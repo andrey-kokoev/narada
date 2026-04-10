@@ -4,11 +4,12 @@ import { join } from 'node:path';
 import { loadConfig } from 'exchange-fs-sync';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
+import { createFormatter } from '../lib/formatter.js';
 
 export interface IntegrityOptions {
   config?: string;
   verbose?: boolean;
-  format?: string;
+  format?: 'json' | 'human' | 'auto';
 }
 
 interface IntegrityReport {
@@ -27,6 +28,7 @@ export async function integrityCommand(
   context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const { configPath, logger } = context;
+  const fmt = createFormatter({ format: options.format, verbose: options.verbose });
   
   logger.info('Loading config', { path: configPath });
   const config = await loadConfig({ path: configPath });
@@ -106,7 +108,7 @@ export async function integrityCommand(
     if (code === 'ENOENT') {
       logger.info('No messages directory found');
     } else {
-      throw err; // Re-throw unexpected errors
+      throw err;
     }
   }
   
@@ -171,5 +173,83 @@ export async function integrityCommand(
   
   const exitCode = report.status === 'ok' ? ExitCode.SUCCESS : ExitCode.INTEGRITY_ISSUES;
   
+  // Output
+  if (fmt.getFormat() === 'json') {
+    return { exitCode, result: report };
+  }
+  
+  outputHumanReadable(fmt, report);
   return { exitCode, result: report };
+}
+
+function outputHumanReadable(
+  fmt: ReturnType<typeof createFormatter>,
+  report: IntegrityReport,
+): void {
+  if (report.status === 'ok') {
+    fmt.message('Integrity check passed - no issues found', 'success');
+  } else {
+    fmt.message('Integrity check found issues', 'warning');
+  }
+  
+  fmt.section('Cursor');
+  if (report.checks.cursor.exists) {
+    if (report.checks.cursor.valid) {
+      fmt.kv('Status', 'Valid');
+      fmt.kv('Exists', true);
+    } else {
+      fmt.kv('Status', 'Invalid');
+      fmt.kv('Error', report.checks.cursor.error || 'Unknown error');
+    }
+  } else {
+    fmt.kv('Status', 'Not found');
+    fmt.kv('Note', 'This is normal for the first run');
+  }
+  
+  fmt.section('Messages');
+  fmt.kv('Total messages', fmt.formatNumber(report.checks.messages.count));
+  
+  if (report.checks.messages.invalid > 0) {
+    fmt.kv('Invalid records', report.checks.messages.invalid);
+    fmt.message('Sample errors:', 'error');
+    for (const error of report.checks.messages.errors.slice(0, 3)) {
+      console.log(`  • ${error}`);
+    }
+    if (report.checks.messages.errors.length > 3) {
+      console.log(`  ... and ${report.checks.messages.errors.length - 3} more`);
+    }
+  } else if (report.checks.messages.count > 0) {
+    fmt.message('All sampled messages are valid', 'success');
+  } else {
+    fmt.message('No messages found', 'info');
+  }
+  
+  fmt.section('Apply Log');
+  fmt.kv('Event markers', fmt.formatNumber(report.checks.applyLog.count));
+  if (report.checks.applyLog.count === 0) {
+    fmt.message('No events recorded yet', 'info');
+  }
+  
+  fmt.section('Views');
+  if (report.checks.views.exists) {
+    fmt.kv('Status', 'Present');
+    fmt.kv('Folder count', report.checks.views.folderCount);
+  } else {
+    fmt.kv('Status', 'Not found');
+    fmt.message('Views will be created on first sync', 'info');
+  }
+  
+  if (report.status === 'ok') {
+    console.log('');
+    fmt.message('Your data directory looks healthy!', 'success');
+  } else {
+    console.log('');
+    fmt.message('Some issues were found. Review the details above.', 'warning');
+    
+    if (!report.checks.cursor.valid) {
+      console.log('');
+      fmt.message('To fix cursor issues, try running a fresh sync:', 'info');
+      console.log('  exchange-sync sync --config ./config.json');
+    }
+  }
 }

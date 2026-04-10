@@ -1,6 +1,8 @@
 import { resolve } from 'node:path';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
+import { createFormatter } from '../lib/formatter.js';
+import type { RunResult } from 'exchange-fs-sync';
 import {
   loadConfig,
   buildGraphTokenProvider,
@@ -19,8 +21,8 @@ import {
 export interface SyncOptions {
   config?: string;
   verbose?: boolean;
-  format?: string;
   dryRun?: boolean;
+  format?: 'json' | 'human' | 'auto';
 }
 
 export async function syncCommand(
@@ -28,13 +30,14 @@ export async function syncCommand(
   context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const { configPath, verbose, logger } = context;
+  const fmt = createFormatter({ format: options.format, verbose });
   
   logger.info('Loading config', { path: configPath });
   const config = await loadConfig({ path: configPath });
   const rootDir = resolve(config.root_dir);
   
   if (options.dryRun) {
-    logger.info('DRY RUN: No changes will be made');
+    fmt.message('DRY RUN: No changes will be made', 'warning');
   }
   
   logger.info('Initializing Graph client', {
@@ -64,8 +67,8 @@ export async function syncCommand(
     body_policy: config.normalize.body_policy,
     attachment_policy: config.normalize.attachment_policy,
     include_headers: config.normalize.include_headers,
-    normalize_folder_ref: normalizeFolderRef,
-    normalize_flagged: normalizeFlagged,
+    normalize_folder_ref,
+    normalize_flagged,
   });
   
   // Create persistence stores
@@ -113,21 +116,87 @@ export async function syncCommand(
     duration: result.duration_ms,
   });
   
-  // Map result status to exit code
-  let exitCode: ExitCode;
-  switch (result.status) {
-    case 'success':
-      exitCode = ExitCode.SUCCESS;
-      break;
-    case 'retryable_failure':
-      exitCode = ExitCode.SYNC_RETRYABLE;
-      break;
-    case 'fatal_failure':
-      exitCode = ExitCode.SYNC_FATAL;
-      break;
-    default:
-      exitCode = ExitCode.GENERAL_ERROR;
+  // Output based on format
+  if (fmt.getFormat() === 'json') {
+    return { exitCode: getExitCode(result.status), result };
   }
   
-  return { exitCode, result };
+  // Human-readable output
+  outputHumanReadable(fmt, result, options.dryRun);
+  
+  return { exitCode: getExitCode(result.status), result };
+}
+
+function getExitCode(status: RunResult['status']): ExitCode {
+  switch (status) {
+    case 'success':
+      return ExitCode.SUCCESS;
+    case 'retryable_failure':
+      return ExitCode.SYNC_RETRYABLE;
+    case 'fatal_failure':
+      return ExitCode.SYNC_FATAL;
+    default:
+      return ExitCode.GENERAL_ERROR;
+  }
+}
+
+function outputHumanReadable(
+  fmt: ReturnType<typeof createFormatter>,
+  result: RunResult,
+  dryRun?: boolean,
+): void {
+  const status = result.status;
+  
+  if (status === 'success') {
+    if (result.applied_count > 0) {
+      fmt.message(
+        `Sync completed successfully - ${fmt.formatNumber(result.applied_count)} message(s) updated`,
+        'success'
+      );
+    } else {
+      fmt.message('Sync completed - no new messages', 'success');
+    }
+  } else if (status === 'retryable_failure') {
+    fmt.message(`Sync failed (retryable): ${result.error || 'Unknown error'}`, 'warning');
+  } else {
+    fmt.message(`Sync failed: ${result.error || 'Unknown error'}`, 'error');
+  }
+  
+  fmt.section('Summary');
+  
+  fmt.kv('Status', status === 'success' ? 'Success' : status === 'retryable_failure' ? 'Retryable' : 'Fatal');
+  fmt.kv('Messages applied', result.applied_count);
+  fmt.kv('Messages skipped', result.skipped_count);
+  fmt.kv('Total events', result.event_count);
+  fmt.kv('Duration', fmt.duration(result.duration_ms));
+  
+  if (result.prior_cursor) {
+    fmt.kv('Previous cursor', 'Set');
+  } else {
+    fmt.kv('Previous cursor', 'None (initial sync)');
+  }
+  
+  if (result.next_cursor) {
+    fmt.kv('New cursor', 'Updated');
+  }
+  
+  if (dryRun) {
+    console.log('');
+    fmt.message('This was a dry run. No changes were made.', 'info');
+  }
+  
+  if (status === 'success' && result.applied_count === 0) {
+    console.log('');
+    fmt.message('No new messages to sync. The mailbox is up to date.', 'info');
+  }
+  
+  if (status === 'retryable_failure') {
+    console.log('');
+    fmt.message('This error may be temporary. You can retry the sync.', 'info');
+  }
+  
+  if (status === 'fatal_failure') {
+    console.log('');
+    fmt.message('A fatal error occurred. Please check your configuration and credentials.', 'error');
+  }
 }

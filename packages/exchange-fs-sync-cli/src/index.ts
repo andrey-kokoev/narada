@@ -8,3 +8,4 @@ export { configCommand, type ConfigOptions } from './commands/config.js';
 export { ExitCode, ExitCodeDescriptions } from './lib/exit-codes.js';
 export { createLogger, type Logger } from './lib/logger.js';
 export { wrapCommand, type CommandContext, type CommandHandler } from './lib/command-wrapper.js';
+export { createFormatter, detectFormat, type OutputFormat, type FormatterOptions } from './lib/formatter.js';

@@ -9,6 +9,7 @@ import type {
   RunResult,
   SyncRunner,
 } from "../types/runtime.js";
+import type { ProgressCallback, SyncPhase } from "../types/progress.js";
 
 export interface SyncOnceDeps {
   rootDir: string;
@@ -20,6 +21,7 @@ export interface SyncOnceDeps {
   acquireLock?: () => Promise<() => Promise<void>>;
   rebuildViews?: () => Promise<void>;
   rebuildViewsAfterSync?: boolean;
+  onProgress?: ProgressCallback;
 }
 
 function nowMs(): number {
@@ -40,23 +42,38 @@ async function ensureRootLayout(rootDir: string): Promise<void> {
 export class DefaultSyncRunner implements SyncRunner {
   constructor(private readonly deps: SyncOnceDeps) {}
 
+  private reportProgress(phase: SyncPhase, current: number, total: number, message?: string): void {
+    if (this.deps.onProgress) {
+      this.deps.onProgress({ phase, current, total, message });
+    }
+  }
+
   async syncOnce(): Promise<RunResult> {
     const startedAt = nowMs();
     let releaseLock: (() => Promise<void>) | undefined;
 
     try {
+      this.reportProgress('setup', 0, 4, 'Initializing...');
       await ensureRootLayout(this.deps.rootDir);
 
       if (this.deps.acquireLock) {
+        this.reportProgress('setup', 1, 4, 'Acquiring lock...');
         releaseLock = await this.deps.acquireLock();
       }
 
       if (this.deps.cleanupTmp) {
+        this.reportProgress('setup', 2, 4, 'Cleaning up temp files...');
         await this.deps.cleanupTmp();
       }
-
+      
+      this.reportProgress('setup', 3, 4, 'Reading cursor...');
       const priorCursor = await this.deps.cursorStore.read();
+      this.reportProgress('setup', 4, 4, 'Ready');
+
+      this.reportProgress('fetch', 0, 1, 'Fetching from Graph API...');
       const batch = await this.deps.adapter.fetch_since(priorCursor);
+      const totalEvents = batch.events.length;
+      this.reportProgress('fetch', 1, 1, `Fetched ${totalEvents} events`);
 
       let appliedCount = 0;
       let skippedCount = 0;
@@ -67,7 +84,15 @@ export class DefaultSyncRunner implements SyncRunner {
         flagged_changed: false,
       };
 
-      for (const event of batch.events) {
+      this.reportProgress('process', 0, totalEvents, 'Processing events...');
+      
+      for (let i = 0; i < batch.events.length; i++) {
+        const event = batch.events[i];
+        
+        if (i % 10 === 0 || i === batch.events.length - 1) {
+          this.reportProgress('process', i, totalEvents, `Processing event ${i + 1} of ${totalEvents}...`);
+        }
+
         const alreadyApplied = await this.deps.applyLogStore.hasApplied(
           event.event_id,
         );
@@ -99,13 +124,19 @@ export class DefaultSyncRunner implements SyncRunner {
             dirtyAggregate.flagged_changed || result.dirty_views.flagged_changed;
         }
       }
+      
+      this.reportProgress('process', totalEvents, totalEvents, 'Processing complete');
 
       if (batch.next_cursor) {
+        this.reportProgress('commit', 0, 1, 'Committing cursor...');
         await this.deps.cursorStore.commit(batch.next_cursor);
+        this.reportProgress('commit', 1, 1, 'Cursor committed');
       }
 
       if (this.deps.rebuildViewsAfterSync && this.deps.rebuildViews) {
+        this.reportProgress('cleanup', 0, 1, 'Rebuilding views...');
         await this.deps.rebuildViews();
+        this.reportProgress('cleanup', 1, 1, 'Views rebuilt');
       }
 
       return {

@@ -50,3 +50,11 @@ export type {
 
 // Re-export all types from types directory
 export * from "./types/index.js";
+
+// Progress types
+export type {
+  ProgressEvent,
+  ProgressCallback,
+  SyncPhase,
+  ProgressTracker,
+} from "./types/progress.js";
