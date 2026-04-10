@@ -68,6 +68,7 @@ export class FileBlobStore implements BlobInstaller {
   }
 
   async installFromPayload(payload: NormalizedPayload): Promise<void> {
+    if (!payload.attachments) return;
     for (const attachment of payload.attachments) {
       const ref = attachment.content_ref;
       if (!ref || !ref.startsWith("inline-base64:")) {

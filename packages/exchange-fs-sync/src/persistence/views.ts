@@ -25,7 +25,6 @@ export interface FileViewStoreOptions {
 }
 
 export class FileViewStore {
-  private readonly rootDir: string;
   private readonly messagesDir: string;
   private readonly viewsDir: string;
   private readonly byThreadDir: string;
@@ -34,7 +33,6 @@ export class FileViewStore {
   private readonly flaggedDir: string;
 
   constructor(opts: FileViewStoreOptions) {
-    this.rootDir = opts.rootDir;
     this.messagesDir = join(opts.rootDir, "messages");
     this.viewsDir = join(opts.rootDir, "views");
     this.byThreadDir = join(this.viewsDir, "by-thread");
@@ -84,7 +82,7 @@ export class FileViewStore {
       touchedThreads.push(payload.conversation_id);
     }
 
-    for (const folderRef of payload.folder_refs) {
+    for (const folderRef of payload.folder_refs ?? []) {
       const folderDir = join(
         this.byFolderDir,
         safeSegment(folderRef),
@@ -97,14 +95,14 @@ export class FileViewStore {
     }
 
     const unreadPath = join(this.unreadDir, safeSegment(payload.message_id));
-    if (!payload.flags.is_read) {
+    if (!payload.flags?.is_read) {
       await this.linkMessage(unreadPath, payload.message_id);
     } else {
       await this.unlinkMessage(unreadPath);
     }
 
     const flaggedPath = join(this.flaggedDir, safeSegment(payload.message_id));
-    if (payload.flags.is_flagged) {
+    if (payload.flags?.is_flagged) {
       await this.linkMessage(flaggedPath, payload.message_id);
     } else {
       await this.unlinkMessage(flaggedPath);

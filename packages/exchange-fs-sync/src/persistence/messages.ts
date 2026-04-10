@@ -11,11 +11,11 @@ function safeSegment(value: string): string {
 }
 
 function bodyTextFromPayload(payload: NormalizedPayload): string | undefined {
-  return payload.body.text;
+  return payload.body?.text;
 }
 
 function bodyHtmlFromPayload(payload: NormalizedPayload): string | undefined {
-  return payload.body.html;
+  return payload.body?.html;
 }
 
 async function exists(path: string): Promise<boolean> {
