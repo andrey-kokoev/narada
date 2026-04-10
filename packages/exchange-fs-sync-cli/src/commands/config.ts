@@ -5,6 +5,8 @@ import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 
 export interface ConfigOptions {
+  config?: string;  // Not used, but required by wrapper
+  verbose?: boolean;
   output?: string;
   force?: boolean;
 }
