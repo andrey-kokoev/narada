@@ -192,11 +192,5 @@ export async function loadConfig(
     },
   };
 
-  if (merged.scope.included_container_refs.length !== 1) {
-    throw new Error(
-      "Current implementation requires exactly one included_container_ref",
-    );
-  }
-
   return merged;
 }

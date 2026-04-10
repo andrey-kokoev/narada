@@ -13,12 +13,12 @@ import { normalizeBody } from "./body.js";
 
 export interface NormalizeMessageInput {
   mailbox_id: MailboxId;
-  message_id: string;
+  message_id?: string;
   graph_message: GraphDeltaMessage;
   body_policy: BodyPolicy;
   attachment_policy: AttachmentPolicy;
   include_headers: boolean;
-  normalize_folder_ref: (parentFolderId?: string) => string[];
+  normalize_folder_ref: (graph_message: GraphDeltaMessage) => string[];
   normalize_flagged: (flag: GraphDeltaMessage["flag"]) => boolean;
 }
 
@@ -104,7 +104,6 @@ export function normalizeMessageToPayload(
 ): NormalizedPayload {
   const {
     mailbox_id,
-    message_id,
     graph_message,
     body_policy,
     attachment_policy,
@@ -112,6 +111,7 @@ export function normalizeMessageToPayload(
     normalize_folder_ref,
     normalize_flagged,
   } = input;
+  const message_id = input.message_id ?? graph_message.id;
 
   const from = normalizeRecipient(graph_message.from);
   const sender = normalizeRecipient(graph_message.sender);
@@ -150,7 +150,7 @@ export function normalizeMessageToPayload(
     ...(graph_message.lastModifiedDateTime
       ? { last_modified_at: graph_message.lastModifiedDateTime }
       : {}),
-    folder_refs: normalize_folder_ref(graph_message.parentFolderId),
+    folder_refs: normalize_folder_ref(graph_message),
     category_refs: sortStrings(graph_message.categories),
     flags: {
       is_read: Boolean(graph_message.isRead),
@@ -174,3 +174,7 @@ export function normalizeMessageToPayload(
 
   return payload;
 }
+
+
+// Alias for backward compatibility with tests
+export { normalizeMessageToPayload as normalizeMessage };

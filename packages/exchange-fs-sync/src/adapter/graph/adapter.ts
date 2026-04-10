@@ -18,7 +18,7 @@ export interface GraphAdapterConfig {
   body_policy: BodyPolicy;
   attachment_policy: AttachmentPolicy;
   include_headers: boolean;
-  normalize_folder_ref: (parentFolderId?: string) => string[];
+  normalize_folder_ref: (graph_message: GraphDeltaMessage) => string[];
   normalize_flagged: (flag: GraphDeltaMessage["flag"]) => boolean;
   classify_removed_as_delete?: (message: GraphDeltaMessage) => boolean;
 }

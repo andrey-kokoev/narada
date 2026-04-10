@@ -89,6 +89,8 @@ export interface NormalizedPayload {
   received_at?: string;
   observed_at?: string;
   subject?: string;
+  from?: NormalizedAddress;
+  sender?: NormalizedAddress;
   to?: NormalizedAddress[];
   cc?: NormalizedAddress[];
   bcc?: NormalizedAddress[];
@@ -99,6 +101,12 @@ export interface NormalizedPayload {
   flags?: MessageFlags;
   body?: NormalizedBody;
   attachments?: NormalizedAttachment[];
+  internet_message_id?: string;
+  headers?: { values: Record<string, string[]> };
+  importance?: string;
+  is_read?: boolean;
+  is_draft?: boolean;
+  is_flagged?: boolean;
 }
 
 export interface NormalizedEvent {

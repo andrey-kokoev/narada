@@ -74,17 +74,17 @@ export function buildEventId(input: BuildEventIdInput): EventId {
     event_kind: input.event_kind,
   };
 
-  if (input.event_kind === "created" || input.event_kind === "updated") {
+  if (input.event_kind === "created" || input.event_kind === "updated" || input.event_kind === "upsert") {
     if (input.source_version) {
       base.source_version = input.source_version;
     } else if (input.payload) {
       base.payload_hash = hashNormalizedPayload(input.payload);
     } else {
-      throw new Error("created/updated event requires source_version or payload");
+      throw new Error("created/updated/upsert event requires source_version or payload");
     }
   }
 
-  if (input.event_kind === "deleted") {
+  if (input.event_kind === "deleted" || input.event_kind === "delete") {
     base.source_version = input.source_version ?? null;
   }
 

@@ -1,7 +1,7 @@
-import type { GraphMessageFlag } from "../../types/graph.js";
+import type { GraphDeltaMessage, GraphMessageFlag } from "../../types/graph.js";
 
-export function normalizeFolderRef(parentFolderId?: string): string[] {
-  const id = parentFolderId?.trim();
+export function normalizeFolderRef(graphMessage: GraphDeltaMessage): string[] {
+  const id = graphMessage.parentFolderId?.trim();
   return id ? [id] : [];
 }
 

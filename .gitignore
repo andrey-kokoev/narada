@@ -11,3 +11,4 @@ coverage/
 *.tmp
 *.temp
 config.json
+.history
