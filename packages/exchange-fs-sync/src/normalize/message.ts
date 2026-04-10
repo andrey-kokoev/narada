@@ -1,5 +1,7 @@
 import type { GraphDeltaMessage } from "../types/graph.js";
 import type {
+  AttachmentPolicy,
+  BodyPolicy,
   MailboxId,
   NormalizedExtensions,
   NormalizedPayload,
@@ -13,8 +15,8 @@ export interface NormalizeMessageInput {
   mailbox_id: MailboxId;
   message_id: string;
   graph_message: GraphDeltaMessage;
-  body_policy: "text_only" | "html_only" | "text_and_html";
-  attachment_policy: "exclude" | "metadata_only" | "include_content";
+  body_policy: BodyPolicy;
+  attachment_policy: AttachmentPolicy;
   include_headers: boolean;
   normalize_folder_ref: (parentFolderId?: string) => string[];
   normalize_flagged: (flag: GraphDeltaMessage["flag"]) => boolean;

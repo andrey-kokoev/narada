@@ -65,6 +65,7 @@ export class DefaultGraphAdapter implements GraphAdapter {
       next_cursor: walked.nextCursor,
       fetched_at: fetchedAt,
       messages: walked.messages,
+      has_more: false,
       body_policy: this.cfg.body_policy,
       attachment_policy: this.cfg.attachment_policy,
       include_headers: this.cfg.include_headers,

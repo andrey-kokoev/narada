@@ -351,8 +351,75 @@ Atomic rename requires source and destination on same filesystem. Don't put `tmp
 
 ---
 
+## Toolchain: Full Ox Stack
+
+This project uses the **Ox ecosystem** - Rust-based tools for maximum speed:
+
+| Tool | Purpose | Replaces |
+|------|---------|----------|
+| **Rolldown** | Bundler | Rollup, tsc, esbuild |
+| **oxlint** | Linter | ESLint |
+| **oxfmt** | Formatter | Prettier |
+| **Vitest** | Test runner | Jest |
+
+### Why Rolldown?
+
+- 10-20x faster than Rollup
+- Native TypeScript support (no plugin needed)
+- Drop-in Rollup API compatibility
+- Written in Rust, powered by Oxc
+- Will become Vite's default bundler
+
+### Configuration Files
+
+| File | Tool | Purpose |
+|------|------|---------|
+| `rolldown.config.js` | Rolldown | Bundle config (ESM, Node target) |
+| `.oxfmtrc.jsonc` | oxfmt | Formatting rules (Prettier-compatible) |
+| `.oxlintrc.json` | oxlint | Lint rules |
+| `tsconfig.json` | TypeScript | Type checking only (no emit) |
+
+### Commands
+
+```bash
+# Development
+pnpm dev              # Rolldown watch mode
+
+# Build
+pnpm build            # Rolldown production build
+
+# Quality checks
+pnpm lint             # oxlint (50-100x faster than ESLint)
+pnpm lint:fix         # Auto-fix issues
+pnpm fmt              # oxfmt (30x faster than Prettier)
+pnpm fmt:check        # Check formatting (CI)
+pnpm check            # All checks (typecheck + lint + format)
+```
+
+### Migration Notes
+
+**From tsc to Rolldown:**
+- TypeScript compilation is now part of bundling
+- `tsc` is kept for type-checking only (`--noEmit`)
+- Declaration files (.d.ts): Add when needed for library distribution
+
+**From Prettier to oxfmt:**
+- 30x faster formatting
+- 100% Prettier-compatible for JS/TS
+- Config: `.oxfmtrc.jsonc` (or reuse `.prettierrc`)
+
+**From ESLint to oxlint:**
+- 50-100x faster linting
+- Fewer rules than ESLint (focused on correctness, not style)
+- No custom rule support yet
+
+---
+
 ## Resources
 
+- [Rolldown Docs](https://rolldown.rs/)
+- [Oxc/oxlint Docs](https://oxc.rs/docs/guide/usage/linter.html)
+- [Oxfmt Docs](https://oxc.rs/docs/guide/usage/formatter.html)
 - [Microsoft Graph Delta Query Docs](https://docs.microsoft.com/en-us/graph/delta-query-overview)
 - [Node fs promises API](https://nodejs.org/api/fs.html#fs_promises_api)
 - [Vitest Testing Framework](https://vitest.dev/)

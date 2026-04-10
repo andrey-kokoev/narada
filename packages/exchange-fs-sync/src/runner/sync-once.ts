@@ -100,7 +100,9 @@ export class DefaultSyncRunner implements SyncRunner {
         }
       }
 
-      await this.deps.cursorStore.commit(batch.next_cursor);
+      if (batch.next_cursor) {
+        await this.deps.cursorStore.commit(batch.next_cursor);
+      }
 
       if (this.deps.rebuildViewsAfterSync && this.deps.rebuildViews) {
         await this.deps.rebuildViews();

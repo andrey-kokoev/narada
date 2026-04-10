@@ -1,12 +1,12 @@
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ApplyLogStore } from "../types/runtime.js";
-import type { NormalizedEvent } from "../types/normalized.js";
+import type { EventKind, NormalizedEvent } from "../types/normalized.js";
 
 interface ApplyMarkerFileShape {
   event_id: string;
   message_id: string;
-  event_kind: "upsert" | "delete";
+  event_kind: EventKind;
   applied_at: string;
 }
 

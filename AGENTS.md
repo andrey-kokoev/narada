@@ -61,18 +61,32 @@ A deterministic, replay-safe state compiler that transforms a remote Microsoft G
 # Install dependencies
 pnpm install
 
-# Run all tests
+# Development (Rolldown watch)
+pnpm dev
+
+# Build (Rolldown bundle)
+pnpm build
+
+# Type check (tsc --noEmit)
+pnpm typecheck
+
+# Lint (oxlint - Rust-based)
+pnpm lint
+
+# Format (oxfmt - Rust-based, Prettier-compatible)
+pnpm fmt
+
+# Check all (typecheck + lint + format)
+pnpm check
+
+# Run all tests (Vitest)
 pnpm test
 
 # Run tests in watch mode
 pnpm test:watch
-
-# Type check
-pnpm typecheck
-
-# Build
-pnpm build
 ```
+
+**Tooling**: Full Ox stack (Rust-based) - Rolldown + oxlint + oxfmt + Vitest. See package AGENTS.md for details.
 
 ---
 

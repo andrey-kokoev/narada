@@ -106,7 +106,7 @@ export class FileMessageStore implements MessageStore {
       await writeText(join(stagingDir, "body", "body.html"), htmlBody);
     }
 
-    const manifest = buildAttachmentManifest(payload.attachments);
+    const manifest = buildAttachmentManifest(payload.attachments ?? []);
     await writeJson(join(stagingDir, "attachments", "manifest.json"), manifest);
 
     const record = {
