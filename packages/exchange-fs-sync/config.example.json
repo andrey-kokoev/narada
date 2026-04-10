@@ -1,0 +1,28 @@
+{
+  "mailbox_id": "user@example.com",
+  "root_dir": "./data",
+  "graph": {
+    "tenant_id": "contoso.onmicrosoft.com",
+    "client_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "client_secret": "your-client-secret",
+    "user_id": "user@example.com",
+    "base_url": "https://graph.microsoft.com/v1.0",
+    "prefer_immutable_ids": true
+  },
+  "scope": {
+    "included_container_refs": ["inbox"],
+    "included_item_kinds": ["message"]
+  },
+  "normalize": {
+    "attachment_policy": "metadata_only",
+    "body_policy": "text_only",
+    "include_headers": false,
+    "tombstones_enabled": true
+  },
+  "runtime": {
+    "polling_interval_ms": 60000,
+    "acquire_lock_timeout_ms": 30000,
+    "cleanup_tmp_on_startup": true,
+    "rebuild_views_after_sync": false
+  }
+}
