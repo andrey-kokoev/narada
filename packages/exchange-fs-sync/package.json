@@ -2,6 +2,12 @@
   "name": "exchange-fs-sync",
   "version": "1.0.0",
   "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "bin": {
     "exchange-fs-sync": "./dist/cli/main.js"
   },

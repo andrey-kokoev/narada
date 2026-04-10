@@ -1,4 +1,6 @@
-import { resolve } from "node:path";
+import { resolve } from 'node:path';
+import type { CommandContext } from '../lib/command-wrapper.js';
+import { ExitCode } from '../lib/exit-codes.js';
 import {
   loadConfig,
   buildGraphTokenProvider,
@@ -12,22 +14,32 @@ import {
   FileLock,
   normalizeFolderRef,
   normalizeFlagged,
-} from "exchange-fs-sync";
+} from 'exchange-fs-sync';
 
 export interface SyncOptions {
-  config: string;
+  config?: string;
   verbose?: boolean;
+  dryRun?: boolean;
 }
 
-export async function syncCommand(options: SyncOptions): Promise<void> {
-  const configPath = resolve(options.config);
+export async function syncCommand(
+  options: SyncOptions,
+  context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const { configPath, verbose, logger } = context;
   
-  if (options.verbose) {
-    console.error(`Loading config from: ${configPath}`);
-  }
-  
+  logger.info('Loading config', { path: configPath });
   const config = await loadConfig({ path: configPath });
   const rootDir = resolve(config.root_dir);
+  
+  if (options.dryRun) {
+    logger.info('DRY RUN: No changes will be made');
+  }
+  
+  logger.info('Initializing Graph client', {
+    user: config.graph.user_id,
+    mailbox: config.mailbox_id,
+  });
   
   // Set up token provider
   const tokenProvider = buildGraphTokenProvider({ config });
@@ -51,8 +63,8 @@ export async function syncCommand(options: SyncOptions): Promise<void> {
     body_policy: config.normalize.body_policy,
     attachment_policy: config.normalize.attachment_policy,
     include_headers: config.normalize.include_headers,
-    normalize_folder_ref,
-    normalize_flagged,
+    normalize_folder_ref: normalizeFolderRef,
+    normalize_flagged: normalizeFlagged,
   });
   
   // Create persistence stores
@@ -89,20 +101,32 @@ export async function syncCommand(options: SyncOptions): Promise<void> {
   });
   
   // Run sync
-  if (options.verbose) {
-    console.error("Starting sync...");
-  }
+  logger.info('Starting sync cycle');
   
   const result = await runner.syncOnce();
   
-  // Output result as JSON for programmatic use
-  console.log(JSON.stringify(result, null, 2));
+  logger.info('Sync complete', {
+    status: result.status,
+    applied: result.applied_count,
+    skipped: result.skipped_count,
+    duration: result.duration_ms,
+  });
   
-  // Exit with error code on failure
-  if (result.status === "fatal_failure") {
-    process.exit(1);
+  // Map result status to exit code
+  let exitCode: ExitCode;
+  switch (result.status) {
+    case 'success':
+      exitCode = ExitCode.SUCCESS;
+      break;
+    case 'retryable_failure':
+      exitCode = ExitCode.SYNC_RETRYABLE;
+      break;
+    case 'fatal_failure':
+      exitCode = ExitCode.SYNC_FATAL;
+      break;
+    default:
+      exitCode = ExitCode.GENERAL_ERROR;
   }
-  if (result.status === "retryable_failure") {
-    process.exit(2);
-  }
+  
+  return { exitCode, result };
 }

@@ -1,26 +1,28 @@
-import { writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
-import { existsSync } from "node:fs";
+import { writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import type { CommandContext } from '../lib/command-wrapper.js';
+import { ExitCode } from '../lib/exit-codes.js';
 
 export interface ConfigOptions {
-  output: string;
+  output?: string;
   force?: boolean;
 }
 
 const DEFAULT_CONFIG = {
-  mailbox_id: "user@example.com",
-  root_dir: "./data",
+  mailbox_id: 'user@example.com',
+  root_dir: './data',
   graph: {
-    user_id: "user@example.com",
+    user_id: 'user@example.com',
     prefer_immutable_ids: true,
   },
   scope: {
-    included_container_refs: ["inbox"],
-    included_item_kinds: ["message"],
+    included_container_refs: ['inbox'],
+    included_item_kinds: ['message'],
   },
   normalize: {
-    attachment_policy: "metadata_only",
-    body_policy: "text_only",
+    attachment_policy: 'metadata_only',
+    body_policy: 'text_only',
     include_headers: false,
     tombstones_enabled: true,
   },
@@ -32,27 +34,47 @@ const DEFAULT_CONFIG = {
   },
 };
 
-export async function configCommand(options: ConfigOptions): Promise<void> {
-  const outputPath = resolve(options.output);
+export async function configCommand(
+  options: ConfigOptions,
+  context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const outputPath = resolve(options.output || './config.json');
+  const { logger } = context;
+  
+  logger.info('Initializing config', { outputPath });
   
   if (existsSync(outputPath) && !options.force) {
-    console.error(`Error: ${outputPath} already exists. Use --force to overwrite.`);
-    process.exit(1);
+    const error = `File already exists: ${outputPath}. Use --force to overwrite.`;
+    logger.error(error);
+    
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: {
+        status: 'error',
+        error,
+      },
+    };
   }
   
   await writeFile(
     outputPath,
-    JSON.stringify(DEFAULT_CONFIG, null, 2) + "\n",
-    "utf8"
+    JSON.stringify(DEFAULT_CONFIG, null, 2) + '\n',
+    'utf8',
   );
   
-  console.log(JSON.stringify({
-    status: "success",
-    message: `Configuration written to ${outputPath}`,
-    next_steps: [
-      "Edit the file to add your Graph API credentials",
-      "Set GRAPH_TENANT_ID, GRAPH_CLIENT_ID, GRAPH_CLIENT_SECRET environment variables",
-      "Or add credentials directly to the config file (not recommended for production)",
-    ],
-  }, null, 2));
+  logger.info('Config written', { outputPath });
+  
+  return {
+    exitCode: ExitCode.SUCCESS,
+    result: {
+      status: 'success',
+      message: `Configuration written to ${outputPath}`,
+      next_steps: [
+        'Edit the file to add your Graph API credentials',
+        'Set GRAPH_TENANT_ID, GRAPH_CLIENT_ID, GRAPH_CLIENT_SECRET environment variables',
+        'Or add credentials directly to the config file (not recommended for production)',
+        'Run "exchange-sync sync" to test the configuration',
+      ],
+    },
+  };
 }
