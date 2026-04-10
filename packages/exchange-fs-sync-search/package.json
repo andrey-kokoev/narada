@@ -1,26 +1,52 @@
 {
-  "name": "exchange-fs-sync-search",
-  "version": "1.0.0",
+  "name": "@narada/exchange-fs-sync-search",
+  "version": "0.1.0",
+  "description": "Full-text search for Exchange filesystem sync",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "type": "module",
   "bin": {
-    "exchange-fs-sync-search": "./dist/index.js"
+    "exchange-fs-sync-search": "./dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/narada/exchange-fs-sync.git",
+    "directory": "packages/exchange-fs-sync-search"
+  },
+  "keywords": [
+    "exchange",
+    "microsoft-graph",
+    "email",
+    "sync",
+    "search",
+    "sqlite",
+    "fts5"
+  ],
+  "author": "Narada <team@narada.dev>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
-    "dev": "rolldown --config --watch",
-    "build": "rolldown --config",
+    "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "lint": "oxlint src/",
-    "lint:fix": "oxlint src/ --fix",
-    "fmt": "oxfmt",
-    "fmt:check": "oxfmt --check",
     "test": "vitest run"
   },
   "dependencies": {
-    "exchange-fs-sync": "workspace:*"
+    "better-sqlite3": "^9.4.0",
+    "@narada/exchange-fs-sync": "workspace:*"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.9",
     "@types/node": "^20.10.0",
-    "rolldown": "^0.14.0",
     "typescript": "^5.3.0",
     "vitest": "^1.0.0"
   }

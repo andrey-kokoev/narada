@@ -3,10 +3,61 @@
 ## Prerequisites
 
 - **Node.js**: v18+ (tested on v20)
-- **pnpm**: v8+ (package manager)
 - **Microsoft Graph Access**: Azure AD app registration or access token
 
-## Installation
+## Method 1: CLI (Recommended for Users)
+
+### Installation
+
+```bash
+npm install -g @narada/exchange-fs-sync-cli
+# or
+pnpm add -g @narada/exchange-fs-sync-cli
+```
+
+### First-Time Setup
+
+```bash
+# Interactive configuration (recommended)
+exchange-sync init --interactive
+
+# Follow the prompts:
+# - Enter your email address
+# - Choose data directory (default: ./data)
+# - Set Graph API credentials (or use env vars)
+# - Select folders to sync
+# - Test connection before saving
+```
+
+### Run Your First Sync
+
+```bash
+# Run sync
+exchange-sync sync
+
+# Check status
+exchange-sync status
+
+# View results
+ls ./data/messages | wc -l
+```
+
+### Create Your First Backup
+
+```bash
+# Create encrypted backup
+exchange-sync backup -o backup-$(date +%Y%m%d).tar.gz --encrypt
+
+# Verify backup
+exchange-sync backup-verify -i backup-$(date +%Y%m%d).tar.gz
+
+# List contents
+exchange-sync backup-ls -i backup-$(date +%Y%m%d).tar.gz
+```
+
+## Method 2: Library (For Developers)
+
+### Installation
 
 ```bash
 # Clone repository
@@ -20,9 +71,7 @@ pnpm typecheck
 pnpm test
 ```
 
-## First-Time Configuration
-
-### Step 1: Create Config File
+### First-Time Configuration
 
 Copy the example and customize:
 
@@ -47,7 +96,7 @@ Edit `config.json`:
 }
 ```
 
-### Step 2: Configure Authentication
+### Configure Authentication
 
 Choose one method:
 
@@ -257,12 +306,54 @@ Expected output:
 }
 ```
 
+## Backup and Restore (CLI)
+
+### Create Backup
+
+```bash
+# Create basic backup
+exchange-sync backup -o backup-$(date +%Y%m%d).tar.gz
+
+# Create encrypted backup
+exchange-sync backup -o backup-$(date +%Y%m%d).tar.gz --encrypt
+
+# Backup specific components only
+exchange-sync backup -o backup.tar.gz --include messages,config
+```
+
+### Verify Backup
+
+```bash
+# Verify integrity without extracting
+exchange-sync backup-verify -i backup.tar.gz
+
+# List contents
+exchange-sync backup-ls -i backup.tar.gz
+```
+
+### Restore from Backup
+
+```bash
+# Restore everything
+exchange-sync restore -i backup.tar.gz
+
+# Restore to different location
+exchange-sync restore -i backup.tar.gz -t ./restored-data
+
+# Restore specific message
+exchange-sync restore -i backup.tar.gz --select msg-123
+
+# Restore only messages before a date
+exchange-sync restore -i backup.tar.gz --before 2024-01-01
+```
+
 ## Next Steps
 
 1. **Read the spec**: [01-spec.md](01-spec.md) for theoretical understanding
 2. **Understand architecture**: [02-architecture.md](02-architecture.md)
 3. **Configure policies**: [06-configuration.md](06-configuration.md) for attachment/body handling
 4. **Troubleshoot issues**: [09-troubleshooting.md](09-troubleshooting.md)
+5. **CLI reference**: See `packages/exchange-fs-sync-cli/README.md` for all CLI commands
 
 ## Common First-Time Issues
 

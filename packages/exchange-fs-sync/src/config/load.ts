@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ExchangeFsSyncConfig } from "./types.js";
 import { DEFAULT_EXCHANGE_FS_SYNC_CONFIG } from "./defaults.js";
+import type { SecureStorage } from "../auth/secure-storage.js";
+import { resolveSecrets, isSecureRef } from "./secure-config.js";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -94,15 +96,47 @@ function expectNumber(value: unknown, path: string): number {
   return value;
 }
 
+/**
+ * Check if a value (or nested values) contains secure references
+ */
+function checkForSecureRefs(value: unknown): boolean {
+  if (isSecureRef(value)) {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.some(checkForSecureRefs);
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.values(value).some(checkForSecureRefs);
+  }
+  return false;
+}
+
 export interface LoadConfigOptions {
   path: string;
+  /** Secure storage for resolving { "$secure": "key" } references */
+  storage?: SecureStorage;
 }
 
 export async function loadConfig(
   opts: LoadConfigOptions,
 ): Promise<ExchangeFsSyncConfig> {
   const raw = await readFile(resolve(opts.path), "utf8");
-  const parsed = JSON.parse(raw) as unknown;
+  let parsed = JSON.parse(raw) as unknown;
+
+  // Resolve secure references if storage is provided
+  if (opts.storage) {
+    parsed = await resolveSecrets(parsed, opts.storage);
+  } else {
+    // Check for secure refs without storage
+    const hasSecureRefs = checkForSecureRefs(parsed);
+    if (hasSecureRefs) {
+      throw new Error(
+        "Config contains { $secure: ... } references but no secure storage was provided. " +
+          "Either provide a storage parameter or use loadConfigWithStorage().",
+      );
+    }
+  }
 
   const root = expectObject(parsed, "config");
   const graph = expectObject(root.graph, "config.graph");

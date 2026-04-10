@@ -1,26 +1,63 @@
 {
-  "name": "exchange-fs-sync",
-  "version": "1.0.0",
+  "name": "@narada/exchange-fs-sync",
+  "version": "0.1.0",
+  "description": "Sync Microsoft Exchange to filesystem",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "type": "module",
   "exports": {
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./lifecycle": {
+      "import": "./dist/lifecycle/index.js",
+      "types": "./dist/lifecycle/index.d.ts"
     }
   },
-  "bin": {
-    "exchange-fs-sync": "./dist/cli/main.js"
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/narada/exchange-fs-sync.git",
+    "directory": "packages/exchange-fs-sync"
+  },
+  "keywords": [
+    "exchange",
+    "microsoft-graph",
+    "email",
+    "sync"
+  ],
+  "author": "Narada <team@narada.dev>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "start": "node dist/cli/main.js",
-    "sync": "npm run build && node dist/cli/main.js"
+    "coverage": "vitest run --coverage",
+    "benchmark": "vitest bench --run",
+    "benchmark:watch": "vitest bench",
+    "benchmark:report": "vitest bench --run --reporter=verbose",
+    "profile": "node --inspect --expose-gc ../scripts/profile.ts"
+  },
+  "dependencies": {
+    "zod": "^3.22.0"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
+    "@vitest/coverage-v8": "^1.0.0",
+    "fast-check": "^3.15.0",
+    "memfs": "^4.6.0",
     "typescript": "^5.3.0",
     "vitest": "^1.0.0"
   }

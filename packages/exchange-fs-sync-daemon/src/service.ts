@@ -21,8 +21,8 @@ import {
   cleanupTmp,
   normalizeFolderRef,
   normalizeFlagged,
-} from 'exchange-fs-sync';
-import type { ExchangeFsSyncConfig } from 'exchange-fs-sync';
+} from '@narada/exchange-fs-sync';
+import type { ExchangeFsSyncConfig } from '@narada/exchange-fs-sync';
 import { createLogger, type Logger } from './lib/logger.js';
 import { PidFile } from './lib/pid-file.js';
 import { HealthFile, type HealthStatus } from './lib/health.js';

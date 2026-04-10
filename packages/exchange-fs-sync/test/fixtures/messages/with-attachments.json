@@ -1,0 +1,54 @@
+{
+  "id": "AAMkAGVmMDEzMTM4LTZmYWUtNDBmOS1hZGY0LTA4MzUzOTNjZGE5MABGAAAAAABYYFdwieVuS6NTjB2XIxV2BwAwhFwzv0-4Q6vNqZzPVYVAAAAAAAEMAAAwhFwzv0-4Q6vNqZzPVYVAAABpH8qAAB=",
+  "changeKey": "CQAAABYAAAAwhFwzv0+4Q6vNqZzPVYVAAABpIBWH",
+  "conversationId": "AAQkAGVmMDEzMTM4LTZmYWUtNDBmOS1hZGY0LTA4MzUzOTNjZGE5MAAQABRFEHM0U5pCrBi6pLsSUIJ=",
+  "subject": "Document for review",
+  "parentFolderId": "AQMkAGVmMDEzMTM4LTZmYWUtNDBmOS1hZGY0LTAwAEMDUzOTNjZGE5MAAuAAADGFx2N4p7S0C6R_lEfWSNWQEAwhFwzv0+4Q6vNqZzPVYVAAACAQwAAAA=",
+  "isRead": true,
+  "isDraft": false,
+  "hasAttachments": true,
+  "body": {
+    "contentType": "html",
+    "content": "<html><body><p>Please find the attached document for your review.</p></body></html>"
+  },
+  "from": {
+    "emailAddress": {
+      "name": "John Smith",
+      "address": "john.smith@example.com"
+    }
+  },
+  "toRecipients": [
+    {
+      "emailAddress": {
+        "name": "Jane Doe",
+        "address": "jane.doe@example.com"
+      }
+    }
+  ],
+  "ccRecipients": [
+    {
+      "emailAddress": {
+        "name": "Team Lead",
+        "address": "lead@example.com"
+      }
+    }
+  ],
+  "receivedDateTime": "2024-01-15T14:22:00Z",
+  "sentDateTime": "2024-01-15T14:20:00Z",
+  "internetMessageId": "<doc-review@example.com>",
+  "webLink": "https://outlook.office365.com/mail/inbox/id/AAMkAGVmMDEzMTM4LTZmYWUtNDBmOS1hZGY0LTA4MzUzOTNjZGE5MABGAAAAAABYYFdwieVuS6NTjB2XIxV2BwAwhFwzv0-4Q6vNqZzPVYVAAAAAAAEMAAAwhFwzv0-4Q6vNqZzPVYVAAABpH8qAAB=",
+  "inferenceClassification": "focused",
+  "flag": {
+    "flagStatus": "flagged"
+  },
+  "attachments": [
+    {
+      "id": "AAMkAGVmMDEzMTM4LTZmYWUtNDBmOS1hZGY0LTA4MzUzOTNjZGE5MABGAAAAAABYYFdwieVuS6NTjB2XIxV2BwAwhFwzv0-4Q6vNqZzPVYVAAAAAAAEMAAAwhFwzv0-4Q6vNqZzPVYVAAABpH8qAAC=",
+      "name": "document.pdf",
+      "contentType": "application/pdf",
+      "size": 1048576,
+      "isInline": false
+    }
+  ],
+  "categories": ["Important", "Review"]
+}

@@ -1,0 +1,4 @@
+{
+  "description": "Partial cursor - sync has occurred",
+  "cursor": "https://graph.microsoft.com/v1.0/users/test@example.com/mailFolders/inbox/messages/delta?$deltatoken=R0uCBCSmop1o6lalWj7E4oVfErVVsRAFl3yKJ3QHHFk8WbHRKqLxLH4VnqmMH5T"
+}

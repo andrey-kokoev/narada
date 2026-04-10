@@ -1,11 +1,21 @@
 // Main exports
 export { loadConfig } from "./config/load.js";
+export {
+  ConfigSchema,
+  validateConfig,
+  validateConfigOrThrow,
+  isValidConfig,
+  type ConfigSchemaType,
+  type ValidationResult,
+} from "./config/schema.js";
 export { ClientCredentialsTokenProvider } from "./adapter/graph/auth.js";
 export { buildGraphTokenProvider } from "./config/token-provider.js";
 export { DefaultGraphAdapter } from "./adapter/graph/adapter.js";
 export { GraphHttpClient } from "./adapter/graph/client.js";
 export { GraphDeltaWalker } from "./adapter/graph/delta.js";
 export { normalizeFolderRef, normalizeFlagged } from "./adapter/graph/scope.js";
+export { MockGraphAdapter, createMockAdapter } from "./adapter/graph/mock-adapter.js";
+export { normalizeBatch } from "./normalize/batch.js";
 export { DefaultSyncRunner } from "./runner/sync-once.js";
 export { FileCursorStore } from "./persistence/cursor.js";
 export { FileApplyLogStore } from "./persistence/apply-log.js";
@@ -15,18 +25,241 @@ export { FileMessageStore } from "./persistence/messages.js";
 export { FileTombstoneStore } from "./persistence/tombstones.js";
 export { FileViewStore } from "./persistence/views.js";
 export { FileLock } from "./persistence/lock.js";
+
+// Lifecycle exports
+export {
+  cleanupTombstones,
+  compactMessages,
+  vacuum,
+  applyRetentionPolicy,
+  getTombstoneStats,
+  getCompactionStats,
+  getRetentionStats,
+  shouldRunCleanup,
+  getNextRunTime,
+  maybeRunCleanup,
+  runWithTimeLimit,
+  parseSize,
+} from "./lifecycle/index.js";
+export type {
+  CleanupOptions,
+  CleanupResult,
+  CompactionOptions,
+  CompactionResult,
+  VacuumOptions,
+  VacuumResult,
+  RetentionPolicy,
+  RetentionResult,
+  CleanupSchedule,
+  LifecycleConfig,
+} from "./lifecycle/types.js";
 export { cleanupTmp } from "./recovery/cleanup-tmp.js";
+export { writeHealthFile, createHealthWriter } from "./health.js";
+
+// Multi-mailbox exports
+export {
+  loadMultiMailboxConfig,
+  validateMailboxConfig,
+  getMailboxById,
+  isMultiMailboxConfig,
+  DEFAULT_GLOBAL_CONFIG,
+  DEFAULT_SYNC_OPTIONS,
+} from "./config/multi-mailbox.js";
+export type {
+  MailboxConfig,
+  MultiMailboxConfig,
+  MultiMailboxGlobalConfig,
+  TokenProviderConfig,
+  ResourceLimits,
+  LoadMultiMailboxOptions,
+  LoadMultiMailboxResult,
+} from "./config/multi-mailbox.js";
+
+export {
+  ResourceManager,
+  getGlobalResourceManager,
+  resetGlobalResourceManager,
+  DEFAULT_RESOURCE_LIMITS,
+} from "./utils/resources.js";
+export type { ResourceUsage } from "./utils/resources.js";
+
+export {
+  SharedTokenProvider,
+  getGlobalSharedTokenProvider,
+  resetGlobalSharedTokenProvider,
+} from "./adapter/graph/shared-token.js";
+
+export {
+  syncMultiple,
+  gracefulShutdown,
+  allMailboxesHealthy,
+  getFailedMailboxIds,
+  formatMultiSyncResult,
+} from "./runner/multi-sync.js";
+export type {
+  MultiSyncOptions,
+  MultiSyncResult,
+  SyncMultipleOptions,
+} from "./runner/multi-sync.js";
+
+export {
+  writeMultiMailboxHealth,
+  readMultiMailboxHealth,
+  markMailboxSyncing,
+  formatHealthSummary,
+  formatHealthTable,
+} from "./health-multi.js";
+export type {
+  MailboxHealth,
+  GlobalHealthMetrics,
+  MultiMailboxHealth,
+  MailboxSyncResult,
+  MailboxStatus,
+} from "./health-multi.js";
 
 // Normalize exports
 export { normalizeMessageToPayload, normalizeMessage } from "./normalize/message.js";
 export { normalizeDeltaEntry } from "./normalize/delta-entry.js";
-export { normalizeBatch } from "./normalize/batch.js";
 export { normalizeAttachments } from "./normalize/attachments.js";
 export { normalizeBody } from "./normalize/body.js";
 export { normalizeRecipient, normalizeRecipientList } from "./normalize/addresses.js";
 
 // ID exports
 export { buildEventId, hashNormalizedPayload } from "./ids/event-id.js";
+
+// Error handling exports
+export {
+  ExchangeFSSyncError,
+  NetworkError,
+  AuthError,
+  StorageError,
+  CorruptionError,
+  RateLimitError,
+  ErrorCode,
+  classifyGraphError,
+  classifyFsError,
+  wrapError,
+} from "./errors.js";
+
+// Retry and resilience exports
+export {
+  withRetry,
+  CircuitBreaker,
+  globalCircuitBreakers,
+  resetCircuitBreakers,
+  handleGraphError,
+  DEFAULT_RETRY_CONFIG,
+  DEFAULT_CIRCUIT_BREAKER_CONFIG,
+} from "./retry.js";
+export type {
+  RetryConfig,
+  CircuitBreakerConfig,
+  RetryContext,
+  RetryResult,
+} from "./retry.js";
+
+// Security exports
+export {
+  SecureStorage,
+  KeychainStorage,
+  FileSecureStorage,
+  InMemorySecureStorage,
+  createSecureStorage,
+} from "./auth/secure-storage.js";
+export {
+  secureRandomFilename,
+  createSecureTempDir,
+  withSecureTemp,
+  writeSecureTempFile,
+  readAndDeleteSecureTempFile,
+  createAutoCleanupTempFile,
+  writeFileSecurely,
+  createSecureTempFileStream,
+} from "./utils/temp.js";
+export type {
+  SecureTempOptions,
+  TempFileStreamOptions,
+  TempFileStreamResult,
+} from "./utils/temp.js";
+export {
+  ensurePrivateFile,
+  ensurePrivateDirectory,
+  checkFilePermissions,
+  checkDirectoryPermissions,
+  verifyFileAccess,
+  applySecurePermissions,
+  scanDirectoryPermissions,
+  fixDirectoryPermissions,
+  runSecurityChecks,
+  isRunningAsRoot,
+  PermissionMode,
+} from "./utils/permissions.js";
+export type {
+  PermissionCheckResult,
+  SecurityCheckResult,
+} from "./utils/permissions.js";
+
+// Log sanitization exports
+export {
+  sanitizeForLogging,
+  sanitizeError,
+  sanitizeHeaders,
+  sanitizeUrl,
+  sanitizeLogEntry,
+  redactEmail,
+  isSensitiveField,
+  REDACTED,
+} from "./logging/sanitize.js";
+export type { LogEntry } from "./logging/sanitize.js";
+
+// Batch processing exports
+export {
+  batchSync,
+  streamEvents,
+  processEventsConcurrently,
+  createThrottledFunction,
+  sleep,
+} from "./runner/batch-sync.js";
+export type {
+  SyncProgress,
+  BatchSyncOptions,
+  BatchSyncResult,
+} from "./runner/batch-sync.js";
+
+// Memory profiling exports
+export {
+  getMemoryUsage,
+  formatMemoryUsage,
+  logMemorySnapshot,
+  MemoryMonitor,
+  MemoryWatcher,
+  triggerHeapSnapshot,
+  estimateObjectSize,
+  formatBytes,
+} from "./utils/memory.js";
+export type {
+  MemoryUsage,
+  MemoryAlertCallback,
+} from "./utils/memory.js";
+
+// Timing utilities
+export {
+  sleep,
+  createTimeout,
+  withTimeout,
+  measureTime,
+  debounce,
+  throttle,
+} from "./utils/timing.js";
+
+// Secure config exports
+export {
+  resolveSecrets,
+  extractSecureRefs,
+  validateSecureRefs,
+  isSecureRef,
+} from "./config/secure-config.js";
+export type { SecureRef } from "./config/secure-config.js";
 
 // Type exports
 export type {
@@ -36,7 +269,17 @@ export type {
   GraphAdapterConfig,
 } from "./adapter/graph/adapter.js";
 export type {
+  MockAdapterOptions,
+} from "./adapter/graph/mock-adapter.js";
+export type {
   SyncOnceDeps,
+  SyncError,
+  DetailedSyncResult,
+} from "./runner/sync-once.js";
+export {
+  isSyncSuccess,
+  isSyncRetryable,
+  getErrorSummary,
 } from "./runner/sync-once.js";
 export type {
   NormalizeMessageInput,
@@ -58,3 +301,47 @@ export type {
   SyncPhase,
   ProgressTracker,
 } from "./types/progress.js";
+export type {
+  HealthFileData,
+  HealthStatus,
+  HealthWriterOptions,
+  HealthMetrics,
+  HealthRecentError,
+} from "./health.js";
+
+// Observability exports
+export {
+  MetricsCollector,
+  metrics,
+  MetricNames,
+  type MetricsSnapshot,
+} from "./metrics.js";
+
+export {
+  createLogger,
+  configureLogging,
+  getLoggingConfig,
+  resetLogging,
+  setLogLevel,
+  setLogFormat,
+  FileTransport,
+  createFileLogger,
+  getDefaultLogDirectory,
+  type Logger,
+  type LogEntry,
+  type LogLevel,
+  type FileLoggerConfig,
+} from "./logging/index.js";
+
+export {
+  createTracer,
+  setGlobalTracer,
+  getTracer,
+  trace,
+  createSpan,
+  initTracing,
+  type Span,
+  type SpanContext,
+  type Tracer,
+  type SpanExporter,
+} from "./tracing.js";

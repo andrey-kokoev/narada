@@ -1,0 +1,36 @@
+{
+  "id": "AAMkAGVmMDEzMTM4LTZmYWUtNDBmOS1hZGY0LTA4MzUzOTNjZGE5MABGAAAAAABYYFdwieVuS6NTjB2XIxV2BwAwhFwzv0-4Q6vNqZzPVYVAAAAAAAEMAAAwhFwzv0-4Q6vNqZzPVYVAAABpH8qAAC=",
+  "changeKey": "CQAAABYAAAAwhFwzv0+4Q6vNqZzPVYVAAABpIBWI",
+  "conversationId": "AAQkAGVmMDEzMTM4LTZmYWUtNDBmOS1hZGY0LTA4MzUzOTNjZGE5MAAQABRFEHM0U5pCrBi6pLsSUIK=",
+  "subject": "日本語メールテスト 🎌 ñoño résumé café",
+  "parentFolderId": "AQMkAGVmMDEzMTM4LTZmYWUtNDBmOS1hZGY0LTAwAEMDUzOTNjZGE5MAAuAAADGFx2N4p7S0C6R_lEfWSNWQEAwhFwzv0+4Q6vNqZzPVYVAAACAQwAAAA=",
+  "isRead": false,
+  "isDraft": false,
+  "hasAttachments": false,
+  "body": {
+    "contentType": "text",
+    "content": "Testing unicode characters: ñoño résumé café 日本語 🎌 🚀"
+  },
+  "from": {
+    "emailAddress": {
+      "name": "Unicode Tester",
+      "address": "unicode@example.com"
+    }
+  },
+  "toRecipients": [
+    {
+      "emailAddress": {
+        "name": "收件人",
+        "address": "recipient@example.com"
+      }
+    }
+  ],
+  "receivedDateTime": "2024-01-15T09:00:00Z",
+  "sentDateTime": "2024-01-15T08:55:00Z",
+  "internetMessageId": "<unicode-test@example.com>",
+  "webLink": "https://outlook.office365.com/mail/inbox/id/AAMkAGVmMDEzMTM4LTZmYWUtNDBmOS1hZGY0LTA4MzUzOTNjZGE5MABGAAAAAABYYFdwieVuS6NTjB2XIxV2BwAwhFwzv0-4Q6vNqZzPVYVAAAAAAAEMAAAwhFwzv0-4Q6vNqZzPVYVAAABpH8qAAC=",
+  "inferenceClassification": "focused",
+  "flag": {
+    "flagStatus": "notFlagged"
+  }
+}

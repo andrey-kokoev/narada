@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { CursorStore } from "../types/runtime.js";
 import type { CursorToken } from "../types/normalized.js";
+import { CorruptionError, StorageError, wrapError, ErrorCode } from "../errors.js";
 
 interface CursorFileShape {
   mailbox_id: string;
@@ -19,26 +20,39 @@ async function ensureParentDir(path: string): Promise<void> {
 
 function validateCursorFileShape(value: unknown): CursorFileShape {
   if (!value || typeof value !== "object") {
-    throw new Error("Invalid cursor file: expected object");
+    throw new CorruptionError("Invalid cursor file: expected object", {
+      phase: "cursor:validate",
+      metadata: { receivedType: typeof value },
+    });
   }
 
   const record = value as Record<string, unknown>;
 
   if (typeof record.mailbox_id !== "string" || !record.mailbox_id.trim()) {
-    throw new Error("Invalid cursor file: mailbox_id must be a non-empty string");
+    throw new CorruptionError("Invalid cursor file: mailbox_id must be a non-empty string", {
+      phase: "cursor:validate",
+      metadata: { receivedMailboxId: record.mailbox_id },
+    });
   }
 
   if (
     typeof record.committed_cursor !== "string" ||
     !record.committed_cursor.trim()
   ) {
-    throw new Error(
+    throw new CorruptionError(
       "Invalid cursor file: committed_cursor must be a non-empty string",
+      {
+        phase: "cursor:validate",
+        metadata: { receivedCursor: record.committed_cursor },
+      },
     );
   }
 
   if (typeof record.committed_at !== "string" || !record.committed_at.trim()) {
-    throw new Error("Invalid cursor file: committed_at must be a non-empty string");
+    throw new CorruptionError("Invalid cursor file: committed_at must be a non-empty string", {
+      phase: "cursor:validate",
+      metadata: { receivedCommittedAt: record.committed_at },
+    });
   }
 
   return {
@@ -48,29 +62,64 @@ function validateCursorFileShape(value: unknown): CursorFileShape {
   };
 }
 
+export interface FileCursorStoreOptions {
+  rootDir: string;
+  mailboxId: string;
+  /** If true, attempt to recover from corrupted cursor files by resetting to null */
+  autoRecoverCorruption?: boolean;
+}
+
 export class FileCursorStore implements CursorStore {
   private readonly cursorPath: string;
   private readonly tmpDir: string;
   private readonly mailboxId: string;
+  private readonly autoRecoverCorruption: boolean;
 
-  constructor(params: {
-    rootDir: string;
-    mailboxId: string;
-  }) {
+  constructor(params: FileCursorStoreOptions) {
     this.cursorPath = join(params.rootDir, "state", "cursor.json");
     this.tmpDir = join(params.rootDir, "tmp");
     this.mailboxId = params.mailboxId;
+    this.autoRecoverCorruption = params.autoRecoverCorruption ?? false;
   }
 
   async read(): Promise<CursorToken | null> {
     try {
       const raw = await readFile(this.cursorPath, "utf8");
-      const parsed = JSON.parse(raw) as unknown;
-      const cursorState = validateCursorFileShape(parsed);
+      let parsed: unknown;
+
+      try {
+        parsed = JSON.parse(raw) as unknown;
+      } catch (parseError) {
+        // JSON parse error - file is corrupted
+        if (this.autoRecoverCorruption) {
+          console.warn(`Cursor file corrupted (invalid JSON), resetting to null: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+          return null;
+        }
+        throw new CorruptionError("Cursor file contains invalid JSON", {
+          phase: "cursor:read",
+          metadata: { cursorPath: this.cursorPath },
+          cause: parseError instanceof Error ? parseError : undefined,
+        });
+      }
+
+      let cursorState: CursorFileShape;
+      try {
+        cursorState = validateCursorFileShape(parsed);
+      } catch (validationError) {
+        if (this.autoRecoverCorruption && validationError instanceof CorruptionError) {
+          console.warn(`Cursor file corrupted, resetting to null: ${validationError.message}`);
+          return null;
+        }
+        throw validationError;
+      }
 
       if (cursorState.mailbox_id !== this.mailboxId) {
-        throw new Error(
+        throw new CorruptionError(
           `Cursor mailbox mismatch: expected ${this.mailboxId}, got ${cursorState.mailbox_id}`,
+          {
+            phase: "cursor:read",
+            metadata: { expectedMailbox: this.mailboxId, actualMailbox: cursorState.mailbox_id },
+          },
         );
       }
 
@@ -80,13 +129,26 @@ export class FileCursorStore implements CursorStore {
       if (code === "ENOENT") {
         return null;
       }
-      throw error;
+
+      // Already wrapped errors
+      if (error instanceof CorruptionError) {
+        throw error;
+      }
+
+      throw wrapError(error, {
+        phase: "cursor:read",
+        operation: "readFile",
+      });
     }
   }
 
   async commit(nextCursor: CursorToken): Promise<void> {
     if (!nextCursor.trim()) {
-      throw new Error("Cannot commit empty cursor");
+      throw new StorageError("Cannot commit empty cursor", {
+        phase: "cursor:commit",
+        recoverable: false,
+        metadata: { operation: "commit" },
+      });
     }
 
     await ensureParentDir(this.cursorPath);
@@ -106,11 +168,60 @@ export class FileCursorStore implements CursorStore {
     const bytes = `${JSON.stringify(payload, null, 2)}\n`;
 
     try {
+      // Atomic write: write to temp file first, then rename
       await writeFile(tmpPath, bytes, "utf8");
       await rename(tmpPath, this.cursorPath);
     } catch (error) {
+      // Clean up temp file on error
       await rm(tmpPath, { force: true }).catch(() => undefined);
-      throw error;
+
+      // Check for disk full
+      const nodeError = error as NodeJS.ErrnoException;
+      if (nodeError.code === "ENOSPC") {
+        throw new StorageError("Disk full: unable to commit cursor", {
+          code: ErrorCode.STORAGE_DISK_FULL,
+          phase: "cursor:commit",
+          recoverable: false,
+          metadata: { cursorPath: this.cursorPath, tmpPath },
+          cause: nodeError,
+        });
+      }
+
+      throw wrapError(error, {
+        phase: "cursor:commit",
+        operation: "writeFile/rename",
+      });
+    }
+  }
+
+  /**
+   * Reset the cursor to a null state (for recovery scenarios)
+   */
+  async reset(): Promise<void> {
+    try {
+      await rm(this.cursorPath, { force: true });
+    } catch (error) {
+      throw wrapError(error, {
+        phase: "cursor:reset",
+        operation: "rm",
+      });
+    }
+  }
+
+  /**
+   * Get cursor file metadata for diagnostics
+   */
+  async getMetadata(): Promise<{ exists: boolean; path: string; mailboxId: string }> {
+    try {
+      await readFile(this.cursorPath, "utf8");
+      return { exists: true, path: this.cursorPath, mailboxId: this.mailboxId };
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      return {
+        exists: code !== "ENOENT",
+        path: this.cursorPath,
+        mailboxId: this.mailboxId,
+      };
     }
   }
 }

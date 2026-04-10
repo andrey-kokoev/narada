@@ -1,8 +1,8 @@
 /**
- * Structured CLI logger with human/JSON format support
+ * Structured CLI logger using the new formatter
  */
 
-import { createFormatter, detectFormat, type OutputFormat, type Formatter } from './formatter.js';
+import { createFormatter, type FormatterOptions } from './formatter.js';
 
 export interface Logger {
   info(message: string, data?: Record<string, unknown>): void;
@@ -15,45 +15,49 @@ export interface Logger {
 
 export interface CreateLoggerOptions {
   verbose: boolean;
-  format?: OutputFormat;
+  format?: FormatterOptions['format'];
 }
 
 export function createLogger(options: CreateLoggerOptions): Logger {
-  const format = detectFormat(options.format);
-  const formatter = createFormatter(format);
-  const isVerbose = options.verbose;
+  const formatter = createFormatter({
+    format: options.format,
+    verbose: options.verbose,
+  });
   
   return {
     info(message: string, data?: Record<string, unknown>): void {
-      formatter.info(message);
-      if (isVerbose && data) {
-        console.error('  ', JSON.stringify(data));
+      formatter.message(message, 'info');
+      if (options.verbose && data) {
+        formatter.output({ level: 'debug', ...data });
       }
     },
     
     error(message: string, error?: Error): void {
-      formatter.error(message, error);
+      formatter.message(message, 'error');
+      if (error && options.verbose) {
+        formatter.output({ error: error.message, stack: error.stack });
+      }
     },
     
     debug(message: string, data?: Record<string, unknown>): void {
-      if (isVerbose) {
-        formatter.info(`[debug] ${message}`);
+      if (options.verbose) {
+        formatter.message(`[debug] ${message}`, 'info');
         if (data) {
-          console.error('  ', JSON.stringify(data));
+          formatter.output(data);
         }
       }
     },
     
     result(data: unknown): void {
-      formatter.result(data);
+      formatter.output(data);
     },
     
     success(message: string): void {
-      formatter.success(message);
+      formatter.message(message, 'success');
     },
     
     warning(message: string): void {
-      formatter.warning(message);
+      formatter.message(message, 'warning');
     },
   };
 }

@@ -1,0 +1,13 @@
+{
+  "description": "Note: email validation is not strict in schema, but field must be non-empty string",
+  "mailbox_id": "invalid-email-format",
+  "root_dir": "./data/mail-sync",
+  "graph": {
+    "user_id": "",
+    "prefer_immutable_ids": true
+  },
+  "scope": {
+    "included_container_refs": ["inbox"],
+    "included_item_kinds": ["message"]
+  }
+}

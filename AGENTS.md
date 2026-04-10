@@ -37,7 +37,7 @@ A deterministic, replay-safe state compiler that transforms a remote Microsoft G
 | Change event ID computation | [`src/ids/event-id.ts`](packages/exchange-fs-sync/src/ids/event-id.ts) |
 | Add a new persistence store | [`src/persistence/`](packages/exchange-fs-sync/src/persistence/) + see [03-persistence.md](packages/exchange-fs-sync/docs/03-persistence.md) |
 | Modify the sync loop | [`src/runner/sync-once.ts`](packages/exchange-fs-sync/src/runner/sync-once.ts) |
-| Add a CLI command | [`src/cli/`](packages/exchange-fs-sync/src/cli/) + see [02-architecture.md](packages/exchange-fs-sync/docs/02-architecture.md) CLI section |
+| Add a CLI command | [`packages/exchange-fs-sync-cli/src/commands/`](packages/exchange-fs-sync-cli/src/commands/) |
 | Change Graph API handling | [`src/adapter/graph/`](packages/exchange-fs-sync/src/adapter/graph/) |
 | Add a new field to messages | [`src/types/normalized.ts`](packages/exchange-fs-sync/src/types/normalized.ts) + [`src/normalize/message.ts`](packages/exchange-fs-sync/src/normalize/message.ts) |
 | Modify config schema | [`src/config/types.ts`](packages/exchange-fs-sync/src/config/types.ts) + [`src/config/load.ts`](packages/exchange-fs-sync/src/config/load.ts) |
@@ -52,6 +52,10 @@ A deterministic, replay-safe state compiler that transforms a remote Microsoft G
 | **Tombstone** | Deletion marker for audit trails | [`src/persistence/tombstones.ts`](packages/exchange-fs-sync/src/persistence/tombstones.ts) |
 | **Normalized Event** | Canonical representation of a Graph change | [`src/types/normalized.ts`](packages/exchange-fs-sync/src/types/normalized.ts) |
 | **Stable Stringify** | Deterministic JSON serialization | [`src/ids/event-id.ts`](packages/exchange-fs-sync/src/ids/event-id.ts) |
+| **Secure Storage** | OS keychain credential storage | [`src/auth/secure-storage.ts`](packages/exchange-fs-sync/src/auth/secure-storage.ts) |
+| **Batch Sync** | Memory-efficient streaming sync | [`src/runner/batch-sync.ts`](packages/exchange-fs-sync/src/runner/batch-sync.ts) |
+| **Circuit Breaker** | Failure rate protection | [`src/retry.ts`](packages/exchange-fs-sync/src/retry.ts) |
+| **Health File** | Sync status persistence | [`src/health.ts`](packages/exchange-fs-sync/src/health.ts) |
 
 ---
 
@@ -61,32 +65,37 @@ A deterministic, replay-safe state compiler that transforms a remote Microsoft G
 # Install dependencies
 pnpm install
 
-# Development (Rolldown watch)
-pnpm dev
-
-# Build (Rolldown bundle)
+# Build all packages (tsc)
 pnpm build
 
 # Type check (tsc --noEmit)
 pnpm typecheck
 
-# Lint (oxlint - Rust-based)
-pnpm lint
-
-# Format (oxfmt - Rust-based, Prettier-compatible)
-pnpm fmt
-
-# Check all (typecheck + lint + format)
-pnpm check
-
 # Run all tests (Vitest)
 pnpm test
 
-# Run tests in watch mode
-pnpm test:watch
+# Run benchmarks
+pnpm benchmark
+
+# Compare benchmarks with baseline
+pnpm benchmark:compare
+
+# Pre-publish checks
+pnpm prepublish-check
 ```
 
-**Tooling**: Full Ox stack (Rust-based) - Rolldown + oxlint + oxfmt + Vitest. See package AGENTS.md for details.
+**Package Management**: Uses [Changesets](https://github.com/changesets/changesets) for versioning.
+
+```bash
+# Add a changeset
+pnpm changeset
+
+# Version packages  
+pnpm version-packages
+
+# Publish (CI handles this)
+pnpm release
+```
 
 ---
 
@@ -96,27 +105,42 @@ pnpm test:watch
 narada/
 ├── AGENTS.md                          # This file (navigation hub)
 ├── packages/
-│   └── exchange-fs-sync/
-│       ├── AGENTS.md                  # Package-specific agent guidance
-│       ├── config.example.json        # Configuration template
-│       ├── docs/                      # Numbered documentation
-│       │   ├── 01-spec.md
-│       │   ├── 02-architecture.md
-│       │   └── ...
-│       ├── src/
-│       │   ├── adapter/graph/         # Microsoft Graph API client
-│       │   ├── cli/                   # Command-line interfaces
-│       │   ├── config/                # Configuration loading
-│       │   ├── ids/                   # Event ID generation
-│       │   ├── normalize/             # Graph → normalized conversion
-│       │   ├── persistence/           # Filesystem storage
-│       │   ├── projector/             # Event application
-│       │   ├── recovery/              # Crash recovery
-│       │   ├── runner/                # Sync orchestration
-│       │   └── types/                 # TypeScript definitions
-│       └── test/
-│           ├── integration/           # End-to-end tests
-│           └── unit/                  # Component tests
+│   ├── exchange-fs-sync/              # Core library
+│   │   ├── AGENTS.md                  # Package-specific agent guidance
+│   │   ├── config.example.json        # Configuration template
+│   │   ├── docs/                      # Numbered documentation
+│   │   │   ├── 01-spec.md
+│   │   │   ├── 02-architecture.md
+│   │   │   └── ...
+│   │   ├── src/
+│   │   │   ├── adapter/graph/         # Microsoft Graph API client
+│   │   │   ├── auth/                  # Secure credential storage
+│   │   │   ├── config/                # Configuration loading
+│   │   │   ├── ids/                   # Event ID generation
+│   │   │   ├── logging/               # Structured logging
+│   │   │   ├── normalize/             # Graph → normalized conversion
+│   │   │   ├── persistence/           # Filesystem storage
+│   │   │   ├── projector/             # Event application
+│   │   │   ├── recovery/              # Crash recovery
+│   │   │   ├── runner/                # Sync orchestration
+│   │   │   └── types/                 # TypeScript definitions
+│   │   └── test/
+│   │       ├── benchmarks/            # Performance benchmarks
+│   │       ├── integration/           # End-to-end tests
+│   │       ├── unit/                  # Component tests
+│   │       └── windows/               # Windows-specific tests
+│   │
+│   ├── exchange-fs-sync-cli/          # Command-line interface
+│   │   └── src/
+│   │       ├── commands/              # CLI commands
+│   │       ├── lib/                   # Shared utilities
+│   │       └── main.ts                # Entry point
+│   │
+│   ├── exchange-fs-sync-daemon/       # Long-running daemon
+│   └── exchange-fs-sync-search/       # Full-text search (FTS5)
+│
+├── scripts/                           # Build and utility scripts
+└── .github/workflows/                 # CI/CD pipelines
 ```
 
 ---
@@ -171,8 +195,9 @@ narada/
 
 ### 4. Add a CLI Command
 
-1. Create [`src/cli/{command}.ts`](packages/exchange-fs-sync/src/cli/)
-2. Wire up in [`src/cli/main.ts`](packages/exchange-fs-sync/src/cli/main.ts) (when implemented)
+1. Create [`packages/exchange-fs-sync-cli/src/commands/{command}.ts`](packages/exchange-fs-sync-cli/src/commands/)
+2. Wire up in [`packages/exchange-fs-sync-cli/src/main.ts`](packages/exchange-fs-sync-cli/src/main.ts)
+3. Export types from [`packages/exchange-fs-sync-cli/src/index.ts`](packages/exchange-fs-sync-cli/src/index.ts)
 3. Use [`loadConfig()`](packages/exchange-fs-sync/src/config/load.ts) for config handling
 
 ---

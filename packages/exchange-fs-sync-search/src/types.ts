@@ -32,7 +32,7 @@ export interface SearchResult {
 }
 
 export interface SearchQuery {
-  q: string;
+  q?: string;
   fields?: ('subject' | 'body' | 'from' | 'to')[];
   folder_refs?: string[];
   is_read?: boolean;

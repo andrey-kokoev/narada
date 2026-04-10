@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
-import type { RunResult } from 'exchange-fs-sync';
+import type { RunResult } from '@narada/exchange-fs-sync';
 import {
   loadConfig,
   buildGraphTokenProvider,
@@ -16,7 +16,7 @@ import {
   FileLock,
   normalizeFolderRef,
   normalizeFlagged,
-} from 'exchange-fs-sync';
+} from '@narada/exchange-fs-sync';
 
 export interface SyncOptions {
   config?: string;
@@ -67,8 +67,8 @@ export async function syncCommand(
     body_policy: config.normalize.body_policy,
     attachment_policy: config.normalize.attachment_policy,
     include_headers: config.normalize.include_headers,
-    normalize_folder_ref,
-    normalize_flagged,
+    normalize_folder_ref: normalizeFolderRef,
+    normalize_flagged: normalizeFlagged,
   });
   
   // Create persistence stores

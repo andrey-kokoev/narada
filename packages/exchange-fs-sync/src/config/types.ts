@@ -1,5 +1,28 @@
 import type { AttachmentPolicy, BodyPolicy, FolderRef, MailboxId } from "../types/index.js";
 
+export interface RetentionPolicy {
+  max_age_days?: number;
+  max_total_size?: string;
+  max_message_count?: number;
+  preserve_flagged: boolean;
+  preserve_unread: boolean;
+}
+
+export interface CleanupSchedule {
+  frequency: 'daily' | 'weekly' | 'on-sync' | 'manual';
+  max_run_time_minutes: number;
+  time_window?: { start: string; end: string };
+}
+
+export interface LifecycleConfig {
+  tombstone_retention_days: number;
+  archive_after_days: number;
+  archive_dir: string;
+  compress_archives: boolean;
+  retention: RetentionPolicy;
+  schedule: CleanupSchedule;
+}
+
 export interface ExchangeFsSyncConfig {
   mailbox_id: MailboxId;
   root_dir: string;
@@ -31,4 +54,6 @@ export interface ExchangeFsSyncConfig {
     cleanup_tmp_on_startup: boolean;
     rebuild_views_after_sync: boolean;
   };
+
+  lifecycle: LifecycleConfig;
 }

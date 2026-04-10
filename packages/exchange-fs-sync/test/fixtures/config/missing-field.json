@@ -1,0 +1,12 @@
+{
+  "description": "Invalid: missing required mailbox_id field",
+  "root_dir": "./data/mail-sync",
+  "graph": {
+    "user_id": "user@example.com",
+    "prefer_immutable_ids": true
+  },
+  "scope": {
+    "included_container_refs": ["inbox"],
+    "included_item_kinds": ["message"]
+  }
+}

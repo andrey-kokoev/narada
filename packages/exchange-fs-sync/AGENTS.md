@@ -16,7 +16,7 @@ packages/exchange-fs-sync/
 │   │   ├── auth.ts              # Token providers
 │   │   ├── client.ts            # HTTP client
 │   │   └── delta.ts             # Delta pagination
-│   ├── cli/                     # CLI commands (legacy - use exchange-fs-sync-cli package)
+│   ├── cli/                     # CLI commands (DEPRECATED - use exchange-fs-sync-cli package)
 │   │   ├── integrity-check.ts   # Integrity check command
 │   │   ├── main.ts              # Entry point (basic implementation)
 │   │   └── rebuild-views.ts     # View rebuild command

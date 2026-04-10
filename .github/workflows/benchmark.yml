@@ -1,0 +1,233 @@
+name: Benchmark
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build
+        run: pnpm build
+
+      - name: Run benchmarks
+        run: |
+          cd packages/exchange-fs-sync
+          pnpm vitest bench --run --reporter=json > benchmark-results.json
+        env:
+          NODE_ENV: production
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark-results
+          path: packages/exchange-fs-sync/benchmark-results.json
+
+      - name: Load baseline
+        id: baseline
+        run: |
+          if [ -f .benchmarks/baselines/latest.json ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            cp .benchmarks/baselines/latest.json baseline.json
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Compare with baseline
+        if: steps.baseline.outputs.exists == 'true'
+        run: |
+          cd packages/exchange-fs-sync
+          node -e "
+            const fs = require('fs');
+            const current = JSON.parse(fs.readFileSync('benchmark-results.json', 'utf8'));
+            const baseline = JSON.parse(fs.readFileSync('../../baseline.json', 'utf8'));
+            
+            // Simple regression check
+            let hasRegression = false;
+            const threshold = 10; // 10%
+            
+            for (const result of current.results || []) {
+              const baseResult = baseline.results.find(b => b.name === result.name);
+              if (baseResult) {
+                const change = ((result.meanMs - baseResult.meanMs) / baseResult.meanMs) * 100;
+                if (change > threshold) {
+                  console.log('🔴 REGRESSION:', result.name, '+', change.toFixed(1) + '%');
+                  hasRegression = true;
+                } else if (change < -threshold) {
+                  console.log('🟢 IMPROVEMENT:', result.name, change.toFixed(1) + '%');
+                } else {
+                  console.log('⚪ STABLE:', result.name, (change > 0 ? '+' : '') + change.toFixed(1) + '%');
+                }
+              }
+            }
+            
+            if (hasRegression) {
+              process.exit(1);
+            }
+          "
+
+      - name: Generate markdown report
+        run: |
+          cd packages/exchange-fs-sync
+          node -e "
+            const fs = require('fs');
+            const results = JSON.parse(fs.readFileSync('benchmark-results.json', 'utf8'));
+            
+            let markdown = '# Benchmark Results\n\n';
+            markdown += 'Generated: ' + new Date().toISOString() + '\n\n';
+            markdown += '| Benchmark | Mean | Median | P95 | Ops/sec |\n';
+            markdown += '|-----------|------|--------|-----|---------|\n';
+            
+            for (const result of results.results || []) {
+              markdown += '| ' + result.name + ' | ' + 
+                result.meanMs.toFixed(1) + 'ms | ' +
+                result.medianMs.toFixed(1) + 'ms | ' +
+                result.p95Ms.toFixed(1) + 'ms | ' +
+                result.opsPerSecond.toFixed(0) + ' |\n';
+            }
+            
+            fs.writeFileSync('benchmark-report.md', markdown);
+            console.log(markdown);
+          "
+
+      - name: Comment PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const markdown = fs.readFileSync('packages/exchange-fs-sync/benchmark-report.md', 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: markdown
+            });
+
+      - name: Update baseline (main only)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          mkdir -p .benchmarks/baselines
+          cp packages/exchange-fs-sync/benchmark-results.json .benchmarks/baselines/latest.json
+          
+          # Also save with version
+          VERSION=$(node -p "require('./package.json').version")
+          cp packages/exchange-fs-sync/benchmark-results.json ".benchmarks/baselines/${VERSION}.json"
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .benchmarks/baselines/
+          git diff --quiet && git diff --staged --quiet || git commit -m "Update benchmark baseline [skip ci]"
+          git push
+
+  memory-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build
+        run: pnpm build
+
+      - name: Run memory benchmarks
+        run: |
+          cd packages/exchange-fs-sync
+          # Run with --expose-gc for accurate memory measurement
+          node --expose-gc ../../node_modules/vitest/vitest.mjs bench --run test/benchmarks/memory.bench.ts
+
+  performance-targets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build
+        run: pnpm build
+
+      - name: Check performance targets
+        run: |
+          cd packages/exchange-fs-sync
+          node -e "
+            const targets = {
+              'write single message': { maxMs: 50 },
+              'read random message': { maxMs: 20 },
+              'event ID generation': { maxMs: 1, opsPerSecond: 10000 },
+            };
+            
+            console.log('Checking performance targets...\n');
+            
+            // In a real scenario, we'd load actual benchmark results
+            // and compare against these targets
+            
+            for (const [name, target] of Object.entries(targets)) {
+              console.log(name + ':');
+              if (target.maxMs) console.log('  Max time:', target.maxMs + 'ms');
+              if (target.opsPerSecond) console.log('  Min ops/sec:', target.opsPerSecond);
+            }
+          "

@@ -206,6 +206,49 @@ interface CachedToken {
 
 ---
 
+## Secure Credential Storage
+
+The system supports storing credentials in your OS keychain for enhanced security.
+
+### Supported Keychains
+
+| Platform | Keychain |
+|----------|----------|
+| macOS | Keychain Access |
+| Windows | Credential Manager |
+| Linux | libsecret (GNOME Keyring, KWallet) |
+
+### Using Secure Storage
+
+Credentials can be referenced in config using the `{ "$secure": "key" }` syntax:
+
+```json
+{
+  "graph": {
+    "client_secret": { "$secure": "graph_client_secret" },
+    "tenant_id": { "$secure": "graph_tenant_id" }
+  }
+}
+```
+
+The actual values are stored securely and resolved at runtime.
+
+### Fallback Encryption
+
+If no OS keychain is available, credentials are encrypted using AES-256-GCM with a key derived from your user account. Encryption keys are stored with 0600 permissions in `~/.exchange-fs-sync/credentials/`.
+
+### Programmatic API
+
+```typescript
+import { createSecureStorage } from '@narada/exchange-fs-sync';
+
+const storage = await createSecureStorage('my-mailbox');
+await storage.setCredential('client_secret', 'secret-value');
+const secret = await storage.getCredential('client_secret');
+```
+
+---
+
 ## Default Values
 
 Fields not provided use these defaults:

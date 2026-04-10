@@ -354,6 +354,91 @@ The current implementation is intentionally cache-free. Potential additions:
 
 ---
 
+## Backup and Restore
+
+### CLI Backup Commands
+
+The CLI provides comprehensive backup functionality:
+
+```bash
+# Create backup
+exchange-sync backup -o backup-$(date +%Y%m%d).tar.gz
+
+# Create encrypted backup
+exchange-sync backup -o backup.tar.gz --encrypt --passphrase "secret"
+
+# Backup specific components
+exchange-sync backup -o backup.tar.gz --include messages,config
+```
+
+### Backup Format
+
+Backups are tar archives containing:
+
+```
+backup.tar.gz
+├── backup-manifest.json    # Metadata and checksums
+├── messages/               # Message records
+├── views/                  # Derived views
+├── config/                 # Configuration
+├── state/                  # Cursor, apply-log, tombstones
+└── blobs/                  # Attachment content (if included)
+```
+
+### Manifest Schema
+
+```typescript
+interface BackupManifest {
+  version: string;           // Backup format version
+  created: string;           // ISO timestamp
+  sourceMailbox: string;
+  sourceRootDir: string;
+  contents: {
+    messages: number;
+    views: number;
+    config: boolean;
+    cursor: boolean;
+    applyLog: boolean;
+    tombstones: number;
+  };
+  checksums: Record<string, string>;  // SHA-256 hashes
+  encrypted: boolean;
+}
+```
+
+### Encryption
+
+Backups support AES-256-CBC encryption:
+- Passphrase-derived key with salt
+- Random IV per backup
+- Integrity verification via checksums
+
+### Restore
+
+```bash
+# Restore all data
+exchange-sync restore -i backup.tar.gz
+
+# Restore to different location
+exchange-sync restore -i backup.tar.gz -t ./restored
+
+# Selective restore
+exchange-sync restore -i backup.tar.gz --select msg-123
+exchange-sync restore -i backup.tar.gz --before 2024-01-01
+```
+
+### Verification
+
+```bash
+# Verify without extracting
+exchange-sync backup-verify -i backup.tar.gz
+
+# List contents
+exchange-sync backup-ls -i backup.tar.gz
+```
+
+---
+
 ## See Also
 
 - [02-architecture.md](02-architecture.md) — Where persistence fits in the component model

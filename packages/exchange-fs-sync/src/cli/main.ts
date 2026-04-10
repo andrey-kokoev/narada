@@ -1,5 +1,11 @@
 #!/usr/bin/env node
+/**
+ * @deprecated This CLI is deprecated. Please use the exchange-fs-sync-cli package instead.
+ * Install: npm install -g exchange-fs-sync-cli
+ * Usage: exchange-sync <command>
+ */
 import { resolve } from "node:path";
+import { stderr } from "node:process";
 import { loadConfig } from "../config/load.js";
 import { DefaultGraphAdapter } from "../adapter/graph/adapter.js";
 import { DefaultSyncRunner } from "../runner/sync-once.js";
@@ -13,7 +19,24 @@ import { GraphHttpClient } from "../adapter/graph/client.js";
 import { normalizeFolderRef, normalizeFlagged } from "../adapter/graph/scope.js";
 
 
+function printDeprecationWarning(): void {
+  stderr.write("\n");
+  stderr.write("╔════════════════════════════════════════════════════════════════╗\n");
+  stderr.write("║  DEPRECATION WARNING                                           ║\n");
+  stderr.write("║                                                                ║\n");
+  stderr.write("║  This CLI is deprecated and will be removed in a future        ║\n");
+  stderr.write("║  version. Please use the exchange-fs-sync-cli package:         ║\n");
+  stderr.write("║                                                                ║\n");
+  stderr.write("║    npm install -g exchange-fs-sync-cli                         ║\n");
+  stderr.write("║    exchange-sync <command>                                     ║\n");
+  stderr.write("║                                                                ║\n");
+  stderr.write("╚════════════════════════════════════════════════════════════════╝\n");
+  stderr.write("\n");
+}
+
 async function main() {
+  printDeprecationWarning();
+  
   const configPath = process.argv[2] || "./config.json";
   
   console.log(`Loading config from: ${configPath}`);

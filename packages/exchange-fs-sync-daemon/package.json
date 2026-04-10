@@ -1,15 +1,37 @@
 {
-  "name": "exchange-fs-sync-daemon",
-  "version": "1.0.0",
+  "name": "@narada/exchange-fs-sync-daemon",
+  "version": "0.1.0",
+  "description": "Long-running daemon for Exchange filesystem synchronization",
+  "main": "./dist/service.js",
+  "types": "./dist/service.d.ts",
   "type": "module",
   "bin": {
     "exchange-fs-sync-daemon": "./dist/index.js"
   },
-  "exports": {
-    ".": {
-      "import": "./dist/service.js",
-      "types": "./dist/service.d.ts"
-    }
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/narada/exchange-fs-sync.git",
+    "directory": "packages/exchange-fs-sync-daemon"
+  },
+  "keywords": [
+    "exchange",
+    "microsoft-graph",
+    "email",
+    "sync",
+    "daemon"
+  ],
+  "author": "Narada <team@narada.dev>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc",
@@ -18,7 +40,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "exchange-fs-sync": "workspace:*"
+    "@narada/exchange-fs-sync": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

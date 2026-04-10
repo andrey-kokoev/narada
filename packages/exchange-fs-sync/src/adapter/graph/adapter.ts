@@ -9,6 +9,7 @@ import type { GraphAdapter } from "../../types/runtime.js";
 import { normalizeBatch } from "../../normalize/batch.js";
 import { GraphHttpClient } from "./client.js";
 import { GraphDeltaWalker } from "./delta.js";
+import type { RetryConfig } from "../../retry.js";
 
 export interface GraphAdapterConfig {
   mailbox_id: string;
@@ -21,6 +22,8 @@ export interface GraphAdapterConfig {
   normalize_folder_ref: (graph_message: GraphDeltaMessage) => string[];
   normalize_flagged: (flag: GraphDeltaMessage["flag"]) => boolean;
   classify_removed_as_delete?: (message: GraphDeltaMessage) => boolean;
+  retryConfig?: Partial<RetryConfig>;
+  circuitBreakerThreshold?: number;
 }
 
 function resolveSingleFolderScope(scope: AdapterScope): string {

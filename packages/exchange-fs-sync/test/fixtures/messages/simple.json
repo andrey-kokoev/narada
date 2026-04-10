@@ -1,0 +1,36 @@
+{
+  "id": "AAMkAGVmMDEzMTM4LTZmYWUtNDBmOS1hZGY0LTA4MzUzOTNjZGE5MABGAAAAAABYYFdwieVuS6NTjB2XIxV2BwAwhFwzv0-4Q6vNqZzPVYVAAAAAAAEMAAAwhFwzv0-4Q6vNqZzPVYVAAABpH8qAAA=",
+  "changeKey": "CQAAABYAAAAwhFwzv0+4Q6vNqZzPVYVAAABpIBWG",
+  "conversationId": "AAQkAGVmMDEzMTM4LTZmYWUtNDBmOS1hZGY0LTA4MzUzOTNjZGE5MAAQABRFEHM0U5pCrBi6pLsSUII=",
+  "subject": "Hello from the team",
+  "parentFolderId": "AQMkAGVmMDEzMTM4LTZmYWUtNDBmOS1hZGY0LTAwAEMDUzOTNjZGE5MAAuAAADGFx2N4p7S0C6R_lEfWSNWQEAwhFwzv0+4Q6vNqZzPVYVAAACAQwAAAA=",
+  "isRead": false,
+  "isDraft": false,
+  "hasAttachments": false,
+  "body": {
+    "contentType": "text",
+    "content": "Hi there,\n\nJust wanted to check in and see how things are going. Let me know if you need anything!\n\nBest,\nThe Team"
+  },
+  "from": {
+    "emailAddress": {
+      "name": "Team Member",
+      "address": "team@example.com"
+    }
+  },
+  "toRecipients": [
+    {
+      "emailAddress": {
+        "name": "Recipient User",
+        "address": "user@example.com"
+      }
+    }
+  ],
+  "receivedDateTime": "2024-01-15T10:30:00Z",
+  "sentDateTime": "2024-01-15T10:29:00Z",
+  "internetMessageId": "<message-id@example.com>",
+  "webLink": "https://outlook.office365.com/mail/inbox/id/AAMkAGVmMDEzMTM4LTZmYWUtNDBmOS1hZGY0LTA4MzUzOTNjZGE5MABGAAAAAABYYFdwieVuS6NTjB2XIxV2BwAwhFwzv0-4Q6vNqZzPVYVAAAAAAAEMAAAwhFwzv0-4Q6vNqZzPVYVAAABpH8qAAA=",
+  "inferenceClassification": "focused",
+  "flag": {
+    "flagStatus": "notFlagged"
+  }
+}
