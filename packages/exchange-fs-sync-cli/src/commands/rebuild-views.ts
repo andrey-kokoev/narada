@@ -6,6 +6,7 @@ import { ExitCode } from '../lib/exit-codes.js';
 export interface RebuildViewsOptions {
   config?: string;
   verbose?: boolean;
+  format?: string;
 }
 
 export async function rebuildViewsCommand(

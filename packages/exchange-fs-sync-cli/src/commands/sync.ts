@@ -19,6 +19,7 @@ import {
 export interface SyncOptions {
   config?: string;
   verbose?: boolean;
+  format?: string;
   dryRun?: boolean;
 }
 

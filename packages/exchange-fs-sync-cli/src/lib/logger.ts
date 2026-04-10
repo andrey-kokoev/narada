@@ -1,37 +1,59 @@
 /**
- * Structured CLI logger
+ * Structured CLI logger with human/JSON format support
  */
+
+import { createFormatter, detectFormat, type OutputFormat, type Formatter } from './formatter.js';
 
 export interface Logger {
   info(message: string, data?: Record<string, unknown>): void;
   error(message: string, error?: Error): void;
   debug(message: string, data?: Record<string, unknown>): void;
   result(data: unknown): void;
+  success(message: string): void;
+  warning(message: string): void;
 }
 
-export function createLogger(verbose: boolean): Logger {
+export interface CreateLoggerOptions {
+  verbose: boolean;
+  format?: OutputFormat;
+}
+
+export function createLogger(options: CreateLoggerOptions): Logger {
+  const format = detectFormat(options.format);
+  const formatter = createFormatter(format);
+  const isVerbose = options.verbose;
+  
   return {
     info(message: string, data?: Record<string, unknown>): void {
-      if (verbose) {
-        console.error(`[info] ${message}`, data ? JSON.stringify(data) : '');
+      formatter.info(message);
+      if (isVerbose && data) {
+        console.error('  ', JSON.stringify(data));
       }
     },
     
     error(message: string, error?: Error): void {
-      console.error(`[error] ${message}`);
-      if (verbose && error?.stack) {
-        console.error(error.stack);
-      }
+      formatter.error(message, error);
     },
     
     debug(message: string, data?: Record<string, unknown>): void {
-      if (verbose) {
-        console.error(`[debug] ${message}`, data ? JSON.stringify(data) : '');
+      if (isVerbose) {
+        formatter.info(`[debug] ${message}`);
+        if (data) {
+          console.error('  ', JSON.stringify(data));
+        }
       }
     },
     
     result(data: unknown): void {
-      console.log(JSON.stringify(data, null, 2));
+      formatter.result(data);
+    },
+    
+    success(message: string): void {
+      formatter.success(message);
+    },
+    
+    warning(message: string): void {
+      formatter.warning(message);
     },
   };
 }

@@ -8,6 +8,7 @@ import { ExitCode } from '../lib/exit-codes.js';
 export interface IntegrityOptions {
   config?: string;
   verbose?: boolean;
+  format?: string;
 }
 
 interface IntegrityReport {

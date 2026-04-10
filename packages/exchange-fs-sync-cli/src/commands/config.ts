@@ -5,8 +5,9 @@ import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 
 export interface ConfigOptions {
-  config?: string;  // Not used, but required by wrapper
+  config?: string;
   verbose?: boolean;
+  format?: string;
   output?: string;
   force?: boolean;
 }
@@ -40,20 +41,16 @@ export async function configCommand(
   options: ConfigOptions,
   context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const outputPath = resolve(options.output || './config.json');
   const { logger } = context;
-  
-  logger.info('Initializing config', { outputPath });
+  const outputPath = options.output ? resolve(options.output) : resolve('./config.json');
   
   if (existsSync(outputPath) && !options.force) {
-    const error = `File already exists: ${outputPath}. Use --force to overwrite.`;
-    logger.error(error);
-    
+    logger.error(`${outputPath} already exists. Use --force to overwrite.`);
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: {
         status: 'error',
-        error,
+        error: 'File already exists',
       },
     };
   }
@@ -61,10 +58,10 @@ export async function configCommand(
   await writeFile(
     outputPath,
     JSON.stringify(DEFAULT_CONFIG, null, 2) + '\n',
-    'utf8',
+    'utf8'
   );
   
-  logger.info('Config written', { outputPath });
+  logger.success(`Configuration written to ${outputPath}`);
   
   return {
     exitCode: ExitCode.SUCCESS,
