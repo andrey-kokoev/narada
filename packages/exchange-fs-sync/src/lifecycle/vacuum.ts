@@ -4,7 +4,7 @@
  * Performs integrity checks and repairs on the data store.
  */
 
-import { readdir, readFile, stat, rm } from 'node:fs/promises';
+import { readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import type { VacuumOptions, VacuumResult, CleanupContext } from './types.js';
@@ -74,19 +74,6 @@ async function verifyMessageChecksum(messagePath: string): Promise<{
       valid: false,
       error: error instanceof Error ? error.message : String(error),
     };
-  }
-}
-
-/**
- * Check if a message directory has all required files
- */
-async function isMessageComplete(messagePath: string): Promise<boolean> {
-  try {
-    const recordPath = join(messagePath, 'record.json');
-    await stat(recordPath);
-    return true;
-  } catch {
-    return false;
   }
 }
 
@@ -181,7 +168,7 @@ async function listViewEntries(rootDir: string): Promise<ViewEntry[]> {
  * Check for orphaned message files (no view entry)
  */
 async function findOrphans(
-  rootDir: string,
+  _rootDir: string,
   messages: string[],
   viewEntries: ViewEntry[]
 ): Promise<string[]> {
@@ -193,7 +180,7 @@ async function findOrphans(
  * Check for missing message files (view entry exists but no message)
  */
 async function findMissing(
-  rootDir: string,
+  _rootDir: string,
   messages: string[],
   viewEntries: ViewEntry[]
 ): Promise<ViewEntry[]> {
@@ -207,7 +194,7 @@ async function findMissing(
  * the message has been properly deleted and we can safely remove the tombstone
  */
 async function findStaleTombstones(
-  rootDir: string,
+  _rootDir: string,
   messages: string[],
   tombstones: string[]
 ): Promise<string[]> {

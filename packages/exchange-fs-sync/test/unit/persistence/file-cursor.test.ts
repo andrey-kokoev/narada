@@ -54,7 +54,10 @@ describe('FileCursorStore', () => {
     await store.commit('cursor-data');
 
     const stored = vol.readFileSync('/test/data/state/cursor.json', 'utf8');
-    expect(JSON.parse(stored)).toEqual({ cursor: 'cursor-data' });
+    expect(JSON.parse(stored)).toMatchObject({
+      mailbox_id: 'test@example.com',
+      committed_cursor: 'cursor-data',
+    });
   });
 
   it('handles concurrent writes gracefully', async () => {

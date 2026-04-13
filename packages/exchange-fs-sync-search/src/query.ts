@@ -41,10 +41,9 @@ export class SearchEngine {
    */
   search(query: SearchQuery): SearchResult[] {
     const index = this.indexer.getIndex();
-    const startTime = Date.now();
 
     // Tokenize query
-    const queryTerms = this.tokenize(query.q);
+    const queryTerms = this.tokenize(query.q ?? "");
     if (queryTerms.length === 0) {
       return [];
     }

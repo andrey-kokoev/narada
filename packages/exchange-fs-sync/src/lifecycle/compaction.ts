@@ -4,13 +4,12 @@
  * Archives old messages to a separate location with optional compression.
  */
 
-import { mkdir, readdir, stat, rename, createReadStream, createWriteStream } from 'node:fs';
-import { rm, readFile } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { mkdir, readdir, rm, readFile, stat } from 'node:fs/promises';
+import { join } from 'node:path';
 import { createGzip } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
 import type { CompactionOptions, CompactionResult, CleanupContext } from './types.js';
-import type { MessageStore, ViewStore } from '../types/runtime.js';
 
 /**
  * Default compaction options
@@ -34,8 +33,7 @@ interface MessageEntry {
 async function getMessageTimestamp(messagePath: string): Promise<Date> {
   try {
     const recordPath = join(messagePath, 'record.json');
-    const content = await readFile(recordPath, 'utf8');
-    const record = JSON.parse(content) as { _checksum?: string };
+    await readFile(recordPath, 'utf8');
     // Use record modification time (simplified - could parse from record)
     const stats = await stat(recordPath);
     return stats.mtime;
@@ -112,7 +110,6 @@ async function compressMessage(
   sourcePath: string,
   destPath: string
 ): Promise<void> {
-  const archivePath = `${destPath}.tar.gz`;
   await mkdir(destPath, { recursive: true });
   
   // For simplicity, we'll gzip individual files
@@ -174,8 +171,8 @@ async function archiveMessage(
  * Compact old messages by archiving them
  */
 export async function compactMessages(
-  messageStore: MessageStore,
-  viewStore: ViewStore,
+  _messageStore: unknown,
+  _viewStore: unknown,
   rootDir: string,
   options: Partial<CompactionOptions> = {},
   context: CleanupContext = {}

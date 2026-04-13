@@ -36,7 +36,6 @@ const PII_FIELDS = new Set([
   'sender',
   'recipient',
   'address',
-  'name',
   'displayName',
   'userPrincipalName',
   'mail',
@@ -260,9 +259,10 @@ export function getLoggingConfig(): LoggerConfig {
  * Reset to default configuration (useful for testing)
  */
 export function resetLogging(): void {
+  const existingTransports = globalConfig.transports;
   globalConfig = {
     ...DEFAULT_CONFIG,
-    transports: [new ConsoleTransport()],
+    transports: existingTransports.length > 0 ? existingTransports : [new ConsoleTransport()],
   };
 }
 

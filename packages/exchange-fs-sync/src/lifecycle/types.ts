@@ -194,3 +194,12 @@ export interface LifecycleStores {
   messageStore: MessageStore;
   viewStore: ViewStore;
 }
+
+export interface CleanupExecutionContext {
+  signal?: AbortSignal;
+  execute: () => Promise<void>;
+  onSkipped?: (reason: string) => void;
+  onStarted?: () => void;
+  onCompleted?: () => void;
+  onError?: (error: Error) => void;
+}

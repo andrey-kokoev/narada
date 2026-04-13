@@ -6,7 +6,7 @@
  */
 
 import { join } from 'node:path';
-import { loadConfig } from 'exchange-fs-sync/src/config/load.js';
+import { loadConfig } from '@narada/exchange-fs-sync';
 import { SearchEngine } from './search-engine.js';
 import type { SearchQuery } from './types.js';
 

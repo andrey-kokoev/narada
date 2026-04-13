@@ -63,6 +63,20 @@ describe("loadConfig", () => {
         cleanup_tmp_on_startup: true,
         rebuild_views_after_sync: false,
       },
+      lifecycle: {
+        tombstone_retention_days: 30,
+        archive_after_days: 90,
+        archive_dir: "archive",
+        compress_archives: true,
+        retention: {
+          preserve_flagged: true,
+          preserve_unread: true,
+        },
+        schedule: {
+          frequency: "manual",
+          max_run_time_minutes: 60,
+        },
+      },
     });
   });
 

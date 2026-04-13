@@ -2,112 +2,143 @@
 /**
  * exchange-fs-sync-daemon
  *
- * Long-running polling daemon for continuous mailbox synchronization.
- * Uses the core exchange-fs-sync package for actual sync operations.
+ * Long-running daemon for Exchange filesystem synchronization.
+ * Supports both polling and webhook-based real-time sync.
  */
 
-import { createSyncService, type SyncServiceConfig } from './service.js';
-import { createLogger } from './lib/logger.js';
-import { PidFile } from './lib/pid-file.js';
-import { join } from 'node:path';
+import { fileURLToPath } from "node:url";
+import { createSyncService } from "./service.js";
 
-interface DaemonConfig {
-  configPath: string;
-  shutdownTimeoutMs: number;
-  verbose: boolean;
-  pidFilePath?: string;
-}
+// Service exports
+export {
+  createSyncService,
+  type SyncService,
+  type SyncServiceConfig,
+  type SyncStats,
+} from "./service.js";
 
-function loadDaemonConfig(): DaemonConfig {
-  const configPath = process.env.CONFIG_PATH || './config.json';
-  const shutdownTimeoutMs = parseInt(process.env.SHUTDOWN_TIMEOUT_MS || '30000', 10);
-  const verbose = process.env.VERBOSE === 'true' || process.env.DEBUG === 'true';
-  const pidFilePath = process.env.PID_FILE_PATH || undefined;
+// Webhook server exports
+export {
+  createWebhookServer,
+  createSimpleWebhookServer,
+  type WebhookServer,
+  type WebhookServerConfig,
+  type WebhookCallbacks,
+  type ParsedNotification,
+} from "./webhook-server.js";
 
-  return {
-    configPath,
-    shutdownTimeoutMs,
-    verbose,
-    pidFilePath,
-  };
-}
+// Webhook validation exports
+export {
+  extractValidationToken,
+  extractSignature,
+  validateWebhookSignature,
+  validateClientState,
+  isAllowedTenant,
+  sanitizeNotificationForLogging,
+  generateClientState,
+  WebhookRateLimiter,
+  WebhookValidationError,
+  validateNotification,
+  type WebhookValidationConfig,
+  type ValidationResult,
+  type DetailedValidationResult,
+} from "./webhook-validation.js";
+
+// Notification handler exports
+export {
+  SyncOnNotification,
+  BatchNotificationHandler,
+  createNotificationHandler,
+  type NotificationHandler,
+  type SingleMessageSync,
+  type NotificationResult,
+  type NotificationHandlerOptions,
+} from "./notification-handler.js";
+
+// Lifecycle handler exports
+export {
+  LifecycleHandler,
+  createLifecycleHandler,
+  type LifecycleCallbacks,
+  type LifecycleResult,
+  type LifecycleHandlerOptions,
+} from "./lifecycle-handler.js";
+
+// Sync scheduler exports
+export {
+  DefaultHybridSyncScheduler,
+  createHybridSyncScheduler,
+  type HybridSyncScheduler,
+  type SyncSchedulerConfig,
+  type WebhookConfig,
+  type SyncFunction,
+  type DeltaSyncFunction,
+  type SyncResult,
+  type SchedulerStats,
+  type SchedulerDependencies,
+} from "./sync-scheduler.js";
+
+// Library exports
+export { createLogger, type Logger } from "./lib/logger.js";
+export { PidFile, type PidFileOptions } from "./lib/pid-file.js";
+export { HealthFile, type HealthStatus, type HealthFileOptions } from "./lib/health.js";
+
+// Default export for library consumers
+export { createSyncService as default } from "./service.js";
+
+// ---------------------------------------------------------------------------
+// CLI entrypoint (when invoked as the bin target)
+// ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
-  const daemonConfig = loadDaemonConfig();
-  const logger = createLogger({ component: 'daemon', verbose: daemonConfig.verbose });
+  const args = process.argv.slice(2);
 
-  logger.info('Starting exchange-fs-sync-daemon', {
-    config: daemonConfig.configPath,
-    pid: process.pid,
-  });
+  let configPath = "./config.json";
+  let verbose = false;
+  let pidFilePath: string | undefined;
 
-  const service = await createSyncService({
-    configPath: daemonConfig.configPath,
-    verbose: daemonConfig.verbose,
-    pidFilePath: daemonConfig.pidFilePath,
-  });
-
-  // Graceful shutdown handling
-  let shuttingDown = false;
-
-  async function shutdown(signal: string): Promise<void> {
-    if (shuttingDown) {
-      logger.info('Shutdown already in progress');
-      return;
-    }
-
-    shuttingDown = true;
-    logger.info(`Received ${signal}, shutting down...`);
-
-    // Create a timeout promise that rejects
-    const timeoutPromise = new Promise<void>((_, reject) => {
-      setTimeout(() => {
-        reject(new Error('Shutdown timeout exceeded'));
-      }, daemonConfig.shutdownTimeoutMs);
-    });
-
-    try {
-      await Promise.race([
-        service.stop(),
-        timeoutPromise,
-      ]);
-      logger.info('Shutdown complete');
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "-c" || arg === "--config") {
+      configPath = args[++i] ?? configPath;
+    } else if (arg === "-v" || arg === "--verbose") {
+      verbose = true;
+    } else if (arg === "--pid-file") {
+      pidFilePath = args[++i] ?? pidFilePath;
+    } else if (arg === "-h" || arg === "--help") {
+      console.log("Usage: exchange-fs-sync-daemon [-c config.json] [-v] [--pid-file path]");
       process.exit(0);
+    }
+  }
+
+  const service = await createSyncService({ configPath, verbose, pidFilePath });
+
+  let stopping = false;
+  async function shutdown(signal: string): Promise<void> {
+    if (stopping) return;
+    stopping = true;
+    console.log(`Received ${signal}, shutting down...`);
+    try {
+      await service.stop();
     } catch (error) {
-      logger.error(
-        'Shutdown timed out or failed',
-        error instanceof Error ? error : new Error(String(error))
-      );
+      console.error("Error during shutdown:", error);
       process.exit(1);
     }
+    process.exit(0);
   }
 
-  process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
-  // Handle uncaught errors
-  process.on('uncaughtException', (error) => {
-    logger.error('Uncaught exception', error);
-    shutdown('uncaughtException').catch(() => process.exit(1));
-  });
-
-  process.on('unhandledRejection', (reason) => {
-    logger.error('Unhandled rejection', new Error(String(reason)));
-  });
-
-  // Start the service
-  try {
-    await service.start();
-  } catch (error) {
-    logger.error(
-      'Failed to start service',
-      error instanceof Error ? error : new Error(String(error))
-    );
-    process.exit(1);
-  }
+  await service.start();
 }
 
-main().catch((error) => {
-  console.error('[daemon] Fatal error:', error instanceof Error ? error.message : error);
-  process.exit(1);
-});
+if (import.meta.url.startsWith("file:")) {
+  const modulePath = fileURLToPath(import.meta.url);
+  if (process.argv[1] === modulePath) {
+    main().catch((error) => {
+      console.error("Daemon failed:", error);
+      process.exit(1);
+    });
+  }
+}

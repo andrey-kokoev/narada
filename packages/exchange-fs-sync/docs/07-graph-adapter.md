@@ -215,7 +215,7 @@ const adapter = new DefaultGraphAdapter({
   body_policy: "text_only",
   attachment_policy: "metadata_only",
   include_headers: false,
-  normalize_folder_ref: (parentFolderId) => [parentFolderId ?? "unknown"],
+  normalize_folder_ref: (message) => [message.parentFolderId ?? "unknown"],
   normalize_flagged: (flag) => flag?.flagStatus === "flagged",
 });
 ```

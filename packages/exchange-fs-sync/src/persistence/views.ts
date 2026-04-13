@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import type { NormalizedPayload } from "../types/normalized.js";
 
@@ -48,12 +48,21 @@ export class FileViewStore {
   private async linkMessage(linkPath: string, messageId: string): Promise<void> {
     const target = relative(join(linkPath, ".."), this.messageDir(messageId));
 
-    await rm(linkPath, { force: true }).catch(() => undefined);
+    await this.unlinkMessage(linkPath);
     await symlink(target, linkPath, "dir");
   }
 
   private async unlinkMessage(linkPath: string): Promise<void> {
-    await rm(linkPath, { force: true }).catch(() => undefined);
+    try {
+      const entry = await lstat(linkPath);
+      if (entry.isSymbolicLink()) {
+        await unlink(linkPath);
+        return;
+      }
+      await rm(linkPath, { recursive: true, force: true });
+    } catch {
+      // best effort cleanup
+    }
   }
 
   async markFromPayload(payload: NormalizedPayload): Promise<{

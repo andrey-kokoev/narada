@@ -4,6 +4,7 @@ import type {
   MessageId,
   NormalizedBatch,
   NormalizedEvent,
+  NormalizedPayload,
 } from "./normalized.js";
 
 export interface RunResult {
@@ -49,4 +50,18 @@ export interface Projector {
 
 export interface SyncRunner {
   syncOnce(): Promise<RunResult>;
+}
+
+export interface MessageStore {
+  upsertFromPayload(payload: NormalizedPayload): Promise<void>;
+  remove(messageId: string): Promise<void>;
+}
+
+export interface ViewStore {
+  markDelete(messageId: string): Promise<{
+    by_thread: string[];
+    by_folder: string[];
+    unread_changed: boolean;
+    flagged_changed: boolean;
+  }>;
 }

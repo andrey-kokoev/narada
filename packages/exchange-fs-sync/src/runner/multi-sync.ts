@@ -9,7 +9,7 @@ import { mkdir } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import type { MultiMailboxConfig, MailboxConfig } from "../config/multi-mailbox.js";
 import { ResourceManager } from "../utils/resources.js";
-import type { MailboxSyncResult, MultiMailboxHealth } from "../health-multi.js";
+import type { MailboxSyncResult } from "../health-multi.js";
 import { writeMultiMailboxHealth, markMailboxSyncing } from "../health-multi.js";
 import { SharedTokenProvider } from "../adapter/graph/shared-token.js";
 import { ClientCredentialsTokenProvider } from "../adapter/graph/auth.js";
@@ -61,6 +61,8 @@ export interface SyncMultipleOptions extends MultiSyncOptions {
   sharedTokenProvider?: SharedTokenProvider;
   /** Abort signal for cancellation */
   abortSignal?: AbortSignal;
+  /** Custom token provider factory per mailbox */
+  createTokenProvider?: (mailbox: MailboxConfig) => { getAccessToken: () => Promise<string> };
 }
 
 /** Internal sync state */
@@ -70,6 +72,7 @@ interface SyncState {
   completedResults: MailboxSyncResult[];
   resourceManager: ResourceManager;
   sharedTokenProvider?: SharedTokenProvider;
+  createTokenProvider?: (mailbox: MailboxConfig) => { getAccessToken: () => Promise<string> };
 }
 
 /** Create token provider for a mailbox */
@@ -142,7 +145,9 @@ async function syncSingleMailbox(
     });
 
     // Create token provider
-    const tokenProvider = createTokenProvider(config, mailbox, state.sharedTokenProvider);
+    const tokenProvider = state.createTokenProvider
+      ? state.createTokenProvider(mailbox)
+      : createTokenProvider(config, mailbox, state.sharedTokenProvider);
 
     // Create Graph HTTP client
     const graphClient = new GraphHttpClient({
@@ -203,7 +208,7 @@ async function syncSingleMailbox(
         : undefined,
       acquireLock: () => lock.acquire(),
       rebuildViewsAfterSync: mailbox.sync?.rebuild_views_after_sync ?? true,
-      onProgress: (progress) => {
+      onProgress: (_progress) => {
         // Could forward to global progress handler
       },
       continueOnError: true, // Continue on individual event errors
@@ -227,7 +232,7 @@ async function syncSingleMailbox(
 
     const result: MailboxSyncResult = {
       mailboxId: mailbox.id,
-      success: syncResult.status === "success" || syncResult.status === "success",
+      success: syncResult.status === "success",
       durationMs,
       messagesSynced: syncResult.applied_count,
       eventsApplied: syncResult.applied_count,
@@ -350,6 +355,7 @@ export async function syncMultiple(
     completedResults: [],
     resourceManager,
     sharedTokenProvider,
+    createTokenProvider: options.createTokenProvider,
   };
 
   // Process mailboxes with concurrency control

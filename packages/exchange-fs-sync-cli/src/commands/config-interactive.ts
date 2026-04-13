@@ -11,6 +11,7 @@ import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { buildGraphTokenProvider } from '@narada/exchange-fs-sync';
 import { GraphHttpClient } from '@narada/exchange-fs-sync';
+import type { GraphListResponse, GraphMessage } from '@narada/exchange-fs-sync';
 
 export interface ConfigInteractiveOptions {
   output?: string;
@@ -23,7 +24,7 @@ interface ConfigValues {
   mailbox_id: string;
   root_dir: string;
   graph_user_id: string;
-  container_refs: string;
+  container_ref: string;
   test_connection: boolean;
   config_path: string;
 }
@@ -87,8 +88,10 @@ async function testGraphConnection(config: {
       preferImmutableIds: true,
     });
 
-    // Try to fetch user's messages (limit 1)
-    await client.get(`/users/${config.user_id}/messages?$top=1`);
+    // Try a lightweight mailbox read to validate auth and mailbox access.
+    await client.getJson<GraphListResponse<GraphMessage>>(
+      `/users/${encodeURIComponent(config.user_id)}/messages?$top=1&$select=id`,
+    );
 
     return { success: true, message: 'Connection successful!' };
   } catch (error) {
@@ -129,9 +132,9 @@ async function runPrompts(defaultOutputPath: string): Promise<ConfigValues | nul
           defaultValue: results.mailbox_id || 'user@example.com',
         }),
 
-      container_refs: () =>
+      container_ref: () =>
         p.text({
-          message: 'Folders to sync (comma-separated):',
+          message: 'Folder to sync:',
           placeholder: 'inbox',
           defaultValue: 'inbox',
         }),
@@ -198,10 +201,7 @@ export async function configInteractiveCommand(
     },
     scope: {
       ...DEFAULT_CONFIG.scope,
-      included_container_refs: values.container_refs
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean),
+      included_container_refs: [values.container_ref.trim()].filter(Boolean),
     },
     normalize: DEFAULT_CONFIG.normalize,
     runtime: DEFAULT_CONFIG.runtime,

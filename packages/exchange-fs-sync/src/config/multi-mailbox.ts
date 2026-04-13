@@ -94,11 +94,12 @@ export const DEFAULT_GLOBAL_CONFIG: MultiMailboxGlobalConfig = {
     maxMemoryMB: 512,
     maxDiskIOPerSecond: 100,
     maxNetworkRequestsPerSecond: 50,
-  },n  shutdown_timeout_ms: 30000,
+  },
+  shutdown_timeout_ms: 30000,
 };
 
 /** Default sync options */
-export const DEFAULT_SYNC_OPTIONS: Required<MailboxConfig["sync"]> = {
+export const DEFAULT_SYNC_OPTIONS: Required<NonNullable<MailboxConfig["sync"]>> = {
   attachment_policy: "metadata_only",
   body_policy: "text_only",
   include_headers: false,
@@ -136,13 +137,6 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function expectString(value: unknown, path: string): string {
-  if (!isNonEmptyString(value)) {
-    throw new Error(`${path} must be a non-empty string`);
-  }
-  return value.trim();
-}
-
 function expectBoolean(value: unknown, defaultValue: boolean): boolean {
   if (typeof value === "boolean") return value;
   return defaultValue;
@@ -153,15 +147,6 @@ function expectNumber(value: unknown, defaultValue: number): number {
     return value;
   }
   return defaultValue;
-}
-
-function expectStringArray(value: unknown, path: string): string[] {
-  if (!Array.isArray(value)) {
-    throw new Error(`${path} must be an array of strings`);
-  }
-  return value.map((item, index) =>
-    expectString(item, `${path}[${index}]`),
-  );
 }
 
 /**

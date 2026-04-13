@@ -1,5 +1,5 @@
-import { writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
@@ -65,6 +65,7 @@ export async function configCommand(
     return { exitCode: ExitCode.GENERAL_ERROR, result: { status: 'error', error } };
   }
   
+  await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(
     outputPath,
     JSON.stringify(DEFAULT_CONFIG, null, 2) + '\n',

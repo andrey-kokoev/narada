@@ -251,7 +251,6 @@ export class MemoryWatcher {
  */
 export function triggerHeapSnapshot(filename?: string): string | null {
   try {
-    // @ts-expect-error - require is not typed
     const v8 = require("v8");
     const path = require("path");
 

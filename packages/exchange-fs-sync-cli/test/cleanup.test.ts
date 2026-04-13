@@ -6,8 +6,26 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { cleanupCommand } from '../src/commands/cleanup.js';
 import type { CommandContext } from '../src/lib/command-wrapper.js';
 
-// Mock the lifecycle module
-vi.mock('@narada/exchange-fs-sync/lifecycle', () => ({
+// Mock the core package exports used by cleanup.ts
+vi.mock('@narada/exchange-fs-sync', () => ({
+  loadConfig: vi.fn().mockResolvedValue({
+    mailbox_id: 'test@example.com',
+    root_dir: '/test-data',
+    lifecycle: {
+      tombstone_retention_days: 30,
+      archive_after_days: 90,
+      archive_dir: 'archive',
+      compress_archives: true,
+      retention: {
+        preserve_flagged: true,
+        preserve_unread: true,
+      },
+      schedule: {
+        frequency: 'weekly',
+        max_run_time_minutes: 60,
+      },
+    },
+  }),
   cleanupTombstones: vi.fn().mockResolvedValue({
     tombstonesRemoved: 5,
     bytesReclaimed: 1024,
@@ -55,28 +73,6 @@ vi.mock('@narada/exchange-fs-sync/lifecycle', () => ({
   FileTombstoneStore: vi.fn(),
   FileMessageStore: vi.fn(),
   FileViewStore: vi.fn(),
-}));
-
-// Mock config loading
-vi.mock('@narada/exchange-fs-sync', () => ({
-  loadConfig: vi.fn().mockResolvedValue({
-    mailbox_id: 'test@example.com',
-    root_dir: '/test-data',
-    lifecycle: {
-      tombstone_retention_days: 30,
-      archive_after_days: 90,
-      archive_dir: 'archive',
-      compress_archives: true,
-      retention: {
-        preserve_flagged: true,
-        preserve_unread: true,
-      },
-      schedule: {
-        frequency: 'weekly',
-        max_run_time_minutes: 60,
-      },
-    },
-  }),
 }));
 
 describe('cleanup command', () => {
@@ -148,7 +144,7 @@ describe('cleanup command', () => {
       baseContext
     );
     
-    expect(result.exitCode).toBe(3); // INVALID_CONFIG
+    expect(result.exitCode).toBe(2); // INVALID_CONFIG
     expect(result.result).toMatchObject({
       status: 'error',
       error: expect.stringContaining('Config not found'),

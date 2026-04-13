@@ -5,9 +5,9 @@
  * Designed for production deployments where logs need to be persisted.
  */
 
-import { createWriteStream, type WriteStream } from 'node:fs';
-import { rename, unlink, stat } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { gzipSync } from 'node:zlib';
 import type { LogEntry, LogTransport } from './types.js';
 
 export interface FileLoggerConfig {
@@ -21,11 +21,6 @@ export interface FileLoggerConfig {
   compress: boolean;
   /** Base filename (default: exchange-sync) */
   filename?: string;
-}
-
-interface ParsedSize {
-  value: number;
-  unit: string;
 }
 
 /**
@@ -69,11 +64,8 @@ function parseSize(sizeStr: string): number {
 export class FileTransport implements LogTransport {
   private readonly config: Required<FileLoggerConfig>;
   private readonly maxSizeBytes: number;
-  private stream: WriteStream | null = null;
   private currentSize = 0;
-  private rotating = false;
-  private buffer: string[] = [];
-  private flushPromise: Promise<void> | null = null;
+  private pending: Promise<void> = Promise.resolve();
 
   constructor(config: FileLoggerConfig) {
     this.config = {
@@ -89,10 +81,8 @@ export class FileTransport implements LogTransport {
    * Must be called before first use.
    */
   async init(): Promise<void> {
-    const { mkdir } = await import('node:fs/promises');
     await mkdir(this.config.directory, { recursive: true });
-
-    const logPath = this.getLogPath(0);
+    const logPath = this.getCurrentPath();
 
     // Check if existing file and get its size
     try {
@@ -102,12 +92,7 @@ export class FileTransport implements LogTransport {
       this.currentSize = 0;
     }
 
-    this.stream = createWriteStream(logPath, { flags: 'a' });
-
-    await new Promise<void>((resolve, reject) => {
-      this.stream!.once('open', resolve);
-      this.stream!.once('error', reject);
-    });
+    await appendFile(logPath, '', 'utf8');
   }
 
   /**
@@ -116,49 +101,22 @@ export class FileTransport implements LogTransport {
   write(entry: LogEntry): void {
     const line = JSON.stringify(entry) + '\n';
     const lineBytes = Buffer.byteLength(line, 'utf8');
-
-    // Check if rotation needed
-    if (this.currentSize + lineBytes > this.maxSizeBytes && !this.rotating) {
-      this.rotating = true;
-      this.performRotation().catch(() => {
-        // Rotation errors are silent to avoid breaking application
-      }).finally(() => {
-        this.rotating = false;
-      });
-    }
-
-    // Buffer if rotating
-    if (this.rotating) {
-      this.buffer.push(line);
-      return;
-    }
-
-    // Write directly
-    if (this.stream && this.stream.writable) {
-      this.stream.write(line);
+    this.pending = this.pending.then(async () => {
+      if (this.currentSize + lineBytes > this.maxSizeBytes) {
+        await this.performRotation();
+      }
+      await appendFile(this.getCurrentPath(), line, 'utf8');
       this.currentSize += lineBytes;
-    }
+    }).catch(() => {
+      // Logging failures must remain non-fatal.
+    });
   }
 
   /**
    * Flush any buffered writes
    */
   async flush(): Promise<void> {
-    if (this.flushPromise) {
-      return this.flushPromise;
-    }
-
-    this.flushPromise = this.doFlush();
-    return this.flushPromise;
-  }
-
-  private async doFlush(): Promise<void> {
-    if (this.stream && this.stream.writable) {
-      await new Promise<void>((resolve) => {
-        this.stream!.end(resolve);
-      });
-      this.stream = null;
-    }
+    await this.pending;
   }
 
   /**
@@ -181,28 +139,14 @@ export class FileTransport implements LogTransport {
       return `${base}.log`;
     }
     const suffix = this.config.compress ? '.gz' : '';
-    return `${base}.${index}.log${suffix}`;
+    return `${base}.log.${index}${suffix}`;
   }
 
   private async performRotation(): Promise<void> {
-    if (!this.stream) return;
-
-    // Close current stream
-    await this.doFlush();
-
     // Rotate existing files
     await this.rotateFiles();
-
-    // Reopen new file
     this.currentSize = 0;
-    this.stream = createWriteStream(this.getLogPath(0), { flags: 'w' });
-
-    // Flush buffer
-    const buffer = this.buffer;
-    this.buffer = [];
-    for (const line of buffer) {
-      this.write(JSON.parse(line) as LogEntry);
-    }
+    await writeFile(this.getCurrentPath(), '', 'utf8');
   }
 
   private async rotateFiles(): Promise<void> {
@@ -231,15 +175,8 @@ export class FileTransport implements LogTransport {
 
     if (this.config.compress) {
       // Compress current file
-      const { createGzip } = await import('node:zlib');
-      const { pipeline } = await import('node:stream/promises');
-      const { createReadStream, createWriteStream } = await import('node:fs');
-
-      const gzip = createGzip();
-      const source = createReadStream(currentPath);
-      const dest = createWriteStream(`${rotatedPath}.gz`);
-
-      await pipeline(source, gzip, dest);
+      const content = await readFile(currentPath);
+      await writeFile(rotatedPath, gzipSync(content));
       await unlink(currentPath);
     } else {
       await rename(currentPath, rotatedPath);

@@ -4,7 +4,7 @@
  * Manages scheduled execution of cleanup operations within time windows.
  */
 
-import type { CleanupSchedule } from './types.js';
+import type { CleanupExecutionContext, CleanupSchedule } from './types.js';
 
 /**
  * Default schedule
@@ -57,6 +57,10 @@ function shouldRunByFrequency(
   lastRun: Date | null,
   now: Date
 ): boolean {
+  if (frequency === 'manual') {
+    return false;
+  }
+
   if (!lastRun) {
     return true; // Never run before
   }
@@ -73,9 +77,6 @@ function shouldRunByFrequency(
     case 'on-sync':
       // This is checked externally - returns true if a sync just completed
       return true;
-      
-    case 'manual':
-      return false; // Never auto-run
       
     default:
       return false;
@@ -112,7 +113,7 @@ export function shouldRunCleanup(
  */
 export function getNextRunTime(
   schedule: Partial<CleanupSchedule>,
-  lastRun: Date | null,
+  _lastRun: Date | null,
   now: Date = new Date()
 ): Date | null {
   const fullSchedule = { ...DEFAULT_SCHEDULE, ...schedule };
@@ -152,18 +153,6 @@ export function getNextRunTime(
   }
   
   return nextRun;
-}
-
-/**
- * Context for maybeRunCleanup
- */
-export interface CleanupExecutionContext {
-  signal?: AbortSignal;
-  execute: () => Promise<void>;
-  onSkipped?: (reason: string) => void;
-  onStarted?: () => void;
-  onCompleted?: () => void;
-  onError?: (error: Error) => void;
 }
 
 /**

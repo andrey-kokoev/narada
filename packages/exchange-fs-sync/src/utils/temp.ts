@@ -226,7 +226,11 @@ export async function createSecureTempFileStream(
     path: filepath,
     write: async (chunk: string | Buffer) => {
       const h = await getHandle();
-      await h.write(chunk);
+      if (typeof chunk === "string") {
+        await h.write(chunk);
+      } else {
+        await h.write(chunk, 0, chunk.length);
+      }
     },
     end: async () => {
       if (handle) {

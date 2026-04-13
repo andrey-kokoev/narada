@@ -1,4 +1,5 @@
 import type { AttachmentPolicy, BodyPolicy, FolderRef, MailboxId } from "../types/index.js";
+import type { ChangeType } from "../adapter/graph/subscription.js";
 
 export interface RetentionPolicy {
   max_age_days?: number;
@@ -56,4 +57,54 @@ export interface ExchangeFsSyncConfig {
   };
 
   lifecycle: LifecycleConfig;
+
+  /**
+   * Webhook configuration for real-time sync
+   */
+  webhook?: {
+    /** Enable webhook notifications */
+    enabled: boolean;
+    
+    /** Public URL for receiving notifications */
+    public_url: string;
+    
+    /** Local port for webhook server */
+    port: number;
+    
+    /** Host to bind to */
+    host?: string;
+    
+    /** Webhook endpoint path */
+    path?: string;
+    
+    /** Client state secret for validation */
+    client_state: string;
+    
+    /** Optional HMAC secret for signature validation */
+    hmac_secret?: string;
+    
+    /** Subscription expiration in minutes (max 4230) */
+    subscription_expiration_minutes?: number;
+    
+    /** Auto-renew subscriptions before expiration */
+    auto_renew?: boolean;
+    
+    /** Change types to monitor */
+    change_types?: ChangeType[];
+    
+    /** Lifecycle notification URL (defaults to public_url) */
+    lifecycle_url?: string;
+    
+    /** Fallback poll interval when webhooks fail (minutes) */
+    fallback_poll_minutes?: number;
+    
+    /** Enable hybrid mode (webhooks + polling fallback) */
+    hybrid_mode?: boolean;
+    
+    /** Rate limit: max requests per minute */
+    rate_limit_max_requests?: number;
+    
+    /** Maximum request body size in bytes */
+    max_body_size?: number;
+  };
 }

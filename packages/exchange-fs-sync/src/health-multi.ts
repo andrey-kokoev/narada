@@ -103,22 +103,6 @@ function createDefaultMailboxHealth(mailboxId: string): MailboxHealth {
   };
 }
 
-/** Determine mailbox status from sync result and history */
-function determineStatus(
-  result: MailboxSyncResult,
-  previousHealth: MailboxHealth | undefined,
-): MailboxStatus {
-  if (!result) return previousHealth?.status ?? "unknown";
-
-  if (result.success) {
-    return "healthy";
-  } else {
-    const failures = (previousHealth?.consecutiveFailures ?? 0) + 1;
-    // Degrade to error after 3 consecutive failures
-    return failures >= 3 ? "error" : "stale";
-  }
-}
-
 /** Calculate overall system status */
 function calculateOverallStatus(
   mailboxes: Map<string, MailboxHealth>,

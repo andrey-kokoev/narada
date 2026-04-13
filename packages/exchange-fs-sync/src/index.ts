@@ -13,6 +13,26 @@ export { buildGraphTokenProvider } from "./config/token-provider.js";
 export { DefaultGraphAdapter } from "./adapter/graph/adapter.js";
 export { GraphHttpClient } from "./adapter/graph/client.js";
 export { GraphDeltaWalker } from "./adapter/graph/delta.js";
+export {
+  GraphSubscriptionManager,
+  extractMessageId,
+  validateClientState,
+  isLifecycleNotification,
+  isChangeNotification,
+  MAX_SUBSCRIPTION_EXPIRATION_MINUTES,
+  DEFAULT_SUBSCRIPTION_EXPIRATION_MINUTES,
+  RENEWAL_BUFFER_MINUTES,
+} from "./adapter/graph/subscription.js";
+export type {
+  SubscriptionConfig,
+  Subscription,
+  Notification,
+  LifecycleNotification,
+  GraphNotification,
+  ChangeType,
+  LifecycleEvent,
+  CreateSubscriptionResult,
+} from "./adapter/graph/subscription.js";
 export { normalizeFolderRef, normalizeFlagged } from "./adapter/graph/scope.js";
 export { MockGraphAdapter, createMockAdapter } from "./adapter/graph/mock-adapter.js";
 export { normalizeBatch } from "./normalize/batch.js";
@@ -25,6 +45,22 @@ export { FileMessageStore } from "./persistence/messages.js";
 export { FileTombstoneStore } from "./persistence/tombstones.js";
 export { FileViewStore } from "./persistence/views.js";
 export { FileLock } from "./persistence/lock.js";
+
+// Outbound exports
+export {
+  isValidTransition,
+  isTerminalStatus,
+  VALID_TRANSITIONS,
+  TERMINAL_STATUSES,
+} from "./outbound/types.js";
+export type {
+  OutboundActionType,
+  OutboundStatus,
+  OutboundCommand,
+  OutboundVersion,
+  ManagedDraft,
+  OutboundTransition,
+} from "./outbound/types.js";
 
 // Lifecycle exports
 export {
@@ -123,6 +159,7 @@ export { normalizeDeltaEntry } from "./normalize/delta-entry.js";
 export { normalizeAttachments } from "./normalize/attachments.js";
 export { normalizeBody } from "./normalize/body.js";
 export { normalizeRecipient, normalizeRecipientList } from "./normalize/addresses.js";
+export type { GraphMessage, GraphListResponse } from "./types/graph.js";
 
 // ID exports
 export { buildEventId, hashNormalizedPayload } from "./ids/event-id.js";
@@ -212,13 +249,27 @@ export {
 } from "./logging/sanitize.js";
 export type { LogEntry } from "./logging/sanitize.js";
 
+// Logging and metrics exports
+export {
+  configureLogging,
+  getLoggingConfig,
+  resetLogging,
+  setLogLevel,
+  setLogFormat,
+} from "./logging/index.js";
+export {
+  metrics,
+  MetricsCollector,
+  MetricNames,
+} from "./metrics.js";
+export type { MetricsSnapshot } from "./metrics.js";
+
 // Batch processing exports
 export {
   batchSync,
   streamEvents,
   processEventsConcurrently,
   createThrottledFunction,
-  sleep,
 } from "./runner/batch-sync.js";
 export type {
   SyncProgress,
@@ -308,30 +359,6 @@ export type {
   HealthMetrics,
   HealthRecentError,
 } from "./health.js";
-
-// Observability exports
-export {
-  MetricsCollector,
-  metrics,
-  MetricNames,
-  type MetricsSnapshot,
-} from "./metrics.js";
-
-export {
-  createLogger,
-  configureLogging,
-  getLoggingConfig,
-  resetLogging,
-  setLogLevel,
-  setLogFormat,
-  FileTransport,
-  createFileLogger,
-  getDefaultLogDirectory,
-  type Logger,
-  type LogEntry,
-  type LogLevel,
-  type FileLoggerConfig,
-} from "./logging/index.js";
 
 export {
   createTracer,

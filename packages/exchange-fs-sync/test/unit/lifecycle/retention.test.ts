@@ -7,7 +7,7 @@ import type { RetentionPolicy } from '../../../src/lifecycle/types.js';
 
 describe('retention policy', () => {
   describe('parseSize', () => {
-    it('should parse various size formats', () => {
+    it('should parse various size formats', async () => {
       const { parseSize } = await import('../../../src/lifecycle/retention.js');
       
       expect(parseSize('100')).toBe(100);

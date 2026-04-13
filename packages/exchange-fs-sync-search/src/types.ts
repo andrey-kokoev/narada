@@ -51,6 +51,8 @@ export interface SearchOptions {
   stopWords?: Set<string>;
 }
 
+export type SearchConfig = SearchOptions;
+
 export interface IndexerStats {
   documents_indexed: number;
   terms_indexed: number;

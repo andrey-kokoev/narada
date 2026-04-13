@@ -46,6 +46,7 @@ program
   .option('-c, --config <path>', 'Path to config file', './config.json')
   .option('-v, --verbose', 'Enable verbose output', false)
   .option('--dry-run', 'Show what would be done without making changes', false)
+  .option('-m, --mailbox <id>', 'Sync only a specific mailbox (multi-mailbox config)')
   .action(wrapCommand('sync', (opts, ctx) => 
     syncCommand({ ...opts, format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto' }, ctx)));
 

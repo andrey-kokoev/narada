@@ -10,7 +10,7 @@ import type {
   SyncRunner,
 } from "../types/runtime.js";
 import type { ProgressCallback, SyncPhase } from "../types/progress.js";
-import { ExchangeFSSyncError, ErrorCode, wrapError } from "../errors.js";
+import { ExchangeFSSyncError, wrapError } from "../errors.js";
 import { globalCircuitBreakers } from "../retry.js";
 
 export interface SyncError {

@@ -24,7 +24,8 @@ describe('File Logger', () => {
         compress: false,
       });
 
-      await transport.init();\n      const entry: LogEntry = {
+      await transport.init();
+      const entry: LogEntry = {
         timestamp: new Date().toISOString(),
         level: 'info',
         message: 'Test message',

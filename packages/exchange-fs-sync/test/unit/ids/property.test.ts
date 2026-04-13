@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import { computeEventId, stableStringify } from '../../../src/ids/event-id.js';
-import type { NormalizedEvent } from '../../../src/types/normalized.js';
+import { SCHEMA_VERSION, type NormalizedEvent } from '../../../src/types/normalized.js';
 
 describe('ID Property-Based Tests', () => {
   describe('stableStringify', () => {
@@ -47,17 +47,32 @@ describe('ID Property-Based Tests', () => {
           }),
           (eventData) => {
             const event: NormalizedEvent = {
+              schema_version: SCHEMA_VERSION,
               event_id: 'temp',
               event_kind: eventData.event_kind,
               message_id: eventData.message_id,
               mailbox_id: eventData.mailbox_id,
+              source_item_id: `src-${eventData.message_id}`,
+              source_version: 'v1',
+              observed_at: new Date().toISOString(),
               payload: {
-                item_ref: eventData.message_id,
+                schema_version: SCHEMA_VERSION,
+                mailbox_id: eventData.mailbox_id,
+                message_id: eventData.message_id,
                 folder_refs: ['inbox'],
-                received_at: new Date().toISOString(),
                 subject: 'Test',
-                from_address: 'test@example.com',
-                to_addresses: ['recipient@example.com'],
+                reply_to: [],
+                to: [],
+                cc: [],
+                bcc: [],
+                category_refs: [],
+                flags: {
+                  is_read: false,
+                  is_draft: false,
+                  is_flagged: false,
+                  has_attachments: false,
+                },
+                attachments: [],
               },
             };
             const id1 = computeEventId(event);
@@ -78,16 +93,31 @@ describe('ID Property-Based Tests', () => {
           ).filter(([a, b]) => a !== b),
           ([msgId1, msgId2]) => {
             const baseEvent = {
+              schema_version: SCHEMA_VERSION,
               event_id: 'temp',
               event_kind: 'upsert' as const,
               mailbox_id: 'test@example.com',
+              source_item_id: `src-${msgId1}`,
+              source_version: 'v1',
+              observed_at: new Date().toISOString(),
               payload: {
-                item_ref: msgId1,
+                schema_version: SCHEMA_VERSION,
+                mailbox_id: 'test@example.com',
+                message_id: msgId1,
                 folder_refs: ['inbox'],
-                received_at: new Date().toISOString(),
                 subject: 'Test',
-                from_address: 'test@example.com',
-                to_addresses: ['recipient@example.com'],
+                reply_to: [],
+                to: [],
+                cc: [],
+                bcc: [],
+                category_refs: [],
+                flags: {
+                  is_read: false,
+                  is_draft: false,
+                  is_flagged: false,
+                  has_attachments: false,
+                },
+                attachments: [],
               },
             };
             const event1 = { ...baseEvent, message_id: msgId1 };
@@ -111,22 +141,37 @@ describe('ID Property-Based Tests', () => {
           }),
           (eventData) => {
             const event: NormalizedEvent = {
+              schema_version: SCHEMA_VERSION,
               event_id: 'temp',
               event_kind: eventData.event_kind,
               message_id: eventData.message_id,
               mailbox_id: eventData.mailbox_id,
+              source_item_id: `src-${eventData.message_id}`,
+              source_version: 'v1',
+              observed_at: new Date().toISOString(),
               payload: {
-                item_ref: eventData.message_id,
+                schema_version: SCHEMA_VERSION,
+                mailbox_id: eventData.mailbox_id,
+                message_id: eventData.message_id,
                 folder_refs: ['inbox'],
-                received_at: new Date().toISOString(),
                 subject: 'Test',
-                from_address: 'test@example.com',
-                to_addresses: ['recipient@example.com'],
+                reply_to: [],
+                to: [],
+                cc: [],
+                bcc: [],
+                category_refs: [],
+                flags: {
+                  is_read: false,
+                  is_draft: false,
+                  is_flagged: false,
+                  has_attachments: false,
+                },
+                attachments: [],
               },
             };
             const id = computeEventId(event);
             // Should be a valid hash string
-            return /^[a-f0-9]{64}$/i.test(id);
+            return /^evt_[a-f0-9]{64}$/i.test(id);
           },
         ),
         { numRuns: 100 },

@@ -8,7 +8,7 @@ import type Database from 'better-sqlite3';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createSearchDb, closeSearchDb } from './db.js';
-import { initSchema, dropSchema } from './schema.js';
+import { initSchema } from './schema.js';
 import { Fts5Indexer } from './fts5-indexer.js';
 import { Fts5QueryEngine } from './fts5-query.js';
 import type { SearchDocument, SearchQuery, SearchResult, IndexerStats } from './types.js';

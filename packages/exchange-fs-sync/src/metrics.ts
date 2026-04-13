@@ -130,7 +130,7 @@ export class MetricsCollector {
    *
    * Useful for async operations where you need explicit start/stop.
    */
-  startTimer(name: string, tags?: Record<string, string>): string {
+  startTimer(name: string, _tags?: Record<string, string>): string {
     const timerId = `${name}:${Date.now()}:${Math.random()}`;
     this.startTimes.set(timerId, performance.now());
     return timerId;
@@ -187,15 +187,19 @@ export class MetricsCollector {
     if (!entry) return null;
 
     const sorted = [...entry.samples].sort((a, b) => a - b);
+    const percentile = (p: number): number => {
+      const index = Math.floor((sorted.length - 1) * p);
+      return sorted[index]!;
+    };
     return {
       count: entry.count,
       sum: entry.sum,
       min: entry.min,
       max: entry.max,
       avg: entry.sum / entry.count,
-      p50: sorted[Math.floor(sorted.length * 0.5)],
-      p95: sorted[Math.floor(sorted.length * 0.95)],
-      p99: sorted[Math.floor(sorted.length * 0.99)],
+      p50: percentile(0.5),
+      p95: percentile(0.95),
+      p99: percentile(0.99),
     };
   }
 

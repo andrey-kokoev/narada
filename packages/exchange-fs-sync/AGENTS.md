@@ -72,6 +72,23 @@ packages/exchange-fs-sync/
 
 ---
 
+## Outbound Architecture (v1)
+
+A durable outbound command system is being introduced on top of the inbound compiler.
+
+- **Spec**: [`.ai/tasks/20260413-001-outbound-draft-worker-spec.md`](../../.ai/tasks/20260413-001-outbound-draft-worker-spec.md)
+- **Types**: [`src/outbound/types.ts`](src/outbound/types.ts)
+- **Schema**: [`src/outbound/schema.sql`](src/outbound/schema.sql)
+
+Key principles:
+- Draft-first delivery: no direct sends from the agent
+- SQLite as the source of truth for commands and transitions
+- Two-stage completion: `submitted` (Graph accepted) → `confirmed` (inbound reconciliation)
+- Only the outbound worker may create or mutate managed drafts
+- External modification of a managed draft is a hard failure
+
+---
+
 ## Coding Conventions
 
 ### File Naming

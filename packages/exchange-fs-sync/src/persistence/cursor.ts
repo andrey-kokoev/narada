@@ -14,6 +14,8 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+let tmpCounter = 0;
+
 async function ensureParentDir(path: string): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
 }
@@ -156,7 +158,7 @@ export class FileCursorStore implements CursorStore {
 
     const tmpPath = join(
       this.tmpDir,
-      `cursor.${process.pid}.${Date.now()}.tmp.json`,
+      `cursor.${process.pid}.${Date.now()}.${tmpCounter++}.tmp.json`,
     );
 
     const payload: CursorFileShape = {

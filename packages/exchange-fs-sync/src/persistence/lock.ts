@@ -124,6 +124,7 @@ export class FileLock {
    */
   async acquire(): Promise<() => Promise<void>> {
     const startedAt = Date.now();
+    await mkdir(join(this.lockDir, ".."), { recursive: true });
 
     while (true) {
       try {
@@ -219,6 +220,7 @@ export class FileBasedLock {
   async acquire(): Promise<() => Promise<void>> {
     const { open, rm } = await import("node:fs/promises");
     const startedAt = Date.now();
+    await mkdir(join(this.lockFile, ".."), { recursive: true });
 
     while (true) {
       try {

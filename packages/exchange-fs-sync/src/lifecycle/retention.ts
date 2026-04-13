@@ -4,7 +4,7 @@
  * Applies configurable retention policies to messages.
  */
 
-import { readdir, readFile, stat, rm } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { RetentionPolicy, RetentionResult, CleanupContext } from './types.js';
 import type { MessageStore, ViewStore } from '../types/runtime.js';

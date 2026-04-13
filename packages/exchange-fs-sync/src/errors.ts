@@ -123,8 +123,8 @@ export class StorageError extends ExchangeFSSyncError {
     message: string,
     options: Omit<
       ConstructorParameters<typeof ExchangeFSSyncError>[1],
-      "code"
-    > & { code?: ErrorCode },
+      "code" | "recoverable"
+    > & { code?: ErrorCode; recoverable?: boolean },
   ) {
     super(message, {
       ...options,
@@ -140,13 +140,13 @@ export class CorruptionError extends ExchangeFSSyncError {
     message: string,
     options: Omit<
       ConstructorParameters<typeof ExchangeFSSyncError>[1],
-      "code"
-    > & { code?: ErrorCode },
+      "code" | "recoverable"
+    > & { code?: ErrorCode; recoverable?: boolean },
   ) {
     super(message, {
       ...options,
       code: options.code ?? ErrorCode.CURSOR_CORRUPTED,
-      recoverable: true,
+      recoverable: options.recoverable ?? true,
     });
     this.name = "CorruptionError";
   }
@@ -182,7 +182,7 @@ export class RateLimitError extends ExchangeFSSyncError {
  */
 export function classifyGraphError(
   status: number,
-  responseText?: string,
+  _responseText?: string,
 ): { code: ErrorCode; recoverable: boolean; retryAfterMs?: number } {
   switch (status) {
     case 429:

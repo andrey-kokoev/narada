@@ -3,9 +3,8 @@
  * Processes messages in batches to avoid loading everything into memory
  */
 
-import type { NormalizedEvent, NormalizedBatch } from "../types/normalized.js";
+import type { NormalizedEvent } from "../types/normalized.js";
 import type { GraphAdapter, CursorStore, ApplyLogStore, Projector } from "../types/runtime.js";
-import type { MessageStore } from "../projector/apply-event.js";
 import { getMemoryUsage, MemoryMonitor } from "../utils/memory.js";
 import { sleep } from "../utils/timing.js";
 
@@ -92,7 +91,6 @@ export async function batchSync(
 ): Promise<BatchSyncResult> {
   const startTime = Date.now();
   const batchSize = options.batchSize ?? 100;
-  const memoryThresholdMB = options.memoryThresholdMB ?? 500;
   const backpressureThreshold = options.backpressureThreshold ?? 3;
   const batchDelayMs = options.batchDelayMs ?? 0;
   const enableMemoryMonitor = options.enableMemoryMonitor ?? true;
@@ -100,7 +98,7 @@ export async function batchSync(
   // Memory monitoring
   const memoryMonitor = enableMemoryMonitor ? new MemoryMonitor() : null;
   const initialMemory = getMemoryUsage();
-  let peakMemory = initialMemory.usedMB;
+  let peakMemory = initialMemory.heapUsedMB;
 
   if (memoryMonitor) {
     memoryMonitor.start();
@@ -122,7 +120,7 @@ export async function batchSync(
   const reportProgress = (phase: SyncProgress["phase"], warning?: string) => {
     if (options.onProgress) {
       const memory = getMemoryUsage();
-      peakMemory = Math.max(peakMemory, memory.usedMB);
+      peakMemory = Math.max(peakMemory, memory.heapUsedMB);
 
       const elapsed = Date.now() - startTime;
       const rate = eventsProcessed > 0 ? elapsed / eventsProcessed : 0;
@@ -135,7 +133,7 @@ export async function batchSync(
         eventsApplied,
         eventsSkipped,
         currentBatch,
-        memoryUsedMB: memory.usedMB,
+        memoryUsedMB: memory.heapUsedMB,
         etaMs,
         phase,
         warning,
@@ -160,16 +158,14 @@ export async function batchSync(
         durationMs: Date.now() - startTime,
         finalCursor,
         memoryStats: {
-          initialMB: initialMemory.usedMB,
-          peakMB: initialMemory.usedMB,
-          finalMB: getMemoryUsage().usedMB,
+          initialMB: initialMemory.heapUsedMB,
+          peakMB: initialMemory.heapUsedMB,
+          finalMB: getMemoryUsage().heapUsedMB,
         },
       };
     }
 
     // Process events in batches
-    const totalBatches = Math.ceil(batch.events.length / batchSize);
-
     for (let i = 0; i < batch.events.length; i += batchSize) {
       currentBatch++;
       const batchEvents = batch.events.slice(i, i + batchSize);
@@ -245,7 +241,7 @@ export async function batchSync(
     reportProgress("cleanup");
 
     const finalMemory = getMemoryUsage();
-    peakMemory = Math.max(peakMemory, finalMemory.usedMB);
+    peakMemory = Math.max(peakMemory, finalMemory.heapUsedMB);
 
     return {
       success: true,
@@ -256,16 +252,16 @@ export async function batchSync(
       durationMs: Date.now() - startTime,
       finalCursor,
       memoryStats: {
-        initialMB: initialMemory.usedMB,
+        initialMB: initialMemory.heapUsedMB,
         peakMB: peakMemory,
-        finalMB: finalMemory.usedMB,
+        finalMB: finalMemory.heapUsedMB,
       },
     };
   } catch (syncError) {
     error = syncError as Error;
 
     const finalMemory = getMemoryUsage();
-    peakMemory = Math.max(peakMemory, finalMemory.usedMB);
+    peakMemory = Math.max(peakMemory, finalMemory.heapUsedMB);
 
     return {
       success: false,
@@ -277,9 +273,9 @@ export async function batchSync(
       error,
       finalCursor,
       memoryStats: {
-        initialMB: initialMemory.usedMB,
+        initialMB: initialMemory.heapUsedMB,
         peakMB: peakMemory,
-        finalMB: finalMemory.usedMB,
+        finalMB: finalMemory.heapUsedMB,
       },
     };
   }
@@ -321,7 +317,7 @@ export async function* streamEvents(
       totalFetched += chunk.length;
     }
 
-    cursor = batch.next_cursor;
+    cursor = batch.next_cursor ?? null;
 
     if (!cursor) {
       break;

@@ -5,8 +5,8 @@
 import { resolve } from 'node:path';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
-import { loadConfig } from '@narada/exchange-fs-sync';
 import {
+  loadConfig,
   cleanupTombstones,
   compactMessages,
   vacuum,
@@ -17,7 +17,7 @@ import {
   FileTombstoneStore,
   FileMessageStore,
   FileViewStore,
-} from '@narada/exchange-fs-sync/lifecycle';
+} from '@narada/exchange-fs-sync';
 
 export interface CleanupOptions {
   config?: string;
@@ -75,6 +75,20 @@ export async function cleanupCommand(
   const viewStore = new FileViewStore({ rootDir });
   
   const lifecycleConfig = config.lifecycle;
+  const lifecycleLogger = {
+    info: (msg: string, meta?: Record<string, unknown>) => logger.info(msg, meta),
+    warn: (msg: string, meta?: Record<string, unknown>) => logger.warn(msg, meta),
+    error: (msg: string, meta?: Record<string, unknown>) => logger.error(msg, meta),
+  };
+  const retentionPolicy = lifecycleConfig?.retention
+    ? {
+        maxAgeDays: lifecycleConfig.retention.max_age_days,
+        maxTotalSize: lifecycleConfig.retention.max_total_size,
+        maxMessageCount: lifecycleConfig.retention.max_message_count,
+        preserveFlagged: lifecycleConfig.retention.preserve_flagged,
+        preserveUnread: lifecycleConfig.retention.preserve_unread,
+      }
+    : undefined;
   
   try {
     // Tombstone cleanup
@@ -90,13 +104,7 @@ export async function cleanupCommand(
           maxTombstoneAgeDays: lifecycleConfig?.tombstone_retention_days ?? 30,
           dryRun: options.dryRun ?? false,
         },
-        {
-          logger: {
-            info: (msg, meta) => logger.info(msg, meta),
-            warn: (msg, meta) => logger.warn(msg, meta),
-            error: (msg, meta) => logger.error(msg, meta),
-          },
-        }
+        { logger: lifecycleLogger }
       );
       
       results.tombstones = {
@@ -125,13 +133,7 @@ export async function cleanupCommand(
           archiveDir: lifecycleConfig?.archive_dir ?? 'archive',
           compress: lifecycleConfig?.compress_archives ?? true,
         },
-        {
-          logger: {
-            info: (msg, meta) => logger.info(msg, meta),
-            warn: (msg, meta) => logger.warn(msg, meta),
-            error: (msg, meta) => logger.error(msg, meta),
-          },
-        }
+        { logger: lifecycleLogger }
       );
       
       results.compaction = {
@@ -154,13 +156,7 @@ export async function cleanupCommand(
           removeOrphans: !options.dryRun,
           dryRun: options.dryRun ?? false,
         },
-        {
-          logger: {
-            info: (msg, meta) => logger.info(msg, meta),
-            warn: (msg, meta) => logger.warn(msg, meta),
-            error: (msg, meta) => logger.error(msg, meta),
-          },
-        }
+        { logger: lifecycleLogger }
       );
       
       results.vacuum = result;
@@ -172,26 +168,18 @@ export async function cleanupCommand(
     if (operations.includes('retention')) {
       logger.info('Applying retention policy...');
       
-      const retentionConfig = lifecycleConfig?.retention;
-      
-      const stats = options.dryRun && retentionConfig ? await getRetentionStats(
+      const stats = options.dryRun && retentionPolicy ? await getRetentionStats(
         rootDir,
-        retentionConfig
+        retentionPolicy
       ) : null;
       
-      const result = retentionConfig
+      const result = retentionPolicy
         ? await applyRetentionPolicy(
             messageStore,
             viewStore,
             rootDir,
-            retentionConfig,
-            {
-              logger: {
-                info: (msg, meta) => logger.info(msg, meta),
-                warn: (msg, meta) => logger.warn(msg, meta),
-                error: (msg, meta) => logger.error(msg, meta),
-              },
-            }
+            retentionPolicy,
+            { logger: lifecycleLogger }
           )
         : { messagesDeleted: 0, bytesFreed: 0, preserved: 0, errors: [] };
       

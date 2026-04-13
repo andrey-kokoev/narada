@@ -5,12 +5,13 @@
 import { createFormatter, type FormatterOptions } from './formatter.js';
 
 export interface Logger {
-  info(message: string, data?: Record<string, unknown>): void;
-  error(message: string, error?: Error): void;
-  debug(message: string, data?: Record<string, unknown>): void;
+  info(message: string, data?: unknown): void;
+  error(message: string, error?: unknown): void;
+  debug(message: string, data?: unknown): void;
   result(data: unknown): void;
   success(message: string): void;
   warning(message: string): void;
+  warn(message: string, data?: unknown): void;
 }
 
 export interface CreateLoggerOptions {
@@ -25,21 +26,25 @@ export function createLogger(options: CreateLoggerOptions): Logger {
   });
   
   return {
-    info(message: string, data?: Record<string, unknown>): void {
+    info(message: string, data?: unknown): void {
       formatter.message(message, 'info');
       if (options.verbose && data) {
-        formatter.output({ level: 'debug', ...data });
+        formatter.output({ level: 'debug', data });
       }
     },
     
-    error(message: string, error?: Error): void {
+    error(message: string, error?: unknown): void {
       formatter.message(message, 'error');
       if (error && options.verbose) {
-        formatter.output({ error: error.message, stack: error.stack });
+        if (error instanceof Error) {
+          formatter.output({ error: error.message, stack: error.stack });
+        } else {
+          formatter.output({ error });
+        }
       }
     },
     
-    debug(message: string, data?: Record<string, unknown>): void {
+    debug(message: string, data?: unknown): void {
       if (options.verbose) {
         formatter.message(`[debug] ${message}`, 'info');
         if (data) {
@@ -58,6 +63,13 @@ export function createLogger(options: CreateLoggerOptions): Logger {
     
     warning(message: string): void {
       formatter.message(message, 'warning');
+    },
+
+    warn(message: string, data?: unknown): void {
+      formatter.message(message, 'warning');
+      if (options.verbose && data) {
+        formatter.output({ level: 'warning', data });
+      }
     },
   };
 }

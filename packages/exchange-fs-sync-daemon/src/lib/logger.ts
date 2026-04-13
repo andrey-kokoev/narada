@@ -11,10 +11,10 @@ export interface LogEntry {
 }
 
 export interface Logger {
-  debug(message: string, meta?: Record<string, unknown>): void;
-  info(message: string, meta?: Record<string, unknown>): void;
-  warn(message: string, meta?: Record<string, unknown>): void;
-  error(message: string, error?: Error, meta?: Record<string, unknown>): void;
+  debug(message: string, meta?: unknown): void;
+  info(message: string, meta?: unknown): void;
+  warn(message: string, meta?: unknown): void;
+  error(message: string, error?: unknown, meta?: Record<string, unknown>): void;
 }
 
 export interface LoggerOptions {
@@ -31,39 +31,47 @@ class ConsoleLogger implements Logger {
     this.verbose = options.verbose ?? false;
   }
 
-  private log(level: LogEntry['level'], message: string, meta?: Record<string, unknown>): void {
+  private log(level: LogEntry['level'], message: string, meta?: unknown): void {
     const entry: LogEntry = {
       timestamp: new Date().toISOString(),
       level,
       message,
       component: this.component,
-      ...(meta && Object.keys(meta).length > 0 ? { meta } : {}),
+      ...(meta && typeof meta === "object" && Object.keys(meta as Record<string, unknown>).length > 0
+        ? { meta: meta as Record<string, unknown> }
+        : {}),
     };
 
     // Output structured JSON to stderr for logging
     console.error(JSON.stringify(entry));
   }
 
-  debug(message: string, meta?: Record<string, unknown>): void {
+  debug(message: string, meta?: unknown): void {
     if (this.verbose) {
       this.log('debug', message, meta);
     }
   }
 
-  info(message: string, meta?: Record<string, unknown>): void {
+  info(message: string, meta?: unknown): void {
     this.log('info', message, meta);
   }
 
-  warn(message: string, meta?: Record<string, unknown>): void {
+  warn(message: string, meta?: unknown): void {
     this.log('warn', message, meta);
   }
 
-  error(message: string, error?: Error, meta?: Record<string, unknown> = {}): void {
+  error(message: string, error?: unknown, meta: Record<string, unknown> = {}): void {
     const enrichedMeta: Record<string, unknown> = { ...meta };
-    if (error) {
+    if (error instanceof Error) {
       enrichedMeta.error = error.message;
       if (this.verbose && error.stack) {
         enrichedMeta.stack = error.stack;
+      }
+    } else if (error !== undefined) {
+      if (typeof error === "object" && error !== null) {
+        Object.assign(enrichedMeta, error);
+      } else {
+        enrichedMeta.error = String(error);
       }
     }
     this.log('error', message, enrichedMeta);

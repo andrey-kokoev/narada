@@ -6,7 +6,6 @@
  */
 
 import type { GraphTokenProvider } from "./auth.js";
-import { ClientCredentialsTokenProvider } from "./auth.js";
 import type { TokenProviderConfig } from "../../config/multi-mailbox.js";
 
 /** Token with metadata */
@@ -14,14 +13,6 @@ interface Token {
   accessToken: string;
   expiresAt: number;
   credentialKey: string;
-}
-
-/** Credential key for deduplication */
-interface CredentialKey {
-  tenantId: string;
-  clientId: string;
-  userId?: string;
-  scope?: string;
 }
 
 /** Shared token provider that caches and deduplicates token requests */

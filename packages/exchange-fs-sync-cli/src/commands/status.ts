@@ -3,7 +3,7 @@ import { stat, readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
-import { loadConfig } from '@narada/exchange-fs-sync';
+import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig } from '@narada/exchange-fs-sync';
 
 export interface StatusOptions {
   config?: string;
@@ -36,9 +36,64 @@ export async function statusCommand(
   context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const { configPath, logger } = context;
-  
+
   logger.info('Loading config', { path: configPath });
-  
+
+  let raw: string;
+  try {
+    raw = await readFile(configPath, 'utf8');
+  } catch (error) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        status: 'error',
+        error: 'Failed to read config: ' + (error as Error).message,
+        health: 'error',
+      },
+    };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        status: 'error',
+        error: 'Failed to parse config: ' + (error as Error).message,
+        health: 'error',
+      },
+    };
+  }
+
+  if (isMultiMailboxConfig(parsed)) {
+    const { config, valid } = await loadMultiMailboxConfig({ path: configPath });
+    if (!valid) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          error: 'Invalid multi-mailbox configuration',
+          health: 'error',
+        },
+      };
+    }
+
+    const reports: StatusReport[] = [];
+    for (const mailbox of config.mailboxes) {
+      reports.push(await buildStatusReport(mailbox.mailbox_id, resolve(mailbox.root_dir)));
+    }
+
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: {
+        status: 'success',
+        mailboxes: reports,
+      },
+    };
+  }
+
   let config: { mailbox_id: string; root_dir: string };
   try {
     config = await loadConfig({ path: configPath });
@@ -52,13 +107,22 @@ export async function statusCommand(
       },
     };
   }
-  
-  const rootDir = resolve(config.root_dir);
-  
-  // Build status report
+
+  const report = await buildStatusReport(config.mailbox_id, resolve(config.root_dir));
+
+  return {
+    exitCode: ExitCode.SUCCESS,
+    result: {
+      status: 'success',
+      ...report,
+    },
+  };
+}
+
+async function buildStatusReport(mailboxId: string, rootDir: string): Promise<StatusReport> {
   const report: StatusReport = {
     mailbox: {
-      id: config.mailbox_id,
+      id: mailboxId,
       rootDir: rootDir,
     },
     sync: {
@@ -74,7 +138,7 @@ export async function statusCommand(
     },
     health: 'empty',
   };
-  
+
   try {
     // Read cursor
     try {
@@ -84,14 +148,14 @@ export async function statusCommand(
     } catch {
       // No cursor yet
     }
-    
+
     // Read last sync from apply-log (most recent file)
     try {
       const applyLogDir = join(rootDir, 'state', 'apply-log');
       const entries = await readdir(applyLogDir);
-      const logFiles = entries.filter(f => f.endsWith('.json'));
+      const logFiles = entries.filter((f) => f.endsWith('.json'));
       report.storage.applyLogCount = logFiles.length;
-      
+
       if (logFiles.length > 0) {
         // Sort by filename (timestamp) and get most recent
         logFiles.sort().reverse();
@@ -102,34 +166,34 @@ export async function statusCommand(
     } catch {
       // No apply-log yet
     }
-    
+
     // Count messages
     try {
       const messagesDir = join(rootDir, 'messages');
       const entries = await readdir(messagesDir, { withFileTypes: true });
-      report.storage.messageCount = entries.filter(e => e.isDirectory()).length;
+      report.storage.messageCount = entries.filter((e) => e.isDirectory()).length;
     } catch {
       // No messages yet
     }
-    
+
     // Count tombstones
     try {
       const tombstonesDir = join(rootDir, 'tombstones');
       const entries = await readdir(tombstonesDir);
-      report.storage.tombstoneCount = entries.filter(f => f.endsWith('.json')).length;
+      report.storage.tombstoneCount = entries.filter((f) => f.endsWith('.json')).length;
     } catch {
       // No tombstones yet
     }
-    
+
     // Count view folders
     try {
       const viewsDir = join(rootDir, 'views');
       const entries = await readdir(viewsDir, { withFileTypes: true });
-      report.storage.viewFolderCount = entries.filter(e => e.isDirectory()).length;
+      report.storage.viewFolderCount = entries.filter((e) => e.isDirectory()).length;
     } catch {
       // No views yet
     }
-    
+
     // Determine health
     if (report.storage.messageCount === 0) {
       report.health = 'empty';
@@ -137,7 +201,7 @@ export async function statusCommand(
     } else if (report.sync.lastSyncAt) {
       const lastSync = new Date(report.sync.lastSyncAt);
       const hoursSince = (Date.now() - lastSync.getTime()) / (1000 * 60 * 60);
-      
+
       if (hoursSince > 24) {
         report.health = 'stale';
         report.message = `Last sync was ${Math.round(hoursSince)} hours ago.`;
@@ -148,23 +212,11 @@ export async function statusCommand(
     } else {
       report.health = 'empty';
     }
-    
-    return {
-      exitCode: ExitCode.SUCCESS,
-      result: {
-        status: 'success',
-        ...report,
-      },
-    };
-    
+
+    return report;
   } catch (error) {
-    return {
-      exitCode: ExitCode.GENERAL_ERROR,
-      result: {
-        status: 'error',
-        error: (error as Error).message,
-        health: 'error',
-      },
-    };
+    report.health = 'error';
+    report.message = (error as Error).message;
+    return report;
   }
 }

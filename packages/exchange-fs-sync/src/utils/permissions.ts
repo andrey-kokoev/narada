@@ -5,6 +5,13 @@
 
 import { stat, chmod, access, constants } from "node:fs/promises";
 
+export class PermissionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PermissionError";
+  }
+}
+
 /**
  * Permission check result
  */
@@ -35,6 +42,14 @@ export async function ensurePrivateFile(path: string): Promise<void> {
   await chmod(path, 0o600);
 }
 
+export async function setPrivateFile(path: string): Promise<void> {
+  try {
+    await ensurePrivateFile(path);
+  } catch (error) {
+    throw new PermissionError((error as Error).message);
+  }
+}
+
 /**
  * Ensure a directory has private permissions (owner only)
  * Unix: 0o700 (owner read/write/execute)
@@ -46,6 +61,18 @@ export async function ensurePrivateDirectory(path: string): Promise<void> {
   }
 
   await chmod(path, 0o700);
+}
+
+export async function setGroupReadableFile(path: string): Promise<void> {
+  if (process.platform === "win32") {
+    return;
+  }
+
+  try {
+    await chmod(path, PermissionMode.GROUP_READABLE_FILE);
+  } catch (error) {
+    throw new PermissionError((error as Error).message);
+  }
 }
 
 /**
@@ -62,7 +89,6 @@ export async function checkFilePermissions(path: string): Promise<PermissionChec
       // Extract permission bits
       const ownerRead = mode & 0o400;
       const ownerWrite = mode & 0o200;
-      const ownerExecute = mode & 0o100;
       const groupRead = mode & 0o040;
       const groupWrite = mode & 0o020;
       const groupExecute = mode & 0o010;
@@ -302,7 +328,7 @@ export function isRunningAsRoot(): boolean {
   }
 
   // Unix: check UID
-  return process.getuid?.() === 0 ?? false;
+  return process.getuid?.() === 0;
 }
 
 /**

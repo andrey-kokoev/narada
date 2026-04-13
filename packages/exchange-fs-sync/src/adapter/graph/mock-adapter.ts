@@ -12,9 +12,7 @@ import type {
   AttachmentPolicy,
   BodyPolicy,
   NormalizedBatch,
-  NormalizedEvent,
 } from "../../types/normalized.js";
-import { SCHEMA_VERSION } from "../../types/normalized.js";
 import type { GraphAdapter } from "../../types/runtime.js";
 import { normalizeBatch } from "../../normalize/batch.js";
 
@@ -105,7 +103,7 @@ export class MockGraphAdapter implements GraphAdapter {
    * Generate synthetic GraphDeltaMessage objects
    */
   private generateMessages(): GraphDeltaMessage[] {
-    const { messageCount, mailbox_id, seed } = this.options;
+    const { messageCount, seed } = this.options;
 
     return Array.from({ length: messageCount }, (_, i) => {
       const messageId = this.generateMessageId(i, seed);

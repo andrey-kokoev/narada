@@ -72,6 +72,8 @@ function calculateChecksum(data: string): string {
   return createHash("sha256").update(data).digest("hex").slice(0, 16);
 }
 
+let tempPathCounter = 0;
+
 export interface FileMessageStoreOptions {
   rootDir: string;
   /** If true, validate checksums on read operations */
@@ -95,11 +97,13 @@ export class FileMessageStore implements MessageStore {
 
   async upsertFromPayload(payload: NormalizedPayload): Promise<void> {
     const destinationDir = this.messageDir(payload.message_id);
+    const nonce = `${process.pid}.${Date.now()}.${tempPathCounter++}`;
     const stagingDir = join(
       this.tmpDir,
-      `message.${safeSegment(payload.message_id)}.${process.pid}.${Date.now()}`,
+      `message.${safeSegment(payload.message_id)}.${nonce}`,
     );
-    const priorDir = `${destinationDir}.prior.${process.pid}.${Date.now()}`;
+    const priorDir = `${destinationDir}.prior.${nonce}`;
+    let destinationExists = false;
 
     try {
       await mkdir(this.messagesDir, { recursive: true });
@@ -143,7 +147,7 @@ export class FileMessageStore implements MessageStore {
 
       await writeJson(join(stagingDir, "record.json"), record);
 
-      const destinationExists = await exists(destinationDir);
+      destinationExists = await exists(destinationDir);
 
       // Atomic replacement: move existing to prior, move staging to destination, remove prior
       if (destinationExists) {

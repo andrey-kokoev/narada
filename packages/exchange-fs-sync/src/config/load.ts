@@ -144,6 +144,9 @@ export async function loadConfig(
 
   const normalizeRaw = isObject(root.normalize) ? root.normalize : {};
   const runtimeRaw = isObject(root.runtime) ? root.runtime : {};
+  const lifecycleRaw = isObject(root.lifecycle) ? root.lifecycle : {};
+  const retentionRaw = isObject(lifecycleRaw.retention) ? lifecycleRaw.retention : {};
+  const scheduleRaw = isObject(lifecycleRaw.schedule) ? lifecycleRaw.schedule : {};
 
   const mailbox_id = expectString(root.mailbox_id, "config.mailbox_id");
   const root_dir = expectString(root.root_dir, "config.root_dir");
@@ -223,6 +226,75 @@ export async function loadConfig(
           DEFAULT_EXCHANGE_FS_SYNC_CONFIG.runtime.rebuild_views_after_sync,
         "config.runtime.rebuild_views_after_sync",
       ),
+    },
+    lifecycle: {
+      tombstone_retention_days: expectNumber(
+        lifecycleRaw.tombstone_retention_days ??
+          DEFAULT_EXCHANGE_FS_SYNC_CONFIG.lifecycle.tombstone_retention_days,
+        "config.lifecycle.tombstone_retention_days",
+      ),
+      archive_after_days: expectNumber(
+        lifecycleRaw.archive_after_days ??
+          DEFAULT_EXCHANGE_FS_SYNC_CONFIG.lifecycle.archive_after_days,
+        "config.lifecycle.archive_after_days",
+      ),
+      archive_dir: expectString(
+        lifecycleRaw.archive_dir ??
+          DEFAULT_EXCHANGE_FS_SYNC_CONFIG.lifecycle.archive_dir,
+        "config.lifecycle.archive_dir",
+      ),
+      compress_archives: expectBoolean(
+        lifecycleRaw.compress_archives ??
+          DEFAULT_EXCHANGE_FS_SYNC_CONFIG.lifecycle.compress_archives,
+        "config.lifecycle.compress_archives",
+      ),
+      retention: {
+        max_age_days:
+          retentionRaw.max_age_days !== undefined
+            ? expectNumber(retentionRaw.max_age_days, "config.lifecycle.retention.max_age_days")
+            : undefined,
+        max_total_size:
+          retentionRaw.max_total_size !== undefined
+            ? expectString(retentionRaw.max_total_size, "config.lifecycle.retention.max_total_size")
+            : undefined,
+        max_message_count:
+          retentionRaw.max_message_count !== undefined
+            ? expectNumber(retentionRaw.max_message_count, "config.lifecycle.retention.max_message_count")
+            : undefined,
+        preserve_flagged: expectBoolean(
+          retentionRaw.preserve_flagged ??
+            DEFAULT_EXCHANGE_FS_SYNC_CONFIG.lifecycle.retention.preserve_flagged,
+          "config.lifecycle.retention.preserve_flagged",
+        ),
+        preserve_unread: expectBoolean(
+          retentionRaw.preserve_unread ??
+            DEFAULT_EXCHANGE_FS_SYNC_CONFIG.lifecycle.retention.preserve_unread,
+          "config.lifecycle.retention.preserve_unread",
+        ),
+      },
+      schedule: {
+        frequency:
+          scheduleRaw.frequency === "daily" ||
+          scheduleRaw.frequency === "weekly" ||
+          scheduleRaw.frequency === "on-sync" ||
+          scheduleRaw.frequency === "manual"
+            ? scheduleRaw.frequency
+            : DEFAULT_EXCHANGE_FS_SYNC_CONFIG.lifecycle.schedule.frequency,
+        max_run_time_minutes: expectNumber(
+          scheduleRaw.max_run_time_minutes ??
+            DEFAULT_EXCHANGE_FS_SYNC_CONFIG.lifecycle.schedule.max_run_time_minutes,
+          "config.lifecycle.schedule.max_run_time_minutes",
+        ),
+        time_window:
+          isObject(scheduleRaw.time_window) &&
+          isNonEmptyString(scheduleRaw.time_window.start) &&
+          isNonEmptyString(scheduleRaw.time_window.end)
+            ? {
+                start: scheduleRaw.time_window.start.trim(),
+                end: scheduleRaw.time_window.end.trim(),
+              }
+            : undefined,
+      },
     },
   };
 

@@ -17,6 +17,7 @@ import { vol } from 'memfs';
 
 beforeEach(() => {
   vol.reset();
+  vol.mkdirSync('/tmp', { recursive: true });
 });
 
 // Global test utilities

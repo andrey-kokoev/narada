@@ -18,21 +18,21 @@ pnpm add -g @narada/exchange-fs-sync-cli
 ### First-Time Setup
 
 ```bash
-# Interactive configuration (recommended)
+# Interactive configuration
 exchange-sync init --interactive
 
 # Follow the prompts:
 # - Enter your email address
 # - Choose data directory (default: ./data)
 # - Set Graph API credentials (or use env vars)
-# - Select folders to sync
+# - Select a single folder to sync
 # - Test connection before saving
 ```
 
 ### Run Your First Sync
 
 ```bash
-# Run sync
+# Run sync for the configured folder
 exchange-sync sync
 
 # Check status
@@ -116,6 +116,11 @@ export GRAPH_ACCESS_TOKEN="eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsIng1dCI6..."
 
 Get a token via [Microsoft Graph Explorer](https://developer.microsoft.com/en-us/graph/graph-explorer) or Azure CLI.
 
+## Current Scope
+
+The current Graph delta implementation is folder-scoped, not whole-mailbox scoped.
+Configure exactly one entry in `scope.included_container_refs` such as `["inbox"]`.
+
 #### Method C: Config File (Not Recommended for Secrets)
 
 Add to `config.json`:
@@ -183,7 +188,7 @@ async function main() {
     body_policy: config.normalize.body_policy,
     attachment_policy: config.normalize.attachment_policy,
     include_headers: config.normalize.include_headers,
-    normalize_folder_ref: (folderId) => [folderId ?? "unknown"],
+    normalize_folder_ref: (message) => [message.parentFolderId ?? "unknown"],
     normalize_flagged: (flag) => flag?.flagStatus === "flagged",
   });
   

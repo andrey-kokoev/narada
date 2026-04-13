@@ -194,7 +194,7 @@ export class Fts5QueryEngine {
    * For production use, consider creating a vocab table:
    *   CREATE VIRTUAL TABLE message_search_vocab USING fts5vocab(message_search, row);
    */
-  getSuggestions(partial: string, limit = 5): string[] {
+  getSuggestions(_partial: string, _limit = 5): string[] {
     // For now, return empty array - vocab table can be added later
     // To enable: CREATE VIRTUAL TABLE message_search_vocab USING fts5vocab(message_search, row)
     return [];

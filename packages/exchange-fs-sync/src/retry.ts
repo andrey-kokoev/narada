@@ -62,10 +62,8 @@ interface CircuitBreakerState {
 export class CircuitBreaker {
   private state: CircuitBreakerState;
   private readonly config: CircuitBreakerConfig;
-  private readonly name: string;
 
-  constructor(name: string, config?: Partial<CircuitBreakerConfig>) {
-    this.name = name;
+  constructor(_name: string, config?: Partial<CircuitBreakerConfig>) {
     this.config = { ...DEFAULT_CIRCUIT_BREAKER_CONFIG, ...config };
     this.state = {
       state: "closed",
@@ -80,7 +78,6 @@ export class CircuitBreaker {
   }
 
   private transitionTo(newState: CircuitState): void {
-    const oldState = this.state.state;
     this.state.state = newState;
 
     if (newState === "closed") {
@@ -102,13 +99,18 @@ export class CircuitBreaker {
     if (this.state.state === "open") {
       if (this.shouldAttemptReset()) {
         this.transitionTo("half-open");
+        this.state.halfOpenCalls++;
         return true;
       }
       return false;
     }
 
     // half-open
-    return this.state.halfOpenCalls < this.config.halfOpenMaxCalls;
+    if (this.state.halfOpenCalls >= this.config.halfOpenMaxCalls) {
+      return false;
+    }
+    this.state.halfOpenCalls++;
+    return true;
   }
 
   /**
@@ -222,6 +224,8 @@ function isRetryableError(
     ) {
       return { retryable: true };
     }
+
+    return { retryable: true };
   }
 
   return { retryable: false };
@@ -317,11 +321,11 @@ export async function withRetry<T>(
 
       totalDelayMs += delayMs;
 
-      // Notify retry callback
-      retryContext?.onRetry?.(attempt, delayMs, error);
-
       // Wait before retrying
       await sleep(delayMs);
+
+      // Notify retry callback after the scheduled delay has elapsed.
+      retryContext?.onRetry?.(attempt, delayMs, error);
     }
   }
 

@@ -56,7 +56,7 @@ export class ResourceManager {
    * Check if a new sync can be started
    * Returns true if resources are available
    */
-  canStartSync(mailboxId: string): boolean {
+  canStartSync(_mailboxId: string): boolean {
     const currentMemory = this.getTotalMemoryUsage();
     const estimatedNewSyncMemory = this.limits.maxMemoryMB * 0.8; // Estimate 80% of limit for new sync
 
@@ -86,7 +86,7 @@ export class ResourceManager {
   trackSync(mailboxId: string, initialUsage?: Partial<ResourceUsage>): void {
     const memory = getMemoryUsage();
     const usage: ResourceUsage = {
-      memoryMB: initialUsage?.memoryMB ?? memory.usedMB,
+      memoryMB: initialUsage?.memoryMB ?? memory.heapUsedMB,
       diskIOps: initialUsage?.diskIOps ?? 0,
       networkRequestsPerSec: initialUsage?.networkRequestsPerSec ?? 0,
     };

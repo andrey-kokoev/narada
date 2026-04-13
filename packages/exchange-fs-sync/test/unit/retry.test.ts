@@ -64,12 +64,13 @@ describe("withRetry", () => {
       { maxAttempts: 3, baseDelayMs: 100, jitterFactor: 0 },
       "test",
     );
+    const expectation = expect(promise).rejects.toThrow(ExchangeFSSyncError);
 
     // Fast-forward past all delays
     await vi.advanceTimersByTimeAsync(100);
     await vi.advanceTimersByTimeAsync(200);
 
-    await expect(promise).rejects.toThrow(ExchangeFSSyncError);
+    await expectation;
     expect(operation).toHaveBeenCalledTimes(3);
   });
 

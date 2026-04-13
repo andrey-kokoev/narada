@@ -17,7 +17,7 @@ function sha256(input: string | Uint8Array): string {
  * - sorts object keys
  * - stable for identical semantic payloads
  */
-function stableStringify(value: unknown): string {
+export function stableStringify(value: unknown): string {
   if (value === null || typeof value !== "object") {
     return JSON.stringify(value);
   }
@@ -92,4 +92,16 @@ export function buildEventId(input: BuildEventIdInput): EventId {
   const digest = sha256(material);
 
   return `evt_${digest}`;
+}
+
+export function computeEventId(input: BuildEventIdInput): EventId;
+export function computeEventId(input: BuildEventIdInput | {
+  mailbox_id: MailboxId;
+  message_id: MessageId;
+  event_kind: EventKind;
+  source_version?: SourceVersion;
+  payload?: NormalizedPayload;
+}): EventId;
+export function computeEventId(input: BuildEventIdInput): EventId {
+  return buildEventId(input);
 }

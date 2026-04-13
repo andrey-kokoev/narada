@@ -5,7 +5,7 @@
  * simple file-based health checks without parsing logs.
  */
 
-import { writeFile } from "node:fs/promises";
+ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 export type HealthStatus = "healthy" | "stale" | "error" | "stopped";
@@ -68,6 +68,14 @@ export interface HealthWriterOptions {
   mailboxId: string;
 }
 
+export interface LegacyHealthRecord {
+  status: HealthStatus;
+  consecutive_failures: number;
+  total_errors: number;
+  mailbox_id: string;
+  last_sync_at: string | null;
+}
+
 /**
  * Writes a health file to the filesystem for external monitoring
  *
@@ -99,11 +107,12 @@ export async function writeHealthFile(
  */
 export function createHealthWriter(options: HealthWriterOptions): {
   write: (data: Omit<HealthFileData, "timestamp" | "mailboxId">) => Promise<void>;
-  markError: (error: Error | string) => Promise<void>;
+  markError: (error: Error | string, previousData?: Partial<HealthFileData>) => Promise<void>;
   markSuccess: (
     eventsApplied: number,
     eventsSkipped: number,
     durationMs: number,
+    previousData?: Partial<HealthFileData>,
   ) => Promise<void>;
 } {
   const { rootDir, mailboxId } = options;
@@ -162,7 +171,6 @@ export function createHealthWriter(options: HealthWriterOptions): {
       durationMs: number,
       previousData?: Partial<HealthFileData>,
     ) {
-      const totalEvents = eventsApplied + eventsSkipped;
       const messagesPerSecond = durationMs > 0
         ? (eventsApplied * 1000) / durationMs
         : 0;
@@ -187,4 +195,52 @@ export function createHealthWriter(options: HealthWriterOptions): {
       });
     },
   };
+}
+
+export class FileHealthStore {
+  private readonly rootDir: string;
+  private readonly mailboxId: string;
+
+  constructor(options: HealthWriterOptions) {
+    this.rootDir = options.rootDir;
+    this.mailboxId = options.mailboxId;
+  }
+
+  async recordSuccess(
+    eventsApplied = 0,
+    eventsSkipped = 0,
+    durationMs = 0,
+  ): Promise<void> {
+    const previous = await this.readRaw().catch(() => null);
+    const writer = createHealthWriter({
+      rootDir: this.rootDir,
+      mailboxId: this.mailboxId,
+    });
+    await writer.markSuccess(eventsApplied, eventsSkipped, durationMs, previous ?? undefined);
+  }
+
+  async recordError(error: Error | string): Promise<void> {
+    const previous = await this.readRaw().catch(() => null);
+    const writer = createHealthWriter({
+      rootDir: this.rootDir,
+      mailboxId: this.mailboxId,
+    });
+    await writer.markError(error, previous ?? undefined);
+  }
+
+  async read(): Promise<LegacyHealthRecord> {
+    const raw = await this.readRaw();
+    return {
+      status: raw.status,
+      consecutive_failures: raw.metrics.consecutiveFailures,
+      total_errors: raw.totalErrors,
+      mailbox_id: raw.mailboxId,
+      last_sync_at: raw.lastSyncAt,
+    };
+  }
+
+  private async readRaw(): Promise<HealthFileData> {
+    const content = await readFile(join(this.rootDir, ".health.json"), "utf8");
+    return JSON.parse(content) as HealthFileData;
+  }
 }

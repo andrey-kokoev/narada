@@ -9,9 +9,9 @@
  *   init --add-to-existing    # Add mailbox to existing config
  */
 
-import { resolve, dirname } from "node:path";
+import { resolve } from "node:path";
 import { existsSync } from "node:fs";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { stderr } from "node:process";
 import {
   loadMultiMailboxConfig,
@@ -299,8 +299,8 @@ async function handleInit(options: CLIOptions): Promise<void> {
           graph: singleConfig.graph as MailboxConfig["graph"],
           scope: singleConfig.scope as MailboxConfig["scope"],
           sync: {
-            attachment_policy: (singleConfig.normalize?.attachment_policy as MailboxConfig["sync"]["attachment_policy"]) ?? "metadata_only",
-            body_policy: (singleConfig.normalize?.body_policy as MailboxConfig["sync"]["body_policy"]) ?? "text_only",
+            attachment_policy: (singleConfig.normalize?.attachment_policy as NonNullable<MailboxConfig["sync"]>["attachment_policy"]) ?? "metadata_only",
+            body_policy: (singleConfig.normalize?.body_policy as NonNullable<MailboxConfig["sync"]>["body_policy"]) ?? "text_only",
             include_headers: (singleConfig.normalize?.include_headers as boolean) ?? false,
             tombstones_enabled: (singleConfig.normalize?.tombstones_enabled as boolean) ?? true,
             polling_interval_ms: (singleConfig.runtime?.polling_interval_ms as number) ?? 60000,

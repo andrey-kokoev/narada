@@ -63,9 +63,12 @@ export interface Tracer {
   /**
    * Execute a function within a span
    */
-  withSpan<T>(name: string, fn: (span: Span) => T | Promise<T>, options?: {
+  withSpan<T>(name: string, fn: (span: Span) => Promise<T>, options?: {
     attributes?: Record<string, unknown>;
   }): Promise<T>;
+  withSpan<T>(name: string, fn: (span: Span) => T, options?: {
+    attributes?: Record<string, unknown>;
+  }): T;
 }
 
 /** Global ID generator for trace/span IDs */
@@ -220,25 +223,36 @@ class TracerImpl implements Tracer {
     return span;
   }
 
-  async withSpan<T>(
+  withSpan<T>(
     name: string,
     fn: (span: Span) => T | Promise<T>,
     options: { attributes?: Record<string, unknown> } = {},
-  ): Promise<T> {
+  ): T | Promise<T> {
     const span = this.startSpan(name, { attributes: options.attributes });
 
     try {
       const result = fn(span);
       if (result instanceof Promise) {
-        return await result;
+        return result
+          .then((value) => {
+            span.setOk();
+            return value;
+          })
+          .catch((error) => {
+            span.recordException(error instanceof Error ? error : new Error(String(error)));
+            throw error;
+          })
+          .finally(() => {
+            span.end();
+          });
       }
       span.setOk();
+      span.end();
       return result;
     } catch (error) {
       span.recordException(error instanceof Error ? error : new Error(String(error)));
-      throw error;
-    } finally {
       span.end();
+      return Promise.reject(error);
     }
   }
 
@@ -323,6 +337,3 @@ export function initTracing(options: { enabled?: boolean; debug?: boolean } = {}
     exporter: options.debug ? new ConsoleSpanExporter() : undefined,
   });
 }
-
-// Re-export types
-export type { Span, SpanContext, SpanEvent, Tracer, SpanExporter };

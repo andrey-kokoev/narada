@@ -5,7 +5,7 @@
 import { mkdir, readFile, writeFile, chmod, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
-import { tmpdir, homedir } from "node:os";
+import { homedir } from "node:os";
 
 const SERVICE_NAME = "exchange-fs-sync";
 
@@ -66,33 +66,6 @@ export class KeychainStorage implements SecureStorage {
     const keytar = await this.getKeytar();
     const result = await keytar.findCredentials(`${SERVICE_NAME}:${key}`);
     return result.some((cred) => cred.account === this.account);
-  }
-}
-
-/**
- * Get or create a persistent encryption key for file-based storage
- * Uses a key derived from OS-specific entropy
- */
-function getOrCreateEncryptionKey(configDir: string): Buffer {
-  const keyPath = join(configDir, ".encryption-key");
-
-  try {
-    // Try to read existing key
-    const keyData = readFileSync(keyPath);
-    // Derive actual key from stored key using scrypt
-    return scryptSync(keyData, SERVICE_NAME, 32);
-  } catch {
-    // Generate new key
-    const keyData = randomBytes(32);
-    // Ensure directory exists
-    try {
-      mkdirSync(configDir, { recursive: true, mode: 0o700 });
-    } catch {
-      // Directory may already exist
-    }
-    // Write key with restricted permissions
-    writeFileSync(keyPath, keyData, { mode: 0o600 });
-    return scryptSync(keyData, SERVICE_NAME, 32);
   }
 }
 

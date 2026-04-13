@@ -36,10 +36,7 @@ const SENSITIVE_HEADER_PATTERNS = [
 ];
 
 /** Redacted value placeholder */
-const REDACTED = "***REDACTED***";
-
-/** Partial redacted value placeholder (for values where length matters) */
-const PARTIAL_REDACTED = (length: number): string => "*".repeat(Math.min(length, 8));
+export const REDACTED = "***REDACTED***";
 
 /**
  * Check if a key represents sensitive data
@@ -232,7 +229,7 @@ function sanitizeStackTrace(stack: string): string {
       // Keep the line but redact absolute paths
       return line.replace(
         /\s+at\s+(.+?)\s+\((.+?)\)/g,
-        (match, func, path) => {
+        (_match, func, path) => {
           // Keep only the filename, not full path
           const filename = path.split("/").pop()?.split("\\").pop() ?? path;
           return `    at ${func} (${filename})`;
@@ -337,16 +334,20 @@ export interface LogEntry {
 }
 
 export function sanitizeLogEntry(entry: LogEntry): LogEntry {
+  const sanitizedMetadata = sanitizeForLogging(
+    Object.fromEntries(
+      Object.entries(entry).filter(
+        ([key]) => !["level", "message", "timestamp"].includes(key),
+      ),
+    ),
+  );
+
   return {
     level: entry.level,
     message: sanitizeErrorMessage(entry.message),
     timestamp: entry.timestamp,
-    ...sanitizeForLogging(
-      Object.fromEntries(
-        Object.entries(entry).filter(
-          (k) => !["level", "message", "timestamp"].includes(k[0]),
-        ),
-      ),
-    ),
+    ...(sanitizedMetadata && typeof sanitizedMetadata === "object"
+      ? sanitizedMetadata as Record<string, unknown>
+      : {}),
   } as LogEntry;
 }
