@@ -12,9 +12,10 @@ function rowToAgentTrace(row: Record<string, unknown>): AgentTrace {
   return {
     rowid: Number(row.rowid),
     trace_id: String(row.trace_id),
-    thread_id: String(row.thread_id),
+    conversation_id: String(row.conversation_id),
     mailbox_id: String(row.mailbox_id),
     agent_id: String(row.agent_id),
+    chat_id: row.chat_id ? String(row.chat_id) : null,
     session_id: row.session_id ? String(row.session_id) : null,
     trace_type: String(row.trace_type) as TraceType,
     parent_trace_id: row.parent_trace_id ? String(row.parent_trace_id) : null,
@@ -42,22 +43,14 @@ export class SqliteAgentTraceStore implements AgentTraceStore {
 
   initSchema(): void {
     this.db.exec(`
-      -- Agent Trace Persistence Schema
-      --
-      -- Append-only local commentary for agent reasoning, decisions, and observations.
-      -- Lives in the same SQLite database as outbound state but is loaded independently.
-      --
-      -- Semantics:
-      -- - Traces are NOT authoritative sync state, workflow state, command state, or recovery state.
-      -- - thread_id in this table is the Exchange conversation_id used by the filesystem view layer.
-      -- - reference_outbound_id and parent_trace_id are logical references only (no FK constraints)
-      --   so that trace retention is not coupled to command or parent trace retention.
+      -- Agent Trace Persistence Schema — Identity-Closed Version
 
       create table if not exists agent_traces (
         trace_id text primary key,
-        thread_id text not null,
+        conversation_id text not null,
         mailbox_id text not null,
         agent_id text not null,
+        chat_id text,
         session_id text,
         trace_type text not null,
         parent_trace_id text,
@@ -67,8 +60,11 @@ export class SqliteAgentTraceStore implements AgentTraceStore {
         created_at text not null
       );
 
-      create index if not exists idx_agent_traces_thread
-        on agent_traces(thread_id, created_at desc);
+      create index if not exists idx_agent_traces_conversation
+        on agent_traces(conversation_id, created_at desc);
+
+      create index if not exists idx_agent_traces_chat
+        on agent_traces(chat_id, created_at desc);
 
       create index if not exists idx_agent_traces_session
         on agent_traces(session_id, created_at asc);
@@ -89,17 +85,18 @@ export class SqliteAgentTraceStore implements AgentTraceStore {
 
     const stmt = this.db.prepare(`
       insert into agent_traces (
-        trace_id, thread_id, mailbox_id, agent_id, session_id,
+        trace_id, conversation_id, mailbox_id, agent_id, chat_id, session_id,
         trace_type, parent_trace_id, reference_outbound_id, reference_message_id,
         payload_json, created_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
       traceId,
-      trace.thread_id,
+      trace.conversation_id,
       trace.mailbox_id,
       trace.agent_id,
+      trace.chat_id ?? null,
       trace.session_id ?? null,
       trace.trace_type,
       trace.parent_trace_id ?? null,
@@ -116,8 +113,8 @@ export class SqliteAgentTraceStore implements AgentTraceStore {
     return rowToAgentTrace(row);
   }
 
-  readByThread(
-    threadId: string,
+  readByConversation(
+    conversationId: string,
     opts?: {
       after?: string;
       before?: string;
@@ -125,8 +122,8 @@ export class SqliteAgentTraceStore implements AgentTraceStore {
       types?: TraceType[];
     },
   ): AgentTrace[] {
-    const conditions: string[] = ["thread_id = ?"];
-    const params: (string | number)[] = [threadId];
+    const conditions: string[] = ["conversation_id = ?"];
+    const params: (string | number)[] = [conversationId];
 
     if (opts?.after) {
       conditions.push("created_at > ?");
@@ -154,6 +151,15 @@ export class SqliteAgentTraceStore implements AgentTraceStore {
     `;
 
     const rows = this.db.prepare(sql).all(...params) as Record<string, unknown>[];
+    return rows.map(rowToAgentTrace);
+  }
+
+  readByChatId(chatId: string): AgentTrace[] {
+    const rows = this.db.prepare(`
+      select rowid, * from agent_traces
+      where chat_id = ?
+      order by created_at desc, rowid desc
+    `).all(chatId) as Record<string, unknown>[];
     return rows.map(rowToAgentTrace);
   }
 

@@ -5,6 +5,7 @@
  *
  * Spec: .ai/tasks/20260413-009-agent-trace-persistence.md
  * Review: .ai/reviews/20260413-010-review-agent-trace-architecture.md
+ * Identity Closure: .ai/tasks/20260413-010-identify-closure-conversation-chat-session-model.md
  */
 
 export type TraceType =
@@ -20,13 +21,19 @@ export type TraceType =
  *
  * `rowid` is exposed as a stable local ordering primitive for deterministic
  * replay and cursor-based pagination.
+ *
+ * Identity model:
+ * - `conversation_id` is the canonical mailbox identity (Exchange conversationId).
+ * - `chat_id` is an optional local UI/CLI interaction container.
+ * - `session_id` is an optional single-execution correlation token.
  */
 export interface AgentTrace {
   rowid: number;
   trace_id: string;
-  thread_id: string;
+  conversation_id: string;
   mailbox_id: string;
   agent_id: string;
+  chat_id: string | null;
   session_id: string | null;
   trace_type: TraceType;
   parent_trace_id: string | null;
@@ -43,8 +50,8 @@ export interface AgentTraceStore {
     trace: Omit<AgentTrace, "rowid" | "trace_id" | "created_at">,
   ): AgentTrace;
 
-  readByThread(
-    threadId: string,
+  readByConversation(
+    conversationId: string,
     opts?: {
       after?: string;
       before?: string;
@@ -52,6 +59,8 @@ export interface AgentTraceStore {
       types?: TraceType[];
     },
   ): AgentTrace[];
+
+  readByChatId(chatId: string): AgentTrace[];
 
   readBySession(sessionId: string): AgentTrace[];
 
