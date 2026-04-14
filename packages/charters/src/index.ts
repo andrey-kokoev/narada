@@ -31,8 +31,16 @@ export type {
   CharterId,
   InvocationMode,
   CharterInvocationPolicy,
+  ToolArgSchema,
+  ToolSourceType,
+  ToolDefinition,
+  ToolBinding,
+  MailboxBinding,
   MailboxCharterBinding,
   CoordinatorConfig,
 } from "./types/coordinator.js";
 
-export { validateMailboxCharterBinding } from "./types/coordinator.js";
+export {
+  validateMailboxBinding,
+  validateMailboxCharterBinding,
+} from "./types/coordinator.js";

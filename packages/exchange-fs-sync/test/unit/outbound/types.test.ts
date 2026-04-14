@@ -42,6 +42,10 @@ describe("outbound state machine", () => {
       expect(isValidTransition("draft_ready", "sending")).toBe(true);
     });
 
+    it("allows draft_ready -> confirmed (for draft_reply)", () => {
+      expect(isValidTransition("draft_ready", "confirmed")).toBe(true);
+    });
+
     it("allows sending -> submitted", () => {
       expect(isValidTransition("sending", "submitted")).toBe(true);
     });

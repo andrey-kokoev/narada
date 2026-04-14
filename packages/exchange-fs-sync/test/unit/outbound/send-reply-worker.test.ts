@@ -386,6 +386,35 @@ describe("SendReplyWorker", () => {
     expect(updated?.blocked_reason).toContain("not a thread participant");
   });
 
+  it("draft_reply: pending -> confirmed without sending", async () => {
+    const cmd = createCommand({ action_type: "draft_reply", status: "pending" });
+    const ver = createVersion(cmd.outbound_id);
+    store.createCommand(cmd, ver);
+
+    const result = await worker.processNext();
+    expect(result.processed).toBe(true);
+
+    const updated = store.getCommand(cmd.outbound_id);
+    expect(updated?.status).toBe("confirmed");
+    expect(updated?.confirmed_at).not.toBeNull();
+
+    const transitions = store.db
+      .prepare("select * from outbound_transitions where outbound_id = ? order by id")
+      .all(cmd.outbound_id) as Array<{ from_status: string | null; to_status: string }>;
+
+    expect(transitions.map((t) => [t.from_status, t.to_status])).toEqual([
+      [null, "pending"],
+      ["pending", "draft_creating"],
+      ["draft_creating", "draft_ready"],
+      ["draft_ready", "confirmed"],
+    ]);
+
+    // Draft should be created but never sent
+    const draft = store.getManagedDraft(cmd.outbound_id, ver.version);
+    expect(draft).not.toBeUndefined();
+    expect(draftClient.sent.has(draft!.draft_id)).toBe(false);
+  });
+
   it("does not process commands in sending status", async () => {
     const cmd = createCommand({ status: "sending" });
     const ver = createVersion(cmd.outbound_id);

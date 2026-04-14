@@ -8,6 +8,7 @@
  */
 
 export type OutboundActionType =
+  | "draft_reply"
   | "send_reply"
   | "send_new_message"
   | "mark_read"
@@ -94,7 +95,7 @@ export const VALID_TRANSITIONS: Readonly<
 > = {
   pending: ["draft_creating", "draft_ready", "blocked_policy", "failed_terminal", "cancelled", "superseded"],
   draft_creating: ["draft_ready", "retry_wait", "failed_terminal"],
-  draft_ready: ["sending", "blocked_policy", "superseded", "cancelled"],
+  draft_ready: ["sending", "confirmed", "blocked_policy", "superseded", "cancelled"],
   sending: ["submitted", "retry_wait", "failed_terminal"],
   submitted: ["confirmed", "retry_wait"],
   retry_wait: ["draft_ready", "draft_creating", "failed_terminal"],
@@ -143,7 +144,7 @@ export function isVersionEligible(
   if (version.outbound_id !== command.outbound_id) return false;
   if (command.latest_version !== version.version) return false;
   if (version.superseded_at !== null) return false;
-  // A send may only occur from draft_ready per the spec eligibility rule
+  // Eligibility requires draft_ready status for any draft-based action
   if (command.status !== "draft_ready") return false;
   return true;
 }

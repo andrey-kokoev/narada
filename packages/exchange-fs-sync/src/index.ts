@@ -52,6 +52,7 @@ export {
   isTerminalStatus,
   VALID_TRANSITIONS,
   TERMINAL_STATUSES,
+  isVersionEligible,
 } from "./outbound/types.js";
 export type {
   OutboundActionType,
@@ -61,6 +62,29 @@ export type {
   ManagedDraft,
   OutboundTransition,
 } from "./outbound/types.js";
+export { SqliteOutboundStore } from "./outbound/store.js";
+export type { OutboundStore, SqliteOutboundStoreOptions, SqliteOutboundStoreDbOptions } from "./outbound/store.js";
+
+// Coordinator exports
+export { SqliteCoordinatorStore } from "./coordinator/store.js";
+export type {
+  CoordinatorStore,
+  ThreadRecord,
+  CharterOutputRow,
+  ForemanDecisionRow,
+  PolicyOverrideRow,
+} from "./coordinator/types.js";
+export type { SqliteCoordinatorStoreOptions } from "./coordinator/store.js";
+export { deriveThreadId } from "./coordinator/thread-id.js";
+
+// Agent trace exports
+export { SqliteAgentTraceStore } from "./agent/traces/store.js";
+export type {
+  AgentTraceStore,
+  AgentTrace,
+  TraceType,
+} from "./agent/traces/types.js";
+export type { SqliteAgentTraceStoreOptions } from "./agent/traces/store.js";
 
 // Lifecycle exports
 export {

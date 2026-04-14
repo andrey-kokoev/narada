@@ -19,7 +19,7 @@ const DEFAULT_CONFIG = {
     prefer_immutable_ids: true,
   },
   scope: {
-    included_container_refs: ['inbox'],
+    included_container_refs: ['inbox', 'sentitems', 'drafts', 'archive'],
     included_item_kinds: ['message'],
   },
   normalize: {
@@ -96,7 +96,7 @@ export async function configCommand(
   fmt.section('Configuration Details');
   fmt.kv('Mailbox', DEFAULT_CONFIG.mailbox_id);
   fmt.kv('Data directory', DEFAULT_CONFIG.root_dir);
-  fmt.kv('Sync folder', DEFAULT_CONFIG.scope.included_container_refs[0]);
+  fmt.kv('Sync folders', DEFAULT_CONFIG.scope.included_container_refs.join(', '));
   fmt.kv('Polling interval', `${DEFAULT_CONFIG.runtime.polling_interval_ms / 1000}s`);
   
   fmt.section('Next Steps');

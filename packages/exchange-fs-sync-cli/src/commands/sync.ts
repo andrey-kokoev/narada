@@ -190,7 +190,7 @@ async function syncMultiMailbox(
         client: graphClient,
         adapter_scope: {
           mailbox_id: mailbox.mailbox_id,
-          included_container_refs: mailbox.scope?.included_container_refs ?? ['inbox'],
+          included_container_refs: mailbox.scope?.included_container_refs ?? ['inbox', 'sentitems', 'drafts', 'archive'],
           included_item_kinds: mailbox.scope?.included_item_kinds ?? ['message'],
         },
         body_policy: mailbox.sync?.body_policy ?? 'text_only',

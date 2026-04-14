@@ -334,14 +334,14 @@ describe("SqliteAgentTraceStore", () => {
     it("works when given the same Database instance as SqliteOutboundStore", () => {
       const sharedDb = new Database(":memory:");
       const traceStore = new SqliteAgentTraceStore({ db: sharedDb });
+      const outboundStore = new SqliteOutboundStore({ db: sharedDb });
       traceStore.initSchema();
+      outboundStore.initSchema();
 
-      // Verify outbound schema can coexist
-      sharedDb.prepare(`
-        create table if not exists outbound_commands (
-          outbound_id text primary key
-        )
-      `).run();
+      outboundStore.createCommand(
+        createOutboundCommand({ outbound_id: "out-1" }),
+        createOutboundVersion({ outbound_id: "out-1" }),
+      );
 
       const trace = traceStore.writeTrace({
         conversation_id: "conv-1",
@@ -358,6 +358,7 @@ describe("SqliteAgentTraceStore", () => {
 
       expect(traceStore.getTrace(trace.trace_id)).toBeDefined();
       traceStore.close();
+      outboundStore.close();
     });
   });
 

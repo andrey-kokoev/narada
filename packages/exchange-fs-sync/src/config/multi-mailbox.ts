@@ -242,9 +242,9 @@ export function validateMailboxConfig(
       prefer_immutable_ids: expectBoolean(graphObj.prefer_immutable_ids, true),
     },
     scope: {
-      included_container_refs: Array.isArray(scopeObj.included_container_refs) 
+      included_container_refs: Array.isArray(scopeObj.included_container_refs)
         ? scopeObj.included_container_refs as FolderRef[]
-        : ["inbox", "sentitems"],
+        : ["inbox", "sentitems", "drafts", "archive"],
       included_item_kinds: Array.isArray(scopeObj.included_item_kinds)
         ? scopeObj.included_item_kinds as string[]
         : ["message"],

@@ -1,5 +1,9 @@
 # Foreman And Charters Architecture
 
+> **Cross-reference:** Coordinator SQLite schema, foreman → outbound handoff, and unified
+> `CoordinatorConfig` are resolved in
+> `.ai/tasks/20260413-012-coordinator-state-and-foreman-handoff.md`.
+
 ## Mission
 Define the concrete coordinator-first contract for agents working on mailboxes, with one foreman authority above selective charter invocation.
 

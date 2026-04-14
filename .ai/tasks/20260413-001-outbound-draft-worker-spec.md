@@ -1,5 +1,8 @@
 # Outbound Draft Worker Spec
 
+> **Cross-reference:** Coordinator state and foreman handoff semantics are resolved in
+> `.ai/tasks/20260413-012-coordinator-state-and-foreman-handoff.md`.
+
 ## Mission
 Define a de-arbitrized outbound execution model for agent-worked Exchange helpdesk mailboxes, using draft-first delivery, durable local state, and deterministic reconciliation.
 

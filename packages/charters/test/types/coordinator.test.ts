@@ -29,6 +29,10 @@ describe("validateMailboxCharterBinding", () => {
         ],
         obligation_keeper: [],
       },
+      charter_tools: {
+        support_steward: [],
+        obligation_keeper: [],
+      },
     };
     expect(validateMailboxCharterBinding(binding)).toBe(true);
   });
@@ -40,6 +44,7 @@ describe("validateMailboxCharterBinding", () => {
       default_primary_charter: "obligation_keeper",
       invocation_policies: [],
       knowledge_sources: {},
+      charter_tools: {},
     };
     expect(validateMailboxCharterBinding(binding)).toBe(false);
   });
@@ -53,6 +58,7 @@ describe("validateMailboxCharterBinding", () => {
         { charter_id: "support_steward", mode: "invalid" },
       ],
       knowledge_sources: {},
+      charter_tools: {},
     };
     expect(validateMailboxCharterBinding(binding)).toBe(false);
   });
@@ -63,6 +69,17 @@ describe("validateMailboxCharterBinding", () => {
       available_charters: ["support_steward"],
       default_primary_charter: "support_steward",
       invocation_policies: [],
+    };
+    expect(validateMailboxCharterBinding(binding)).toBe(false);
+  });
+
+  it("rejects missing charter_tools", () => {
+    const binding = {
+      mailbox_id: "help@example.com",
+      available_charters: ["support_steward"],
+      default_primary_charter: "support_steward",
+      invocation_policies: [],
+      knowledge_sources: {},
     };
     expect(validateMailboxCharterBinding(binding)).toBe(false);
   });

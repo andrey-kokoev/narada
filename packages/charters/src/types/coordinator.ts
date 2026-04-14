@@ -1,10 +1,13 @@
 /**
  * Coordinator Binding Contracts
  *
- * Mailbox-to-charter attachments and invocation policies.
+ * Mailbox-to-charter attachments, invocation policies, knowledge sources,
+ * tool bindings, and top-level coordinator configuration.
  *
  * Spec: .ai/tasks/20260413-007-foreman-and-charters-architecture.md
  * Spec: .ai/tasks/20260413-008-mailbox-charter-knowledge-sources.md
+ * Spec: .ai/tasks/20260413-011-charter-tool-bindings.md
+ * Spec: .ai/tasks/20260413-012-coordinator-state-and-foreman-handoff.md
  */
 
 import type { KnowledgeSourceRef } from "./knowledge.js";
@@ -20,26 +23,68 @@ export interface CharterInvocationPolicy {
   trigger_tags?: string[];
 }
 
-/** Canonical mailbox-to-charter binding including knowledge sources */
-export interface MailboxCharterBinding {
+/** Argument schema for tool invocation */
+export interface ToolArgSchema {
+  name: string;
+  type: "string" | "number" | "boolean" | "date";
+  required: boolean;
+  description: string;
+}
+
+/** Tool source types */
+export type ToolSourceType = "local_executable" | "http_endpoint" | "docker_image";
+
+/** Global tool definition (deployment/repo specific) */
+export interface ToolDefinition {
+  id: string;
+  source_type: ToolSourceType;
+  repo_root?: string;
+  working_directory?: string;
+  executable_path?: string;
+  url?: string;
+  docker_image?: string;
+  schema_args?: ToolArgSchema[];
+}
+
+/** Binding of a tool to a charter within a mailbox */
+export interface ToolBinding {
+  tool_id: string;
+  enabled: boolean;
+  purpose: string;
+  read_only: boolean;
+  timeout_ms: number;
+  allowed_env_vars?: string[];
+  requires_approval: boolean;
+  working_directory_override?: string;
+}
+
+/** Canonical mailbox-to-coordinator binding */
+export interface MailboxBinding {
   mailbox_id: string;
   available_charters: CharterId[];
   default_primary_charter: CharterId;
   invocation_policies: CharterInvocationPolicy[];
   knowledge_sources: Record<CharterId, KnowledgeSourceRef[]>;
+  charter_tools: Record<CharterId, ToolBinding[]>;
 }
+
+/** @deprecated Use MailboxBinding */
+export type MailboxCharterBinding = MailboxBinding;
 
 /** Top-level coordinator configuration envelope */
 export interface CoordinatorConfig {
-  mailbox_bindings: Record<string, MailboxCharterBinding>;
+  foreman_id: string;
+  mailbox_bindings: Record<string, MailboxBinding>;
+  global_escalation_precedence: string[];
+  tool_definitions: Record<string, ToolDefinition>;
 }
 
 /**
- * Validate a mailbox-charter binding.
+ * Validate a mailbox binding.
  */
-export function validateMailboxCharterBinding(
+export function validateMailboxBinding(
   binding: unknown,
-): binding is MailboxCharterBinding {
+): binding is MailboxBinding {
   if (typeof binding !== "object" || binding === null) return false;
   const b = binding as Record<string, unknown>;
 
@@ -82,5 +127,12 @@ export function validateMailboxCharterBinding(
     return false;
   }
 
+  if (typeof b.charter_tools !== "object" || b.charter_tools === null) {
+    return false;
+  }
+
   return true;
 }
+
+/** @deprecated Use validateMailboxBinding */
+export const validateMailboxCharterBinding = validateMailboxBinding;

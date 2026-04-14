@@ -1,5 +1,9 @@
 # Agent Task: Validate and Repair — Agent Trace Persistence
 
+> **Cross-reference:** Physical co-location with coordinator DB and soft-reference
+> semantics for `reference_outbound_id` are resolved in
+> `.ai/tasks/20260413-012-coordinator-state-and-foreman-handoff.md`.
+
 ## Inputs
 
 - Target spec:  

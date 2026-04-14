@@ -10,7 +10,7 @@
     "prefer_immutable_ids": true
   },
   "scope": {
-    "included_container_refs": ["inbox"],
+    "included_container_refs": ["inbox", "sentitems", "drafts", "archive"],
     "included_item_kinds": ["message"]
   },
   "normalize": {

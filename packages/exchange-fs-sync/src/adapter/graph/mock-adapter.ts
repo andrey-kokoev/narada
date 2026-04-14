@@ -255,7 +255,7 @@ export function createMockAdapter(
     mailbox_id: "mock-mailbox",
     adapter_scope: {
       mailbox_id: "mock-mailbox",
-      included_container_refs: ["inbox"],
+      included_container_refs: ["inbox", "sentitems", "drafts", "archive"],
       included_item_kinds: ["message"],
     },
     body_policy: "text_only",

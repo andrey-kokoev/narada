@@ -83,15 +83,27 @@ export class SendReplyWorker {
   constructor(private readonly deps: SendReplyWorkerDeps) {}
 
   /**
-   * Process the next eligible send_reply command.
+   * Process the next eligible send_reply or draft_reply command.
    * Returns whether a command was processed.
    */
   async processNext(mailboxId?: string): Promise<{ processed: boolean; outboundId?: string }> {
-    const candidates = this.deps.store.fetchNextByStatus(
+    const sendReplyCandidates = this.deps.store.fetchNextByStatus(
       "send_reply",
       ["pending", "draft_creating", "draft_ready"],
       mailboxId,
     );
+    const draftReplyCandidates = this.deps.store.fetchNextByStatus(
+      "draft_reply",
+      ["pending", "draft_creating", "draft_ready"],
+      mailboxId,
+    );
+
+    const candidates = [...sendReplyCandidates, ...draftReplyCandidates];
+    candidates.sort((a, b) => {
+      const aTime = new Date(a.command.created_at).getTime();
+      const bTime = new Date(b.command.created_at).getTime();
+      return aTime - bTime;
+    });
 
     if (candidates.length === 0) {
       return { processed: false };
@@ -123,15 +135,23 @@ export class SendReplyWorker {
         case "pending":
         case "draft_creating": {
           await this.ensureDraftCreated(command, version);
-          // If draft creation succeeded, continue to send in the same invocation
+          // If draft creation succeeded, continue to send/confirm in the same invocation
           const updated = this.deps.store.getCommand(command.outbound_id);
           if (updated && updated.status === "draft_ready") {
-            await this.sendDraft(updated, version);
+            if (updated.action_type === "draft_reply") {
+              await this.confirmDraft(updated, version);
+            } else {
+              await this.sendDraft(updated, version);
+            }
           }
           break;
         }
         case "draft_ready": {
-          await this.sendDraft(command, version);
+          if (command.action_type === "draft_reply") {
+            await this.confirmDraft(command, version);
+          } else {
+            await this.sendDraft(command, version);
+          }
           break;
         }
         default: {
@@ -386,6 +406,76 @@ export class SendReplyWorker {
       // Intentionally leave in sending so reconciler can pick it up
       return;
     }
+  }
+
+  private async confirmDraft(
+    command: OutboundCommand,
+    version: OutboundVersion,
+  ): Promise<void> {
+    const { store, logger } = this.deps;
+
+    let managed = store.getManagedDraft(command.outbound_id, version.version);
+    if (!managed) {
+      logger?.info("Managed draft missing, recreating for draft_reply", {
+        outboundId: command.outbound_id,
+        version: version.version,
+      });
+      try {
+        await this.createAndPersistDraft(command, version);
+      } catch (error) {
+        logger?.warn("Failed to recreate missing managed draft", {
+          outboundId: command.outbound_id,
+          error: (error as Error).message,
+        });
+        if (isAuthError(error)) {
+          this.transition(command.outbound_id, "draft_ready", "failed_terminal", {
+            terminal_reason: `Auth error recreating draft: ${(error as Error).message}`,
+          });
+        } else if (isRetryableError(error)) {
+          this.transition(command.outbound_id, "draft_ready", "retry_wait", {
+            terminal_reason: `Draft recreation failed: ${(error as Error).message}`,
+          });
+        } else {
+          this.transition(command.outbound_id, "draft_ready", "failed_terminal", {
+            terminal_reason: `Draft recreation failed: ${(error as Error).message}`,
+          });
+        }
+        return;
+      }
+      managed = store.getManagedDraft(command.outbound_id, version.version);
+      if (!managed) {
+        this.transition(command.outbound_id, "draft_ready", "failed_terminal", {
+          terminal_reason: "Managed draft still missing after recreation attempt",
+        });
+        return;
+      }
+    }
+
+    try {
+      const verified = await this.verifyManagedDraft(managed, version, command.mailbox_id);
+      if (!verified) {
+        return;
+      }
+    } catch (error) {
+      if (isAuthError(error)) {
+        this.transition(command.outbound_id, "draft_ready", "failed_terminal", {
+          terminal_reason: `Auth error verifying draft before confirm: ${(error as Error).message}`,
+        });
+      } else if (isRetryableError(error)) {
+        this.transition(command.outbound_id, "draft_ready", "retry_wait", {
+          terminal_reason: `Pre-confirm verification failed: ${(error as Error).message}`,
+        });
+      } else {
+        this.transition(command.outbound_id, "draft_ready", "failed_terminal", {
+          terminal_reason: `Pre-confirm verification failed: ${(error as Error).message}`,
+        });
+      }
+      return;
+    }
+
+    this.transition(command.outbound_id, "draft_ready", "confirmed", {
+      confirmed_at: new Date().toISOString(),
+    });
   }
 
   /**

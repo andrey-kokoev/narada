@@ -55,6 +55,10 @@ export interface SqliteOutboundStoreOptions {
   dbPath: string;
 }
 
+export interface SqliteOutboundStoreDbOptions {
+  db: Database.Database;
+}
+
 function rowToCommand(row: Record<string, unknown>): OutboundCommand {
   return {
     outbound_id: String(row.outbound_id),
@@ -118,9 +122,16 @@ function rowToManagedDraft(row: Record<string, unknown>): ManagedDraft {
  */
 export class SqliteOutboundStore implements OutboundStore {
   readonly db: Database.Database;
+  private readonly shouldClose: boolean;
 
-  constructor(opts: SqliteOutboundStoreOptions) {
-    this.db = new Database(opts.dbPath);
+  constructor(opts: SqliteOutboundStoreOptions | SqliteOutboundStoreDbOptions) {
+    if ("db" in opts) {
+      this.db = opts.db;
+      this.shouldClose = false;
+    } else {
+      this.db = new Database(opts.dbPath);
+      this.shouldClose = true;
+    }
   }
 
   initSchema(): void {
@@ -461,6 +472,8 @@ export class SqliteOutboundStore implements OutboundStore {
   }
 
   close(): void {
-    this.db.close();
+    if (this.shouldClose) {
+      this.db.close();
+    }
   }
 }
