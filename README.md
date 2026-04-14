@@ -174,7 +174,3 @@ pnpm version-packages
 # Publish (CI handles automatically)
 pnpm release
 ```
-
-## License
-
-MIT
