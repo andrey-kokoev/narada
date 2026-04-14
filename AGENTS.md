@@ -39,6 +39,11 @@ A deterministic, replay-safe state compiler that transforms a remote Microsoft G
 | Modify the sync loop | [`src/runner/sync-once.ts`](packages/exchange-fs-sync/src/runner/sync-once.ts) |
 | Add a CLI command | [`packages/exchange-fs-sync-cli/src/commands/`](packages/exchange-fs-sync-cli/src/commands/) |
 | Change Graph API handling | [`src/adapter/graph/`](packages/exchange-fs-sync/src/adapter/graph/) |
+| Change outbound command state machine | [`src/outbound/types.ts`](packages/exchange-fs-sync/src/outbound/types.ts) |
+| Add an outbound command | [`src/outbound/store.ts`](packages/exchange-fs-sync/src/outbound/store.ts) |
+| Modify send-reply worker | [`src/outbound/send-reply-worker.ts`](packages/exchange-fs-sync/src/outbound/send-reply-worker.ts) |
+| Modify reconciler | [`src/outbound/reconciler.ts`](packages/exchange-fs-sync/src/outbound/reconciler.ts) |
+| Modify non-send worker | [`src/outbound/non-send-worker.ts`](packages/exchange-fs-sync/src/outbound/non-send-worker.ts) |
 | Add a new field to messages | [`src/types/normalized.ts`](packages/exchange-fs-sync/src/types/normalized.ts) + [`src/normalize/message.ts`](packages/exchange-fs-sync/src/normalize/message.ts) |
 | Modify config schema | [`src/config/types.ts`](packages/exchange-fs-sync/src/config/types.ts) + [`src/config/load.ts`](packages/exchange-fs-sync/src/config/load.ts) |
 | Write integration tests | [`test/integration/`](packages/exchange-fs-sync/test/integration/) + see [05-testing.md](packages/exchange-fs-sync/docs/05-testing.md) |
@@ -56,6 +61,10 @@ A deterministic, replay-safe state compiler that transforms a remote Microsoft G
 | **Batch Sync** | Memory-efficient streaming sync | [`src/runner/batch-sync.ts`](packages/exchange-fs-sync/src/runner/batch-sync.ts) |
 | **Circuit Breaker** | Failure rate protection | [`src/retry.ts`](packages/exchange-fs-sync/src/retry.ts) |
 | **Health File** | Sync status persistence | [`src/health.ts`](packages/exchange-fs-sync/src/health.ts) |
+| **OutboundCommand** | Durable mailbox mutation intent | [`src/outbound/types.ts`](packages/exchange-fs-sync/src/outbound/types.ts) |
+| **ManagedDraft** | Graph draft bound to a command version | [`src/outbound/store.ts`](packages/exchange-fs-sync/src/outbound/store.ts) |
+| **SendReplyWorker** | Draft creation, reuse, and send | [`src/outbound/send-reply-worker.ts`](packages/exchange-fs-sync/src/outbound/send-reply-worker.ts) |
+| **OutboundReconciler** | Submitted → confirmed binding | [`src/outbound/reconciler.ts`](packages/exchange-fs-sync/src/outbound/reconciler.ts) |
 
 ---
 
@@ -137,7 +146,8 @@ narada/
 │   │       └── main.ts                # Entry point
 │   │
 │   ├── exchange-fs-sync-daemon/       # Long-running daemon
-│   └── exchange-fs-sync-search/       # Full-text search (FTS5)
+│   ├── exchange-fs-sync-search/       # Full-text search (FTS5)
+│   └── charters/                      # Mailbox charter definitions and policy types
 │
 ├── scripts/                           # Build and utility scripts
 └── .github/workflows/                 # CI/CD pipelines
@@ -147,11 +157,18 @@ narada/
 
 ## Critical Invariants (Must Never Violate)
 
+### Inbound
 1. **No Loss After Commit**: `cursor = c` ⇒ all events ≤ c have been applied
 2. **Replay Safety**: `apply(e)` multiple times ⇒ same final state
 3. **Determinism**: `normalize(remote_data)` produces identical output for identical input
 4. **Idempotency Boundary**: Enforced at `event_id` → `apply_log`
 5. **Apply Ordering**: `apply(e)` → `mark_applied(e)` → `cursor_commit` (never reorder)
+
+### Outbound
+6. **Draft-First Delivery**: Agents and workers never send directly; they always create a draft first
+7. **Two-Stage Completion**: A command reaches `submitted` when Graph accepts it, and `confirmed` only after inbound reconciliation observes the result
+8. **No External Draft Mutation**: Modification of a managed draft by anything other than the outbound worker is a hard failure
+9. **Worker Exclusivity**: Only the outbound worker may create or mutate managed drafts
 
 ---
 
@@ -162,6 +179,7 @@ narada/
 - Stronger integrity checks
 - Multi-folder support (requires explicit redesign)
 - Alternative projections (search index, analytics)
+- New outbound actions (e.g., set flags, move messages) via the durable command pipeline
 
 **Disallowed** without full redesign:
 - Implicit deletes

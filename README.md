@@ -2,6 +2,15 @@
 
 A deterministic, replay-safe state compiler that transforms a remote Microsoft Graph/Exchange mailbox into a locally materialized filesystem state.
 
+## Architecture
+
+The system is organized in five layers:
+1. **Inbound Sync** - Compiles remote mailbox deltas into local filesystem state
+2. **Foreman** - Coordinates charter invocation and triage decisions per thread
+3. **Charters** - Mailbox-specific policy definitions that guide agent behavior
+4. **Auxiliary Stores** - SQLite-based coordinator, trace, and search indexes
+5. **Outbound Worker** - Durable command pipeline for drafts, replies, and mutations
+
 ## Features
 
 - **🔒 Secure by Default** - Credentials encrypted with OS keychain (macOS Keychain, Windows Credential Manager, Linux libsecret)
@@ -10,7 +19,8 @@ A deterministic, replay-safe state compiler that transforms a remote Microsoft G
 - **⚡ High Performance** - Batch processing, memory-efficient streaming, 500+ messages/sec
 - **📊 Observable** - Structured logging, metrics, health checks, OpenTelemetry tracing
 - **🔧 Resilient** - Automatic retry with exponential backoff, circuit breakers, crash recovery
-- **📦 Multi-Mailbox** - Sync multiple mailboxes with resource management (coming soon)
+- **📦 Multi-Mailbox** - Sync multiple mailboxes with resource management
+- **📤 Outbound Worker** - Durable command pipeline for replies, drafts, and mailbox mutations
 
 ## Installation
 
@@ -140,6 +150,7 @@ pnpm typecheck
 - `packages/exchange-fs-sync-cli/` - Command-line interface
 - `packages/exchange-fs-sync-daemon/` - Long-running daemon
 - `packages/exchange-fs-sync-search/` - Full-text search (SQLite FTS5)
+- `packages/charters/` - Mailbox charter definitions and coordinator policy types
 
 ## Documentation
 

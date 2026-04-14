@@ -48,8 +48,16 @@ packages/exchange-fs-sync/
 │   │   └── apply-event.ts       # applyEvent() function
 │   ├── recovery/                # Crash recovery
 │   │   └── cleanup-tmp.ts       # Temp file cleanup
+│   ├── outbound/                # Durable outbound command pipeline
+│   │   ├── types.ts             # Outbound command types and state machine
+│   │   ├── schema.sql           # SQLite schema for commands and drafts
+│   │   ├── store.ts             # SqliteOutboundStore
+│   │   ├── send-reply-worker.ts # Draft creation / send worker
+│   │   ├── non-send-worker.ts   # Non-send action worker
+│   │   └── reconciler.ts        # Submitted → confirmed reconciliation
 │   ├── runner/                  # Sync orchestration
-│   │   └── sync-once.ts         # DefaultSyncRunner
+│   │   ├── sync-once.ts         # DefaultSyncRunner
+│   │   └── multi-sync.ts        # Multi-mailbox orchestration
 │   ├── types/                   # Type definitions
 │   │   ├── graph.ts             # Graph API types
 │   │   ├── index.ts             # Re-exports
@@ -266,7 +274,7 @@ When running, the system creates:
 
 ### Enable Verbose Logging
 
-The system doesn't have structured logging yet. Add temporarily:
+The system uses structured logging. See `src/logging/types.ts` and `src/logging/structured.ts` for the interface.
 
 ```typescript
 // In runner/sync-once.ts
@@ -368,75 +376,30 @@ Atomic rename requires source and destination on same filesystem. Don't put `tmp
 
 ---
 
-## Toolchain: Full Ox Stack
+## Toolchain
 
-This project uses the **Ox ecosystem** - Rust-based tools for maximum speed:
-
-| Tool | Purpose | Replaces |
-|------|---------|----------|
-| **Rolldown** | Bundler | Rollup, tsc, esbuild |
-| **oxlint** | Linter | ESLint |
-| **oxfmt** | Formatter | Prettier |
-| **Vitest** | Test runner | Jest |
-
-### Why Rolldown?
-
-- 10-20x faster than Rollup
-- Native TypeScript support (no plugin needed)
-- Drop-in Rollup API compatibility
-- Written in Rust, powered by Oxc
-- Will become Vite's default bundler
-
-### Configuration Files
-
-| File | Tool | Purpose |
-|------|------|---------|
-| `rolldown.config.js` | Rolldown | Bundle config (ESM, Node target) |
-| `.oxfmtrc.jsonc` | oxfmt | Formatting rules (Prettier-compatible) |
-| `.oxlintrc.json` | oxlint | Lint rules |
-| `tsconfig.json` | TypeScript | Type checking only (no emit) |
+| Tool | Purpose |
+|------|---------|
+| **TypeScript (`tsc`)** | Compilation to ESM |
+| **Vitest** | Test runner |
+| **tsx** | TypeScript script execution |
 
 ### Commands
 
 ```bash
 # Development
-pnpm dev              # Rolldown watch mode
-
-# Build
-pnpm build            # Rolldown production build
+pnpm build            # tsc production build
 
 # Quality checks
-pnpm lint             # oxlint (50-100x faster than ESLint)
-pnpm lint:fix         # Auto-fix issues
-pnpm fmt              # oxfmt (30x faster than Prettier)
-pnpm fmt:check        # Check formatting (CI)
-pnpm check            # All checks (typecheck + lint + format)
+pnpm typecheck        # tsc --noEmit
+pnpm test             # Vitest
+pnpm benchmark        # Benchmark suite
+pnpm benchmark:compare # Compare with baseline
 ```
-
-### Migration Notes
-
-**From tsc to Rolldown:**
-- TypeScript compilation is now part of bundling
-- `tsc` is kept for type-checking only (`--noEmit`)
-- Declaration files (.d.ts): Add when needed for library distribution
-
-**From Prettier to oxfmt:**
-- 30x faster formatting
-- 100% Prettier-compatible for JS/TS
-- Config: `.oxfmtrc.jsonc` (or reuse `.prettierrc`)
-
-**From ESLint to oxlint:**
-- 50-100x faster linting
-- Fewer rules than ESLint (focused on correctness, not style)
-- No custom rule support yet
 
 ---
 
 ## Resources
-
-- [Rolldown Docs](https://rolldown.rs/)
-- [Oxc/oxlint Docs](https://oxc.rs/docs/guide/usage/linter.html)
-- [Oxfmt Docs](https://oxc.rs/docs/guide/usage/formatter.html)
 - [Microsoft Graph Delta Query Docs](https://docs.microsoft.com/en-us/graph/delta-query-overview)
 - [Node fs promises API](https://nodejs.org/api/fs.html#fs_promises_api)
 - [Vitest Testing Framework](https://vitest.dev/)
