@@ -34,6 +34,7 @@ import {
   MockCharterRunner,
   buildInvocationEnvelope,
   buildEvaluationRecord,
+  loadCharterEnv,
   type ExchangeFsSyncConfig,
   type NormalizedEvent,
   type ApplyEventResult,
@@ -42,6 +43,7 @@ import {
   type CharterRunner,
   type GraphAdapter,
 } from '@narada/exchange-fs-sync';
+import { CodexCharterRunner } from '@narada/charters';
 import { createLogger } from './lib/logger.js';
 import { PidFile } from './lib/pid-file.js';
 import { HealthFile, type HealthStatus } from './lib/health.js';
@@ -167,6 +169,60 @@ async function createSingleMailboxService(
         clearTimeout(timer);
         resolve();
       };
+    });
+  }
+
+  function createDefaultCharterRunner(
+    cfg: typeof config,
+    store: InstanceType<typeof SqliteCoordinatorStore>,
+  ): CharterRunner {
+    const env = loadCharterEnv();
+    const runtime = cfg.charter?.runtime ?? 'mock';
+    const apiKey = cfg.charter?.api_key ?? env.openai_api_key;
+
+    if (runtime === 'codex-api' && apiKey) {
+      return new CodexCharterRunner(
+        {
+          apiKey,
+          model: cfg.charter?.model,
+          baseUrl: cfg.charter?.base_url,
+          timeoutMs: cfg.charter?.timeout_ms,
+        },
+        {
+          persistTrace: (trace) => {
+            // Best-effort trace persistence for observability
+            try {
+              store.db
+                .prepare(
+                  `insert into agent_traces (trace_id, execution_id, envelope_json, reasoning_log, created_at)
+                   values (?, ?, ?, ?, ?)
+                   on conflict(trace_id) do update set envelope_json=excluded.envelope_json, reasoning_log=excluded.reasoning_log`,
+                )
+                .run(trace.trace_id, trace.execution_id, trace.envelope_json, trace.reasoning_log ?? null, trace.created_at);
+            } catch {
+              // Ignore trace persistence errors — traces are commentary, not correctness state
+            }
+          },
+        },
+      ) as unknown as CharterRunner;
+    }
+
+    return new MockCharterRunner({
+      output: {
+        output_version: '2.0',
+        execution_id: 'mock-exec',
+        charter_id: 'support_steward',
+        role: 'primary',
+        analyzed_at: new Date().toISOString(),
+        outcome: 'no_op',
+        confidence: { overall: 'high', uncertainty_flags: [] },
+        summary: 'Mock evaluation: no action required',
+        classifications: [],
+        facts: [],
+        proposed_actions: [],
+        tool_requests: [],
+        escalations: [],
+      },
     });
   }
 
@@ -296,23 +352,7 @@ async function createSingleMailboxService(
       runnerId: config.mailbox_id,
     });
 
-    const charterRunner = opts.charterRunner ?? new MockCharterRunner({
-      output: {
-        output_version: '2.0',
-        execution_id: 'mock-exec',
-        charter_id: 'support_steward',
-        role: 'primary',
-        analyzed_at: new Date().toISOString(),
-        outcome: 'no_op',
-        confidence: { overall: 'high', uncertainty_flags: [] },
-        summary: 'Mock evaluation: no action required',
-        classifications: [],
-        facts: [],
-        proposed_actions: [],
-        tool_requests: [],
-        escalations: [],
-      },
-    });
+    const charterRunner = opts.charterRunner ?? createDefaultCharterRunner(config, coordinatorStore);
 
     dispatchDeps = { db, coordinatorStore, outboundStore, foreman, scheduler, charterRunner };
     return dispatchDeps;

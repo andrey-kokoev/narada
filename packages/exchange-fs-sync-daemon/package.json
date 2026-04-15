@@ -40,7 +40,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@narada/exchange-fs-sync": "workspace:*"
+    "@narada/exchange-fs-sync": "workspace:*",
+    "@narada/charters": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

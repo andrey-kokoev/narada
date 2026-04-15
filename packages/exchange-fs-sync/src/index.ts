@@ -398,6 +398,8 @@ export {
   validateSecureRefs,
   isSecureRef,
 } from "./config/secure-config.js";
+export { loadCharterEnv } from "./config/env.js";
+export type { CharterEnvConfig } from "./config/env.js";
 export type { SecureRef } from "./config/secure-config.js";
 
 // Type exports

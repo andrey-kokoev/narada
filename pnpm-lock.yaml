@@ -110,6 +110,9 @@ importers:
 
   packages/exchange-fs-sync-daemon:
     dependencies:
+      '@narada/charters':
+        specifier: workspace:*
+        version: link:../charters
       '@narada/exchange-fs-sync':
         specifier: workspace:*
         version: link:../exchange-fs-sync
