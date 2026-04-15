@@ -93,11 +93,11 @@ export interface ExchangeFsSyncConfig {
     /** Enable webhook notifications */
     enabled: boolean;
     
-    /** Public URL for receiving notifications */
-    public_url: string;
+    /** Public URL for receiving notifications (required when enabled) */
+    public_url?: string;
     
-    /** Local port for webhook server */
-    port: number;
+    /** Local port for webhook server (required when enabled) */
+    port?: number;
     
     /** Host to bind to */
     host?: string;
@@ -105,8 +105,8 @@ export interface ExchangeFsSyncConfig {
     /** Webhook endpoint path */
     path?: string;
     
-    /** Client state secret for validation */
-    client_state: string;
+    /** Client state secret for validation (required when enabled) */
+    client_state?: string;
     
     /** Optional HMAC secret for signature validation */
     hmac_secret?: string;

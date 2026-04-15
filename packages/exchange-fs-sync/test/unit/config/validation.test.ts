@@ -282,5 +282,100 @@ describe('Config Schema Validation', () => {
         expect(result.success).toBe(true);
       }
     });
+
+    it('validates charter runtime config', () => {
+      const result = ConfigSchema.safeParse({
+        ...validConfig,
+        charter: {
+          runtime: 'codex-api',
+          api_key: 'sk-test',
+          model: 'gpt-4',
+          base_url: 'https://api.openai.com/v1',
+          timeout_ms: 30000,
+        },
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.charter.runtime).toBe('codex-api');
+        expect(result.data.charter.api_key).toBe('sk-test');
+        expect(result.data.charter.model).toBe('gpt-4');
+      }
+    });
+
+    it('validates mailbox policy', () => {
+      const result = ConfigSchema.safeParse({
+        ...validConfig,
+        policy: {
+          primary_charter: 'obligation_keeper',
+          secondary_charters: ['support_steward'],
+          allowed_actions: ['send_reply', 'no_action'],
+          allowed_tools: ['echo_test'],
+          require_human_approval: true,
+        },
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.policy.primary_charter).toBe('obligation_keeper');
+        expect(result.data.policy.allowed_actions).toEqual(['send_reply', 'no_action']);
+        expect(result.data.policy.require_human_approval).toBe(true);
+      }
+    });
+
+    it('rejects invalid allowed_actions in policy', () => {
+      const result = validateConfig({
+        ...validConfig,
+        policy: {
+          allowed_actions: ['invalid_action'],
+        },
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.formatted.some((e) => e.includes('allowed_actions'))).toBe(true);
+      }
+    });
+
+    it('rejects empty allowed_actions in policy', () => {
+      const result = validateConfig({
+        ...validConfig,
+        policy: {
+          allowed_actions: [],
+        },
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.formatted.some((e) => e.includes('allowed_actions'))).toBe(true);
+      }
+    });
+
+    it('validates webhook config when enabled', () => {
+      const result = ConfigSchema.safeParse({
+        ...validConfig,
+        webhook: {
+          enabled: true,
+          public_url: 'https://example.com/webhook',
+          port: 3000,
+          client_state: 'secret',
+          auto_renew: true,
+        },
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.webhook?.enabled).toBe(true);
+        expect(result.data.webhook?.public_url).toBe('https://example.com/webhook');
+      }
+    });
+
+    it('rejects enabled webhook without required fields', () => {
+      const result = validateConfig({
+        ...validConfig,
+        webhook: {
+          enabled: true,
+        },
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.formatted.some((e) => e.includes('webhook'))).toBe(true);
+      }
+    });
   });
 });

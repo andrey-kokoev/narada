@@ -9,7 +9,8 @@ The system is organized into **eleven layers**: five control-plane layers above 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                      Daemon Layer                                │
-│  (wake coalescing, sync-to-dispatch sequence, quiescence)       │
+│  (polling loop, per-mailbox dispatch context, sync-to-dispatch  │
+│   sequence, lease renewal, quiescence)                           │
 ├─────────────────────────────────────────────────────────────────┤
 │                      Foreman Layer                               │
 │  (work opening, revision supersession, decision arbitration)    │
@@ -51,6 +52,11 @@ The system is organized into **eleven layers**: five control-plane layers above 
 │  (applyEvent - upsert/delete application logic)                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+### Vocabulary Note
+
+- **`conversation_id`** is the v2 canonical thread identifier.
+- **`thread_id`** is legacy-only. It remains in `thread_records` for rollback safety and in some internal variable names, but all control-plane tables (`conversation_records`, `work_items`, `outbound_commands`) use `conversation_id`.
 
 ---
 
@@ -180,8 +186,8 @@ Daemon sleeps until next wake (webhook, poll, retry timer, manual)
 3. **Work Opening** — The daemon calls `foreman.onSyncCompleted(signal)`. The foreman inserts `work_item` rows for changed conversations, superseding stale ones when necessary.
 4. **Scheduling** — The scheduler scans for runnable work items, acquires leases, and transitions items to `leased`.
 5. **Evaluation** — The scheduler inserts an `execution_attempt` and transitions the item to `executing`. The charter runtime receives a frozen `CharterInvocationEnvelope` and produces a `CharterOutputEnvelope`.
-6. **Tool Execution** — Approved tool requests are executed by the tool runner, with results logged to `tool_call_records`.
-7. **Proposal / Command Creation** — The foreman validates output, writes a `foreman_decisions` row, and creates `outbound_command` + `outbound_versions` in the same SQLite transaction. The work item transitions to `resolved`.
+6. **Tool Execution** — Approved *read-only* tool requests are executed by the tool runner, with results logged to `tool_call_records`. Non-read-only requests are rejected with `rejected_policy` records (Phase A guardrail).
+7. **Proposal / Command Creation** — The foreman validates output (`validation.ts`), applies governance (`governance.ts`), writes a `foreman_decisions` row, and creates `outbound_command` + `outbound_versions` in the same SQLite transaction. The work item transitions to `resolved`.
 8. **Outbound Execution** — The outbound worker polls commands, creates Graph drafts, and drives status to `confirmed`.
 9. **Terminal Quiescence** — The scheduler finds no runnable work, valid leases, or expired retry timers. The daemon sleeps until the next wake.
 
@@ -221,6 +227,45 @@ interface SyncRunner {
 }
 ```
 
+### Control-Plane Interfaces
+
+```typescript
+// Foreman boundary
+interface ForemanFacade {
+  onSyncCompleted(signal: SyncCompletionSignal): Promise<WorkOpeningResult>;
+  resolveWorkItem(req: ResolveWorkItemRequest): Promise<ResolutionResult>;
+}
+
+// Scheduler boundary
+interface Scheduler {
+  scanForRunnableWork(mailboxId?: string, limit?: number): WorkItem[];
+  acquireLease(workItemId: string, runnerId: string): LeaseAcquisitionResult;
+  startExecution(workItemId: string, revisionId: string, envelopeJson: string): ExecutionAttempt;
+  completeExecution(executionId: string, outcomeJson: string): void;
+  failExecution(executionId: string, error: string, releaseLease: boolean): void;
+}
+
+// Charter runtime boundary
+interface CharterRunner {
+  run(envelope: CharterInvocationEnvelope): Promise<CharterOutputEnvelope>;
+}
+
+// Coordinator store boundary
+interface CoordinatorStore {
+  insertWorkItem(item: WorkItem): void;
+  getWorkItem(id: string): WorkItem | undefined;
+  insertExecutionAttempt(attempt: ExecutionAttempt): void;
+  // ... (see src/coordinator/types.ts for full schema)
+}
+
+// Outbound store boundary
+interface OutboundStore {
+  insertCommand(command: OutboundCommand): void;
+  insertVersion(version: OutboundVersion): void;
+  getLatestVersion(commandId: string): OutboundVersion | undefined;
+}
+```
+
 ### Projector Dependencies (`src/projector/apply-event.ts`)
 
 The `applyEvent` function depends on these abstractions:
@@ -257,6 +302,16 @@ src/
 │   └── depends on: types/normalized
 ├── config/
 │   └── depends on: adapter/graph/auth
+├── coordinator/
+│   └── depends on: types
+├── foreman/
+│   └── depends on: coordinator, outbound, types
+├── scheduler/
+│   └── depends on: coordinator, types
+├── charter/
+│   └── depends on: coordinator, persistence, types
+├── outbound/
+│   └── depends on: types
 └── types/
     └── (no internal dependencies - leaf module)
 ```
@@ -374,6 +429,17 @@ interface RunResult {
 - **fatal_failure**: Configuration or data error, requires investigation
 
 ---
+
+## Authority Boundaries
+
+These boundaries are enforced by code structure and must not be bypassed:
+
+1. **Foreman owns work opening**: Only `DefaultForemanFacade.onSyncCompleted()` may insert `work_item` rows.
+2. **Foreman owns resolution**: Only `DefaultForemanFacade.resolveWorkItem()` may transition a `work_item` to a terminal status based on charter output.
+3. **Scheduler owns leases**: Only `SqliteScheduler` may insert/release `work_item_leases` and transition `work_item` between `opened ↔ leased ↔ executing ↔ failed_retryable`.
+4. **OutboundHandoff owns command creation**: All `outbound_commands` + `outbound_versions` must be created inside `OutboundHandoff.createCommandFromDecision()` (atomic with decision insert).
+5. **Outbound workers own mutation**: Only the outbound worker layer may call Graph API to create drafts / send messages / move items.
+6. **Charter runtime is read-only sandbox**: It may only read the `CharterInvocationEnvelope` and produce a `CharterOutputEnvelope`. It must NOT write to coordinator or outbound stores directly.
 
 ## See Also
 

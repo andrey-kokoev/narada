@@ -99,6 +99,28 @@ packages/exchange-fs-sync/
 
 ---
 
+## Control Plane Quick Reference
+
+| File | Concept |
+|------|---------|
+| [`src/coordinator/store.ts`](src/coordinator/store.ts) | `SqliteCoordinatorStore` — durable state for conversations, work items, leases, execution attempts, evaluations, decisions, agent sessions, tool calls, policy overrides |
+| [`src/coordinator/types.ts`](src/coordinator/types.ts) | `WorkItem`, `ExecutionAttempt`, `AgentSession`, `Evaluation`, `ToolCallRecord`, `ForemanDecisionRow` |
+| [`src/scheduler/scheduler.ts`](src/scheduler/scheduler.ts) | `SqliteScheduler` — lease acquisition, execution lifecycle, stale-lease recovery |
+| [`src/scheduler/types.ts`](src/scheduler/types.ts) | `Scheduler`, `LeaseAcquisitionResult` |
+| [`src/foreman/facade.ts`](src/foreman/facade.ts) | `DefaultForemanFacade` — work opening, resolution, outbound handoff orchestration |
+| [`src/foreman/types.ts`](src/foreman/types.ts) | `SyncCompletionSignal`, `ChangedConversation`, `CharterOutputEnvelope`, `EvaluationEnvelope` |
+| [`src/foreman/validation.ts`](src/foreman/validation.ts) | 10-rule validation of charter output against invocation envelope |
+| [`src/foreman/governance.ts`](src/foreman/governance.ts) | `governEvaluation()` — policy enforcement, action bounding, confidence floors |
+| [`src/foreman/handoff.ts`](src/foreman/handoff.ts) | `OutboundHandoff` — atomic decision → outbound command transaction |
+| [`src/charter/index.ts`](src/charter/index.ts) | `CharterRunner`, `buildInvocationEnvelope`, `buildEvaluationRecord` |
+| [`src/outbound/types.ts`](src/outbound/types.ts) | `OutboundCommand`, `OutboundVersion`, state machine transitions |
+| [`src/outbound/store.ts`](src/outbound/store.ts) | `SqliteOutboundStore` — commands, versions, managed drafts |
+| [`src/outbound/send-reply-worker.ts`](src/outbound/send-reply-worker.ts) | Draft creation, reuse, and send worker |
+| [`src/outbound/non-send-worker.ts`](src/outbound/non-send-worker.ts) | Non-send action worker |
+| [`src/outbound/reconciler.ts`](src/outbound/reconciler.ts) | `OutboundReconciler` — submitted → confirmed binding |
+| [`src/config/types.ts`](src/config/types.ts) | `MailboxPolicy`, `ExchangeFsSyncConfig` |
+| [`src/config/defaults.ts`](src/config/defaults.ts) | Default charter runtime (`mock`), default policy (`support_steward`) |
+
 ## Control Plane Architecture (v2)
 
 The control plane sits above the deterministic inbound compiler and manages first-class work objects.
@@ -300,10 +322,35 @@ When running, the system creates:
 ├── tombstones/                  # Deletion records (optional)
 ├── views/                       # Symlink projections
 ├── blobs/sha256/                # Content-addressed attachments
-└── tmp/                         # Atomic write staging
+├── tmp/                         # Atomic write staging
+└── .narada/
+    └── coordinator.db           # WAL-mode SQLite (control-plane durable state)
+        ├── conversation_records
+        ├── conversation_revisions
+        ├── work_items
+        ├── work_item_leases
+        ├── execution_attempts
+        ├── evaluations
+        ├── foreman_decisions
+        ├── agent_sessions
+        ├── tool_call_records
+        └── policy_overrides
 ```
 
 **Important**: `tmp/` must be on same filesystem as other directories for atomic rename to work.
+
+### Coordinator Database Setup
+
+The daemon creates `{rootDir}/.narada/coordinator.db` lazily on first dispatch:
+
+```typescript
+db.pragma('journal_mode = WAL');
+db.pragma('synchronous = NORMAL');
+```
+
+- **Schema coexistence**: `SqliteCoordinatorStore` and `SqliteOutboundStore` share the same `Database` instance. Do not open separate connections to the same file while the daemon is running.
+- **Rollback safety**: Legacy `thread_records` still exists in the schema for rollback, but all new control-plane features must anchor on `conversation_records`.
+- **Authority boundary**: Do not write to `work_items`, `work_item_leases`, or `execution_attempts` from outside the foreman/scheduler.
 
 ---
 

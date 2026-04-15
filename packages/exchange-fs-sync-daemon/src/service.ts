@@ -35,6 +35,7 @@ import {
   MockCharterRunner,
   buildInvocationEnvelope,
   buildEvaluationRecord,
+  validateCharterRuntimeConfig,
   loadCharterEnv,
   type ExchangeFsSyncConfig,
   type NormalizedEvent,
@@ -48,6 +49,8 @@ import {
   type LeaseAcquisitionResult,
   type SchedulerOptions,
   type ToolCatalogEntry,
+  DEFAULT_EXCHANGE_FS_SYNC_CONFIG,
+  type MailboxConfig,
 } from '@narada/exchange-fs-sync';
 import { CodexCharterRunner, ToolRunner } from '@narada/charters';
 import type { ToolDefinition, ToolInvocationRequest } from '@narada/charters';
@@ -132,6 +135,420 @@ class ExponentialBackoff {
   }
 }
 
+
+function mailboxConfigToSingleConfig(mailbox: MailboxConfig): ExchangeFsSyncConfig {
+  return {
+    mailbox_id: mailbox.mailbox_id,
+    root_dir: mailbox.root_dir,
+    graph: {
+      tenant_id: mailbox.graph.tenant_id,
+      client_id: mailbox.graph.client_id,
+      client_secret: mailbox.graph.client_secret,
+      user_id: mailbox.graph.user_id,
+      base_url: mailbox.graph.base_url,
+      prefer_immutable_ids: mailbox.graph.prefer_immutable_ids,
+    },
+    scope: {
+      included_container_refs: mailbox.scope?.included_container_refs ?? ["inbox", "sentitems", "drafts", "archive"],
+      included_item_kinds: mailbox.scope?.included_item_kinds ?? ["message"],
+    },
+    normalize: {
+      attachment_policy: mailbox.sync?.attachment_policy ?? DEFAULT_EXCHANGE_FS_SYNC_CONFIG.normalize.attachment_policy,
+      body_policy: mailbox.sync?.body_policy ?? DEFAULT_EXCHANGE_FS_SYNC_CONFIG.normalize.body_policy,
+      include_headers: mailbox.sync?.include_headers ?? DEFAULT_EXCHANGE_FS_SYNC_CONFIG.normalize.include_headers,
+      tombstones_enabled: mailbox.sync?.tombstones_enabled ?? DEFAULT_EXCHANGE_FS_SYNC_CONFIG.normalize.tombstones_enabled,
+    },
+    runtime: {
+      polling_interval_ms: mailbox.sync?.polling_interval_ms ?? DEFAULT_EXCHANGE_FS_SYNC_CONFIG.runtime.polling_interval_ms,
+      acquire_lock_timeout_ms: mailbox.sync?.acquire_lock_timeout_ms ?? DEFAULT_EXCHANGE_FS_SYNC_CONFIG.runtime.acquire_lock_timeout_ms,
+      cleanup_tmp_on_startup: mailbox.sync?.cleanup_tmp_on_startup ?? DEFAULT_EXCHANGE_FS_SYNC_CONFIG.runtime.cleanup_tmp_on_startup,
+      rebuild_views_after_sync: mailbox.sync?.rebuild_views_after_sync ?? DEFAULT_EXCHANGE_FS_SYNC_CONFIG.runtime.rebuild_views_after_sync,
+    },
+    lifecycle: mailbox.lifecycle ?? DEFAULT_EXCHANGE_FS_SYNC_CONFIG.lifecycle,
+    charter: mailbox.charter ?? DEFAULT_EXCHANGE_FS_SYNC_CONFIG.charter,
+    policy: mailbox.policy ?? DEFAULT_EXCHANGE_FS_SYNC_CONFIG.policy,
+    ...(mailbox.webhook ? { webhook: mailbox.webhook } : {}),
+  };
+}
+
+const phaseAToolCatalog: ToolCatalogEntry[] = [
+  {
+    tool_id: "echo_test",
+    tool_signature: "echo_test(input: string)",
+    description: "Echoes input for testing tool execution path",
+    schema_args: [{ name: "input", type: "string", required: true, description: "Input to echo" }],
+    read_only: true,
+    requires_approval: false,
+    timeout_ms: 5000,
+  },
+];
+
+const phaseAToolDefinitions: Record<string, ToolDefinition> = {
+  echo_test: {
+    id: "echo_test",
+    source_type: "local_executable",
+    executable_path: process.platform === "win32" ? "cmd" : "/bin/echo",
+  },
+};
+
+function createDefaultCharterRunner(
+  cfg: ExchangeFsSyncConfig,
+  store: InstanceType<typeof SqliteCoordinatorStore>,
+): CharterRunner {
+  const env = loadCharterEnv();
+  const runtime = cfg.charter?.runtime ?? 'mock';
+
+  if (runtime === 'codex-api') {
+    const apiKey = cfg.charter?.api_key ?? env.openai_api_key;
+    return new CodexCharterRunner(
+      {
+        apiKey: apiKey!,
+        model: cfg.charter?.model,
+        baseUrl: cfg.charter?.base_url,
+        timeoutMs: cfg.charter?.timeout_ms,
+      },
+      {
+        persistTrace: (trace) => {
+          try {
+            store.db
+              .prepare(
+                `insert into agent_traces (trace_id, execution_id, envelope_json, reasoning_log, created_at)
+                 values (?, ?, ?, ?, ?)
+                 on conflict(trace_id) do update set envelope_json=excluded.envelope_json, reasoning_log=excluded.reasoning_log`,
+              )
+              .run(trace.trace_id, trace.execution_id, trace.envelope_json, trace.reasoning_log ?? null, trace.created_at);
+          } catch {
+            // Ignore trace persistence errors
+          }
+        },
+      },
+    ) as unknown as CharterRunner;
+  }
+
+  if (runtime === 'mock') {
+    return new MockCharterRunner({
+      output: {
+        output_version: '2.0',
+        execution_id: 'mock-exec',
+        charter_id: 'support_steward',
+        role: 'primary',
+        analyzed_at: new Date().toISOString(),
+        outcome: 'no_op',
+        confidence: { overall: 'high', uncertainty_flags: [] },
+        summary: 'Mock evaluation: no action required',
+        classifications: [],
+        facts: [],
+        proposed_actions: [],
+        tool_requests: [],
+        escalations: [],
+      },
+    });
+  }
+
+  throw new Error(`Invalid charter runtime: ${runtime}. Expected 'codex-api' or 'mock'.`);
+}
+
+async function createMailboxDispatchContext(
+  config: ExchangeFsSyncConfig,
+  opts: SyncServiceConfig,
+  logger: ReturnType<typeof createLogger>,
+) {
+  const rootDir = config.root_dir;
+  const messageStore = new FileMessageStore({ rootDir });
+
+  let dispatchDeps: {
+    db: InstanceType<typeof Database>;
+    coordinatorStore: InstanceType<typeof SqliteCoordinatorStore>;
+    outboundStore: InstanceType<typeof SqliteOutboundStore>;
+    traceStore: InstanceType<typeof SqliteAgentTraceStore>;
+    foreman: InstanceType<typeof DefaultForemanFacade>;
+    scheduler: InstanceType<typeof SqliteScheduler>;
+    charterRunner: CharterRunner;
+    toolCatalog: ToolCatalogEntry[];
+    toolDefinitions: Record<string, ToolDefinition>;
+  } | null = null;
+
+  async function initDispatchDeps(): Promise<NonNullable<typeof dispatchDeps>> {
+    if (dispatchDeps) {
+      return dispatchDeps;
+    }
+
+    const dbDir = join(rootDir, '.narada');
+    await mkdir(dbDir, { recursive: true });
+    const dbPath = join(dbDir, 'coordinator.db');
+
+    const db = new Database(dbPath);
+    db.pragma('journal_mode = WAL');
+    db.pragma('synchronous = NORMAL');
+    const coordinatorStore = new SqliteCoordinatorStore({ db });
+    coordinatorStore.initSchema();
+
+    const outboundStore = new SqliteOutboundStore({ db });
+    outboundStore.initSchema();
+
+    const traceStore = new SqliteAgentTraceStore({ db });
+    traceStore.initSchema();
+
+    const getMailboxPolicy = (_mailboxId: string) => config.policy ?? {
+      primary_charter: 'support_steward',
+      allowed_actions: ['draft_reply', 'send_reply', 'send_new_message', 'mark_read', 'move_message', 'archive', 'no_action'],
+    };
+
+    const foreman = new DefaultForemanFacade({
+      coordinatorStore,
+      outboundStore,
+      db,
+      foremanId: config.mailbox_id,
+      getMailboxPolicy,
+    });
+
+    const scheduler = new SqliteScheduler(coordinatorStore, {
+      runnerId: config.mailbox_id,
+      ...opts.schedulerOptions,
+    });
+
+    const charterRunner = opts.charterRunner ?? createDefaultCharterRunner(config, coordinatorStore);
+    const toolCatalog = opts.toolCatalog ?? phaseAToolCatalog;
+    const toolDefinitions = opts.toolDefinitions ?? phaseAToolDefinitions;
+
+    dispatchDeps = { db, coordinatorStore, outboundStore, traceStore, foreman, scheduler, charterRunner, toolCatalog, toolDefinitions };
+    return dispatchDeps;
+  }
+
+  async function runDispatchPhase(
+    changedConversations: Map<string, Set<ChangedConversation['change_kinds'][number]>>,
+  ): Promise<void> {
+    const deps = await initDispatchDeps();
+    const now = new Date().toISOString();
+
+    if (changedConversations.size > 0) {
+      const changed: ChangedConversation[] = [];
+      for (const [conversationId, kindsSet] of changedConversations) {
+        const previousOrdinal = deps.coordinatorStore.getLatestRevisionOrdinal(conversationId);
+        const currentOrdinal = (previousOrdinal ?? 0) + 1;
+        changed.push({
+          conversation_id: conversationId,
+          previous_revision_ordinal: previousOrdinal,
+          current_revision_ordinal: currentOrdinal,
+          change_kinds: Array.from(kindsSet),
+        });
+      }
+
+      const signal: SyncCompletionSignal = {
+        signal_id: `sync_${now}_${Math.random().toString(36).slice(2)}`,
+        mailbox_id: config.mailbox_id,
+        synced_at: now,
+        changed_conversations: changed,
+      };
+
+      logger.info('Dispatch phase starting', { conversations: changed.length });
+
+      const openResult = await deps.foreman.onSyncCompleted(signal);
+      await opts.dispatchHooks?.afterSyncCompleted?.(signal, openResult);
+      for (const opened of openResult.opened) {
+        const openedItem = deps.coordinatorStore.getWorkItem(opened.work_item_id);
+        if (openedItem) {
+          await opts.dispatchHooks?.afterWorkOpened?.(openedItem);
+        }
+      }
+    }
+
+    function persistRejectedToolCall(
+      request: { tool_id: string; arguments_json: string; purpose: string },
+      reason: string,
+      executionId: string,
+      workItem: { work_item_id: string; conversation_id: string },
+    ): void {
+      const now = new Date().toISOString();
+      try {
+        deps.coordinatorStore.db
+          .prepare(
+            `insert into tool_call_records (
+              call_id, execution_id, work_item_id, conversation_id, tool_id,
+              request_args_json, exit_status, stdout, stderr, structured_output_json,
+              started_at, completed_at, duration_ms
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            `tc_${executionId}_${Date.now()}_${request.tool_id}`,
+            executionId,
+            workItem.work_item_id,
+            workItem.conversation_id,
+            request.tool_id,
+            request.arguments_json,
+            'rejected_policy',
+            '',
+            `Rejected by Phase A policy: ${reason}`,
+            null,
+            now,
+            now,
+            0,
+          );
+      } catch (persistError) {
+        logger.warn('Failed to persist rejected tool call record', { error: String(persistError) });
+      }
+    }
+
+    while (!deps.scheduler.isQuiescent(config.mailbox_id)) {
+      const runnable = deps.scheduler.scanForRunnableWork(config.mailbox_id, 1);
+      if (runnable.length === 0) {
+        break;
+      }
+
+      const workItem = runnable[0]!;
+      const leaseResult = deps.scheduler.acquireLease(workItem.work_item_id, config.mailbox_id);
+      if (!leaseResult.success) {
+        logger.warn('Failed to acquire lease', { work_item_id: workItem.work_item_id, error: leaseResult.error });
+        continue;
+      }
+
+      await opts.dispatchHooks?.afterLeaseAcquired?.(workItem, leaseResult);
+
+      const envelope = await buildInvocationEnvelope(
+        { coordinatorStore: deps.coordinatorStore, messageStore, rootDir, getMailboxPolicy: (_mailboxId: string) => config.policy ?? {
+          primary_charter: 'support_steward',
+          allowed_actions: ['draft_reply', 'send_reply', 'send_new_message', 'mark_read', 'move_message', 'archive', 'no_action'],
+        } },
+        { executionId: `ex_${workItem.work_item_id}_${Date.now()}`, workItem, tools: deps.toolCatalog },
+      );
+
+      const attempt = deps.scheduler.startExecution(
+        workItem.work_item_id,
+        workItem.opened_for_revision_id,
+        JSON.stringify(envelope),
+      );
+
+      await opts.dispatchHooks?.beforeRuntimeInvoke?.(workItem, attempt, envelope);
+
+      let leaseRenewalTimer: NodeJS.Timeout | null = null;
+      try {
+        if (leaseResult.success && leaseResult.lease) {
+          leaseRenewalTimer = setInterval(() => {
+            try {
+              const newExpiresAt = new Date(Date.now() + 60000).toISOString();
+              deps.scheduler.renewLease(leaseResult.lease!.lease_id, newExpiresAt);
+            } catch (renewError) {
+              logger.warn('Lease renewal failed', { lease_id: leaseResult.lease!.lease_id, error: String(renewError) });
+            }
+          }, 30000);
+        }
+
+        const output = await deps.charterRunner.run(envelope);
+
+        await opts.dispatchHooks?.afterRuntimeComplete?.(workItem, attempt, output);
+
+        if (output.tool_requests.length > 0) {
+          await opts.dispatchHooks?.beforeToolExecution?.(workItem, attempt, output.tool_requests);
+
+          const toolRunner = new ToolRunner({
+            definitions: deps.toolDefinitions,
+            persistHook: async (record) => {
+              try {
+                deps.coordinatorStore.insertToolCallRecord(record as unknown as Parameters<typeof deps.coordinatorStore.insertToolCallRecord>[0]);
+              } catch (persistError) {
+                logger.warn('Failed to persist tool call record', { error: String(persistError) });
+              }
+            },
+          });
+
+          let toolIndex = 0;
+          for (const request of output.tool_requests) {
+            await opts.dispatchHooks?.duringToolExecution?.(workItem, attempt, request, toolIndex);
+
+            const catalogTool = envelope.available_tools.find((t) => t.tool_id === request.tool_id);
+            if (!catalogTool) {
+              logger.warn('Tool request rejected: not in envelope catalog', { tool_id: request.tool_id });
+              persistRejectedToolCall(request, 'not_in_catalog', attempt.execution_id, workItem);
+              toolIndex++;
+              continue;
+            }
+
+            if (!catalogTool.read_only) {
+              logger.warn('Tool request rejected: not read-only in Phase A', { tool_id: request.tool_id });
+              persistRejectedToolCall(request, 'not_read_only', attempt.execution_id, workItem);
+              toolIndex++;
+              continue;
+            }
+
+            const definitionTool = deps.toolDefinitions[request.tool_id];
+            if (!definitionTool) {
+              logger.warn('Tool request rejected: no definition', { tool_id: request.tool_id });
+              persistRejectedToolCall(request, 'no_definition', attempt.execution_id, workItem);
+              toolIndex++;
+              continue;
+            }
+
+            let sanitizedArgs: Record<string, unknown>;
+            try {
+              sanitizedArgs = JSON.parse(request.arguments_json) as Record<string, unknown>;
+            } catch {
+              logger.warn('Unparseable tool arguments', { tool_id: request.tool_id });
+              persistRejectedToolCall(request, 'unparseable_args', attempt.execution_id, workItem);
+              toolIndex++;
+              continue;
+            }
+            const result = await toolRunner.executeToolCall(request, catalogTool, {
+              execution_id: attempt.execution_id,
+              work_item_id: workItem.work_item_id,
+              conversation_id: workItem.conversation_id,
+              sanitized_args: sanitizedArgs,
+            });
+            logger.info('Tool executed', {
+              tool_id: request.tool_id,
+              exit_status: result.exit_status,
+              duration_ms: result.duration_ms,
+            });
+            toolIndex++;
+          }
+
+          await opts.dispatchHooks?.afterToolExecution?.(workItem, attempt);
+        }
+
+        deps.scheduler.completeExecution(attempt.execution_id, JSON.stringify(output));
+
+        const evaluation = buildEvaluationRecord(output, {
+          execution_id: attempt.execution_id,
+          work_item_id: workItem.work_item_id,
+          conversation_id: workItem.conversation_id,
+        });
+
+        await opts.dispatchHooks?.beforeResolveWorkItem?.(workItem, attempt, evaluation);
+
+        const resolveResult = await deps.foreman.resolveWorkItem({
+          work_item_id: workItem.work_item_id,
+          execution_id: attempt.execution_id,
+          evaluation,
+        });
+
+        if (!resolveResult.success && resolveResult.error) {
+          logger.warn('Work item resolution failed', {
+            work_item_id: workItem.work_item_id,
+            error: resolveResult.error,
+          });
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        deps.scheduler.failExecution(attempt.execution_id, msg, true);
+        logger.error('Execution failed', { work_item_id: workItem.work_item_id, error: msg });
+      } finally {
+        if (leaseRenewalTimer) {
+          clearInterval(leaseRenewalTimer);
+        }
+      }
+    }
+
+    logger.info('Dispatch phase complete');
+  }
+
+  async function close(): Promise<void> {
+    if (dispatchDeps) {
+      dispatchDeps.db.close();
+    }
+  }
+
+  return { runDispatchPhase, close };
+}
+
 export async function createSyncService(
   opts: SyncServiceConfig,
 ): Promise<SyncService> {
@@ -203,106 +620,6 @@ async function createSingleMailboxService(
    * Eager validation of charter runtime configuration so that
    * misconfiguration fails fast during service creation.
    */
-  function validateCharterRuntimeConfig(cfg: typeof config): void {
-    const runtime = cfg.charter?.runtime ?? 'mock';
-
-    if (runtime === 'codex-api') {
-      const env = loadCharterEnv();
-      const apiKey = cfg.charter?.api_key ?? env.openai_api_key;
-      if (!apiKey) {
-        throw new Error(
-          'Charter runtime is configured as codex-api but no API key is provided. ' +
-            'Set config.charter.api_key or NARADA_OPENAI_API_KEY / OPENAI_API_KEY environment variable.',
-        );
-      }
-      return;
-    }
-
-    if (runtime === 'mock') {
-      return;
-    }
-
-    throw new Error(`Invalid charter runtime: ${runtime}. Expected 'codex-api' or 'mock'.`);
-  }
-
-  function createDefaultCharterRunner(
-    cfg: typeof config,
-    store: InstanceType<typeof SqliteCoordinatorStore>,
-  ): CharterRunner {
-    const env = loadCharterEnv();
-    const runtime = cfg.charter?.runtime ?? 'mock';
-
-    if (runtime === 'codex-api') {
-      const apiKey = cfg.charter?.api_key ?? env.openai_api_key;
-      return new CodexCharterRunner(
-        {
-          apiKey: apiKey!,
-          model: cfg.charter?.model,
-          baseUrl: cfg.charter?.base_url,
-          timeoutMs: cfg.charter?.timeout_ms,
-        },
-        {
-          persistTrace: (trace) => {
-            // Best-effort trace persistence for observability
-            try {
-              store.db
-                .prepare(
-                  `insert into agent_traces (trace_id, execution_id, envelope_json, reasoning_log, created_at)
-                   values (?, ?, ?, ?, ?)
-                   on conflict(trace_id) do update set envelope_json=excluded.envelope_json, reasoning_log=excluded.reasoning_log`,
-                )
-                .run(trace.trace_id, trace.execution_id, trace.envelope_json, trace.reasoning_log ?? null, trace.created_at);
-            } catch {
-              // Ignore trace persistence errors — traces are commentary, not correctness state
-            }
-          },
-        },
-      ) as unknown as CharterRunner;
-    }
-
-    if (runtime === 'mock') {
-      return new MockCharterRunner({
-        output: {
-          output_version: '2.0',
-          execution_id: 'mock-exec',
-          charter_id: 'support_steward',
-          role: 'primary',
-          analyzed_at: new Date().toISOString(),
-          outcome: 'no_op',
-          confidence: { overall: 'high', uncertainty_flags: [] },
-          summary: 'Mock evaluation: no action required',
-          classifications: [],
-          facts: [],
-          proposed_actions: [],
-          tool_requests: [],
-          escalations: [],
-        },
-      });
-    }
-
-    throw new Error(`Invalid charter runtime: ${runtime}. Expected 'codex-api' or 'mock'.`);
-  }
-
-  const phaseAToolCatalog: ToolCatalogEntry[] = [
-    {
-      tool_id: "echo_test",
-      tool_signature: "echo_test(input: string)",
-      description: "Echoes input for testing tool execution path",
-      schema_args: [{ name: "input", type: "string", required: true, description: "Input to echo" }],
-      read_only: true,
-      requires_approval: false,
-      timeout_ms: 5000,
-    },
-  ];
-
-  const phaseAToolDefinitions: Record<string, ToolDefinition> = {
-    echo_test: {
-      id: "echo_test",
-      source_type: "local_executable",
-      executable_path: process.platform === "win32" ? "cmd" : "/bin/echo",
-    },
-  };
-
   // Initialize dependencies
   logger.debug('Initializing Graph client');
   const tokenProvider = buildGraphTokenProvider({ config });
@@ -390,289 +707,7 @@ async function createSingleMailboxService(
 
   const pollingIntervalMs = opts.pollingIntervalMs ?? config.runtime.polling_interval_ms;
 
-  // Control-plane dispatch state (lazily initialized)
-  let dispatchDeps: {
-    db: InstanceType<typeof Database>;
-    coordinatorStore: InstanceType<typeof SqliteCoordinatorStore>;
-    outboundStore: InstanceType<typeof SqliteOutboundStore>;
-    traceStore: InstanceType<typeof SqliteAgentTraceStore>;
-    foreman: InstanceType<typeof DefaultForemanFacade>;
-    scheduler: InstanceType<typeof SqliteScheduler>;
-    charterRunner: CharterRunner;
-    toolCatalog: ToolCatalogEntry[];
-    toolDefinitions: Record<string, ToolDefinition>;
-  } | null = null;
-
-  async function initDispatchDeps(): Promise<NonNullable<typeof dispatchDeps>> {
-    if (dispatchDeps) {
-      return dispatchDeps;
-    }
-
-    const dbDir = join(rootDir, '.narada');
-    await mkdir(dbDir, { recursive: true });
-    const dbPath = join(dbDir, 'coordinator.db');
-
-    const db = new Database(dbPath);
-    db.pragma('journal_mode = WAL');
-    db.pragma('synchronous = NORMAL');
-    const coordinatorStore = new SqliteCoordinatorStore({ db });
-    coordinatorStore.initSchema();
-
-    const outboundStore = new SqliteOutboundStore({ db });
-    outboundStore.initSchema();
-
-    const traceStore = new SqliteAgentTraceStore({ db });
-    traceStore.initSchema();
-
-    const getMailboxPolicy = (_mailboxId: string) => config.policy ?? {
-      primary_charter: 'support_steward',
-      allowed_actions: ['draft_reply', 'send_reply', 'send_new_message', 'mark_read', 'move_message', 'archive', 'no_action'],
-    };
-
-    const foreman = new DefaultForemanFacade({
-      coordinatorStore,
-      outboundStore,
-      db,
-      foremanId: config.mailbox_id,
-      getMailboxPolicy,
-    });
-
-    const scheduler = new SqliteScheduler(coordinatorStore, {
-      runnerId: config.mailbox_id,
-      ...opts.schedulerOptions,
-    });
-
-    const charterRunner = opts.charterRunner ?? createDefaultCharterRunner(config, coordinatorStore);
-    const toolCatalog = opts.toolCatalog ?? phaseAToolCatalog;
-    const toolDefinitions = opts.toolDefinitions ?? phaseAToolDefinitions;
-
-    dispatchDeps = { db, coordinatorStore, outboundStore, traceStore, foreman, scheduler, charterRunner, toolCatalog, toolDefinitions };
-    return dispatchDeps;
-  }
-
-  async function runDispatchPhase(): Promise<void> {
-    const deps = await initDispatchDeps();
-    const now = new Date().toISOString();
-
-    if (changedConversations.size > 0) {
-      const changed: ChangedConversation[] = [];
-    for (const [conversationId, kindsSet] of changedConversations) {
-      const previousOrdinal = deps.coordinatorStore.getLatestRevisionOrdinal(conversationId);
-      const currentOrdinal = (previousOrdinal ?? 0) + 1;
-      changed.push({
-        conversation_id: conversationId,
-        previous_revision_ordinal: previousOrdinal,
-        current_revision_ordinal: currentOrdinal,
-        change_kinds: Array.from(kindsSet),
-      });
-    }
-
-    const signal: SyncCompletionSignal = {
-      signal_id: `sync_${now}_${Math.random().toString(36).slice(2)}`,
-      mailbox_id: config.mailbox_id,
-      synced_at: now,
-      changed_conversations: changed,
-    };
-
-    logger.info('Dispatch phase starting', { conversations: changed.length });
-
-      const openResult = await deps.foreman.onSyncCompleted(signal);
-      await opts.dispatchHooks?.afterSyncCompleted?.(signal, openResult);
-      for (const opened of openResult.opened) {
-        const openedItem = deps.coordinatorStore.getWorkItem(opened.work_item_id);
-        if (openedItem) {
-          await opts.dispatchHooks?.afterWorkOpened?.(openedItem);
-        }
-      }
-    }
-
-    function persistRejectedToolCall(
-      request: { tool_id: string; arguments_json: string; purpose: string },
-      reason: string,
-      executionId: string,
-      workItem: { work_item_id: string; conversation_id: string },
-    ): void {
-      const now = new Date().toISOString();
-      try {
-        deps.coordinatorStore.db
-          .prepare(
-            `insert into tool_call_records (
-              call_id, execution_id, work_item_id, conversation_id, tool_id,
-              request_args_json, exit_status, stdout, stderr, structured_output_json,
-              started_at, completed_at, duration_ms
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          )
-          .run(
-            `tc_${executionId}_${Date.now()}_${request.tool_id}`,
-            executionId,
-            workItem.work_item_id,
-            workItem.conversation_id,
-            request.tool_id,
-            request.arguments_json,
-            'rejected_policy',
-            '',
-            `Rejected by Phase A policy: ${reason}`,
-            null,
-            now,
-            now,
-            0,
-          );
-      } catch (persistError) {
-        logger.warn('Failed to persist rejected tool call record', { error: String(persistError) });
-      }
-    }
-
-    while (!deps.scheduler.isQuiescent(config.mailbox_id)) {
-      const runnable = deps.scheduler.scanForRunnableWork(config.mailbox_id, 1);
-      if (runnable.length === 0) {
-        break;
-      }
-
-      const workItem = runnable[0]!;
-      const leaseResult = deps.scheduler.acquireLease(workItem.work_item_id, config.mailbox_id);
-      if (!leaseResult.success) {
-        logger.warn('Failed to acquire lease', { work_item_id: workItem.work_item_id, error: leaseResult.error });
-        continue;
-      }
-
-      const envelope = await buildInvocationEnvelope(
-        { coordinatorStore: deps.coordinatorStore, messageStore, rootDir, getMailboxPolicy: (_mailboxId: string) => config.policy ?? {
-          primary_charter: 'support_steward',
-          allowed_actions: ['draft_reply', 'send_reply', 'send_new_message', 'mark_read', 'move_message', 'archive', 'no_action'],
-        } },
-        { executionId: `ex_${workItem.work_item_id}_${Date.now()}`, workItem, tools: deps.toolCatalog },
-      );
-
-      const attempt = deps.scheduler.startExecution(
-        workItem.work_item_id,
-        workItem.opened_for_revision_id,
-        JSON.stringify(envelope),
-      );
-
-      await opts.dispatchHooks?.beforeRuntimeInvoke?.(workItem, attempt, envelope);
-
-      let leaseRenewalTimer: NodeJS.Timeout | null = null;
-      try {
-        // Set up lease renewal every 30 seconds
-        if (leaseResult.success && leaseResult.lease) {
-          leaseRenewalTimer = setInterval(() => {
-            try {
-              const newExpiresAt = new Date(Date.now() + 60000).toISOString();
-              deps.scheduler.renewLease(leaseResult.lease!.lease_id, newExpiresAt);
-            } catch (renewError) {
-              logger.warn('Lease renewal failed', { lease_id: leaseResult.lease!.lease_id, error: String(renewError) });
-            }
-          }, 30000);
-        }
-
-        const output = await deps.charterRunner.run(envelope);
-
-        await opts.dispatchHooks?.afterRuntimeComplete?.(workItem, attempt, output);
-
-        // Execute any tool requests produced by the charter
-        if (output.tool_requests.length > 0) {
-          await opts.dispatchHooks?.beforeToolExecution?.(workItem, attempt, output.tool_requests);
-
-          const toolRunner = new ToolRunner({
-            definitions: deps.toolDefinitions,
-            persistHook: async (record) => {
-              try {
-                deps.coordinatorStore.insertToolCallRecord(record as unknown as Parameters<typeof deps.coordinatorStore.insertToolCallRecord>[0]);
-              } catch (persistError) {
-                logger.warn('Failed to persist tool call record', { error: String(persistError) });
-              }
-            },
-          });
-
-          let toolIndex = 0;
-          for (const request of output.tool_requests) {
-            await opts.dispatchHooks?.duringToolExecution?.(workItem, attempt, request, toolIndex);
-
-            const catalogTool = envelope.available_tools.find((t) => t.tool_id === request.tool_id);
-            if (!catalogTool) {
-              logger.warn('Tool request rejected: not in envelope catalog', { tool_id: request.tool_id });
-              persistRejectedToolCall(request, 'not_in_catalog', attempt.execution_id, workItem);
-              toolIndex++;
-              continue;
-            }
-
-            // Phase A guardrail: only read-only tools are permitted
-            if (!catalogTool.read_only) {
-              logger.warn('Tool request rejected: not read-only in Phase A', { tool_id: request.tool_id });
-              persistRejectedToolCall(request, 'not_read_only', attempt.execution_id, workItem);
-              toolIndex++;
-              continue;
-            }
-
-            const definitionTool = deps.toolDefinitions[request.tool_id];
-            if (!definitionTool) {
-              logger.warn('Tool request rejected: no definition', { tool_id: request.tool_id });
-              persistRejectedToolCall(request, 'no_definition', attempt.execution_id, workItem);
-              toolIndex++;
-              continue;
-            }
-
-            let sanitizedArgs: Record<string, unknown>;
-            try {
-              sanitizedArgs = JSON.parse(request.arguments_json) as Record<string, unknown>;
-            } catch {
-              logger.warn('Unparseable tool arguments', { tool_id: request.tool_id });
-              persistRejectedToolCall(request, 'unparseable_args', attempt.execution_id, workItem);
-              toolIndex++;
-              continue;
-            }
-            const result = await toolRunner.executeToolCall(request, catalogTool, {
-              execution_id: attempt.execution_id,
-              work_item_id: workItem.work_item_id,
-              conversation_id: workItem.conversation_id,
-              sanitized_args: sanitizedArgs,
-            });
-            logger.info('Tool executed', {
-              tool_id: request.tool_id,
-              exit_status: result.exit_status,
-              duration_ms: result.duration_ms,
-            });
-            toolIndex++;
-          }
-
-          await opts.dispatchHooks?.afterToolExecution?.(workItem, attempt);
-        }
-
-        deps.scheduler.completeExecution(attempt.execution_id, JSON.stringify(output));
-
-        const evaluation = buildEvaluationRecord(output, {
-          execution_id: attempt.execution_id,
-          work_item_id: workItem.work_item_id,
-          conversation_id: workItem.conversation_id,
-        });
-
-        await opts.dispatchHooks?.beforeResolveWorkItem?.(workItem, attempt, evaluation);
-
-        const resolveResult = await deps.foreman.resolveWorkItem({
-          work_item_id: workItem.work_item_id,
-          execution_id: attempt.execution_id,
-          evaluation,
-        });
-
-        if (!resolveResult.success && resolveResult.error) {
-          logger.warn('Work item resolution failed', {
-            work_item_id: workItem.work_item_id,
-            error: resolveResult.error,
-          });
-        }
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        deps.scheduler.failExecution(attempt.execution_id, msg, true);
-        logger.error('Execution failed', { work_item_id: workItem.work_item_id, error: msg });
-      } finally {
-        if (leaseRenewalTimer) {
-          clearInterval(leaseRenewalTimer);
-        }
-      }
-    }
-
-    logger.info('Dispatch phase complete');
-  }
+  const dispatchContext = await createMailboxDispatchContext(config, opts, logger);
 
   async function updateHealth(): Promise<void> {
     const health: Omit<HealthStatus, 'timestamp'> = {
@@ -710,7 +745,7 @@ async function createSingleMailboxService(
         });
 
         try {
-          await runDispatchPhase();
+          await dispatchContext.runDispatchPhase(changedConversations);
         } catch (dispatchError) {
           const msg = dispatchError instanceof Error ? dispatchError.message : String(dispatchError);
           logger.error('Dispatch phase error', { error: msg });
@@ -805,6 +840,10 @@ async function createSingleMailboxService(
       // Ignore errors during shutdown
     });
 
+    await dispatchContext.close().catch(() => {
+      // Ignore close errors during shutdown
+    });
+
     // Remove PID file
     if (pidFile) {
       await pidFile.remove().catch(() => {
@@ -872,6 +911,11 @@ async function createMultiMailboxService(
   const { config, valid } = await loadMultiMailboxConfig({ path: opts.configPath });
   if (!valid) {
     throw new Error('Invalid multi-mailbox configuration');
+  }
+
+  // Validate charter runtime config for each mailbox before starting
+  for (const mailbox of config.mailboxes) {
+    validateCharterRuntimeConfig(mailboxConfigToSingleConfig(mailbox));
   }
 
   const pidFile = opts.pidFilePath
@@ -971,11 +1015,41 @@ async function createMultiMailboxService(
           successes: result.successes,
           duration_ms: result.totalDurationMs,
         });
-        // TODO: Multi-mailbox dispatch phase is deferred.
-        // The current syncMultiple abstraction does not expose per-mailbox
-        // changed conversations needed for foreman.onSyncCompleted().
-        // To enable dispatch here, extend syncMultiple with a per-mailbox
-        // callback or run individual DefaultSyncRunners inline.
+        // Run per-mailbox dispatch independently
+        const dispatchContexts = new Map<string, Awaited<ReturnType<typeof createMailboxDispatchContext>>>();
+
+        for (const r of result.results) {
+          if (r.success && r.changedConversations && r.changedConversations.length > 0) {
+            const mailbox = config.mailboxes.find((m) => m.id === r.mailboxId);
+            if (!mailbox) continue;
+
+            try {
+              if (!dispatchContexts.has(mailbox.id)) {
+                const singleConfig = mailboxConfigToSingleConfig(mailbox);
+                dispatchContexts.set(mailbox.id, await createMailboxDispatchContext(singleConfig, opts, logger));
+              }
+              const ctx = dispatchContexts.get(mailbox.id)!;
+              const changedMap = new Map<string, Set<ChangedConversation['change_kinds'][number]>>();
+              for (const c of r.changedConversations) {
+                changedMap.set(c.conversation_id, new Set(c.change_kinds as ChangedConversation['change_kinds'][number][]));
+              }
+              await ctx.runDispatchPhase(changedMap);
+            } catch (dispatchError) {
+              const msg = dispatchError instanceof Error ? dispatchError.message : String(dispatchError);
+              logger.error('Dispatch phase error', { mailbox_id: r.mailboxId, error: msg });
+              if (stats.perMailbox?.[r.mailboxId]) {
+                stats.perMailbox[r.mailboxId].errors++;
+              }
+            }
+          }
+        }
+
+        for (const ctx of dispatchContexts.values()) {
+          await ctx.close().catch(() => {
+            // Ignore close errors
+          });
+        }
+
         return 'success';
       }
 

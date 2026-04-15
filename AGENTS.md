@@ -71,11 +71,17 @@ A deterministic, replay-safe state compiler that transforms a remote Microsoft G
 | **Batch Sync** | Memory-efficient streaming sync | [`src/runner/batch-sync.ts`](packages/exchange-fs-sync/src/runner/batch-sync.ts) |
 | **Circuit Breaker** | Failure rate protection | [`src/retry.ts`](packages/exchange-fs-sync/src/retry.ts) |
 | **Health File** | Sync status persistence | [`src/health.ts`](packages/exchange-fs-sync/src/health.ts) |
-| **Work Item** | Terminal schedulable unit of control work | [`src/coordinator/types.ts`](packages/exchange-fs-sync/src/coordinator/types.ts) |
+| **conversation_id** | v2 canonical thread identifier (legacy `thread_id` exists in rollback tables only) | [`src/coordinator/types.ts`](packages/exchange-fs-sync/src/coordinator/types.ts) |
+| **work_item** | Terminal schedulable unit of control work | [`src/coordinator/types.ts`](packages/exchange-fs-sync/src/coordinator/types.ts) |
+| **execution_attempt** | Bounded charter invocation record | [`src/coordinator/types.ts`](packages/exchange-fs-sync/src/coordinator/types.ts) |
+| **session** | `AgentSession` — operator-facing session with `resume_hint` | [`src/coordinator/types.ts`](packages/exchange-fs-sync/src/coordinator/types.ts) |
+| **evaluation** | Persisted charter output for foreman governance | [`src/foreman/types.ts`](packages/exchange-fs-sync/src/foreman/types.ts) |
 | **Lease** | Execution authority record for a work item | [`src/scheduler/scheduler.ts`](packages/exchange-fs-sync/src/scheduler/scheduler.ts) |
 | **Foreman Decision** | Outbound proposal record | [`src/foreman/facade.ts`](packages/exchange-fs-sync/src/foreman/facade.ts) |
-| **OutboundCommand** | Durable mailbox mutation intent | [`src/outbound/types.ts`](packages/exchange-fs-sync/src/outbound/types.ts) |
+| **outbound command** | Durable mailbox mutation intent | [`src/outbound/types.ts`](packages/exchange-fs-sync/src/outbound/types.ts) |
 | **ManagedDraft** | Graph draft bound to a command version | [`src/outbound/store.ts`](packages/exchange-fs-sync/src/outbound/store.ts) |
+| **trace** | Commentary record (non-authoritative) anchored to `execution_id` | [`src/agent/traces/types.ts`](packages/exchange-fs-sync/src/agent/traces/types.ts) |
+| **mailbox policy** | Charter routing, allowed actions, and tool catalog binding | [`src/config/types.ts`](packages/exchange-fs-sync/src/config/types.ts) |
 | **SendReplyWorker** | Draft creation, reuse, and send | [`src/outbound/send-reply-worker.ts`](packages/exchange-fs-sync/src/outbound/send-reply-worker.ts) |
 | **OutboundReconciler** | Submitted → confirmed binding | [`src/outbound/reconciler.ts`](packages/exchange-fs-sync/src/outbound/reconciler.ts) |
 | **CharterInvocationEnvelope** | Runtime envelope for charter evaluation | [`packages/charters/src/runtime/envelope.ts`](packages/charters/src/runtime/envelope.ts) |
@@ -180,16 +186,54 @@ narada/
 5. **Apply Ordering**: `apply(e)` → `mark_applied(e)` → `cursor_commit` (never reorder)
 
 ### Control Plane
-6. **Work Object Authority**: A `work_item` is the terminal schedulable unit; at most one non-terminal work item per conversation may be `leased` or `executing`
-7. **Lease Uniqueness**: A work item has at most one unreleased, unexpired lease at any time
-8. **Bounded Evaluation**: Charters run inside frozen `CharterInvocationEnvelope`s with immutable capability envelopes
-9. **Decision Before Command**: `foreman_decision` is append-only; `outbound_command` is worker-mutable; one decision produces at most one command
+6. **Foreman owns work opening**: Only `DefaultForemanFacade.onSyncCompleted()` may insert `work_item` rows.
+7. **Foreman owns resolution**: Only `DefaultForemanFacade.resolveWorkItem()` may transition a `work_item` to `resolved`, `failed_terminal`, or `failed_retryable` based on charter output.
+8. **Scheduler owns leases**: Only `SqliteScheduler` may insert/release `work_item_leases` and transition `work_item` between `opened ↔ leased ↔ executing ↔ failed_retryable`.
+9. **OutboundHandoff owns command creation**: All `outbound_commands` + `outbound_versions` must be created inside `OutboundHandoff.createCommandFromDecision()` (atomic with decision insert).
+10. **Outbound workers own mutation**: Only the outbound worker layer may call Graph API to create drafts / send messages / move items.
+11. **Charter runtime is read-only sandbox**: It may only read the `CharterInvocationEnvelope` and produce a `CharterOutputEnvelope`. It must NOT write to coordinator or outbound stores directly.
+12. **Work Object Authority**: A `work_item` is the terminal schedulable unit; at most one non-terminal work item per conversation may be `leased` or `executing`
+13. **Lease Uniqueness**: A work item has at most one unreleased, unexpired lease at any time
+14. **Bounded Evaluation**: Charters run inside frozen `CharterInvocationEnvelope`s with immutable capability envelopes
+15. **Decision Before Command**: `foreman_decision` is append-only; `outbound_command` is worker-mutable; one decision produces at most one command
 
 ### Outbound
 10. **Draft-First Delivery**: Agents and workers never send directly; they always create a draft first
 11. **Two-Stage Completion**: A command reaches `submitted` when Graph accepts it, and `confirmed` only after inbound reconciliation observes the result
 12. **No External Draft Mutation**: Modification of a managed draft by anything other than the outbound worker is a hard failure
 13. **Worker Exclusivity**: Only the outbound worker may create or mutate managed drafts
+
+---
+
+## Secret Resolution Precedence
+
+Configuration values that involve secrets follow a deterministic precedence:
+
+1. **Environment variables** (highest precedence)
+2. **Secure storage references** (`{ "$secure": "key" }`)
+3. **Config file values** (lowest precedence)
+
+### Graph API Credentials
+| Source | Env Var | Config Key |
+|--------|---------|------------|
+| Access token | `GRAPH_ACCESS_TOKEN` | `graph.access_token` (via secure ref) |
+| Tenant ID | `GRAPH_TENANT_ID` | `graph.tenant_id` |
+| Client ID | `GRAPH_CLIENT_ID` | `graph.client_id` |
+| Client Secret | `GRAPH_CLIENT_SECRET` | `graph.client_secret` |
+
+Resolved in `buildGraphTokenProvider()`.
+
+### Charter Runtime API Key
+| Source | Env Var | Config Key |
+|--------|---------|------------|
+| OpenAI API key | `NARADA_OPENAI_API_KEY` or `OPENAI_API_KEY` | `charter.api_key` |
+
+Resolved in `validateCharterRuntimeConfig()`.
+
+### Secure Storage
+- `loadConfig()` and `loadMultiMailboxConfig()` accept an optional `storage: SecureStorage` parameter.
+- If `{ "$secure": "key" }` references exist and no storage is provided, loading throws before any side effects.
+- The CLI and daemon currently do not wire secure storage automatically; callers must explicitly provide it.
 
 ---
 
@@ -207,6 +251,9 @@ narada/
 - Cursor-first commit
 - Non-deterministic normalization
 - Externalized apply-log
+- Direct writes to `work_item`, `work_item_leases`, or `execution_attempts` from outside `ForemanFacade` / `Scheduler`
+- Bypassing `OutboundHandoff` to create `outbound_command` rows
+- Charter runtimes that mutate coordinator or outbound stores directly
 
 ---
 

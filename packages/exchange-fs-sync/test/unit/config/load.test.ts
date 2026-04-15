@@ -354,6 +354,91 @@ describe("loadConfig", () => {
     );
   });
 
+  it("parses webhook configuration when enabled", async () => {
+    const path = await writeConfigFile({
+      mailbox_id: "mailbox_primary",
+      root_dir: "./data/mail-sync",
+      graph: {
+        user_id: "user@example.com",
+        prefer_immutable_ids: true,
+      },
+      scope: {
+        included_container_refs: ["inbox"],
+        included_item_kinds: ["message"],
+      },
+      webhook: {
+        enabled: true,
+        public_url: "https://example.com/webhook",
+        port: 3000,
+        host: "0.0.0.0",
+        path: "/notify",
+        client_state: "secret-state",
+        hmac_secret: "hmac-secret",
+        auto_renew: true,
+        hybrid_mode: true,
+      },
+    });
+    createdPaths.push(path);
+
+    const config = await loadConfig({ path });
+    expect(config.webhook).toEqual({
+      enabled: true,
+      public_url: "https://example.com/webhook",
+      port: 3000,
+      host: "0.0.0.0",
+      path: "/notify",
+      client_state: "secret-state",
+      hmac_secret: "hmac-secret",
+      auto_renew: true,
+      hybrid_mode: true,
+    });
+  });
+
+  it("rejects enabled webhook without required fields", async () => {
+    const path = await writeConfigFile({
+      mailbox_id: "mailbox_primary",
+      root_dir: "./data/mail-sync",
+      graph: {
+        user_id: "user@example.com",
+        prefer_immutable_ids: true,
+      },
+      scope: {
+        included_container_refs: ["inbox"],
+        included_item_kinds: ["message"],
+      },
+      webhook: {
+        enabled: true,
+      },
+    });
+    createdPaths.push(path);
+
+    await expect(loadConfig({ path })).rejects.toThrow(
+      /config\.webhook\.public_url is required when webhook is enabled/,
+    );
+  });
+
+  it("allows disabled webhook with minimal fields", async () => {
+    const path = await writeConfigFile({
+      mailbox_id: "mailbox_primary",
+      root_dir: "./data/mail-sync",
+      graph: {
+        user_id: "user@example.com",
+        prefer_immutable_ids: true,
+      },
+      scope: {
+        included_container_refs: ["inbox"],
+        included_item_kinds: ["message"],
+      },
+      webhook: {
+        enabled: false,
+      },
+    });
+    createdPaths.push(path);
+
+    const config = await loadConfig({ path });
+    expect(config.webhook).toEqual({ enabled: false });
+  });
+
   it("rejects empty allowed_actions in policy", async () => {
     const path = await writeConfigFile({
       mailbox_id: "mailbox_primary",

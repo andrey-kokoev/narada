@@ -73,6 +73,64 @@ const LifecycleConfigSchema = z.object({
   schedule: CleanupScheduleSchema.default({}),
 });
 
+// Charter runtime configuration schema
+const CharterRuntimeConfigSchema = z.object({
+  runtime: z.string().min(1).default('mock'),
+  api_key: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
+  base_url: z.string().url().optional(),
+  timeout_ms: z.number().int().min(1).optional(),
+});
+
+// Allowed action enum
+const AllowedActionSchema = z.enum([
+  'draft_reply',
+  'send_reply',
+  'send_new_message',
+  'mark_read',
+  'move_message',
+  'set_categories',
+  'extract_obligations',
+  'create_followup',
+  'tool_request',
+  'no_action',
+]);
+
+// Mailbox policy schema
+const MailboxPolicySchema = z.object({
+  primary_charter: z.string().min(1).default('support_steward'),
+  secondary_charters: z.array(z.string().min(1)).optional(),
+  allowed_actions: z.array(AllowedActionSchema).min(1, 'At least one allowed action is required'),
+  allowed_tools: z.array(z.string().min(1)).optional(),
+  require_human_approval: z.boolean().optional(),
+});
+
+// Webhook configuration schema
+const WebhookConfigSchema = z.object({
+  enabled: z.boolean(),
+  public_url: z.string().min(1).optional(),
+  port: z.number().int().min(1).max(65535).optional(),
+  host: z.string().min(1).optional(),
+  path: z.string().min(1).optional(),
+  client_state: z.string().min(1).optional(),
+  hmac_secret: z.string().min(1).optional(),
+  subscription_expiration_minutes: z.number().int().min(1).optional(),
+  auto_renew: z.boolean().optional(),
+  change_types: z.array(z.string().min(1)).optional(),
+  lifecycle_url: z.string().min(1).optional(),
+  fallback_poll_minutes: z.number().int().min(1).optional(),
+  hybrid_mode: z.boolean().optional(),
+  rate_limit_max_requests: z.number().int().min(1).optional(),
+  max_body_size: z.number().int().min(1).optional(),
+}).refine((data) => {
+  if (data.enabled) {
+    return data.public_url !== undefined && data.port !== undefined && data.client_state !== undefined;
+  }
+  return true;
+}, {
+  message: 'public_url, port, and client_state are required when webhook is enabled',
+});
+
 // Main configuration schema
 export const ConfigSchema = z.object({
   mailbox_id: z.string().min(1, 'Mailbox ID is required'),
@@ -82,6 +140,9 @@ export const ConfigSchema = z.object({
   normalize: NormalizeConfigSchema.default({}),
   runtime: RuntimeConfigSchema.default({}),
   lifecycle: LifecycleConfigSchema.default({}),
+  charter: CharterRuntimeConfigSchema.default({}),
+  policy: MailboxPolicySchema.default({ allowed_actions: ['no_action'] }),
+  webhook: WebhookConfigSchema.optional(),
 });
 
 // Export inferred type

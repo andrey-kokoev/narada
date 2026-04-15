@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ExchangeFsSyncConfig } from "./types.js";
+import type { ChangeType } from "../adapter/graph/subscription.js";
 import { DEFAULT_EXCHANGE_FS_SYNC_CONFIG } from "./defaults.js";
 import type { SecureStorage } from "../auth/secure-storage.js";
 import { resolveSecrets, isSecureRef } from "./secure-config.js";
@@ -306,6 +307,66 @@ export async function loadConfig(
           : {}),
         ...(isBoolean(policyRaw.require_human_approval)
           ? { require_human_approval: policyRaw.require_human_approval }
+          : {}),
+      };
+    })(),
+    webhook: (() => {
+      const webhookRaw = isObject(root.webhook) ? root.webhook : null;
+      if (!webhookRaw) {
+        return undefined;
+      }
+      const enabled = webhookRaw.enabled;
+      if (typeof enabled !== "boolean") {
+        throw new Error("config.webhook.enabled must be a boolean");
+      }
+      if (enabled) {
+        if (!isNonEmptyString(webhookRaw.public_url)) {
+          throw new Error("config.webhook.public_url is required when webhook is enabled");
+        }
+        if (typeof webhookRaw.port !== "number") {
+          throw new Error("config.webhook.port is required when webhook is enabled");
+        }
+        if (!isNonEmptyString(webhookRaw.client_state)) {
+          throw new Error("config.webhook.client_state is required when webhook is enabled");
+        }
+      }
+      return {
+        enabled,
+        ...(isNonEmptyString(webhookRaw.public_url)
+          ? { public_url: (webhookRaw.public_url as string).trim() }
+          : {}),
+        ...(typeof webhookRaw.port === "number" ? { port: webhookRaw.port as number } : {}),
+        ...(isNonEmptyString(webhookRaw.host) ? { host: (webhookRaw.host as string).trim() } : {}),
+        ...(isNonEmptyString(webhookRaw.path) ? { path: (webhookRaw.path as string).trim() } : {}),
+        ...(isNonEmptyString(webhookRaw.client_state)
+          ? { client_state: (webhookRaw.client_state as string).trim() }
+          : {}),
+        ...(isNonEmptyString(webhookRaw.hmac_secret)
+          ? { hmac_secret: (webhookRaw.hmac_secret as string).trim() }
+          : {}),
+        ...(typeof webhookRaw.subscription_expiration_minutes === "number"
+          ? { subscription_expiration_minutes: webhookRaw.subscription_expiration_minutes as number }
+          : {}),
+        ...(typeof webhookRaw.auto_renew === "boolean"
+          ? { auto_renew: webhookRaw.auto_renew as boolean }
+          : {}),
+        ...(Array.isArray(webhookRaw.change_types)
+          ? { change_types: webhookRaw.change_types as ChangeType[] }
+          : {}),
+        ...(isNonEmptyString(webhookRaw.lifecycle_url)
+          ? { lifecycle_url: (webhookRaw.lifecycle_url as string).trim() }
+          : {}),
+        ...(typeof webhookRaw.fallback_poll_minutes === "number"
+          ? { fallback_poll_minutes: webhookRaw.fallback_poll_minutes as number }
+          : {}),
+        ...(typeof webhookRaw.hybrid_mode === "boolean"
+          ? { hybrid_mode: webhookRaw.hybrid_mode as boolean }
+          : {}),
+        ...(typeof webhookRaw.rate_limit_max_requests === "number"
+          ? { rate_limit_max_requests: webhookRaw.rate_limit_max_requests as number }
+          : {}),
+        ...(typeof webhookRaw.max_body_size === "number"
+          ? { max_body_size: webhookRaw.max_body_size as number }
           : {}),
       };
     })(),

@@ -9,6 +9,8 @@ import { resolve } from "node:path";
 import type { SecureStorage } from "../auth/secure-storage.js";
 import { resolveSecrets, isSecureRef } from "./secure-config.js";
 import type { AttachmentPolicy, BodyPolicy, FolderRef } from "../types/index.js";
+import type { CharterRuntimeConfig, MailboxPolicy, LifecycleConfig } from "./types.js";
+import type { ChangeType } from "../adapter/graph/subscription.js";
 
 /** Configuration for a single mailbox */
 export interface MailboxConfig {
@@ -42,6 +44,30 @@ export interface MailboxConfig {
   scope?: {
     included_container_refs: FolderRef[];
     included_item_kinds: string[];
+  };
+  /** Charter runtime configuration */
+  charter?: CharterRuntimeConfig;
+  /** Mailbox policy routing */
+  policy?: MailboxPolicy;
+  /** Lifecycle configuration */
+  lifecycle?: LifecycleConfig;
+  /** Webhook configuration */
+  webhook?: {
+    enabled: boolean;
+    public_url?: string;
+    port?: number;
+    host?: string;
+    path?: string;
+    client_state?: string;
+    hmac_secret?: string;
+    subscription_expiration_minutes?: number;
+    auto_renew?: boolean;
+    change_types?: ChangeType[];
+    lifecycle_url?: string;
+    fallback_poll_minutes?: number;
+    hybrid_mode?: boolean;
+    rate_limit_max_requests?: number;
+    max_body_size?: number;
   };
 }
 
@@ -149,6 +175,50 @@ function expectNumber(value: unknown, defaultValue: number): number {
   return defaultValue;
 }
 
+export function expectAttachmentPolicy(value: unknown): AttachmentPolicy {
+  if (value === "exclude" || value === "metadata_only" || value === "include_content") {
+    return value;
+  }
+  return DEFAULT_SYNC_OPTIONS.attachment_policy;
+}
+
+export function expectBodyPolicy(value: unknown): BodyPolicy {
+  if (value === "text_only" || value === "html_only" || value === "text_and_html") {
+    return value;
+  }
+  return DEFAULT_SYNC_OPTIONS.body_policy;
+}
+
+const ALLOWED_ACTIONS = new Set([
+  "draft_reply",
+  "send_reply",
+  "send_new_message",
+  "mark_read",
+  "move_message",
+  "set_categories",
+  "extract_obligations",
+  "create_followup",
+  "tool_request",
+  "no_action",
+]);
+
+export function expectAllowedActions(value: unknown): MailboxPolicy["allowed_actions"] {
+  if (!Array.isArray(value)) {
+    throw new Error("allowed_actions must be an array of allowed actions");
+  }
+  const actions = value.map((item, index) => {
+    const action = typeof item === "string" && item.trim().length > 0 ? item.trim() : "";
+    if (!ALLOWED_ACTIONS.has(action)) {
+      throw new Error(`allowed_actions[${index}] must be a valid allowed action, got "${action}"`);
+    }
+    return action as MailboxPolicy["allowed_actions"][number];
+  });
+  if (actions.length === 0) {
+    throw new Error("allowed_actions must contain at least one allowed action");
+  }
+  return actions;
+}
+
 /**
  * Check if a value (or nested values) contains secure references
  */
@@ -229,6 +299,144 @@ export function validateMailboxConfig(
   const scopeObj = isObject(mailbox.scope) ? mailbox.scope : {};
   const syncObj = isObject(mailbox.sync) ? mailbox.sync : {};
 
+  // Charter config
+  const charterObj = isObject(mailbox.charter) ? mailbox.charter : {};
+  const charter: CharterRuntimeConfig = {
+    runtime:
+      typeof charterObj.runtime === "string" && charterObj.runtime.length > 0
+        ? charterObj.runtime.trim()
+        : "mock",
+    ...(isNonEmptyString(charterObj.api_key) ? { api_key: (charterObj.api_key as string).trim() } : {}),
+    ...(isNonEmptyString(charterObj.model) ? { model: (charterObj.model as string).trim() } : {}),
+    ...(isNonEmptyString(charterObj.base_url) ? { base_url: (charterObj.base_url as string).trim() } : {}),
+    ...(typeof charterObj.timeout_ms === "number" && Number.isFinite(charterObj.timeout_ms) && charterObj.timeout_ms >= 0
+      ? { timeout_ms: charterObj.timeout_ms as number }
+      : {}),
+  };
+
+  // Policy config
+  const policyObj = isObject(mailbox.policy) ? mailbox.policy : {};
+  let policy: MailboxPolicy | undefined;
+  try {
+    policy = {
+      primary_charter: isNonEmptyString(policyObj.primary_charter)
+        ? (policyObj.primary_charter as string).trim()
+        : "support_steward",
+      allowed_actions:
+        policyObj.allowed_actions !== undefined
+          ? expectAllowedActions(policyObj.allowed_actions)
+          : (["draft_reply", "send_reply", "mark_read", "no_action"] as MailboxPolicy["allowed_actions"]),
+      ...(Array.isArray(policyObj.secondary_charters) && policyObj.secondary_charters.length > 0
+        ? { secondary_charters: (policyObj.secondary_charters as unknown[]).map((s) => String(s).trim()) }
+        : {}),
+      ...(Array.isArray(policyObj.allowed_tools) && policyObj.allowed_tools.length > 0
+        ? { allowed_tools: (policyObj.allowed_tools as unknown[]).map((s) => String(s).trim()) }
+        : {}),
+      ...(typeof policyObj.require_human_approval === "boolean"
+        ? { require_human_approval: policyObj.require_human_approval as boolean }
+        : {}),
+    };
+  } catch (err) {
+    errors.push(`Mailbox[${index}].policy: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // Lifecycle config
+  const lifecycleObj = isObject(mailbox.lifecycle) ? mailbox.lifecycle : {};
+  const retentionObj = isObject(lifecycleObj.retention) ? lifecycleObj.retention : {};
+  const scheduleObj = isObject(lifecycleObj.schedule) ? lifecycleObj.schedule : {};
+  const lifecycle: LifecycleConfig = {
+    tombstone_retention_days: expectNumber(lifecycleObj.tombstone_retention_days, 30),
+    archive_after_days: expectNumber(lifecycleObj.archive_after_days, 90),
+    archive_dir: isNonEmptyString(lifecycleObj.archive_dir) ? (lifecycleObj.archive_dir as string).trim() : "archive",
+    compress_archives: expectBoolean(lifecycleObj.compress_archives, true),
+    retention: {
+      preserve_flagged: expectBoolean(retentionObj.preserve_flagged, true),
+      preserve_unread: expectBoolean(retentionObj.preserve_unread, true),
+      ...(typeof retentionObj.max_age_days === "number" ? { max_age_days: retentionObj.max_age_days as number } : {}),
+      ...(typeof retentionObj.max_total_size === "string" ? { max_total_size: retentionObj.max_total_size as string } : {}),
+      ...(typeof retentionObj.max_message_count === "number" ? { max_message_count: retentionObj.max_message_count as number } : {}),
+    },
+    schedule: {
+      frequency: ["daily", "weekly", "on-sync", "manual"].includes(String(scheduleObj.frequency))
+        ? (String(scheduleObj.frequency) as "daily" | "weekly" | "on-sync" | "manual")
+        : "manual",
+      max_run_time_minutes: expectNumber(scheduleObj.max_run_time_minutes, 60),
+      ...(isObject(scheduleObj.time_window)
+        ? {
+            time_window: {
+              start: String(scheduleObj.time_window.start),
+              end: String(scheduleObj.time_window.end),
+            },
+          }
+        : {}),
+    },
+  };
+
+  // Webhook config
+  const webhookObj = isObject(mailbox.webhook) ? mailbox.webhook : null;
+  let webhook: MailboxConfig["webhook"] | undefined;
+  if (webhookObj) {
+    if (typeof webhookObj.enabled !== "boolean") {
+      errors.push(`Mailbox[${index}].webhook.enabled must be a boolean`);
+    } else {
+      const whEnabled = webhookObj.enabled as boolean;
+      if (whEnabled) {
+        if (!isNonEmptyString(webhookObj.public_url)) {
+          errors.push(`Mailbox[${index}].webhook.public_url is required when webhook is enabled`);
+        }
+        if (typeof webhookObj.port !== "number") {
+          errors.push(`Mailbox[${index}].webhook.port is required when webhook is enabled`);
+        }
+        if (!isNonEmptyString(webhookObj.client_state)) {
+          errors.push(`Mailbox[${index}].webhook.client_state is required when webhook is enabled`);
+        }
+      }
+      webhook = {
+        enabled: whEnabled,
+        ...(isNonEmptyString(webhookObj.public_url)
+          ? { public_url: (webhookObj.public_url as string).trim() }
+          : {}),
+        ...(typeof webhookObj.port === "number" ? { port: webhookObj.port as number } : {}),
+        ...(isNonEmptyString(webhookObj.host) ? { host: (webhookObj.host as string).trim() } : {}),
+        ...(isNonEmptyString(webhookObj.path) ? { path: (webhookObj.path as string).trim() } : {}),
+        ...(isNonEmptyString(webhookObj.client_state)
+          ? { client_state: (webhookObj.client_state as string).trim() }
+          : {}),
+        ...(isNonEmptyString(webhookObj.hmac_secret)
+          ? { hmac_secret: (webhookObj.hmac_secret as string).trim() }
+          : {}),
+        ...(typeof webhookObj.subscription_expiration_minutes === "number"
+          ? { subscription_expiration_minutes: webhookObj.subscription_expiration_minutes as number }
+          : {}),
+        ...(typeof webhookObj.auto_renew === "boolean"
+          ? { auto_renew: webhookObj.auto_renew as boolean }
+          : {}),
+        ...(Array.isArray(webhookObj.change_types)
+          ? { change_types: webhookObj.change_types as ChangeType[] }
+          : {}),
+        ...(isNonEmptyString(webhookObj.lifecycle_url)
+          ? { lifecycle_url: (webhookObj.lifecycle_url as string).trim() }
+          : {}),
+        ...(typeof webhookObj.fallback_poll_minutes === "number"
+          ? { fallback_poll_minutes: webhookObj.fallback_poll_minutes as number }
+          : {}),
+        ...(typeof webhookObj.hybrid_mode === "boolean"
+          ? { hybrid_mode: webhookObj.hybrid_mode as boolean }
+          : {}),
+        ...(typeof webhookObj.rate_limit_max_requests === "number"
+          ? { rate_limit_max_requests: webhookObj.rate_limit_max_requests as number }
+          : {}),
+        ...(typeof webhookObj.max_body_size === "number"
+          ? { max_body_size: webhookObj.max_body_size as number }
+          : {}),
+      };
+    }
+  }
+
+  if (errors.length > 0) {
+    return { valid: false, errors };
+  }
+
   const config: MailboxConfig = {
     id: (id as string).trim(),
     mailbox_id: (mailbox_id as string).trim(),
@@ -250,8 +458,8 @@ export function validateMailboxConfig(
         : ["message"],
     },
     sync: {
-      attachment_policy: (syncObj.attachment_policy as AttachmentPolicy) ?? DEFAULT_SYNC_OPTIONS.attachment_policy,
-      body_policy: (syncObj.body_policy as BodyPolicy) ?? DEFAULT_SYNC_OPTIONS.body_policy,
+      attachment_policy: expectAttachmentPolicy(syncObj.attachment_policy),
+      body_policy: expectBodyPolicy(syncObj.body_policy),
       include_headers: expectBoolean(syncObj.include_headers, DEFAULT_SYNC_OPTIONS.include_headers),
       tombstones_enabled: expectBoolean(syncObj.tombstones_enabled, DEFAULT_SYNC_OPTIONS.tombstones_enabled),
       polling_interval_ms: expectNumber(syncObj.polling_interval_ms, DEFAULT_SYNC_OPTIONS.polling_interval_ms),
@@ -259,6 +467,10 @@ export function validateMailboxConfig(
       cleanup_tmp_on_startup: expectBoolean(syncObj.cleanup_tmp_on_startup, DEFAULT_SYNC_OPTIONS.cleanup_tmp_on_startup),
       rebuild_views_after_sync: expectBoolean(syncObj.rebuild_views_after_sync, DEFAULT_SYNC_OPTIONS.rebuild_views_after_sync),
     },
+    charter,
+    ...(policy ? { policy } : {}),
+    lifecycle,
+    ...(webhook ? { webhook } : {}),
   };
 
   return { valid: true, errors: [], config };

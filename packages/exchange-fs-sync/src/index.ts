@@ -1,6 +1,8 @@
 // Main exports
 export { default as Database } from "better-sqlite3";
 export { loadConfig } from "./config/load.js";
+export { validateCharterRuntimeConfig } from "./config/validation.js";
+export { DEFAULT_EXCHANGE_FS_SYNC_CONFIG } from "./config/defaults.js";
 export {
   ConfigSchema,
   validateConfig,
@@ -251,6 +253,34 @@ export type { GraphMessage, GraphListResponse } from "./types/graph.js";
 
 // ID exports
 export { buildEventId, hashNormalizedPayload } from "./ids/event-id.js";
+
+// Observability exports
+export type {
+  DaemonCycleSummary,
+  MailboxDispatchSummary,
+  WorkItemLifecycleSummary,
+  ExecutionAttemptSummary,
+  ToolCallSummary,
+  OutboundHandoffSummary,
+  ControlPlaneStatusSnapshot,
+} from "./observability/types.js";
+export {
+  OperatorErrorCategory,
+  classifyErrorToOperatorCategory,
+  classifyWorkItemForOperator,
+  classifyToolCallForOperator,
+  type OperatorErrorClassification,
+} from "./observability/errors.js";
+export {
+  getActiveWorkItems,
+  getRecentFailedWorkItems,
+  getWorkItemsAwaitingRetry,
+  getRecentOutboundCommands,
+  getRecentSessionsAndExecutions,
+  getToolCallSummary,
+  buildMailboxDispatchSummary,
+  buildControlPlaneSnapshot,
+} from "./observability/queries.js";
 
 // Error handling exports
 export {

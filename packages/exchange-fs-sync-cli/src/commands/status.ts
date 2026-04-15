@@ -3,7 +3,30 @@ import { stat, readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
-import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig } from '@narada/exchange-fs-sync';
+import {
+  loadConfig,
+  isMultiMailboxConfig,
+  loadMultiMailboxConfig,
+  type ControlPlaneStatusSnapshot,
+} from '@narada/exchange-fs-sync';
+
+// Lazy-load better-sqlite3 to avoid eager native-module load in test environments
+async function loadControlPlaneSnapshot(
+  dbPath: string,
+  mailboxId: string,
+): Promise<ControlPlaneStatusSnapshot | undefined> {
+  const { Database, SqliteCoordinatorStore, SqliteOutboundStore, buildControlPlaneSnapshot } = await import(
+    '@narada/exchange-fs-sync'
+  );
+  const db = new Database(dbPath);
+  try {
+    const coordinatorStore = new SqliteCoordinatorStore({ db });
+    const outboundStore = new SqliteOutboundStore({ db });
+    return buildControlPlaneSnapshot(coordinatorStore, outboundStore, mailboxId);
+  } finally {
+    db.close();
+  }
+}
 
 export interface StatusOptions {
   config?: string;
@@ -29,6 +52,7 @@ interface StatusReport {
   };
   health: 'healthy' | 'stale' | 'empty' | 'error';
   message?: string;
+  controlPlane?: ControlPlaneStatusSnapshot;
 }
 
 export async function statusCommand(
@@ -138,6 +162,17 @@ async function buildStatusReport(mailboxId: string, rootDir: string): Promise<St
     },
     health: 'empty',
   };
+
+  // Attempt to enrich with control-plane snapshot if coordinator.db exists
+  const dbPath = join(rootDir, '.narada', 'coordinator.db');
+  try {
+    const dbStat = await stat(dbPath);
+    if (dbStat.isFile()) {
+      report.controlPlane = await loadControlPlaneSnapshot(dbPath, mailboxId);
+    }
+  } catch {
+    // No control-plane database yet; leave controlPlane undefined
+  }
 
   try {
     // Read cursor

@@ -48,6 +48,27 @@ const DEFAULT_CONFIG = {
     cleanup_tmp_on_startup: true,
     rebuild_views_after_sync: false,
   },
+  lifecycle: {
+    tombstone_retention_days: 30,
+    archive_after_days: 90,
+    archive_dir: 'archive',
+    compress_archives: true,
+    retention: {
+      preserve_flagged: true,
+      preserve_unread: true,
+    },
+    schedule: {
+      frequency: 'manual',
+      max_run_time_minutes: 60,
+    },
+  },
+  charter: {
+    runtime: 'mock',
+  },
+  policy: {
+    primary_charter: 'support_steward',
+    allowed_actions: ['draft_reply', 'send_reply', 'mark_read', 'no_action'],
+  },
 };
 
 /**
@@ -205,6 +226,9 @@ export async function configInteractiveCommand(
     },
     normalize: DEFAULT_CONFIG.normalize,
     runtime: DEFAULT_CONFIG.runtime,
+    lifecycle: DEFAULT_CONFIG.lifecycle,
+    charter: DEFAULT_CONFIG.charter,
+    policy: DEFAULT_CONFIG.policy,
   };
 
   // Test connection if requested

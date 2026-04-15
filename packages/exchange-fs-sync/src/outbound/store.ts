@@ -25,6 +25,7 @@ const ACTIVE_UNSENT_STATUSES: readonly OutboundStatus[] = [
 ];
 
 export interface OutboundStore {
+  readonly db: import("better-sqlite3").Database;
   initSchema(): void;
   createCommand(command: OutboundCommand, version: OutboundVersion): void;
   getCommandByIdempotencyKey(idempotencyKey: string): OutboundCommand | undefined;
