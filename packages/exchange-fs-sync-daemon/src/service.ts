@@ -42,8 +42,10 @@ import {
   type ChangedConversation,
   type CharterRunner,
   type GraphAdapter,
+  type ToolCatalogEntry,
 } from '@narada/exchange-fs-sync';
-import { CodexCharterRunner } from '@narada/charters';
+import { CodexCharterRunner, ToolRunner } from '@narada/charters';
+import type { ToolDefinition } from '@narada/charters';
 import { createLogger } from './lib/logger.js';
 import { PidFile } from './lib/pid-file.js';
 import { HealthFile, type HealthStatus } from './lib/health.js';
@@ -226,6 +228,26 @@ async function createSingleMailboxService(
     });
   }
 
+  const phaseAToolCatalog: ToolCatalogEntry[] = [
+    {
+      tool_id: "echo_test",
+      tool_signature: "echo_test(input: string)",
+      description: "Echoes input for testing tool execution path",
+      schema_args: [{ name: "input", type: "string", required: true, description: "Input to echo" }],
+      read_only: true,
+      requires_approval: false,
+      timeout_ms: 5000,
+    },
+  ];
+
+  const phaseAToolDefinitions: Record<string, ToolDefinition> = {
+    echo_test: {
+      id: "echo_test",
+      source_type: "local_executable",
+      executable_path: process.platform === "win32" ? "cmd" : "/bin/echo",
+    },
+  };
+
   // Initialize dependencies
   logger.debug('Initializing Graph client');
   const tokenProvider = buildGraphTokenProvider({ config });
@@ -404,7 +426,7 @@ async function createSingleMailboxService(
 
       const envelope = await buildInvocationEnvelope(
         { coordinatorStore: deps.coordinatorStore, messageStore, rootDir },
-        { executionId: `ex_${workItem.work_item_id}_${Date.now()}`, workItem },
+        { executionId: `ex_${workItem.work_item_id}_${Date.now()}`, workItem, tools: phaseAToolCatalog },
       );
 
       const attempt = deps.scheduler.startExecution(
@@ -428,6 +450,47 @@ async function createSingleMailboxService(
         }
 
         const output = await deps.charterRunner.run(envelope);
+
+        // Execute any tool requests produced by the charter
+        if (output.tool_requests.length > 0) {
+          const toolRunner = new ToolRunner({
+            definitions: phaseAToolDefinitions,
+            persistHook: async (record) => {
+              try {
+                deps.coordinatorStore.insertToolCallRecord(record as unknown as Parameters<typeof deps.coordinatorStore.insertToolCallRecord>[0]);
+              } catch (persistError) {
+                logger.warn('Failed to persist tool call record', { error: String(persistError) });
+              }
+            },
+          });
+
+          for (const request of output.tool_requests) {
+            const tool = phaseAToolCatalog.find((t) => t.tool_id === request.tool_id);
+            if (!tool) {
+              logger.warn('Tool request for unknown tool', { tool_id: request.tool_id });
+              continue;
+            }
+            let sanitizedArgs: Record<string, unknown>;
+            try {
+              sanitizedArgs = JSON.parse(request.arguments_json) as Record<string, unknown>;
+            } catch {
+              logger.warn('Unparseable tool arguments', { tool_id: request.tool_id });
+              continue;
+            }
+            const result = await toolRunner.executeToolCall(request, tool, {
+              execution_id: attempt.execution_id,
+              work_item_id: workItem.work_item_id,
+              conversation_id: workItem.conversation_id,
+              sanitized_args: sanitizedArgs,
+            });
+            logger.info('Tool executed', {
+              tool_id: request.tool_id,
+              exit_status: result.exit_status,
+              duration_ms: result.duration_ms,
+            });
+          }
+        }
+
         deps.scheduler.completeExecution(attempt.execution_id, JSON.stringify(output));
 
         const evaluation = buildEvaluationRecord(output, {

@@ -10,6 +10,7 @@ import type {
   CharterInvocationEnvelope,
   CharterOutputEnvelope,
   EvaluationEnvelope,
+  ToolCatalogEntry,
 } from "../foreman/types.js";
 import type { CoordinatorStore, NormalizedThreadContext, WorkItem } from "../coordinator/types.js";
 import type { NormalizedMessage } from "../types/normalized.js";
@@ -29,6 +30,7 @@ export interface BuildInvocationEnvelopeOptions {
   executionId: string;
   workItem: WorkItem;
   maxPriorEvaluations?: number;
+  tools?: ToolCatalogEntry[];
 }
 
 async function getThreadMessageIds(rootDir: string, conversationId: string): Promise<string[]> {
@@ -105,7 +107,7 @@ export async function buildInvocationEnvelope(
     revision_id: workItem.opened_for_revision_id,
     thread_context: threadContext,
     allowed_actions: ["draft_reply", "send_reply", "mark_read", "no_action"],
-    available_tools: [],
+    available_tools: opts.tools ?? [],
     coordinator_flags: [],
     prior_evaluations: priorEvaluations,
     max_prior_evaluations: maxPriorEvaluations,
