@@ -24,6 +24,14 @@ export interface LifecycleConfig {
   schedule: CleanupSchedule;
 }
 
+export interface CharterRuntimeConfig {
+  runtime: "mock" | "codex-api";
+  api_key?: string;
+  model?: string;
+  base_url?: string;
+  timeout_ms?: number;
+}
+
 export interface ExchangeFsSyncConfig {
   mailbox_id: MailboxId;
   root_dir: string;
@@ -57,6 +65,11 @@ export interface ExchangeFsSyncConfig {
   };
 
   lifecycle: LifecycleConfig;
+
+  /**
+   * Charter runtime configuration
+   */
+  charter?: CharterRuntimeConfig;
 
   /**
    * Webhook configuration for real-time sync

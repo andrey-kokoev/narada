@@ -145,6 +145,7 @@ export async function loadConfig(
   const normalizeRaw = isObject(root.normalize) ? root.normalize : {};
   const runtimeRaw = isObject(root.runtime) ? root.runtime : {};
   const lifecycleRaw = isObject(root.lifecycle) ? root.lifecycle : {};
+  const charterRaw = isObject(root.charter) ? root.charter : {};
   const retentionRaw = isObject(lifecycleRaw.retention) ? lifecycleRaw.retention : {};
   const scheduleRaw = isObject(lifecycleRaw.schedule) ? lifecycleRaw.schedule : {};
 
@@ -226,6 +227,24 @@ export async function loadConfig(
           DEFAULT_EXCHANGE_FS_SYNC_CONFIG.runtime.rebuild_views_after_sync,
         "config.runtime.rebuild_views_after_sync",
       ),
+    },
+    charter: {
+      runtime:
+        charterRaw.runtime === "codex-api"
+          ? "codex-api"
+          : (DEFAULT_EXCHANGE_FS_SYNC_CONFIG.charter?.runtime ?? "mock"),
+      ...(isNonEmptyString(charterRaw.api_key)
+        ? { api_key: charterRaw.api_key.trim() }
+        : {}),
+      ...(isNonEmptyString(charterRaw.model)
+        ? { model: charterRaw.model.trim() }
+        : {}),
+      ...(isNonEmptyString(charterRaw.base_url)
+        ? { base_url: charterRaw.base_url.trim() }
+        : {}),
+      ...(charterRaw.timeout_ms !== undefined
+        ? { timeout_ms: expectNumber(charterRaw.timeout_ms, "config.charter.timeout_ms") }
+        : {}),
     },
     lifecycle: {
       tombstone_retention_days: expectNumber(

@@ -31,3 +31,13 @@ export function requireEnv(name: string): string {
   }
   return value;
 }
+
+export interface CharterEnvConfig {
+  openai_api_key?: string;
+}
+
+export function loadCharterEnv(): CharterEnvConfig {
+  return {
+    openai_api_key: readEnv("NARADA_OPENAI_API_KEY") ?? readEnv("OPENAI_API_KEY"),
+  };
+}

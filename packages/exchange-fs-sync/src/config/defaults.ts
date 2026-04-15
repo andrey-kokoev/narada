@@ -11,6 +11,9 @@ export const DEFAULT_EXCHANGE_FS_SYNC_CONFIG: Omit<
     include_headers: false,
     tombstones_enabled: true,
   },
+  charter: {
+    runtime: "mock",
+  },
   runtime: {
     polling_interval_ms: 60_000,
     acquire_lock_timeout_ms: 30_000,
