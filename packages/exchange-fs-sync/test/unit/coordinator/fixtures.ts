@@ -1,5 +1,6 @@
 import type {
   ThreadRecord,
+  ConversationRecord,
   CharterOutputRow,
   ForemanDecisionRow,
   PolicyOverrideRow,
@@ -9,6 +10,26 @@ export function createThreadRecord(overrides?: Partial<ThreadRecord>): ThreadRec
   const now = new Date().toISOString();
   return {
     thread_id: "thread-1",
+    mailbox_id: "mailbox-1",
+    primary_charter: "support_steward",
+    secondary_charters_json: "[]",
+    status: "active",
+    assigned_agent: null,
+    last_message_at: now,
+    last_inbound_at: null,
+    last_outbound_at: null,
+    last_analyzed_at: null,
+    last_triaged_at: null,
+    created_at: now,
+    updated_at: now,
+    ...overrides,
+  };
+}
+
+export function createConversationRecord(overrides?: Partial<ConversationRecord>): ConversationRecord {
+  const now = new Date().toISOString();
+  return {
+    conversation_id: "conv-1",
     mailbox_id: "mailbox-1",
     primary_charter: "support_steward",
     secondary_charters_json: "[]",

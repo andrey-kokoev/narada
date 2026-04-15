@@ -5,11 +5,12 @@ A deterministic, replay-safe state compiler that transforms a remote Microsoft G
 ## Architecture
 
 The system is organized in five layers:
-1. **Inbound Sync** - Compiles remote mailbox deltas into local filesystem state
-2. **Foreman** - Coordinates charter invocation and triage decisions per thread
-3. **Charters** - Mailbox-specific policy definitions that guide agent behavior
-4. **Auxiliary Stores** - SQLite-based coordinator, trace, and search indexes
-5. **Outbound Worker** - Durable command pipeline for drafts, replies, and mutations
+
+1. **Inbound Compiler** — `exchange-fs-sync` compiles remote mailbox deltas into a locally materialized filesystem state. It knows nothing of agents, charters, or control decisions.
+2. **Control Plane** — Manages first-class work objects (`work_item`, `execution_attempt`, `outbound_command`) above the compiler. The daemon schedules work; the foreman decides it.
+3. **Charter Runtime** — Mailbox-specific policy definitions (`packages/charters`) that guide bounded agent evaluation inside frozen capability envelopes.
+4. **Tool Runner** — Executes validated tool calls with timeout enforcement and durable `tool_call_records` logging.
+5. **Outbound Worker** — Durable command pipeline for drafts, replies, and mailbox mutations. Only the outbound worker may create Graph drafts or mutate mailbox state.
 
 ## Features
 

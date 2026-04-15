@@ -1,6 +1,8 @@
 # AGENTS.md — exchange-fs-sync package
 
 > **Package Guide**: This file covers conventions specific to the `exchange-fs-sync` package. For project overview and navigation, see the [root AGENTS.md](../../AGENTS.md).
+>
+> **Control Plane Architecture**: For the integrated end-to-end control-plane v2 model, see [`20260414-011-chief-integration-control-plane-v2.md`](../../.ai/tasks/20260414-011-chief-integration-control-plane-v2.md).
 
 ---
 
@@ -27,6 +29,14 @@ packages/exchange-fs-sync/
 │   │   ├── load.ts              # Validation and loading
 │   │   ├── token-provider.ts    # Token provider selection
 │   │   └── types.ts             # Config TypeScript types
+│   ├── coordinator/             # SQLite coordinator store (control-plane durable state)
+│   │   ├── store.ts             # SqliteCoordinatorStore
+│   │   ├── types.ts             # WorkItem, ExecutionAttempt, Lease types
+│   │   └── thread-context.ts    # Thread context hydration
+│   ├── foreman/                 # Control-plane foreman
+│   │   ├── facade.ts            # DefaultForemanFacade
+│   │   ├── handoff.ts           # Outbound handoff logic
+│   │   └── types.ts             # Foreman types and envelopes
 │   ├── ids/                     # Identity generation
 │   │   └── event-id.ts          # buildEventId(), stableStringify()
 │   ├── normalize/               # Graph → Normalized conversion
@@ -48,6 +58,9 @@ packages/exchange-fs-sync/
 │   │   └── apply-event.ts       # applyEvent() function
 │   ├── recovery/                # Crash recovery
 │   │   └── cleanup-tmp.ts       # Temp file cleanup
+│   ├── scheduler/               # Work-item scheduler and lease manager
+│   │   ├── scheduler.ts         # SqliteScheduler
+│   │   └── types.ts             # Scheduler interfaces
 │   ├── outbound/                # Durable outbound command pipeline
 │   │   ├── types.ts             # Outbound command types and state machine
 │   │   ├── schema.sql           # SQLite schema for commands and drafts
@@ -70,23 +83,47 @@ packages/exchange-fs-sync/
     │   ├── crash-replay.test.ts
     │   ├── delete.test.ts
     │   ├── replay.test.ts
-    │   └── update.test.ts
+    │   ├── update.test.ts
+    │   └── control-plane/         # Replay/recovery and control-plane tests
+    │       └── replay-recovery.test.ts
     └── unit/                      # Component tests
         ├── adapter/
         ├── config/
+        ├── coordinator/
+        ├── foreman/
         ├── ids/
-        └── normalize/
+        ├── normalize/
+        ├── outbound/
+        └── scheduler/
 ```
 
 ---
 
-## Outbound Architecture (v1)
+## Control Plane Architecture (v2)
 
-A durable outbound command system is being introduced on top of the inbound compiler.
+The control plane sits above the deterministic inbound compiler and manages first-class work objects.
 
-- **Spec**: [`.ai/tasks/20260413-001-outbound-draft-worker-spec.md`](../../.ai/tasks/20260413-001-outbound-draft-worker-spec.md)
+- **Integration Spec**: [`20260414-011-chief-integration-control-plane-v2.md`](../../.ai/tasks/20260414-011-chief-integration-control-plane-v2.md)
+- **Coordinator Store**: [`src/coordinator/store.ts`](src/coordinator/store.ts)
+- **Scheduler**: [`src/scheduler/scheduler.ts`](src/scheduler/scheduler.ts)
+- **Foreman Facade**: [`src/foreman/facade.ts`](src/foreman/facade.ts)
+- **Outbound Handoff**: [`src/foreman/handoff.ts`](src/foreman/handoff.ts)
+
+Key principles:
+- The compiler (`exchange-fs-sync`) determines mailbox truth; the control plane decides what to do about it.
+- `work_item` is the terminal schedulable unit per conversation.
+- At most one non-terminal work item per conversation may be `leased` or `executing`.
+- Charters run inside bounded `execution_attempt`s with frozen capability envelopes.
+- Only the outbound worker may create or mutate managed drafts.
+- Recovery must succeed using only `work_item`, `execution_attempt`, and `outbound_command` state.
+
+## Outbound Architecture
+
+A durable outbound command pipeline enforces a hard boundary between proposal and execution.
+
 - **Types**: [`src/outbound/types.ts`](src/outbound/types.ts)
 - **Schema**: [`src/outbound/schema.sql`](src/outbound/schema.sql)
+- **Store**: [`src/outbound/store.ts`](src/outbound/store.ts)
 
 Key principles:
 - Draft-first delivery: no direct sends from the agent

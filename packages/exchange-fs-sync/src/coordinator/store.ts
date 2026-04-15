@@ -8,10 +8,20 @@ import Database from "better-sqlite3";
 import type {
   CoordinatorStore,
   ThreadRecord,
+  ConversationRecord,
   CharterOutputRow,
   ForemanDecisionRow,
   PolicyOverrideRow,
+  WorkItem,
+  WorkItemStatus,
+  WorkItemLease,
+  ExecutionAttempt,
+  ExecutionAttemptStatus,
+  Evaluation,
+  ToolCallRecord,
+  ToolCallStatus,
 } from "./types.js";
+import { isValidCreatedBy } from "./types.js";
 
 function rowToThreadRecord(row: Record<string, unknown>): ThreadRecord {
   return {
@@ -28,6 +38,93 @@ function rowToThreadRecord(row: Record<string, unknown>): ThreadRecord {
     last_triaged_at: row.last_triaged_at ? String(row.last_triaged_at) : null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
+  };
+}
+
+function rowToConversationRecord(row: Record<string, unknown>): ConversationRecord {
+  return {
+    conversation_id: String(row.conversation_id),
+    mailbox_id: String(row.mailbox_id),
+    primary_charter: String(row.primary_charter),
+    secondary_charters_json: String(row.secondary_charters_json),
+    status: String(row.status) as ConversationRecord["status"],
+    assigned_agent: row.assigned_agent ? String(row.assigned_agent) : null,
+    last_message_at: row.last_message_at ? String(row.last_message_at) : null,
+    last_inbound_at: row.last_inbound_at ? String(row.last_inbound_at) : null,
+    last_outbound_at: row.last_outbound_at ? String(row.last_outbound_at) : null,
+    last_analyzed_at: row.last_analyzed_at ? String(row.last_analyzed_at) : null,
+    last_triaged_at: row.last_triaged_at ? String(row.last_triaged_at) : null,
+    created_at: String(row.created_at),
+    updated_at: String(row.updated_at),
+  };
+}
+
+function rowToWorkItem(row: Record<string, unknown>): WorkItem {
+  return {
+    work_item_id: String(row.work_item_id),
+    conversation_id: String(row.conversation_id),
+    mailbox_id: String(row.mailbox_id),
+    status: String(row.status) as WorkItemStatus,
+    priority: Number(row.priority),
+    opened_for_revision_id: String(row.opened_for_revision_id),
+    resolved_revision_id: row.resolved_revision_id ? String(row.resolved_revision_id) : null,
+    resolution_outcome: row.resolution_outcome
+      ? (String(row.resolution_outcome) as WorkItem["resolution_outcome"])
+      : null,
+    error_message: row.error_message ? String(row.error_message) : null,
+    retry_count: Number(row.retry_count ?? 0),
+    next_retry_at: row.next_retry_at ? String(row.next_retry_at) : null,
+    created_at: String(row.created_at),
+    updated_at: String(row.updated_at),
+  };
+}
+
+function rowToWorkItemLease(row: Record<string, unknown>): WorkItemLease {
+  return {
+    lease_id: String(row.lease_id),
+    work_item_id: String(row.work_item_id),
+    runner_id: String(row.runner_id),
+    acquired_at: String(row.acquired_at),
+    expires_at: String(row.expires_at),
+    released_at: row.released_at ? String(row.released_at) : null,
+    release_reason: row.release_reason
+      ? (String(row.release_reason) as WorkItemLease["release_reason"])
+      : null,
+  };
+}
+
+function rowToExecutionAttempt(row: Record<string, unknown>): ExecutionAttempt {
+  return {
+    execution_id: String(row.execution_id),
+    work_item_id: String(row.work_item_id),
+    revision_id: String(row.revision_id),
+    session_id: row.session_id ? String(row.session_id) : null,
+    status: String(row.status) as ExecutionAttemptStatus,
+    started_at: String(row.started_at),
+    completed_at: row.completed_at ? String(row.completed_at) : null,
+    runtime_envelope_json: String(row.runtime_envelope_json),
+    outcome_json: row.outcome_json ? String(row.outcome_json) : null,
+    error_message: row.error_message ? String(row.error_message) : null,
+  };
+}
+
+function rowToEvaluation(row: Record<string, unknown>): Evaluation {
+  return {
+    evaluation_id: String(row.evaluation_id),
+    execution_id: String(row.execution_id),
+    work_item_id: String(row.work_item_id),
+    conversation_id: String(row.conversation_id),
+    charter_id: String(row.charter_id),
+    role: String(row.role) as Evaluation["role"],
+    output_version: String(row.output_version),
+    analyzed_at: String(row.analyzed_at),
+    summary: String(row.summary),
+    classifications_json: String(row.classifications_json),
+    facts_json: String(row.facts_json),
+    escalations_json: String(row.escalations_json),
+    proposed_actions_json: String(row.proposed_actions_json),
+    tool_requests_json: String(row.tool_requests_json),
+    created_at: String(row.created_at),
   };
 }
 
@@ -75,6 +172,24 @@ function rowToPolicyOverride(row: Record<string, unknown>): PolicyOverrideRow {
   };
 }
 
+function rowToToolCallRecord(row: Record<string, unknown>): ToolCallRecord {
+  return {
+    call_id: String(row.call_id),
+    execution_id: String(row.execution_id),
+    work_item_id: String(row.work_item_id),
+    conversation_id: String(row.conversation_id),
+    tool_id: String(row.tool_id),
+    request_args_json: String(row.request_args_json),
+    exit_status: String(row.exit_status) as ToolCallStatus,
+    stdout: String(row.stdout),
+    stderr: String(row.stderr),
+    structured_output_json: row.structured_output_json ? String(row.structured_output_json) : null,
+    started_at: String(row.started_at),
+    completed_at: String(row.completed_at),
+    duration_ms: Number(row.duration_ms),
+  };
+}
+
 export interface SqliteCoordinatorStoreOptions {
   db: Database.Database;
 }
@@ -88,6 +203,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
 
   initSchema(): void {
     this.db.exec(`
+      -- Legacy thread_records (deprecated, retained for rollback safety)
       create table if not exists thread_records (
         thread_id text not null,
         mailbox_id text not null,
@@ -110,6 +226,134 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
 
       create index if not exists idx_thread_records_status
         on thread_records(status, mailbox_id);
+
+      -- v2 conversation_records (canonical control-plane conversation metadata)
+      create table if not exists conversation_records (
+        conversation_id text primary key,
+        mailbox_id text not null,
+        primary_charter text not null,
+        secondary_charters_json text not null default '[]',
+        status text not null default 'active',
+        assigned_agent text,
+        last_message_at text,
+        last_inbound_at text,
+        last_outbound_at text,
+        last_analyzed_at text,
+        last_triaged_at text,
+        created_at text not null default (datetime('now')),
+        updated_at text not null default (datetime('now'))
+      );
+
+      create index if not exists idx_conversation_records_mailbox
+        on conversation_records(mailbox_id, status, updated_at);
+
+      -- v2 conversation_revisions (monotone ordinal tracking)
+      create table if not exists conversation_revisions (
+        revision_record_id integer primary key autoincrement,
+        conversation_id text not null,
+        ordinal integer not null,
+        observed_at text not null default (datetime('now')),
+        trigger_event_id text,
+        unique (conversation_id, ordinal),
+        foreign key (conversation_id) references conversation_records(conversation_id)
+          on delete cascade
+      );
+
+      create index if not exists idx_conversation_revisions_lookup
+        on conversation_revisions(conversation_id, ordinal);
+
+      -- v2 work_items (terminal schedulable unit)
+      create table if not exists work_items (
+        work_item_id text primary key,
+        conversation_id text not null,
+        mailbox_id text not null,
+        status text not null default 'opened',
+        priority integer not null default 0,
+        opened_for_revision_id text not null,
+        resolved_revision_id text,
+        resolution_outcome text,
+        error_message text,
+        retry_count integer not null default 0,
+        next_retry_at text,
+        created_at text not null default (datetime('now')),
+        updated_at text not null default (datetime('now')),
+        foreign key (conversation_id) references conversation_records(conversation_id)
+          on delete cascade
+      );
+
+      create index if not exists idx_work_items_runnable
+        on work_items(conversation_id, status, priority, created_at);
+      create index if not exists idx_work_items_mailbox_status
+        on work_items(mailbox_id, status, updated_at);
+      create index if not exists idx_work_items_retry
+        on work_items(mailbox_id, status, next_retry_at);
+
+      -- v2 work_item_leases (crash-safe scheduling)
+      create table if not exists work_item_leases (
+        lease_id text primary key,
+        work_item_id text not null,
+        runner_id text not null,
+        acquired_at text not null,
+        expires_at text not null,
+        released_at text,
+        release_reason text,
+        foreign key (work_item_id) references work_items(work_item_id)
+          on delete cascade
+      );
+
+      create index if not exists idx_work_item_leases_active
+        on work_item_leases(work_item_id, released_at, expires_at);
+      create index if not exists idx_work_item_leases_stale
+        on work_item_leases(released_at, expires_at);
+
+      -- v2 execution_attempts (bounded invocations)
+      create table if not exists execution_attempts (
+        execution_id text primary key,
+        work_item_id text not null,
+        revision_id text not null,
+        session_id text,
+        status text not null default 'started',
+        started_at text not null default (datetime('now')),
+        completed_at text,
+        runtime_envelope_json text not null,
+        outcome_json text,
+        error_message text,
+        foreign key (work_item_id) references work_items(work_item_id)
+          on delete cascade
+      );
+
+      create index if not exists idx_execution_attempts_work_item
+        on execution_attempts(work_item_id, started_at);
+      create index if not exists idx_execution_attempts_session
+        on execution_attempts(session_id) where session_id is not null;
+
+      -- v2 evaluations (durable charter output summary)
+      create table if not exists evaluations (
+        evaluation_id text primary key,
+        execution_id text not null unique,
+        work_item_id text not null,
+        conversation_id text not null,
+        charter_id text not null,
+        role text not null check (role in ('primary', 'secondary')),
+        output_version text not null,
+        analyzed_at text not null default (datetime('now')),
+        summary text not null,
+        classifications_json text not null default '{}',
+        facts_json text not null default '[]',
+        escalations_json text not null default '[]',
+        proposed_actions_json text not null default '[]',
+        tool_requests_json text not null default '[]',
+        created_at text not null default (datetime('now')),
+        foreign key (execution_id) references execution_attempts(execution_id)
+          on delete cascade,
+        foreign key (work_item_id) references work_items(work_item_id)
+          on delete cascade
+      );
+
+      create index if not exists idx_evaluations_conversation
+        on evaluations(conversation_id, analyzed_at);
+      create index if not exists idx_evaluations_work_item
+        on evaluations(work_item_id, analyzed_at);
 
       create table if not exists charter_outputs (
         output_id text primary key,
@@ -168,7 +412,50 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
 
       create index if not exists idx_policy_overrides_outbound
         on policy_overrides(outbound_id);
+
+      create table if not exists tool_call_records (
+        call_id text primary key,
+        execution_id text not null,
+        work_item_id text not null,
+        conversation_id text not null,
+        tool_id text not null,
+        request_args_json text not null default '{}',
+        exit_status text not null default 'pending',
+        stdout text not null default '',
+        stderr text not null default '',
+        structured_output_json text,
+        started_at text not null,
+        completed_at text not null,
+        duration_ms integer not null default 0,
+        foreign key (execution_id) references execution_attempts(execution_id)
+          on delete cascade,
+        foreign key (work_item_id) references work_items(work_item_id)
+          on delete cascade
+      );
+
+      create index if not exists idx_tool_call_records_execution
+        on tool_call_records(execution_id, started_at);
+
+      create index if not exists idx_tool_call_records_work_item
+        on tool_call_records(work_item_id, started_at);
     `);
+
+    this.migrateThreadRecordsToConversationRecords();
+  }
+
+  private migrateThreadRecordsToConversationRecords(): void {
+    this.db.prepare(`
+      insert or ignore into conversation_records (
+        conversation_id, mailbox_id, primary_charter, secondary_charters_json,
+        status, assigned_agent, last_message_at, last_inbound_at, last_outbound_at,
+        last_analyzed_at, last_triaged_at, created_at, updated_at
+      )
+      select
+        thread_id as conversation_id, mailbox_id, primary_charter, secondary_charters_json,
+        status, assigned_agent, last_message_at, last_inbound_at, last_outbound_at,
+        last_analyzed_at, last_triaged_at, created_at, updated_at
+      from thread_records
+    `).run();
   }
 
   upsertThread(record: ThreadRecord): void {
@@ -213,6 +500,353 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     return row ? rowToThreadRecord(row) : undefined;
   }
 
+  upsertConversationRecord(record: ConversationRecord): void {
+    this.db.prepare(`
+      insert into conversation_records (
+        conversation_id, mailbox_id, primary_charter, secondary_charters_json, status,
+        assigned_agent, last_message_at, last_inbound_at, last_outbound_at,
+        last_analyzed_at, last_triaged_at, created_at, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      on conflict(conversation_id) do update set
+        mailbox_id = excluded.mailbox_id,
+        primary_charter = excluded.primary_charter,
+        secondary_charters_json = excluded.secondary_charters_json,
+        status = excluded.status,
+        assigned_agent = excluded.assigned_agent,
+        last_message_at = excluded.last_message_at,
+        last_inbound_at = excluded.last_inbound_at,
+        last_outbound_at = excluded.last_outbound_at,
+        last_analyzed_at = excluded.last_analyzed_at,
+        last_triaged_at = excluded.last_triaged_at,
+        updated_at = excluded.updated_at
+    `).run(
+      record.conversation_id,
+      record.mailbox_id,
+      record.primary_charter,
+      record.secondary_charters_json,
+      record.status,
+      record.assigned_agent,
+      record.last_message_at,
+      record.last_inbound_at,
+      record.last_outbound_at,
+      record.last_analyzed_at,
+      record.last_triaged_at,
+      record.created_at,
+      record.updated_at,
+    );
+  }
+
+  getConversationRecord(conversationId: string): ConversationRecord | undefined {
+    const row = this.db.prepare(`
+      select * from conversation_records where conversation_id = ?
+    `).get(conversationId) as Record<string, unknown> | undefined;
+    return row ? rowToConversationRecord(row) : undefined;
+  }
+
+  nextRevisionOrdinal(conversationId: string): number {
+    const tx = this.db.transaction(() => {
+      const current = this.db.prepare(`
+        select coalesce(max(ordinal), 0) as max_ordinal from conversation_revisions where conversation_id = ?
+      `).get(conversationId) as { max_ordinal: number };
+      const next = current.max_ordinal + 1;
+      this.db.prepare(`
+        insert into conversation_revisions (conversation_id, ordinal, observed_at, trigger_event_id)
+        values (?, ?, datetime('now'), null)
+      `).run(conversationId, next);
+      return next;
+    });
+    return tx();
+  }
+
+  recordRevision(
+    conversationId: string,
+    ordinal: number,
+    triggerEventId: string | null = null,
+  ): void {
+    this.db.prepare(`
+      insert into conversation_revisions (conversation_id, ordinal, observed_at, trigger_event_id)
+      values (?, ?, datetime('now'), ?)
+    `).run(conversationId, ordinal, triggerEventId);
+  }
+
+  getLatestRevisionOrdinal(conversationId: string): number | null {
+    const row = this.db.prepare(`
+      select ordinal from conversation_revisions
+      where conversation_id = ?
+      order by ordinal desc
+      limit 1
+    `).get(conversationId) as { ordinal: number } | undefined;
+    return row ? row.ordinal : null;
+  }
+
+  insertWorkItem(item: WorkItem): void {
+    this.db.prepare(`
+      insert into work_items (
+        work_item_id, conversation_id, mailbox_id, status, priority,
+        opened_for_revision_id, resolved_revision_id, resolution_outcome,
+        error_message, retry_count, next_retry_at, created_at, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      item.work_item_id,
+      item.conversation_id,
+      item.mailbox_id,
+      item.status,
+      item.priority,
+      item.opened_for_revision_id,
+      item.resolved_revision_id,
+      item.resolution_outcome,
+      item.error_message,
+      item.retry_count,
+      item.next_retry_at,
+      item.created_at,
+      item.updated_at,
+    );
+  }
+
+  updateWorkItemStatus(
+    workItemId: string,
+    status: WorkItemStatus,
+    updates?: Partial<
+      Pick<WorkItem, "resolved_revision_id" | "resolution_outcome" | "error_message" | "retry_count" | "next_retry_at" | "updated_at">
+    >,
+  ): void {
+    const fields: string[] = ["status = ?"];
+    const params: (string | number | null)[] = [status];
+
+    if (updates?.resolved_revision_id !== undefined) {
+      fields.push("resolved_revision_id = ?");
+      params.push(updates.resolved_revision_id);
+    }
+    if (updates?.resolution_outcome !== undefined) {
+      fields.push("resolution_outcome = ?");
+      params.push(updates.resolution_outcome);
+    }
+    if (updates?.error_message !== undefined) {
+      fields.push("error_message = ?");
+      params.push(updates.error_message);
+    }
+    if (updates?.retry_count !== undefined) {
+      fields.push("retry_count = ?");
+      params.push(updates.retry_count);
+    }
+    if (updates?.next_retry_at !== undefined) {
+      fields.push("next_retry_at = ?");
+      params.push(updates.next_retry_at);
+    }
+    fields.push("updated_at = ?");
+    params.push(updates?.updated_at ?? new Date().toISOString());
+    params.push(workItemId);
+
+    this.db.prepare(`
+      update work_items set ${fields.join(", ")} where work_item_id = ?
+    `).run(...params);
+  }
+
+  getWorkItem(workItemId: string): WorkItem | undefined {
+    const row = this.db.prepare(`
+      select * from work_items where work_item_id = ?
+    `).get(workItemId) as Record<string, unknown> | undefined;
+    return row ? rowToWorkItem(row) : undefined;
+  }
+
+  getActiveWorkItemForConversation(conversationId: string): WorkItem | undefined {
+    const row = this.db.prepare(`
+      select * from work_items
+      where conversation_id = ? and status in ('opened', 'leased', 'executing')
+      order by created_at desc
+      limit 1
+    `).get(conversationId) as Record<string, unknown> | undefined;
+    return row ? rowToWorkItem(row) : undefined;
+  }
+
+  getLatestWorkItemForConversation(conversationId: string): WorkItem | undefined {
+    const row = this.db.prepare(`
+      select * from work_items
+      where conversation_id = ?
+      order by created_at desc
+      limit 1
+    `).get(conversationId) as Record<string, unknown> | undefined;
+    return row ? rowToWorkItem(row) : undefined;
+  }
+
+  insertLease(lease: WorkItemLease): void {
+    this.db.prepare(`
+      insert into work_item_leases (
+        lease_id, work_item_id, runner_id, acquired_at, expires_at, released_at, release_reason
+      ) values (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      lease.lease_id,
+      lease.work_item_id,
+      lease.runner_id,
+      lease.acquired_at,
+      lease.expires_at,
+      lease.released_at,
+      lease.release_reason,
+    );
+  }
+
+  getActiveLeaseForWorkItem(workItemId: string): WorkItemLease | undefined {
+    const row = this.db.prepare(`
+      select * from work_item_leases
+      where work_item_id = ? and released_at is null
+      order by acquired_at desc
+      limit 1
+    `).get(workItemId) as Record<string, unknown> | undefined;
+    return row ? rowToWorkItemLease(row) : undefined;
+  }
+
+  updateLeaseExpiry(leaseId: string, expiresAt: string): void {
+    this.db.prepare(`
+      update work_item_leases set expires_at = ? where lease_id = ? and released_at is null
+    `).run(expiresAt, leaseId);
+  }
+
+  releaseLease(leaseId: string, releasedAt: string, reason: WorkItemLease["release_reason"]): void {
+    this.db.prepare(`
+      update work_item_leases
+      set released_at = ?, release_reason = ?
+      where lease_id = ? and released_at is null
+    `).run(releasedAt, reason, leaseId);
+  }
+
+  recoverStaleLeases(now: string): { leaseId: string; workItemId: string }[] {
+    const tx = this.db.transaction(() => {
+      const stale = this.db.prepare(`
+        select lease_id, work_item_id from work_item_leases
+        where released_at is null and expires_at <= ?
+      `).all(now) as Array<{ lease_id: string; work_item_id: string }>;
+
+      for (const row of stale) {
+        // Release lease
+        this.db.prepare(`
+          update work_item_leases
+          set released_at = ?, release_reason = 'abandoned'
+          where lease_id = ? and released_at is null
+        `).run(now, row.lease_id);
+
+        // Mark active attempts as abandoned
+        this.db.prepare(`
+          update execution_attempts
+          set status = 'abandoned', completed_at = ?
+          where work_item_id = ? and status = 'active'
+        `).run(now, row.work_item_id);
+
+        // Transition work item to failed_retryable with retry_count + 1
+        this.db.prepare(`
+          update work_items
+          set status = 'failed_retryable',
+              retry_count = retry_count + 1,
+              updated_at = ?
+          where work_item_id = ? and status in ('leased', 'executing')
+        `).run(now, row.work_item_id);
+      }
+
+      return stale.map((r) => ({ leaseId: r.lease_id, workItemId: r.work_item_id }));
+    });
+    return tx();
+  }
+
+  insertExecutionAttempt(attempt: ExecutionAttempt): void {
+    this.db.prepare(`
+      insert into execution_attempts (
+        execution_id, work_item_id, revision_id, session_id, status,
+        started_at, completed_at, runtime_envelope_json, outcome_json, error_message
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      attempt.execution_id,
+      attempt.work_item_id,
+      attempt.revision_id,
+      attempt.session_id,
+      attempt.status,
+      attempt.started_at,
+      attempt.completed_at,
+      attempt.runtime_envelope_json,
+      attempt.outcome_json,
+      attempt.error_message,
+    );
+  }
+
+  getExecutionAttempt(executionId: string): ExecutionAttempt | undefined {
+    const row = this.db.prepare(`
+      select * from execution_attempts where execution_id = ?
+    `).get(executionId) as Record<string, unknown> | undefined;
+    return row ? rowToExecutionAttempt(row) : undefined;
+  }
+
+  getExecutionAttemptsByWorkItem(workItemId: string): ExecutionAttempt[] {
+    const rows = this.db.prepare(`
+      select * from execution_attempts where work_item_id = ? order by started_at asc
+    `).all(workItemId) as Record<string, unknown>[];
+    return rows.map(rowToExecutionAttempt);
+  }
+
+  updateExecutionAttemptStatus(
+    executionId: string,
+    status: ExecutionAttemptStatus,
+    updates?: Partial<Pick<ExecutionAttempt, "completed_at" | "outcome_json" | "error_message">>,
+  ): void {
+    const fields: string[] = ["status = ?"];
+    const params: (string | null)[] = [status];
+
+    if (updates?.completed_at !== undefined) {
+      fields.push("completed_at = ?");
+      params.push(updates.completed_at);
+    }
+    if (updates?.outcome_json !== undefined) {
+      fields.push("outcome_json = ?");
+      params.push(updates.outcome_json);
+    }
+    if (updates?.error_message !== undefined) {
+      fields.push("error_message = ?");
+      params.push(updates.error_message);
+    }
+    params.push(executionId);
+
+    this.db.prepare(`
+      update execution_attempts set ${fields.join(", ")} where execution_id = ?
+    `).run(...params);
+  }
+
+  insertEvaluation(evaluation: Evaluation): void {
+    this.db.prepare(`
+      insert into evaluations (
+        evaluation_id, execution_id, work_item_id, conversation_id, charter_id, role,
+        output_version, analyzed_at, summary, classifications_json, facts_json,
+        escalations_json, proposed_actions_json, tool_requests_json, created_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      evaluation.evaluation_id,
+      evaluation.execution_id,
+      evaluation.work_item_id,
+      evaluation.conversation_id,
+      evaluation.charter_id,
+      evaluation.role,
+      evaluation.output_version,
+      evaluation.analyzed_at,
+      evaluation.summary,
+      evaluation.classifications_json,
+      evaluation.facts_json,
+      evaluation.escalations_json,
+      evaluation.proposed_actions_json,
+      evaluation.tool_requests_json,
+      evaluation.created_at,
+    );
+  }
+
+  getEvaluationByExecutionId(executionId: string): Evaluation | undefined {
+    const row = this.db.prepare(`
+      select * from evaluations where execution_id = ?
+    `).get(executionId) as Record<string, unknown> | undefined;
+    return row ? rowToEvaluation(row) : undefined;
+  }
+
+  getEvaluationsByWorkItem(workItemId: string): Evaluation[] {
+    const rows = this.db.prepare(`
+      select * from evaluations where work_item_id = ? order by analyzed_at asc
+    `).all(workItemId) as Record<string, unknown>[];
+    return rows.map(rowToEvaluation);
+  }
+
   insertCharterOutput(output: CharterOutputRow): void {
     this.db.prepare(`
       insert into charter_outputs (
@@ -248,6 +882,11 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
   }
 
   insertDecision(decision: ForemanDecisionRow): void {
+    if (!isValidCreatedBy(decision.created_by)) {
+      throw new Error(
+        `Invalid created_by format: "${decision.created_by}". Expected foreman:{id}/charter:{id}[,{id}...]`,
+      );
+    }
     this.db.prepare(`
       insert into foreman_decisions (
         decision_id, thread_id, mailbox_id, source_charter_ids_json,
@@ -276,6 +915,13 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     return rows.map(rowToForemanDecision);
   }
 
+  getDecisionById(decisionId: string): ForemanDecisionRow | undefined {
+    const row = this.db.prepare(`
+      select * from foreman_decisions where decision_id = ?
+    `).get(decisionId) as Record<string, unknown> | undefined;
+    return row ? rowToForemanDecision(row) : undefined;
+  }
+
   linkDecisionToOutbound(decisionId: string, outboundId: string): void {
     this.db.prepare(`
       update foreman_decisions set outbound_id = ? where decision_id = ?
@@ -301,6 +947,84 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
       select * from policy_overrides where outbound_id = ? order by created_at asc
     `).all(outboundId) as Record<string, unknown>[];
     return rows.map(rowToPolicyOverride);
+  }
+
+  insertToolCallRecord(record: ToolCallRecord): void {
+    this.db.prepare(`
+      insert into tool_call_records (
+        call_id, execution_id, work_item_id, conversation_id, tool_id,
+        request_args_json, exit_status, stdout, stderr, structured_output_json,
+        started_at, completed_at, duration_ms
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      record.call_id,
+      record.execution_id,
+      record.work_item_id,
+      record.conversation_id,
+      record.tool_id,
+      record.request_args_json,
+      record.exit_status,
+      record.stdout,
+      record.stderr,
+      record.structured_output_json,
+      record.started_at,
+      record.completed_at,
+      record.duration_ms,
+    );
+  }
+
+  getToolCallRecordsByExecution(executionId: string): ToolCallRecord[] {
+    const rows = this.db.prepare(`
+      select * from tool_call_records where execution_id = ? order by started_at asc
+    `).all(executionId) as Record<string, unknown>[];
+    return rows.map(rowToToolCallRecord);
+  }
+
+  getToolCallRecordsByWorkItem(workItemId: string): ToolCallRecord[] {
+    const rows = this.db.prepare(`
+      select * from tool_call_records where work_item_id = ? order by started_at asc
+    `).all(workItemId) as Record<string, unknown>[];
+    return rows.map(rowToToolCallRecord);
+  }
+
+  updateToolCallRecord(
+    callId: string,
+    updates: Partial<
+      Pick<ToolCallRecord, "exit_status" | "stdout" | "stderr" | "structured_output_json" | "completed_at" | "duration_ms">
+    >,
+  ): void {
+    const fields: string[] = [];
+    const params: (string | number | null)[] = [];
+
+    if (updates.exit_status !== undefined) {
+      fields.push("exit_status = ?");
+      params.push(updates.exit_status);
+    }
+    if (updates.stdout !== undefined) {
+      fields.push("stdout = ?");
+      params.push(updates.stdout);
+    }
+    if (updates.stderr !== undefined) {
+      fields.push("stderr = ?");
+      params.push(updates.stderr);
+    }
+    if (updates.structured_output_json !== undefined) {
+      fields.push("structured_output_json = ?");
+      params.push(updates.structured_output_json);
+    }
+    if (updates.completed_at !== undefined) {
+      fields.push("completed_at = ?");
+      params.push(updates.completed_at);
+    }
+    if (updates.duration_ms !== undefined) {
+      fields.push("duration_ms = ?");
+      params.push(updates.duration_ms);
+    }
+
+    if (fields.length === 0) return;
+    params.push(callId);
+
+    this.db.prepare(`update tool_call_records set ${fields.join(", ")} where call_id = ?`).run(...params);
   }
 
   close(): void {

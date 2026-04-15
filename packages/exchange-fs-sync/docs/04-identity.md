@@ -71,6 +71,47 @@ function buildEventId(input: {
 
 ---
 
+## Control-Plane Identity Lattice
+
+The control plane operates on a separate identity lattice that sits above compiler event IDs. These identities are durable, deterministic, and have strict foreign-key relationships.
+
+### Primary Identities
+
+| Identity | Format | Scope | Derivation |
+|----------|--------|-------|------------|
+| `conversation_id` | Graph `conversationId` string | Stable mailbox thread | `thread_id === conversation_id` (legacy alias) |
+| `revision_id` | `{conversation_id}:rev:{ordinal}` | Snapshot of a conversation at a point in time | Ordinal incremented by foreman on material change |
+| `work_item_id` | `wi_<uuid>` | Terminal schedulable unit | Random UUID |
+| `execution_id` | `ex_<uuid>` | Bounded charter invocation | Random UUID |
+| `evaluation_id` | `eval_<execution_id>` | Structured output summary | Derived from `execution_id` |
+| `decision_id` | `fd_<work_item_id>_<action_type>` | Foreman proposal | Deterministic from work item + action |
+| `outbound_id` | `ob_<decision_id>` | Executable command envelope | Derived from `decision_id` |
+
+### Relationship to Compiler Event IDs
+
+Compiler event IDs (`evt_<sha256>`) are content-addressed hashes of normalized Graph deltas. They live in the filesystem apply-log and have no direct foreign-key relationship to control-plane tables. The linkage is indirect:
+
+- A Graph delta produces an `event_id`.
+- The compiler applies the event and updates `messages/` and `views/`.
+- The foreman observes the changed conversation and opens a `work_item`.
+- The charter runtime hydrates `thread_context` from the compiled filesystem state.
+
+### Alias Rules
+
+- **`thread_id === conversation_id`**. Legacy columns (e.g., `outbound_commands.thread_id`) retain the old name for backward compatibility, but conceptually they hold `conversation_id`.
+- **`session_id`** is an optional correlation token on `execution_attempts`. It is not a foreign key and is not required for recovery.
+- **`chat_id`** is not persisted in any first-class table. It is a UI/runtime-only token.
+
+### Foreign-Key Constraints
+
+1. Every `work_item` belongs to exactly one `conversation_id`.
+2. Every `execution_attempt` belongs to exactly one `work_item`.
+3. Every `foreman_decision` belongs to exactly one `work_item`.
+4. Every `outbound_command` is created by at most one `foreman_decision`.
+5. Every `tool_call_record` belongs to exactly one `execution_attempt`.
+
+---
+
 ## Stable Serialization
 
 ### The Problem

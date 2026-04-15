@@ -28,8 +28,10 @@ export interface OutboundStore {
   initSchema(): void;
   createCommand(command: OutboundCommand, version: OutboundVersion): void;
   getCommand(outbound_id: string): OutboundCommand | undefined;
+  getCommandStatus(outbound_id: string): OutboundStatus | undefined;
   getLatestVersion(outbound_id: string): OutboundVersion | undefined;
   getVersions(outbound_id: string): OutboundVersion[];
+  getActiveCommandsForThread(thread_id: string): OutboundCommand[];
   supersedePriorVersions(outbound_id: string, newVersion: number): void;
   appendTransition(transition: Omit<OutboundTransition, "id">): void;
   updateCommandStatus(
@@ -312,6 +314,13 @@ export class SqliteOutboundStore implements OutboundStore {
     return row ? rowToCommand(row) : undefined;
   }
 
+  getCommandStatus(outbound_id: string): OutboundStatus | undefined {
+    const row = this.db.prepare(
+      "select status from outbound_commands where outbound_id = ?",
+    ).get(outbound_id) as { status: string } | undefined;
+    return row ? (row.status as OutboundStatus) : undefined;
+  }
+
   getLatestVersion(outbound_id: string): OutboundVersion | undefined {
     const row = this.db.prepare(`
       select * from outbound_versions
@@ -329,6 +338,14 @@ export class SqliteOutboundStore implements OutboundStore {
       order by version asc
     `).all(outbound_id) as Record<string, unknown>[];
     return rows.map(rowToVersion);
+  }
+
+  getActiveCommandsForThread(thread_id: string): OutboundCommand[] {
+    const rows = this.db.prepare(`
+      select * from outbound_commands
+      where thread_id = ? and status in (${ACTIVE_UNSENT_STATUSES.map(() => "?").join(", ")})
+    `).all(thread_id, ...ACTIVE_UNSENT_STATUSES) as Record<string, unknown>[];
+    return rows.map(rowToCommand);
   }
 
   supersedePriorVersions(outbound_id: string, newVersion: number): void {

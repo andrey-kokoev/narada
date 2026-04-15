@@ -4,6 +4,7 @@ import { SqliteCoordinatorStore } from "../../../src/coordinator/store.js";
 import { SqliteOutboundStore } from "../../../src/outbound/store.js";
 import {
   createThreadRecord,
+  createConversationRecord,
   createCharterOutput,
   createForemanDecision,
   createPolicyOverride,
@@ -52,6 +53,147 @@ describe("SqliteCoordinatorStore", () => {
 
     it("returns undefined for missing thread", () => {
       expect(store.getThread("missing", "missing")).toBeUndefined();
+    });
+  });
+
+  describe("conversation records", () => {
+    it("inserts a new conversation record", () => {
+      const record = createConversationRecord();
+      store.upsertConversationRecord(record);
+
+      const fetched = store.getConversationRecord(record.conversation_id);
+      expect(fetched).toEqual(record);
+    });
+
+    it("updates an existing conversation record on conflict", () => {
+      const record = createConversationRecord();
+      store.upsertConversationRecord(record);
+
+      const updated = createConversationRecord({ status: "archived", updated_at: new Date().toISOString() });
+      store.upsertConversationRecord(updated);
+
+      const fetched = store.getConversationRecord(record.conversation_id);
+      expect(fetched?.status).toBe("archived");
+      expect(fetched?.updated_at).toBe(updated.updated_at);
+    });
+
+    it("returns undefined for missing conversation", () => {
+      expect(store.getConversationRecord("missing")).toBeUndefined();
+    });
+  });
+
+  describe("migration from thread_records to conversation_records", () => {
+    it("migrates legacy thread_records automatically on initSchema", () => {
+      // Simulate a legacy database by inserting directly into thread_records
+      // before calling initSchema on a fresh store.
+      const legacyDb = new Database(":memory:");
+      legacyDb.exec(`
+        create table thread_records (
+          thread_id text not null,
+          mailbox_id text not null,
+          primary_charter text not null,
+          secondary_charters_json text not null default '[]',
+          status text not null,
+          assigned_agent text,
+          last_message_at text not null,
+          last_inbound_at text,
+          last_outbound_at text,
+          last_analyzed_at text,
+          last_triaged_at text,
+          created_at text not null,
+          updated_at text not null,
+          primary key (thread_id, mailbox_id)
+        );
+      `);
+      const legacyRecord = createThreadRecord({ thread_id: "legacy-thread", mailbox_id: "mb-1" });
+      legacyDb.prepare(`
+        insert into thread_records values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        legacyRecord.thread_id,
+        legacyRecord.mailbox_id,
+        legacyRecord.primary_charter,
+        legacyRecord.secondary_charters_json,
+        legacyRecord.status,
+        legacyRecord.assigned_agent,
+        legacyRecord.last_message_at,
+        legacyRecord.last_inbound_at,
+        legacyRecord.last_outbound_at,
+        legacyRecord.last_analyzed_at,
+        legacyRecord.last_triaged_at,
+        legacyRecord.created_at,
+        legacyRecord.updated_at,
+      );
+
+      const migratedStore = new SqliteCoordinatorStore({ db: legacyDb });
+      migratedStore.initSchema();
+
+      const fetched = migratedStore.getConversationRecord("legacy-thread");
+      expect(fetched).toBeDefined();
+      expect(fetched?.conversation_id).toBe("legacy-thread");
+      expect(fetched?.mailbox_id).toBe("mb-1");
+      expect(fetched?.primary_charter).toBe(legacyRecord.primary_charter);
+
+      legacyDb.close();
+    });
+
+    it("migration is idempotent", () => {
+      const record = createThreadRecord({ thread_id: "idempotent-thread" });
+      store.upsertThread(record);
+
+      // Calling initSchema again should not throw or duplicate rows.
+      store.initSchema();
+      store.initSchema();
+
+      const rows = db.prepare(`select count(*) as c from conversation_records where conversation_id = ?`).get("idempotent-thread") as { c: number };
+      expect(rows.c).toBe(1);
+    });
+  });
+
+  describe("conversation revisions", () => {
+    it("nextRevisionOrdinal returns monotonically increasing values", () => {
+      const conv = createConversationRecord();
+      store.upsertConversationRecord(conv);
+
+      const o1 = store.nextRevisionOrdinal(conv.conversation_id);
+      const o2 = store.nextRevisionOrdinal(conv.conversation_id);
+      const o3 = store.nextRevisionOrdinal(conv.conversation_id);
+
+      expect(o1).toBe(1);
+      expect(o2).toBe(2);
+      expect(o3).toBe(3);
+    });
+
+    it("getLatestRevisionOrdinal returns the highest ordinal", () => {
+      const conv = createConversationRecord();
+      store.upsertConversationRecord(conv);
+
+      expect(store.getLatestRevisionOrdinal(conv.conversation_id)).toBeNull();
+
+      store.recordRevision(conv.conversation_id, 1, "evt-1");
+      store.recordRevision(conv.conversation_id, 2, "evt-2");
+
+      expect(store.getLatestRevisionOrdinal(conv.conversation_id)).toBe(2);
+    });
+
+    it("recordRevision stores trigger_event_id", () => {
+      const conv = createConversationRecord();
+      store.upsertConversationRecord(conv);
+
+      store.recordRevision(conv.conversation_id, 1, "trigger-123");
+
+      const row = db.prepare(`select * from conversation_revisions where conversation_id = ? and ordinal = 1`).get(conv.conversation_id) as Record<string, unknown>;
+      expect(row.trigger_event_id).toBe("trigger-123");
+    });
+
+    it("revision ordinals are isolated per conversation", () => {
+      const convA = createConversationRecord({ conversation_id: "conv-a" });
+      const convB = createConversationRecord({ conversation_id: "conv-b" });
+      store.upsertConversationRecord(convA);
+      store.upsertConversationRecord(convB);
+
+      expect(store.nextRevisionOrdinal("conv-a")).toBe(1);
+      expect(store.nextRevisionOrdinal("conv-b")).toBe(1);
+      expect(store.nextRevisionOrdinal("conv-a")).toBe(2);
     });
   });
 

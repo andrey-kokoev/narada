@@ -207,6 +207,45 @@ describe("SqliteOutboundStore", () => {
     });
   });
 
+  describe("getCommandStatus", () => {
+    it("returns the status for an existing command", () => {
+      const cmd = createOutboundCommand({ outbound_id: "o1", status: "pending" });
+      store.createCommand(cmd, createOutboundVersion({ outbound_id: "o1" }));
+
+      expect(store.getCommandStatus("o1")).toBe("pending");
+    });
+
+    it("returns undefined for a missing command", () => {
+      expect(store.getCommandStatus("missing")).toBeUndefined();
+    });
+  });
+
+  describe("getActiveCommandsForThread", () => {
+    it("returns only active unsent commands for the thread", () => {
+      const cmd1 = createOutboundCommand({ outbound_id: "o1", thread_id: "t1", action_type: "send_reply", status: "pending" });
+      store.createCommand(cmd1, createOutboundVersion({ outbound_id: "o1" }));
+
+      const cmd2 = createOutboundCommand({ outbound_id: "o2", thread_id: "t1", action_type: "mark_read", status: "pending" });
+      store.createCommand(cmd2, createOutboundVersion({ outbound_id: "o2" }));
+
+      // Make cmd1 terminal so we can create another send_reply for the same thread
+      store.updateCommandStatus("o1", "confirmed", { confirmed_at: new Date().toISOString() });
+
+      const cmd3 = createOutboundCommand({ outbound_id: "o3", thread_id: "t1", action_type: "send_reply", status: "confirmed" });
+      store.createCommand(cmd3, createOutboundVersion({ outbound_id: "o3" }));
+
+      const cmd4 = createOutboundCommand({ outbound_id: "o4", thread_id: "t2", action_type: "send_reply", status: "pending" });
+      store.createCommand(cmd4, createOutboundVersion({ outbound_id: "o4" }));
+
+      const active = store.getActiveCommandsForThread("t1");
+      expect(active.map((c) => c.outbound_id).sort()).toEqual(["o2"]);
+    });
+
+    it("returns empty array when thread has no commands", () => {
+      expect(store.getActiveCommandsForThread("no-such-thread")).toEqual([]);
+    });
+  });
+
   describe("managed drafts", () => {
     it("persists and retrieves a managed draft", () => {
       const cmd = createOutboundCommand({ outbound_id: "o1" });

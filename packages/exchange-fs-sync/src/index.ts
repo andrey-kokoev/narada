@@ -1,4 +1,5 @@
 // Main exports
+export { default as Database } from "better-sqlite3";
 export { loadConfig } from "./config/load.js";
 export {
   ConfigSchema,
@@ -70,12 +71,75 @@ export { SqliteCoordinatorStore } from "./coordinator/store.js";
 export type {
   CoordinatorStore,
   ThreadRecord,
+  ConversationRecord,
+  ConversationRevision,
+  NormalizedThreadContext,
   CharterOutputRow,
   ForemanDecisionRow,
   PolicyOverrideRow,
+  WorkItem,
+  WorkItemStatus,
+  WorkItemLease,
+  ExecutionAttempt,
+  ExecutionAttemptStatus,
+  Evaluation,
+  ToolCallRecord,
+  ToolCallStatus,
 } from "./coordinator/types.js";
 export type { SqliteCoordinatorStoreOptions } from "./coordinator/store.js";
 export { deriveThreadId } from "./coordinator/thread-id.js";
+
+// Foreman exports
+export { DefaultForemanFacade } from "./foreman/facade.js";
+export type {
+  ForemanFacadeDeps,
+  ForemanFacadeOptions,
+} from "./foreman/facade.js";
+export type {
+  ForemanFacade,
+  SyncCompletionSignal,
+  ChangedConversation,
+  WorkOpeningResult,
+  OpenedWorkItem,
+  SupersededWorkItem,
+  ResolveWorkItemRequest,
+  ResolutionResult,
+  EvaluationEnvelope,
+  CharterOutputEnvelope,
+  CharterInvocationEnvelope,
+  AllowedAction,
+  ToolCatalogEntry,
+  PriorEvaluation,
+  CharterClassification,
+  ExtractedFact,
+  ProposedAction,
+  EscalationProposal,
+  ToolInvocationRequest,
+} from "./foreman/types.js";
+export { validateCharterOutput, arbitrateEvaluations } from "./foreman/validation.js";
+export { OutboundHandoff } from "./foreman/handoff.js";
+
+// Scheduler exports
+export { SqliteScheduler } from "./scheduler/scheduler.js";
+export type {
+  Scheduler,
+  SchedulerOptions,
+  LeaseAcquisitionResult,
+} from "./scheduler/types.js";
+export { createLeaseScanner, type LeaseScanner } from "./scheduler/lease-scanner.js";
+
+// Charter runtime exports
+export { MockCharterRunner } from "./charter/index.js";
+export type { CharterRunner, MockCharterRunnerOptions } from "./charter/index.js";
+export {
+  buildInvocationEnvelope,
+  buildEvaluationRecord,
+} from "./charter/index.js";
+export type {
+  BuildInvocationEnvelopeDeps,
+  BuildInvocationEnvelopeOptions,
+  BuildEvaluationRecordOptions,
+} from "./charter/index.js";
 
 // Agent trace exports
 export { SqliteAgentTraceStore } from "./agent/traces/store.js";

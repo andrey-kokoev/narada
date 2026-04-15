@@ -2,7 +2,33 @@
 
 ## Component Overview
 
-The system is organized into six layers, each with clear responsibilities and interface boundaries:
+The system is organized into **eleven layers**: five control-plane layers above six deterministic compiler layers.
+
+### Control Plane Layers
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      Daemon Layer                                │
+│  (wake coalescing, sync-to-dispatch sequence, quiescence)       │
+├─────────────────────────────────────────────────────────────────┤
+│                      Foreman Layer                               │
+│  (work opening, revision supersession, decision arbitration)    │
+├─────────────────────────────────────────────────────────────────┤
+│                     Scheduler Layer                              │
+│  (runnable work scan, lease acquisition, execution lifecycle)   │
+├─────────────────────────────────────────────────────────────────┤
+│                   Charter Runtime Layer                          │
+│  (CharterInvocationEnvelope → bounded evaluation → output)      │
+├─────────────────────────────────────────────────────────────────┤
+│                    Tool Runner Layer                             │
+│  (catalog resolution, request validation, subprocess/HTTP exec) │
+├─────────────────────────────────────────────────────────────────┤
+│                   Outbound Worker Layer                          │
+│  (command claim, draft creation, send, reconcile to confirmed)  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Compiler Layers
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -88,6 +114,76 @@ Graph Delta Entry
 │  (with payload)  │
 └──────────────────┘
 ```
+
+---
+
+## End-to-End Control Plane Sequence
+
+```text
+REMOTE MAILBOX
+        │
+        ▼ (Graph delta: new message, move, flag change)
+┌───────────────────┐
+│  exchange-fs-sync │  ← Deterministic compiler
+│  (sync cycle)     │     Normalizes events, applies to filesystem,
+│                   │     updates views, commits cursor
+└─────────┬─────────┘
+          │
+          ▼
+┌───────────────────┐
+│  Daemon           │  ← Emits SyncCompletionSignal
+│  (dispatch phase) │     { changed_conversations: [...] }
+└─────────┬─────────┘
+          │
+          ▼
+┌───────────────────┐
+│  Foreman          │  ← Opens / supersedes work_items
+│  (work opening)   │     Evaluates revision relevance
+└─────────┬─────────┘
+          │
+          ▼
+┌───────────────────┐
+│  Scheduler        │  ← Scans runnable work_items
+│  (lease + run)    │     Acquires lease, starts execution_attempt
+└─────────┬─────────┘
+          │
+          ▼
+┌───────────────────┐
+│  Charter Runtime  │  ← Receives CharterInvocationEnvelope
+│  (evaluation)     │     Produces CharterOutputEnvelope
+└─────────┬─────────┘
+          │
+          ▼
+┌───────────────────┐
+│  Foreman          │  ← Validates output, arbitrates,
+│  (resolution)     │     writes foreman_decision + outbound_command
+│                   │     (or resolves as no-op / escalation)
+└─────────┬─────────┘
+          │
+          ▼
+┌───────────────────┐
+│  Outbound Worker  │  ← Claims command, creates draft,
+│  (mutation)       │     sends, reconciles to confirmed
+└─────────┬─────────┘
+          │
+          ▼
+TERMINAL QUIESCENCE
+        │
+        ▼
+Daemon sleeps until next wake (webhook, poll, retry timer, manual)
+```
+
+### Step Descriptions
+
+1. **Remote Mailbox Change** — Graph API reports a change.
+2. **Sync** — The compiler fetches deltas, normalizes events, applies to `messages/` and `views/`, writes `apply-log` markers, and commits the cursor.
+3. **Work Opening** — The daemon calls `foreman.onSyncCompleted(signal)`. The foreman inserts `work_item` rows for changed conversations, superseding stale ones when necessary.
+4. **Scheduling** — The scheduler scans for runnable work items, acquires leases, and transitions items to `leased`.
+5. **Evaluation** — The scheduler inserts an `execution_attempt` and transitions the item to `executing`. The charter runtime receives a frozen `CharterInvocationEnvelope` and produces a `CharterOutputEnvelope`.
+6. **Tool Execution** — Approved tool requests are executed by the tool runner, with results logged to `tool_call_records`.
+7. **Proposal / Command Creation** — The foreman validates output, writes a `foreman_decisions` row, and creates `outbound_command` + `outbound_versions` in the same SQLite transaction. The work item transitions to `resolved`.
+8. **Outbound Execution** — The outbound worker polls commands, creates Graph drafts, and drives status to `confirmed`.
+9. **Terminal Quiescence** — The scheduler finds no runnable work, valid leases, or expired retry timers. The daemon sleeps until the next wake.
 
 ---
 

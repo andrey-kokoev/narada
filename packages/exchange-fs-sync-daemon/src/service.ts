@@ -3,7 +3,8 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
+import { mkdir } from 'node:fs/promises';
 import {
   loadConfig,
   buildGraphTokenProvider,
@@ -25,7 +26,21 @@ import {
   loadMultiMailboxConfig,
   syncMultiple,
   writeMultiMailboxHealth,
+  Database,
+  SqliteCoordinatorStore,
+  SqliteOutboundStore,
+  DefaultForemanFacade,
+  SqliteScheduler,
+  MockCharterRunner,
+  buildInvocationEnvelope,
+  buildEvaluationRecord,
   type ExchangeFsSyncConfig,
+  type NormalizedEvent,
+  type ApplyEventResult,
+  type SyncCompletionSignal,
+  type ChangedConversation,
+  type CharterRunner,
+  type GraphAdapter,
 } from '@narada/exchange-fs-sync';
 import { createLogger } from './lib/logger.js';
 import { PidFile } from './lib/pid-file.js';
@@ -35,6 +50,12 @@ export interface SyncServiceConfig {
   configPath: string;
   verbose?: boolean;
   pidFilePath?: string;
+  /** Override the Graph adapter (for testing) */
+  adapter?: GraphAdapter;
+  /** Override the charter runner (for testing) */
+  charterRunner?: CharterRunner;
+  /** Override polling interval in ms (for testing) */
+  pollingIntervalMs?: number;
 }
 
 export interface SyncService {
@@ -158,7 +179,7 @@ async function createSingleMailboxService(
   });
 
   logger.debug('Creating Graph adapter');
-  const adapter = new DefaultGraphAdapter({
+  const adapter = opts.adapter ?? new DefaultGraphAdapter({
     mailbox_id: config.mailbox_id,
     user_id: config.graph.user_id,
     client,
@@ -191,14 +212,30 @@ async function createSingleMailboxService(
     acquireTimeoutMs: config.runtime.acquire_lock_timeout_ms,
   });
 
+  const changedConversations = new Map<string, Set<ChangedConversation['change_kinds'][number]>>();
+
+  function trackEventChanges(event: NormalizedEvent, result: ApplyEventResult): void {
+    for (const threadId of result.dirty_views.by_thread) {
+      const kinds = changedConversations.get(threadId) ?? new Set();
+      if (event.event_kind === 'created' || event.event_kind === 'upsert') {
+        kinds.add('new_message');
+      } else if (event.event_kind === 'updated') {
+        kinds.add('new_message');
+      } else if (event.event_kind === 'deleted' || event.event_kind === 'delete') {
+        kinds.add('moved');
+      }
+      changedConversations.set(threadId, kinds);
+    }
+  }
+
   const runner = new DefaultSyncRunner({
     rootDir,
     adapter,
     cursorStore,
     applyLogStore,
     projector: {
-      applyEvent: (event) =>
-        applyEvent(
+      applyEvent: async (event) => {
+        const result = await applyEvent(
           {
             blobs: blobStore,
             messages: messageStore,
@@ -207,7 +244,10 @@ async function createSingleMailboxService(
             tombstones_enabled: config.normalize.tombstones_enabled,
           },
           event,
-        ),
+        );
+        trackEventChanges(event, result);
+        return result;
+      },
     },
     cleanupTmp: () => cleanupTmp({ rootDir }),
     acquireLock: () => lock.acquire(),
@@ -215,7 +255,172 @@ async function createSingleMailboxService(
     rebuildViewsAfterSync: config.runtime.rebuild_views_after_sync,
   });
 
-  const pollingIntervalMs = config.runtime.polling_interval_ms;
+  const pollingIntervalMs = opts.pollingIntervalMs ?? config.runtime.polling_interval_ms;
+
+  // Control-plane dispatch state (lazily initialized)
+  let dispatchDeps: {
+    db: InstanceType<typeof Database>;
+    coordinatorStore: InstanceType<typeof SqliteCoordinatorStore>;
+    outboundStore: InstanceType<typeof SqliteOutboundStore>;
+    foreman: InstanceType<typeof DefaultForemanFacade>;
+    scheduler: InstanceType<typeof SqliteScheduler>;
+    charterRunner: CharterRunner;
+  } | null = null;
+
+  async function initDispatchDeps(): Promise<NonNullable<typeof dispatchDeps>> {
+    if (dispatchDeps) {
+      return dispatchDeps;
+    }
+
+    const dbDir = join(rootDir, '.narada');
+    await mkdir(dbDir, { recursive: true });
+    const dbPath = join(dbDir, 'coordinator.db');
+
+    const db = new Database(dbPath);
+    db.pragma('journal_mode = WAL');
+    db.pragma('synchronous = NORMAL');
+    const coordinatorStore = new SqliteCoordinatorStore({ db });
+    coordinatorStore.initSchema();
+
+    const outboundStore = new SqliteOutboundStore({ db });
+    outboundStore.initSchema();
+
+    const foreman = new DefaultForemanFacade({
+      coordinatorStore,
+      outboundStore,
+      db,
+      foremanId: config.mailbox_id,
+    });
+
+    const scheduler = new SqliteScheduler(coordinatorStore, {
+      runnerId: config.mailbox_id,
+    });
+
+    const charterRunner = opts.charterRunner ?? new MockCharterRunner({
+      output: {
+        output_version: '2.0',
+        execution_id: 'mock-exec',
+        charter_id: 'support_steward',
+        role: 'primary',
+        analyzed_at: new Date().toISOString(),
+        outcome: 'no_op',
+        confidence: { overall: 'high', uncertainty_flags: [] },
+        summary: 'Mock evaluation: no action required',
+        classifications: [],
+        facts: [],
+        proposed_actions: [],
+        tool_requests: [],
+        escalations: [],
+      },
+    });
+
+    dispatchDeps = { db, coordinatorStore, outboundStore, foreman, scheduler, charterRunner };
+    return dispatchDeps;
+  }
+
+  async function runDispatchPhase(): Promise<void> {
+    if (changedConversations.size === 0) {
+      return;
+    }
+
+    const deps = await initDispatchDeps();
+    const now = new Date().toISOString();
+
+    const changed: ChangedConversation[] = [];
+    for (const [conversationId, kindsSet] of changedConversations) {
+      const previousOrdinal = deps.coordinatorStore.getLatestRevisionOrdinal(conversationId);
+      const currentOrdinal = (previousOrdinal ?? 0) + 1;
+      changed.push({
+        conversation_id: conversationId,
+        previous_revision_ordinal: previousOrdinal,
+        current_revision_ordinal: currentOrdinal,
+        change_kinds: Array.from(kindsSet),
+      });
+    }
+
+    const signal: SyncCompletionSignal = {
+      signal_id: `sync_${now}_${Math.random().toString(36).slice(2)}`,
+      mailbox_id: config.mailbox_id,
+      synced_at: now,
+      changed_conversations: changed,
+    };
+
+    logger.info('Dispatch phase starting', { conversations: changed.length });
+
+    await deps.foreman.onSyncCompleted(signal);
+
+    while (!deps.scheduler.isQuiescent(config.mailbox_id)) {
+      const runnable = deps.scheduler.scanForRunnableWork(config.mailbox_id, 1);
+      if (runnable.length === 0) {
+        break;
+      }
+
+      const workItem = runnable[0]!;
+      const leaseResult = deps.scheduler.acquireLease(workItem.work_item_id, config.mailbox_id);
+      if (!leaseResult.success) {
+        logger.warn('Failed to acquire lease', { work_item_id: workItem.work_item_id, error: leaseResult.error });
+        continue;
+      }
+
+      const envelope = await buildInvocationEnvelope(
+        { coordinatorStore: deps.coordinatorStore, messageStore, rootDir },
+        { executionId: `ex_${workItem.work_item_id}_${Date.now()}`, workItem },
+      );
+
+      const attempt = deps.scheduler.startExecution(
+        workItem.work_item_id,
+        workItem.opened_for_revision_id,
+        JSON.stringify(envelope),
+      );
+
+      let leaseRenewalTimer: NodeJS.Timeout | null = null;
+      try {
+        // Set up lease renewal every 30 seconds
+        if (leaseResult.success && leaseResult.lease) {
+          leaseRenewalTimer = setInterval(() => {
+            try {
+              const newExpiresAt = new Date(Date.now() + 60000).toISOString();
+              deps.scheduler.renewLease(leaseResult.lease!.lease_id, newExpiresAt);
+            } catch (renewError) {
+              logger.warn('Lease renewal failed', { lease_id: leaseResult.lease!.lease_id, error: String(renewError) });
+            }
+          }, 30000);
+        }
+
+        const output = await deps.charterRunner.run(envelope);
+        deps.scheduler.completeExecution(attempt.execution_id, JSON.stringify(output));
+
+        const evaluation = buildEvaluationRecord(output, {
+          execution_id: attempt.execution_id,
+          work_item_id: workItem.work_item_id,
+          conversation_id: workItem.conversation_id,
+        });
+
+        const resolveResult = await deps.foreman.resolveWorkItem({
+          work_item_id: workItem.work_item_id,
+          execution_id: attempt.execution_id,
+          evaluation,
+        });
+
+        if (!resolveResult.success && resolveResult.error) {
+          logger.warn('Work item resolution failed', {
+            work_item_id: workItem.work_item_id,
+            error: resolveResult.error,
+          });
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        deps.scheduler.failExecution(attempt.execution_id, msg, true);
+        logger.error('Execution failed', { work_item_id: workItem.work_item_id, error: msg });
+      } finally {
+        if (leaseRenewalTimer) {
+          clearInterval(leaseRenewalTimer);
+        }
+      }
+    }
+
+    logger.info('Dispatch phase complete');
+  }
 
   async function updateHealth(): Promise<void> {
     const health: Omit<HealthStatus, 'timestamp'> = {
@@ -235,6 +440,7 @@ async function createSingleMailboxService(
 
   async function runSingleSync(): Promise<'success' | 'retryable' | 'fatal'> {
     logger.info('Starting sync cycle');
+    changedConversations.clear();
 
     try {
       const result = await runner.syncOnce();
@@ -250,6 +456,15 @@ async function createSingleMailboxService(
           skipped: result.skipped_count,
           duration_ms: result.duration_ms,
         });
+
+        try {
+          await runDispatchPhase();
+        } catch (dispatchError) {
+          const msg = dispatchError instanceof Error ? dispatchError.message : String(dispatchError);
+          logger.error('Dispatch phase error', { error: msg });
+          stats.errors++;
+          stats.consecutiveErrors++;
+        }
 
         await updateHealth();
         return 'success';
@@ -453,7 +668,7 @@ async function createMultiMailboxService(
   }
 
   // Use the shortest polling interval across mailboxes, with a 60s ceiling
-  const pollingIntervalMs = Math.min(
+  const pollingIntervalMs = opts.pollingIntervalMs ?? Math.min(
     ...config.mailboxes.map((m) => m.sync?.polling_interval_ms ?? 60000),
     60000,
   );
@@ -504,6 +719,11 @@ async function createMultiMailboxService(
           successes: result.successes,
           duration_ms: result.totalDurationMs,
         });
+        // TODO: Multi-mailbox dispatch phase is deferred.
+        // The current syncMultiple abstraction does not expose per-mailbox
+        // changed conversations needed for foreman.onSyncCompleted().
+        // To enable dispatch here, extend syncMultiple with a per-mailbox
+        // callback or run individual DefaultSyncRunners inline.
         return 'success';
       }
 
