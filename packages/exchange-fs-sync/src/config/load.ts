@@ -230,8 +230,8 @@ export async function loadConfig(
     },
     charter: {
       runtime:
-        charterRaw.runtime === "codex-api"
-          ? "codex-api"
+        typeof charterRaw.runtime === "string" && charterRaw.runtime.length > 0
+          ? charterRaw.runtime.trim()
           : (DEFAULT_EXCHANGE_FS_SYNC_CONFIG.charter?.runtime ?? "mock"),
       ...(isNonEmptyString(charterRaw.api_key)
         ? { api_key: charterRaw.api_key.trim() }

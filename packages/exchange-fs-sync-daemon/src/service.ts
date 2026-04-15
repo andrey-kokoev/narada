@@ -139,6 +139,10 @@ async function createSingleMailboxService(
   logger: ReturnType<typeof createLogger>,
 ): Promise<SyncService> {
   const config = await loadConfig({ path: opts.configPath });
+
+  // Fail fast on invalid charter runtime configuration
+  validateCharterRuntimeConfig(config);
+
   const rootDir = config.root_dir;
 
   // Initialize PID file
@@ -174,6 +178,32 @@ async function createSingleMailboxService(
     });
   }
 
+  /**
+   * Eager validation of charter runtime configuration so that
+   * misconfiguration fails fast during service creation.
+   */
+  function validateCharterRuntimeConfig(cfg: typeof config): void {
+    const runtime = cfg.charter?.runtime ?? 'mock';
+
+    if (runtime === 'codex-api') {
+      const env = loadCharterEnv();
+      const apiKey = cfg.charter?.api_key ?? env.openai_api_key;
+      if (!apiKey) {
+        throw new Error(
+          'Charter runtime is configured as codex-api but no API key is provided. ' +
+            'Set config.charter.api_key or NARADA_OPENAI_API_KEY / OPENAI_API_KEY environment variable.',
+        );
+      }
+      return;
+    }
+
+    if (runtime === 'mock') {
+      return;
+    }
+
+    throw new Error(`Invalid charter runtime: ${runtime}. Expected 'codex-api' or 'mock'.`);
+  }
+
   function createDefaultCharterRunner(
     cfg: typeof config,
     store: InstanceType<typeof SqliteCoordinatorStore>,
@@ -183,15 +213,9 @@ async function createSingleMailboxService(
 
     if (runtime === 'codex-api') {
       const apiKey = cfg.charter?.api_key ?? env.openai_api_key;
-      if (!apiKey) {
-        throw new Error(
-          'Charter runtime is configured as codex-api but no API key is provided. ' +
-            'Set config.charter.api_key or NARADA_OPENAI_API_KEY / OPENAI_API_KEY environment variable.',
-        );
-      }
       return new CodexCharterRunner(
         {
-          apiKey,
+          apiKey: apiKey!,
           model: cfg.charter?.model,
           baseUrl: cfg.charter?.base_url,
           timeoutMs: cfg.charter?.timeout_ms,
@@ -215,24 +239,27 @@ async function createSingleMailboxService(
       ) as unknown as CharterRunner;
     }
 
-    // Explicit mock path only when runtime === 'mock'
-    return new MockCharterRunner({
-      output: {
-        output_version: '2.0',
-        execution_id: 'mock-exec',
-        charter_id: 'support_steward',
-        role: 'primary',
-        analyzed_at: new Date().toISOString(),
-        outcome: 'no_op',
-        confidence: { overall: 'high', uncertainty_flags: [] },
-        summary: 'Mock evaluation: no action required',
-        classifications: [],
-        facts: [],
-        proposed_actions: [],
-        tool_requests: [],
-        escalations: [],
-      },
-    });
+    if (runtime === 'mock') {
+      return new MockCharterRunner({
+        output: {
+          output_version: '2.0',
+          execution_id: 'mock-exec',
+          charter_id: 'support_steward',
+          role: 'primary',
+          analyzed_at: new Date().toISOString(),
+          outcome: 'no_op',
+          confidence: { overall: 'high', uncertainty_flags: [] },
+          summary: 'Mock evaluation: no action required',
+          classifications: [],
+          facts: [],
+          proposed_actions: [],
+          tool_requests: [],
+          escalations: [],
+        },
+      });
+    }
+
+    throw new Error(`Invalid charter runtime: ${runtime}. Expected 'codex-api' or 'mock'.`);
   }
 
   const phaseAToolCatalog: ToolCatalogEntry[] = [

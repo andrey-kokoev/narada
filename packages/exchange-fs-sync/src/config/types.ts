@@ -25,7 +25,7 @@ export interface LifecycleConfig {
 }
 
 export interface CharterRuntimeConfig {
-  runtime: "mock" | "codex-api";
+  runtime: string;
   api_key?: string;
   model?: string;
   base_url?: string;
