@@ -106,7 +106,7 @@ describe("daemon dispatch phase with real charter runner (mocked api)", { timeou
     expect(resolvedItem!.resolution_outcome).toBe("action_created");
 
     const commands = store.db
-      .prepare("select * from outbound_commands where thread_id = ?")
+      .prepare("select * from outbound_commands where conversation_id = ?")
       .all(conversationId) as Array<Record<string, unknown>>;
 
     expect(commands.length).toBeGreaterThanOrEqual(1);
