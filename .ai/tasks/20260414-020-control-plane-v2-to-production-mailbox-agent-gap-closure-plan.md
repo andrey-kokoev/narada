@@ -10,20 +10,20 @@ This is a planning and sequencing task. It is not an implementation task.
 
 Narada now has a real control-plane substrate:
 
-- durable coordinator state for conversations, revisions, work items, leases, execution attempts, evaluations, and tool call records exists in `SqliteCoordinatorStore` :contentReference[oaicite:0]{index=0} :contentReference[oaicite:1]{index=1}
-- a real scheduler exists for runnable work scanning, lease acquisition, execution lifecycle, retry, and stale lease recovery :contentReference[oaicite:2]{index=2}
-- a real foreman exists for work opening, supersession, evaluation validation, and outbound handoff :contentReference[oaicite:3]{index=3} :contentReference[oaicite:4]{index=4}
-- the daemon now performs a dispatch phase after sync and drives foreman + scheduler + charter execution in-process :contentReference[oaicite:5]{index=5}
-- the package exports now expose coordinator, foreman, scheduler, charter, and trace surfaces as first-class runtime modules :contentReference[oaicite:6]{index=6}
+- durable coordinator state for conversations, revisions, work items, leases, execution attempts, evaluations, and tool call records exists in `SqliteCoordinatorStore`
+- a real scheduler exists for runnable work scanning, lease acquisition, execution lifecycle, retry, and stale lease recovery
+- a real foreman exists for work opening, supersession, evaluation validation, and outbound handoff
+- the daemon now performs a dispatch phase after sync and drives foreman + scheduler + charter execution in-process
+- the package exports now expose coordinator, foreman, scheduler, charter, and trace surfaces as first-class runtime modules
 
 However, the current system is still not the terminal production mailbox agent:
 
-- daemon dispatch still defaults to `MockCharterRunner` unless a real runner is injected :contentReference[oaicite:7]{index=7}
-- the real Codex-capable charter runner is API-based, not CLI-based, and is not yet wired into the daemon dispatch path by default :contentReference[oaicite:8]{index=8}
-- invocation envelopes still expose no actual runtime tools (`available_tools: []`) :contentReference[oaicite:9]{index=9}
-- charter routing is still hardcoded around `support_steward` in core foreman/envelope flows :contentReference[oaicite:10]{index=10} :contentReference[oaicite:11]{index=11}
-- multi-mailbox dispatch remains explicitly deferred in the daemon service :contentReference[oaicite:12]{index=12}
-- identity remains partly transitional because v2 `conversation_id` objects coexist with legacy `thread_id` surfaces and migration logic :contentReference[oaicite:13]{index=13} :contentReference[oaicite:14]{index=14}
+- daemon dispatch still defaults to `MockCharterRunner` unless a real runner is injected
+- the real Codex-capable charter runner is API-based, not CLI-based, and is not yet wired into the daemon dispatch path by default
+- invocation envelopes still expose no actual runtime tools (`available_tools: []`)
+- charter routing is still hardcoded around `support_steward` in core foreman/envelope flows
+- multi-mailbox dispatch remains explicitly deferred in the daemon service
+- identity remains partly transitional because v2 `conversation_id` objects coexist with legacy `thread_id` surfaces and migration logic
 
 ## Terminal Objective
 
@@ -54,14 +54,33 @@ The result must answer:
 
 ---
 
-## 1. Current State Summary
+## Runtime Decision Gate
+
+This plan assumes a real production charter runtime will replace the daemon’s current `MockCharterRunner` default. Before implementation begins, Narada must explicitly choose whether the production runtime is:
+
+- **Codex/OpenAI-compatible API runner** — network call to OpenAI/Codex API; requires `OPENAI_API_KEY`; fast to implement; depends on external service availability
+- **Codex CLI runner in local workspace** — spawns local `codex` CLI process; depends on local installation and workspace context; may offer better locality and auditability
+- **Dual-runtime abstraction with config-driven selection** — `CharterRunner` interface backed by either API or CLI depending on config; most flexible but requires unifying secrets, timeouts, and observability surfaces
+
+This decision is first-order because it affects:
+- **workspace semantics** — where reasoning context and file attachments live
+- **tool integration** — whether tools are in-process (API) or subprocess (CLI)
+- **secrets/config handling** — API key vs. CLI auth session
+- **observability** — HTTP tracing vs. process stdout capture
+- **operator model** — headless daemon vs. interactive developer loop
+
+**No Phase A implementation tasks should begin until this choice is made.**
+
+---
+
+## Current State Summary
 
 **Solved well enough to build upon:**
 
-- **Control-plane durable substrate**: SQLite coordinator schema (`conversation_records`, `revisions`, `work_items`, `execution_attempts`, `evaluations`, `tool_call_records`) is implemented, migrated from legacy `thread_records`, and tested.
-- **Scheduler mechanics**: Lease acquisition, renewal, stale-lease recovery, execution lifecycle (`active` → `succeeded`/`crashed`), and retry backoff are implemented and unit-tested.
-- **Foreman lifecycle**: `onSyncCompleted()` opens/supersedes work items; `resolveWorkItem()` validates charter output and atomically commits `foreman_decision` + `outbound_command` via `OutboundHandoff`.
-- **Crash recovery**: 35 integration tests (replay-recovery) validate idempotency, supersession, lease uniqueness, stale-lease recovery, tool failure, trace independence, and daemon-wake duplication.
+- **Control-plane durable substrate**: SQLite coordinator schema (`conversation_records`, `revisions`, `work_items`, `execution_attempts`, `evaluations`, `tool_call_records`) is implemented, with existing test coverage in `test/unit/coordinator/store.test.ts`.
+- **Scheduler mechanics**: Lease acquisition, renewal, stale-lease recovery, execution lifecycle (`active` → `succeeded`/`crashed`), and retry backoff are implemented, with existing test coverage in `test/unit/scheduler/scheduler.test.ts`.
+- **Foreman lifecycle**: `onSyncCompleted()` opens/supersedes work items; `resolveWorkItem()` validates charter output and atomically commits `foreman_decision` + `outbound_command` via `OutboundHandoff`, with existing test coverage in `test/unit/foreman/facade.test.ts` and `test/unit/foreman/handoff.test.ts`.
+- **Crash recovery**: Replay and recovery behaviors are validated by the integration suite in `test/integration/control-plane/replay-recovery.test.ts`.
 - **Outbound pipeline**: `SqliteOutboundStore`, send-reply worker, reconciler, and non-send worker exist and operate on durable commands.
 - **Daemon dispatch (single-mailbox)**: After a successful sync cycle, the daemon builds a `SyncCompletionSignal`, calls the foreman, and drives the scheduler quiescence loop with lease heartbeats.
 
@@ -76,33 +95,33 @@ The result must answer:
 
 ---
 
-## 2. Gap Register
+## Gap Register
 
-| Gap | Current State | Target State | Priority | Blocking / Non-blocking |
-|-----|--------------|--------------|----------|------------------------|
-| **Real charter runtime wiring** | Daemon defaults to `MockCharterRunner`; `CodexCharterRunner` exists but is opt-in via injection | Daemon uses `CodexCharterRunner` (or configurable OpenAI-compatible runner) by default; `MockCharterRunner` is dev/test-only | P0 | **Blocking** — without this, no real agent evaluation happens |
-| **Live tool governance** | `available_tools: []` in invocation envelope; `ToolRunner` exists but is not invoked from daemon dispatch | Envelope populates actual tool catalog; daemon dispatch executes approved tool calls via `ToolRunner` and persists `tool_call_records` | P0 | **Blocking** — a real charter cannot do useful work without tools |
-| **Mailbox charter/policy routing** | Hardcoded `support_steward` in foreman/envelope flows | Configurable per-mailbox charter selection (e.g., `mailbox.charter_id`) with fallback policy | P1 | **Non-blocking** for first real mailbox, but blocking for multi-tenant generalization |
-| **Identity cleanup** | `thread_id` columns and naming persist alongside `conversation_id` semantics | All control-plane surfaces use `conversation_id`; legacy migration code removed | P1 | **Non-blocking** for functionality, but blocking for long-term maintainability |
-| **Arbitration refinement** | Foreman validates output envelope structurally; limited action-class governance | Richer validation (action-class allowlists, payload schema guards, escalation heuristics) | P1 | **Non-blocking** for happy path, but blocking for safe unattended operation |
-| **Multi-mailbox dispatch completion** | Deferred `TODO` in `createMultiMailboxService`; `syncMultiple` does not expose per-mailbox changed conversations | Per-mailboard dispatch loop after `syncMultiple`, or inline individual runners with conversation tracking | P1 | **Blocking** for multi-mailbox production deployment, but not for single-mailbox validation |
-| **End-to-end daemon test harness** | Daemon dispatch tested only with mock runner; no test covers tool execution or real runtime path | Integration test exercises full daemon cycle: sync → real runner → tool call → outbound command, plus crash replay | P0 | **Blocking** — without this, we cannot claim the system is verified |
-| **Documentation realignment** | Docs updated for control-plane v2 structure (Tasks 021) | Docs refreshed to describe real runtime wiring, tool governance, and multi-mailbox dispatch | P2 | **Non-blocking** but must be synchronized before any phase exit |
+| Gap | Current State | Target State | Priority | Blocking / Non-blocking | Classification |
+|-----|--------------|--------------|----------|------------------------|----------------|
+| **Real charter runtime wiring** | Daemon defaults to `MockCharterRunner`; `CodexCharterRunner` exists but is opt-in via injection | Daemon uses a configurable real runner (API, CLI, or dual) by default; `MockCharterRunner` is dev/test-only | P0 | **Blocking** — without this, no real agent evaluation happens | blocks first real mailbox |
+| **Live tool governance** | `available_tools: []` in invocation envelope; `ToolRunner` exists but is not invoked from daemon dispatch | Envelope populates actual tool catalog; daemon dispatch executes approved tool calls via `ToolRunner` and persists `tool_call_records` | P0 | **Blocking** — a real charter cannot do useful work without tools | blocks first real mailbox |
+| **Mailbox charter/policy routing** | Hardcoded `support_steward` in foreman/envelope flows | Configurable per-mailbox charter selection (e.g., `mailbox.charter_id`) with fallback policy | P1 | **Non-blocking** for first real mailbox, but blocking for multi-tenant generalization | blocks platform generalization |
+| **Identity cleanup** | `thread_id` columns and naming persist alongside `conversation_id` semantics | All control-plane surfaces use `conversation_id`; legacy migration code removed | P1 | **Non-blocking** for functionality, but blocking for long-term maintainability | does not block usefulness |
+| **Arbitration refinement** | Foreman validates output envelope structurally; limited action-class governance | Richer validation (action-class allowlists, payload schema guards, escalation heuristics) | P1 | **Non-blocking** for happy path, but blocking for safe unattended operation | blocks unattended safety |
+| **Multi-mailbox dispatch completion** | Deferred `TODO` in `createMultiMailboxService`; `syncMultiple` does not expose per-mailbox changed conversations | Per-mailbox dispatch loop after `syncMultiple`, or inline individual runners with conversation tracking | P1 | **Blocking** for multi-mailbox production deployment, but not for single-mailbox validation | blocks platform generalization |
+| **End-to-end daemon test harness** | Daemon dispatch tested only with mock runner; no test covers tool execution or real runtime path | Integration test exercises full daemon cycle: sync → real runner → charter evaluation → outbound command, plus crash replay | P0 | **Blocking** — without this, we cannot claim the system is verified | blocks first real mailbox |
+| **Documentation realignment** | Docs updated for control-plane v2 structure | Docs refreshed to describe real runtime wiring, tool governance, and multi-mailbox dispatch | P2 | **Non-blocking** but must be synchronized before any phase exit | does not block usefulness |
 
 ---
 
-## 3. Three-Phase Plan
+## Three-Phase Plan
 
 ### Phase A — Make It Real
 
 **Scope:** Convert the daemon dispatch scaffold into an actual working mailbox-agent path for a single mailbox.
 
 **Included workstreams:**
-- Wire `CodexCharterRunner` as the default daemon charter runner (configurable via `config.json` or env vars).
+- Wire the chosen real charter runtime as the default daemon runner (configurable via `config.json` or env vars).
 - Populate `available_tools` in `buildInvocationEnvelope` based on a tool catalog (start with a small, governed set).
 - Connect `ToolRunner` into the daemon dispatch loop so approved tool requests are executed and recorded.
-- Add an end-to-end daemon integration test that uses a real (or realistically mocked) charter runner, produces a tool call, and results in an `outbound_command`.
-- Add configuration schema support for charter runtime credentials (`OPENAI_API_KEY`, model selection, timeout).
+- Add an end-to-end daemon integration test that uses the real runtime path and results in an `outbound_command`.
+- Add configuration schema support for charter runtime credentials and selection.
 
 **Excluded workstreams:**
 - Multi-mailbox dispatch
@@ -110,16 +129,17 @@ The result must answer:
 - Advanced arbitration heuristics
 - New outbound action types beyond `send_reply` / `create_draft`
 
-**Dependencies:** None beyond the existing substrate.
+**Dependencies:** The Runtime Decision Gate must be resolved.
 
 **Deliverables:**
-- `service.ts` instantiates `CodexCharterRunner` by default with config-driven secrets.
+- `service.ts` instantiates the chosen real runner by default with config-driven secrets.
 - `buildInvocationEnvelope` receives a non-empty tool catalog.
 - Daemon dispatch loop executes tool calls via `ToolRunner` and persists records.
 - New integration test in `exchange-fs-sync-daemon/test/integration/dispatch-real.test.ts` passes.
 
 **Exit criteria:**
-- A single-mailbox daemon, started with valid Graph and OpenAI credentials, can sync a changed conversation, evaluate it through the real charter runtime, execute any approved tools, and produce a valid `outbound_command` — all without human intervention.
+- A single-mailbox daemon, started with valid mailbox credentials and a real charter runtime, can sync a changed conversation, open a work item, acquire a lease, produce a real evaluation, and materialize a valid outbound command without human intervention.
+- Live tool execution is in Phase A scope, but is not required for Phase A exit if it delays the first real runtime proof.
 - `pnpm test` passes with no regressions.
 
 ---
@@ -142,7 +162,7 @@ The result must answer:
 **Dependencies:** Phase A must be complete so that the safety tests exercise the real runtime path.
 
 **Deliverables:**
-- At least 3 new crash-replay integration tests covering daemon mid-execution restart.
+- New crash-replay integration tests covering daemon mid-execution restart.
 - Foreman rejects disallowed actions with explicit `validation_failed` outcome.
 - `tool_call_records` include permission level and timeout budget.
 - Zero remaining `thread_id` references in first-class control-plane tables.
@@ -181,7 +201,7 @@ The result must answer:
 
 ---
 
-## 4. Ordering Constraints
+## Ordering Constraints
 
 | Question | Answer |
 |----------|--------|
@@ -192,15 +212,18 @@ The result must answer:
 
 ---
 
-## 5. Critical Path
+## Critical Path
 
 The shortest path that preserves de-arbitrarization:
 
-1. **Wire `CodexCharterRunner` as the daemon default** (highest leverage).
-   - This unblocks the first real end-to-end evaluation.
-   - It forces the configuration and secrets model to become concrete.
+1. **Resolve the Runtime Decision Gate.**
+   - Choose API, CLI, or dual runtime before any implementation begins.
+   - This forces secrets, config, and observability models to become concrete.
 
-2. **Populate `available_tools` and connect `ToolRunner` in daemon dispatch** (highest leverage).
+2. **Wire the chosen real charter runner as the daemon default.**
+   - This unblocks the first real end-to-end evaluation.
+
+3. **Populate `available_tools` and connect `ToolRunner` in daemon dispatch.**
    - Without this, the runner produces proposals that cannot be grounded in mailbox state.
    - This is the second half of “making it real.”
 
@@ -216,16 +239,16 @@ The shortest path that preserves de-arbitrarization:
 
 ---
 
-## 6. Success Metrics
+## Success Metrics
 
 ### Phase A — Make It Real
-- Daemon `service.ts` uses `CodexCharterRunner` by default when `config.charter.runtime === 'codex-api'` (or similar).
+- Daemon `service.ts` uses the chosen real runtime by default when configured.
 - `buildInvocationEnvelope` passes at least one real tool definition into `available_tools`.
-- At least one integration test demonstrates: sync changed conversation → scheduler lease → charter evaluation (with tool call) → foreman resolution → `outbound_command` row created.
+- At least one integration test demonstrates: sync changed conversation → scheduler lease → charter evaluation → foreman resolution → `outbound_command` row created. (Tool execution is highly desirable but not required for Phase A exit.)
 - `pnpm test` and `pnpm typecheck` pass with no regressions.
 
 ### Phase B — Make It Safe
-- At least 3 new integration tests demonstrate crash recovery during daemon dispatch (mid-execution restart).
+- New integration tests demonstrate crash recovery during daemon dispatch (mid-execution restart).
 - Foreman rejects a charter output proposing a disallowed action class.
 - All first-class control-plane SQL schemas use `conversation_id` exclusively.
 - `pnpm test` passes; segfaults (if any) are confirmed as `better-sqlite3` cleanup artifacts only.
@@ -234,11 +257,11 @@ The shortest path that preserves de-arbitrarization:
 - Multi-mailbox daemon test verifies that two mailboxes each produce independent `work_item` + `outbound_command` flows.
 - Config schema supports `mailboxes[].charter_id` and validates it.
 - `docs/02-architecture.md` and both `AGENTS.md` files describe the real runtime and multi-mailbox dispatch accurately.
-- All 35 replay/recovery tests plus all daemon tests pass.
+- All replay/recovery tests plus all daemon tests pass.
 
 ---
 
-## 7. Deferred Work (Intentionally Not on the Critical Path)
+## Deferred Work (Intentionally Not on the Critical Path)
 
 - **Trace/commentary productization**: `agent_traces` and evaluation reasoning logs are soft commentary. They can be enriched later but must never become required for correctness.
 - **Analytics projections**: Search index, conversation analytics, or dashboard views are non-authoritative and can be rebuilt at any time.
@@ -248,7 +271,7 @@ The shortest path that preserves de-arbitrarization:
 
 ---
 
-## 8. Terminal Readiness Statement
+## Terminal Readiness Statement
 
 > Narada reaches the terminal mailbox-agent objective when a changed conversation in a synced mailbox automatically flows through foreman work opening, scheduler lease acquisition, real charter evaluation with governed tools, and foreman resolution into an outbound command, all without human intervention and with deterministic crash recovery.
 
