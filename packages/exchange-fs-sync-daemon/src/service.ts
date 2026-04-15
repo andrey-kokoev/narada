@@ -72,6 +72,8 @@ export interface SyncServiceConfig {
 }
 
 export interface DispatchHooks {
+  afterSyncCompleted?: (signal: import("@narada/exchange-fs-sync").SyncCompletionSignal, result: import("@narada/exchange-fs-sync").WorkOpeningResult) => Promise<void>;
+  afterWorkOpened?: (workItem: WorkItem) => Promise<void>;
   afterLeaseAcquired?: (workItem: WorkItem, lease: LeaseAcquisitionResult) => Promise<void>;
   beforeRuntimeInvoke?: (workItem: WorkItem, attempt: ExecutionAttempt, envelope: import("@narada/exchange-fs-sync").CharterInvocationEnvelope) => Promise<void>;
   afterRuntimeComplete?: (workItem: WorkItem, attempt: ExecutionAttempt, output: import("@narada/exchange-fs-sync").CharterOutputEnvelope) => Promise<void>;
@@ -422,7 +424,10 @@ async function createSingleMailboxService(
     const traceStore = new SqliteAgentTraceStore({ db });
     traceStore.initSchema();
 
-    const getMailboxPolicy = (_mailboxId: string) => config.policy;
+    const getMailboxPolicy = (_mailboxId: string) => config.policy ?? {
+      primary_charter: 'support_steward',
+      allowed_actions: ['draft_reply', 'send_reply', 'send_new_message', 'mark_read', 'move_message', 'archive', 'no_action'],
+    };
 
     const foreman = new DefaultForemanFacade({
       coordinatorStore,
@@ -471,7 +476,14 @@ async function createSingleMailboxService(
 
     logger.info('Dispatch phase starting', { conversations: changed.length });
 
-      await deps.foreman.onSyncCompleted(signal);
+      const openResult = await deps.foreman.onSyncCompleted(signal);
+      await opts.dispatchHooks?.afterSyncCompleted?.(signal, openResult);
+      for (const opened of openResult.opened) {
+        const openedItem = deps.coordinatorStore.getWorkItem(opened.work_item_id);
+        if (openedItem) {
+          await opts.dispatchHooks?.afterWorkOpened?.(openedItem);
+        }
+      }
     }
 
     function persistRejectedToolCall(
@@ -524,7 +536,10 @@ async function createSingleMailboxService(
       }
 
       const envelope = await buildInvocationEnvelope(
-        { coordinatorStore: deps.coordinatorStore, messageStore, rootDir, getMailboxPolicy: (_mailboxId: string) => config.policy },
+        { coordinatorStore: deps.coordinatorStore, messageStore, rootDir, getMailboxPolicy: (_mailboxId: string) => config.policy ?? {
+          primary_charter: 'support_steward',
+          allowed_actions: ['draft_reply', 'send_reply', 'send_new_message', 'mark_read', 'move_message', 'archive', 'no_action'],
+        } },
         { executionId: `ex_${workItem.work_item_id}_${Date.now()}`, workItem, tools: deps.toolCatalog },
       );
 

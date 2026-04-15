@@ -325,7 +325,7 @@ describe("DefaultForemanFacade", () => {
       expect(commands.c).toBe(1);
     });
 
-    it("rejects resolve when work item status is not executing/leased", async () => {
+    it("idempotently returns success when work item is already resolved", async () => {
       insertConversation("conv-1");
       const wi = insertWorkItem("conv-1", "resolved", "conv-1:rev:1");
       const exId = `ex_${wi.work_item_id}`;
@@ -340,8 +340,8 @@ describe("DefaultForemanFacade", () => {
       const evaluation = makeEvaluation(wi.work_item_id, exId);
       const result = await facade.resolveWorkItem({ work_item_id: wi.work_item_id, execution_id: exId, evaluation });
 
-      expect(result.success).toBe(false);
-      expect(result.error).toContain("resolved");
+      expect(result.success).toBe(true);
+      expect(result.resolution_outcome).toBe(wi.resolution_outcome ?? "no_op");
     });
 
     it("strips invalid actions and resolves no_op when none remain", async () => {

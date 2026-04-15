@@ -157,10 +157,10 @@ describe("OutboundHandoff", () => {
       expect(updatedDecision!.outbound_id).toBe("ob_fd-1");
     });
 
-    it("throws when a different active unsent command already exists for thread+action", () => {
+    it("creates a new command when payload differs (different idempotency key)", () => {
       const decision1 = makeDecision({ decision_id: "fd-1", approved_action: "send_reply" });
       coordinatorStore.insertDecision(decision1);
-      db.transaction(() => handoff.createCommandFromDecision(decision1))();
+      const ob1 = db.transaction(() => handoff.createCommandFromDecision(decision1))();
 
       const decision2 = makeDecision({
         decision_id: "fd-2",
@@ -169,9 +169,9 @@ describe("OutboundHandoff", () => {
       });
       coordinatorStore.insertDecision(decision2);
 
-      expect(() => {
-        db.transaction(() => handoff.createCommandFromDecision(decision2))();
-      }).toThrow("Active unsent command already exists");
+      const ob2 = db.transaction(() => handoff.createCommandFromDecision(decision2))();
+      expect(ob2).not.toBe(ob1);
+      expect(outboundStore.getCommand(ob2)).toBeDefined();
     });
   });
 
@@ -184,7 +184,7 @@ describe("OutboundHandoff", () => {
 
     it("resolves the work item and returns outbound_id when command exists (Path B)", () => {
       insertWorkItem();
-      const decision = makeDecision({ outbound_id: "ob_fd-1" });
+      const decision = makeDecision({ decision_id: "fd_wi-1_send_reply", outbound_id: "ob_fd-1" });
       coordinatorStore.insertDecision(decision);
       outboundStore.createCommand(
         {

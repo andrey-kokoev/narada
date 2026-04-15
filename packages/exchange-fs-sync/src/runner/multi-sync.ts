@@ -24,6 +24,8 @@ import { DefaultSyncRunner } from "./sync-once.js";
 import { normalizeFolderRef, normalizeFlagged } from "../adapter/graph/scope.js";
 import { createHealthWriter } from "../health.js";
 import { sleep } from "../utils/timing.js";
+import type { ApplyEventResult } from "../types/runtime.js";
+import type { NormalizedEvent } from "../types/normalized.js";
 
 /** Options for multi-sync operation */
 export interface MultiSyncOptions {
@@ -181,10 +183,34 @@ async function syncSingleMailbox(
 
     const applyLogStore = new FileApplyLogStore({ rootDir });
 
-    const projector = new DefaultProjector({
+    const baseProjector = new DefaultProjector({
       rootDir,
       tombstonesEnabled: mailbox.sync?.tombstones_enabled ?? true,
     });
+
+    // Track changed conversations for dispatch
+    const changedConversations = new Map<string, Set<string>>();
+    function trackEventChanges(event: NormalizedEvent, result: ApplyEventResult): void {
+      for (const threadId of result.dirty_views.by_thread) {
+        const kinds = changedConversations.get(threadId) ?? new Set<string>();
+        if (event.event_kind === "created" || event.event_kind === "upsert") {
+          kinds.add("new_message");
+        } else if (event.event_kind === "updated") {
+          kinds.add("new_message");
+        } else if (event.event_kind === "deleted" || event.event_kind === "delete") {
+          kinds.add("moved");
+        }
+        changedConversations.set(threadId, kinds);
+      }
+    }
+
+    const projector = {
+      applyEvent: async (event: NormalizedEvent): Promise<ApplyEventResult> => {
+        const result = await baseProjector.applyEvent(event);
+        trackEventChanges(event, result);
+        return result;
+      },
+    };
 
     const lock = new FileLock({
       rootDir,
@@ -237,6 +263,9 @@ async function syncSingleMailbox(
       messagesSynced: syncResult.applied_count,
       eventsApplied: syncResult.applied_count,
       eventsSkipped: syncResult.skipped_count,
+      changedConversations: Array.from(changedConversations.entries()).map(
+        ([conversation_id, kinds]) => ({ conversation_id, change_kinds: Array.from(kinds) }),
+      ),
     };
 
     return result;

@@ -66,7 +66,7 @@ describe("daemon dispatch phase with real charter runner (mocked api)", { timeou
                   {
                     action_type: "send_reply",
                     authority: "recommended",
-                    payload_json: JSON.stringify({ body_text: "Hello from real runner" }),
+                    payload_json: JSON.stringify({ body_text: "Hello from real runner", to: ["test@example.com"] }),
                     rationale: "Test real runtime path",
                   },
                 ],

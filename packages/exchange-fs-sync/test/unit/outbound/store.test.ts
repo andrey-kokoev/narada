@@ -43,7 +43,7 @@ describe("SqliteOutboundStore", () => {
   });
 
   describe("active unsent uniqueness", () => {
-    it("throws when creating a second active unsent command for same thread+action", () => {
+    it("allows a second active unsent command for same thread+action when idempotency key differs", () => {
       const cmd1 = createOutboundCommand({ outbound_id: "o1", conversation_id: "t1", action_type: "send_reply" });
       const ver1 = createOutboundVersion({ outbound_id: "o1", version: 1 });
       store.createCommand(cmd1, ver1);
@@ -51,9 +51,20 @@ describe("SqliteOutboundStore", () => {
       const cmd2 = createOutboundCommand({ outbound_id: "o2", conversation_id: "t1", action_type: "send_reply" });
       const ver2 = createOutboundVersion({ outbound_id: "o2", version: 1 });
 
-      expect(() => store.createCommand(cmd2, ver2)).toThrow(
-        "Active unsent command already exists",
-      );
+      expect(() => store.createCommand(cmd2, ver2)).not.toThrow();
+      expect(store.getCommand("o2")).toBeDefined();
+    });
+
+    it("silently deduplicates when idempotency key is identical", () => {
+      const cmd1 = createOutboundCommand({ outbound_id: "o1", conversation_id: "t1", action_type: "send_reply", idempotency_key: "shared-key" });
+      const ver1 = createOutboundVersion({ outbound_id: "o1", version: 1, idempotency_key: "shared-key" });
+      store.createCommand(cmd1, ver1);
+
+      const cmd2 = createOutboundCommand({ outbound_id: "o2", conversation_id: "t1", action_type: "send_reply", idempotency_key: "shared-key" });
+      const ver2 = createOutboundVersion({ outbound_id: "o2", version: 1, idempotency_key: "shared-key" });
+
+      expect(() => store.createCommand(cmd2, ver2)).not.toThrow();
+      expect(store.getCommand("o2")).toBeUndefined();
     });
 
     it("allows a new command after the prior one is terminal", () => {

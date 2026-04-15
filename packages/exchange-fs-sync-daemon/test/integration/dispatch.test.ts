@@ -141,7 +141,7 @@ describe("daemon dispatch phase integration", { timeout: 30000 }, () => {
           {
             action_type: "send_reply",
             authority: "recommended",
-            payload_json: JSON.stringify({ body_text: "Hello" }),
+            payload_json: JSON.stringify({ body_text: "Hello", to: ["test@example.com"] }),
             rationale: "Test action",
           },
         ],

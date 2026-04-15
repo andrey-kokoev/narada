@@ -282,7 +282,7 @@ export async function loadConfig(
         ? policyRaw.primary_charter.trim()
         : DEFAULT_EXCHANGE_FS_SYNC_CONFIG.policy.primary_charter;
       const allowedActions =
-        Array.isArray(policyRaw.allowed_actions) && policyRaw.allowed_actions.length > 0
+        policyRaw.allowed_actions !== undefined
           ? expectAllowedActions(policyRaw.allowed_actions, "config.policy.allowed_actions")
           : DEFAULT_EXCHANGE_FS_SYNC_CONFIG.policy.allowed_actions;
       return {

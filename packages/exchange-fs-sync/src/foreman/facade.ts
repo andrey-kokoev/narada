@@ -135,6 +135,22 @@ export class DefaultForemanFacade implements ForemanFacade {
       return { success: false, resolution_outcome: "failed", error: "Work item not found" };
     }
 
+    if (workItem.status === "resolved") {
+      const decisions = this.deps.coordinatorStore.getDecisionsByConversation(workItem.conversation_id, workItem.mailbox_id);
+      const materialized = decisions.find((d) => d.outbound_id !== null);
+      if (materialized?.outbound_id) {
+        return {
+          success: true,
+          outbound_id: materialized.outbound_id,
+          resolution_outcome: "action_created",
+        };
+      }
+      return {
+        success: true,
+        resolution_outcome: workItem.resolution_outcome ?? "no_op",
+      };
+    }
+
     if (workItem.status !== "executing" && workItem.status !== "leased") {
       return { success: false, resolution_outcome: "failed", error: `Work item status is ${workItem.status}` };
     }
@@ -376,7 +392,7 @@ export class DefaultForemanFacade implements ForemanFacade {
     const decisionId = `fd_${workItem.work_item_id}_${chosenAction.action_type}`;
 
     try {
-      this.deps.db.transaction(() => {
+      const outboundId = this.deps.db.transaction(() => {
         // Idempotency: decision already materialized?
         const existingDecision = this.deps.coordinatorStore.getDecisionById(decisionId);
         if (existingDecision?.outbound_id) {
@@ -384,7 +400,7 @@ export class DefaultForemanFacade implements ForemanFacade {
             resolution_outcome: "action_created",
             updated_at: now,
           });
-          return;
+          return existingDecision.outbound_id;
         }
 
         // Insert decision if it does not yet exist (crash-recovery Path A)
@@ -403,7 +419,7 @@ export class DefaultForemanFacade implements ForemanFacade {
           });
         }
 
-        this.handoff.createCommandFromDecision({
+        const obId = this.handoff.createCommandFromDecision({
           decision_id: decisionId,
           conversation_id: workItem.conversation_id,
           mailbox_id: workItem.mailbox_id,
@@ -421,12 +437,14 @@ export class DefaultForemanFacade implements ForemanFacade {
           resolution_outcome: "action_created",
           updated_at: now,
         });
+
+        return obId;
       })();
 
       return {
         success: true,
         decision_id: decisionId,
-        outbound_id: `ob_${decisionId}`,
+        outbound_id: outboundId,
         resolution_outcome: "action_created",
       };
     } catch (error) {

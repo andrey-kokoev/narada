@@ -79,6 +79,8 @@ export interface MailboxSyncResult {
   eventsApplied?: number;
   /** Events skipped */
   eventsSkipped?: number;
+  /** Changed conversations detected during sync */
+  changedConversations?: Array<{ conversation_id: string; change_kinds: string[] }>;
 }
 
 /** Multi-health file format (JSON-serializable) */

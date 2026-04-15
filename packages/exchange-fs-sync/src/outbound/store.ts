@@ -250,11 +250,6 @@ export class SqliteOutboundStore implements OutboundStore {
       ) values (?, ?, ?, ?, ?, ?)
     `);
 
-    const checkActive = this.db.prepare(`
-      select outbound_id from outbound_commands
-      where conversation_id = ? and action_type = ? and status in (${ACTIVE_UNSENT_STATUSES.map(() => "?").join(", ")})
-    `);
-
     const checkIdempotency = this.db.prepare(`
       select outbound_id from outbound_commands where idempotency_key = ?
     `);
@@ -266,18 +261,6 @@ export class SqliteOutboundStore implements OutboundStore {
       if (idempotent) {
         // Effect-of-once boundary: identical intent already materialized.
         return;
-      }
-
-      const existing = checkActive.get(
-        command.conversation_id,
-        command.action_type,
-        ...ACTIVE_UNSENT_STATUSES,
-      ) as { outbound_id: string } | undefined;
-
-      if (existing) {
-        throw new Error(
-          `Active unsent command already exists for conversation ${command.conversation_id} action ${command.action_type}: ${existing.outbound_id}`,
-        );
       }
 
       insertCmd.run(

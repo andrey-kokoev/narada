@@ -128,7 +128,9 @@ export class OutboundHandoff {
     mailboxId: string,
   ): string | null {
     const decisions = this.deps.coordinatorStore.getDecisionsByConversation(conversationId, mailboxId);
-    const materialized = decisions.find((d) => d.outbound_id !== null);
+    // Only recover decisions that belong to this specific work item.
+    // Decision IDs are formatted as fd_${workItemId}_${actionType}.
+    const materialized = decisions.find((d) => d.outbound_id !== null && d.decision_id.startsWith(`fd_${workItemId}`));
     if (!materialized?.outbound_id) {
       return null;
     }
