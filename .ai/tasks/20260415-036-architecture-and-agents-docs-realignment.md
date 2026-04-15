@@ -1,5 +1,3 @@
-.ai/tasks/20260415-036-architecture-and-agents-docs-realignment.md
-
 # Architecture and AGENTS Docs Realignment
 
 ## Context
