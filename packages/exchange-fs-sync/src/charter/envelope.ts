@@ -47,12 +47,39 @@ async function getThreadMessageIds(rootDir: string, conversationId: string): Pro
   }
 }
 
+function normalizeMessageForEnvelope(msg: NormalizedMessage): NormalizedMessage {
+  const r = msg as unknown as Record<string, unknown>;
+  const bodyText =
+    typeof msg.body === "object" && msg.body && "text" in msg.body
+      ? (msg.body as { text?: string }).text?.slice(0, 200) ?? null
+      : null;
+  const mapAddr = (a: { email?: string; display_name?: string }): { email: string | null; name: string | null } => ({
+    email: a.email ?? null,
+    name: a.display_name ?? null,
+  });
+  return {
+    ...msg,
+    internet_message_id: (r.internet_message_id as string | undefined) ?? null,
+    body_preview: (r.body_preview as string | undefined) ?? bodyText,
+    from: Array.isArray(msg.from) ? msg.from.map(mapAddr) : msg.from ? [mapAddr(msg.from)] : [],
+    to: (msg.to ?? []).map(mapAddr),
+    cc: (msg.cc ?? []).map(mapAddr),
+    bcc: (msg.bcc ?? []).map(mapAddr),
+    sent_at: (r.sent_at as string | undefined) ?? null,
+    is_draft: msg.flags?.is_draft ?? false,
+    is_read: msg.flags?.is_read ?? false,
+    categories: msg.category_refs ?? [],
+    parent_folder_id: (r.parent_folder_id as string | undefined) ?? null,
+    importance: (r.importance as "low" | "normal" | "high" | undefined) ?? null,
+  } as NormalizedMessage;
+}
+
 export async function buildInvocationEnvelope(
   deps: BuildInvocationEnvelopeDeps,
   opts: BuildInvocationEnvelopeOptions,
 ): Promise<CharterInvocationEnvelope> {
   const { coordinatorStore, messageStore, rootDir } = deps;
-  const { executionId, workItem, maxPriorEvaluations = 3 } = opts;
+  const { executionId, workItem, maxPriorEvaluations = 3, tools } = opts;
 
   const conversationRecord = coordinatorStore.getConversationRecord(workItem.conversation_id);
   const charterId = conversationRecord?.primary_charter ?? "support_steward";
@@ -63,7 +90,7 @@ export async function buildInvocationEnvelope(
   for (const messageId of messageIds) {
     const record = await messageStore.readRecord(messageId);
     if (record && typeof record === "object") {
-      messages.push(record as NormalizedMessage);
+      messages.push(normalizeMessageForEnvelope(record as NormalizedMessage));
     }
   }
 
@@ -107,7 +134,7 @@ export async function buildInvocationEnvelope(
     revision_id: workItem.opened_for_revision_id,
     thread_context: threadContext,
     allowed_actions: ["draft_reply", "send_reply", "mark_read", "no_action"],
-    available_tools: opts.tools ?? [],
+    available_tools: tools ?? [],
     coordinator_flags: [],
     prior_evaluations: priorEvaluations,
     max_prior_evaluations: maxPriorEvaluations,
