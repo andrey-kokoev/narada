@@ -12,7 +12,7 @@ export function createOutboundCommand(
   const now = new Date().toISOString();
   return {
     outbound_id: overrides.outbound_id ?? "outbound-001",
-    thread_id: "thread-001",
+    conversation_id: "thread-001",
     mailbox_id: "mailbox-001",
     action_type: "send_reply",
     status: "pending",

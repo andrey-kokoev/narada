@@ -55,7 +55,7 @@ describe('I/O: Message Store', () => {
 
       await store.upsertFromPayload({
         message_id: 'test-1',
-        thread_id: 'thread-1',
+        conversation_id: 'thread-1',
         container_refs: [{ type: 'folder', id: 'inbox' }],
         received_at: new Date().toISOString(),
         sent_at: new Date().toISOString(),
@@ -83,7 +83,7 @@ describe('I/O: Message Store', () => {
     try {
       await store.upsertFromPayload({
         message_id: 'test-1',
-        thread_id: 'thread-1',
+        conversation_id: 'thread-1',
         container_refs: [{ type: 'folder', id: 'inbox' }],
         received_at: new Date().toISOString(),
         sent_at: new Date().toISOString(),
@@ -116,7 +116,7 @@ describe('I/O: Message Store', () => {
       for (let i = 0; i < 100; i++) {
         await store.upsertFromPayload({
           message_id: `msg-${i}`,
-          thread_id: `thread-${i}`,
+          conversation_id: `thread-${i}`,
           container_refs: [{ type: 'folder', id: 'inbox' }],
           received_at: new Date().toISOString(),
           sent_at: new Date().toISOString(),

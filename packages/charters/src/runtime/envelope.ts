@@ -8,7 +8,7 @@
 
 import { z } from "zod";
 
-export const CharterIdSchema = z.enum(["support_steward", "obligation_keeper"]);
+export const CharterIdSchema = z.string();
 export type CharterId = z.infer<typeof CharterIdSchema>;
 
 export const AllowedActionSchema = z.enum([

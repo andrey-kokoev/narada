@@ -44,11 +44,11 @@ describe("SqliteOutboundStore", () => {
 
   describe("active unsent uniqueness", () => {
     it("throws when creating a second active unsent command for same thread+action", () => {
-      const cmd1 = createOutboundCommand({ outbound_id: "o1", thread_id: "t1", action_type: "send_reply" });
+      const cmd1 = createOutboundCommand({ outbound_id: "o1", conversation_id: "t1", action_type: "send_reply" });
       const ver1 = createOutboundVersion({ outbound_id: "o1", version: 1 });
       store.createCommand(cmd1, ver1);
 
-      const cmd2 = createOutboundCommand({ outbound_id: "o2", thread_id: "t1", action_type: "send_reply" });
+      const cmd2 = createOutboundCommand({ outbound_id: "o2", conversation_id: "t1", action_type: "send_reply" });
       const ver2 = createOutboundVersion({ outbound_id: "o2", version: 1 });
 
       expect(() => store.createCommand(cmd2, ver2)).toThrow(
@@ -57,22 +57,22 @@ describe("SqliteOutboundStore", () => {
     });
 
     it("allows a new command after the prior one is terminal", () => {
-      const cmd1 = createOutboundCommand({ outbound_id: "o1", thread_id: "t1", action_type: "send_reply" });
+      const cmd1 = createOutboundCommand({ outbound_id: "o1", conversation_id: "t1", action_type: "send_reply" });
       const ver1 = createOutboundVersion({ outbound_id: "o1", version: 1 });
       store.createCommand(cmd1, ver1);
 
       store.updateCommandStatus("o1", "confirmed", { confirmed_at: new Date().toISOString() });
 
-      const cmd2 = createOutboundCommand({ outbound_id: "o2", thread_id: "t1", action_type: "send_reply" });
+      const cmd2 = createOutboundCommand({ outbound_id: "o2", conversation_id: "t1", action_type: "send_reply" });
       const ver2 = createOutboundVersion({ outbound_id: "o2", version: 1 });
       expect(() => store.createCommand(cmd2, ver2)).not.toThrow();
     });
 
     it("allows different action types on the same thread", () => {
-      const cmd1 = createOutboundCommand({ outbound_id: "o1", thread_id: "t1", action_type: "send_reply" });
+      const cmd1 = createOutboundCommand({ outbound_id: "o1", conversation_id: "t1", action_type: "send_reply" });
       store.createCommand(cmd1, createOutboundVersion({ outbound_id: "o1" }));
 
-      const cmd2 = createOutboundCommand({ outbound_id: "o2", thread_id: "t1", action_type: "mark_read" });
+      const cmd2 = createOutboundCommand({ outbound_id: "o2", conversation_id: "t1", action_type: "mark_read" });
       expect(() => store.createCommand(cmd2, createOutboundVersion({ outbound_id: "o2" }))).not.toThrow();
     });
   });
@@ -169,7 +169,7 @@ describe("SqliteOutboundStore", () => {
       const cmd1 = createOutboundCommand({ outbound_id: "o1", mailbox_id: "m1", status: "draft_ready" });
       store.createCommand(cmd1, createOutboundVersion({ outbound_id: "o1", version: 1 }));
 
-      const cmd2 = createOutboundCommand({ outbound_id: "o2", mailbox_id: "m2", thread_id: "t2", status: "pending" });
+      const cmd2 = createOutboundCommand({ outbound_id: "o2", mailbox_id: "m2", conversation_id: "t2", status: "pending" });
       store.createCommand(cmd2, createOutboundVersion({ outbound_id: "o2", version: 1 }));
 
       const eligible = store.fetchNextEligible();
@@ -182,7 +182,7 @@ describe("SqliteOutboundStore", () => {
       const cmd1 = createOutboundCommand({ outbound_id: "o1", mailbox_id: "m1", status: "draft_ready" });
       store.createCommand(cmd1, createOutboundVersion({ outbound_id: "o1", version: 1 }));
 
-      const cmd2 = createOutboundCommand({ outbound_id: "o2", mailbox_id: "m2", thread_id: "t2", status: "draft_ready" });
+      const cmd2 = createOutboundCommand({ outbound_id: "o2", mailbox_id: "m2", conversation_id: "t2", status: "draft_ready" });
       store.createCommand(cmd2, createOutboundVersion({ outbound_id: "o2", version: 1 }));
 
       const eligible = store.fetchNextEligible("m2");
@@ -222,19 +222,19 @@ describe("SqliteOutboundStore", () => {
 
   describe("getActiveCommandsForThread", () => {
     it("returns only active unsent commands for the thread", () => {
-      const cmd1 = createOutboundCommand({ outbound_id: "o1", thread_id: "t1", action_type: "send_reply", status: "pending" });
+      const cmd1 = createOutboundCommand({ outbound_id: "o1", conversation_id: "t1", action_type: "send_reply", status: "pending" });
       store.createCommand(cmd1, createOutboundVersion({ outbound_id: "o1" }));
 
-      const cmd2 = createOutboundCommand({ outbound_id: "o2", thread_id: "t1", action_type: "mark_read", status: "pending" });
+      const cmd2 = createOutboundCommand({ outbound_id: "o2", conversation_id: "t1", action_type: "mark_read", status: "pending" });
       store.createCommand(cmd2, createOutboundVersion({ outbound_id: "o2" }));
 
       // Make cmd1 terminal so we can create another send_reply for the same thread
       store.updateCommandStatus("o1", "confirmed", { confirmed_at: new Date().toISOString() });
 
-      const cmd3 = createOutboundCommand({ outbound_id: "o3", thread_id: "t1", action_type: "send_reply", status: "confirmed" });
+      const cmd3 = createOutboundCommand({ outbound_id: "o3", conversation_id: "t1", action_type: "send_reply", status: "confirmed" });
       store.createCommand(cmd3, createOutboundVersion({ outbound_id: "o3" }));
 
-      const cmd4 = createOutboundCommand({ outbound_id: "o4", thread_id: "t2", action_type: "send_reply", status: "pending" });
+      const cmd4 = createOutboundCommand({ outbound_id: "o4", conversation_id: "t2", action_type: "send_reply", status: "pending" });
       store.createCommand(cmd4, createOutboundVersion({ outbound_id: "o4" }));
 
       const active = store.getActiveCommandsForThread("t1");

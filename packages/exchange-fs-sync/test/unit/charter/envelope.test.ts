@@ -1,6 +1,47 @@
 import { describe, it, expect } from "vitest";
-import { normalizeMessageForEnvelope } from "../../../src/charter/envelope.js";
+import { normalizeMessageForEnvelope, buildInvocationEnvelope } from "../../../src/charter/envelope.js";
 import type { NormalizedMessage } from "../../../src/types/normalized.js";
+import type { CoordinatorStore, WorkItem } from "../../../src/coordinator/types.js";
+import type { MailboxPolicy } from "../../../src/config/types.js";
+import type { FileMessageStore } from "../../../src/persistence/messages.js";
+
+function makeMockStore(record?: { primary_charter: string }): CoordinatorStore {
+  return {
+    getConversationRecord: () =>
+      record
+        ? {
+            conversation_id: "conv-1",
+            mailbox_id: "mb-1",
+            primary_charter: record.primary_charter,
+            secondary_charters_json: "[]",
+            status: "active",
+            assigned_agent: null,
+            last_message_at: null,
+            last_inbound_at: null,
+            last_outbound_at: null,
+            last_analyzed_at: null,
+            last_triaged_at: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }
+        : undefined,
+    getEvaluationsByWorkItem: () => [],
+  } as unknown as CoordinatorStore;
+}
+
+function makeMockMessageStore(): FileMessageStore {
+  return {
+    readRecord: async () => null,
+  } as unknown as FileMessageStore;
+}
+
+function makeMailboxPolicy(overrides?: Partial<MailboxPolicy>): MailboxPolicy {
+  return {
+    primary_charter: "support_steward",
+    allowed_actions: ["draft_reply", "send_reply", "mark_read", "no_action"],
+    ...overrides,
+  };
+}
 
 describe("normalizeMessageForEnvelope", () => {
   it("maps a minimal real normalized message into charter runtime shape without loss", () => {
@@ -115,5 +156,63 @@ describe("normalizeMessageForEnvelope", () => {
 
     const out = normalizeMessageForEnvelope(input as NormalizedMessage);
     expect(out.from).toEqual([{ email: "solo@example.com", name: "Solo" }]);
+  });
+
+  describe("buildInvocationEnvelope", () => {
+    const workItem: WorkItem = {
+      work_item_id: "wi-1",
+      conversation_id: "conv-1",
+      mailbox_id: "mb-1",
+      status: "opened",
+      priority: 0,
+      opened_for_revision_id: "rev-1",
+      resolved_revision_id: null,
+      resolution_outcome: null,
+      error_message: null,
+      retry_count: 0,
+      next_retry_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    it("uses the conversation record's primary charter without fallback", async () => {
+      const envelope = await buildInvocationEnvelope(
+        {
+          coordinatorStore: makeMockStore({ primary_charter: "custom_charter" }),
+          messageStore: makeMockMessageStore(),
+          rootDir: "/tmp",
+          getMailboxPolicy: () => makeMailboxPolicy(),
+        },
+        { executionId: "ex-1", workItem },
+      );
+      expect(envelope.charter_id).toBe("custom_charter");
+    });
+
+    it("throws when no conversation record exists", async () => {
+      await expect(
+        buildInvocationEnvelope(
+          {
+            coordinatorStore: makeMockStore(undefined),
+            messageStore: makeMockMessageStore(),
+            rootDir: "/tmp",
+            getMailboxPolicy: () => makeMailboxPolicy(),
+          },
+          { executionId: "ex-1", workItem },
+        ),
+      ).rejects.toThrow(/no conversation record found/);
+    });
+
+    it("derives allowed_actions from mailbox policy", async () => {
+      const envelope = await buildInvocationEnvelope(
+        {
+          coordinatorStore: makeMockStore({ primary_charter: "support_steward" }),
+          messageStore: makeMockMessageStore(),
+          rootDir: "/tmp",
+          getMailboxPolicy: () => makeMailboxPolicy({ allowed_actions: ["send_reply", "no_action"] }),
+        },
+        { executionId: "ex-1", workItem },
+      );
+      expect(envelope.allowed_actions).toEqual(["send_reply", "no_action"]);
+    });
   });
 });

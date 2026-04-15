@@ -5,6 +5,15 @@ import { SqliteOutboundStore } from "../../../src/outbound/store.js";
 import { DefaultForemanFacade } from "../../../src/foreman/facade.js";
 import type { SyncCompletionSignal, EvaluationEnvelope } from "../../../src/foreman/types.js";
 import type { WorkItem } from "../../../src/coordinator/types.js";
+import type { MailboxPolicy } from "../../../src/config/types.js";
+
+function makeMailboxPolicy(overrides?: Partial<MailboxPolicy>): MailboxPolicy {
+  return {
+    primary_charter: "support_steward",
+    allowed_actions: ["draft_reply", "send_reply", "mark_read", "no_action"],
+    ...overrides,
+  };
+}
 
 describe("DefaultForemanFacade", () => {
   let db: Database.Database;
@@ -23,6 +32,7 @@ describe("DefaultForemanFacade", () => {
       outboundStore,
       db,
       foremanId: "fm-test",
+      getMailboxPolicy: () => makeMailboxPolicy(),
     });
   });
 
@@ -311,7 +321,7 @@ describe("DefaultForemanFacade", () => {
       expect(result2.success).toBe(true);
 
       // Should still resolve but not create a duplicate command
-      const commands = db.prepare(`select count(*) as c from outbound_commands where thread_id = ?`).get("conv-1") as { c: number };
+      const commands = db.prepare(`select count(*) as c from outbound_commands where conversation_id = ?`).get("conv-1") as { c: number };
       expect(commands.c).toBe(1);
     });
 
@@ -385,7 +395,7 @@ describe("DefaultForemanFacade", () => {
       expect(result2.resolution_outcome).toBe("action_created");
       expect(result2.outbound_id).toBe(result1.outbound_id);
 
-      const commands = db.prepare("select count(*) as c from outbound_commands where thread_id = ?").get("conv-1") as { c: number };
+      const commands = db.prepare("select count(*) as c from outbound_commands where conversation_id = ?").get("conv-1") as { c: number };
       expect(commands.c).toBe(1);
     });
   });
@@ -400,7 +410,7 @@ describe("DefaultForemanFacade", () => {
       outboundStore.createCommand(
         {
           outbound_id: "ob-1",
-          thread_id: "conv-1",
+          conversation_id: "conv-1",
           mailbox_id: "mb-1",
           action_type: "send_reply",
           status: "pending",
@@ -452,7 +462,7 @@ describe("DefaultForemanFacade", () => {
       outboundStore.createCommand(
         {
           outbound_id: "ob-1",
-          thread_id: "conv-1",
+          conversation_id: "conv-1",
           mailbox_id: "mb-1",
           action_type: "send_reply",
           status: "submitted",
@@ -491,6 +501,72 @@ describe("DefaultForemanFacade", () => {
 
       const cmd = outboundStore.getCommand("ob-1");
       expect(cmd!.status).toBe("submitted");
+    });
+  });
+
+  describe("policy routing", () => {
+    it("creates conversation records using the configured primary charter", async () => {
+      const policyFacade = new DefaultForemanFacade({
+        coordinatorStore,
+        outboundStore,
+        db,
+        foremanId: "fm-test",
+        getMailboxPolicy: () => makeMailboxPolicy({ primary_charter: "custom_charter" }),
+      });
+      const signal = makeSignal([
+        { conversation_id: "conv-policy", previous_revision_ordinal: 0, current_revision_ordinal: 1, change_kinds: ["new_message"] },
+      ]);
+      await policyFacade.onSyncCompleted(signal);
+      const record = coordinatorStore.getConversationRecord("conv-policy");
+      expect(record).toBeDefined();
+      expect(record!.primary_charter).toBe("custom_charter");
+    });
+
+    it("persists secondary charters from policy", async () => {
+      const policyFacade = new DefaultForemanFacade({
+        coordinatorStore,
+        outboundStore,
+        db,
+        foremanId: "fm-test",
+        getMailboxPolicy: () => makeMailboxPolicy({ secondary_charters: ["helper_1", "helper_2"] }),
+      });
+      const signal = makeSignal([
+        { conversation_id: "conv-secondary", previous_revision_ordinal: 0, current_revision_ordinal: 1, change_kinds: ["new_message"] },
+      ]);
+      await policyFacade.onSyncCompleted(signal);
+      const record = coordinatorStore.getConversationRecord("conv-secondary");
+      expect(record).toBeDefined();
+      expect(JSON.parse(record!.secondary_charters_json)).toEqual(["helper_1", "helper_2"]);
+    });
+
+    it("enforces human approval gate when policy requires it", async () => {
+      const policyFacade = new DefaultForemanFacade({
+        coordinatorStore,
+        outboundStore,
+        db,
+        foremanId: "fm-test",
+        getMailboxPolicy: () => makeMailboxPolicy({ require_human_approval: true }),
+      });
+      insertConversation("conv-approval");
+      const workItem = insertWorkItem("conv-approval", "opened", "rev-1");
+      const executionId = "ex-approval-1";
+      insertExecutionAttempt(workItem.work_item_id, executionId, {
+        execution_id: executionId,
+        work_item_id: workItem.work_item_id,
+        conversation_id: "conv-approval",
+        charter_id: "support_steward",
+        role: "primary",
+        allowed_actions: ["send_reply"],
+      });
+
+      const result = await policyFacade.resolveWorkItem({
+        work_item_id: workItem.work_item_id,
+        execution_id: executionId,
+        evaluation: makeEvaluation(workItem.work_item_id, executionId),
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/Human approval required/);
     });
   });
 });

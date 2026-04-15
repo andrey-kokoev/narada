@@ -15,6 +15,7 @@ import type {
 import type { CoordinatorStore, NormalizedThreadContext, WorkItem } from "../coordinator/types.js";
 import type { NormalizedMessage } from "../types/normalized.js";
 import { FileMessageStore } from "../persistence/messages.js";
+import type { MailboxPolicy } from "../config/types.js";
 
 function safeSegment(value: string): string {
   return encodeURIComponent(value);
@@ -24,6 +25,7 @@ export interface BuildInvocationEnvelopeDeps {
   coordinatorStore: CoordinatorStore;
   messageStore: FileMessageStore;
   rootDir: string;
+  getMailboxPolicy: (mailboxId: string) => MailboxPolicy;
 }
 
 export interface BuildInvocationEnvelopeOptions {
@@ -89,8 +91,14 @@ export async function buildInvocationEnvelope(
   const { executionId, workItem, maxPriorEvaluations = 3, tools } = opts;
 
   const conversationRecord = coordinatorStore.getConversationRecord(workItem.conversation_id);
-  const charterId = conversationRecord?.primary_charter ?? "support_steward";
+  if (!conversationRecord) {
+    throw new Error(
+      `Cannot build invocation envelope: no conversation record found for ${workItem.conversation_id}`,
+    );
+  }
+  const charterId = conversationRecord.primary_charter;
   const role: "primary" | "secondary" = "primary";
+  const policy = deps.getMailboxPolicy(workItem.mailbox_id);
 
   const messageIds = await getThreadMessageIds(rootDir, workItem.conversation_id);
   const messages: NormalizedMessage[] = [];
@@ -119,7 +127,7 @@ export async function buildInvocationEnvelope(
     .slice(0, maxPriorEvaluations)
     .map((evalRow) => ({
       evaluation_id: evalRow.evaluation_id,
-      charter_id: evalRow.charter_id as "support_steward" | "obligation_keeper",
+      charter_id: evalRow.charter_id,
       role: evalRow.role as "primary" | "secondary",
       evaluated_at: evalRow.created_at,
       summary: evalRow.summary,
@@ -135,12 +143,12 @@ export async function buildInvocationEnvelope(
     work_item_id: workItem.work_item_id,
     conversation_id: workItem.conversation_id,
     mailbox_id: workItem.mailbox_id,
-    charter_id: charterId as "support_steward" | "obligation_keeper",
+    charter_id: charterId,
     role,
     invoked_at: new Date().toISOString(),
     revision_id: workItem.opened_for_revision_id,
     thread_context: threadContext,
-    allowed_actions: ["draft_reply", "send_reply", "mark_read", "no_action"],
+    allowed_actions: policy.allowed_actions,
     available_tools: tools ?? [],
     coordinator_flags: [],
     prior_evaluations: priorEvaluations,

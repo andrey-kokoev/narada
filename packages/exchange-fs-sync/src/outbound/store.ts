@@ -31,7 +31,7 @@ export interface OutboundStore {
   getCommandStatus(outbound_id: string): OutboundStatus | undefined;
   getLatestVersion(outbound_id: string): OutboundVersion | undefined;
   getVersions(outbound_id: string): OutboundVersion[];
-  getActiveCommandsForThread(thread_id: string): OutboundCommand[];
+  getActiveCommandsForThread(conversation_id: string): OutboundCommand[];
   supersedePriorVersions(outbound_id: string, newVersion: number): void;
   appendTransition(transition: Omit<OutboundTransition, "id">): void;
   updateCommandStatus(
@@ -64,7 +64,7 @@ export interface SqliteOutboundStoreDbOptions {
 function rowToCommand(row: Record<string, unknown>): OutboundCommand {
   return {
     outbound_id: String(row.outbound_id),
-    thread_id: String(row.thread_id),
+    conversation_id: String(row.conversation_id),
     mailbox_id: String(row.mailbox_id),
     action_type: String(row.action_type) as OutboundCommand["action_type"],
     status: String(row.status) as OutboundStatus,
@@ -117,7 +117,7 @@ function rowToManagedDraft(row: Record<string, unknown>): ManagedDraft {
 /**
  * SQLite-backed implementation of the outbound store.
  *
- * Uniqueness of at most one active unsent command per (thread_id, action_type)
+ * Uniqueness of at most one active unsent command per (conversation_id, action_type)
  * is enforced at the application level inside a transaction. This is preferred
  * over a partial unique index because the "active unsent" status set may
  * evolve, and we want explicit error messages and the ability to supersede.
@@ -140,7 +140,7 @@ export class SqliteOutboundStore implements OutboundStore {
     this.db.exec(`
       create table if not exists outbound_commands (
         outbound_id text primary key,
-        thread_id text not null,
+        conversation_id text not null,
         mailbox_id text not null,
         action_type text not null,
         status text not null,
@@ -157,7 +157,7 @@ export class SqliteOutboundStore implements OutboundStore {
         on outbound_commands(status);
 
       create index if not exists idx_outbound_commands_thread_action
-        on outbound_commands(thread_id, action_type);
+        on outbound_commands(conversation_id, action_type);
 
       create index if not exists idx_outbound_commands_mailbox
         on outbound_commands(mailbox_id);
@@ -224,7 +224,7 @@ export class SqliteOutboundStore implements OutboundStore {
   createCommand(command: OutboundCommand, version: OutboundVersion): void {
     const insertCmd = this.db.prepare(`
       insert into outbound_commands (
-        outbound_id, thread_id, mailbox_id, action_type, status,
+        outbound_id, conversation_id, mailbox_id, action_type, status,
         latest_version, created_at, created_by, submitted_at,
         confirmed_at, blocked_reason, terminal_reason
       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -246,25 +246,25 @@ export class SqliteOutboundStore implements OutboundStore {
 
     const checkActive = this.db.prepare(`
       select outbound_id from outbound_commands
-      where thread_id = ? and action_type = ? and status in (${ACTIVE_UNSENT_STATUSES.map(() => "?").join(", ")})
+      where conversation_id = ? and action_type = ? and status in (${ACTIVE_UNSENT_STATUSES.map(() => "?").join(", ")})
     `);
 
     const tx = this.db.transaction(() => {
       const existing = checkActive.get(
-        command.thread_id,
+        command.conversation_id,
         command.action_type,
         ...ACTIVE_UNSENT_STATUSES,
       ) as { outbound_id: string } | undefined;
 
       if (existing) {
         throw new Error(
-          `Active unsent command already exists for thread ${command.thread_id} action ${command.action_type}: ${existing.outbound_id}`,
+          `Active unsent command already exists for conversation ${command.conversation_id} action ${command.action_type}: ${existing.outbound_id}`,
         );
       }
 
       insertCmd.run(
         command.outbound_id,
-        command.thread_id,
+        command.conversation_id,
         command.mailbox_id,
         command.action_type,
         command.status,
@@ -340,11 +340,11 @@ export class SqliteOutboundStore implements OutboundStore {
     return rows.map(rowToVersion);
   }
 
-  getActiveCommandsForThread(thread_id: string): OutboundCommand[] {
+  getActiveCommandsForThread(conversation_id: string): OutboundCommand[] {
     const rows = this.db.prepare(`
       select * from outbound_commands
-      where thread_id = ? and status in (${ACTIVE_UNSENT_STATUSES.map(() => "?").join(", ")})
-    `).all(thread_id, ...ACTIVE_UNSENT_STATUSES) as Record<string, unknown>[];
+      where conversation_id = ? and status in (${ACTIVE_UNSENT_STATUSES.map(() => "?").join(", ")})
+    `).all(conversation_id, ...ACTIVE_UNSENT_STATUSES) as Record<string, unknown>[];
     return rows.map(rowToCommand);
   }
 

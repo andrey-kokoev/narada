@@ -56,6 +56,9 @@ export interface EvaluationRecord {
 export interface TraceRecord {
   trace_id: string;
   execution_id: string;
+  conversation_id: string;
+  work_item_id: string;
+  charter_id: string;
   envelope_json: string;
   reasoning_log?: string;
   created_at: string;
@@ -257,6 +260,9 @@ ${priors}
       const trace: TraceRecord = {
         trace_id: `trace_${envelope.execution_id}`,
         execution_id: envelope.execution_id,
+        conversation_id: envelope.conversation_id,
+        work_item_id: envelope.work_item_id,
+        charter_id: envelope.charter_id,
         envelope_json: JSON.stringify(output),
         reasoning_log: output.reasoning_log,
         created_at: now,

@@ -16,7 +16,7 @@ function createCommand(overrides?: Partial<OutboundCommand>): OutboundCommand {
   const now = new Date().toISOString();
   return {
     outbound_id: `out-${Date.now()}`,
-    thread_id: "thread-1",
+    conversation_id: "thread-1",
     mailbox_id: "mailbox-1",
     action_type: "send_reply",
     status: "pending",

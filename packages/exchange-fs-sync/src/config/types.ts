@@ -1,4 +1,5 @@
 import type { AttachmentPolicy, BodyPolicy, FolderRef, MailboxId } from "../types/index.js";
+import type { AllowedAction } from "../foreman/types.js";
 import type { ChangeType } from "../adapter/graph/subscription.js";
 
 export interface RetentionPolicy {
@@ -30,6 +31,14 @@ export interface CharterRuntimeConfig {
   model?: string;
   base_url?: string;
   timeout_ms?: number;
+}
+
+export interface MailboxPolicy {
+  primary_charter: string;
+  secondary_charters?: string[];
+  allowed_actions: AllowedAction[];
+  allowed_tools?: string[];
+  require_human_approval?: boolean;
 }
 
 export interface ExchangeFsSyncConfig {
@@ -70,6 +79,12 @@ export interface ExchangeFsSyncConfig {
    * Charter runtime configuration
    */
   charter?: CharterRuntimeConfig;
+
+  /**
+   * Mailbox policy binding that determines charter routing,
+   * allowed actions, and available tools for this mailbox.
+   */
+  policy: MailboxPolicy;
 
   /**
    * Webhook configuration for real-time sync

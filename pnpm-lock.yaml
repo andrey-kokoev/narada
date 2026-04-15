@@ -43,8 +43,8 @@ importers:
   packages/exchange-fs-sync:
     dependencies:
       better-sqlite3:
-        specifier: ^9.6.0
-        version: 9.6.0
+        specifier: ^12.9.0
+        version: 12.9.0
       zod:
         specifier: ^3.22.0
         version: 3.25.76
@@ -133,8 +133,8 @@ importers:
         specifier: workspace:*
         version: link:../exchange-fs-sync
       better-sqlite3:
-        specifier: ^9.4.0
-        version: 9.6.0
+        specifier: ^12.9.0
+        version: 12.9.0
     devDependencies:
       '@types/better-sqlite3':
         specifier: ^7.6.9
@@ -924,8 +924,9 @@ packages:
     resolution: {integrity: sha512-pbnl5XzGBdrFU/wT4jqmJVPn2B6UHPBOhzMQkY/SPUPB6QtUXtmBHBIwCbXJol93mOpGMnQyP/+BB19q04xj7g==}
     engines: {node: '>=4'}
 
-  better-sqlite3@9.6.0:
-    resolution: {integrity: sha512-yR5HATnqeYNVnkaUTf4bOP2dJSnyhP4puJN/QPRyx4YkBEEUxib422n2XzPqDEHjQQqazoYoADdAm5vE15+dAQ==}
+  better-sqlite3@12.9.0:
+    resolution: {integrity: sha512-wqUv4Gm3toFpHDQmaKD4QhZm3g1DjUBI0yzS4UBl6lElUmXFYdTQmmEDpAFa5o8FiFiymURypEnfVHzILKaxqQ==}
+    engines: {node: 20.x || 22.x || 23.x || 24.x || 25.x}
 
   bindings@1.5.0:
     resolution: {integrity: sha512-p2q/t/mhvuOj/UeLlV6566GD/guowlr0hHxClI0W9m7MWYkL1F0hLo+0Aexs9HSPCtR1SXQ0TD3MMKrXZajbiQ==}
@@ -2381,7 +2382,7 @@ snapshots:
     dependencies:
       is-windows: 1.0.2
 
-  better-sqlite3@9.6.0:
+  better-sqlite3@12.9.0:
     dependencies:
       bindings: 1.5.0
       prebuild-install: 7.1.3

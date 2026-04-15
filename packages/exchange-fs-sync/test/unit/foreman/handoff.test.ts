@@ -21,7 +21,7 @@ describe("OutboundHandoff", () => {
 
     // Seed thread and conversation records so foreign keys are satisfied
     coordinatorStore.upsertThread({
-      thread_id: "thread-1",
+      conversation_id: "thread-1",
       mailbox_id: "mb-1",
       primary_charter: "support_steward",
       secondary_charters_json: "[]",
@@ -83,7 +83,7 @@ describe("OutboundHandoff", () => {
     const now = new Date().toISOString();
     return {
       decision_id: "fd-1",
-      thread_id: "thread-1",
+      conversation_id: "thread-1",
       mailbox_id: "mb-1",
       source_charter_ids_json: '["support_steward"]',
       approved_action: "send_reply",
@@ -185,7 +185,7 @@ describe("OutboundHandoff", () => {
       outboundStore.createCommand(
         {
           outbound_id: "ob_fd-1",
-          thread_id: "thread-1",
+          conversation_id: "thread-1",
           mailbox_id: "mb-1",
           action_type: "send_reply",
           status: "pending",
@@ -229,7 +229,7 @@ describe("OutboundHandoff", () => {
       outboundStore.createCommand(
         {
           outbound_id: "o1",
-          thread_id: "thread-1",
+          conversation_id: "thread-1",
           mailbox_id: "mb-1",
           action_type: "send_reply",
           status: "pending",
@@ -262,7 +262,7 @@ describe("OutboundHandoff", () => {
       outboundStore.createCommand(
         {
           outbound_id: "o2",
-          thread_id: "thread-1",
+          conversation_id: "thread-1",
           mailbox_id: "mb-1",
           action_type: "mark_read",
           status: "confirmed",

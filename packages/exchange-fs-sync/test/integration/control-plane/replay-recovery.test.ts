@@ -39,7 +39,7 @@ describe("Replay and Recovery Tests", () => {
       const decisionId = `fd_${wi.work_item_id}_send_reply`;
       h.coordinatorStore.insertDecision({
         decision_id: decisionId,
-        thread_id: "conv-1",
+        conversation_id: "conv-1",
         mailbox_id: "mb-1",
         source_charter_ids_json: "[\"support_steward\"]",
         approved_action: "send_reply",
@@ -52,7 +52,7 @@ describe("Replay and Recovery Tests", () => {
       h.outboundStore.createCommand(
         {
           outbound_id: `ob_${decisionId}`,
-          thread_id: "conv-1",
+          conversation_id: "conv-1",
           mailbox_id: "mb-1",
           action_type: "send_reply",
           status: "pending",
@@ -563,13 +563,11 @@ describe("Replay and Recovery Tests", () => {
 
       // Write traces then delete them
       h.traceStore.writeTrace({
+        execution_id: exId,
         conversation_id: "conv-1",
-        mailbox_id: "mb-1",
-        agent_id: "charter:support_steward",
-        chat_id: null,
+        work_item_id: wi.work_item_id,
         session_id: exId,
-        trace_type: "charter_output",
-        parent_trace_id: null,
+        trace_type: "runtime_output",
         reference_outbound_id: null,
         reference_message_id: null,
         payload_json: "{}",
@@ -824,7 +822,7 @@ describe("Replay and Recovery Tests", () => {
       expect(r2.success).toBe(true);
 
       const decisionId = r1.decision_id!;
-      const commands = h.db.prepare("select count(*) as c from outbound_commands where thread_id = ?").get("conv-1") as { c: number };
+      const commands = h.db.prepare("select count(*) as c from outbound_commands where conversation_id = ?").get("conv-1") as { c: number };
       expect(commands.c).toBe(1);
 
       const decisionCmds = h.db.prepare("select count(*) as c from foreman_decisions where decision_id = ?").get(decisionId) as { c: number };
@@ -864,13 +862,11 @@ describe("Replay and Recovery Tests", () => {
       insertExecutionAttempt(h, wi.work_item_id, exId, envelope, "active");
 
       h.traceStore.writeTrace({
+        execution_id: exId,
         conversation_id: "conv-1",
-        mailbox_id: "mb-1",
-        agent_id: "test",
-        chat_id: null,
+        work_item_id: wi.work_item_id,
         session_id: exId,
-        trace_type: "test",
-        parent_trace_id: null,
+        trace_type: "debug",
         reference_outbound_id: null,
         reference_message_id: null,
         payload_json: "{}",

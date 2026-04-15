@@ -3,40 +3,42 @@
  *
  * Append-only durable commentary for agent reasoning, decisions, and observations.
  *
- * Spec: .ai/tasks/20260413-009-agent-trace-persistence.md
- * Review: .ai/reviews/20260413-010-review-agent-trace-architecture.md
- * Identity Closure: .ai/tasks/20260413-010-identify-closure-conversation-chat-session-model.md
+ * Semantics:
+ * - Traces are commentary, not authority. No control-plane correctness depends on them.
+ * - `execution_id` is the canonical anchor (primary attachment point).
+ * - All other references (`conversation_id`, `work_item_id`, `session_id`, `reference_outbound_id`)
+ *   are navigational only and non-authoritative.
+ *
+ * Spec: .ai/tasks/20260415-027-trace-system-reanchored-on-canonical-identity.md
  */
 
 export type TraceType =
-  | "reasoning"
+  | "observation"
   | "decision"
   | "action"
-  | "observation"
   | "handoff"
-  | "override";
+  | "tool_call"
+  | "runtime_output"
+  | "debug";
 
 /**
  * A single trace record.
  *
- * `rowid` is exposed as a stable local ordering primitive for deterministic
- * replay and cursor-based pagination.
- *
  * Identity model:
- * - `conversation_id` is the canonical mailbox identity (Exchange conversationId).
- * - `chat_id` is an optional local UI/CLI interaction container.
- * - `session_id` is an optional single-execution correlation token.
+ * - `execution_id` is the canonical anchor (required, non-null).
+ * - `conversation_id` is required for conversation-level navigation.
+ * - `work_item_id` is optional local navigation.
+ * - `session_id` is optional single-execution correlation.
+ * - `reference_outbound_id` and `reference_message_id` are logical references only
+ *   (no FK constraints) so trace retention is not coupled to command retention.
  */
 export interface AgentTrace {
-  rowid: number;
   trace_id: string;
+  execution_id: string;
   conversation_id: string;
-  mailbox_id: string;
-  agent_id: string;
-  chat_id: string | null;
+  work_item_id: string | null;
   session_id: string | null;
   trace_type: TraceType;
-  parent_trace_id: string | null;
   reference_outbound_id: string | null;
   reference_message_id: string | null;
   payload_json: string;
@@ -47,8 +49,11 @@ export interface AgentTraceStore {
   initSchema(): void;
 
   writeTrace(
-    trace: Omit<AgentTrace, "rowid" | "trace_id" | "created_at">,
+    trace: Omit<AgentTrace, "trace_id" | "created_at">,
   ): AgentTrace;
+
+  /** Canonical read by execution_id (primary anchor). */
+  readByExecutionId(executionId: string): AgentTrace[];
 
   readByConversation(
     conversationId: string,
@@ -60,16 +65,9 @@ export interface AgentTraceStore {
     },
   ): AgentTrace[];
 
-  readByChatId(chatId: string): AgentTrace[];
-
   readBySession(sessionId: string): AgentTrace[];
 
   readByOutboundId(outboundId: string): AgentTrace[];
-
-  readUnlinkedDecisions(opts?: {
-    types?: TraceType[];
-    limit?: number;
-  }): AgentTrace[];
 
   getTrace(traceId: string): AgentTrace | undefined;
 

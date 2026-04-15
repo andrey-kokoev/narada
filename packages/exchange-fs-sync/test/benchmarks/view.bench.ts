@@ -26,7 +26,7 @@ describe('View Queries', () => {
         date.setDate(date.getDate() + i);
         await messageStore.upsertFromPayload({
           message_id: `msg-${i}`,
-          thread_id: `thread-${i}`,
+          conversation_id: `thread-${i}`,
           container_refs: [{ type: 'folder', id: 'inbox' }],
           received_at: date.toISOString(),
           sent_at: date.toISOString(),
@@ -70,7 +70,7 @@ describe('View Queries', () => {
         date.setDate(date.getDate() + (i % 90));
         await messageStore.upsertFromPayload({
           message_id: `msg-${i}`,
-          thread_id: `thread-${Math.floor(i / 10)}`,
+          conversation_id: `thread-${Math.floor(i / 10)}`,
           container_refs: [{ type: 'folder', id: 'inbox' }],
           received_at: date.toISOString(),
           sent_at: date.toISOString(),
@@ -114,7 +114,7 @@ describe('View Queries', () => {
         for (let msg = 0; msg < msgCount; msg++) {
           await messageStore.upsertFromPayload({
             message_id: `thread-${thread}-msg-${msg}`,
-            thread_id: `thread-${thread}`,
+            conversation_id: `thread-${thread}`,
             container_refs: [{ type: 'folder', id: 'inbox' }],
             received_at: new Date().toISOString(),
             sent_at: new Date().toISOString(),
@@ -156,7 +156,7 @@ describe('View Queries', () => {
         const word = words[i % words.length];
         await messageStore.upsertFromPayload({
           message_id: `msg-${i}`,
-          thread_id: `thread-${i}`,
+          conversation_id: `thread-${i}`,
           container_refs: [{ type: 'folder', id: 'inbox' }],
           received_at: new Date().toISOString(),
           sent_at: new Date().toISOString(),
@@ -200,7 +200,7 @@ describe('View Queries', () => {
       for (let i = 0; i < 500; i++) {
         await messageStore.upsertFromPayload({
           message_id: `msg-${i}`,
-          thread_id: `thread-${Math.floor(i / 10)}`,
+          conversation_id: `thread-${Math.floor(i / 10)}`,
           container_refs: [{ type: 'folder', id: 'inbox' }],
           received_at: new Date().toISOString(),
           sent_at: new Date().toISOString(),

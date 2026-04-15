@@ -145,7 +145,7 @@ describe('Memory: Store Operations', () => {
         for (let i = 0; i < 100; i++) {
           await store.upsertFromPayload({
             message_id: `msg-${i}`,
-            thread_id: `thread-${i}`,
+            conversation_id: `thread-${i}`,
             container_refs: [{ type: 'folder', id: 'inbox' }],
             received_at: new Date().toISOString(),
             sent_at: new Date().toISOString(),

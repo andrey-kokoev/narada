@@ -97,6 +97,10 @@ describe("CodexCharterRunner", () => {
     expect(evaluations).toHaveLength(1);
     expect(traces).toHaveLength(1);
     expect((traces[0] as { reasoning_log?: string }).reasoning_log).toBe("thinking...");
+    expect((traces[0] as { execution_id: string }).execution_id).toBe("ex-1");
+    expect((traces[0] as { conversation_id: string }).conversation_id).toBe("conv-1");
+    expect((traces[0] as { work_item_id: string }).work_item_id).toBe("wi-1");
+    expect((traces[0] as { charter_id: string }).charter_id).toBe("support_steward");
   });
 
   it("throws on API error", async () => {

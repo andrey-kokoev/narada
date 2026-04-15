@@ -12,7 +12,7 @@
 
 import type { NormalizedThreadContext } from "../coordinator/types.js";
 
-export type CharterId = "support_steward" | "obligation_keeper";
+export type CharterId = string;
 
 export type AllowedAction =
   | "draft_reply"

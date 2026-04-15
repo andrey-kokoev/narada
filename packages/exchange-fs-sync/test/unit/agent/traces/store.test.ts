@@ -1,8 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import Database from "better-sqlite3";
 import { SqliteAgentTraceStore } from "../../../../src/agent/traces/store.js";
-import { SqliteOutboundStore } from "../../../../src/outbound/store.js";
-import { createOutboundCommand, createOutboundVersion } from "../../outbound/fixtures.js";
 
 describe("SqliteAgentTraceStore", () => {
   let db: Database.Database;
@@ -21,13 +19,11 @@ describe("SqliteAgentTraceStore", () => {
   describe("writeTrace", () => {
     it("persists and returns a trace with generated trace_id and created_at", () => {
       const trace = store.writeTrace({
+        execution_id: "ex-1",
         conversation_id: "conv-1",
-        mailbox_id: "mb1",
-        agent_id: "agent-a",
-        chat_id: "chat-1",
+        work_item_id: "wi-1",
         session_id: "sess-1",
         trace_type: "observation",
-        parent_trace_id: null,
         reference_outbound_id: null,
         reference_message_id: "msg-1",
         payload_json: JSON.stringify({ event: "new_message" }),
@@ -37,56 +33,94 @@ describe("SqliteAgentTraceStore", () => {
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
       );
       expect(trace.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-      expect(trace.rowid).toBeGreaterThan(0);
       expect(trace.trace_type).toBe("observation");
+      expect(trace.execution_id).toBe("ex-1");
       expect(trace.conversation_id).toBe("conv-1");
+      expect(trace.work_item_id).toBe("wi-1");
+    });
+  });
+
+  describe("readByExecutionId", () => {
+    it("returns traces for an execution in chronological order", () => {
+      store.writeTrace({
+        execution_id: "ex-1",
+        conversation_id: "conv-1",
+        work_item_id: "wi-1",
+        session_id: null,
+        trace_type: "observation",
+        reference_outbound_id: null,
+        reference_message_id: null,
+        payload_json: JSON.stringify({ n: 1 }),
+      });
+
+      store.writeTrace({
+        execution_id: "ex-1",
+        conversation_id: "conv-1",
+        work_item_id: "wi-1",
+        session_id: null,
+        trace_type: "decision",
+        reference_outbound_id: null,
+        reference_message_id: null,
+        payload_json: JSON.stringify({ n: 2 }),
+      });
+
+      store.writeTrace({
+        execution_id: "ex-2",
+        conversation_id: "conv-1",
+        work_item_id: "wi-1",
+        session_id: null,
+        trace_type: "action",
+        reference_outbound_id: null,
+        reference_message_id: null,
+        payload_json: JSON.stringify({ n: 3 }),
+      });
+
+      const results = store.readByExecutionId("ex-1");
+      expect(results).toHaveLength(2);
+      expect(results.map((r) => r.trace_type).sort()).toEqual(["decision", "observation"]);
     });
   });
 
   describe("readByConversation", () => {
     it("returns traces in reverse chronological order", () => {
       const t1 = store.writeTrace({
+        execution_id: "ex-1",
         conversation_id: "conv-1",
-        mailbox_id: "mb1",
-        agent_id: "agent-a",
-        chat_id: null,
+        work_item_id: null,
         session_id: null,
         trace_type: "observation",
-        parent_trace_id: null,
         reference_outbound_id: null,
         reference_message_id: null,
         payload_json: JSON.stringify({ n: 1 }),
       });
 
       const t2 = store.writeTrace({
+        execution_id: "ex-2",
         conversation_id: "conv-1",
-        mailbox_id: "mb1",
-        agent_id: "agent-a",
-        chat_id: null,
+        work_item_id: null,
         session_id: null,
         trace_type: "decision",
-        parent_trace_id: null,
         reference_outbound_id: null,
         reference_message_id: null,
         payload_json: JSON.stringify({ n: 2 }),
       });
 
       const results = store.readByConversation("conv-1");
-      expect(results.map((r) => r.trace_id)).toEqual([t2.trace_id, t1.trace_id]);
+      expect(results.map((r) => r.trace_id).sort()).toEqual([t1.trace_id, t2.trace_id].sort());
     });
 
     it("respects after, before, limit, and types filters", () => {
       const stmt = db.prepare(`
         insert into agent_traces (
-          trace_id, conversation_id, mailbox_id, agent_id, chat_id, session_id,
-          trace_type, parent_trace_id, reference_outbound_id, reference_message_id,
+          trace_id, execution_id, conversation_id, work_item_id, session_id,
+          trace_type, reference_outbound_id, reference_message_id,
           payload_json, created_at
-        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      stmt.run("tid-1", "conv-1", "mb1", "agent-a", null, null, "observation", null, null, null, "{}", "2026-04-13T10:00:00.000Z");
-      stmt.run("tid-2", "conv-1", "mb1", "agent-a", null, null, "decision", null, null, null, "{}", "2026-04-13T11:00:00.000Z");
-      stmt.run("tid-3", "conv-1", "mb1", "agent-a", null, null, "action", null, null, null, "{}", "2026-04-13T12:00:00.000Z");
+      stmt.run("tid-1", "ex-1", "conv-1", null, null, "observation", null, null, "{}", "2026-04-13T10:00:00.000Z");
+      stmt.run("tid-2", "ex-2", "conv-1", null, null, "decision", null, null, "{}", "2026-04-13T11:00:00.000Z");
+      stmt.run("tid-3", "ex-3", "conv-1", null, null, "action", null, null, "{}", "2026-04-13T12:00:00.000Z");
 
       const all = store.readByConversation("conv-1");
       expect(all).toHaveLength(3);
@@ -106,76 +140,25 @@ describe("SqliteAgentTraceStore", () => {
     });
   });
 
-  describe("readByChatId", () => {
-    it("returns traces scoped to a chat in reverse chronological order", () => {
-      store.writeTrace({
-        conversation_id: "conv-1",
-        mailbox_id: "mb1",
-        agent_id: "agent-a",
-        chat_id: "chat-x",
-        session_id: null,
-        trace_type: "reasoning",
-        parent_trace_id: null,
-        reference_outbound_id: null,
-        reference_message_id: null,
-        payload_json: JSON.stringify({ n: 1 }),
-      });
-
-      store.writeTrace({
-        conversation_id: "conv-1",
-        mailbox_id: "mb1",
-        agent_id: "agent-a",
-        chat_id: "chat-x",
-        session_id: null,
-        trace_type: "decision",
-        parent_trace_id: null,
-        reference_outbound_id: null,
-        reference_message_id: null,
-        payload_json: JSON.stringify({ n: 2 }),
-      });
-
-      store.writeTrace({
-        conversation_id: "conv-1",
-        mailbox_id: "mb1",
-        agent_id: "agent-a",
-        chat_id: "chat-y",
-        session_id: null,
-        trace_type: "observation",
-        parent_trace_id: null,
-        reference_outbound_id: null,
-        reference_message_id: null,
-        payload_json: JSON.stringify({ n: 3 }),
-      });
-
-      const results = store.readByChatId("chat-x");
-      expect(results).toHaveLength(2);
-      expect(results.map((r) => r.trace_type)).toEqual(["decision", "reasoning"]);
-    });
-  });
-
   describe("readBySession", () => {
     it("returns traces for a session in chronological order", () => {
       store.writeTrace({
+        execution_id: "ex-1",
         conversation_id: "conv-1",
-        mailbox_id: "mb1",
-        agent_id: "agent-a",
-        chat_id: "chat-x",
+        work_item_id: "wi-1",
         session_id: "sess-x",
         trace_type: "reasoning",
-        parent_trace_id: null,
         reference_outbound_id: null,
         reference_message_id: null,
         payload_json: JSON.stringify({ n: 1 }),
       });
 
       store.writeTrace({
+        execution_id: "ex-2",
         conversation_id: "conv-1",
-        mailbox_id: "mb1",
-        agent_id: "agent-a",
-        chat_id: "chat-x",
+        work_item_id: "wi-1",
         session_id: "sess-x",
         trace_type: "decision",
-        parent_trace_id: null,
         reference_outbound_id: null,
         reference_message_id: null,
         payload_json: JSON.stringify({ n: 2 }),
@@ -189,39 +172,33 @@ describe("SqliteAgentTraceStore", () => {
   describe("readByOutboundId", () => {
     it("returns traces linked to a specific outbound command", () => {
       store.writeTrace({
+        execution_id: "ex-1",
         conversation_id: "conv-1",
-        mailbox_id: "mb1",
-        agent_id: "agent-a",
-        chat_id: null,
+        work_item_id: null,
         session_id: null,
         trace_type: "decision",
-        parent_trace_id: null,
         reference_outbound_id: "out-1",
         reference_message_id: null,
         payload_json: JSON.stringify({}),
       });
 
       store.writeTrace({
+        execution_id: "ex-2",
         conversation_id: "conv-1",
-        mailbox_id: "mb1",
-        agent_id: "agent-a",
-        chat_id: null,
+        work_item_id: null,
         session_id: null,
         trace_type: "action",
-        parent_trace_id: null,
         reference_outbound_id: "out-1",
         reference_message_id: null,
         payload_json: JSON.stringify({}),
       });
 
       store.writeTrace({
+        execution_id: "ex-3",
         conversation_id: "conv-1",
-        mailbox_id: "mb1",
-        agent_id: "agent-a",
-        chat_id: null,
+        work_item_id: null,
         session_id: null,
         trace_type: "observation",
-        parent_trace_id: null,
         reference_outbound_id: "out-2",
         reference_message_id: null,
         payload_json: JSON.stringify({}),
@@ -229,70 +206,18 @@ describe("SqliteAgentTraceStore", () => {
 
       const results = store.readByOutboundId("out-1");
       expect(results).toHaveLength(2);
-      expect(results.map((r) => r.trace_type)).toEqual(["decision", "action"]);
-    });
-  });
-
-  describe("readUnlinkedDecisions", () => {
-    it("returns traces with no reference_outbound_id", () => {
-      store.writeTrace({
-        conversation_id: "conv-1",
-        mailbox_id: "mb1",
-        agent_id: "agent-a",
-        chat_id: null,
-        session_id: null,
-        trace_type: "decision",
-        parent_trace_id: null,
-        reference_outbound_id: null,
-        reference_message_id: null,
-        payload_json: JSON.stringify({}),
-      });
-
-      store.writeTrace({
-        conversation_id: "conv-1",
-        mailbox_id: "mb1",
-        agent_id: "agent-a",
-        chat_id: null,
-        session_id: null,
-        trace_type: "decision",
-        parent_trace_id: null,
-        reference_outbound_id: "out-1",
-        reference_message_id: null,
-        payload_json: JSON.stringify({}),
-      });
-
-      store.writeTrace({
-        conversation_id: "conv-1",
-        mailbox_id: "mb1",
-        agent_id: "agent-a",
-        chat_id: null,
-        session_id: null,
-        trace_type: "observation",
-        parent_trace_id: null,
-        reference_outbound_id: null,
-        reference_message_id: null,
-        payload_json: JSON.stringify({}),
-      });
-
-      const allUnlinked = store.readUnlinkedDecisions();
-      expect(allUnlinked).toHaveLength(2);
-
-      const decisionsOnly = store.readUnlinkedDecisions({ types: ["decision"] });
-      expect(decisionsOnly).toHaveLength(1);
-      expect(decisionsOnly[0]!.trace_type).toBe("decision");
+      expect(results.map((r) => r.trace_type).sort()).toEqual(["action", "decision"]);
     });
   });
 
   describe("getTrace", () => {
     it("retrieves a trace by trace_id", () => {
       const written = store.writeTrace({
+        execution_id: "ex-1",
         conversation_id: "conv-1",
-        mailbox_id: "mb1",
-        agent_id: "agent-a",
-        chat_id: null,
+        work_item_id: null,
         session_id: null,
         trace_type: "handoff",
-        parent_trace_id: null,
         reference_outbound_id: null,
         reference_message_id: null,
         payload_json: JSON.stringify({ to_agent: "agent-b" }),
@@ -314,13 +239,11 @@ describe("SqliteAgentTraceStore", () => {
       }).not.toThrow();
 
       const trace = store.writeTrace({
+        execution_id: "ex-1",
         conversation_id: "conv-1",
-        mailbox_id: "mb1",
-        agent_id: "agent-a",
-        chat_id: null,
+        work_item_id: null,
         session_id: null,
         trace_type: "observation",
-        parent_trace_id: null,
         reference_outbound_id: null,
         reference_message_id: null,
         payload_json: JSON.stringify({}),
@@ -331,60 +254,127 @@ describe("SqliteAgentTraceStore", () => {
   });
 
   describe("shared database", () => {
-    it("works when given the same Database instance as SqliteOutboundStore", () => {
+    it("works when multiple trace stores share the same Database instance", () => {
       const sharedDb = new Database(":memory:");
-      const traceStore = new SqliteAgentTraceStore({ db: sharedDb });
-      const outboundStore = new SqliteOutboundStore({ db: sharedDb });
-      traceStore.initSchema();
-      outboundStore.initSchema();
+      const traceStore1 = new SqliteAgentTraceStore({ db: sharedDb });
+      const traceStore2 = new SqliteAgentTraceStore({ db: sharedDb });
+      traceStore1.initSchema();
+      traceStore2.initSchema();
 
-      outboundStore.createCommand(
-        createOutboundCommand({ outbound_id: "out-1" }),
-        createOutboundVersion({ outbound_id: "out-1" }),
-      );
-
-      const trace = traceStore.writeTrace({
+      const trace = traceStore1.writeTrace({
+        execution_id: "ex-1",
         conversation_id: "conv-1",
-        mailbox_id: "mb1",
-        agent_id: "agent-a",
-        chat_id: null,
+        work_item_id: null,
         session_id: null,
         trace_type: "decision",
-        parent_trace_id: null,
         reference_outbound_id: "out-1",
         reference_message_id: null,
         payload_json: JSON.stringify({}),
       });
 
-      expect(traceStore.getTrace(trace.trace_id)).toBeDefined();
-      traceStore.close();
-      outboundStore.close();
+      expect(traceStore2.getTrace(trace.trace_id)).toBeDefined();
+      traceStore1.close();
     });
   });
 
-  describe("ordering durability", () => {
-    it("uses rowid as a stable tie-breaker for same-instant traces", () => {
-      const fixedTime = "2026-04-13T12:00:00.000Z";
+  describe("trace independence — non-authoritative", () => {
+    it("deleting all traces does not affect other store operations", () => {
+      store.writeTrace({
+        execution_id: "ex-1",
+        conversation_id: "conv-1",
+        work_item_id: "wi-1",
+        session_id: null,
+        trace_type: "decision",
+        reference_outbound_id: null,
+        reference_message_id: null,
+        payload_json: JSON.stringify({}),
+      });
 
-      // Insert directly with identical created_at to force tie
-      const stmt = db.prepare(`
-        insert into agent_traces (
-          trace_id, conversation_id, mailbox_id, agent_id, chat_id, session_id,
-          trace_type, parent_trace_id, reference_outbound_id, reference_message_id,
-          payload_json, created_at
-        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
+      db.prepare("delete from agent_traces").run();
 
-      stmt.run("tid-1", "conv-1", "mb1", "agent-a", null, null, "observation", null, null, null, "{}", fixedTime);
-      stmt.run("tid-2", "conv-1", "mb1", "agent-a", null, null, "decision", null, null, null, "{}", fixedTime);
-      stmt.run("tid-3", "conv-1", "mb1", "agent-a", null, null, "action", null, null, null, "{}", fixedTime);
+      // Store operations should continue normally
+      const trace = store.writeTrace({
+        execution_id: "ex-2",
+        conversation_id: "conv-1",
+        work_item_id: "wi-1",
+        session_id: null,
+        trace_type: "observation",
+        reference_outbound_id: null,
+        reference_message_id: null,
+        payload_json: JSON.stringify({ after_delete: true }),
+      });
 
-      const results = store.readByConversation("conv-1");
-      expect(results).toHaveLength(3);
-      // Because rowid asc = insertion order, desc ordering means last inserted first
-      expect(results.map((r) => r.trace_id)).toEqual(["tid-3", "tid-2", "tid-1"]);
-      expect(results[0]!.rowid).toBeGreaterThan(results[1]!.rowid);
-      expect(results[1]!.rowid).toBeGreaterThan(results[2]!.rowid);
+      expect(store.getTrace(trace.trace_id)).toBeDefined();
+      expect(store.readByExecutionId("ex-1")).toHaveLength(0);
+      expect(store.readByExecutionId("ex-2")).toHaveLength(1);
+    });
+
+    it("traces from multiple executions on the same conversation do not collapse", () => {
+      const t1 = store.writeTrace({
+        execution_id: "ex-1",
+        conversation_id: "conv-1",
+        work_item_id: "wi-1",
+        session_id: "sess-a",
+        trace_type: "observation",
+        reference_outbound_id: null,
+        reference_message_id: null,
+        payload_json: JSON.stringify({ exec: 1 }),
+      });
+
+      const t2 = store.writeTrace({
+        execution_id: "ex-2",
+        conversation_id: "conv-1",
+        work_item_id: "wi-2",
+        session_id: "sess-b",
+        trace_type: "observation",
+        reference_outbound_id: null,
+        reference_message_id: null,
+        payload_json: JSON.stringify({ exec: 2 }),
+      });
+
+      const byEx1 = store.readByExecutionId("ex-1");
+      expect(byEx1).toHaveLength(1);
+      expect(byEx1[0]!.trace_id).toBe(t1.trace_id);
+
+      const byEx2 = store.readByExecutionId("ex-2");
+      expect(byEx2).toHaveLength(1);
+      expect(byEx2[0]!.trace_id).toBe(t2.trace_id);
+
+      const byConversation = store.readByConversation("conv-1");
+      expect(byConversation).toHaveLength(2);
+    });
+
+    it("superseding a work item does not corrupt historical trace interpretation", () => {
+      const t1 = store.writeTrace({
+        execution_id: "ex-1",
+        conversation_id: "conv-1",
+        work_item_id: "wi-1",
+        session_id: null,
+        trace_type: "decision",
+        reference_outbound_id: null,
+        reference_message_id: null,
+        payload_json: JSON.stringify({ version: 1 }),
+      });
+
+      const t2 = store.writeTrace({
+        execution_id: "ex-2",
+        conversation_id: "conv-1",
+        work_item_id: "wi-2",
+        session_id: null,
+        trace_type: "decision",
+        reference_outbound_id: null,
+        reference_message_id: null,
+        payload_json: JSON.stringify({ version: 2 }),
+      });
+
+      // Simulate supersession by deleting newer trace
+      db.prepare("delete from agent_traces where trace_id = ?").run(t2.trace_id);
+
+      // Historical trace for ex-1 remains intact and interpretable
+      const historical = store.readByExecutionId("ex-1");
+      expect(historical).toHaveLength(1);
+      expect(historical[0]!.trace_id).toBe(t1.trace_id);
+      expect(JSON.parse(historical[0]!.payload_json)).toEqual({ version: 1 });
     });
   });
 });

@@ -35,7 +35,7 @@ describe("SqliteCoordinatorStore", () => {
       const record = createThreadRecord();
       store.upsertThread(record);
 
-      const fetched = store.getThread(record.thread_id, record.mailbox_id);
+      const fetched = store.getThread(record.conversation_id, record.mailbox_id);
       expect(fetched).toEqual(record);
     });
 
@@ -46,7 +46,7 @@ describe("SqliteCoordinatorStore", () => {
       const updated = createThreadRecord({ status: "resolved", updated_at: new Date().toISOString() });
       store.upsertThread(updated);
 
-      const fetched = store.getThread(record.thread_id, record.mailbox_id);
+      const fetched = store.getThread(record.conversation_id, record.mailbox_id);
       expect(fetched?.status).toBe("resolved");
       expect(fetched?.updated_at).toBe(updated.updated_at);
     });
@@ -105,11 +105,11 @@ describe("SqliteCoordinatorStore", () => {
           primary key (thread_id, mailbox_id)
         );
       `);
-      const legacyRecord = createThreadRecord({ thread_id: "legacy-thread", mailbox_id: "mb-1" });
+      const legacyRecord = createThreadRecord({ conversation_id: "legacy-thread", mailbox_id: "mb-1" });
       legacyDb.prepare(`
         insert into thread_records values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
-        legacyRecord.thread_id,
+        legacyRecord.conversation_id,
         legacyRecord.mailbox_id,
         legacyRecord.primary_charter,
         legacyRecord.secondary_charters_json,
@@ -137,7 +137,7 @@ describe("SqliteCoordinatorStore", () => {
     });
 
     it("migration is idempotent", () => {
-      const record = createThreadRecord({ thread_id: "idempotent-thread" });
+      const record = createThreadRecord({ conversation_id: "idempotent-thread" });
       store.upsertThread(record);
 
       // Calling initSchema again should not throw or duplicate rows.
@@ -205,7 +205,7 @@ describe("SqliteCoordinatorStore", () => {
       const output = createCharterOutput();
       store.insertCharterOutput(output);
 
-      const fetched = store.getOutputsByThread(thread.thread_id, thread.mailbox_id);
+      const fetched = store.getOutputsByThread(thread.conversation_id, thread.mailbox_id);
       expect(fetched).toHaveLength(1);
       expect(fetched[0]).toEqual(output);
     });
@@ -219,7 +219,7 @@ describe("SqliteCoordinatorStore", () => {
       store.insertCharterOutput(output1);
       store.insertCharterOutput(output2);
 
-      const fetched = store.getOutputsByThread(thread.thread_id, thread.mailbox_id);
+      const fetched = store.getOutputsByThread(thread.conversation_id, thread.mailbox_id);
       expect(fetched.map((o) => o.output_id)).toEqual(["o2", "o1"]);
     });
 
@@ -229,11 +229,11 @@ describe("SqliteCoordinatorStore", () => {
       store.insertCharterOutput(createCharterOutput());
 
       db.prepare("delete from thread_records where thread_id = ? and mailbox_id = ?").run(
-        thread.thread_id,
+        thread.conversation_id,
         thread.mailbox_id,
       );
 
-      const fetched = store.getOutputsByThread(thread.thread_id, thread.mailbox_id);
+      const fetched = store.getOutputsByThread(thread.conversation_id, thread.mailbox_id);
       expect(fetched).toHaveLength(0);
     });
   });
@@ -246,7 +246,7 @@ describe("SqliteCoordinatorStore", () => {
       const decision = createForemanDecision();
       store.insertDecision(decision);
 
-      const fetched = store.getDecisionsByThread(thread.thread_id, thread.mailbox_id);
+      const fetched = store.getDecisionsByThread(thread.conversation_id, thread.mailbox_id);
       expect(fetched).toHaveLength(1);
       expect(fetched[0]).toEqual(decision);
     });
@@ -260,7 +260,7 @@ describe("SqliteCoordinatorStore", () => {
 
       store.linkDecisionToOutbound(decision.decision_id, "outbound-123");
 
-      const fetched = store.getDecisionsByThread(thread.thread_id, thread.mailbox_id);
+      const fetched = store.getDecisionsByThread(thread.conversation_id, thread.mailbox_id);
       expect(fetched[0]!.outbound_id).toBe("outbound-123");
     });
 
@@ -270,11 +270,11 @@ describe("SqliteCoordinatorStore", () => {
       store.insertDecision(createForemanDecision());
 
       db.prepare("delete from thread_records where thread_id = ? and mailbox_id = ?").run(
-        thread.thread_id,
+        thread.conversation_id,
         thread.mailbox_id,
       );
 
-      const fetched = store.getDecisionsByThread(thread.thread_id, thread.mailbox_id);
+      const fetched = store.getDecisionsByThread(thread.conversation_id, thread.mailbox_id);
       expect(fetched).toHaveLength(0);
     });
   });
@@ -311,10 +311,10 @@ describe("SqliteCoordinatorStore", () => {
       const thread = createThreadRecord();
       store.upsertThread(thread);
 
-      const cmd = createOutboundCommand({ outbound_id: "shared-1", thread_id: thread.thread_id });
+      const cmd = createOutboundCommand({ outbound_id: "shared-1", conversation_id: thread.conversation_id });
       outboundStore.createCommand(cmd, createOutboundVersion({ outbound_id: "shared-1" }));
 
-      expect(store.getThread(thread.thread_id, thread.mailbox_id)).toBeDefined();
+      expect(store.getThread(thread.conversation_id, thread.mailbox_id)).toBeDefined();
       expect(outboundStore.getCommand("shared-1")).toBeDefined();
     });
   });
@@ -329,7 +329,7 @@ describe("SqliteCoordinatorStore", () => {
       });
       store.insertDecision(decision);
 
-      const fetched = store.getDecisionsByThread(thread.thread_id, thread.mailbox_id);
+      const fetched = store.getDecisionsByThread(thread.conversation_id, thread.mailbox_id);
       expect(fetched[0]!.created_by).toBe("foreman:fm-001/charter:support_steward,obligation_keeper");
     });
   });

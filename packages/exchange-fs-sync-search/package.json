@@ -41,8 +41,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "better-sqlite3": "^9.4.0",
-    "@narada/exchange-fs-sync": "workspace:*"
+    "@narada/exchange-fs-sync": "workspace:*",
+    "better-sqlite3": "^12.9.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.9",

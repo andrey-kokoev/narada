@@ -45,7 +45,7 @@ export class OutboundHandoff {
 
     const command: OutboundCommand = {
       outbound_id: outboundId,
-      thread_id: decision.thread_id,
+      conversation_id: decision.conversation_id,
       mailbox_id: decision.mailbox_id,
       action_type: decision.approved_action as OutboundCommand["action_type"],
       status: "pending",
@@ -109,10 +109,10 @@ export class OutboundHandoff {
    */
   recoverWorkItemIfCommandExists(
     workItemId: string,
-    threadId: string,
+    conversationId: string,
     mailboxId: string,
   ): string | null {
-    const decisions = this.deps.coordinatorStore.getDecisionsByThread(threadId, mailboxId);
+    const decisions = this.deps.coordinatorStore.getDecisionsByConversation(conversationId, mailboxId);
     const materialized = decisions.find((d) => d.outbound_id !== null);
     if (!materialized?.outbound_id) {
       return null;

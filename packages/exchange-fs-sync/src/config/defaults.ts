@@ -14,6 +14,10 @@ export const DEFAULT_EXCHANGE_FS_SYNC_CONFIG: Omit<
   charter: {
     runtime: "mock",
   },
+  policy: {
+    primary_charter: "support_steward",
+    allowed_actions: ["draft_reply", "send_reply", "mark_read", "no_action"],
+  },
   runtime: {
     polling_interval_ms: 60_000,
     acquire_lock_timeout_ms: 30_000,

@@ -38,7 +38,7 @@ describe("SqliteScheduler", () => {
       updated_at: new Date().toISOString(),
     });
     store.upsertThread({
-      thread_id: conversationId,
+      conversation_id: conversationId,
       mailbox_id: mailboxId,
       primary_charter: "support_steward",
       secondary_charters_json: "[]",

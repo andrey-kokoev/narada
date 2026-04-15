@@ -10,15 +10,12 @@ import type { AgentTrace, AgentTraceStore, TraceType } from "./types.js";
 
 function rowToAgentTrace(row: Record<string, unknown>): AgentTrace {
   return {
-    rowid: Number(row.rowid),
     trace_id: String(row.trace_id),
+    execution_id: String(row.execution_id),
     conversation_id: String(row.conversation_id),
-    mailbox_id: String(row.mailbox_id),
-    agent_id: String(row.agent_id),
-    chat_id: row.chat_id ? String(row.chat_id) : null,
+    work_item_id: row.work_item_id ? String(row.work_item_id) : null,
     session_id: row.session_id ? String(row.session_id) : null,
     trace_type: String(row.trace_type) as TraceType,
-    parent_trace_id: row.parent_trace_id ? String(row.parent_trace_id) : null,
     reference_outbound_id: row.reference_outbound_id
       ? String(row.reference_outbound_id)
       : null,
@@ -43,34 +40,29 @@ export class SqliteAgentTraceStore implements AgentTraceStore {
 
   initSchema(): void {
     this.db.exec(`
-      -- Agent Trace Persistence Schema — Identity-Closed Version
+      -- Agent Trace Persistence Schema — Canonical Identity Version
 
       create table if not exists agent_traces (
         trace_id text primary key,
+        execution_id text not null,
         conversation_id text not null,
-        mailbox_id text not null,
-        agent_id text not null,
-        chat_id text,
+        work_item_id text,
         session_id text,
         trace_type text not null,
-        parent_trace_id text,
         reference_outbound_id text,
         reference_message_id text,
         payload_json text not null,
         created_at text not null
       );
 
+      create index if not exists idx_agent_traces_execution
+        on agent_traces(execution_id, created_at asc);
+
       create index if not exists idx_agent_traces_conversation
         on agent_traces(conversation_id, created_at desc);
 
-      create index if not exists idx_agent_traces_chat
-        on agent_traces(chat_id, created_at desc);
-
       create index if not exists idx_agent_traces_session
         on agent_traces(session_id, created_at asc);
-
-      create index if not exists idx_agent_traces_agent
-        on agent_traces(agent_id, created_at desc);
 
       create index if not exists idx_agent_traces_reference_outbound
         on agent_traces(reference_outbound_id, created_at asc);
@@ -78,28 +70,26 @@ export class SqliteAgentTraceStore implements AgentTraceStore {
   }
 
   writeTrace(
-    trace: Omit<AgentTrace, "rowid" | "trace_id" | "created_at">,
+    trace: Omit<AgentTrace, "trace_id" | "created_at">,
   ): AgentTrace {
     const traceId = randomUUID();
     const createdAt = new Date().toISOString();
 
     const stmt = this.db.prepare(`
       insert into agent_traces (
-        trace_id, conversation_id, mailbox_id, agent_id, chat_id, session_id,
-        trace_type, parent_trace_id, reference_outbound_id, reference_message_id,
+        trace_id, execution_id, conversation_id, work_item_id, session_id,
+        trace_type, reference_outbound_id, reference_message_id,
         payload_json, created_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
       traceId,
+      trace.execution_id,
       trace.conversation_id,
-      trace.mailbox_id,
-      trace.agent_id,
-      trace.chat_id ?? null,
+      trace.work_item_id ?? null,
       trace.session_id ?? null,
       trace.trace_type,
-      trace.parent_trace_id ?? null,
       trace.reference_outbound_id ?? null,
       trace.reference_message_id ?? null,
       trace.payload_json,
@@ -107,10 +97,19 @@ export class SqliteAgentTraceStore implements AgentTraceStore {
     );
 
     const row = this.db.prepare(`
-      select rowid, * from agent_traces where trace_id = ?
+      select * from agent_traces where trace_id = ?
     `).get(traceId) as Record<string, unknown>;
 
     return rowToAgentTrace(row);
+  }
+
+  readByExecutionId(executionId: string): AgentTrace[] {
+    const rows = this.db.prepare(`
+      select * from agent_traces
+      where execution_id = ?
+      order by created_at asc, trace_id asc
+    `).all(executionId) as Record<string, unknown>[];
+    return rows.map(rowToAgentTrace);
   }
 
   readByConversation(
@@ -144,9 +143,9 @@ export class SqliteAgentTraceStore implements AgentTraceStore {
     }
 
     const sql = `
-      select rowid, * from agent_traces
+      select * from agent_traces
       where ${conditions.join(" and ")}
-      order by created_at desc, rowid desc
+      order by created_at desc, trace_id desc
       ${limitClause}
     `;
 
@@ -154,64 +153,27 @@ export class SqliteAgentTraceStore implements AgentTraceStore {
     return rows.map(rowToAgentTrace);
   }
 
-  readByChatId(chatId: string): AgentTrace[] {
-    const rows = this.db.prepare(`
-      select rowid, * from agent_traces
-      where chat_id = ?
-      order by created_at desc, rowid desc
-    `).all(chatId) as Record<string, unknown>[];
-    return rows.map(rowToAgentTrace);
-  }
-
   readBySession(sessionId: string): AgentTrace[] {
     const rows = this.db.prepare(`
-      select rowid, * from agent_traces
+      select * from agent_traces
       where session_id = ?
-      order by created_at asc, rowid asc
+      order by created_at asc, trace_id asc
     `).all(sessionId) as Record<string, unknown>[];
     return rows.map(rowToAgentTrace);
   }
 
   readByOutboundId(outboundId: string): AgentTrace[] {
     const rows = this.db.prepare(`
-      select rowid, * from agent_traces
+      select * from agent_traces
       where reference_outbound_id = ?
-      order by created_at asc, rowid asc
+      order by created_at asc, trace_id asc
     `).all(outboundId) as Record<string, unknown>[];
-    return rows.map(rowToAgentTrace);
-  }
-
-  readUnlinkedDecisions(opts?: {
-    types?: TraceType[];
-    limit?: number;
-  }): AgentTrace[] {
-    const conditions: string[] = ["reference_outbound_id is null"];
-    const params: (string | number)[] = [];
-
-    if (opts?.types && opts.types.length > 0) {
-      conditions.push(`trace_type in (${opts.types.map(() => "?").join(", ")})`);
-      params.push(...opts.types);
-    }
-
-    const limitClause = opts?.limit !== undefined ? "limit ?" : "";
-    if (opts?.limit !== undefined) {
-      params.push(opts.limit);
-    }
-
-    const sql = `
-      select rowid, * from agent_traces
-      where ${conditions.join(" and ")}
-      order by created_at desc, rowid desc
-      ${limitClause}
-    `;
-
-    const rows = this.db.prepare(sql).all(...params) as Record<string, unknown>[];
     return rows.map(rowToAgentTrace);
   }
 
   getTrace(traceId: string): AgentTrace | undefined {
     const row = this.db.prepare(`
-      select rowid, * from agent_traces where trace_id = ?
+      select * from agent_traces where trace_id = ?
     `).get(traceId) as Record<string, unknown> | undefined;
     return row ? rowToAgentTrace(row) : undefined;
   }

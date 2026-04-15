@@ -14,7 +14,7 @@ import { join } from 'node:path';
 function createMockMessage(id: string) {
   return {
     message_id: id,
-    thread_id: `thread-${Math.floor(parseInt(id) / 10)}`,
+    conversation_id: `thread-${Math.floor(parseInt(id) / 10)}`,
     container_refs: [{ type: 'folder' as const, id: 'inbox' }],
     received_at: new Date().toISOString(),
     sent_at: new Date().toISOString(),

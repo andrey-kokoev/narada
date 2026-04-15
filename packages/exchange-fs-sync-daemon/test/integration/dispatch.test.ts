@@ -189,7 +189,7 @@ describe("daemon dispatch phase integration", { timeout: 30000 }, () => {
 
     // Verify an outbound command was created
     const commands = store.db
-      .prepare("select * from outbound_commands where thread_id = ?")
+      .prepare("select * from outbound_commands where conversation_id = ?")
       .all(conversationId) as Array<Record<string, unknown>>;
 
     expect(commands.length).toBeGreaterThanOrEqual(1);

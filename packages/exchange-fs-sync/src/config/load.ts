@@ -96,6 +96,36 @@ function expectNumber(value: unknown, path: string): number {
   return value;
 }
 
+const ALLOWED_ACTIONS = new Set([
+  "draft_reply",
+  "send_reply",
+  "send_new_message",
+  "mark_read",
+  "move_message",
+  "set_categories",
+  "extract_obligations",
+  "create_followup",
+  "tool_request",
+  "no_action",
+]);
+
+function expectAllowedActions(value: unknown, path: string): ExchangeFsSyncConfig["policy"]["allowed_actions"] {
+  if (!Array.isArray(value)) {
+    throw new Error(`${path} must be an array of allowed actions`);
+  }
+  const actions = value.map((item, index) => {
+    const action = expectString(item, `${path}[${index}]`);
+    if (!ALLOWED_ACTIONS.has(action)) {
+      throw new Error(`${path}[${index}] must be a valid allowed action, got "${action}"`);
+    }
+    return action as ExchangeFsSyncConfig["policy"]["allowed_actions"][number];
+  });
+  if (actions.length === 0) {
+    throw new Error(`${path} must contain at least one allowed action`);
+  }
+  return actions;
+}
+
 /**
  * Check if a value (or nested values) contains secure references
  */
@@ -246,6 +276,39 @@ export async function loadConfig(
         ? { timeout_ms: expectNumber(charterRaw.timeout_ms, "config.charter.timeout_ms") }
         : {}),
     },
+    policy: (() => {
+      const policyRaw = isObject(root.policy) ? root.policy : {};
+      const primaryCharter = isNonEmptyString(policyRaw.primary_charter)
+        ? policyRaw.primary_charter.trim()
+        : DEFAULT_EXCHANGE_FS_SYNC_CONFIG.policy.primary_charter;
+      const allowedActions =
+        Array.isArray(policyRaw.allowed_actions) && policyRaw.allowed_actions.length > 0
+          ? expectAllowedActions(policyRaw.allowed_actions, "config.policy.allowed_actions")
+          : DEFAULT_EXCHANGE_FS_SYNC_CONFIG.policy.allowed_actions;
+      return {
+        primary_charter: primaryCharter,
+        allowed_actions: allowedActions,
+        ...(Array.isArray(policyRaw.secondary_charters) && policyRaw.secondary_charters.length > 0
+          ? {
+              secondary_charters: expectStringArray(
+                policyRaw.secondary_charters,
+                "config.policy.secondary_charters",
+              ),
+            }
+          : {}),
+        ...(Array.isArray(policyRaw.allowed_tools) && policyRaw.allowed_tools.length > 0
+          ? {
+              allowed_tools: expectStringArray(
+                policyRaw.allowed_tools,
+                "config.policy.allowed_tools",
+              ),
+            }
+          : {}),
+        ...(isBoolean(policyRaw.require_human_approval)
+          ? { require_human_approval: policyRaw.require_human_approval }
+          : {}),
+      };
+    })(),
     lifecycle: {
       tombstone_retention_days: expectNumber(
         lifecycleRaw.tombstone_retention_days ??

@@ -9,7 +9,7 @@ import type {
 export function createThreadRecord(overrides?: Partial<ThreadRecord>): ThreadRecord {
   const now = new Date().toISOString();
   return {
-    thread_id: "thread-1",
+    conversation_id: "thread-1",
     mailbox_id: "mailbox-1",
     primary_charter: "support_steward",
     secondary_charters_json: "[]",
@@ -50,7 +50,7 @@ export function createCharterOutput(overrides?: Partial<CharterOutputRow>): Char
   const now = new Date().toISOString();
   return {
     output_id: "output-1",
-    thread_id: "thread-1",
+    conversation_id: "thread-1",
     mailbox_id: "mailbox-1",
     charter_id: "support_steward",
     role: "primary",
@@ -71,7 +71,7 @@ export function createForemanDecision(overrides?: Partial<ForemanDecisionRow>): 
   const now = new Date().toISOString();
   return {
     decision_id: "decision-1",
-    thread_id: "thread-1",
+    conversation_id: "thread-1",
     mailbox_id: "mailbox-1",
     source_charter_ids_json: '["support_steward"]',
     approved_action: "send_reply",

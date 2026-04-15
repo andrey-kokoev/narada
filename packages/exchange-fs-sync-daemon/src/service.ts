@@ -29,6 +29,7 @@ import {
   Database,
   SqliteCoordinatorStore,
   SqliteOutboundStore,
+  SqliteAgentTraceStore,
   DefaultForemanFacade,
   SqliteScheduler,
   MockCharterRunner,
@@ -42,10 +43,14 @@ import {
   type ChangedConversation,
   type CharterRunner,
   type GraphAdapter,
+  type WorkItem,
+  type ExecutionAttempt,
+  type LeaseAcquisitionResult,
+  type SchedulerOptions,
   type ToolCatalogEntry,
 } from '@narada/exchange-fs-sync';
 import { CodexCharterRunner, ToolRunner } from '@narada/charters';
-import type { ToolDefinition } from '@narada/charters';
+import type { ToolDefinition, ToolInvocationRequest } from '@narada/charters';
 import { createLogger } from './lib/logger.js';
 import { PidFile } from './lib/pid-file.js';
 import { HealthFile, type HealthStatus } from './lib/health.js';
@@ -60,6 +65,20 @@ export interface SyncServiceConfig {
   charterRunner?: CharterRunner;
   /** Override polling interval in ms (for testing) */
   pollingIntervalMs?: number;
+  dispatchHooks?: DispatchHooks;
+  schedulerOptions?: Partial<SchedulerOptions>;
+  toolCatalog?: ToolCatalogEntry[];
+  toolDefinitions?: Record<string, ToolDefinition>;
+}
+
+export interface DispatchHooks {
+  afterLeaseAcquired?: (workItem: WorkItem, lease: LeaseAcquisitionResult) => Promise<void>;
+  beforeRuntimeInvoke?: (workItem: WorkItem, attempt: ExecutionAttempt, envelope: import("@narada/exchange-fs-sync").CharterInvocationEnvelope) => Promise<void>;
+  afterRuntimeComplete?: (workItem: WorkItem, attempt: ExecutionAttempt, output: import("@narada/exchange-fs-sync").CharterOutputEnvelope) => Promise<void>;
+  beforeToolExecution?: (workItem: WorkItem, attempt: ExecutionAttempt, requests: ToolInvocationRequest[]) => Promise<void>;
+  duringToolExecution?: (workItem: WorkItem, attempt: ExecutionAttempt, request: ToolInvocationRequest, index: number) => Promise<void>;
+  afterToolExecution?: (workItem: WorkItem, attempt: ExecutionAttempt) => Promise<void>;
+  beforeResolveWorkItem?: (workItem: WorkItem, attempt: ExecutionAttempt, evaluation: ReturnType<typeof buildEvaluationRecord>) => Promise<void>;
 }
 
 export interface SyncService {
@@ -374,9 +393,12 @@ async function createSingleMailboxService(
     db: InstanceType<typeof Database>;
     coordinatorStore: InstanceType<typeof SqliteCoordinatorStore>;
     outboundStore: InstanceType<typeof SqliteOutboundStore>;
+    traceStore: InstanceType<typeof SqliteAgentTraceStore>;
     foreman: InstanceType<typeof DefaultForemanFacade>;
     scheduler: InstanceType<typeof SqliteScheduler>;
     charterRunner: CharterRunner;
+    toolCatalog: ToolCatalogEntry[];
+    toolDefinitions: Record<string, ToolDefinition>;
   } | null = null;
 
   async function initDispatchDeps(): Promise<NonNullable<typeof dispatchDeps>> {
@@ -397,32 +419,38 @@ async function createSingleMailboxService(
     const outboundStore = new SqliteOutboundStore({ db });
     outboundStore.initSchema();
 
+    const traceStore = new SqliteAgentTraceStore({ db });
+    traceStore.initSchema();
+
+    const getMailboxPolicy = (_mailboxId: string) => config.policy;
+
     const foreman = new DefaultForemanFacade({
       coordinatorStore,
       outboundStore,
       db,
       foremanId: config.mailbox_id,
+      getMailboxPolicy,
     });
 
     const scheduler = new SqliteScheduler(coordinatorStore, {
       runnerId: config.mailbox_id,
+      ...opts.schedulerOptions,
     });
 
     const charterRunner = opts.charterRunner ?? createDefaultCharterRunner(config, coordinatorStore);
+    const toolCatalog = opts.toolCatalog ?? phaseAToolCatalog;
+    const toolDefinitions = opts.toolDefinitions ?? phaseAToolDefinitions;
 
-    dispatchDeps = { db, coordinatorStore, outboundStore, foreman, scheduler, charterRunner };
+    dispatchDeps = { db, coordinatorStore, outboundStore, traceStore, foreman, scheduler, charterRunner, toolCatalog, toolDefinitions };
     return dispatchDeps;
   }
 
   async function runDispatchPhase(): Promise<void> {
-    if (changedConversations.size === 0) {
-      return;
-    }
-
     const deps = await initDispatchDeps();
     const now = new Date().toISOString();
 
-    const changed: ChangedConversation[] = [];
+    if (changedConversations.size > 0) {
+      const changed: ChangedConversation[] = [];
     for (const [conversationId, kindsSet] of changedConversations) {
       const previousOrdinal = deps.coordinatorStore.getLatestRevisionOrdinal(conversationId);
       const currentOrdinal = (previousOrdinal ?? 0) + 1;
@@ -443,7 +471,8 @@ async function createSingleMailboxService(
 
     logger.info('Dispatch phase starting', { conversations: changed.length });
 
-    await deps.foreman.onSyncCompleted(signal);
+      await deps.foreman.onSyncCompleted(signal);
+    }
 
     function persistRejectedToolCall(
       request: { tool_id: string; arguments_json: string; purpose: string },
@@ -495,8 +524,8 @@ async function createSingleMailboxService(
       }
 
       const envelope = await buildInvocationEnvelope(
-        { coordinatorStore: deps.coordinatorStore, messageStore, rootDir },
-        { executionId: `ex_${workItem.work_item_id}_${Date.now()}`, workItem, tools: phaseAToolCatalog },
+        { coordinatorStore: deps.coordinatorStore, messageStore, rootDir, getMailboxPolicy: (_mailboxId: string) => config.policy },
+        { executionId: `ex_${workItem.work_item_id}_${Date.now()}`, workItem, tools: deps.toolCatalog },
       );
 
       const attempt = deps.scheduler.startExecution(
@@ -504,6 +533,8 @@ async function createSingleMailboxService(
         workItem.opened_for_revision_id,
         JSON.stringify(envelope),
       );
+
+      await opts.dispatchHooks?.beforeRuntimeInvoke?.(workItem, attempt, envelope);
 
       let leaseRenewalTimer: NodeJS.Timeout | null = null;
       try {
@@ -521,10 +552,14 @@ async function createSingleMailboxService(
 
         const output = await deps.charterRunner.run(envelope);
 
+        await opts.dispatchHooks?.afterRuntimeComplete?.(workItem, attempt, output);
+
         // Execute any tool requests produced by the charter
         if (output.tool_requests.length > 0) {
+          await opts.dispatchHooks?.beforeToolExecution?.(workItem, attempt, output.tool_requests);
+
           const toolRunner = new ToolRunner({
-            definitions: phaseAToolDefinitions,
+            definitions: deps.toolDefinitions,
             persistHook: async (record) => {
               try {
                 deps.coordinatorStore.insertToolCallRecord(record as unknown as Parameters<typeof deps.coordinatorStore.insertToolCallRecord>[0]);
@@ -534,11 +569,15 @@ async function createSingleMailboxService(
             },
           });
 
+          let toolIndex = 0;
           for (const request of output.tool_requests) {
+            await opts.dispatchHooks?.duringToolExecution?.(workItem, attempt, request, toolIndex);
+
             const catalogTool = envelope.available_tools.find((t) => t.tool_id === request.tool_id);
             if (!catalogTool) {
               logger.warn('Tool request rejected: not in envelope catalog', { tool_id: request.tool_id });
               persistRejectedToolCall(request, 'not_in_catalog', attempt.execution_id, workItem);
+              toolIndex++;
               continue;
             }
 
@@ -546,13 +585,15 @@ async function createSingleMailboxService(
             if (!catalogTool.read_only) {
               logger.warn('Tool request rejected: not read-only in Phase A', { tool_id: request.tool_id });
               persistRejectedToolCall(request, 'not_read_only', attempt.execution_id, workItem);
+              toolIndex++;
               continue;
             }
 
-            const definitionTool = phaseAToolDefinitions[request.tool_id];
+            const definitionTool = deps.toolDefinitions[request.tool_id];
             if (!definitionTool) {
               logger.warn('Tool request rejected: no definition', { tool_id: request.tool_id });
               persistRejectedToolCall(request, 'no_definition', attempt.execution_id, workItem);
+              toolIndex++;
               continue;
             }
 
@@ -562,6 +603,7 @@ async function createSingleMailboxService(
             } catch {
               logger.warn('Unparseable tool arguments', { tool_id: request.tool_id });
               persistRejectedToolCall(request, 'unparseable_args', attempt.execution_id, workItem);
+              toolIndex++;
               continue;
             }
             const result = await toolRunner.executeToolCall(request, catalogTool, {
@@ -575,7 +617,10 @@ async function createSingleMailboxService(
               exit_status: result.exit_status,
               duration_ms: result.duration_ms,
             });
+            toolIndex++;
           }
+
+          await opts.dispatchHooks?.afterToolExecution?.(workItem, attempt);
         }
 
         deps.scheduler.completeExecution(attempt.execution_id, JSON.stringify(output));
@@ -585,6 +630,10 @@ async function createSingleMailboxService(
           work_item_id: workItem.work_item_id,
           conversation_id: workItem.conversation_id,
         });
+
+        await opts.dispatchHooks?.beforeResolveWorkItem?.(workItem, attempt, evaluation);
+
+        await opts.dispatchHooks?.beforeResolveWorkItem?.(workItem, attempt, evaluation);
 
         const resolveResult = await deps.foreman.resolveWorkItem({
           work_item_id: workItem.work_item_id,

@@ -51,7 +51,7 @@
     "profile": "node --inspect --expose-gc ../scripts/profile.ts"
   },
   "dependencies": {
-    "better-sqlite3": "^9.6.0",
+    "better-sqlite3": "^12.9.0",
     "zod": "^3.22.0"
   },
   "devDependencies": {

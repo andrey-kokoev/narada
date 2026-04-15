@@ -66,6 +66,10 @@ describe("loadConfig", () => {
       charter: {
         runtime: "mock",
       },
+      policy: {
+        primary_charter: "support_steward",
+        allowed_actions: ["draft_reply", "send_reply", "mark_read", "no_action"],
+      },
       lifecycle: {
         tombstone_retention_days: 30,
         archive_after_days: 90,
@@ -323,6 +327,54 @@ describe("loadConfig", () => {
 
     await expect(loadConfig({ path })).rejects.toThrow(
       /config\.scope\.included_container_refs\[1\] must be a non-empty string/,
+    );
+  });
+
+  it("rejects invalid allowed_actions in policy", async () => {
+    const path = await writeConfigFile({
+      mailbox_id: "mailbox_primary",
+      root_dir: "./data/mail-sync",
+      graph: {
+        user_id: "user@example.com",
+        prefer_immutable_ids: true,
+      },
+      scope: {
+        included_container_refs: ["inbox"],
+        included_item_kinds: ["message"],
+      },
+      policy: {
+        primary_charter: "support_steward",
+        allowed_actions: ["send_reply", "invalid_action"],
+      },
+    });
+    createdPaths.push(path);
+
+    await expect(loadConfig({ path })).rejects.toThrow(
+      /config\.policy\.allowed_actions\[1\] must be a valid allowed action/,
+    );
+  });
+
+  it("rejects empty allowed_actions in policy", async () => {
+    const path = await writeConfigFile({
+      mailbox_id: "mailbox_primary",
+      root_dir: "./data/mail-sync",
+      graph: {
+        user_id: "user@example.com",
+        prefer_immutable_ids: true,
+      },
+      scope: {
+        included_container_refs: ["inbox"],
+        included_item_kinds: ["message"],
+      },
+      policy: {
+        primary_charter: "support_steward",
+        allowed_actions: [],
+      },
+    });
+    createdPaths.push(path);
+
+    await expect(loadConfig({ path })).rejects.toThrow(
+      /config\.policy\.allowed_actions must contain at least one allowed action/,
     );
   });
 });

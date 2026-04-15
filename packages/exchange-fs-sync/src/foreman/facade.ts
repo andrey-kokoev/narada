@@ -29,19 +29,19 @@ import type {
   Evaluation,
 } from "../coordinator/types.js";
 import type { OutboundStore } from "../outbound/store.js";
+import type { MailboxPolicy } from "../config/types.js";
 
 export interface ForemanFacadeDeps {
   coordinatorStore: CoordinatorStore;
   outboundStore: OutboundStore;
   db: Database.Database;
   foremanId: string;
+  getMailboxPolicy: (mailboxId: string) => MailboxPolicy;
 }
 
 export interface ForemanFacadeOptions {
   /** Maximum retries for a work item before terminal failure (default: 3) */
   maxRetries?: number;
-  /** Whether to require human approval before creating outbound commands (default: false) */
-  requireHumanApproval?: boolean;
 }
 
 function makeRevisionId(conversationId: string, ordinal: number): string {
@@ -51,10 +51,7 @@ function makeRevisionId(conversationId: string, ordinal: number): string {
 export class DefaultForemanFacade implements ForemanFacade {
   private readonly handoff: OutboundHandoff;
 
-  constructor(
-    private readonly deps: ForemanFacadeDeps,
-    private readonly opts: ForemanFacadeOptions = {},
-  ) {
+  constructor(private readonly deps: ForemanFacadeDeps) {
     this.handoff = new OutboundHandoff({
       coordinatorStore: deps.coordinatorStore,
       outboundStore: deps.outboundStore,
@@ -207,7 +204,7 @@ export class DefaultForemanFacade implements ForemanFacade {
       if (!existingDecision) {
         this.deps.coordinatorStore.insertDecision({
           decision_id: decisionId,
-          thread_id: workItem.conversation_id,
+          conversation_id: workItem.conversation_id,
           mailbox_id: workItem.mailbox_id,
           source_charter_ids_json: JSON.stringify([evaluation.charter_id]),
           approved_action: "escalate_to_human",
@@ -266,7 +263,8 @@ export class DefaultForemanFacade implements ForemanFacade {
     const chosenAction = validActions[0]!;
 
     // Human approval gate (v1 default: auto-approve)
-    if (this.opts.requireHumanApproval) {
+    const policy = this.deps.getMailboxPolicy(workItem.mailbox_id);
+    if (policy.require_human_approval) {
       return { success: false, resolution_outcome: "failed", error: "Human approval required (not implemented)" };
     }
 
@@ -293,7 +291,7 @@ export class DefaultForemanFacade implements ForemanFacade {
         if (!existingDecision) {
           this.deps.coordinatorStore.insertDecision({
             decision_id: decisionId,
-            thread_id: workItem.conversation_id,
+            conversation_id: workItem.conversation_id,
             mailbox_id: workItem.mailbox_id,
             source_charter_ids_json: JSON.stringify([evaluation.charter_id]),
             approved_action: chosenAction.action_type,
@@ -307,7 +305,7 @@ export class DefaultForemanFacade implements ForemanFacade {
 
         this.handoff.createCommandFromDecision({
           decision_id: decisionId,
-          thread_id: workItem.conversation_id,
+          conversation_id: workItem.conversation_id,
           mailbox_id: workItem.mailbox_id,
           source_charter_ids_json: JSON.stringify([evaluation.charter_id]),
           approved_action: chosenAction.action_type,
@@ -338,12 +336,13 @@ export class DefaultForemanFacade implements ForemanFacade {
   }
 
   private buildConversationRecord(conversationId: string, mailboxId: string): ConversationRecord {
+    const policy = this.deps.getMailboxPolicy(mailboxId);
     const now = new Date().toISOString();
     return {
       conversation_id: conversationId,
       mailbox_id: mailboxId,
-      primary_charter: "support_steward",
-      secondary_charters_json: "[]",
+      primary_charter: policy.primary_charter,
+      secondary_charters_json: JSON.stringify(policy.secondary_charters ?? []),
       status: "active",
       assigned_agent: null,
       last_message_at: null,
@@ -358,7 +357,7 @@ export class DefaultForemanFacade implements ForemanFacade {
 
   private toThreadRecord(record: ConversationRecord) {
     return {
-      thread_id: record.conversation_id,
+      conversation_id: record.conversation_id,
       mailbox_id: record.mailbox_id,
       primary_charter: record.primary_charter,
       secondary_charters_json: record.secondary_charters_json,

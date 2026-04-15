@@ -18,6 +18,7 @@ import type {
   ExecutionAttempt,
   ExecutionAttemptStatus,
   Evaluation,
+  AgentSession,
   ToolCallRecord,
   ToolCallStatus,
 } from "./types.js";
@@ -25,7 +26,7 @@ import { isValidCreatedBy } from "./types.js";
 
 function rowToThreadRecord(row: Record<string, unknown>): ThreadRecord {
   return {
-    thread_id: String(row.thread_id),
+    conversation_id: String(row.thread_id),
     mailbox_id: String(row.mailbox_id),
     primary_charter: String(row.primary_charter),
     secondary_charters_json: String(row.secondary_charters_json),
@@ -131,7 +132,7 @@ function rowToEvaluation(row: Record<string, unknown>): Evaluation {
 function rowToCharterOutput(row: Record<string, unknown>): CharterOutputRow {
   return {
     output_id: String(row.output_id),
-    thread_id: String(row.thread_id),
+    conversation_id: String(row.conversation_id),
     mailbox_id: String(row.mailbox_id),
     charter_id: String(row.charter_id),
     role: String(row.role) as CharterOutputRow["role"],
@@ -150,7 +151,7 @@ function rowToCharterOutput(row: Record<string, unknown>): CharterOutputRow {
 function rowToForemanDecision(row: Record<string, unknown>): ForemanDecisionRow {
   return {
     decision_id: String(row.decision_id),
-    thread_id: String(row.thread_id),
+    conversation_id: String(row.conversation_id),
     mailbox_id: String(row.mailbox_id),
     source_charter_ids_json: String(row.source_charter_ids_json),
     approved_action: String(row.approved_action),
@@ -357,7 +358,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
 
       create table if not exists charter_outputs (
         output_id text primary key,
-        thread_id text not null,
+        conversation_id text not null,
         mailbox_id text not null,
         charter_id text not null,
         role text not null,
@@ -370,19 +371,19 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
         proposed_actions_json text not null default '[]',
         tool_requests_json text not null default '[]',
         created_at text not null,
-        foreign key (thread_id, mailbox_id) references thread_records(thread_id, mailbox_id)
+        foreign key (conversation_id) references conversation_records(conversation_id)
           on delete cascade
       );
 
       create index if not exists idx_charter_outputs_thread
-        on charter_outputs(thread_id, mailbox_id, analyzed_at desc);
+        on charter_outputs(conversation_id, mailbox_id, analyzed_at desc);
 
       create index if not exists idx_charter_outputs_charter
         on charter_outputs(charter_id, analyzed_at desc);
 
       create table if not exists foreman_decisions (
         decision_id text primary key,
-        thread_id text not null,
+        conversation_id text not null,
         mailbox_id text not null,
         source_charter_ids_json text not null,
         approved_action text not null,
@@ -391,12 +392,12 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
         decided_at text not null,
         outbound_id text,
         created_by text not null,
-        foreign key (thread_id, mailbox_id) references thread_records(thread_id, mailbox_id)
+        foreign key (conversation_id) references conversation_records(conversation_id)
           on delete cascade
       );
 
       create index if not exists idx_foreman_decisions_thread
-        on foreman_decisions(thread_id, mailbox_id, decided_at desc);
+        on foreman_decisions(conversation_id, mailbox_id, decided_at desc);
 
       create index if not exists idx_foreman_decisions_outbound
         on foreman_decisions(outbound_id);
@@ -412,6 +413,17 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
 
       create index if not exists idx_policy_overrides_outbound
         on policy_overrides(outbound_id);
+
+      create table if not exists agent_sessions (
+        session_id text primary key,
+        conversation_id text not null,
+        started_at text not null,
+        ended_at text,
+        status text not null
+      );
+
+      create index if not exists idx_agent_sessions_conversation
+        on agent_sessions(conversation_id);
 
       create table if not exists tool_call_records (
         call_id text primary key,
@@ -477,7 +489,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
         last_triaged_at = excluded.last_triaged_at,
         updated_at = excluded.updated_at
     `).run(
-      record.thread_id,
+      record.conversation_id,
       record.mailbox_id,
       record.primary_charter,
       record.secondary_charters_json,
@@ -850,13 +862,13 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
   insertCharterOutput(output: CharterOutputRow): void {
     this.db.prepare(`
       insert into charter_outputs (
-        output_id, thread_id, mailbox_id, charter_id, role, output_version,
+        output_id, conversation_id, mailbox_id, charter_id, role, output_version,
         analyzed_at, summary, classifications_json, facts_json, escalations_json,
         proposed_actions_json, tool_requests_json, created_at
       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       output.output_id,
-      output.thread_id,
+      output.conversation_id,
       output.mailbox_id,
       output.charter_id,
       output.role,
@@ -872,12 +884,12 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     );
   }
 
-  getOutputsByThread(threadId: string, mailboxId: string): CharterOutputRow[] {
+  getOutputsByConversation(conversationId: string, mailboxId: string): CharterOutputRow[] {
     const rows = this.db.prepare(`
       select * from charter_outputs
-      where thread_id = ? and mailbox_id = ?
+      where conversation_id = ? and mailbox_id = ?
       order by analyzed_at desc
-    `).all(threadId, mailboxId) as Record<string, unknown>[];
+    `).all(conversationId, mailboxId) as Record<string, unknown>[];
     return rows.map(rowToCharterOutput);
   }
 
@@ -889,12 +901,12 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     }
     this.db.prepare(`
       insert into foreman_decisions (
-        decision_id, thread_id, mailbox_id, source_charter_ids_json,
+        decision_id, conversation_id, mailbox_id, source_charter_ids_json,
         approved_action, payload_json, rationale, decided_at, outbound_id, created_by
       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       decision.decision_id,
-      decision.thread_id,
+      decision.conversation_id,
       decision.mailbox_id,
       decision.source_charter_ids_json,
       decision.approved_action,
@@ -906,12 +918,12 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     );
   }
 
-  getDecisionsByThread(threadId: string, mailboxId: string): ForemanDecisionRow[] {
+  getDecisionsByConversation(conversationId: string, mailboxId: string): ForemanDecisionRow[] {
     const rows = this.db.prepare(`
       select * from foreman_decisions
-      where thread_id = ? and mailbox_id = ?
+      where conversation_id = ? and mailbox_id = ?
       order by decided_at desc
-    `).all(threadId, mailboxId) as Record<string, unknown>[];
+    `).all(conversationId, mailboxId) as Record<string, unknown>[];
     return rows.map(rowToForemanDecision);
   }
 
@@ -1025,6 +1037,30 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     params.push(callId);
 
     this.db.prepare(`update tool_call_records set ${fields.join(", ")} where call_id = ?`).run(...params);
+  }
+
+
+  insertAgentSession(session: AgentSession): void {
+    this.db.prepare(`
+      insert into agent_sessions (session_id, conversation_id, started_at, ended_at, status)
+      values (?, ?, ?, ?, ?)
+    `).run(session.session_id, session.conversation_id, session.started_at, session.ended_at, session.status);
+  }
+
+  getAgentSession(sessionId: string): AgentSession | undefined {
+    const row = this.db.prepare(`select * from agent_sessions where session_id = ?`).get(sessionId) as Record<string, unknown> | undefined;
+    if (!row) return undefined;
+    return {
+      session_id: String(row.session_id),
+      conversation_id: String(row.conversation_id),
+      started_at: String(row.started_at),
+      ended_at: row.ended_at ? String(row.ended_at) : null,
+      status: String(row.status) as AgentSession["status"],
+    };
+  }
+
+  updateAgentSessionStatus(sessionId: string, status: AgentSession["status"], endedAt?: string): void {
+    this.db.prepare(`update agent_sessions set status = ?, ended_at = ? where session_id = ?`).run(status, endedAt ?? null, sessionId);
   }
 
   close(): void {

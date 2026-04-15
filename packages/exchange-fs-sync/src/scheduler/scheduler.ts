@@ -237,11 +237,23 @@ export class SqliteScheduler implements Scheduler {
       }
 
       // Insert execution attempt
+      const sessionId = `sess_${randomUUID()}`;
+      const workItem = this.store.getWorkItem(workItemId);
+      const conversationId = workItem?.conversation_id ?? "";
+
+      this.store.insertAgentSession({
+        session_id: sessionId,
+        conversation_id: conversationId,
+        started_at: now,
+        ended_at: null,
+        status: "active",
+      });
+
       this.store.insertExecutionAttempt({
         execution_id: executionId,
         work_item_id: workItemId,
         revision_id: revisionId,
-        session_id: null,
+        session_id: sessionId,
         status: "active",
         started_at: now,
         completed_at: null,

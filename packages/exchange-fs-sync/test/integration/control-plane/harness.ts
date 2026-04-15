@@ -6,6 +6,15 @@ import { SqliteScheduler } from "../../../src/scheduler/scheduler.js";
 import { DefaultForemanFacade } from "../../../src/foreman/facade.js";
 import type { SyncCompletionSignal, EvaluationEnvelope, CharterInvocationEnvelope } from "../../../src/foreman/types.js";
 import type { WorkItem, ExecutionAttempt } from "../../../src/coordinator/types.js";
+import type { MailboxPolicy } from "../../../src/config/types.js";
+
+export function makeMailboxPolicy(overrides?: Partial<MailboxPolicy>): MailboxPolicy {
+  return {
+    primary_charter: "support_steward",
+    allowed_actions: ["draft_reply", "send_reply", "mark_read", "no_action"],
+    ...overrides,
+  };
+}
 
 export interface Harness {
   db: Database.Database;
@@ -30,6 +39,7 @@ export function createHarness(runnerId = "runner-test"): Harness {
     outboundStore,
     db,
     foremanId: "fm-test",
+    getMailboxPolicy: () => makeMailboxPolicy(),
   });
   return { db, coordinatorStore, outboundStore, traceStore, scheduler, foreman };
 }
@@ -52,7 +62,7 @@ export function insertConversation(h: Harness, conversationId: string, mailboxId
     updated_at: now,
   });
   h.coordinatorStore.upsertThread({
-    thread_id: conversationId,
+    conversation_id: conversationId,
     mailbox_id: mailboxId,
     primary_charter: "support_steward",
     secondary_charters_json: "[]",
@@ -193,7 +203,7 @@ export function countDecisionsForWorkItem(h: Harness, workItemId: string): numbe
 
 export function countOutboundCommandsForThread(h: Harness, threadId: string): number {
   const row = h.db.prepare(
-    "select count(*) as c from outbound_commands where thread_id = ?",
+    "select count(*) as c from outbound_commands where conversation_id = ?",
   ).get(threadId) as { c: number };
   return row.c;
 }

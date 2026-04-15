@@ -10,7 +10,7 @@ function createCommand(
   const now = new Date().toISOString();
   return {
     outbound_id: `out-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    thread_id: "thread-1",
+    conversation_id: "thread-1",
     mailbox_id: "mailbox-1",
     action_type: "send_reply",
     status: "pending",

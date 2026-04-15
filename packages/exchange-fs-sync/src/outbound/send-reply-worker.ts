@@ -341,7 +341,7 @@ export class SendReplyWorker {
     try {
       const participants = await participantResolver.getParticipants(
         command.mailbox_id,
-        command.thread_id,
+        command.conversation_id,
       );
       const allRecipients = new Set([...version.to, ...version.cc, ...version.bcc]);
       for (const recipient of allRecipients) {

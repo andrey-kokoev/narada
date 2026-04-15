@@ -11,7 +11,7 @@ import type { NormalizedMessage } from "../types/normalized.js";
 
 /** Canonical thread state as seen by the coordinator */
 export interface ThreadRecord {
-  thread_id: string;
+  conversation_id: string;
   mailbox_id: string;
   primary_charter: string;
   secondary_charters_json: string;
@@ -63,7 +63,7 @@ export interface NormalizedThreadContext {
 /** Persisted output from charter analysis of a thread */
 export interface CharterOutputRow {
   output_id: string;
-  thread_id: string;
+  conversation_id: string;
   mailbox_id: string;
   charter_id: string;
   role: "primary" | "secondary";
@@ -81,7 +81,7 @@ export interface CharterOutputRow {
 /** Record of a foreman decision and its outbound handoff */
 export interface ForemanDecisionRow {
   decision_id: string;
-  thread_id: string;
+  conversation_id: string;
   mailbox_id: string;
   source_charter_ids_json: string;
   approved_action: string;
@@ -216,6 +216,14 @@ export interface PolicyOverrideRow {
 }
 
 /** Coordinator durable state operations */
+export interface AgentSession {
+  session_id: string;
+  conversation_id: string;
+  started_at: string;
+  ended_at: string | null;
+  status: "active" | "completed" | "failed";
+}
+
 export interface CoordinatorStore {
   readonly db: import("better-sqlite3").Database;
   initSchema(): void;
@@ -270,11 +278,16 @@ export interface CoordinatorStore {
 
   // Charter outputs
   insertCharterOutput(output: CharterOutputRow): void;
-  getOutputsByThread(threadId: string, mailboxId: string): CharterOutputRow[];
+  getOutputsByConversation(conversationId: string, mailboxId: string): CharterOutputRow[];
+
+  // Agent sessions
+  insertAgentSession(session: AgentSession): void;
+  getAgentSession(sessionId: string): AgentSession | undefined;
+  updateAgentSessionStatus(sessionId: string, status: AgentSession["status"], endedAt?: string): void;
 
   // Decisions
   insertDecision(decision: ForemanDecisionRow): void;
-  getDecisionsByThread(threadId: string, mailboxId: string): ForemanDecisionRow[];
+  getDecisionsByConversation(conversationId: string, mailboxId: string): ForemanDecisionRow[];
   getDecisionById(decisionId: string): ForemanDecisionRow | undefined;
   linkDecisionToOutbound(decisionId: string, outboundId: string): void;
 

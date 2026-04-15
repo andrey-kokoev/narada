@@ -413,6 +413,32 @@ Atomic rename requires source and destination on same filesystem. Don't put `tmp
 
 ---
 
+## Trace System
+
+Traces are **commentary, not authority**.
+
+- The canonical anchor for every trace is `execution_id`.
+- Secondary references (`conversation_id`, `work_item_id`, `session_id`, `reference_outbound_id`) exist only for navigation and diagnostics.
+- Traces may aid humans and debugging, but they must never alter control flow, scheduler decisions, lease state, outbound idempotency, or replay correctness.
+- Deleting or corrupting traces must not affect any control-plane operation.
+- Trace reads are best-effort; missing traces are not a failure mode.
+
+### What traces are
+- Runtime observations
+- Tool call commentary
+- Decision explanations
+- Handoff notes
+- Debug evidence
+
+### What traces are not
+- Source of truth for work resolution
+- Source of truth for outbound idempotency
+- Lease state
+- Replay cursor
+- Scheduler truth
+
+---
+
 ## Toolchain
 
 | Tool | Purpose |
