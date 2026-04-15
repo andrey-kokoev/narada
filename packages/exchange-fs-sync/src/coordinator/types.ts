@@ -215,13 +215,25 @@ export interface PolicyOverrideRow {
   created_at: string;
 }
 
-/** Coordinator durable state operations */
+/** Session status values */
+export type AgentSessionStatus =
+  | "opened"
+  | "active"
+  | "idle"
+  | "completed"
+  | "abandoned"
+  | "superseded";
+
+/** Operator-facing interpretive session record */
 export interface AgentSession {
   session_id: string;
   conversation_id: string;
+  work_item_id: string;
   started_at: string;
   ended_at: string | null;
-  status: "active" | "completed" | "failed";
+  updated_at: string;
+  status: AgentSessionStatus;
+  resume_hint: string | null;
 }
 
 export interface CoordinatorStore {
@@ -283,7 +295,11 @@ export interface CoordinatorStore {
   // Agent sessions
   insertAgentSession(session: AgentSession): void;
   getAgentSession(sessionId: string): AgentSession | undefined;
+  getSessionForWorkItem(workItemId: string): AgentSession | undefined;
+  getSessionsForConversation(conversationId: string): AgentSession[];
+  getResumableSessions(mailboxId?: string): AgentSession[];
   updateAgentSessionStatus(sessionId: string, status: AgentSession["status"], endedAt?: string): void;
+  updateAgentSessionResumeHint(sessionId: string, hint: string): void;
 
   // Decisions
   insertDecision(decision: ForemanDecisionRow): void;

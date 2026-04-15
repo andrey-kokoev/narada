@@ -157,10 +157,11 @@ describe("SqliteScheduler", () => {
   });
 
   // U7: Stale lease detection
-  it("U7: stale lease scanner recovers abandoned work items", () => {
+  it("U7: stale lease scanner recovers abandoned work items and idles session", () => {
     createConversation("conv-1");
     const item = insertWorkItem({ conversation_id: "conv-1", status: "opened" });
     scheduler.acquireLease(item.work_item_id);
+    scheduler.startExecution(item.work_item_id, "conv-1:rev:1", "{}");
 
     const past = new Date(Date.now() - 120_000).toISOString();
     store.updateLeaseExpiry(store.getActiveLeaseForWorkItem(item.work_item_id)!.lease_id, past);
@@ -174,10 +175,14 @@ describe("SqliteScheduler", () => {
 
     const lease = store.db.prepare("select * from work_item_leases where lease_id = ?").get(recovered[0]!.leaseId) as Record<string, unknown>;
     expect(lease.release_reason).toBe("abandoned");
+
+    const session = store.getSessionForWorkItem(item.work_item_id);
+    expect(session).toBeDefined();
+    expect(session!.status).toBe("idle");
   });
 
   // U8: Execution start writes attempt record
-  it("U8: startExecution writes execution_attempts row with status active", () => {
+  it("U8: startExecution writes execution_attempts row with status active and creates session", () => {
     createConversation("conv-1");
     const item = insertWorkItem({ conversation_id: "conv-1", status: "opened" });
     scheduler.acquireLease(item.work_item_id);
@@ -191,6 +196,11 @@ describe("SqliteScheduler", () => {
     const fetched = store.getExecutionAttempt(attempt.execution_id);
     expect(fetched).toBeDefined();
     expect(fetched!.status).toBe("active");
+
+    const session = store.getSessionForWorkItem(item.work_item_id);
+    expect(session).toBeDefined();
+    expect(session!.status).toBe("active");
+    expect(session!.session_id).toBe(attempt.session_id);
   });
 
   // U9: Success path
@@ -211,7 +221,7 @@ describe("SqliteScheduler", () => {
   });
 
   // U10: Crash path increments retry
-  it("U10: failExecution marks crashed, releases lease, and increments retry", () => {
+  it("U10: failExecution marks crashed, releases lease, sets session idle, and increments retry", () => {
     createConversation("conv-1");
     const item = insertWorkItem({ conversation_id: "conv-1", status: "opened" });
     scheduler.acquireLease(item.work_item_id);
@@ -226,10 +236,15 @@ describe("SqliteScheduler", () => {
     expect(wi!.status).toBe("failed_retryable");
     expect(wi!.retry_count).toBe(1);
     expect(wi!.next_retry_at).not.toBeNull();
+
+    const session = store.getSessionForWorkItem(item.work_item_id);
+    expect(session).toBeDefined();
+    expect(session!.status).toBe("idle");
+    expect(session!.resume_hint).toContain("Runtime error");
   });
 
   // U11: Max retries → terminal
-  it("U11: failExecution transitions to failed_terminal after max retries exceeded", () => {
+  it("U11: failExecution transitions to failed_terminal and abandons session after max retries exceeded", () => {
     createConversation("conv-1");
     const item = insertWorkItem({ conversation_id: "conv-1", status: "opened", retry_count: 2 });
     scheduler.acquireLease(item.work_item_id);
@@ -239,6 +254,10 @@ describe("SqliteScheduler", () => {
 
     const wi = store.getWorkItem(item.work_item_id);
     expect(wi!.status).toBe("failed_terminal");
+
+    const session = store.getSessionForWorkItem(item.work_item_id);
+    expect(session).toBeDefined();
+    expect(session!.status).toBe("abandoned");
   });
 
   // U12: Supersession during retry — old item superseded, new opened

@@ -28,6 +28,7 @@ import type {
   ConversationRecord,
   WorkItem,
   Evaluation,
+  AgentSession,
 } from "../coordinator/types.js";
 import type { OutboundStore } from "../outbound/store.js";
 import type { MailboxPolicy } from "../config/types.js";
@@ -93,6 +94,7 @@ export class DefaultForemanFacade implements ForemanFacade {
           this.deps.coordinatorStore.updateWorkItemStatus(activeWorkItem.work_item_id, "superseded", {
             updated_at: signal.synced_at,
           });
+          this.closeSessionForWorkItem(activeWorkItem.work_item_id, "superseded", signal.synced_at);
           this.handoff.cancelUnsentCommandsForThread(conversationId, "superseded_by_new_revision");
           const newWorkItem = this.openWorkItem(conversationId, mailboxId, makeRevisionId(conversationId, ordinal), signal.synced_at);
           result.superseded.push({
@@ -152,6 +154,7 @@ export class DefaultForemanFacade implements ForemanFacade {
     }
 
     if (workItem.status !== "executing" && workItem.status !== "leased") {
+      this.closeSessionForWorkItem(workItem.work_item_id, "abandoned");
       return { success: false, resolution_outcome: "failed", error: `Work item status is ${workItem.status}` };
     }
 
@@ -161,6 +164,7 @@ export class DefaultForemanFacade implements ForemanFacade {
       store.updateWorkItemStatus(workItem.work_item_id, "superseded", {
         updated_at: new Date().toISOString(),
       });
+      this.closeSessionForWorkItem(workItem.work_item_id, "superseded");
       return { success: false, resolution_outcome: "failed", error: "superseded_by_new_revision" };
     }
 
@@ -210,6 +214,7 @@ export class DefaultForemanFacade implements ForemanFacade {
         resolution_outcome: "no_op",
         updated_at: new Date().toISOString(),
       });
+      this.closeSessionForWorkItem(workItem.work_item_id, "completed");
       return { success: true, resolution_outcome: "no_op" };
     }
 
@@ -236,6 +241,7 @@ export class DefaultForemanFacade implements ForemanFacade {
         resolution_outcome: "escalated",
         updated_at: now,
       });
+      this.closeSessionForWorkItem(workItem.work_item_id, "completed", now);
       return { success: true, decision_id: decisionId, resolution_outcome: "escalated" };
     }
 
@@ -244,6 +250,11 @@ export class DefaultForemanFacade implements ForemanFacade {
         error_message: "clarification_needed",
         updated_at: new Date().toISOString(),
       });
+      const session = this.deps.coordinatorStore.getSessionForWorkItem(workItem.work_item_id);
+      if (session) {
+        this.deps.coordinatorStore.updateAgentSessionStatus(session.session_id, "idle");
+        this.deps.coordinatorStore.updateAgentSessionResumeHint(session.session_id, "Clarification needed from operator");
+      }
       return { success: false, resolution_outcome: "failed", error: "clarification_needed" };
     }
 
@@ -259,6 +270,7 @@ export class DefaultForemanFacade implements ForemanFacade {
         resolution_outcome: "no_op",
         updated_at: new Date().toISOString(),
       });
+      this.closeSessionForWorkItem(workItem.work_item_id, "completed");
       return { success: true, resolution_outcome: "no_op" };
     }
 
@@ -269,6 +281,7 @@ export class DefaultForemanFacade implements ForemanFacade {
       workItem.mailbox_id,
     );
     if (recoveredOutboundId) {
+      this.closeSessionForWorkItem(workItem.work_item_id, "completed");
       return {
         success: true,
         outbound_id: recoveredOutboundId,
@@ -286,6 +299,7 @@ export class DefaultForemanFacade implements ForemanFacade {
         error_message: governance.reason,
         updated_at: new Date().toISOString(),
       });
+      this.closeSessionForWorkItem(workItem.work_item_id, "abandoned");
       return { success: false, resolution_outcome: "failed", error: governance.reason };
     }
 
@@ -311,6 +325,7 @@ export class DefaultForemanFacade implements ForemanFacade {
         resolution_outcome: "escalated",
         updated_at: now,
       });
+      this.closeSessionForWorkItem(workItem.work_item_id, "completed", now);
       return { success: true, decision_id: decisionId, resolution_outcome: "escalated" };
     }
 
@@ -319,6 +334,11 @@ export class DefaultForemanFacade implements ForemanFacade {
         error_message: governance.reason,
         updated_at: new Date().toISOString(),
       });
+      const session = this.deps.coordinatorStore.getSessionForWorkItem(workItem.work_item_id);
+      if (session) {
+        this.deps.coordinatorStore.updateAgentSessionStatus(session.session_id, "idle");
+        this.deps.coordinatorStore.updateAgentSessionResumeHint(session.session_id, `Clarification needed: ${governance.reason}`);
+      }
       return { success: false, resolution_outcome: "failed", error: governance.reason };
     }
 
@@ -344,6 +364,7 @@ export class DefaultForemanFacade implements ForemanFacade {
         resolution_outcome: "pending_approval",
         updated_at: now,
       });
+      this.closeSessionForWorkItem(workItem.work_item_id, "completed", now);
       return { success: true, decision_id: decisionId, resolution_outcome: "pending_approval" };
     }
 
@@ -352,6 +373,7 @@ export class DefaultForemanFacade implements ForemanFacade {
         resolution_outcome: "no_op",
         updated_at: new Date().toISOString(),
       });
+      this.closeSessionForWorkItem(workItem.work_item_id, "completed");
       return { success: true, resolution_outcome: "no_op" };
     }
 
@@ -378,6 +400,7 @@ export class DefaultForemanFacade implements ForemanFacade {
         resolution_outcome: "pending_approval",
         updated_at: now,
       });
+      this.closeSessionForWorkItem(workItem.work_item_id, "completed", now);
       return { success: true, decision_id: decisionId, resolution_outcome: "pending_approval" };
     }
 
@@ -400,6 +423,7 @@ export class DefaultForemanFacade implements ForemanFacade {
             resolution_outcome: "action_created",
             updated_at: now,
           });
+          this.closeSessionForWorkItem(workItem.work_item_id, "completed", now);
           return existingDecision.outbound_id;
         }
 
@@ -437,6 +461,8 @@ export class DefaultForemanFacade implements ForemanFacade {
           resolution_outcome: "action_created",
           updated_at: now,
         });
+
+        this.closeSessionForWorkItem(workItem.work_item_id, "completed", now);
 
         return obId;
       })();
@@ -510,7 +536,24 @@ export class DefaultForemanFacade implements ForemanFacade {
       updated_at: now,
     };
     this.deps.coordinatorStore.insertWorkItem(item);
+    this.deps.coordinatorStore.insertAgentSession({
+      session_id: `sess_${randomUUID()}`,
+      conversation_id: conversationId,
+      work_item_id: workItemId,
+      started_at: now,
+      ended_at: null,
+      updated_at: now,
+      status: "opened",
+      resume_hint: null,
+    });
     return item;
+  }
+
+  private closeSessionForWorkItem(workItemId: string, status: AgentSession["status"], endedAt?: string): void {
+    const session = this.deps.coordinatorStore.getSessionForWorkItem(workItemId);
+    if (session && !session.ended_at) {
+      this.deps.coordinatorStore.updateAgentSessionStatus(session.session_id, status, endedAt);
+    }
   }
 
   private shouldSupersede(

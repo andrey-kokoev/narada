@@ -142,7 +142,7 @@ describe("DefaultForemanFacade", () => {
   }
 
   describe("onSyncCompleted", () => {
-    it("opens a new work item for a changed conversation", async () => {
+    it("opens a new work item and session for a changed conversation", async () => {
       const signal = makeSignal([
         { conversation_id: "conv-1", previous_revision_ordinal: null, current_revision_ordinal: 1, change_kinds: ["new_message"] },
       ]);
@@ -159,6 +159,11 @@ describe("DefaultForemanFacade", () => {
       const active = coordinatorStore.getActiveWorkItemForConversation("conv-1");
       expect(active).toBeDefined();
       expect(active!.status).toBe("opened");
+
+      const session = coordinatorStore.getSessionForWorkItem(active!.work_item_id);
+      expect(session).toBeDefined();
+      expect(session!.status).toBe("opened");
+      expect(session!.conversation_id).toBe("conv-1");
     });
 
     it("no-ops when change is only draft_observed", async () => {
@@ -172,10 +177,20 @@ describe("DefaultForemanFacade", () => {
       expect(result.nooped).toContain("conv-1");
     });
 
-    it("supersedes an opened work item when new message arrives with higher revision", async () => {
+    it("supersedes an opened work item and session when new message arrives with higher revision", async () => {
       insertConversation("conv-1");
       coordinatorStore.nextRevisionOrdinal("conv-1"); // ordinal 1
       const existing = insertWorkItem("conv-1", "opened", "conv-1:rev:1");
+      coordinatorStore.insertAgentSession({
+        session_id: "sess-old",
+        conversation_id: "conv-1",
+        work_item_id: existing.work_item_id,
+        started_at: new Date().toISOString(),
+        ended_at: null,
+        updated_at: new Date().toISOString(),
+        status: "opened",
+        resume_hint: null,
+      });
 
       const signal = makeSignal([
         { conversation_id: "conv-1", previous_revision_ordinal: 1, current_revision_ordinal: 2, change_kinds: ["new_message"] },
@@ -189,6 +204,15 @@ describe("DefaultForemanFacade", () => {
 
       const oldItem = coordinatorStore.getWorkItem(existing.work_item_id);
       expect(oldItem!.status).toBe("superseded");
+
+      const oldSession = coordinatorStore.getSessionForWorkItem(existing.work_item_id);
+      expect(oldSession).toBeDefined();
+      expect(oldSession!.status).toBe("superseded");
+
+      const newItem = coordinatorStore.getWorkItem(result.opened[0]!.work_item_id);
+      const newSession = coordinatorStore.getSessionForWorkItem(newItem!.work_item_id);
+      expect(newSession).toBeDefined();
+      expect(newSession!.status).toBe("opened");
     });
 
     it("does not supersede a leased work item when revision is same", async () => {
@@ -262,6 +286,16 @@ describe("DefaultForemanFacade", () => {
     it("creates outbound command atomically on complete + valid action", async () => {
       insertConversation("conv-1");
       const wi = insertWorkItem("conv-1", "executing", "conv-1:rev:1");
+      coordinatorStore.insertAgentSession({
+        session_id: "sess-exec",
+        conversation_id: "conv-1",
+        work_item_id: wi.work_item_id,
+        started_at: new Date().toISOString(),
+        ended_at: null,
+        updated_at: new Date().toISOString(),
+        status: "active",
+        resume_hint: null,
+      });
       const exId = `ex_${wi.work_item_id}`;
       insertExecutionAttempt(wi.work_item_id, exId, {
         execution_id: exId,
@@ -293,6 +327,11 @@ describe("DefaultForemanFacade", () => {
       // Verify work item resolved
       const updated = coordinatorStore.getWorkItem(wi.work_item_id);
       expect(updated!.status).toBe("resolved");
+
+      // Verify session completed
+      const session = coordinatorStore.getSessionForWorkItem(wi.work_item_id);
+      expect(session).toBeDefined();
+      expect(session!.status).toBe("completed");
     });
 
     it("is idempotent: skips command creation if decision already has outbound_id", async () => {

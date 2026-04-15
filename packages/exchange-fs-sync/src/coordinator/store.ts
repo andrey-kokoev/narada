@@ -109,6 +109,19 @@ function rowToExecutionAttempt(row: Record<string, unknown>): ExecutionAttempt {
   };
 }
 
+function rowToAgentSession(row: Record<string, unknown>): AgentSession {
+  return {
+    session_id: String(row.session_id),
+    conversation_id: String(row.conversation_id),
+    work_item_id: String(row.work_item_id ?? ''),
+    started_at: String(row.started_at),
+    ended_at: row.ended_at ? String(row.ended_at) : null,
+    updated_at: String(row.updated_at ?? row.started_at),
+    status: String(row.status) as AgentSession["status"],
+    resume_hint: row.resume_hint ? String(row.resume_hint) : null,
+  };
+}
+
 function rowToEvaluation(row: Record<string, unknown>): Evaluation {
   return {
     evaluation_id: String(row.evaluation_id),
@@ -417,13 +430,19 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
       create table if not exists agent_sessions (
         session_id text primary key,
         conversation_id text not null,
+        work_item_id text not null,
         started_at text not null,
         ended_at text,
-        status text not null
+        updated_at text not null,
+        status text not null,
+        resume_hint text
       );
 
       create index if not exists idx_agent_sessions_conversation
         on agent_sessions(conversation_id);
+
+      create index if not exists idx_agent_sessions_work_item
+        on agent_sessions(work_item_id);
 
       create table if not exists tool_call_records (
         call_id text primary key,
@@ -453,6 +472,23 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     `);
 
     this.migrateThreadRecordsToConversationRecords();
+    this.migrateAgentSessionsSchema();
+  }
+
+  private migrateAgentSessionsSchema(): void {
+    const columns = this.db.prepare(`pragma table_info(agent_sessions)`).all() as Array<{ name: string }>;
+    const names = new Set(columns.map((c) => c.name));
+    if (!names.has('work_item_id')) {
+      this.db.prepare(`alter table agent_sessions add column work_item_id text`).run();
+      this.db.prepare(`update agent_sessions set work_item_id = '' where work_item_id is null`).run();
+    }
+    if (!names.has('updated_at')) {
+      this.db.prepare(`alter table agent_sessions add column updated_at text`).run();
+      this.db.prepare(`update agent_sessions set updated_at = started_at where updated_at is null`).run();
+    }
+    if (!names.has('resume_hint')) {
+      this.db.prepare(`alter table agent_sessions add column resume_hint text`).run();
+    }
   }
 
   private migrateThreadRecordsToConversationRecords(): void {
@@ -741,6 +777,13 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
           update execution_attempts
           set status = 'abandoned', completed_at = ?
           where work_item_id = ? and status = 'active'
+        `).run(now, row.work_item_id);
+
+        // Transition session to idle (work item will be retried)
+        this.db.prepare(`
+          update agent_sessions
+          set status = 'idle', updated_at = ?
+          where work_item_id = ? and status in ('opened', 'active')
         `).run(now, row.work_item_id);
 
         // Transition work item to failed_retryable with retry_count + 1
@@ -1042,25 +1085,76 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
 
   insertAgentSession(session: AgentSession): void {
     this.db.prepare(`
-      insert into agent_sessions (session_id, conversation_id, started_at, ended_at, status)
-      values (?, ?, ?, ?, ?)
-    `).run(session.session_id, session.conversation_id, session.started_at, session.ended_at, session.status);
+      insert into agent_sessions (
+        session_id, conversation_id, work_item_id, started_at, ended_at, updated_at, status, resume_hint
+      ) values (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      session.session_id,
+      session.conversation_id,
+      session.work_item_id,
+      session.started_at,
+      session.ended_at,
+      session.updated_at,
+      session.status,
+      session.resume_hint,
+    );
   }
 
   getAgentSession(sessionId: string): AgentSession | undefined {
     const row = this.db.prepare(`select * from agent_sessions where session_id = ?`).get(sessionId) as Record<string, unknown> | undefined;
     if (!row) return undefined;
-    return {
-      session_id: String(row.session_id),
-      conversation_id: String(row.conversation_id),
-      started_at: String(row.started_at),
-      ended_at: row.ended_at ? String(row.ended_at) : null,
-      status: String(row.status) as AgentSession["status"],
-    };
+    return rowToAgentSession(row);
+  }
+
+  getSessionForWorkItem(workItemId: string): AgentSession | undefined {
+    const row = this.db.prepare(`
+      select * from agent_sessions where work_item_id = ? order by started_at desc limit 1
+    `).get(workItemId) as Record<string, unknown> | undefined;
+    return row ? rowToAgentSession(row) : undefined;
+  }
+
+  getSessionsForConversation(conversationId: string): AgentSession[] {
+    const rows = this.db.prepare(`
+      select * from agent_sessions where conversation_id = ? order by started_at desc
+    `).all(conversationId) as Record<string, unknown>[];
+    return rows.map(rowToAgentSession);
+  }
+
+  getResumableSessions(mailboxId?: string): AgentSession[] {
+    let sql: string;
+    let params: string[];
+    if (mailboxId) {
+      sql = `
+        select s.* from agent_sessions s
+        join work_items wi on wi.work_item_id = s.work_item_id
+        where wi.mailbox_id = ? and s.status in ('opened', 'idle', 'active')
+        order by s.updated_at desc
+      `;
+      params = [mailboxId];
+    } else {
+      sql = `
+        select * from agent_sessions
+        where status in ('opened', 'idle', 'active')
+        order by updated_at desc
+      `;
+      params = [];
+    }
+    const rows = this.db.prepare(sql).all(...params) as Record<string, unknown>[];
+    return rows.map(rowToAgentSession);
   }
 
   updateAgentSessionStatus(sessionId: string, status: AgentSession["status"], endedAt?: string): void {
-    this.db.prepare(`update agent_sessions set status = ?, ended_at = ? where session_id = ?`).run(status, endedAt ?? null, sessionId);
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      update agent_sessions set status = ?, ended_at = ?, updated_at = ? where session_id = ?
+    `).run(status, endedAt ?? null, now, sessionId);
+  }
+
+  updateAgentSessionResumeHint(sessionId: string, hint: string): void {
+    const now = new Date().toISOString();
+    this.db.prepare(`
+      update agent_sessions set resume_hint = ?, updated_at = ? where session_id = ?
+    `).run(hint, now, sessionId);
   }
 
   close(): void {

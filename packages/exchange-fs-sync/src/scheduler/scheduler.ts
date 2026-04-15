@@ -236,18 +236,28 @@ export class SqliteScheduler implements Scheduler {
         throw new Error("Lease has expired");
       }
 
-      // Insert execution attempt
-      const sessionId = `sess_${randomUUID()}`;
       const workItem = this.store.getWorkItem(workItemId);
       const conversationId = workItem?.conversation_id ?? "";
 
-      this.store.insertAgentSession({
-        session_id: sessionId,
-        conversation_id: conversationId,
-        started_at: now,
-        ended_at: null,
-        status: "active",
-      });
+      // Reuse existing session or create one
+      let sessionId: string;
+      const existingSession = this.store.getSessionForWorkItem(workItemId);
+      if (existingSession) {
+        sessionId = existingSession.session_id;
+        this.store.updateAgentSessionStatus(sessionId, "active");
+      } else {
+        sessionId = `sess_${randomUUID()}`;
+        this.store.insertAgentSession({
+          session_id: sessionId,
+          conversation_id: conversationId,
+          work_item_id: workItemId,
+          started_at: now,
+          ended_at: null,
+          updated_at: now,
+          status: "active",
+          resume_hint: null,
+        });
+      }
 
       this.store.insertExecutionAttempt({
         execution_id: executionId,
@@ -291,6 +301,8 @@ export class SqliteScheduler implements Scheduler {
       if (lease) {
         this.store.releaseLease(lease.lease_id, now, "success");
       }
+
+      // Session status is advanced by resolveWorkItem; do not touch here.
     })();
   }
 
@@ -319,6 +331,20 @@ export class SqliteScheduler implements Scheduler {
       const lease = this.store.getActiveLeaseForWorkItem(attempt.work_item_id);
       if (lease) {
         this.store.releaseLease(lease.lease_id, now, "crash");
+      }
+
+      // Update session status
+      const session = this.store.getSessionForWorkItem(attempt.work_item_id);
+      if (session) {
+        if (terminal) {
+          this.store.updateAgentSessionStatus(session.session_id, "abandoned", now);
+        } else {
+          this.store.updateAgentSessionStatus(session.session_id, "idle");
+          this.store.updateAgentSessionResumeHint(
+            session.session_id,
+            `Execution failed (retry ${newRetryCount}/${this.opts.maxRetries}): ${errorMessage}`,
+          );
+        }
       }
 
       if (terminal) {
