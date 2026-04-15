@@ -180,9 +180,15 @@ async function createSingleMailboxService(
   ): CharterRunner {
     const env = loadCharterEnv();
     const runtime = cfg.charter?.runtime ?? 'mock';
-    const apiKey = cfg.charter?.api_key ?? env.openai_api_key;
 
-    if (runtime === 'codex-api' && apiKey) {
+    if (runtime === 'codex-api') {
+      const apiKey = cfg.charter?.api_key ?? env.openai_api_key;
+      if (!apiKey) {
+        throw new Error(
+          'Charter runtime is configured as codex-api but no API key is provided. ' +
+            'Set config.charter.api_key or NARADA_OPENAI_API_KEY / OPENAI_API_KEY environment variable.',
+        );
+      }
       return new CodexCharterRunner(
         {
           apiKey,
@@ -209,6 +215,7 @@ async function createSingleMailboxService(
       ) as unknown as CharterRunner;
     }
 
+    // Explicit mock path only when runtime === 'mock'
     return new MockCharterRunner({
       output: {
         output_version: '2.0',
@@ -411,6 +418,42 @@ async function createSingleMailboxService(
 
     await deps.foreman.onSyncCompleted(signal);
 
+    function persistRejectedToolCall(
+      request: { tool_id: string; arguments_json: string; purpose: string },
+      reason: string,
+      executionId: string,
+      workItem: { work_item_id: string; conversation_id: string },
+    ): void {
+      const now = new Date().toISOString();
+      try {
+        deps.coordinatorStore.db
+          .prepare(
+            `insert into tool_call_records (
+              call_id, execution_id, work_item_id, conversation_id, tool_id,
+              request_args_json, exit_status, stdout, stderr, structured_output_json,
+              started_at, completed_at, duration_ms
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            `tc_${executionId}_${Date.now()}_${request.tool_id}`,
+            executionId,
+            workItem.work_item_id,
+            workItem.conversation_id,
+            request.tool_id,
+            request.arguments_json,
+            'rejected_policy',
+            '',
+            `Rejected by Phase A policy: ${reason}`,
+            null,
+            now,
+            now,
+            0,
+          );
+      } catch (persistError) {
+        logger.warn('Failed to persist rejected tool call record', { error: String(persistError) });
+      }
+    }
+
     while (!deps.scheduler.isQuiescent(config.mailbox_id)) {
       const runnable = deps.scheduler.scanForRunnableWork(config.mailbox_id, 1);
       if (runnable.length === 0) {
@@ -465,19 +508,36 @@ async function createSingleMailboxService(
           });
 
           for (const request of output.tool_requests) {
-            const tool = phaseAToolCatalog.find((t) => t.tool_id === request.tool_id);
-            if (!tool) {
-              logger.warn('Tool request for unknown tool', { tool_id: request.tool_id });
+            const catalogTool = envelope.available_tools.find((t) => t.tool_id === request.tool_id);
+            if (!catalogTool) {
+              logger.warn('Tool request rejected: not in envelope catalog', { tool_id: request.tool_id });
+              persistRejectedToolCall(request, 'not_in_catalog', attempt.execution_id, workItem);
               continue;
             }
+
+            // Phase A guardrail: only read-only tools are permitted
+            if (!catalogTool.read_only) {
+              logger.warn('Tool request rejected: not read-only in Phase A', { tool_id: request.tool_id });
+              persistRejectedToolCall(request, 'not_read_only', attempt.execution_id, workItem);
+              continue;
+            }
+
+            const definitionTool = phaseAToolDefinitions[request.tool_id];
+            if (!definitionTool) {
+              logger.warn('Tool request rejected: no definition', { tool_id: request.tool_id });
+              persistRejectedToolCall(request, 'no_definition', attempt.execution_id, workItem);
+              continue;
+            }
+
             let sanitizedArgs: Record<string, unknown>;
             try {
               sanitizedArgs = JSON.parse(request.arguments_json) as Record<string, unknown>;
             } catch {
               logger.warn('Unparseable tool arguments', { tool_id: request.tool_id });
+              persistRejectedToolCall(request, 'unparseable_args', attempt.execution_id, workItem);
               continue;
             }
-            const result = await toolRunner.executeToolCall(request, tool, {
+            const result = await toolRunner.executeToolCall(request, catalogTool, {
               execution_id: attempt.execution_id,
               work_item_id: workItem.work_item_id,
               conversation_id: workItem.conversation_id,

@@ -187,7 +187,8 @@ export type ToolCallStatus =
   | "timeout"
   | "permission_denied"
   | "error"
-  | "budget_exceeded";
+  | "budget_exceeded"
+  | "rejected_policy";
 
 export interface ToolCallRecord {
   call_id: string;

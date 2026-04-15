@@ -47,7 +47,14 @@ async function getThreadMessageIds(rootDir: string, conversationId: string): Pro
   }
 }
 
-function normalizeMessageForEnvelope(msg: NormalizedMessage): NormalizedMessage {
+/**
+ * Canonical projection from exchange-fs-sync message model into charter runtime model.
+ *
+ * This is the normative boundary between the compiler's filesystem state and the
+ * charter runtime envelope. Any field mapping or default-value injection must be
+ * explicit and stable.
+ */
+export function normalizeMessageForEnvelope(msg: NormalizedMessage): NormalizedMessage {
   const r = msg as unknown as Record<string, unknown>;
   const bodyText =
     typeof msg.body === "object" && msg.body && "text" in msg.body
