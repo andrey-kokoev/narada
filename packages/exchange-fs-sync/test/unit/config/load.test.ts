@@ -63,6 +63,9 @@ describe("loadConfig", () => {
         cleanup_tmp_on_startup: true,
         rebuild_views_after_sync: false,
       },
+      charter: {
+        runtime: "mock",
+      },
       lifecycle: {
         tombstone_retention_days: 30,
         archive_after_days: 90,
