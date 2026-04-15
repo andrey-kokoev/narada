@@ -120,7 +120,7 @@ export interface WorkItem {
   priority: number;
   opened_for_revision_id: string;
   resolved_revision_id: string | null;
-  resolution_outcome: "no_op" | "action_created" | "escalated" | "failed" | null;
+  resolution_outcome: "no_op" | "action_created" | "escalated" | "pending_approval" | "failed" | null;
   error_message: string | null;
   retry_count: number;
   next_retry_at: string | null;

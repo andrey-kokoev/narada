@@ -42,6 +42,7 @@ export interface OutboundCommand {
   confirmed_at: string | null;
   blocked_reason: string | null;
   terminal_reason: string | null;
+  idempotency_key: string;
 }
 
 /** Version-specific payload for an outbound command */

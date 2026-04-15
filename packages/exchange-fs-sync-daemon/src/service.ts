@@ -633,8 +633,6 @@ async function createSingleMailboxService(
 
         await opts.dispatchHooks?.beforeResolveWorkItem?.(workItem, attempt, evaluation);
 
-        await opts.dispatchHooks?.beforeResolveWorkItem?.(workItem, attempt, evaluation);
-
         const resolveResult = await deps.foreman.resolveWorkItem({
           work_item_id: workItem.work_item_id,
           execution_id: attempt.execution_id,

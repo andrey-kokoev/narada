@@ -63,6 +63,7 @@ describe("Replay and Recovery Tests", () => {
           confirmed_at: null,
           blocked_reason: null,
           terminal_reason: null,
+          idempotency_key: "key-001",
         },
         {
           outbound_id: `ob_${decisionId}`,

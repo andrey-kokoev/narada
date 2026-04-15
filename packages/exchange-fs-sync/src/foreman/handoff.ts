@@ -11,6 +11,7 @@
 import type { CoordinatorStore, ForemanDecisionRow } from "../coordinator/types.js";
 import type { OutboundCommand, OutboundVersion } from "../outbound/types.js";
 import type { OutboundStore } from "../outbound/store.js";
+import { computeIdempotencyKey } from "../outbound/idempotency.js";
 
 export interface OutboundHandoffDeps {
   coordinatorStore: CoordinatorStore;
@@ -34,14 +35,27 @@ export class OutboundHandoff {
       return existing.outbound_id;
     }
 
-    const outboundId = `ob_${decision.decision_id}`;
-
     let payload: Record<string, unknown> = {};
     try {
       payload = JSON.parse(decision.payload_json);
     } catch {
       // Leave as empty object if payload is unparseable
     }
+
+    const idempotencyKey = computeIdempotencyKey(
+      decision.conversation_id,
+      decision.approved_action,
+      payload,
+    );
+
+    // Effect-of-once boundary: identical intent converges to the same command.
+    const idempotentCmd = this.deps.outboundStore.getCommandByIdempotencyKey(idempotencyKey);
+    if (idempotentCmd) {
+      this.deps.coordinatorStore.linkDecisionToOutbound(decision.decision_id, idempotentCmd.outbound_id);
+      return idempotentCmd.outbound_id;
+    }
+
+    const outboundId = `ob_${decision.decision_id}`;
 
     const command: OutboundCommand = {
       outbound_id: outboundId,
@@ -56,6 +70,7 @@ export class OutboundHandoff {
       confirmed_at: null,
       blocked_reason: null,
       terminal_reason: null,
+      idempotency_key: idempotencyKey,
     };
 
     const version: OutboundVersion = {
@@ -68,7 +83,7 @@ export class OutboundHandoff {
       subject: (payload.subject as string | undefined) || "",
       body_text: (payload.body_text as string | undefined) || "",
       body_html: (payload.body_html as string | undefined) || "",
-      idempotency_key: `${outboundId}-v1`,
+      idempotency_key: idempotencyKey,
       policy_snapshot_json: JSON.stringify({ participants: [] }),
       payload_json: decision.payload_json,
       created_at: decision.decided_at,

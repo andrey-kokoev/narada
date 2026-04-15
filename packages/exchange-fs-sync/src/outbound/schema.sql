@@ -11,7 +11,7 @@
 -- ---------------------------------------------------------------------------
 create table if not exists outbound_commands (
   outbound_id text primary key,
-  thread_id text not null,
+  conversation_id text not null,
   mailbox_id text not null,
   action_type text not null,
   status text not null,
@@ -21,7 +21,8 @@ create table if not exists outbound_commands (
   submitted_at text,
   confirmed_at text,
   blocked_reason text,
-  terminal_reason text
+  terminal_reason text,
+  idempotency_key text not null unique
 );
 
 -- Fast lookups for worker eligibility and thread constraints
@@ -29,7 +30,10 @@ create index if not exists idx_outbound_commands_status
   on outbound_commands(status);
 
 create index if not exists idx_outbound_commands_thread_action
-  on outbound_commands(thread_id, action_type);
+  on outbound_commands(conversation_id, action_type);
+
+create index if not exists idx_outbound_commands_idempotency
+  on outbound_commands(idempotency_key);
 
 create index if not exists idx_outbound_commands_mailbox
   on outbound_commands(mailbox_id);

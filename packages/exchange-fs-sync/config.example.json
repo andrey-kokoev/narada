@@ -31,5 +31,12 @@
     "model": "gpt-4o-mini",
     "base_url": "https://api.openai.com/v1",
     "timeout_ms": 30000
+  },
+  "policy": {
+    "primary_charter": "support_steward",
+    "secondary_charters": [],
+    "allowed_actions": ["draft_reply", "send_reply", "mark_read", "no_action"],
+    "allowed_tools": [],
+    "require_human_approval": false
   }
 }

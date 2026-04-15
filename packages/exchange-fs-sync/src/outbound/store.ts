@@ -27,6 +27,7 @@ const ACTIVE_UNSENT_STATUSES: readonly OutboundStatus[] = [
 export interface OutboundStore {
   initSchema(): void;
   createCommand(command: OutboundCommand, version: OutboundVersion): void;
+  getCommandByIdempotencyKey(idempotencyKey: string): OutboundCommand | undefined;
   getCommand(outbound_id: string): OutboundCommand | undefined;
   getCommandStatus(outbound_id: string): OutboundStatus | undefined;
   getLatestVersion(outbound_id: string): OutboundVersion | undefined;
@@ -75,6 +76,7 @@ function rowToCommand(row: Record<string, unknown>): OutboundCommand {
     confirmed_at: row.confirmed_at ? String(row.confirmed_at) : null,
     blocked_reason: row.blocked_reason ? String(row.blocked_reason) : null,
     terminal_reason: row.terminal_reason ? String(row.terminal_reason) : null,
+    idempotency_key: String(row.idempotency_key),
   };
 }
 
@@ -150,7 +152,8 @@ export class SqliteOutboundStore implements OutboundStore {
         submitted_at text,
         confirmed_at text,
         blocked_reason text,
-        terminal_reason text
+        terminal_reason text,
+        idempotency_key text not null unique
       );
 
       create index if not exists idx_outbound_commands_status
@@ -158,6 +161,9 @@ export class SqliteOutboundStore implements OutboundStore {
 
       create index if not exists idx_outbound_commands_thread_action
         on outbound_commands(conversation_id, action_type);
+
+      create index if not exists idx_outbound_commands_idempotency
+        on outbound_commands(idempotency_key);
 
       create index if not exists idx_outbound_commands_mailbox
         on outbound_commands(mailbox_id);
@@ -226,8 +232,8 @@ export class SqliteOutboundStore implements OutboundStore {
       insert into outbound_commands (
         outbound_id, conversation_id, mailbox_id, action_type, status,
         latest_version, created_at, created_by, submitted_at,
-        confirmed_at, blocked_reason, terminal_reason
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        confirmed_at, blocked_reason, terminal_reason, idempotency_key
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const insertVer = this.db.prepare(`
@@ -249,7 +255,19 @@ export class SqliteOutboundStore implements OutboundStore {
       where conversation_id = ? and action_type = ? and status in (${ACTIVE_UNSENT_STATUSES.map(() => "?").join(", ")})
     `);
 
+    const checkIdempotency = this.db.prepare(`
+      select outbound_id from outbound_commands where idempotency_key = ?
+    `);
+
     const tx = this.db.transaction(() => {
+      const idempotent = checkIdempotency.get(command.idempotency_key) as
+        | { outbound_id: string }
+        | undefined;
+      if (idempotent) {
+        // Effect-of-once boundary: identical intent already materialized.
+        return;
+      }
+
       const existing = checkActive.get(
         command.conversation_id,
         command.action_type,
@@ -275,6 +293,7 @@ export class SqliteOutboundStore implements OutboundStore {
         command.confirmed_at,
         command.blocked_reason,
         command.terminal_reason,
+        command.idempotency_key,
       );
 
       insertVer.run(
@@ -305,6 +324,13 @@ export class SqliteOutboundStore implements OutboundStore {
     });
 
     tx();
+  }
+
+  getCommandByIdempotencyKey(idempotencyKey: string): OutboundCommand | undefined {
+    const row = this.db.prepare(
+      "select * from outbound_commands where idempotency_key = ?",
+    ).get(idempotencyKey) as Record<string, unknown> | undefined;
+    return row ? rowToCommand(row) : undefined;
   }
 
   getCommand(outbound_id: string): OutboundCommand | undefined {

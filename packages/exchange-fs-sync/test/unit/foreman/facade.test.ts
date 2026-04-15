@@ -133,7 +133,7 @@ describe("DefaultForemanFacade", () => {
       classifications: [],
       facts: [],
       proposed_actions: [
-        { action_type: "send_reply", authority: "recommended", payload_json: JSON.stringify({ subject: "Hi" }), rationale: "" },
+        { action_type: "send_reply", authority: "recommended", payload_json: JSON.stringify({ to: ["a@b.com"], body_text: "Hello", subject: "Hi" }), rationale: "" },
       ],
       tool_requests: [],
       escalations: [],
@@ -421,6 +421,7 @@ describe("DefaultForemanFacade", () => {
           confirmed_at: null,
           blocked_reason: null,
           terminal_reason: null,
+          idempotency_key: "key-001",
         },
         {
           outbound_id: "ob-1",
@@ -473,6 +474,7 @@ describe("DefaultForemanFacade", () => {
           confirmed_at: null,
           blocked_reason: null,
           terminal_reason: null,
+          idempotency_key: "key-001",
         },
         {
           outbound_id: "ob-1",
@@ -539,7 +541,7 @@ describe("DefaultForemanFacade", () => {
       expect(JSON.parse(record!.secondary_charters_json)).toEqual(["helper_1", "helper_2"]);
     });
 
-    it("enforces human approval gate when policy requires it", async () => {
+    it("records pending approval decision and does not create outbound command when approval is required", async () => {
       const policyFacade = new DefaultForemanFacade({
         coordinatorStore,
         outboundStore,
@@ -548,7 +550,7 @@ describe("DefaultForemanFacade", () => {
         getMailboxPolicy: () => makeMailboxPolicy({ require_human_approval: true }),
       });
       insertConversation("conv-approval");
-      const workItem = insertWorkItem("conv-approval", "opened", "rev-1");
+      const workItem = insertWorkItem("conv-approval", "executing", "rev-1");
       const executionId = "ex-approval-1";
       insertExecutionAttempt(workItem.work_item_id, executionId, {
         execution_id: executionId,
@@ -557,16 +559,115 @@ describe("DefaultForemanFacade", () => {
         charter_id: "support_steward",
         role: "primary",
         allowed_actions: ["send_reply"],
+        available_tools: [],
       });
 
       const result = await policyFacade.resolveWorkItem({
         work_item_id: workItem.work_item_id,
         execution_id: executionId,
-        evaluation: makeEvaluation(workItem.work_item_id, executionId),
+        evaluation: makeEvaluation(workItem.work_item_id, executionId, {
+          proposed_actions: [{
+            action_type: "send_reply",
+            authority: "recommended",
+            payload_json: JSON.stringify({ to: ["a@b.com"], body_text: "Hello" }),
+            rationale: "",
+          }],
+        }),
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.resolution_outcome).toBe("pending_approval");
+      expect(result.decision_id).toBeDefined();
+      expect(result.outbound_id).toBeUndefined();
+
+      const decision = coordinatorStore.getDecisionById(result.decision_id!);
+      expect(decision).toBeDefined();
+      expect(decision!.outbound_id).toBeNull();
+
+      const commands = db.prepare("select count(*) as c from outbound_commands where conversation_id = ?").get("conv-approval") as { c: number };
+      expect(commands.c).toBe(0);
+
+      const updated = coordinatorStore.getWorkItem(workItem.work_item_id);
+      expect(updated!.status).toBe("resolved");
+      expect(updated!.resolution_outcome).toBe("pending_approval");
+    });
+
+    it("rejects invalid payload before outbound handoff", async () => {
+      insertConversation("conv-payload");
+      const workItem = insertWorkItem("conv-payload", "executing", "rev-1");
+      const executionId = "ex-payload-1";
+      insertExecutionAttempt(workItem.work_item_id, executionId, {
+        execution_id: executionId,
+        work_item_id: workItem.work_item_id,
+        conversation_id: "conv-payload",
+        charter_id: "support_steward",
+        role: "primary",
+        allowed_actions: ["send_reply"],
+        available_tools: [],
+      });
+
+      const result = await facade.resolveWorkItem({
+        work_item_id: workItem.work_item_id,
+        execution_id: executionId,
+        evaluation: makeEvaluation(workItem.work_item_id, executionId, {
+          proposed_actions: [{
+            action_type: "send_reply",
+            authority: "recommended",
+            payload_json: JSON.stringify({ body_text: "Hello" }), // missing recipient
+            rationale: "",
+          }],
+        }),
       });
 
       expect(result.success).toBe(false);
-      expect(result.error).toMatch(/Human approval required/);
+      expect(result.resolution_outcome).toBe("failed");
+      expect(result.error).toMatch(/invalid payload/);
+
+      const updated = coordinatorStore.getWorkItem(workItem.work_item_id);
+      expect(updated!.status).toBe("failed_terminal");
+
+      const commands = db.prepare("select count(*) as c from outbound_commands where conversation_id = ?").get("conv-payload") as { c: number };
+      expect(commands.c).toBe(0);
+    });
+
+    it("downgrades low-confidence evaluation to escalation", async () => {
+      insertConversation("conv-lowconf");
+      const workItem = insertWorkItem("conv-lowconf", "executing", "rev-1");
+      const executionId = "ex-lowconf-1";
+      insertExecutionAttempt(workItem.work_item_id, executionId, {
+        execution_id: executionId,
+        work_item_id: workItem.work_item_id,
+        conversation_id: "conv-lowconf",
+        charter_id: "support_steward",
+        role: "primary",
+        allowed_actions: ["send_reply"],
+        available_tools: [],
+      });
+
+      const result = await facade.resolveWorkItem({
+        work_item_id: workItem.work_item_id,
+        execution_id: executionId,
+        evaluation: makeEvaluation(workItem.work_item_id, executionId, {
+          confidence: { overall: "low", uncertainty_flags: [] },
+          proposed_actions: [{
+            action_type: "send_reply",
+            authority: "recommended",
+            payload_json: JSON.stringify({ to: ["a@b.com"], body_text: "Hello" }),
+            rationale: "",
+          }],
+        }),
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.resolution_outcome).toBe("escalated");
+      expect(result.decision_id).toBeDefined();
+
+      const updated = coordinatorStore.getWorkItem(workItem.work_item_id);
+      expect(updated!.status).toBe("resolved");
+      expect(updated!.resolution_outcome).toBe("escalated");
+
+      const commands = db.prepare("select count(*) as c from outbound_commands where conversation_id = ?").get("conv-lowconf") as { c: number };
+      expect(commands.c).toBe(0);
     });
   });
 });

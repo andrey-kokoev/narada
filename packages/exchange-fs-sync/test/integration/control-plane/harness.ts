@@ -170,7 +170,7 @@ export function makeEvaluation(
     classifications: [],
     facts: [],
     proposed_actions: [
-      { action_type: "send_reply", authority: "recommended", payload_json: JSON.stringify({ subject: "Hi" }), rationale: "" },
+      { action_type: "send_reply", authority: "recommended", payload_json: JSON.stringify({ to: ["a@example.com"], body_text: "Hi" }), rationale: "" },
     ],
     tool_requests: [],
     escalations: [],

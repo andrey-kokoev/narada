@@ -208,5 +208,5 @@ export interface EvaluationEnvelope {
 
 // Minimal WorkItem shape referenced in ResolutionResult
 export interface WorkItem {
-  resolution_outcome: "no_op" | "action_created" | "escalated" | "failed" | null;
+  resolution_outcome: "no_op" | "action_created" | "escalated" | "pending_approval" | "failed" | null;
 }

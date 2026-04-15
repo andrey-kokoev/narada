@@ -239,6 +239,16 @@ narada/
 3. Export types from [`packages/exchange-fs-sync-cli/src/index.ts`](packages/exchange-fs-sync-cli/src/index.ts)
 3. Use [`loadConfig()`](packages/exchange-fs-sync/src/config/load.ts) for config handling
 
+### 5. Change Mailbox Policy Binding
+
+Mailbox policy determines charter routing, allowed actions, and tool catalog for a mailbox. To modify:
+
+1. Update [`MailboxPolicy`](packages/exchange-fs-sync/src/config/types.ts) type
+2. Update parsing/defaults in [`src/config/load.ts`](packages/exchange-fs-sync/src/config/load.ts) and [`src/config/defaults.ts`](packages/exchange-fs-sync/src/config/defaults.ts)
+3. Update consumers: [`DefaultForemanFacade`](packages/exchange-fs-sync/src/foreman/facade.ts), [`buildInvocationEnvelope`](packages/exchange-fs-sync/src/charter/envelope.ts), and daemon [`service.ts`](packages/exchange-fs-sync-daemon/src/service.ts)
+4. Update [`config.example.json`](packages/exchange-fs-sync/config.example.json)
+5. Add tests in [`test/unit/config/load.test.ts`](packages/exchange-fs-sync/test/unit/config/load.test.ts) and [`test/integration/policy-routing.test.ts`](packages/exchange-fs-sync-daemon/test/integration/policy-routing.test.ts)
+
 ---
 
 ## Package-Specific Guidance

@@ -21,6 +21,7 @@ import type {
   CharterInvocationEnvelope,
 } from "./types.js";
 import { validateCharterOutput } from "./validation.js";
+import { governEvaluation } from "./governance.js";
 import { OutboundHandoff } from "./handoff.js";
 import type {
   CoordinatorStore,
@@ -259,14 +260,113 @@ export class DefaultForemanFacade implements ForemanFacade {
       };
     }
 
-    // For v1, take the first valid proposed action
-    const chosenAction = validActions[0]!;
-
-    // Human approval gate (v1 default: auto-approve)
+    // Apply action governance to structurally-valid actions
     const policy = this.deps.getMailboxPolicy(workItem.mailbox_id);
-    if (policy.require_human_approval) {
-      return { success: false, resolution_outcome: "failed", error: "Human approval required (not implemented)" };
+    const governance = governEvaluation(evaluation, policy, validActions);
+
+    if (governance.outcome === "reject") {
+      this.deps.coordinatorStore.updateWorkItemStatus(workItem.work_item_id, "failed_terminal", {
+        resolution_outcome: "failed",
+        error_message: governance.reason,
+        updated_at: new Date().toISOString(),
+      });
+      return { success: false, resolution_outcome: "failed", error: governance.reason };
     }
+
+    if (governance.outcome === "escalate") {
+      const decisionId = `fd_${workItem.work_item_id}_escalation`;
+      const now = new Date().toISOString();
+      const existingDecision = this.deps.coordinatorStore.getDecisionById(decisionId);
+      if (!existingDecision) {
+        this.deps.coordinatorStore.insertDecision({
+          decision_id: decisionId,
+          conversation_id: workItem.conversation_id,
+          mailbox_id: workItem.mailbox_id,
+          source_charter_ids_json: JSON.stringify([evaluation.charter_id]),
+          approved_action: "escalate_to_human",
+          payload_json: JSON.stringify({ reason: governance.reason }),
+          rationale: evaluation.summary,
+          decided_at: now,
+          outbound_id: null,
+          created_by: `foreman:${this.deps.foremanId}/charter:${evaluation.charter_id}`,
+        });
+      }
+      this.deps.coordinatorStore.updateWorkItemStatus(workItem.work_item_id, "resolved", {
+        resolution_outcome: "escalated",
+        updated_at: now,
+      });
+      return { success: true, decision_id: decisionId, resolution_outcome: "escalated" };
+    }
+
+    if (governance.outcome === "clarification_needed") {
+      this.deps.coordinatorStore.updateWorkItemStatus(workItem.work_item_id, "failed_retryable", {
+        error_message: governance.reason,
+        updated_at: new Date().toISOString(),
+      });
+      return { success: false, resolution_outcome: "failed", error: governance.reason };
+    }
+
+    if (governance.approval_required) {
+      const decisionId = `fd_${workItem.work_item_id}_pending_approval`;
+      const now = new Date().toISOString();
+      const existingDecision = this.deps.coordinatorStore.getDecisionById(decisionId);
+      if (!existingDecision) {
+        this.deps.coordinatorStore.insertDecision({
+          decision_id: decisionId,
+          conversation_id: workItem.conversation_id,
+          mailbox_id: workItem.mailbox_id,
+          source_charter_ids_json: JSON.stringify([evaluation.charter_id]),
+          approved_action: "pending_approval",
+          payload_json: JSON.stringify({ reason: governance.reason }),
+          rationale: evaluation.summary,
+          decided_at: now,
+          outbound_id: null,
+          created_by: `foreman:${this.deps.foremanId}/charter:${evaluation.charter_id}`,
+        });
+      }
+      this.deps.coordinatorStore.updateWorkItemStatus(workItem.work_item_id, "resolved", {
+        resolution_outcome: "pending_approval",
+        updated_at: now,
+      });
+      return { success: true, decision_id: decisionId, resolution_outcome: "pending_approval" };
+    }
+
+    if (governance.outcome === "no_op") {
+      this.deps.coordinatorStore.updateWorkItemStatus(workItem.work_item_id, "resolved", {
+        resolution_outcome: "no_op",
+        updated_at: new Date().toISOString(),
+      });
+      return { success: true, resolution_outcome: "no_op" };
+    }
+
+    if (governance.outcome === "accept" && governance.approval_required) {
+      const action = governance.governed_action!;
+      const decisionId = `fd_${workItem.work_item_id}_pending_approval`;
+      const now = new Date().toISOString();
+      const existingDecision = this.deps.coordinatorStore.getDecisionById(decisionId);
+      if (!existingDecision) {
+        this.deps.coordinatorStore.insertDecision({
+          decision_id: decisionId,
+          conversation_id: workItem.conversation_id,
+          mailbox_id: workItem.mailbox_id,
+          source_charter_ids_json: JSON.stringify([evaluation.charter_id]),
+          approved_action: action.action_type,
+          payload_json: action.payload_json,
+          rationale: `Pending approval: ${governance.reason}`,
+          decided_at: now,
+          outbound_id: null,
+          created_by: `foreman:${this.deps.foremanId}/charter:${evaluation.charter_id}`,
+        });
+      }
+      this.deps.coordinatorStore.updateWorkItemStatus(workItem.work_item_id, "resolved", {
+        resolution_outcome: "pending_approval",
+        updated_at: now,
+      });
+      return { success: true, decision_id: decisionId, resolution_outcome: "pending_approval" };
+    }
+
+    // Normal accept path — proceed to atomic handoff
+    const chosenAction = governance.governed_action!;
 
     // Persist evaluation first (outside the main tx to keep it simple, but could be inside)
     this.persistEvaluation(evaluation);

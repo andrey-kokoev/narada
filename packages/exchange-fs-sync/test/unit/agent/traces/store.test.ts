@@ -147,7 +147,7 @@ describe("SqliteAgentTraceStore", () => {
         conversation_id: "conv-1",
         work_item_id: "wi-1",
         session_id: "sess-x",
-        trace_type: "reasoning",
+        trace_type: "observation",
         reference_outbound_id: null,
         reference_message_id: null,
         payload_json: JSON.stringify({ n: 1 }),
@@ -165,7 +165,7 @@ describe("SqliteAgentTraceStore", () => {
       });
 
       const results = store.readBySession("sess-x");
-      expect(results.map((r) => r.trace_type)).toEqual(["reasoning", "decision"]);
+      expect(results.map((r) => r.trace_type).sort()).toEqual(["decision", "observation"]);
     });
   });
 

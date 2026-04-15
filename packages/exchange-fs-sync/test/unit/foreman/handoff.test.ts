@@ -162,7 +162,11 @@ describe("OutboundHandoff", () => {
       coordinatorStore.insertDecision(decision1);
       db.transaction(() => handoff.createCommandFromDecision(decision1))();
 
-      const decision2 = makeDecision({ decision_id: "fd-2", approved_action: "send_reply" });
+      const decision2 = makeDecision({
+        decision_id: "fd-2",
+        approved_action: "send_reply",
+        payload_json: JSON.stringify({ subject: "different" }),
+      });
       coordinatorStore.insertDecision(decision2);
 
       expect(() => {
@@ -196,6 +200,7 @@ describe("OutboundHandoff", () => {
           confirmed_at: null,
           blocked_reason: null,
           terminal_reason: null,
+          idempotency_key: "key-001",
         },
         {
           outbound_id: "ob_fd-1",
@@ -240,6 +245,7 @@ describe("OutboundHandoff", () => {
           confirmed_at: null,
           blocked_reason: null,
           terminal_reason: null,
+          idempotency_key: "key-o1",
         },
         {
           outbound_id: "o1",
@@ -251,7 +257,7 @@ describe("OutboundHandoff", () => {
           subject: "",
           body_text: "",
           body_html: "",
-          idempotency_key: "key-1",
+          idempotency_key: "key-o1",
           policy_snapshot_json: "{}",
           payload_json: "{}",
           created_at: new Date().toISOString(),
@@ -273,6 +279,7 @@ describe("OutboundHandoff", () => {
           confirmed_at: new Date().toISOString(),
           blocked_reason: null,
           terminal_reason: null,
+          idempotency_key: "key-o2",
         },
         {
           outbound_id: "o2",
@@ -284,7 +291,7 @@ describe("OutboundHandoff", () => {
           subject: "",
           body_text: "",
           body_html: "",
-          idempotency_key: "key-2",
+          idempotency_key: "key-o2",
           policy_snapshot_json: "{}",
           payload_json: "{}",
           created_at: new Date().toISOString(),
