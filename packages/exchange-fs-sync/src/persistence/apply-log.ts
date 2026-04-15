@@ -63,8 +63,8 @@ export class FileApplyLogStore implements ApplyLogStore {
     return join(this.applyLogDir, shard, `${eventId}.json`);
   }
 
-  async hasApplied(eventId: string): Promise<boolean> {
-    const markerPath = this.markerPath(eventId);
+  async hasApplied(recordId: string): Promise<boolean> {
+    const markerPath = this.markerPath(recordId);
 
     try {
       await stat(markerPath);
@@ -78,25 +78,27 @@ export class FileApplyLogStore implements ApplyLogStore {
     }
   }
 
-  async markApplied(event: NormalizedEvent): Promise<void> {
-    const markerPath = this.markerPath(event.event_id);
-    const markerDir = join(this.applyLogDir, shardForEventId(event.event_id));
+  async markApplied(recordId: string, payload?: unknown): Promise<void> {
+    const markerPath = this.markerPath(recordId);
+    const markerDir = join(this.applyLogDir, shardForEventId(recordId));
     const tmpPath = join(
       this.tmpDir,
-      `apply-marker.${event.event_id}.${process.pid}.${Date.now()}.tmp.json`,
+      `apply-marker.${recordId}.${process.pid}.${Date.now()}.tmp.json`,
     );
 
     await mkdir(markerDir, { recursive: true });
     await mkdir(this.tmpDir, { recursive: true });
 
-    const payload: ApplyMarkerFileShape = {
-      event_id: event.event_id,
-      message_id: event.message_id,
-      event_kind: event.event_kind,
+    const event = payload && typeof payload === "object" ? (payload as NormalizedEvent) : null;
+
+    const marker: ApplyMarkerFileShape = {
+      event_id: recordId,
+      message_id: event?.message_id ?? "",
+      event_kind: event?.event_kind ?? "upsert",
       applied_at: nowIso(),
     };
 
-    const bytes = `${JSON.stringify(payload, null, 2)}\n`;
+    const bytes = `${JSON.stringify(marker, null, 2)}\n`;
 
     try {
       try {

@@ -97,7 +97,7 @@ const AllowedActionSchema = z.enum([
 ]);
 
 // Mailbox policy schema
-const MailboxPolicySchema = z.object({
+const RuntimePolicySchema = z.object({
   primary_charter: z.string().min(1).default('support_steward'),
   secondary_charters: z.array(z.string().min(1)).optional(),
   allowed_actions: z.array(AllowedActionSchema).min(1, 'At least one allowed action is required'),
@@ -141,7 +141,7 @@ export const ConfigSchema = z.object({
   runtime: RuntimeConfigSchema.default({}),
   lifecycle: LifecycleConfigSchema.default({}),
   charter: CharterRuntimeConfigSchema.default({}),
-  policy: MailboxPolicySchema.default({ allowed_actions: ['no_action'] }),
+  policy: RuntimePolicySchema.default({ allowed_actions: ['no_action'] }),
   webhook: WebhookConfigSchema.optional(),
 });
 

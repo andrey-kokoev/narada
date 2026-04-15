@@ -2,12 +2,13 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import Database from "better-sqlite3";
 import { SqliteCoordinatorStore } from "../../../src/coordinator/store.js";
 import { SqliteOutboundStore } from "../../../src/outbound/store.js";
+import { SqliteIntentStore } from "../../../src/intent/store.js";
 import { DefaultForemanFacade } from "../../../src/foreman/facade.js";
 import type { SyncCompletionSignal, EvaluationEnvelope } from "../../../src/foreman/types.js";
 import type { WorkItem } from "../../../src/coordinator/types.js";
-import type { MailboxPolicy } from "../../../src/config/types.js";
+import type { RuntimePolicy } from "../../../src/config/types.js";
 
-function makeMailboxPolicy(overrides?: Partial<MailboxPolicy>): MailboxPolicy {
+function makeRuntimePolicy(overrides?: Partial<RuntimePolicy>): RuntimePolicy {
   return {
     primary_charter: "support_steward",
     allowed_actions: ["draft_reply", "send_reply", "mark_read", "no_action"],
@@ -19,6 +20,7 @@ describe("DefaultForemanFacade", () => {
   let db: Database.Database;
   let coordinatorStore: SqliteCoordinatorStore;
   let outboundStore: SqliteOutboundStore;
+  let intentStore: SqliteIntentStore;
   let facade: DefaultForemanFacade;
 
   beforeEach(() => {
@@ -27,17 +29,21 @@ describe("DefaultForemanFacade", () => {
     outboundStore = new SqliteOutboundStore({ db });
     coordinatorStore.initSchema();
     outboundStore.initSchema();
+    intentStore = new SqliteIntentStore({ db });
+    intentStore.initSchema();
     facade = new DefaultForemanFacade({
       coordinatorStore,
       outboundStore,
+      intentStore,
       db,
       foremanId: "fm-test",
-      getMailboxPolicy: () => makeMailboxPolicy(),
+      getRuntimePolicy: () => makeRuntimePolicy(),
     });
   });
 
   afterEach(() => {
     outboundStore.close();
+    intentStore.close();
     coordinatorStore.close();
     db.close();
   });
@@ -550,9 +556,10 @@ describe("DefaultForemanFacade", () => {
       const policyFacade = new DefaultForemanFacade({
         coordinatorStore,
         outboundStore,
+        intentStore,
         db,
         foremanId: "fm-test",
-        getMailboxPolicy: () => makeMailboxPolicy({ primary_charter: "custom_charter" }),
+        getRuntimePolicy: () => makeRuntimePolicy({ primary_charter: "custom_charter" }),
       });
       const signal = makeSignal([
         { conversation_id: "conv-policy", previous_revision_ordinal: 0, current_revision_ordinal: 1, change_kinds: ["new_message"] },
@@ -567,9 +574,10 @@ describe("DefaultForemanFacade", () => {
       const policyFacade = new DefaultForemanFacade({
         coordinatorStore,
         outboundStore,
+        intentStore,
         db,
         foremanId: "fm-test",
-        getMailboxPolicy: () => makeMailboxPolicy({ secondary_charters: ["helper_1", "helper_2"] }),
+        getRuntimePolicy: () => makeRuntimePolicy({ secondary_charters: ["helper_1", "helper_2"] }),
       });
       const signal = makeSignal([
         { conversation_id: "conv-secondary", previous_revision_ordinal: 0, current_revision_ordinal: 1, change_kinds: ["new_message"] },
@@ -584,9 +592,10 @@ describe("DefaultForemanFacade", () => {
       const policyFacade = new DefaultForemanFacade({
         coordinatorStore,
         outboundStore,
+        intentStore,
         db,
         foremanId: "fm-test",
-        getMailboxPolicy: () => makeMailboxPolicy({ require_human_approval: true }),
+        getRuntimePolicy: () => makeRuntimePolicy({ require_human_approval: true }),
       });
       insertConversation("conv-approval");
       const workItem = insertWorkItem("conv-approval", "executing", "rev-1");

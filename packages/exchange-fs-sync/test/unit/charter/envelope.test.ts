@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { normalizeMessageForEnvelope, buildInvocationEnvelope } from "../../../src/charter/envelope.js";
 import type { NormalizedMessage } from "../../../src/types/normalized.js";
 import type { CoordinatorStore, WorkItem } from "../../../src/coordinator/types.js";
-import type { MailboxPolicy } from "../../../src/config/types.js";
+import type { RuntimePolicy } from "../../../src/config/types.js";
 import type { FileMessageStore } from "../../../src/persistence/messages.js";
 
 function makeMockStore(record?: { primary_charter: string }): CoordinatorStore {
@@ -35,7 +35,7 @@ function makeMockMessageStore(): FileMessageStore {
   } as unknown as FileMessageStore;
 }
 
-function makeMailboxPolicy(overrides?: Partial<MailboxPolicy>): MailboxPolicy {
+function makeRuntimePolicy(overrides?: Partial<RuntimePolicy>): RuntimePolicy {
   return {
     primary_charter: "support_steward",
     allowed_actions: ["draft_reply", "send_reply", "mark_read", "no_action"],
@@ -181,7 +181,7 @@ describe("normalizeMessageForEnvelope", () => {
           coordinatorStore: makeMockStore({ primary_charter: "custom_charter" }),
           messageStore: makeMockMessageStore(),
           rootDir: "/tmp",
-          getMailboxPolicy: () => makeMailboxPolicy(),
+          getRuntimePolicy: () => makeRuntimePolicy(),
         },
         { executionId: "ex-1", workItem },
       );
@@ -195,7 +195,7 @@ describe("normalizeMessageForEnvelope", () => {
             coordinatorStore: makeMockStore(undefined),
             messageStore: makeMockMessageStore(),
             rootDir: "/tmp",
-            getMailboxPolicy: () => makeMailboxPolicy(),
+            getRuntimePolicy: () => makeRuntimePolicy(),
           },
           { executionId: "ex-1", workItem },
         ),
@@ -208,7 +208,7 @@ describe("normalizeMessageForEnvelope", () => {
           coordinatorStore: makeMockStore({ primary_charter: "support_steward" }),
           messageStore: makeMockMessageStore(),
           rootDir: "/tmp",
-          getMailboxPolicy: () => makeMailboxPolicy({ allowed_actions: ["send_reply", "no_action"] }),
+          getRuntimePolicy: () => makeRuntimePolicy({ allowed_actions: ["send_reply", "no_action"] }),
         },
         { executionId: "ex-1", workItem },
       );

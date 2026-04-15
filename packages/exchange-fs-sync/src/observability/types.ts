@@ -118,3 +118,63 @@ export interface ControlPlaneStatusSnapshot {
   };
   mailbox_summary: MailboxDispatchSummary | null;
 }
+
+/** Process execution summary for observability */
+export interface ProcessExecutionSummary {
+  execution_id: string;
+  intent_id: string;
+  command: string;
+  status: "pending" | "running" | "completed" | "failed";
+  exit_code: number | null;
+  started_at: string | null;
+  completed_at: string | null;
+  lease_runner_id: string | null;
+  lease_expires_at: string | null;
+  created_at: string;
+}
+
+/** Intent summary for observability */
+export interface IntentSummary {
+  intent_id: string;
+  intent_type: string;
+  executor_family: string;
+  status: string;
+  context_id: string;
+  target_id: string | null;
+  terminal_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Worker status observation — derived from registry + durable state */
+export interface WorkerStatusObservation {
+  worker_id: string;
+  executor_family: string;
+  concurrency_policy: string;
+  description: string | undefined;
+  /** Whether the worker identity is registered */
+  registered: boolean;
+  /** Whether durable state shows active work for this executor family */
+  has_active_work: boolean;
+  /** Count of pending items for this worker's executor family */
+  pending_count: number;
+}
+
+/** Unified observation plane snapshot */
+export interface ObservationPlaneSnapshot {
+  captured_at: string;
+  workers: WorkerStatusObservation[];
+  control_plane: ControlPlaneStatusSnapshot;
+  process_executions: {
+    active: ProcessExecutionSummary[];
+    recent: ProcessExecutionSummary[];
+    failed_recent: ProcessExecutionSummary[];
+    total_count: number;
+  };
+  intents: {
+    pending: IntentSummary[];
+    executing: IntentSummary[];
+    failed_terminal: IntentSummary[];
+    total_count: number;
+  };
+}

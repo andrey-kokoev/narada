@@ -3,9 +3,9 @@ import type {
   EventId,
   MessageId,
   NormalizedBatch,
-  NormalizedEvent,
   NormalizedPayload,
 } from "./normalized.js";
+import type { SourceRecord } from "./source.js";
 
 export interface RunResult {
   prior_cursor?: CursorToken | null;
@@ -30,6 +30,7 @@ export interface ApplyEventResult {
   };
 }
 
+/** @deprecated Use Source from ./source.js instead */
 export interface GraphAdapter {
   fetch_since(cursor?: CursorToken | null): Promise<NormalizedBatch>;
 }
@@ -40,12 +41,12 @@ export interface CursorStore {
 }
 
 export interface ApplyLogStore {
-  hasApplied(eventId: EventId): Promise<boolean>;
-  markApplied(event: NormalizedEvent): Promise<void>;
+  hasApplied(recordId: string): Promise<boolean>;
+  markApplied(recordId: string, payload?: unknown): Promise<void>;
 }
 
 export interface Projector {
-  applyEvent(event: NormalizedEvent): Promise<ApplyEventResult>;
+  applyRecord(record: SourceRecord): Promise<ApplyEventResult>;
 }
 
 export interface SyncRunner {

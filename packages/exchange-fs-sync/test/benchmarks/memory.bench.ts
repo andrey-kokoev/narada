@@ -78,8 +78,8 @@ describe('Memory: Sync Operations', () => {
         const lock = new FileLock({ rootDir, acquireTimeoutMs: 5000 });
 
         const runner = new DefaultSyncRunner({
-          rootDir,
-          adapter,
+      rootDir,
+      source: new ExchangeSource({ adapter, sourceId: "test" }),
           cursorStore,
           applyLogStore,
           projector,
@@ -103,6 +103,7 @@ describe('Memory: Sync Operations', () => {
       const mem = await memoryBenchmark(async () => {
         const { createMockAdapter } = require('../../src/adapter/graph/mock-adapter.js');
         const { DefaultSyncRunner } = require('../../src/runner/sync-once.js');
+        const { ExchangeSource } = require('../../src/adapter/graph/exchange-source.js');
         const { FileCursorStore } = require('../../src/persistence/cursor.js');
         const { FileApplyLogStore } = require('../../src/persistence/apply-log.js');
         const { DefaultProjector } = require('../../src/projector/apply-event.js');
@@ -115,8 +116,8 @@ describe('Memory: Sync Operations', () => {
         const lock = new FileLock({ rootDir, acquireTimeoutMs: 5000 });
 
         const runner = new DefaultSyncRunner({
-          rootDir,
-          adapter,
+      rootDir,
+      source: new ExchangeSource({ adapter, sourceId: "test" }),
           cursorStore,
           applyLogStore,
           projector,
@@ -249,6 +250,7 @@ describe('Memory: Stress Tests', () => {
 
         const { createMockAdapter } = require('../../src/adapter/graph/mock-adapter.js');
         const { DefaultSyncRunner } = require('../../src/runner/sync-once.js');
+        const { ExchangeSource } = require('../../src/adapter/graph/exchange-source.js');
         const { FileCursorStore } = require('../../src/persistence/cursor.js');
         const { FileApplyLogStore } = require('../../src/persistence/apply-log.js');
         const { DefaultProjector } = require('../../src/projector/apply-event.js');
@@ -261,8 +263,8 @@ describe('Memory: Stress Tests', () => {
         const lock = new FileLock({ rootDir, acquireTimeoutMs: 5000 });
 
         const runner = new DefaultSyncRunner({
-          rootDir,
-          adapter,
+      rootDir,
+      source: new ExchangeSource({ adapter, sourceId: "test" }),
           cursorStore,
           applyLogStore,
           projector,

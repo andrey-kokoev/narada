@@ -22,7 +22,7 @@ export interface SchedulerOptions {
 }
 
 export interface Scheduler {
-  scanForRunnableWork(mailboxId?: string, limit?: number): WorkItem[];
+  scanForRunnableWork(scopeId?: string, limit?: number): WorkItem[];
   acquireLease(workItemId: string, runnerId?: string): LeaseAcquisitionResult;
   renewLease(leaseId: string, expiresAt: string): void;
   releaseLease(leaseId: string, reason: WorkItemLease["release_reason"]): void;
@@ -31,5 +31,5 @@ export interface Scheduler {
   failExecution(executionId: string, errorMessage: string, retryable: boolean): void;
   recoverStaleLeases(now?: string): { leaseId: string; workItemId: string }[];
   calculateBackoff(retryCount: number): number;
-  isQuiescent(mailboxId?: string): boolean;
+  isQuiescent(scopeId?: string): boolean;
 }

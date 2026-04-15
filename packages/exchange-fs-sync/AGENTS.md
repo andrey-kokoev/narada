@@ -118,7 +118,7 @@ packages/exchange-fs-sync/
 | [`src/outbound/send-reply-worker.ts`](src/outbound/send-reply-worker.ts) | Draft creation, reuse, and send worker |
 | [`src/outbound/non-send-worker.ts`](src/outbound/non-send-worker.ts) | Non-send action worker |
 | [`src/outbound/reconciler.ts`](src/outbound/reconciler.ts) | `OutboundReconciler` — submitted → confirmed binding |
-| [`src/config/types.ts`](src/config/types.ts) | `MailboxPolicy`, `ExchangeFsSyncConfig` |
+| [`src/config/types.ts`](src/config/types.ts) | `RuntimePolicy`, `ExchangeFsSyncConfig` |
 | [`src/config/defaults.ts`](src/config/defaults.ts) | Default charter runtime (`mock`), default policy (`support_steward`) |
 
 ## Control Plane Architecture (v2)
@@ -483,6 +483,27 @@ Traces are **commentary, not authority**.
 - Lease state
 - Replay cursor
 - Scheduler truth
+
+## Observation Plane
+
+The observation plane (`src/observability/`) provides **read-only, derived views** over durable kernel state.
+
+- **Derived, not authoritative**: Observation values are computed from SQLite tables, not stored as control truth.
+- **Reconstructible**: Any observation can be rebuilt from durable state alone; no terminal attachment or in-memory state is required.
+- **Log-independent**: Rotating or deleting logs, traces, or ephemeral tables does not change observation accuracy.
+- **No correctness coupling**: No scheduler, lease, executor, or sync correctness path may depend on observation artifacts.
+
+### Key surfaces
+- `ObservationPlane.snapshot()` — unified view of workers, control plane, process executions, and intents
+- `getWorkerStatuses()` — worker registration + durable-state activity per executor family
+- `getProcessExecutionSummaries()` — active, recent, and failed process executions
+- `getIntentSummaries()` — pending, executing, and failed terminal intents
+- `buildControlPlaneSnapshot()` — work items, execution attempts, tool calls, outbound commands
+
+### Invariants
+1. Observation reads may never write to durable stores.
+2. Observation must remain accurate even if all logs and traces are dropped.
+3. Operator visibility must not require terminal attachment.
 
 ---
 

@@ -4,11 +4,13 @@ import type {
   ApplyEventResult,
   ApplyLogStore,
   CursorStore,
-  GraphAdapter,
   Projector,
   RunResult,
   SyncRunner,
 } from "../types/runtime.js";
+import type { Source } from "../types/source.js";
+import type { FactStore } from "../facts/types.js";
+import { sourceRecordToFact } from "../facts/record-to-fact.js";
 import type { ProgressCallback, SyncPhase } from "../types/progress.js";
 import { ExchangeFSSyncError, wrapError } from "../errors.js";
 import { globalCircuitBreakers } from "../retry.js";
@@ -34,10 +36,12 @@ export interface DetailedSyncResult extends RunResult {
 
 export interface SyncOnceDeps {
   rootDir: string;
-  adapter: GraphAdapter;
+  source: Source;
   cursorStore: CursorStore;
   applyLogStore: ApplyLogStore;
   projector: Projector;
+  /** Optional fact store for durable canonical boundary */
+  factStore?: FactStore;
   cleanupTmp?: () => Promise<void>;
   acquireLock?: () => Promise<() => Promise<void>>;
   rebuildViews?: () => Promise<void>;
@@ -155,16 +159,29 @@ export class DefaultSyncRunner implements SyncRunner {
       }
       this.reportProgress("setup", 4, 4, "Ready");
 
-      this.reportProgress("fetch", 0, 1, "Fetching from Graph API...");
+      this.reportProgress("fetch", 0, 1, "Fetching from source...");
       let batch;
       try {
-        batch = await this.deps.adapter.fetch_since(priorCursor);
+        batch = await this.deps.source.pull(priorCursor);
       } catch (fetchError) {
         addError("fetch", fetchError, { actionTaken: "abort" });
         throw fetchError;
       }
-      const totalEvents = batch.events.length;
-      this.reportProgress("fetch", 1, 1, `Fetched ${totalEvents} events`);
+      const totalEvents = batch.records.length;
+      this.reportProgress("fetch", 1, 1, `Fetched ${totalEvents} records`);
+
+      // Materialize facts as the canonical durable boundary
+      if (this.deps.factStore) {
+        for (const record of batch.records) {
+          try {
+            const fact = sourceRecordToFact(record, batch.nextCheckpoint ?? null);
+            this.deps.factStore.ingest(fact);
+          } catch (factError) {
+            addError("persist", factError, { actionTaken: "logged_only" });
+            // Continue: fact persistence failures should not abort sync
+          }
+        }
+      }
 
       let appliedCount = 0;
       let skippedCount = 0;
@@ -177,20 +194,20 @@ export class DefaultSyncRunner implements SyncRunner {
 
       this.reportProgress("process", 0, totalEvents, "Processing events...");
 
-      for (let i = 0; i < batch.events.length; i++) {
-        const event = batch.events[i];
+      for (let i = 0; i < batch.records.length; i++) {
+        const record = batch.records[i]!;
+        const recordId = record.recordId;
 
-        if (i % 10 === 0 || i === batch.events.length - 1) {
-          this.reportProgress("process", i, totalEvents, `Processing event ${i + 1} of ${totalEvents}...`);
+        if (i % 10 === 0 || i === batch.records.length - 1) {
+          this.reportProgress("process", i, totalEvents, `Processing record ${i + 1} of ${totalEvents}...`);
         }
 
         let alreadyApplied = false;
         try {
-          alreadyApplied = await this.deps.applyLogStore.hasApplied(event.event_id);
+          alreadyApplied = await this.deps.applyLogStore.hasApplied(recordId);
         } catch (applyLogError) {
           addError("apply", applyLogError, {
-            eventId: event.event_id,
-            messageId: event.message_id,
+            eventId: recordId,
             actionTaken: "checked_failed",
           });
           // Conservative: assume not applied if we can't check
@@ -204,16 +221,15 @@ export class DefaultSyncRunner implements SyncRunner {
 
         let result: ApplyEventResult;
         try {
-          result = await this.deps.projector.applyEvent(event);
+          result = await this.deps.projector.applyRecord(record);
         } catch (applyError) {
           const error = addError("apply", applyError, {
-            eventId: event.event_id,
-            messageId: event.message_id,
+            eventId: recordId,
             actionTaken: this.deps.continueOnError ? "skipped" : "abort",
           });
 
           if (this.deps.continueOnError && error.recoverable) {
-            addRecoveryAction(`skipped_event:${event.event_id}`);
+            addRecoveryAction(`skipped_record:${recordId}`);
             continue;
           }
           throw applyError;
@@ -221,11 +237,10 @@ export class DefaultSyncRunner implements SyncRunner {
 
         if (result.applied) {
           try {
-            await this.deps.applyLogStore.markApplied(event);
+            await this.deps.applyLogStore.markApplied(recordId, record.payload);
           } catch (markError) {
             addError("persist", markError, {
-              eventId: event.event_id,
-              messageId: event.message_id,
+              eventId: recordId,
               actionTaken: "logged_only",
             });
             // Continue even if mark fails - worst case is duplicate apply (idempotent)
@@ -251,11 +266,11 @@ export class DefaultSyncRunner implements SyncRunner {
 
       this.reportProgress("process", totalEvents, totalEvents, "Processing complete");
 
-      if (batch.next_cursor) {
-        this.reportProgress("commit", 0, 1, "Committing cursor...");
+      if (batch.nextCheckpoint) {
+        this.reportProgress("commit", 0, 1, "Committing checkpoint...");
         try {
-          await this.deps.cursorStore.commit(batch.next_cursor);
-          this.reportProgress("commit", 1, 1, "Cursor committed");
+          await this.deps.cursorStore.commit(batch.nextCheckpoint);
+          this.reportProgress("commit", 1, 1, "Checkpoint committed");
         } catch (commitError) {
           addError("persist", commitError, { actionTaken: "abort" });
           throw commitError;
@@ -275,8 +290,8 @@ export class DefaultSyncRunner implements SyncRunner {
 
       return {
         prior_cursor: priorCursor,
-        next_cursor: batch.next_cursor,
-        event_count: batch.events.length,
+        next_cursor: batch.nextCheckpoint,
+        event_count: batch.records.length,
         applied_count: appliedCount,
         skipped_count: skippedCount,
         duration_ms: nowMs() - startedAt,

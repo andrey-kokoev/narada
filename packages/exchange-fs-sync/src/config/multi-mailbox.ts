@@ -9,7 +9,7 @@ import { resolve } from "node:path";
 import type { SecureStorage } from "../auth/secure-storage.js";
 import { resolveSecrets, isSecureRef } from "./secure-config.js";
 import type { AttachmentPolicy, BodyPolicy, FolderRef } from "../types/index.js";
-import type { CharterRuntimeConfig, MailboxPolicy, LifecycleConfig } from "./types.js";
+import type { CharterRuntimeConfig, RuntimePolicy, LifecycleConfig } from "./types.js";
 import type { ChangeType } from "../adapter/graph/subscription.js";
 
 /** Configuration for a single mailbox */
@@ -48,7 +48,7 @@ export interface MailboxConfig {
   /** Charter runtime configuration */
   charter?: CharterRuntimeConfig;
   /** Mailbox policy routing */
-  policy?: MailboxPolicy;
+  policy?: RuntimePolicy;
   /** Lifecycle configuration */
   lifecycle?: LifecycleConfig;
   /** Webhook configuration */
@@ -202,7 +202,7 @@ const ALLOWED_ACTIONS = new Set([
   "no_action",
 ]);
 
-export function expectAllowedActions(value: unknown): MailboxPolicy["allowed_actions"] {
+export function expectAllowedActions(value: unknown): RuntimePolicy["allowed_actions"] {
   if (!Array.isArray(value)) {
     throw new Error("allowed_actions must be an array of allowed actions");
   }
@@ -211,7 +211,7 @@ export function expectAllowedActions(value: unknown): MailboxPolicy["allowed_act
     if (!ALLOWED_ACTIONS.has(action)) {
       throw new Error(`allowed_actions[${index}] must be a valid allowed action, got "${action}"`);
     }
-    return action as MailboxPolicy["allowed_actions"][number];
+    return action as RuntimePolicy["allowed_actions"][number];
   });
   if (actions.length === 0) {
     throw new Error("allowed_actions must contain at least one allowed action");
@@ -316,7 +316,7 @@ export function validateMailboxConfig(
 
   // Policy config
   const policyObj = isObject(mailbox.policy) ? mailbox.policy : {};
-  let policy: MailboxPolicy | undefined;
+  let policy: RuntimePolicy | undefined;
   try {
     policy = {
       primary_charter: isNonEmptyString(policyObj.primary_charter)
@@ -325,7 +325,7 @@ export function validateMailboxConfig(
       allowed_actions:
         policyObj.allowed_actions !== undefined
           ? expectAllowedActions(policyObj.allowed_actions)
-          : (["draft_reply", "send_reply", "mark_read", "no_action"] as MailboxPolicy["allowed_actions"]),
+          : (["draft_reply", "send_reply", "mark_read", "no_action"] as RuntimePolicy["allowed_actions"]),
       ...(Array.isArray(policyObj.secondary_charters) && policyObj.secondary_charters.length > 0
         ? { secondary_charters: (policyObj.secondary_charters as unknown[]).map((s) => String(s).trim()) }
         : {}),

@@ -11,9 +11,19 @@ export {
   type ConfigSchemaType,
   type ValidationResult,
 } from "./config/schema.js";
+export type {
+  Checkpoint,
+  Source,
+  SourceBatch,
+  SourceRecord,
+  SourceProvenance,
+} from "./types/source.js";
 export { ClientCredentialsTokenProvider } from "./adapter/graph/auth.js";
 export { buildGraphTokenProvider } from "./config/token-provider.js";
 export { DefaultGraphAdapter } from "./adapter/graph/adapter.js";
+export { ExchangeSource } from "./adapter/graph/exchange-source.js";
+export { TimerSource } from "./sources/timer-source.js";
+export type { TimerSourceOptions, TimerTickPayload } from "./sources/timer-source.js";
 export { GraphHttpClient } from "./adapter/graph/client.js";
 export { GraphDeltaWalker } from "./adapter/graph/delta.js";
 export {
@@ -145,12 +155,29 @@ export type {
 
 // Agent trace exports
 export { SqliteAgentTraceStore } from "./agent/traces/store.js";
+export { SqliteFactStore } from "./facts/store.js";
+export { SqliteIntentStore } from "./intent/store.js";
+export { SqliteProcessExecutionStore } from "./executors/store.js";
+export type { ProcessExecutionStore, SqliteProcessExecutionStoreOptions, SqliteProcessExecutionStoreDbOptions } from "./executors/store.js";
+export { ProcessExecutor } from "./executors/process-executor.js";
+export type { ProcessExecutorDeps } from "./executors/process-executor.js";
+export type { ProcessExecution, ProcessRunPayload } from "./executors/types.js";
+export { DefaultWorkerRegistry, drainWorker } from "./workers/registry.js";
+export type { WorkerRegistry, RegisteredWorker, WorkerIdentity, WorkerFn, WorkerExecutionResult, ConcurrencyPolicy } from "./workers/index.js";
+export type { IntentStore, SqliteIntentStoreOptions, SqliteIntentStoreDbOptions } from "./intent/store.js";
+export type { Intent, IntentType, IntentStatus } from "./intent/types.js";
+export { IntentHandoff } from "./intent/handoff.js";
+export type { IntentHandoffDeps } from "./intent/handoff.js";
+export type { Fact, FactStore, FactType, FactProvenance } from "./facts/types.js";
+export { buildFactId } from "./ids/fact-id.js";
+export { sourceRecordToFact } from "./facts/record-to-fact.js";
 export type {
   AgentTraceStore,
   AgentTrace,
   TraceType,
 } from "./agent/traces/types.js";
 export type { SqliteAgentTraceStoreOptions } from "./agent/traces/store.js";
+export type { SqliteFactStoreOptions } from "./facts/store.js";
 
 // Lifecycle exports
 export {
@@ -263,6 +290,10 @@ export type {
   ToolCallSummary,
   OutboundHandoffSummary,
   ControlPlaneStatusSnapshot,
+  ProcessExecutionSummary,
+  IntentSummary,
+  WorkerStatusObservation,
+  ObservationPlaneSnapshot,
 } from "./observability/types.js";
 export {
   OperatorErrorCategory,
@@ -280,7 +311,13 @@ export {
   getToolCallSummary,
   buildMailboxDispatchSummary,
   buildControlPlaneSnapshot,
+  getProcessExecutionSummaries,
+  getIntentSummaries,
+  getWorkerStatuses,
+  buildObservationPlaneSnapshot,
 } from "./observability/queries.js";
+export { ObservationPlane } from "./observability/plane.js";
+export type { ObservationPlaneDeps } from "./observability/plane.js";
 
 // Error handling exports
 export {

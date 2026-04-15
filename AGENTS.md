@@ -6,9 +6,17 @@
 
 ## Project Overview
 
-A deterministic, replay-safe state compiler that transforms a remote Microsoft Graph/Exchange mailbox into a locally materialized filesystem state. Tolerates crashes at any point, handles re-fetching overlapping data, and converges to a correct state without coordination with the source.
+Narada is a generalized, deterministic kernel for turning remote source deltas into locally materialized state and durable side-effect intents. It tolerates crashes at any point, handles re-fetching overlapping data, and converges to correct state without coordination with the source.
 
-**Core Identity**: This is NOT a sync client, cache, or mirror. It is a deterministic state compiler from remote mailbox deltas into local canonical state.
+**Core Identity**: This is NOT a sync client, cache, or mirror. It is a deterministic state compiler from remote deltas into local canonical state, with a durable control plane for action governance.
+
+**Mailbox as One Vertical**: The Microsoft Graph/Exchange mailbox integration is the first vertical built on the kernel. It uses:
+- `ExchangeSource` as one `Source` implementation
+- `mail.*` fact types as one fact family
+- Mailbox policy/charters as one policy family
+- `mail.*` intents as one intent/executor family
+
+**Peer Verticals**: `TimerSource`, `process.run`, and future automations are first-class peers that travel through the same kernel pipeline (Source → Fact → Policy → Intent → Execution → Observation).
 
 **Control Plane v2**: Above the compiler, a control plane manages first-class work objects (`work_item`, `execution_attempt`, `outbound_command`). For the integrated end-to-end model, see [`.ai/tasks/20260414-011-chief-integration-control-plane-v2.md`](.ai/tasks/20260414-011-chief-integration-control-plane-v2.md).
 
@@ -290,7 +298,7 @@ Resolved in `validateCharterRuntimeConfig()`.
 
 Mailbox policy determines charter routing, allowed actions, and tool catalog for a mailbox. To modify:
 
-1. Update [`MailboxPolicy`](packages/exchange-fs-sync/src/config/types.ts) type
+1. Update [`RuntimePolicy`](packages/exchange-fs-sync/src/config/types.ts) type
 2. Update parsing/defaults in [`src/config/load.ts`](packages/exchange-fs-sync/src/config/load.ts) and [`src/config/defaults.ts`](packages/exchange-fs-sync/src/config/defaults.ts)
 3. Update consumers: [`DefaultForemanFacade`](packages/exchange-fs-sync/src/foreman/facade.ts), [`buildInvocationEnvelope`](packages/exchange-fs-sync/src/charter/envelope.ts), and daemon [`service.ts`](packages/exchange-fs-sync-daemon/src/service.ts)
 4. Update [`config.example.json`](packages/exchange-fs-sync/config.example.json)

@@ -2,7 +2,8 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { DefaultSyncRunner } from "../../src/runner/sync-once.js";
+import { DefaultSyncRunner } from '../../src/runner/sync-once.js';
+import { ExchangeSource } from '../../src/adapter/graph/exchange-source.js';
 import { FileCursorStore } from "../../src/persistence/cursor.js";
 import { FileApplyLogStore } from "../../src/persistence/apply-log.js";
 import { FileMessageStore } from "../../src/persistence/messages.js";
@@ -86,7 +87,8 @@ describe("crash replay", () => {
     let shouldCrashAfterApply = true;
 
     const crashingProjector = {
-      applyEvent: async (event: NormalizedBatch["events"][number]) => {
+      applyRecord: async (record: { payload: unknown }) => {
+        const event = record.payload as NormalizedBatch["events"][number];
         const result = await applyEvent(
           {
             blobs: { installFromPayload: async () => undefined },
@@ -112,7 +114,7 @@ describe("crash replay", () => {
 
     const firstRunner = new DefaultSyncRunner({
       rootDir,
-      adapter,
+      source: new ExchangeSource({ adapter, sourceId: "test" }),
       cursorStore,
       applyLogStore,
       projector: crashingProjector,
@@ -141,8 +143,9 @@ describe("crash replay", () => {
     expect(recordAfterCrash.subject).toBe("crash-replay");
 
     const normalProjector = {
-      applyEvent: (event: NormalizedBatch["events"][number]) =>
-        applyEvent(
+      applyRecord: (record: { payload: unknown }) => {
+        const event = record.payload as NormalizedBatch["events"][number];
+        return applyEvent(
           {
             blobs: { installFromPayload: async () => undefined },
             messages: messageStore,
@@ -154,12 +157,13 @@ describe("crash replay", () => {
             tombstones_enabled: false,
           },
           event,
-        ),
+        );
+      },
     };
 
     const secondRunner = new DefaultSyncRunner({
       rootDir,
-      adapter,
+      source: new ExchangeSource({ adapter, sourceId: "test" }),
       cursorStore,
       applyLogStore,
       projector: normalProjector,

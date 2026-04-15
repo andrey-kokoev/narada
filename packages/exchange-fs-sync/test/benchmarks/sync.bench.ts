@@ -8,6 +8,7 @@ import { describe, bench } from 'vitest';
 import { benchmark } from './framework.js';
 import { createMockAdapter } from '../../src/adapter/graph/mock-adapter.js';
 import { DefaultSyncRunner } from '../../src/runner/sync-once.js';
+import { ExchangeSource } from '../../src/adapter/graph/exchange-source.js';
 import { FileCursorStore, FileApplyLogStore } from '../../src/index.js';
 import { DefaultProjector } from '../../src/projector/apply-event.js';
 import { FileLock } from '../../src/persistence/lock.js';
@@ -37,8 +38,8 @@ async function setupBenchmark(messageCount: number): Promise<SyncBenchmarkContex
 
   // Create runner
   const runner = new DefaultSyncRunner({
-    rootDir,
-    adapter,
+      rootDir,
+      source: new ExchangeSource({ adapter, sourceId: "test" }),
     cursorStore,
     applyLogStore,
     projector,

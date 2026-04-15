@@ -4,7 +4,8 @@
  */
 
 import type { NormalizedEvent } from "../types/normalized.js";
-import type { GraphAdapter, CursorStore, ApplyLogStore, Projector } from "../types/runtime.js";
+import type { CursorStore, ApplyLogStore, Projector } from "../types/runtime.js";
+import type { Source } from "../types/source.js";
 import { getMemoryUsage, MemoryMonitor } from "../utils/memory.js";
 import { sleep } from "../utils/timing.js";
 
@@ -83,7 +84,7 @@ export interface BatchSyncResult {
  * Process events in batches with memory-efficient streaming
  */
 export async function batchSync(
-  adapter: GraphAdapter,
+  source: Source,
   cursorStore: CursorStore,
   applyLogStore: ApplyLogStore,
   projector: Projector,
@@ -143,12 +144,12 @@ export async function batchSync(
 
   try {
     reportProgress("fetch");
-    const batch = await adapter.fetch_since(priorCursor);
+    const batch = await source.pull(priorCursor);
 
-    eventsFetched = batch.events.length;
-    finalCursor = batch.next_cursor ?? priorCursor;
+    eventsFetched = batch.records.length;
+    finalCursor = batch.nextCheckpoint ?? priorCursor;
 
-    if (batch.events.length === 0) {
+    if (batch.records.length === 0) {
       return {
         success: true,
         eventsFetched: 0,
@@ -165,10 +166,10 @@ export async function batchSync(
       };
     }
 
-    // Process events in batches
-    for (let i = 0; i < batch.events.length; i += batchSize) {
+    // Process records in batches
+    for (let i = 0; i < batch.records.length; i += batchSize) {
       currentBatch++;
-      const batchEvents = batch.events.slice(i, i + batchSize);
+      const batchRecords = batch.records.slice(i, i + batchSize);
 
       reportProgress("process");
 
@@ -187,9 +188,9 @@ export async function batchSync(
       }
 
       // Process batch
-      for (const event of batchEvents) {
+      for (const record of batchRecords) {
         try {
-          const alreadyApplied = await applyLogStore.hasApplied(event.event_id);
+          const alreadyApplied = await applyLogStore.hasApplied(record.recordId);
 
           if (alreadyApplied) {
             eventsSkipped++;
@@ -197,22 +198,22 @@ export async function batchSync(
             continue;
           }
 
-          const result = await projector.applyEvent(event);
+          const result = await projector.applyRecord(record);
 
           if (result.applied) {
-            await applyLogStore.markApplied(event);
+            await applyLogStore.markApplied(record.recordId, record.payload);
             eventsApplied++;
           }
 
           eventsProcessed++;
-        } catch (eventError) {
+        } catch (recordError) {
           const shouldContinue = options.onError?.(
-            eventError as Error,
-            event,
+            recordError as Error,
+            record.payload as NormalizedEvent,
           ) ?? options.continueOnError;
 
           if (!shouldContinue) {
-            throw eventError;
+            throw recordError;
           }
 
           eventsProcessed++;
@@ -226,16 +227,16 @@ export async function batchSync(
       }
 
       // Optional delay between batches
-      if (batchDelayMs > 0 && i + batchSize < batch.events.length) {
+      if (batchDelayMs > 0 && i + batchSize < batch.records.length) {
         await sleep(batchDelayMs);
       }
     }
 
-    // Commit cursor
+    // Commit checkpoint
     reportProgress("commit");
-    if (batch.next_cursor) {
-      await cursorStore.commit(batch.next_cursor);
-      finalCursor = batch.next_cursor;
+    if (batch.nextCheckpoint) {
+      await cursorStore.commit(batch.nextCheckpoint);
+      finalCursor = batch.nextCheckpoint;
     }
 
     reportProgress("cleanup");
@@ -286,7 +287,7 @@ export async function batchSync(
  * This is a generator that yields batches of events
  */
 export async function* streamEvents(
-  adapter: GraphAdapter,
+  source: Source,
   cursorStore: CursorStore,
   options: {
     /** Maximum events per fetch (default: 100) */
@@ -302,22 +303,22 @@ export async function* streamEvents(
   let totalFetched = 0;
 
   while (totalFetched < maxEvents) {
-    const batch = await adapter.fetch_since(cursor);
+    const batch = await source.pull(cursor);
 
-    if (batch.events.length === 0) {
+    if (batch.records.length === 0) {
       break;
     }
 
     // Yield in chunks of pageSize
-    for (let i = 0; i < batch.events.length; i += pageSize) {
+    for (let i = 0; i < batch.records.length; i += pageSize) {
       if (totalFetched >= maxEvents) break;
 
-      const chunk = batch.events.slice(i, Math.min(i + pageSize, batch.events.length));
-      yield chunk;
+      const chunk = batch.records.slice(i, Math.min(i + pageSize, batch.records.length));
+      yield chunk.map((r) => r.payload as NormalizedEvent);
       totalFetched += chunk.length;
     }
 
-    cursor = batch.next_cursor ?? null;
+    cursor = batch.nextCheckpoint ?? null;
 
     if (!cursor) {
       break;

@@ -15,7 +15,7 @@ import type {
 import type { CoordinatorStore, NormalizedThreadContext, WorkItem } from "../coordinator/types.js";
 import type { NormalizedMessage } from "../types/normalized.js";
 import { FileMessageStore } from "../persistence/messages.js";
-import type { MailboxPolicy } from "../config/types.js";
+import type { RuntimePolicy } from "../config/types.js";
 
 function safeSegment(value: string): string {
   return encodeURIComponent(value);
@@ -25,7 +25,7 @@ export interface BuildInvocationEnvelopeDeps {
   coordinatorStore: CoordinatorStore;
   messageStore: FileMessageStore;
   rootDir: string;
-  getMailboxPolicy: (mailboxId: string) => MailboxPolicy;
+  getRuntimePolicy: (mailboxId: string) => RuntimePolicy;
 }
 
 export interface BuildInvocationEnvelopeOptions {
@@ -98,7 +98,7 @@ export async function buildInvocationEnvelope(
   }
   const charterId = conversationRecord.primary_charter;
   const role: "primary" | "secondary" = "primary";
-  const policy = deps.getMailboxPolicy(workItem.mailbox_id);
+  const policy = deps.getRuntimePolicy(workItem.mailbox_id);
 
   const messageIds = await getThreadMessageIds(rootDir, workItem.conversation_id);
   const messages: NormalizedMessage[] = [];

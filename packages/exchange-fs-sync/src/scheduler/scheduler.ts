@@ -30,7 +30,7 @@ export class SqliteScheduler implements Scheduler {
     this.opts = { ...DEFAULT_OPTIONS, ...options };
   }
 
-  scanForRunnableWork(mailboxId?: string, limit = 10): WorkItem[] {
+  scanForRunnableWork(scopeId?: string, limit = 10): WorkItem[] {
     // Recover stale leases first so they become runnable again
     this.recoverStaleLeases();
 
@@ -45,7 +45,7 @@ export class SqliteScheduler implements Scheduler {
     let sql: string;
     let params: (string | number)[];
 
-    if (mailboxId) {
+    if (scopeId) {
       sql = `
         select wi.* from work_items wi
         where wi.mailbox_id = ?
@@ -65,7 +65,7 @@ export class SqliteScheduler implements Scheduler {
         order by wi.priority desc, wi.created_at asc
         limit ?
       `;
-      params = [mailboxId, limit];
+      params = [scopeId, limit];
     } else {
       sql = `
         select wi.* from work_items wi
@@ -94,7 +94,7 @@ export class SqliteScheduler implements Scheduler {
     let retrySql: string;
     let retryParams: (string | number)[];
 
-    if (mailboxId) {
+    if (scopeId) {
       retrySql = `
         select wi.* from work_items wi
         where wi.mailbox_id = ?
@@ -109,7 +109,7 @@ export class SqliteScheduler implements Scheduler {
         order by wi.priority desc, wi.created_at asc
         limit ?
       `;
-      retryParams = [mailboxId, now, limit];
+      retryParams = [scopeId, now, limit];
     } else {
       retrySql = `
         select wi.* from work_items wi
@@ -375,14 +375,14 @@ export class SqliteScheduler implements Scheduler {
     return Math.min(delay, this.opts.maxDelayMs);
   }
 
-  isQuiescent(mailboxId?: string): boolean {
+  isQuiescent(scopeId?: string): boolean {
     this.recoverStaleLeases();
     const now = new Date().toISOString();
 
     let sql: string;
     let params: (string | number)[];
 
-    if (mailboxId) {
+    if (scopeId) {
       sql = `
         select count(*) as c from work_items
         where mailbox_id = ?
@@ -391,7 +391,7 @@ export class SqliteScheduler implements Scheduler {
             or (status = 'failed_retryable' and (next_retry_at is null or next_retry_at <= ?))
           )
       `;
-      params = [mailboxId, now];
+      params = [scopeId, now];
     } else {
       sql = `
         select count(*) as c from work_items

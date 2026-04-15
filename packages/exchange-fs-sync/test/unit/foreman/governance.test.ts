@@ -5,9 +5,9 @@ import {
   resolveArbitration,
 } from "../../../src/foreman/governance.js";
 import type { EvaluationEnvelope, ProposedAction } from "../../../src/foreman/types.js";
-import type { MailboxPolicy } from "../../../src/config/types.js";
+import type { RuntimePolicy } from "../../../src/config/types.js";
 
-function makePolicy(overrides?: Partial<MailboxPolicy>): MailboxPolicy {
+function makePolicy(overrides?: Partial<RuntimePolicy>): RuntimePolicy {
   return {
     primary_charter: "support_steward",
     allowed_actions: ["send_reply", "mark_read", "move_message", "no_action"],

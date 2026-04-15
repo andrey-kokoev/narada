@@ -28,6 +28,7 @@ describe("Outbound Idempotency Boundary (Task 029)", () => {
 
   afterEach(() => {
     h.outboundStore.close();
+    h.intentStore.close();
     h.traceStore.close();
     h.db.close();
   });
@@ -184,8 +185,8 @@ describe("Outbound Idempotency Boundary (Task 029)", () => {
     h.coordinatorStore.insertDecision(decision1);
     h.coordinatorStore.insertDecision(decision2);
 
-    const ob1 = h.db.transaction(() => h.foreman.handoff.createCommandFromDecision(decision1))();
-    const ob2 = h.db.transaction(() => h.foreman.handoff.createCommandFromDecision(decision2))();
+    const ob1 = h.db.transaction(() => h.foreman.handoff.admitIntentFromDecision(decision1))();
+    const ob2 = h.db.transaction(() => h.foreman.handoff.admitIntentFromDecision(decision2))();
 
     expect(ob1).not.toBe(ob2);
     const count = h.db.prepare("select count(*) as c from outbound_commands where conversation_id = ?").get("conv-1") as { c: number };
@@ -225,8 +226,8 @@ describe("Outbound Idempotency Boundary (Task 029)", () => {
     h.coordinatorStore.insertDecision(decision1);
     h.coordinatorStore.insertDecision(decision2);
 
-    const ob1 = h.db.transaction(() => h.foreman.handoff.createCommandFromDecision(decision1))();
-    const ob2 = h.db.transaction(() => h.foreman.handoff.createCommandFromDecision(decision2))();
+    const ob1 = h.db.transaction(() => h.foreman.handoff.admitIntentFromDecision(decision1))();
+    const ob2 = h.db.transaction(() => h.foreman.handoff.admitIntentFromDecision(decision2))();
 
     expect(ob2).toBe(ob1);
     const count = h.db.prepare("select count(*) as c from outbound_commands where conversation_id = ?").get("conv-1") as { c: number };

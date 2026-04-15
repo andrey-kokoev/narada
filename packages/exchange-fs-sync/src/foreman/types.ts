@@ -24,6 +24,7 @@ export type AllowedAction =
   | "extract_obligations"
   | "create_followup"
   | "tool_request"
+  | "process_run"
   | "no_action";
 
 export interface SyncCompletionSignal {

@@ -10,6 +10,7 @@ import {
   buildGraphTokenProvider,
   GraphHttpClient,
   DefaultGraphAdapter,
+  ExchangeSource,
   DefaultSyncRunner,
   FileCursorStore,
   FileApplyLogStore,
@@ -30,6 +31,12 @@ import {
   SqliteCoordinatorStore,
   SqliteOutboundStore,
   SqliteAgentTraceStore,
+  SqliteFactStore,
+  SqliteIntentStore,
+  SqliteProcessExecutionStore,
+  ProcessExecutor,
+  DefaultWorkerRegistry,
+  drainWorker,
   DefaultForemanFacade,
   SqliteScheduler,
   MockCharterRunner,
@@ -260,12 +267,16 @@ async function createMailboxDispatchContext(
     db: InstanceType<typeof Database>;
     coordinatorStore: InstanceType<typeof SqliteCoordinatorStore>;
     outboundStore: InstanceType<typeof SqliteOutboundStore>;
+    intentStore: InstanceType<typeof SqliteIntentStore>;
     traceStore: InstanceType<typeof SqliteAgentTraceStore>;
     foreman: InstanceType<typeof DefaultForemanFacade>;
     scheduler: InstanceType<typeof SqliteScheduler>;
     charterRunner: CharterRunner;
     toolCatalog: ToolCatalogEntry[];
     toolDefinitions: Record<string, ToolDefinition>;
+    workerRegistry: InstanceType<typeof DefaultWorkerRegistry>;
+    processExecutionStore: InstanceType<typeof SqliteProcessExecutionStore>;
+    processExecutor: InstanceType<typeof ProcessExecutor>;
   } | null = null;
 
   async function initDispatchDeps(): Promise<NonNullable<typeof dispatchDeps>> {
@@ -286,10 +297,13 @@ async function createMailboxDispatchContext(
     const outboundStore = new SqliteOutboundStore({ db });
     outboundStore.initSchema();
 
+    const intentStore = new SqliteIntentStore({ db });
+    intentStore.initSchema();
+
     const traceStore = new SqliteAgentTraceStore({ db });
     traceStore.initSchema();
 
-    const getMailboxPolicy = (_mailboxId: string) => config.policy ?? {
+    const getRuntimePolicy = (_mailboxId: string) => config.policy ?? {
       primary_charter: 'support_steward',
       allowed_actions: ['draft_reply', 'send_reply', 'send_new_message', 'mark_read', 'move_message', 'archive', 'no_action'],
     };
@@ -297,9 +311,10 @@ async function createMailboxDispatchContext(
     const foreman = new DefaultForemanFacade({
       coordinatorStore,
       outboundStore,
+      intentStore,
       db,
       foremanId: config.mailbox_id,
-      getMailboxPolicy,
+      getRuntimePolicy,
     });
 
     const scheduler = new SqliteScheduler(coordinatorStore, {
@@ -311,7 +326,23 @@ async function createMailboxDispatchContext(
     const toolCatalog = opts.toolCatalog ?? phaseAToolCatalog;
     const toolDefinitions = opts.toolDefinitions ?? phaseAToolDefinitions;
 
-    dispatchDeps = { db, coordinatorStore, outboundStore, traceStore, foreman, scheduler, charterRunner, toolCatalog, toolDefinitions };
+    const processExecutionStore = new SqliteProcessExecutionStore({ db });
+    processExecutionStore.initSchema();
+
+    const processExecutor = new ProcessExecutor({ intentStore, executionStore: processExecutionStore });
+
+    const workerRegistry = new DefaultWorkerRegistry();
+    workerRegistry.register({
+      identity: {
+        worker_id: 'process_executor',
+        executor_family: 'process',
+        concurrency_policy: 'singleton',
+        description: 'Executes process.run intents via local subprocess',
+      },
+      fn: () => processExecutor.processNext(),
+    });
+
+    dispatchDeps = { db, coordinatorStore, outboundStore, intentStore, traceStore, foreman, scheduler, charterRunner, toolCatalog, toolDefinitions, processExecutionStore, workerRegistry, processExecutor };
     return dispatchDeps;
   }
 
@@ -405,7 +436,7 @@ async function createMailboxDispatchContext(
       await opts.dispatchHooks?.afterLeaseAcquired?.(workItem, leaseResult);
 
       const envelope = await buildInvocationEnvelope(
-        { coordinatorStore: deps.coordinatorStore, messageStore, rootDir, getMailboxPolicy: (_mailboxId: string) => config.policy ?? {
+        { coordinatorStore: deps.coordinatorStore, messageStore, rootDir, getRuntimePolicy: (_mailboxId: string) => config.policy ?? {
           primary_charter: 'support_steward',
           allowed_actions: ['draft_reply', 'send_reply', 'send_new_message', 'mark_read', 'move_message', 'archive', 'no_action'],
         } },
@@ -537,6 +568,25 @@ async function createMailboxDispatchContext(
       }
     }
 
+    // Recover stale process executions before dispatching new work
+    try {
+      const recovered = deps.processExecutor.recoverStaleExecutions();
+      if (recovered.length > 0) {
+        logger.info('Recovered stale process executions', { count: recovered.length });
+      }
+    } catch (recoverError) {
+      const msg = recoverError instanceof Error ? recoverError.message : String(recoverError);
+      logger.error('Process executor recovery error', { error: msg });
+    }
+
+    // Worker registry pass: run pending process intents
+    try {
+      await drainWorker(deps.workerRegistry, 'process_executor');
+    } catch (processError) {
+      const msg = processError instanceof Error ? processError.message : String(processError);
+      logger.error('Process executor error', { error: msg });
+    }
+
     logger.info('Dispatch phase complete');
   }
 
@@ -653,6 +703,12 @@ async function createSingleMailboxService(
     mailboxId: config.mailbox_id,
   });
   const applyLogStore = new FileApplyLogStore({ rootDir });
+  const factDbDir = join(rootDir, '.narada');
+  await mkdir(factDbDir, { recursive: true });
+  const factDb = new Database(join(factDbDir, 'facts.db'));
+  factDb.pragma('journal_mode = WAL');
+  const factStore = new SqliteFactStore({ db: factDb });
+  factStore.initSchema();
   const messageStore = new FileMessageStore({ rootDir });
   const tombstoneStore = new FileTombstoneStore({ rootDir });
   const viewStore = new FileViewStore({ rootDir });
@@ -678,13 +734,17 @@ async function createSingleMailboxService(
     }
   }
 
+  const source = new ExchangeSource({ adapter, sourceId: config.mailbox_id });
+
   const runner = new DefaultSyncRunner({
     rootDir,
-    adapter,
+    source,
     cursorStore,
     applyLogStore,
+    factStore,
     projector: {
-      applyEvent: async (event) => {
+      applyRecord: async (record) => {
+        const event = record.payload as NormalizedEvent;
         const result = await applyEvent(
           {
             blobs: blobStore,

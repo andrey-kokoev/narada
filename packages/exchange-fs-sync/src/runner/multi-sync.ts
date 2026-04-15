@@ -14,6 +14,7 @@ import { writeMultiMailboxHealth, markMailboxSyncing } from "../health-multi.js"
 import { SharedTokenProvider } from "../adapter/graph/shared-token.js";
 import { ClientCredentialsTokenProvider } from "../adapter/graph/auth.js";
 import { DefaultGraphAdapter } from "../adapter/graph/adapter.js";
+import { ExchangeSource } from "../adapter/graph/exchange-source.js";
 import { GraphHttpClient } from "../adapter/graph/client.js";
 import { FileCursorStore } from "../persistence/cursor.js";
 import { FileApplyLogStore } from "../persistence/apply-log.js";
@@ -205,12 +206,15 @@ async function syncSingleMailbox(
     }
 
     const projector = {
-      applyEvent: async (event: NormalizedEvent): Promise<ApplyEventResult> => {
+      applyRecord: async (record: { payload: unknown }): Promise<ApplyEventResult> => {
+        const event = record.payload as NormalizedEvent;
         const result = await baseProjector.applyEvent(event);
         trackEventChanges(event, result);
         return result;
       },
     };
+
+    const source = new ExchangeSource({ adapter, sourceId: mailbox.mailbox_id });
 
     const lock = new FileLock({
       rootDir,
@@ -225,7 +229,7 @@ async function syncSingleMailbox(
     // Create sync runner
     const runner = new DefaultSyncRunner({
       rootDir,
-      adapter,
+      source,
       cursorStore,
       applyLogStore,
       projector,

@@ -30,3 +30,4 @@ export type {
 export { validateCharterOutput, arbitrateEvaluations } from "./validation.js";
 export { DefaultForemanFacade, type ForemanFacadeDeps, type ForemanFacadeOptions } from "./facade.js";
 export { OutboundHandoff, type OutboundHandoffDeps } from "./handoff.js";
+export { IntentHandoff, type IntentHandoffDeps } from "../intent/handoff.js";

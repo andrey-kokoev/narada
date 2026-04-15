@@ -33,7 +33,7 @@ export interface CharterRuntimeConfig {
   timeout_ms?: number;
 }
 
-export interface MailboxPolicy {
+export interface RuntimePolicy {
   primary_charter: string;
   secondary_charters?: string[];
   allowed_actions: AllowedAction[];
@@ -84,7 +84,7 @@ export interface ExchangeFsSyncConfig {
    * Mailbox policy binding that determines charter routing,
    * allowed actions, and available tools for this mailbox.
    */
-  policy: MailboxPolicy;
+  policy: RuntimePolicy;
 
   /**
    * Webhook configuration for real-time sync

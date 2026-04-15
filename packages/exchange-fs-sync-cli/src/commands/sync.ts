@@ -9,6 +9,7 @@ import {
   buildGraphTokenProvider,
   GraphHttpClient,
   DefaultGraphAdapter,
+  ExchangeSource,
   DefaultSyncRunner,
   FileCursorStore,
   FileApplyLogStore,
@@ -118,11 +119,13 @@ export async function syncCommand(
   // Run sync or a read-only preview
   logger.info('Starting sync cycle', { dryRun: options.dryRun });
 
+  const source = new ExchangeSource({ adapter, sourceId: config.mailbox_id });
+
   const result = options.dryRun
     ? await previewSync({ adapter, cursorStore, applyLogStore, logger })
     : await new DefaultSyncRunner({
         rootDir,
-        adapter,
+        source,
         cursorStore,
         applyLogStore,
         projector,

@@ -126,7 +126,8 @@ Graph Delta Entry
 ## End-to-End Control Plane Sequence
 
 ```text
-REMOTE MAILBOX
+REMOTE SOURCE
+(mailbox vertical shown; timer/process are peers)
         │
         ▼ (Graph delta: new message, move, flag change)
 ┌───────────────────┐
@@ -162,14 +163,14 @@ REMOTE MAILBOX
           ▼
 ┌───────────────────┐
 │  Foreman          │  ← Validates output, arbitrates,
-│  (resolution)     │     writes foreman_decision + outbound_command
+│  (resolution)     │     writes foreman_decision + intent
 │                   │     (or resolves as no-op / escalation)
 └─────────┬─────────┘
           │
           ▼
 ┌───────────────────┐
-│  Outbound Worker  │  ← Claims command, creates draft,
-│  (mutation)       │     sends, reconciles to confirmed
+│  Worker Layer     │  ← Claims intent, executes effect
+│  (mail / process) │     (draft+send for mail, subprocess for process)
 └─────────┬─────────┘
           │
           ▼
@@ -181,15 +182,30 @@ Daemon sleeps until next wake (webhook, poll, retry timer, manual)
 
 ### Step Descriptions
 
-1. **Remote Mailbox Change** — Graph API reports a change.
-2. **Sync** — The compiler fetches deltas, normalizes events, applies to `messages/` and `views/`, writes `apply-log` markers, and commits the cursor.
+1. **Remote Source Change** — Graph API (mailbox vertical) or timer tick reports a change.
+2. **Sync / Ingest** — The compiler fetches deltas (or the timer emits a fact), normalizes to `Fact` records, applies to `messages/` and `views/`, writes `apply-log` markers, and commits the cursor.
 3. **Work Opening** — The daemon calls `foreman.onSyncCompleted(signal)`. The foreman inserts `work_item` rows for changed conversations, superseding stale ones when necessary.
 4. **Scheduling** — The scheduler scans for runnable work items, acquires leases, and transitions items to `leased`.
 5. **Evaluation** — The scheduler inserts an `execution_attempt` and transitions the item to `executing`. The charter runtime receives a frozen `CharterInvocationEnvelope` and produces a `CharterOutputEnvelope`.
 6. **Tool Execution** — Approved *read-only* tool requests are executed by the tool runner, with results logged to `tool_call_records`. Non-read-only requests are rejected with `rejected_policy` records (Phase A guardrail).
-7. **Proposal / Command Creation** — The foreman validates output (`validation.ts`), applies governance (`governance.ts`), writes a `foreman_decisions` row, and creates `outbound_command` + `outbound_versions` in the same SQLite transaction. The work item transitions to `resolved`.
-8. **Outbound Execution** — The outbound worker polls commands, creates Graph drafts, and drives status to `confirmed`.
+7. **Proposal / Intent Creation** — The foreman validates output (`validation.ts`), applies governance (`governance.ts`), writes a `foreman_decisions` row, and creates an `intent` (and `outbound_command` for mail effects) in the same SQLite transaction. The work item transitions to `resolved`.
+8. **Worker Execution** — The appropriate worker claims the intent and executes the effect: outbound worker creates drafts/sends for `mail.*` intents; `ProcessExecutor` spawns a subprocess for `process.run` intents.
 9. **Terminal Quiescence** — The scheduler finds no runnable work, valid leases, or expired retry timers. The daemon sleeps until the next wake.
+
+### Vertical Parity
+
+Both the **mailbox vertical** and the **timer/process vertical** use the same kernel layers:
+
+| Layer | Mailbox Vertical | Timer/Process Vertical |
+|-------|------------------|------------------------|
+| Source | `ExchangeSource` (Graph API) | `TimerSource` (local timer) |
+| Fact | `mail.message.discovered` | `timer.tick` |
+| Policy | Mailbox charter family | Same charter family (or a timer-specific policy) |
+| Intent | `mail.send_reply`, `mail.mark_read` | `process.run` |
+| Execution | Outbound workers | `ProcessExecutor` |
+| Observation | Control plane snapshot | Control plane snapshot |
+
+The kernel types (`Source`, `Fact`, `Intent`, `Scheduler`, `WorkerRegistry`) remain neutral to the vertical.
 
 ---
 
@@ -238,7 +254,7 @@ interface ForemanFacade {
 
 // Scheduler boundary
 interface Scheduler {
-  scanForRunnableWork(mailboxId?: string, limit?: number): WorkItem[];
+  scanForRunnableWork(scopeId?: string, limit?: number): WorkItem[];
   acquireLease(workItemId: string, runnerId: string): LeaseAcquisitionResult;
   startExecution(workItemId: string, revisionId: string, envelopeJson: string): ExecutionAttempt;
   completeExecution(executionId: string, outcomeJson: string): void;

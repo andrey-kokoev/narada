@@ -54,7 +54,7 @@ describe('FileApplyLogStore', () => {
     const store = new FileApplyLogStore({ rootDir: '/test/data' });
     const event = createMockEvent('evt-1');
 
-    await store.markApplied(event);
+    await store.markApplied('evt-1', event);
     const hasApplied = await store.hasApplied('evt-1');
 
     expect(hasApplied).toBe(true);
@@ -65,8 +65,8 @@ describe('FileApplyLogStore', () => {
 
     const store = new FileApplyLogStore({ rootDir: '/test/data' });
 
-    await store.markApplied(createMockEvent('evt-1'));
-    await store.markApplied(createMockEvent('evt-2'));
+    await store.markApplied('evt-1', createMockEvent('evt-1'));
+    await store.markApplied('evt-2', createMockEvent('evt-2'));
 
     expect(await store.hasApplied('evt-1')).toBe(true);
     expect(await store.hasApplied('evt-2')).toBe(true);
@@ -79,8 +79,8 @@ describe('FileApplyLogStore', () => {
     const store = new FileApplyLogStore({ rootDir: '/test/data' });
     const event = createMockEvent('evt-1');
 
-    await store.markApplied(event);
-    await store.markApplied(event); // Duplicate
+    await store.markApplied('evt-1', event);
+    await store.markApplied('evt-1', event); // Duplicate
 
     expect(await store.hasApplied('evt-1')).toBe(true);
   });

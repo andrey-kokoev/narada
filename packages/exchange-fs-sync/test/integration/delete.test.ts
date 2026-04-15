@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { mkdtemp, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DefaultSyncRunner } from "../../src/runner/sync-once.js";
+import { DefaultSyncRunner } from '../../src/runner/sync-once.js';
+import { ExchangeSource } from '../../src/adapter/graph/exchange-source.js';
 import { FileCursorStore } from "../../src/persistence/cursor.js";
 import { FileApplyLogStore } from "../../src/persistence/apply-log.js";
 import { FileMessageStore } from "../../src/persistence/messages.js";
@@ -78,12 +79,13 @@ describe("delete", () => {
     const views = new FileViewStore({ rootDir });
     const runner = new DefaultSyncRunner({
       rootDir,
-      adapter,
+      source: new ExchangeSource({ adapter, sourceId: "test" }),
       cursorStore: new FileCursorStore({ rootDir, mailboxId: "mailbox_primary" }),
       applyLogStore: new FileApplyLogStore({ rootDir }),
       projector: {
-        applyEvent: (event) =>
-          applyEvent(
+        applyRecord: (record) => {
+          const event = record.payload;
+          return applyEvent(
             {
               blobs: { installFromPayload: async () => undefined },
               messages: messageStore,
@@ -95,8 +97,8 @@ describe("delete", () => {
               tombstones_enabled: false,
             },
             event,
-          ),
-      },
+          );
+        },      },
     });
 
     const result = await runner.syncOnce();

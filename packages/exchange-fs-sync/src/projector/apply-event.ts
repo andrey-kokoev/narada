@@ -2,6 +2,7 @@ import type {
   ApplyEventResult,
   Projector,
 } from "../types/runtime.js";
+import type { SourceRecord } from "../types/source.js";
 import type {
   NormalizedEvent,
   NormalizedPayload,
@@ -130,6 +131,12 @@ export class DefaultProjector implements Projector {
     };
   }
 
+  async applyRecord(record: SourceRecord): Promise<ApplyEventResult> {
+    const event = record.payload as NormalizedEvent;
+    return applyEvent(this.deps, event);
+  }
+
+  /** @deprecated Use applyRecord instead */
   async applyEvent(event: NormalizedEvent): Promise<ApplyEventResult> {
     return applyEvent(this.deps, event);
   }

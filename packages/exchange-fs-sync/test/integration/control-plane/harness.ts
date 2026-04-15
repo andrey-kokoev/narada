@@ -2,13 +2,14 @@ import Database from "better-sqlite3";
 import { SqliteCoordinatorStore } from "../../../src/coordinator/store.js";
 import { SqliteOutboundStore } from "../../../src/outbound/store.js";
 import { SqliteAgentTraceStore } from "../../../src/agent/traces/store.js";
+import { SqliteIntentStore } from "../../../src/intent/store.js";
 import { SqliteScheduler } from "../../../src/scheduler/scheduler.js";
 import { DefaultForemanFacade } from "../../../src/foreman/facade.js";
 import type { SyncCompletionSignal, EvaluationEnvelope, CharterInvocationEnvelope } from "../../../src/foreman/types.js";
 import type { WorkItem, ExecutionAttempt } from "../../../src/coordinator/types.js";
-import type { MailboxPolicy } from "../../../src/config/types.js";
+import type { RuntimePolicy } from "../../../src/config/types.js";
 
-export function makeMailboxPolicy(overrides?: Partial<MailboxPolicy>): MailboxPolicy {
+export function makeRuntimePolicy(overrides?: Partial<RuntimePolicy>): RuntimePolicy {
   return {
     primary_charter: "support_steward",
     allowed_actions: ["draft_reply", "send_reply", "mark_read", "no_action"],
@@ -20,6 +21,7 @@ export interface Harness {
   db: Database.Database;
   coordinatorStore: SqliteCoordinatorStore;
   outboundStore: SqliteOutboundStore;
+  intentStore: SqliteIntentStore;
   traceStore: SqliteAgentTraceStore;
   scheduler: SqliteScheduler;
   foreman: DefaultForemanFacade;
@@ -29,19 +31,22 @@ export function createHarness(runnerId = "runner-test"): Harness {
   const db = new Database(":memory:");
   const coordinatorStore = new SqliteCoordinatorStore({ db });
   const outboundStore = new SqliteOutboundStore({ db });
+  const intentStore = new SqliteIntentStore({ db });
   const traceStore = new SqliteAgentTraceStore({ db });
   coordinatorStore.initSchema();
   outboundStore.initSchema();
+  intentStore.initSchema();
   traceStore.initSchema();
   const scheduler = new SqliteScheduler(coordinatorStore, { leaseDurationMs: 60_000, runnerId });
   const foreman = new DefaultForemanFacade({
     coordinatorStore,
     outboundStore,
+    intentStore,
     db,
     foremanId: "fm-test",
-    getMailboxPolicy: () => makeMailboxPolicy(),
+    getRuntimePolicy: () => makeRuntimePolicy(),
   });
-  return { db, coordinatorStore, outboundStore, traceStore, scheduler, foreman };
+  return { db, coordinatorStore, outboundStore, intentStore, traceStore, scheduler, foreman };
 }
 
 export function insertConversation(h: Harness, conversationId: string, mailboxId = "mb-1"): void {

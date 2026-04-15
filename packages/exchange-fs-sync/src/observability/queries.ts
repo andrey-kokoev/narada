@@ -7,6 +7,9 @@
 
 import type { CoordinatorStore } from "../coordinator/types.js";
 import type { OutboundStore } from "../outbound/store.js";
+import type { ProcessExecutionStore } from "../executors/store.js";
+import type { IntentStore } from "../intent/store.js";
+import type { WorkerRegistry } from "../workers/registry.js";
 import type {
   ControlPlaneStatusSnapshot,
   ExecutionAttemptSummary,
@@ -14,6 +17,10 @@ import type {
   OutboundHandoffSummary,
   ToolCallSummary,
   WorkItemLifecycleSummary,
+  ProcessExecutionSummary,
+  IntentSummary,
+  WorkerStatusObservation,
+  ObservationPlaneSnapshot,
 } from "./types.js";
 
 function rowToWorkItemSummary(row: Record<string, unknown>): WorkItemLifecycleSummary {
@@ -294,5 +301,150 @@ export function buildControlPlaneSnapshot(
       total_count: outboundTotal.c,
     },
     mailbox_summary: mailboxSummary,
+  };
+}
+
+function rowToProcessExecutionSummary(row: Record<string, unknown>): ProcessExecutionSummary {
+  return {
+    execution_id: String(row.execution_id),
+    intent_id: String(row.intent_id),
+    command: String(row.command),
+    status: String(row.status) as ProcessExecutionSummary["status"],
+    exit_code: row.exit_code !== null && row.exit_code !== undefined ? Number(row.exit_code) : null,
+    started_at: row.started_at ? String(row.started_at) : null,
+    completed_at: row.completed_at ? String(row.completed_at) : null,
+    lease_runner_id: row.lease_runner_id ? String(row.lease_runner_id) : null,
+    lease_expires_at: row.lease_expires_at ? String(row.lease_expires_at) : null,
+    created_at: String(row.created_at),
+  };
+}
+
+function rowToIntentSummary(row: Record<string, unknown>): IntentSummary {
+  return {
+    intent_id: String(row.intent_id),
+    intent_type: String(row.intent_type),
+    executor_family: String(row.executor_family),
+    status: String(row.status),
+    context_id: String(row.context_id),
+    target_id: row.target_id ? String(row.target_id) : null,
+    terminal_reason: row.terminal_reason ? String(row.terminal_reason) : null,
+    created_at: String(row.created_at),
+    updated_at: String(row.updated_at),
+  };
+}
+
+export function getProcessExecutionSummaries(
+  executionStore: ProcessExecutionStore,
+  limit = 50,
+): { active: ProcessExecutionSummary[]; recent: ProcessExecutionSummary[]; failed_recent: ProcessExecutionSummary[]; total_count: number } {
+  const activeRows = executionStore.db
+    .prepare(`select * from process_executions where status = 'running' order by started_at desc limit ?`)
+    .all(limit) as Record<string, unknown>[];
+
+  const recentRows = executionStore.db
+    .prepare(`select * from process_executions where status != 'running' order by created_at desc limit ?`)
+    .all(limit) as Record<string, unknown>[];
+
+  const failedRows = executionStore.db
+    .prepare(`select * from process_executions where status = 'failed' order by completed_at desc limit ?`)
+    .all(limit) as Record<string, unknown>[];
+
+  const totalRow = executionStore.db
+    .prepare(`select count(*) as c from process_executions`)
+    .get() as { c: number };
+
+  return {
+    active: activeRows.map(rowToProcessExecutionSummary),
+    recent: recentRows.map(rowToProcessExecutionSummary),
+    failed_recent: failedRows.map(rowToProcessExecutionSummary),
+    total_count: totalRow.c,
+  };
+}
+
+export function getIntentSummaries(
+  intentStore: IntentStore,
+): { pending: IntentSummary[]; executing: IntentSummary[]; failed_terminal: IntentSummary[]; total_count: number } {
+  const pendingRows = intentStore.db
+    .prepare(`select * from intents where status = 'admitted' order by created_at asc`)
+    .all() as Record<string, unknown>[];
+
+  const executingRows = intentStore.db
+    .prepare(`select * from intents where status = 'executing' order by updated_at desc`)
+    .all() as Record<string, unknown>[];
+
+  const failedRows = intentStore.db
+    .prepare(`select * from intents where status = 'failed_terminal' order by updated_at desc`)
+    .all() as Record<string, unknown>[];
+
+  const totalRow = intentStore.db
+    .prepare(`select count(*) as c from intents`)
+    .get() as { c: number };
+
+  return {
+    pending: pendingRows.map(rowToIntentSummary),
+    executing: executingRows.map(rowToIntentSummary),
+    failed_terminal: failedRows.map(rowToIntentSummary),
+    total_count: totalRow.c,
+  };
+}
+
+export function getWorkerStatuses(
+  registry: WorkerRegistry,
+  coordinatorStore: CoordinatorStore,
+  intentStore: IntentStore,
+  executionStore: ProcessExecutionStore,
+): WorkerStatusObservation[] {
+  const workers = registry.listWorkers();
+
+  // Pre-compute durable-state activity per executor family
+  const activeControlPlane = coordinatorStore.db
+    .prepare(`select count(*) as c from work_items where status in ('opened', 'leased', 'executing')`)
+    .get() as { c: number };
+
+  const activeProcess = executionStore.db
+    .prepare(`select count(*) as c from process_executions where status = 'running'`)
+    .get() as { c: number };
+
+  const pendingByFamily: Record<string, number> = {};
+  const pendingRows = intentStore.db
+    .prepare(`select executor_family, count(*) as c from intents where status = 'admitted' group by executor_family`)
+    .all() as Array<{ executor_family: string; c: number }>;
+  for (const row of pendingRows) {
+    pendingByFamily[row.executor_family] = row.c;
+  }
+
+  return workers.map((identity) => {
+    const hasActiveWork = identity.executor_family === "process"
+      ? activeProcess.c > 0
+      : activeControlPlane.c > 0;
+
+    return {
+      worker_id: identity.worker_id,
+      executor_family: identity.executor_family,
+      concurrency_policy: identity.concurrency_policy,
+      description: identity.description,
+      registered: true,
+      has_active_work: hasActiveWork,
+      pending_count: pendingByFamily[identity.executor_family] ?? 0,
+    };
+  });
+}
+
+export function buildObservationPlaneSnapshot(
+  registry: WorkerRegistry,
+  coordinatorStore: CoordinatorStore,
+  outboundStore: OutboundStore,
+  intentStore: IntentStore,
+  executionStore: ProcessExecutionStore,
+  mailboxId?: string,
+): ObservationPlaneSnapshot {
+  const capturedAt = new Date().toISOString();
+
+  return {
+    captured_at: capturedAt,
+    workers: getWorkerStatuses(registry, coordinatorStore, intentStore, executionStore),
+    control_plane: buildControlPlaneSnapshot(coordinatorStore, outboundStore, mailboxId),
+    process_executions: getProcessExecutionSummaries(executionStore, 50),
+    intents: getIntentSummaries(intentStore),
   };
 }

@@ -8,6 +8,7 @@ import { resolve } from "node:path";
 import { stderr } from "node:process";
 import { loadConfig } from "../config/load.js";
 import { DefaultGraphAdapter } from "../adapter/graph/adapter.js";
+import { ExchangeSource } from "../adapter/graph/exchange-source.js";
 import { DefaultSyncRunner } from "../runner/sync-once.js";
 import { FileCursorStore } from "../persistence/cursor.js";
 import { FileApplyLogStore } from "../persistence/apply-log.js";
@@ -105,10 +106,12 @@ async function main() {
     acquireTimeoutMs: config.runtime.acquire_lock_timeout_ms,
   });
   
+  const source = new ExchangeSource({ adapter, sourceId: config.mailbox_id });
+
   // Create sync runner
   const runner = new DefaultSyncRunner({
     rootDir,
-    adapter,
+    source,
     cursorStore,
     applyLogStore,
     projector,

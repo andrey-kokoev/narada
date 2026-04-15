@@ -12,7 +12,7 @@ import type {
   ProposedAction,
   CharterOutputEnvelope,
 } from "./types.js";
-import type { MailboxPolicy } from "../config/types.js";
+import type { RuntimePolicy } from "../config/types.js";
 
 export type ArbitrationOutcome =
   | "accept"
@@ -144,6 +144,19 @@ function validateSetCategoriesPayload(payload: unknown): { valid: boolean; error
   return { valid: errors.length === 0, errors };
 }
 
+function validateProcessRunPayload(payload: unknown): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    errors.push("Payload must be an object");
+    return { valid: false, errors };
+  }
+  const p = payload as Record<string, unknown>;
+  if (!p.command || typeof p.command !== "string" || p.command.trim().length === 0) {
+    errors.push("process_run requires command");
+  }
+  return { valid: errors.length === 0, errors };
+}
+
 function validateCreateFollowupPayload(payload: unknown): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
@@ -174,6 +187,7 @@ const payloadValidators: Record<AllowedAction, (payload: unknown) => { valid: bo
   extract_obligations: defaultPayloadValidator,
   create_followup: validateCreateFollowupPayload,
   tool_request: defaultPayloadValidator,
+  process_run: validateProcessRunPayload,
   no_action: defaultPayloadValidator,
 };
 
@@ -183,7 +197,7 @@ const payloadValidators: Record<AllowedAction, (payload: unknown) => { valid: bo
 
 export function governAction(
   action: ProposedAction,
-  policy: MailboxPolicy,
+  policy: RuntimePolicy,
   confidence: CharterOutputEnvelope["confidence"],
 ): ActionGovernanceResult {
   // Policy allowance
@@ -238,7 +252,7 @@ export function governAction(
 
 export function governEvaluation(
   evaluation: EvaluationEnvelope,
-  policy: MailboxPolicy,
+  policy: RuntimePolicy,
   actions?: ProposedAction[],
 ): GovernEvaluationResult {
   // Respect explicit charter outcomes

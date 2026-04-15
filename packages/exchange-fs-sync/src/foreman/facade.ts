@@ -22,7 +22,7 @@ import type {
 } from "./types.js";
 import { validateCharterOutput } from "./validation.js";
 import { governEvaluation } from "./governance.js";
-import { OutboundHandoff } from "./handoff.js";
+import { IntentHandoff } from "../intent/handoff.js";
 import type {
   CoordinatorStore,
   ConversationRecord,
@@ -31,14 +31,16 @@ import type {
   AgentSession,
 } from "../coordinator/types.js";
 import type { OutboundStore } from "../outbound/store.js";
-import type { MailboxPolicy } from "../config/types.js";
+import type { IntentStore } from "../intent/store.js";
+import type { RuntimePolicy } from "../config/types.js";
 
 export interface ForemanFacadeDeps {
   coordinatorStore: CoordinatorStore;
   outboundStore: OutboundStore;
+  intentStore: IntentStore;
   db: Database.Database;
   foremanId: string;
-  getMailboxPolicy: (mailboxId: string) => MailboxPolicy;
+  getRuntimePolicy: (mailboxId: string) => RuntimePolicy;
 }
 
 export interface ForemanFacadeOptions {
@@ -51,11 +53,12 @@ function makeRevisionId(conversationId: string, ordinal: number): string {
 }
 
 export class DefaultForemanFacade implements ForemanFacade {
-  private readonly handoff: OutboundHandoff;
+  private readonly handoff: IntentHandoff;
 
   constructor(private readonly deps: ForemanFacadeDeps) {
-    this.handoff = new OutboundHandoff({
+    this.handoff = new IntentHandoff({
       coordinatorStore: deps.coordinatorStore,
+      intentStore: deps.intentStore,
       outboundStore: deps.outboundStore,
     });
   }
@@ -290,7 +293,7 @@ export class DefaultForemanFacade implements ForemanFacade {
     }
 
     // Apply action governance to structurally-valid actions
-    const policy = this.deps.getMailboxPolicy(workItem.mailbox_id);
+    const policy = this.deps.getRuntimePolicy(workItem.mailbox_id);
     const governance = governEvaluation(evaluation, policy, validActions);
 
     if (governance.outcome === "reject") {
@@ -443,7 +446,7 @@ export class DefaultForemanFacade implements ForemanFacade {
           });
         }
 
-        const obId = this.handoff.createCommandFromDecision({
+        const obId = this.handoff.admitIntentFromDecision({
           decision_id: decisionId,
           conversation_id: workItem.conversation_id,
           mailbox_id: workItem.mailbox_id,
@@ -480,7 +483,7 @@ export class DefaultForemanFacade implements ForemanFacade {
   }
 
   private buildConversationRecord(conversationId: string, mailboxId: string): ConversationRecord {
-    const policy = this.deps.getMailboxPolicy(mailboxId);
+    const policy = this.deps.getRuntimePolicy(mailboxId);
     const now = new Date().toISOString();
     return {
       conversation_id: conversationId,
