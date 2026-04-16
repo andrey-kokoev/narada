@@ -269,7 +269,7 @@ export interface CoordinatorStore {
   upsertConversationRecord(record: ConversationRecord): void;
   getConversationRecord(conversationId: string): ConversationRecord | undefined;
 
-  // Neutral context records (Task 084) — adapter over conversation_records
+  // Neutral context records (Task 086) — primary durable table; conversation_records is now a compatibility view
   upsertContextRecord(record: ContextRecord): void;
   getContextRecord(contextId: string): ContextRecord | undefined;
 

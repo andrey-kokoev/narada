@@ -284,7 +284,7 @@ export function buildScopeDispatchSummary(
     executing_work_items: executing.c,
     failed_retryable_work_items: failedRetryable.c,
     failed_terminal_work_items: failedTerminal.c,
-    pending_outbound_commands: pendingOutbound.c,
+    pending_outbound_handoffs: pendingOutbound.c,
     recent_decisions_count: recentDecisions.c,
   };
 }
@@ -553,7 +553,7 @@ function intentSummarySql(whereClause: string, orderClause: string): string {
     end as confirmation_status
   from intents i
   left join process_executions pe on pe.intent_id = i.intent_id
-  left join outbound_commands oc on oc.outbound_id = i.target_id
+  left join outbound_handoffs oc on oc.outbound_id = i.target_id
   where ${whereClause}
   order by ${orderClause}`;
 }
@@ -614,7 +614,7 @@ export function getIntentExecutionSummaries(
     oc.confirmed_at as mail_confirmed_at
   from intents i
   left join process_executions pe on pe.intent_id = i.intent_id
-  left join outbound_commands oc on oc.outbound_id = i.target_id
+  left join outbound_handoffs oc on oc.outbound_id = i.target_id
   order by i.updated_at desc
   limit ?`;
 
@@ -643,7 +643,7 @@ export function getIntentExecutionSummaries(
     oc.confirmed_at as mail_confirmed_at
   from intents i
   left join process_executions pe on pe.intent_id = i.intent_id
-  left join outbound_commands oc on oc.outbound_id = i.target_id
+  left join outbound_handoffs oc on oc.outbound_id = i.target_id
   where (
     i.status in ('failed_terminal', 'cancelled')
     or (i.executor_family = 'process' and pe.phase = 'failed')
@@ -740,7 +740,7 @@ export function getMailExecutionDetails(
   limit = 50,
 ): MailExecutionDetail[] {
   const commands = outboundStore.db
-    .prepare(`select * from outbound_commands order by created_at desc limit ?`)
+    .prepare(`select *, context_id as conversation_id, scope_id as mailbox_id from outbound_handoffs order by created_at desc limit ?`)
     .all(limit) as Record<string, unknown>[];
 
   const transitionsMap = new Map<string, MailExecutionTransition[]>();
@@ -913,14 +913,14 @@ export function getMailboxVerticalView(
 ): MailboxVerticalView {
   const conversationRows = coordinatorStore.db
     .prepare(
-      `select conversation_id, mailbox_id, status, primary_charter, assigned_agent,
+      `select context_id as conversation_id, scope_id as mailbox_id, status, primary_charter, assigned_agent,
               last_message_at, last_inbound_at, last_outbound_at, created_at, updated_at
-       from conversation_records
-       where mailbox_id = ?
-         and conversation_id not like 'timer:%'
-         and conversation_id not like 'webhook:%'
-         and conversation_id not like 'fs:%'
-         and conversation_id not like 'filesystem:%'
+       from context_records
+       where scope_id = ?
+         and context_id not like 'timer:%'
+         and context_id not like 'webhook:%'
+         and context_id not like 'fs:%'
+         and context_id not like 'filesystem:%'
        order by updated_at desc
        limit 100`,
     )

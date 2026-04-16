@@ -89,11 +89,11 @@ describe("AgentSession store operations", () => {
   it("getResumableSessions filters by mailbox_id", () => {
     const now = new Date().toISOString();
     store.db.prepare(`
-      insert into conversation_records (conversation_id, mailbox_id, primary_charter, secondary_charters_json, status, assigned_agent, last_message_at, last_inbound_at, last_outbound_at, last_analyzed_at, last_triaged_at, created_at, updated_at)
+      insert into context_records (context_id, scope_id, primary_charter, secondary_charters_json, status, assigned_agent, last_message_at, last_inbound_at, last_outbound_at, last_analyzed_at, last_triaged_at, created_at, updated_at)
       values ('conv-mb1', 'mb-1', 'steward', '[]', 'active', null, null, null, null, null, null, ?, ?)
     `).run(now, now);
     store.db.prepare(`
-      insert into conversation_records (conversation_id, mailbox_id, primary_charter, secondary_charters_json, status, assigned_agent, last_message_at, last_inbound_at, last_outbound_at, last_analyzed_at, last_triaged_at, created_at, updated_at)
+      insert into context_records (context_id, scope_id, primary_charter, secondary_charters_json, status, assigned_agent, last_message_at, last_inbound_at, last_outbound_at, last_analyzed_at, last_triaged_at, created_at, updated_at)
       values ('conv-mb2', 'mb-2', 'steward', '[]', 'active', null, null, null, null, null, null, ?, ?)
     `).run(now, now);
     store.db.prepare(`

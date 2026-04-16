@@ -289,7 +289,7 @@ describe("observability/queries", () => {
       expect(summary.executing_work_items).toBe(1);
       expect(summary.failed_retryable_work_items).toBe(1);
       expect(summary.failed_terminal_work_items).toBe(1);
-      expect(summary.pending_outbound_commands).toBe(1);
+      expect(summary.pending_outbound_handoffs).toBe(1);
       expect(summary.recent_decisions_count).toBe(1);
     });
   });
@@ -340,7 +340,7 @@ describe("observability/queries", () => {
       expect(snapshot.tool_calls.total_count).toBe(1);
       expect(snapshot.outbound.total_count).toBe(1);
       expect(snapshot.scope_summary).not.toBeNull();
-      expect(snapshot.scope_summary!.pending_outbound_commands).toBe(1);
+      expect(snapshot.scope_summary!.pending_outbound_handoffs).toBe(1);
     });
   });
 

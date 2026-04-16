@@ -1,18 +1,18 @@
 -- Outbound Draft Worker SQLite Schema
 --
--- Canonical persistence for durable outbound commands, versions,
+-- Canonical persistence for durable outbound handoffs, versions,
 -- managed drafts, and audit transitions.
 --
 -- Spec: .ai/tasks/20260413-001-outbound-draft-worker-spec.md
 
 -- ---------------------------------------------------------------------------
--- outbound_commands
+-- outbound_handoffs
 -- Canonical command envelope. One row per outbound intent.
 -- ---------------------------------------------------------------------------
-create table if not exists outbound_commands (
+create table if not exists outbound_handoffs (
   outbound_id text primary key,
-  conversation_id text not null,
-  mailbox_id text not null,
+  context_id text not null,
+  scope_id text not null,
   action_type text not null,
   status text not null,
   latest_version integer not null default 1,
@@ -25,18 +25,36 @@ create table if not exists outbound_commands (
   idempotency_key text not null unique
 );
 
--- Fast lookups for worker eligibility and thread constraints
-create index if not exists idx_outbound_commands_status
-  on outbound_commands(status);
+-- Fast lookups for worker eligibility and context constraints
+create index if not exists idx_outbound_handoffs_status
+  on outbound_handoffs(status);
 
-create index if not exists idx_outbound_commands_thread_action
-  on outbound_commands(conversation_id, action_type);
+create index if not exists idx_outbound_handoffs_context_action
+  on outbound_handoffs(context_id, action_type);
 
-create index if not exists idx_outbound_commands_idempotency
-  on outbound_commands(idempotency_key);
+create index if not exists idx_outbound_handoffs_idempotency
+  on outbound_handoffs(idempotency_key);
 
-create index if not exists idx_outbound_commands_mailbox
-  on outbound_commands(mailbox_id);
+create index if not exists idx_outbound_handoffs_scope
+  on outbound_handoffs(scope_id);
+
+-- Mailbox compatibility view
+create view if not exists outbound_commands as
+select
+  outbound_id,
+  context_id as conversation_id,
+  scope_id as mailbox_id,
+  action_type,
+  status,
+  latest_version,
+  created_at,
+  created_by,
+  submitted_at,
+  confirmed_at,
+  blocked_reason,
+  terminal_reason,
+  idempotency_key
+from outbound_handoffs;
 
 -- ---------------------------------------------------------------------------
 -- outbound_versions
@@ -54,10 +72,11 @@ create table if not exists outbound_versions (
   body_html text not null default '',
   idempotency_key text not null,
   policy_snapshot_json text not null default '{}',
+  payload_json text not null default '{}',
   created_at text not null,
   superseded_at text,
   primary key (outbound_id, version),
-  foreign key (outbound_id) references outbound_commands(outbound_id)
+  foreign key (outbound_id) references outbound_handoffs(outbound_id)
     on delete cascade
 );
 
@@ -86,9 +105,12 @@ create table if not exists managed_drafts (
     on delete cascade
 );
 
+create index if not exists idx_managed_drafts_outbound_id
+  on managed_drafts(outbound_id);
+
 -- ---------------------------------------------------------------------------
 -- outbound_transitions
--- Immutable audit log of every status change.
+-- Audit log of status transitions.
 -- ---------------------------------------------------------------------------
 create table if not exists outbound_transitions (
   id integer primary key autoincrement,

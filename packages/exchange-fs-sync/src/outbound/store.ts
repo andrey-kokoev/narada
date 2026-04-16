@@ -80,8 +80,8 @@ export interface SqliteOutboundStoreDbOptions {
 function rowToCommand(row: Record<string, unknown>): OutboundCommand {
   return {
     outbound_id: String(row.outbound_id),
-    conversation_id: String(row.conversation_id),
-    mailbox_id: String(row.mailbox_id),
+    conversation_id: String(row.conversation_id ?? row.context_id),
+    mailbox_id: String(row.mailbox_id ?? row.scope_id),
     action_type: String(row.action_type) as OutboundCommand["action_type"],
     status: String(row.status) as OutboundStatus,
     latest_version: Number(row.latest_version),
@@ -153,12 +153,61 @@ export class SqliteOutboundStore implements OutboundStore {
     }
   }
 
-  initSchema(): void {
-    this.db.exec(`
-      create table if not exists outbound_commands (
+  private migrateOutboundCommandsToHandoffs(): void {
+    // Drop old compatibility view if it exists, so we can drop the old base table
+    const handoffType = this.db.prepare(`select type from sqlite_master where name = 'outbound_handoffs'`).get() as { type: string } | undefined;
+    if (handoffType?.type === 'view') {
+      this.db.prepare(`drop view if exists outbound_handoffs`).run();
+    }
+
+    // Ensure the neutral table exists before attempting migration
+    this.db.prepare(`
+      create table if not exists outbound_handoffs (
         outbound_id text primary key,
-        conversation_id text not null,
-        mailbox_id text not null,
+        context_id text not null,
+        scope_id text not null,
+        action_type text not null,
+        status text not null,
+        latest_version integer not null default 1,
+        created_at text not null,
+        created_by text not null,
+        submitted_at text,
+        confirmed_at text,
+        blocked_reason text,
+        terminal_reason text,
+        idempotency_key text not null unique
+      )
+    `).run();
+
+    // Migrate data from old base table to new base table if old table still exists
+    const commandsType = this.db.prepare(`select type from sqlite_master where name = 'outbound_commands'`).get() as { type: string } | undefined;
+    if (commandsType?.type === 'table') {
+      this.db.prepare(`
+        insert or ignore into outbound_handoffs (
+          outbound_id, context_id, scope_id, action_type, status, latest_version,
+          created_at, created_by, submitted_at, confirmed_at, blocked_reason,
+          terminal_reason, idempotency_key
+        )
+        select
+          outbound_id, conversation_id as context_id, mailbox_id as scope_id,
+          action_type, status, latest_version, created_at, created_by,
+          submitted_at, confirmed_at, blocked_reason, terminal_reason,
+          idempotency_key
+        from outbound_commands
+      `).run();
+
+      this.db.prepare(`drop table if exists outbound_commands`).run();
+    }
+  }
+
+  initSchema(): void {
+    this.migrateOutboundCommandsToHandoffs();
+
+    this.db.exec(`
+      create table if not exists outbound_handoffs (
+        outbound_id text primary key,
+        context_id text not null,
+        scope_id text not null,
         action_type text not null,
         status text not null,
         latest_version integer not null default 1,
@@ -171,24 +220,24 @@ export class SqliteOutboundStore implements OutboundStore {
         idempotency_key text not null unique
       );
 
-      create index if not exists idx_outbound_commands_status
-        on outbound_commands(status);
+      create index if not exists idx_outbound_handoffs_status
+        on outbound_handoffs(status);
 
-      create index if not exists idx_outbound_commands_thread_action
-        on outbound_commands(conversation_id, action_type);
+      create index if not exists idx_outbound_handoffs_context_action
+        on outbound_handoffs(context_id, action_type);
 
-      create index if not exists idx_outbound_commands_idempotency
-        on outbound_commands(idempotency_key);
+      create index if not exists idx_outbound_handoffs_idempotency
+        on outbound_handoffs(idempotency_key);
 
-      create index if not exists idx_outbound_commands_mailbox
-        on outbound_commands(mailbox_id);
+      create index if not exists idx_outbound_handoffs_scope
+        on outbound_handoffs(scope_id);
 
-      -- Neutral observation compatibility view (Task 082)
-      create view if not exists outbound_handoffs as
+      -- Mailbox compatibility view (reverse of previous Task 082)
+      create view if not exists outbound_commands as
       select
         outbound_id,
-        conversation_id as context_id,
-        mailbox_id as scope_id,
+        context_id as conversation_id,
+        scope_id as mailbox_id,
         action_type,
         status,
         latest_version,
@@ -199,7 +248,7 @@ export class SqliteOutboundStore implements OutboundStore {
         blocked_reason,
         terminal_reason,
         idempotency_key
-      from outbound_commands;
+      from outbound_handoffs;
 
       create table if not exists outbound_versions (
         outbound_id text not null,
@@ -217,7 +266,7 @@ export class SqliteOutboundStore implements OutboundStore {
         created_at text not null,
         superseded_at text,
         primary key (outbound_id, version),
-        foreign key (outbound_id) references outbound_commands(outbound_id)
+        foreign key (outbound_id) references outbound_handoffs(outbound_id)
           on delete cascade
       );
 
@@ -262,8 +311,8 @@ export class SqliteOutboundStore implements OutboundStore {
 
   createCommand(command: OutboundCommand, version: OutboundVersion): void {
     const insertCmd = this.db.prepare(`
-      insert into outbound_commands (
-        outbound_id, conversation_id, mailbox_id, action_type, status,
+      insert into outbound_handoffs (
+        outbound_id, context_id, scope_id, action_type, status,
         latest_version, created_at, created_by, submitted_at,
         confirmed_at, blocked_reason, terminal_reason, idempotency_key
       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -284,7 +333,7 @@ export class SqliteOutboundStore implements OutboundStore {
     `);
 
     const checkIdempotency = this.db.prepare(`
-      select outbound_id from outbound_commands where idempotency_key = ?
+      select outbound_id from outbound_handoffs where idempotency_key = ?
     `);
 
     const tx = this.db.transaction(() => {
@@ -344,21 +393,21 @@ export class SqliteOutboundStore implements OutboundStore {
 
   getCommandByIdempotencyKey(idempotencyKey: string): OutboundCommand | undefined {
     const row = this.db.prepare(
-      "select * from outbound_commands where idempotency_key = ?",
+      "select *, context_id as conversation_id, scope_id as mailbox_id from outbound_handoffs where idempotency_key = ?",
     ).get(idempotencyKey) as Record<string, unknown> | undefined;
     return row ? rowToCommand(row) : undefined;
   }
 
   getCommand(outbound_id: string): OutboundCommand | undefined {
     const row = this.db.prepare(
-      "select * from outbound_commands where outbound_id = ?",
+      "select *, context_id as conversation_id, scope_id as mailbox_id from outbound_handoffs where outbound_id = ?",
     ).get(outbound_id) as Record<string, unknown> | undefined;
     return row ? rowToCommand(row) : undefined;
   }
 
   getCommandStatus(outbound_id: string): OutboundStatus | undefined {
     const row = this.db.prepare(
-      "select status from outbound_commands where outbound_id = ?",
+      "select status from outbound_handoffs where outbound_id = ?",
     ).get(outbound_id) as { status: string } | undefined;
     return row ? (row.status as OutboundStatus) : undefined;
   }
@@ -384,8 +433,8 @@ export class SqliteOutboundStore implements OutboundStore {
 
   getActiveCommandsForThread(conversation_id: string): OutboundCommand[] {
     const rows = this.db.prepare(`
-      select * from outbound_commands
-      where conversation_id = ? and status in (${ACTIVE_UNSENT_STATUSES.map(() => "?").join(", ")})
+      select *, context_id as conversation_id, scope_id as mailbox_id from outbound_handoffs
+      where context_id = ? and status in (${ACTIVE_UNSENT_STATUSES.map(() => "?").join(", ")})
     `).all(conversation_id, ...ACTIVE_UNSENT_STATUSES) as Record<string, unknown>[];
     return rows.map(rowToCommand);
   }
@@ -449,7 +498,7 @@ export class SqliteOutboundStore implements OutboundStore {
     values.push(outbound_id);
 
     this.db.prepare(
-      `update outbound_commands set ${fields.join(", ")} where outbound_id = ?`,
+      `update outbound_handoffs set ${fields.join(", ")} where outbound_id = ?`,
     ).run(...values);
   }
 
@@ -463,11 +512,11 @@ export class SqliteOutboundStore implements OutboundStore {
     mailbox_id?: string,
   ): Array<{ command: OutboundCommand; version: OutboundVersion }> {
     if (statuses.length === 0) return [];
-    const mailboxFilter = mailbox_id ? "and c.mailbox_id = ?" : "";
+    const mailboxFilter = mailbox_id ? "and c.scope_id = ?" : "";
     const statusPlaceholders = statuses.map(() => "?").join(", ");
     const sql = `
-      select c.*, v.*
-      from outbound_commands c
+      select c.*, context_id as conversation_id, scope_id as mailbox_id, v.*
+      from outbound_handoffs c
       join outbound_versions v
         on c.outbound_id = v.outbound_id
        and c.latest_version = v.version

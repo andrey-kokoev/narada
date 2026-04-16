@@ -311,4 +311,69 @@ describe("SqliteOutboundStore", () => {
       expect(fetched!.header_outbound_id_present).toBe(true);
     });
   });
+
+  describe("neutral table migration (Task 086)", () => {
+    it("migrates old outbound_commands table to outbound_handoffs and reverses view", () => {
+      const db = store.db;
+
+      // Simulate pre-migration schema
+      db.prepare(`drop view if exists outbound_commands`).run();
+      db.prepare(`drop table if exists outbound_handoffs`).run();
+
+      db.prepare(`
+        create table outbound_commands (
+          outbound_id text primary key,
+          conversation_id text not null,
+          mailbox_id text not null,
+          action_type text not null,
+          status text not null,
+          latest_version integer not null default 1,
+          created_at text not null,
+          created_by text not null,
+          submitted_at text,
+          confirmed_at text,
+          blocked_reason text,
+          terminal_reason text,
+          idempotency_key text not null unique
+        )
+      `).run();
+
+      // Create old compatibility view
+      db.prepare(`
+        create view outbound_handoffs as
+        select outbound_id, conversation_id as context_id, mailbox_id as scope_id,
+               action_type, status, latest_version, created_at, created_by,
+               submitted_at, confirmed_at, blocked_reason, terminal_reason, idempotency_key
+        from outbound_commands
+      `).run();
+
+      // Seed old table
+      db.prepare(`
+        insert into outbound_commands (outbound_id, conversation_id, mailbox_id, action_type, status, latest_version, created_at, created_by, idempotency_key)
+        values ('o1', 'c1', 'm1', 'send_reply', 'pending', 1, '2024-01-01T00:00:00Z', 'test', 'key-1')
+      `).run();
+
+      // Re-run schema init which should migrate
+      store.initSchema();
+
+      // Verify neutral table is physical
+      const handoffType = db.prepare(`select type from sqlite_master where name = 'outbound_handoffs'`).get() as { type: string };
+      expect(handoffType.type).toBe('table');
+
+      // Verify compatibility view exists
+      const commandsType = db.prepare(`select type from sqlite_master where name = 'outbound_commands'`).get() as { type: string };
+      expect(commandsType.type).toBe('view');
+
+      // Verify data migrated to neutral table
+      const handoff = db.prepare(`select * from outbound_handoffs where outbound_id = ?`).get('o1') as Record<string, unknown>;
+      expect(handoff.context_id).toBe('c1');
+      expect(handoff.scope_id).toBe('m1');
+
+      // Verify read through mailbox compatibility view works
+      const cmd = store.getCommand('o1');
+      expect(cmd).toBeDefined();
+      expect(cmd!.conversation_id).toBe('c1');
+      expect(cmd!.mailbox_id).toBe('m1');
+    });
+  });
 });

@@ -1,7 +1,7 @@
 -- Coordinator SQLite Schema
 --
 -- Durable state for foreman, charter outputs, thread records, and policy overrides.
--- Designed to coexist in the same database as outbound_commands and agent_traces.
+-- Designed to coexist in the same database as outbound_handoffs and agent_traces.
 --
 -- Spec: .ai/tasks/20260413-012-coordinator-state-and-foreman-handoff.md
 
@@ -97,7 +97,7 @@ create table if not exists policy_overrides (
   overridden_by text not null,
   reason text not null,
   created_at text not null,
-  foreign key (outbound_id) references outbound_commands(outbound_id)
+  foreign key (outbound_id) references outbound_handoffs(outbound_id)
 );
 
 create index if not exists idx_policy_overrides_outbound

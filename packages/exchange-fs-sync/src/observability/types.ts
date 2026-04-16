@@ -36,7 +36,7 @@ export interface ScopeDispatchSummary {
   executing_work_items: number;
   failed_retryable_work_items: number;
   failed_terminal_work_items: number;
-  pending_outbound_commands: number;
+  pending_outbound_handoffs: number;
   recent_decisions_count: number;
 }
 
@@ -82,7 +82,7 @@ export interface ToolCallSummary {
   completed_at: string;
 }
 
-/** @source authoritative — Outbound handoff summary (mirrors durable outbound_commands row) */
+/** @source authoritative — Outbound handoff summary (mirrors durable outbound_handoffs row) */
 export interface OutboundHandoffSummary {
   outbound_id: string;
   context_id: string;

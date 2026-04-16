@@ -33,6 +33,10 @@ const KERNEL_DIRS = [
 const PATTERNS = [
   { name: "conversation_id", regex: /\bconversation_id\b/ },
   { name: "thread_id", regex: /\bthread_id\b/ },
+  { name: "mailbox_id", regex: /\bmailbox_id\b/ },
+  { name: "conversation_records", regex: /\bconversation_records\b/ },
+  { name: "conversation_revisions", regex: /\bconversation_revisions\b/ },
+  { name: "outbound_commands", regex: /\boutbound_commands\b/ },
   {
     name: "graph_adapter_import",
     regex: /from\s+['"][^'"]*adapter\/graph[^'"]*['"]/,
@@ -76,23 +80,38 @@ const ALLOWLIST: Record<string, string[]> = {
   ],
 
   // Foreman context strategies include mail-specific formation.
-  "foreman/context.ts": ["conversation_id", "thread_id"],
+  "foreman/context.ts": ["conversation_id", "thread_id", "mailbox_id"],
 
   // Foreman facade orchestrates mail-specific conversation opening.
-  "foreman/facade.ts": ["conversation_id"],
+  "foreman/facade.ts": ["conversation_id", "mailbox_id"],
 
   // Foreman handoff creates outbound commands for conversations.
-  "foreman/handoff.ts": ["conversation_id"],
+  "foreman/handoff.ts": ["conversation_id", "mailbox_id"],
 
   // Foreman types include mail-vertical context types.
-  "foreman/types.ts": ["conversation_id"],
+  "foreman/types.ts": ["conversation_id", "mailbox_id"],
 
   // Coordinator retains legacy thread/conversation tables for mail vertical.
-  "coordinator/store.ts": ["conversation_id", "thread_id"],
+  "coordinator/store.ts": [
+    "conversation_id",
+    "thread_id",
+    "mailbox_id",
+    "conversation_records",
+    "conversation_revisions",
+  ],
+  "coordinator/schema.sql": [
+    "conversation_id",
+    "thread_id",
+    "mailbox_id",
+    "conversation_records",
+    "conversation_revisions",
+    "outbound_commands",
+  ],
 
   // Thread context hydration is mail-specific.
   "coordinator/thread-context.ts": [
     "conversation_id",
+    "mailbox_id",
     "normalized_types_import",
   ],
 
@@ -100,15 +119,33 @@ const ALLOWLIST: Record<string, string[]> = {
   "coordinator/thread-id.ts": [
     "conversation_id",
     "thread_id",
+    "mailbox_id",
     "normalized_types_import",
   ],
 
   // Coordinator types include mail-specific conversation records.
-  "coordinator/types.ts": ["conversation_id", "normalized_types_import"],
+  "coordinator/types.ts": [
+    "conversation_id",
+    "mailbox_id",
+    "conversation_records",
+    "normalized_types_import",
+  ],
 
-  // Observability reads from mail-specific tables.
-  "observability/queries.ts": ["conversation_id"],
-  "observability/types.ts": ["conversation_id"],
+  // Outbound store retains mailbox-era compatibility view for mail vertical.
+  "outbound/store.ts": [
+    "conversation_id",
+    "mailbox_id",
+    "outbound_commands",
+  ],
+  "outbound/schema.sql": [
+    "conversation_id",
+    "mailbox_id",
+    "outbound_commands",
+  ],
+
+  // Observability has mailbox-specific drill-down types.
+  "observability/queries.ts": ["conversation_id", "mailbox_id"],
+  "observability/types.ts": ["conversation_id", "mailbox_id"],
 };
 
 function walk(dir: string, files: string[] = []): string[] {

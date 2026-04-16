@@ -231,7 +231,7 @@ describe("SqliteCoordinatorStore", () => {
       store.upsertConversationRecord(createConversationRecord({ conversation_id: thread.conversation_id, mailbox_id: thread.mailbox_id }));
       store.insertCharterOutput(createCharterOutput());
 
-      db.prepare("delete from conversation_records where conversation_id = ?").run(
+      db.prepare("delete from context_records where context_id = ?").run(
         thread.conversation_id,
       );
 
@@ -274,7 +274,7 @@ describe("SqliteCoordinatorStore", () => {
       store.upsertConversationRecord(createConversationRecord({ conversation_id: thread.conversation_id, mailbox_id: thread.mailbox_id }));
       store.insertDecision(createForemanDecision());
 
-      db.prepare("delete from conversation_records where conversation_id = ?").run(
+      db.prepare("delete from context_records where context_id = ?").run(
         thread.conversation_id,
       );
 
@@ -336,6 +336,103 @@ describe("SqliteCoordinatorStore", () => {
 
       const fetched = store.getDecisionsByContext(thread.conversation_id, thread.mailbox_id);
       expect(fetched[0]!.created_by).toBe("foreman:fm-001/charter:support_steward,obligation_keeper");
+    });
+  });
+
+  describe("neutral table migration (Task 086)", () => {
+    it("migrates old conversation_records table to context_records and reverses views", () => {
+      const db = store.db;
+
+      // Simulate pre-migration schema by dropping new tables/views and creating old tables
+      db.prepare(`drop view if exists conversation_records`).run();
+      db.prepare(`drop view if exists conversation_revisions`).run();
+      db.prepare(`drop table if exists context_records`).run();
+      db.prepare(`drop table if exists context_revisions`).run();
+
+      db.prepare(`
+        create table conversation_records (
+          conversation_id text primary key,
+          mailbox_id text not null,
+          primary_charter text not null,
+          secondary_charters_json text not null default '[]',
+          status text not null default 'active',
+          assigned_agent text,
+          last_message_at text,
+          last_inbound_at text,
+          last_outbound_at text,
+          last_analyzed_at text,
+          last_triaged_at text,
+          created_at text not null default (datetime('now')),
+          updated_at text not null default (datetime('now'))
+        )
+      `).run();
+
+      db.prepare(`
+        create table conversation_revisions (
+          revision_record_id integer primary key autoincrement,
+          conversation_id text not null,
+          ordinal integer not null,
+          observed_at text not null default (datetime('now')),
+          trigger_event_id text,
+          unique (conversation_id, ordinal)
+        )
+      `).run();
+
+      // Create old compatibility views
+      db.prepare(`
+        create view context_records as
+        select conversation_id as context_id, mailbox_id as scope_id, status, primary_charter,
+               secondary_charters_json, assigned_agent, last_message_at, last_inbound_at,
+               last_outbound_at, last_analyzed_at, last_triaged_at, created_at, updated_at
+        from conversation_records
+      `).run();
+
+      db.prepare(`
+        create view context_revisions as
+        select conversation_id as context_id, ordinal, observed_at, trigger_event_id
+        from conversation_revisions
+      `).run();
+
+      // Seed old tables
+      db.prepare(`
+        insert into conversation_records (conversation_id, mailbox_id, primary_charter, status, created_at, updated_at)
+        values ('conv-1', 'mb-1', 'steward', 'active', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')
+      `).run();
+      db.prepare(`
+        insert into conversation_revisions (conversation_id, ordinal, observed_at, trigger_event_id)
+        values ('conv-1', 1, '2024-01-01T00:00:00Z', 'evt-1')
+      `).run();
+
+      // Re-run schema init which should migrate
+      store.initSchema();
+
+      // Verify neutral tables are physical
+      const contextRecordsType = db.prepare(`select type from sqlite_master where name = 'context_records'`).get() as { type: string };
+      expect(contextRecordsType.type).toBe('table');
+      const contextRevisionsType = db.prepare(`select type from sqlite_master where name = 'context_revisions'`).get() as { type: string };
+      expect(contextRevisionsType.type).toBe('table');
+
+      // Verify compatibility views exist
+      const conversationRecordsType = db.prepare(`select type from sqlite_master where name = 'conversation_records'`).get() as { type: string };
+      expect(conversationRecordsType.type).toBe('view');
+      const conversationRevisionsType = db.prepare(`select type from sqlite_master where name = 'conversation_revisions'`).get() as { type: string };
+      expect(conversationRevisionsType.type).toBe('view');
+
+      // Verify data migrated to neutral tables
+      const context = store.getContextRecord('conv-1');
+      expect(context).toBeDefined();
+      expect(context!.context_id).toBe('conv-1');
+      expect(context!.scope_id).toBe('mb-1');
+
+      // Verify read through mailbox compatibility view works
+      const conversation = store.getConversationRecord('conv-1');
+      expect(conversation).toBeDefined();
+      expect(conversation!.conversation_id).toBe('conv-1');
+      expect(conversation!.mailbox_id).toBe('mb-1');
+
+      // Verify revision migrated
+      const latestOrdinal = store.getLatestRevisionOrdinal('conv-1');
+      expect(latestOrdinal).toBe(1);
     });
   });
 });
