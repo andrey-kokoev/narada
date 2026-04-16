@@ -361,7 +361,7 @@ export { buildEventId, hashNormalizedPayload } from "./ids/event-id.js";
 // Observability exports
 export type {
   DaemonCycleSummary,
-  MailboxDispatchSummary,
+  ScopeDispatchSummary,
   WorkItemLifecycleSummary,
   ExecutionAttemptSummary,
   ToolCallSummary,
@@ -402,7 +402,7 @@ export {
   getRecentOutboundCommands,
   getRecentSessionsAndExecutions,
   getToolCallSummary,
-  buildMailboxDispatchSummary,
+  buildScopeDispatchSummary,
   buildControlPlaneSnapshot,
   getProcessExecutionSummaries,
   getIntentSummaries,
@@ -419,6 +419,7 @@ export {
   getFactTimeline,
   getUnifiedTimeline,
   buildObservationPlaneSnapshot,
+  buildOverviewSnapshot,
   getActiveLeases,
   getRecentStaleLeaseRecoveries,
   getQuiescenceIndicator,

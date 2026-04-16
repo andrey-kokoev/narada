@@ -6,16 +6,13 @@
  */
 
 import type { WorkItemStatus, ExecutionAttemptStatus, ToolCallStatus } from "../coordinator/types.js";
+import type { OutboundStatus } from "../outbound/types.js";
+import type { ExecutionPhase, ConfirmationStatus } from "../executors/lifecycle.js";
 
 /** Data-source trust classification for UI transparency */
 export type SourceTrust = "authoritative" | "derived" | "decorative";
 
 /** @source derived — Summary of a single daemon sync+dispatch cycle */
-export interface DaemonCycleSummary {
-import type { OutboundStatus } from "../outbound/types.js";
-import type { ExecutionPhase, ConfirmationStatus } from "../executors/lifecycle.js";
-
-/** Summary of a single daemon sync+dispatch cycle */
 export interface DaemonCycleSummary {
   cycle_number: number;
   started_at: string;
@@ -24,15 +21,15 @@ export interface DaemonCycleSummary {
   events_applied: number;
   events_skipped: number;
   dispatch_phase_duration_ms?: number;
-  conversations_changed: number;
+  contexts_changed: number;
   work_items_opened: number;
   work_items_superseded: number;
   errors: number;
 }
 
-/** @source derived — Per-mailbox dispatch summary */
-export interface MailboxDispatchSummary {
-  mailbox_id: string;
+/** @source derived — Per-scope dispatch summary */
+export interface ScopeDispatchSummary {
+  scope_id: string;
   last_sync_at: string | null;
   active_work_items: number;
   leased_work_items: number;
@@ -88,8 +85,8 @@ export interface ToolCallSummary {
 /** @source authoritative — Outbound handoff summary (mirrors durable outbound_commands row) */
 export interface OutboundHandoffSummary {
   outbound_id: string;
-  conversation_id: string;
-  mailbox_id: string;
+  context_id: string;
+  scope_id: string;
   action_type: string;
   status: OutboundStatus;
   latest_version: number;
@@ -104,7 +101,7 @@ export interface OutboundHandoffSummary {
 export interface LeaseSummary {
   lease_id: string;
   work_item_id: string;
-  conversation_id: string;
+  context_id: string;
   runner_id: string;
   acquired_at: string;
   expires_at: string;
@@ -115,7 +112,7 @@ export interface LeaseSummary {
 export interface StaleLeaseRecoveryEvent {
   lease_id: string;
   work_item_id: string;
-  conversation_id: string;
+  context_id: string;
   runner_id: string;
   recovered_at: string;
   reason: string;
@@ -166,7 +163,7 @@ export interface ControlPlaneStatusSnapshot {
     total_count: number;
   };
   quiescence: QuiescenceIndicator;
-  mailbox_summary: MailboxDispatchSummary | null;
+  scope_summary: ScopeDispatchSummary | null;
 }
 
 /** @source derived — Process execution summary for observability (unifies intent + execution stores) */
@@ -467,6 +464,9 @@ export interface ObservationPlaneSnapshot {
     recent: IntentExecutionSummary[];
     failed_recent: IntentExecutionSummary[];
     total_count: number;
+  };
+  _meta?: {
+    source_classifications: Record<string, SourceTrust>;
   };
 }
 

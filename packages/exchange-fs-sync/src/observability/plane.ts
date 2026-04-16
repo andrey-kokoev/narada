@@ -32,14 +32,14 @@ export class ObservationPlane {
    * Capture a full snapshot of the system state.
    * This is entirely derived from durable stores and worker registry metadata.
    */
-  snapshot(mailboxId?: string): ObservationPlaneSnapshot {
+  snapshot(scopeId?: string): ObservationPlaneSnapshot {
     return buildObservationPlaneSnapshot(
       this.deps.registry,
       this.deps.coordinatorStore,
       this.deps.outboundStore,
       this.deps.intentStore,
       this.deps.executionStore,
-      mailboxId,
+      scopeId,
     );
   }
 }

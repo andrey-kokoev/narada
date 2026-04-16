@@ -11,7 +11,7 @@ import {
   getRecentOutboundCommands,
   getRecentSessionsAndExecutions,
   getToolCallSummary,
-  buildMailboxDispatchSummary,
+  buildScopeDispatchSummary,
   buildControlPlaneSnapshot,
   getActiveLeases,
   getRecentStaleLeaseRecoveries,
@@ -230,7 +230,7 @@ describe("observability/queries", () => {
   });
 
   describe("mailbox dispatch summary", () => {
-    it("buildMailboxDispatchSummary aggregates counts per mailbox", () => {
+    it("buildScopeDispatchSummary aggregates counts per scope", () => {
       insertWorkItem({ work_item_id: "wi-1", status: "opened" });
       insertWorkItem({ work_item_id: "wi-2", status: "executing" });
       insertWorkItem({ work_item_id: "wi-3", status: "failed_retryable" });
@@ -283,8 +283,8 @@ describe("observability/queries", () => {
         created_by: "foreman:test/charter:support_steward",
       });
 
-      const summary = buildMailboxDispatchSummary(coordinatorStore, outboundStore, "mb-1");
-      expect(summary.mailbox_id).toBe("mb-1");
+      const summary = buildScopeDispatchSummary(coordinatorStore, outboundStore, "mb-1");
+      expect(summary.scope_id).toBe("mb-1");
       expect(summary.active_work_items).toBe(1);
       expect(summary.executing_work_items).toBe(1);
       expect(summary.failed_retryable_work_items).toBe(1);
@@ -339,8 +339,8 @@ describe("observability/queries", () => {
       expect(snapshot.executions.recent).toHaveLength(1);
       expect(snapshot.tool_calls.total_count).toBe(1);
       expect(snapshot.outbound.total_count).toBe(1);
-      expect(snapshot.mailbox_summary).not.toBeNull();
-      expect(snapshot.mailbox_summary!.pending_outbound_commands).toBe(1);
+      expect(snapshot.scope_summary).not.toBeNull();
+      expect(snapshot.scope_summary!.pending_outbound_commands).toBe(1);
     });
   });
 
@@ -400,7 +400,7 @@ describe("observability/queries", () => {
       const result = getActiveLeases(coordinatorStore);
       expect(result).toHaveLength(1);
       expect(result[0]!.lease_id).toBe("ls-1");
-      expect(result[0]!.conversation_id).toBe("conv-1");
+      expect(result[0]!.context_id).toBe("conv-1");
       expect(result[0]!.work_item_status).toBe("leased");
     });
 
@@ -435,7 +435,7 @@ describe("observability/queries", () => {
       const result = getRecentStaleLeaseRecoveries(coordinatorStore);
       expect(result).toHaveLength(1);
       expect(result[0]!.reason).toBe("abandoned");
-      expect(result[0]!.conversation_id).toBe("conv-1");
+      expect(result[0]!.context_id).toBe("conv-1");
     });
 
     it("getQuiescenceIndicator reflects backlog and stale leases", () => {

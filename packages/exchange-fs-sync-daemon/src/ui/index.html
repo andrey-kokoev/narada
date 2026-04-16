@@ -254,7 +254,6 @@
     </header>
     <menu>
       <li><a href="#overview" class="active" data-page="overview">Overview</a></li>
-      <li><a href="#mailbox" data-page="mailbox">Mailbox</a></li>
       <li><a href="#timeline" data-page="timeline">Timeline</a></li>
       <li><a href="#facts" data-page="facts">Facts</a></li>
       <li><a href="#contexts" data-page="contexts">Contexts</a></li>
@@ -262,7 +261,9 @@
       <li><a href="#intents" data-page="intents">Intents</a></li>
       <li><a href="#executions" data-page="executions">Executions</a></li>
       <li><a href="#workers" data-page="workers">Workers</a></li>
+      <li><a href="#operability" data-page="operability">Operability</a></li>
       <li><a href="#failures" data-page="failures">Failures</a></li>
+      <li><a href="#verticals" data-page="verticals">Verticals</a></li>
     </menu>
   </nav>
 
@@ -272,8 +273,6 @@
       <input id="searchInput" type="text" placeholder="Filter by ID, status, or type…" />
       <div class="spacer"></div>
       <span class="status" id="statusText">Loading scopes…</span>
-      <button id="redispatchBtn" title="Trigger dispatch phase">Redispatch</button>
-      <button id="rebuildBtn" title="Rebuild filesystem views">Rebuild views</button>
       <button id="refreshBtn" class="primary">Refresh</button>
     </div>
 
@@ -366,28 +365,70 @@
     }
 
     async function loadOverview() {
-      const { snapshot } = await api(`/scopes/${encodeURIComponent(currentScope)}/snapshot`);
-      const cp = snapshot.control_plane;
-      const proc = snapshot.process_executions;
-      const intents = snapshot.intents;
-      const workers = snapshot.workers;
+      const { overview } = await api(`/scopes/${encodeURIComponent(currentScope)}/overview`);
+      const scope = overview.scopes.find(s => s.scope_id === currentScope) || overview.scopes[0];
+      const factRows = Object.entries(overview.facts.by_vertical).map(([vertical, count]) => `
+        <tr><td>${esc(vertical)}</td><td>${esc(count)}</td></tr>
+      `).join('');
+      const failureRows = filterRows(overview.recent_failures, ["scope_id", "vertical", "context_id", "work_item_id"]).map(f => `
+        <tr>
+          <td>${esc(f.scope_id)}</td>
+          <td>${esc(f.vertical)}</td>
+          <td class="mono truncate"><a class="link" data-context-id="${esc(f.context_id)}">${esc(f.context_id)}</a></td>
+          <td class="mono truncate">${f.work_item_id ? `<a class="link" data-work-item-id="${esc(f.work_item_id)}">${esc(f.work_item_id)}</a>` : '—'}</td>
+          <td>${fmtDate(f.failed_at)}</td>
+          <td class="truncate" title="${esc(f.error_message || '')}">${esc(f.error_message || '—')}</td>
+        </tr>
+      `).join('');
 
       $("content").innerHTML = `
         <div class="metrics">
-          <div class="metric"><div class="value">${esc(cp.work_items.total_count)}</div><div class="label">Work items</div></div>
-          <div class="metric"><div class="value">${esc(cp.executions.total_count)}</div><div class="label">Executions</div></div>
-          <div class="metric"><div class="value">${esc(intents.total_count)}</div><div class="label">Intents</div></div>
-          <div class="metric"><div class="value">${esc(cp.outbound.total_count)}</div><div class="label">Outbound</div></div>
-          <div class="metric"><div class="value">${esc(proc.total_count)}</div><div class="label">Process runs</div></div>
-          <div class="metric"><div class="value">${esc(workers.length)}</div><div class="label">Workers</div></div>
+          <div class="metric"><div class="value">${esc(overview.global.total_work_items)}</div><div class="label">Work items</div></div>
+          <div class="metric"><div class="value">${esc(overview.global.total_active_executions)}</div><div class="label">Active executions</div></div>
+          <div class="metric"><div class="value">${esc(overview.global.total_pending_intents)}</div><div class="label">Pending intents</div></div>
+          <div class="metric"><div class="value">${esc(overview.global.total_recent_facts)}</div><div class="label">24h facts</div></div>
+          <div class="metric"><div class="value">${esc(overview.global.total_recent_failures)}</div><div class="label">24h failures</div></div>
+        </div>
+        ${scope ? `
+          <div class="card">
+            <h3>Scope: ${esc(scope.scope_id)}</h3>
+            <div style="margin-bottom:12px;">
+              <strong>Active verticals:</strong>
+              ${scope.active_verticals.length ? scope.active_verticals.map(v => `<span class="badge">${esc(v)}</span>`).join(' ') : '<span class="badge">—</span>'}
+            </div>
+            <div style="margin-bottom:12px; font-size:12px; color:var(--text-secondary);">
+              Last activity: ${scope.last_activity_at ? fmtDate(scope.last_activity_at) : '—'}
+            </div>
+            <div class="metrics">
+              <div class="metric"><div class="value">${esc(scope.work_items.opened)}</div><div class="label">Opened</div></div>
+              <div class="metric"><div class="value">${esc(scope.work_items.leased)}</div><div class="label">Leased</div></div>
+              <div class="metric"><div class="value">${esc(scope.work_items.executing)}</div><div class="label">Executing</div></div>
+              <div class="metric"><div class="value">${esc(scope.work_items.failed_retryable)}</div><div class="label">Failed (retryable)</div></div>
+              <div class="metric"><div class="value">${esc(scope.work_items.failed_terminal)}</div><div class="label">Failed (terminal)</div></div>
+              <div class="metric"><div class="value">${esc(scope.intents.pending)}</div><div class="label">Pending intents</div></div>
+              <div class="metric"><div class="value">${esc(scope.intents.executing)}</div><div class="label">Executing intents</div></div>
+              <div class="metric"><div class="value">${esc(scope.executions.active)}</div><div class="label">Active executions</div></div>
+              <div class="metric"><div class="value">${esc(scope.executions.failed_recent)}</div><div class="label">Failed executions</div></div>
+            </div>
+          </div>
+        ` : ''}
+        <div class="card">
+          <h3>Fact volume by vertical (24h)</h3>
+          ${factRows.length ? `
+            <table>
+              <thead><tr><th>Vertical</th><th>Count</th></tr></thead>
+              <tbody>${factRows}</tbody>
+            </table>
+          ` : '<div class="empty">No recent facts.</div>'}
         </div>
         <div class="card">
-          <h3>Active work items</h3>
-          ${cp.work_items.active.length ? renderWorkItems(cp.work_items.active.slice(0, 10)) : '<div class="empty">None</div>'}
-        </div>
-        <div class="card">
-          <h3>Pending intents</h3>
-          ${intents.pending.length ? renderIntents(intents.pending.slice(0, 10)) : '<div class="empty">None</div>'}
+          <h3>Recent failures (${esc(filterRows(overview.recent_failures, ["scope_id", "vertical", "context_id", "work_item_id"]).length)})</h3>
+          ${failureRows.length ? `
+            <table>
+              <thead><tr><th>Scope</th><th>Vertical</th><th>Context</th><th>Work item</th><th>Failed at</th><th>Error</th></tr></thead>
+              <tbody>${failureRows}</tbody>
+            </table>
+          ` : '<div class="empty">No recent failures.</div>'}
         </div>
       `;
       bindDetailLinks();
@@ -416,7 +457,7 @@
           <td class="mono truncate">${esc(r.outbound_id)}</td>
           <td class="mono">${esc(r.action_type)}</td>
           <td>${badge(r.status)}</td>
-          <td class="mono truncate"><a class="link" data-context-id="${esc(r.conversation_id)}">${esc(r.conversation_id)}</a></td>
+          <td class="mono truncate"><a class="link" data-context-id="${esc(r.context_id)}">${esc(r.context_id)}</a></td>
           <td>${fmtDate(r.submitted_at)}</td>
           <td>${fmtDate(r.confirmed_at)}</td>
         </tr>
@@ -462,6 +503,47 @@
         </div>
       `;
       bindDetailLinks();
+    }
+
+    async function loadVerticals() {
+      $("content").innerHTML = `
+        <div class="card">
+          <h3>Available verticals</h3>
+          <p style="color:var(--text-secondary);font-size:13px;margin-top:0;">
+            Vertical-specific views sit above the kernel-neutral shell.
+          </p>
+          <table>
+            <thead><tr><th>Vertical</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><a class="link" data-vertical="mailbox">Mailbox</a></td>
+                <td>Conversation threads, outbound commands, and charter outputs for mail.</td>
+              </tr>
+              <tr>
+                <td>Timer</td>
+                <td>Scheduled jobs and tick events from timer sources.</td>
+              </tr>
+              <tr>
+                <td>Filesystem</td>
+                <td>File change events and scan results from filesystem sources.</td>
+              </tr>
+              <tr>
+                <td>Webhook</td>
+                <td>Incoming webhook payloads and asynchronous push events.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+      $$('a[data-vertical]').forEach(a => a.addEventListener('click', (e) => {
+        e.preventDefault();
+        const vertical = a.dataset.vertical;
+        if (vertical === 'mailbox') {
+          currentPage = 'mailbox';
+          $$('nav menu li a').forEach(x => x.classList.remove('active'));
+          loadPage();
+        }
+      }));
     }
 
     async function loadFacts() {
@@ -557,6 +639,10 @@
         e.preventDefault();
         showFactDetail(a.dataset.factId);
       }));
+      $$('a[data-intent-id]').forEach(a => a.addEventListener('click', (e) => {
+        e.preventDefault();
+        showIntentDetail(a.dataset.intentId);
+      }));
     }
 
     async function loadWork() {
@@ -587,14 +673,14 @@
       bindDetailLinks();
     }
 
-    function renderIntents(items) {
+    function renderIntents(items, linkable = true) {
       return `
         <table>
           <thead><tr><th>Intent ID</th><th>Type</th><th>Family</th><th>Status</th><th>Context ID</th><th>Created</th></tr></thead>
           <tbody>
             ${items.map(r => `
               <tr>
-                <td class="mono truncate" title="${esc(r.intent_id)}">${esc(r.intent_id)}</td>
+                <td class="mono truncate" title="${esc(r.intent_id)}">${linkable ? `<a class="link" data-intent-id="${esc(r.intent_id)}">${esc(r.intent_id)}</a>` : esc(r.intent_id)}</td>
                 <td class="mono">${esc(r.intent_type)}</td>
                 <td class="mono">${esc(r.executor_family)}</td>
                 <td>${badge(r.status)}</td>
@@ -623,50 +709,103 @@
           ${rows.length ? renderIntents(rows) : '<div class="empty">No intents match.</div>'}
         </div>
       `;
+      bindDetailLinks();
     }
 
     async function loadExecutions() {
-      const { charter_executions, process_executions } = await api(`/scopes/${encodeURIComponent(currentScope)}/executions`);
-      const rows = filterRows(charter_executions, ["execution_id", "work_item_id", "status"]);
-      const procRows = filterRows(process_executions.active.concat(process_executions.recent), ["execution_id", "command", "status"]);
+      const [
+        { recent: intentRecent, failed_recent: intentFailed, total_count: intentTotal },
+        { executions: processExecs },
+        { executions: mailExecs },
+      ] = await Promise.all([
+        api(`/scopes/${encodeURIComponent(currentScope)}/intent-executions`),
+        api(`/scopes/${encodeURIComponent(currentScope)}/process-executions`),
+        api(`/scopes/${encodeURIComponent(currentScope)}/mail-executions`),
+      ]);
+
+      const intentRows = filterRows(intentRecent.concat(intentFailed), ["intent_id", "intent_type", "executor_family", "status"]);
+      const procRows = filterRows(processExecs, ["execution_id", "command", "status"]);
+      const mailRows = filterRows(mailExecs, ["outbound_id", "action_type", "status"]);
+
+      const intentTable = intentRows.length ? `
+        <table>
+          <thead><tr><th>Intent ID</th><th>Type</th><th>Family</th><th>Phase</th><th>Confirmation</th><th>Status</th><th>Updated</th></tr></thead>
+          <tbody>
+            ${intentRows.map(r => `
+              <tr>
+                <td class="mono truncate"><a class="link" data-intent-id="${esc(r.intent_id)}">${esc(r.intent_id)}</a></td>
+                <td class="mono">${esc(r.intent_type)}</td>
+                <td class="mono">${esc(r.executor_family)}</td>
+                <td>${badge(r.phase)}</td>
+                <td>${badge(r.confirmation_status)}</td>
+                <td>${badge(r.intent_status)}</td>
+                <td>${fmtDate(r.updated_at)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      ` : '<div class="empty">None</div>';
+
+      const procTable = procRows.length ? `
+        <table>
+          <thead><tr><th>Execution ID</th><th>Intent</th><th>Command</th><th>Phase</th><th>Confirmation</th><th>Exit</th><th>Started</th></tr></thead>
+          <tbody>
+            ${procRows.map(r => `
+              <tr>
+                <td class="mono truncate">${esc(r.execution_id)}</td>
+                <td class="mono truncate"><a class="link" data-intent-id="${esc(r.intent_id)}">${esc(r.intent_id)}</a></td>
+                <td class="mono truncate">${esc(r.command)}</td>
+                <td>${badge(r.phase)}</td>
+                <td>${badge(r.confirmation_status)}</td>
+                <td>${r.exit_code !== null ? esc(r.exit_code) : '—'}</td>
+                <td>${fmtDate(r.started_at)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      ` : '<div class="empty">None</div>';
+
+      const mailTable = mailRows.length ? `
+        <table>
+          <thead><tr><th>Outbound ID</th><th>Action</th><th>Status</th><th>Submitted</th><th>Confirmed</th><th>Transitions</th></tr></thead>
+          <tbody>
+            ${mailRows.map(r => `
+              <tr>
+                <td class="mono truncate">${esc(r.outbound_id)}</td>
+                <td class="mono">${esc(r.action_type)}</td>
+                <td>${badge(r.status)}</td>
+                <td>${fmtDate(r.submitted_at)}</td>
+                <td>${fmtDate(r.confirmed_at)}</td>
+                <td>${esc(r.transitions.length)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      ` : '<div class="empty">None</div>';
+
       $("content").innerHTML = `
+        <div class="metrics">
+          <div class="metric"><div class="value">${esc(intentTotal)}</div><div class="label">Intent executions</div></div>
+          <div class="metric"><div class="value">${esc(procRows.length)}</div><div class="label">Process runs</div></div>
+          <div class="metric"><div class="value">${esc(mailRows.length)}</div><div class="label">Mail handoffs</div></div>
+        </div>
         <div class="card">
-          <h3>Charter executions (${esc(rows.length)})</h3>
-          ${rows.length ? `
-            <table>
-              <thead><tr><th>Execution ID</th><th>Work item</th><th>Status</th><th>Started</th></tr></thead>
-              <tbody>
-                ${rows.map(r => `
-                  <tr>
-                    <td class="mono truncate" title="${esc(r.execution_id)}">${esc(r.execution_id)}</td>
-                    <td class="mono truncate" title="${esc(r.work_item_id)}">${esc(r.work_item_id)}</td>
-                    <td>${badge(r.status)}</td>
-                    <td>${fmtDate(r.started_at)}</td>
-                  </tr>
-                `).join("")}
-              </tbody>
-            </table>
-          ` : '<div class="empty">None</div>'}
+          <h3>Intent executions (${esc(intentRows.length)})</h3>
+          <p style="color:var(--text-secondary);font-size:12px;margin-top:0;">Unified view of intent status, execution phase, and confirmation outcome.</p>
+          ${intentTable}
         </div>
         <div class="card">
           <h3>Process executions (${esc(procRows.length)})</h3>
-          ${procRows.length ? `
-            <table>
-              <thead><tr><th>Execution ID</th><th>Command</th><th>Status</th><th>Started</th></tr></thead>
-              <tbody>
-                ${procRows.map(r => `
-                  <tr>
-                    <td class="mono truncate" title="${esc(r.execution_id)}">${esc(r.execution_id)}</td>
-                    <td class="mono truncate" title="${esc(r.command)}">${esc(r.command)}</td>
-                    <td>${badge(r.status)}</td>
-                    <td>${fmtDate(r.started_at)}</td>
-                  </tr>
-                `).join("")}
-              </tbody>
-            </table>
-          ` : '<div class="empty">None</div>'}
+          <p style="color:var(--text-secondary);font-size:12px;margin-top:0;">Process family executions with phase and confirmation state.</p>
+          ${procTable}
+        </div>
+        <div class="card">
+          <h3>Mail executions (${esc(mailRows.length)})</h3>
+          <p style="color:var(--text-secondary);font-size:12px;margin-top:0;">Mail family executions (outbound commands) with status transitions.</p>
+          ${mailTable}
         </div>
       `;
+      bindDetailLinks();
     }
 
     async function loadWorkers() {
@@ -694,6 +833,80 @@
           ` : '<div class="empty">No workers match.</div>'}
         </div>
       `;
+    }
+
+    async function loadOperability() {
+      const [{ indicator }, { leases }, { recoveries }] = await Promise.all([
+        api(`/scopes/${encodeURIComponent(currentScope)}/quiescence`),
+        api(`/scopes/${encodeURIComponent(currentScope)}/leases`),
+        api(`/scopes/${encodeURIComponent(currentScope)}/lease-recoveries`),
+      ]);
+      const leaseRows = filterRows(leases, ["lease_id", "work_item_id", "runner_id"]);
+      const recoveryRows = filterRows(recoveries, ["lease_id", "work_item_id", "runner_id"]);
+      $("content").innerHTML = `
+        <div class="card">
+          <h3>Quiescence</h3>
+          <div class="metrics">
+            <div class="metric"><div class="value">${esc(indicator.opened_count)}</div><div class="label">Opened</div></div>
+            <div class="metric"><div class="value">${esc(indicator.leased_count)}</div><div class="label">Leased</div></div>
+            <div class="metric"><div class="value">${esc(indicator.executing_count)}</div><div class="label">Executing</div></div>
+            <div class="metric"><div class="value">${esc(indicator.failed_retryable_count)}</div><div class="label">Failed (retryable)</div></div>
+            <div class="metric"><div class="value">${esc(indicator.awaiting_retry_count)}</div><div class="label">Awaiting retry</div></div>
+            <div class="metric"><div class="value">${esc(indicator.stale_lease_count)}</div><div class="label">Stale leases</div></div>
+            <div class="metric"><div class="value">${esc(indicator.active_lease_count)}</div><div class="label">Active leases</div></div>
+          </div>
+          <div style="margin-top:12px;">
+            <span class="badge ${indicator.is_quiescent ? 'success' : 'warning'}">${indicator.is_quiescent ? 'Quiescent' : 'Active'}</span>
+            <span class="badge ${indicator.has_stale_leases ? 'danger' : 'success'}">${indicator.has_stale_leases ? 'Has stale leases' : 'No stale leases'}</span>
+            <span class="badge ${(indicator.opened_count > 0 || indicator.awaiting_retry_count > 0) ? 'warning' : 'success'}">${(indicator.opened_count > 0 || indicator.awaiting_retry_count > 0) ? 'Has backlog' : 'No backlog'}</span>
+          </div>
+          ${indicator.oldest_lease_acquired_at ? `
+            <div style="margin-top:12px; font-size:12px; color:var(--text-secondary);">
+              Oldest active lease acquired at ${fmtDate(indicator.oldest_lease_acquired_at)}
+            </div>
+          ` : ''}
+        </div>
+        <div class="card">
+          <h3>Active leases (${esc(leaseRows.length)})</h3>
+          ${leaseRows.length ? `
+            <table>
+              <thead><tr><th>Lease ID</th><th>Work item</th><th>Runner</th><th>Acquired</th><th>Expires</th><th>Status</th></tr></thead>
+              <tbody>
+                ${leaseRows.map(r => `
+                  <tr>
+                    <td class="mono truncate" title="${esc(r.lease_id)}">${esc(r.lease_id)}</td>
+                    <td class="mono truncate" title="${esc(r.work_item_id)}"><a class="link" data-work-item-id="${esc(r.work_item_id)}">${esc(r.work_item_id)}</a></td>
+                    <td class="mono truncate" title="${esc(r.runner_id)}">${esc(r.runner_id)}</td>
+                    <td>${fmtDate(r.acquired_at)}</td>
+                    <td>${fmtDate(r.expires_at)}</td>
+                    <td>${badge(r.work_item_status)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          ` : '<div class="empty">No active leases.</div>'}
+        </div>
+        <div class="card">
+          <h3>Recent stale lease recoveries (${esc(recoveryRows.length)})</h3>
+          ${recoveryRows.length ? `
+            <table>
+              <thead><tr><th>Lease ID</th><th>Work item</th><th>Runner</th><th>Recovered at</th><th>Reason</th></tr></thead>
+              <tbody>
+                ${recoveryRows.map(r => `
+                  <tr>
+                    <td class="mono truncate" title="${esc(r.lease_id)}">${esc(r.lease_id)}</td>
+                    <td class="mono truncate" title="${esc(r.work_item_id)}"><a class="link" data-work-item-id="${esc(r.work_item_id)}">${esc(r.work_item_id)}</a></td>
+                    <td class="mono truncate" title="${esc(r.runner_id)}">${esc(r.runner_id)}</td>
+                    <td>${fmtDate(r.recovered_at)}</td>
+                    <td>${esc(r.reason)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          ` : '<div class="empty">No recent recoveries.</div>'}
+        </div>
+      `;
+      bindDetailLinks();
     }
 
     async function loadFailures() {
@@ -847,6 +1060,45 @@
         `;
         bindDetailLinks();
         $("statusText").textContent = `Scope: ${esc(currentScope)} · fact · ${esc(factId)}`;
+      } catch (err) {
+        if (err.name !== "AbortError") setError(err);
+      }
+    }
+
+    async function showIntentDetail(intentId) {
+      detailState = { type: 'intent', id: intentId, returnPage: currentPage };
+      setLoading();
+      try {
+        const { transitions } = await api(`/scopes/${encodeURIComponent(currentScope)}/intents/${encodeURIComponent(intentId)}/lifecycle`);
+        $("content").innerHTML = `
+          <div class="breadcrumb">
+            <button onclick="restoreDetailState()">← Back</button>
+            <span>Intent lifecycle</span>
+          </div>
+          <div class="card">
+            <h3>Intent ${esc(intentId)}</h3>
+            <p style="color:var(--text-secondary);font-size:13px;margin-top:0;">
+              Chronological transitions across intent admission, execution phase, and confirmation.
+            </p>
+            ${transitions.length ? `
+              <table>
+                <thead><tr><th>At</th><th>From</th><th>To</th><th>Source</th><th>Detail</th></tr></thead>
+                <tbody>
+                  ${transitions.map(t => `
+                    <tr>
+                      <td>${fmtDate(t.transition_at)}</td>
+                      <td>${t.from_status ? badge(t.from_status) : '—'}</td>
+                      <td>${badge(t.to_status)}</td>
+                      <td class="mono">${esc(t.source)}</td>
+                      <td>${esc(t.detail || '—')}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            ` : '<div class="empty">No lifecycle transitions found.</div>'}
+          </div>
+        `;
+        $("statusText").textContent = `Scope: ${esc(currentScope)} · intent · ${esc(intentId)}`;
       } catch (err) {
         if (err.name !== "AbortError") setError(err);
       }
@@ -1052,7 +1304,6 @@
       try {
         const map = {
           overview: loadOverview,
-          mailbox: loadMailbox,
           timeline: loadTimeline,
           facts: loadFacts,
           contexts: loadContexts,
@@ -1060,7 +1311,10 @@
           intents: loadIntents,
           executions: loadExecutions,
           workers: loadWorkers,
+          operability: loadOperability,
           failures: loadFailures,
+          verticals: loadVerticals,
+          mailbox: loadMailbox,
         };
         await map[currentPage]();
         $("statusText").textContent = `Scope: ${esc(currentScope)} · ${esc(currentPage)}`;
@@ -1075,25 +1329,6 @@
     });
 
     $("refreshBtn").addEventListener("click", () => loadPage());
-
-    $("rebuildBtn").addEventListener("click", async () => {
-      try {
-        const result = await apiPost(`/scopes/${encodeURIComponent(currentScope)}/actions`, { action_type: "rebuild_views" });
-        $("statusText").textContent = `Views rebuilt (${result.request_id})`;
-      } catch (err) {
-        setError(err);
-      }
-    });
-
-    $("redispatchBtn").addEventListener("click", async () => {
-      try {
-        const result = await apiPost(`/scopes/${encodeURIComponent(currentScope)}/actions`, { action_type: "request_redispatch" });
-        $("statusText").textContent = `Redispatch requested (${result.request_id})`;
-        setTimeout(() => loadPage(), 500);
-      } catch (err) {
-        setError(err);
-      }
-    });
 
     $("searchInput").addEventListener("input", () => {
       if (currentScope) loadPage();

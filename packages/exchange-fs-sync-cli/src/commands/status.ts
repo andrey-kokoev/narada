@@ -16,7 +16,7 @@ import {
 // Lazy-load better-sqlite3 to avoid eager native-module load in test environments
 async function loadControlPlaneSnapshot(
   dbPath: string,
-  mailboxId: string,
+  scopeId: string,
 ): Promise<ControlPlaneStatusSnapshot | undefined> {
   const { Database, SqliteCoordinatorStore, SqliteOutboundStore, buildControlPlaneSnapshot } = await import(
     '@narada/exchange-fs-sync'
@@ -25,7 +25,7 @@ async function loadControlPlaneSnapshot(
   try {
     const coordinatorStore = new SqliteCoordinatorStore({ db });
     const outboundStore = new SqliteOutboundStore({ db });
-    return buildControlPlaneSnapshot(coordinatorStore, outboundStore, mailboxId);
+    return buildControlPlaneSnapshot(coordinatorStore, outboundStore, scopeId);
   } finally {
     db.close();
   }

@@ -14,7 +14,7 @@ import type { WorkerRegistryView } from "../workers/registry.js";
 import type {
   ControlPlaneStatusSnapshot,
   ExecutionAttemptSummary,
-  MailboxDispatchSummary,
+  ScopeDispatchSummary,
   OutboundHandoffSummary,
   ToolCallSummary,
   WorkItemLifecycleSummary,
@@ -109,8 +109,8 @@ function rowToToolCallSummary(row: Record<string, unknown>): ToolCallSummary {
 function rowToOutboundSummary(row: Record<string, unknown>): OutboundHandoffSummary {
   return {
     outbound_id: String(row.outbound_id),
-    conversation_id: String(row.conversation_id),
-    mailbox_id: String(row.mailbox_id),
+    context_id: String(row.context_id),
+    scope_id: String(row.scope_id),
     action_type: String(row.action_type),
     status: String(row.status) as OutboundHandoffSummary["status"],
     latest_version: Number(row.latest_version ?? 1),
@@ -173,7 +173,19 @@ export function getRecentOutboundCommands(
 ): OutboundHandoffSummary[] {
   const rows = outboundStore.db
     .prepare(
-      `select * from outbound_commands
+      `select
+         outbound_id,
+         conversation_id as context_id,
+         mailbox_id as scope_id,
+         action_type,
+         status,
+         latest_version,
+         created_at,
+         submitted_at,
+         confirmed_at,
+         terminal_reason,
+         idempotency_key
+       from outbound_commands
        order by created_at desc
        limit ?`,
     )
@@ -227,45 +239,45 @@ export function getToolCallSummary(
   };
 }
 
-export function buildMailboxDispatchSummary(
+export function buildScopeDispatchSummary(
   store: CoordinatorStoreView,
   outboundStore: OutboundStoreView,
-  mailboxId: string,
-): MailboxDispatchSummary {
+  scopeId: string,
+): ScopeDispatchSummary {
   const active = store.db
     .prepare(`select count(*) as c from work_items where scope_id = ? and status = 'opened'`)
-    .get(mailboxId) as { c: number };
+    .get(scopeId) as { c: number };
   const leased = store.db
     .prepare(`select count(*) as c from work_items where scope_id = ? and status = 'leased'`)
-    .get(mailboxId) as { c: number };
+    .get(scopeId) as { c: number };
   const executing = store.db
     .prepare(`select count(*) as c from work_items where scope_id = ? and status = 'executing'`)
-    .get(mailboxId) as { c: number };
+    .get(scopeId) as { c: number };
   const failedRetryable = store.db
     .prepare(`select count(*) as c from work_items where scope_id = ? and status = 'failed_retryable'`)
-    .get(mailboxId) as { c: number };
+    .get(scopeId) as { c: number };
   const failedTerminal = store.db
     .prepare(`select count(*) as c from work_items where scope_id = ? and status = 'failed_terminal'`)
-    .get(mailboxId) as { c: number };
+    .get(scopeId) as { c: number };
   const pendingOutbound = outboundStore.db
     .prepare(
       `select count(*) as c from outbound_commands where mailbox_id = ? and status in ('pending', 'draft_creating', 'draft_ready')`,
     )
-    .get(mailboxId) as { c: number };
+    .get(scopeId) as { c: number };
   const recentDecisions = store.db
     .prepare(
       `select count(*) as c from foreman_decisions where scope_id = ? and decided_at >= datetime('now', '-24 hours')`,
     )
-    .get(mailboxId) as { c: number };
+    .get(scopeId) as { c: number };
 
   const lastSync = store.db
     .prepare(
       `select max(updated_at) as last_sync from work_items where scope_id = ?`,
     )
-    .get(mailboxId) as { last_sync: string | null };
+    .get(scopeId) as { last_sync: string | null };
 
   return {
-    mailbox_id: mailboxId,
+    scope_id: scopeId,
     last_sync_at: lastSync.last_sync,
     active_work_items: active.c,
     leased_work_items: leased.c,
@@ -289,7 +301,7 @@ export function getActiveLeases(
          l.runner_id,
          l.acquired_at,
          l.expires_at,
-         w.context_id as conversation_id,
+         w.context_id as context_id,
          w.status as work_item_status
        from work_item_leases l
        join work_items w on w.work_item_id = l.work_item_id
@@ -302,7 +314,7 @@ export function getActiveLeases(
   return rows.map((row) => ({
     lease_id: String(row.lease_id),
     work_item_id: String(row.work_item_id),
-    conversation_id: String(row.conversation_id),
+    context_id: String(row.context_id),
     runner_id: String(row.runner_id),
     acquired_at: String(row.acquired_at),
     expires_at: String(row.expires_at),
@@ -322,7 +334,7 @@ export function getRecentStaleLeaseRecoveries(
          l.runner_id,
          l.released_at as recovered_at,
          l.release_reason as reason,
-         w.context_id as conversation_id
+         w.context_id as context_id
        from work_item_leases l
        join work_items w on w.work_item_id = l.work_item_id
        where l.release_reason = 'abandoned'
@@ -334,7 +346,7 @@ export function getRecentStaleLeaseRecoveries(
   return rows.map((row) => ({
     lease_id: String(row.lease_id),
     work_item_id: String(row.work_item_id),
-    conversation_id: String(row.conversation_id),
+    context_id: String(row.context_id),
     runner_id: String(row.runner_id),
     recovered_at: String(row.recovered_at),
     reason: String(row.reason),
@@ -384,7 +396,7 @@ export function getQuiescenceIndicator(
 export function buildControlPlaneSnapshot(
   coordinatorStore: CoordinatorStoreView,
   outboundStore: OutboundStoreView,
-  mailboxId?: string,
+  scopeId?: string,
 ): ControlPlaneStatusSnapshot {
   const capturedAt = new Date().toISOString();
 
@@ -416,8 +428,8 @@ export function buildControlPlaneSnapshot(
     .prepare(`select count(*) as c from work_items`)
     .get() as { c: number };
 
-  const mailboxSummary = mailboxId
-    ? buildMailboxDispatchSummary(coordinatorStore, outboundStore, mailboxId)
+  const scopeSummary = scopeId
+    ? buildScopeDispatchSummary(coordinatorStore, outboundStore, scopeId)
     : null;
 
   const activeLeases = getActiveLeases(coordinatorStore, 50);
@@ -463,7 +475,7 @@ export function buildControlPlaneSnapshot(
       total_count: recoveryTotal.c,
     },
     quiescence,
-    mailbox_summary: mailboxSummary,
+    scope_summary: scopeSummary,
   };
 }
 
@@ -905,6 +917,10 @@ export function getMailboxVerticalView(
               last_message_at, last_inbound_at, last_outbound_at, created_at, updated_at
        from conversation_records
        where mailbox_id = ?
+         and conversation_id not like 'timer:%'
+         and conversation_id not like 'webhook:%'
+         and conversation_id not like 'fs:%'
+         and conversation_id not like 'filesystem:%'
        order by updated_at desc
        limit 100`,
     )
@@ -924,7 +940,7 @@ export function getMailboxVerticalView(
   }));
 
   const outbound = getRecentOutboundCommands(outboundStore, 50).filter(
-    (o) => o.mailbox_id === scopeId,
+    (o) => o.scope_id === scopeId,
   );
 
   const outputRows = coordinatorStore.db
@@ -1080,7 +1096,7 @@ export function getContextTimeline(
 
   return {
     context: context
-      ? rowToConversationRecord(context as unknown as Record<string, unknown>)
+      ? rowToContextSummary(context as unknown as Record<string, unknown>)
       : null,
     revisions: revisionRows.map((r) => ({
       ordinal: r.ordinal,
@@ -1092,7 +1108,7 @@ export function getContextTimeline(
   };
 }
 
-function rowToConversationRecord(row: Record<string, unknown>): ContextSummary {
+function rowToContextSummary(row: Record<string, unknown>): ContextSummary {
   return {
     context_id: String(row.conversation_id),
     scope_id: String(row.mailbox_id),
@@ -1473,7 +1489,7 @@ export function buildObservationPlaneSnapshot(
   outboundStore: OutboundStoreView,
   intentStore: IntentStoreView,
   executionStore: ProcessExecutionStoreView,
-  mailboxId?: string,
+  scopeId?: string,
 ): ObservationPlaneSnapshot {
   const capturedAt = new Date().toISOString();
 
@@ -1489,7 +1505,7 @@ export function buildObservationPlaneSnapshot(
       },
     },
     workers: getWorkerStatuses(registry, coordinatorStore, intentStore, executionStore),
-    control_plane: buildControlPlaneSnapshot(coordinatorStore, outboundStore, mailboxId),
+    control_plane: buildControlPlaneSnapshot(coordinatorStore, outboundStore, scopeId),
     process_executions: getProcessExecutionSummaries(executionStore, 50),
     intents: getIntentSummaries(intentStore),
     intent_executions: getIntentExecutionSummaries(intentStore, 50),

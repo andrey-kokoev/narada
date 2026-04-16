@@ -506,6 +506,21 @@ The observation plane (`src/observability/`) provides **read-only, derived views
 2. Observation must remain accurate even if all logs and traces are dropped.
 3. Operator visibility must not require terminal attachment.
 
+### UI Authority Guardrails (Task 073)
+The observation UI must remain a **projection** of durable state and must not become a hidden control plane.
+
+| Guard | Enforcement |
+|-------|-------------|
+| **Read-mostly semantics** | `observation-server.ts` allows only `GET` (derived reads) and a single audited `POST /actions` endpoint. All other HTTP methods return `405`. |
+| **No direct store mutations** | Route handlers receive `*View` store interfaces (`CoordinatorStoreView`, `IntentStoreView`, `OutboundStoreView`, `ProcessExecutionStoreView`). These types omit all write methods at compile time. |
+| **No intent boundary bypass** | The UI cannot call `intentStore.admit()` or `intentStore.updateStatus()` — those methods are stripped from `IntentStoreView`. |
+| **No scheduler/foreman bypass** | The UI cannot create work items, record leases, release leases, or inject foreman decisions. `CoordinatorStoreView` excludes `insertWorkItem`, `insertLease`, `releaseLease`, `insertDecision`, etc. |
+| **Audited operator actions only** | The sole permitted write path is `executeOperatorAction()` in `operator-actions.ts`. Every action is validated, logged to `operator_action_requests`, and restricted to a safelisted set (`retry_work_item`, `acknowledge_alert`, `rebuild_views`, `request_redispatch`). |
+| **Data-source transparency** | Every major snapshot includes `_meta.source_classifications` marking fields as `authoritative` (mirrors a durable row), `derived` (computed projection), or `decorative` (presentational only). |
+
+### Contribution rule
+> **If you are adding a UI-facing endpoint that writes to durable state, it must go through `operator-actions.ts` and use a `*View` store type. Direct store mutation from a route handler is prohibited.**
+
 ---
 
 ## Toolchain

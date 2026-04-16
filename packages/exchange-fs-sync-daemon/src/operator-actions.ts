@@ -17,11 +17,14 @@ import type {
   OperatorActionRequest,
 } from "@narada/exchange-fs-sync";
 
-export type OperatorActionType =
-  | "retry_work_item"
-  | "acknowledge_alert"
-  | "rebuild_views"
-  | "request_redispatch";
+export const PERMITTED_OPERATOR_ACTIONS = [
+  "retry_work_item",
+  "acknowledge_alert",
+  "rebuild_views",
+  "request_redispatch",
+] as const;
+
+export type OperatorActionType = (typeof PERMITTED_OPERATOR_ACTIONS)[number];
 
 export interface OperatorActionPayload {
   action_type: OperatorActionType;
