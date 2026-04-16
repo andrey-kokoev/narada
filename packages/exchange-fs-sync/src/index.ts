@@ -119,6 +119,7 @@ export type {
   Evaluation,
   ToolCallRecord,
   ToolCallStatus,
+  OperatorActionRequest,
 } from "./coordinator/types.js";
 export type { SqliteCoordinatorStoreOptions } from "./coordinator/store.js";
 export { deriveThreadId } from "./coordinator/thread-id.js";
@@ -382,6 +383,8 @@ export type {
   LeaseSummary,
   StaleLeaseRecoveryEvent,
   QuiescenceIndicator,
+  MailboxVerticalView,
+  MailboxConversationSummary,
 } from "./observability/types.js";
 export {
   OperatorErrorCategory,
@@ -408,6 +411,7 @@ export {
   getWorkerStatuses,
   getRecentFacts,
   getContextSummaries,
+  getMailboxVerticalView,
   getWorkItemTimeline,
   getContextTimeline,
   getFactTimeline,

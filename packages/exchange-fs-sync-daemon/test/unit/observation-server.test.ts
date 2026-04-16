@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
-import { get } from "node:http";
+import { get, request as httpRequest } from "node:http";
 import Database from "better-sqlite3";
 import {
   SqliteCoordinatorStore,
@@ -24,6 +24,29 @@ async function httpGetJson(url: string): Promise<unknown> {
         }
       });
     }).on("error", reject);
+  });
+}
+
+async function httpPostJson(url: string, body: unknown): Promise<{ status: number; data: unknown }> {
+  return new Promise((resolve, reject) => {
+    const req = httpRequest(
+      url,
+      { method: "POST", headers: { "Content-Type": "application/json" } },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          try {
+            resolve({ status: res.statusCode ?? 0, data: JSON.parse(data) });
+          } catch {
+            resolve({ status: res.statusCode ?? 0, data });
+          }
+        });
+      },
+    );
+    req.on("error", reject);
+    req.write(JSON.stringify(body));
+    req.end();
   });
 }
 
@@ -86,6 +109,23 @@ describe("observation server", () => {
     error_message: null,
     retry_count: 0,
     next_retry_at: null,
+    context_json: null,
+    created_at: "2026-04-13T12:00:00Z",
+    updated_at: "2026-04-13T12:00:00Z",
+  });
+
+  coordinatorStore.insertWorkItem({
+    work_item_id: "wi-failed",
+    context_id: "ctx-1",
+    scope_id: "scope-a",
+    status: "failed_retryable",
+    priority: 1,
+    opened_for_revision_id: "rev-1",
+    resolved_revision_id: null,
+    resolution_outcome: null,
+    error_message: "Test failure",
+    retry_count: 2,
+    next_retry_at: "2099-01-01T00:00:00Z",
     context_json: null,
     created_at: "2026-04-13T12:00:00Z",
     updated_at: "2026-04-13T12:00:00Z",
@@ -223,6 +263,38 @@ describe("observation server", () => {
     expect(body.workers[0].worker_id).toBe("process_executor");
   });
 
+  it("returns unified timeline", async () => {
+    const url = `${server.getUrl()}/scopes/scope-a/timeline`;
+    const body = (await httpGetJson(url)) as { scope_id: string; events: unknown[] };
+    expect(body.scope_id).toBe("scope-a");
+    expect(Array.isArray(body.events)).toBe(true);
+    expect(body.events.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("returns fact timeline", async () => {
+    const url = `${server.getUrl()}/scopes/scope-a/facts/fact-1/timeline`;
+    const body = (await httpGetJson(url)) as { scope_id: string; fact_id: string; timeline: { fact: { fact_id: string } | null } };
+    expect(body.scope_id).toBe("scope-a");
+    expect(body.fact_id).toBe("fact-1");
+    expect(body.timeline.fact?.fact_id).toBe("fact-1");
+  });
+
+  it("returns context timeline", async () => {
+    const url = `${server.getUrl()}/scopes/scope-a/contexts/ctx-1/timeline`;
+    const body = (await httpGetJson(url)) as { scope_id: string; context_id: string; timeline: { context: { context_id: string } | null } };
+    expect(body.scope_id).toBe("scope-a");
+    expect(body.context_id).toBe("ctx-1");
+    expect(body.timeline.context?.context_id).toBe("ctx-1");
+  });
+
+  it("returns work item timeline", async () => {
+    const url = `${server.getUrl()}/scopes/scope-a/work-items/wi-1/timeline`;
+    const body = (await httpGetJson(url)) as { scope_id: string; work_item_id: string; timeline: { work_item: { work_item_id: string } | null } };
+    expect(body.scope_id).toBe("scope-a");
+    expect(body.work_item_id).toBe("wi-1");
+    expect(body.timeline.work_item?.work_item_id).toBe("wi-1");
+  });
+
   it("returns health", async () => {
     const url = `${server.getUrl()}/health`;
     const body = (await httpGetJson(url)) as { status: string };
@@ -240,6 +312,7 @@ describe("observation server", () => {
     });
     expect(html).toContain("Narada Operator Console");
     expect(html).toContain("Overview");
+    expect(html).toContain("Timeline");
     expect(html).toContain("Facts");
     expect(html).toContain("Contexts");
     expect(html).toContain("Work");
@@ -253,5 +326,56 @@ describe("observation server", () => {
     const url = `${server.getUrl()}/scopes/unknown/snapshot`;
     const body = (await httpGetJson(url)) as { error: string };
     expect(body.error).toBe("Scope not found");
+  });
+
+  it("executes retry_work_item action", async () => {
+    const url = `${server.getUrl()}/scopes/scope-a/actions`;
+    const { status, data } = await httpPostJson(url, { action_type: "retry_work_item", target_id: "wi-failed" });
+    expect(status).toBe(200);
+    expect((data as { success: boolean }).success).toBe(true);
+
+    const item = coordinatorStore.getWorkItem("wi-failed");
+    expect(item?.next_retry_at).toBeNull();
+  });
+
+  it("executes acknowledge_alert action", async () => {
+    const url = `${server.getUrl()}/scopes/scope-a/actions`;
+    const { status, data } = await httpPostJson(url, { action_type: "acknowledge_alert", target_id: "wi-failed" });
+    expect(status).toBe(200);
+    expect((data as { success: boolean }).success).toBe(true);
+
+    const item = coordinatorStore.getWorkItem("wi-failed");
+    expect(item?.status).toBe("failed_terminal");
+    expect(item?.error_message).toContain("acknowledged by operator");
+  });
+
+  it("rejects action for unknown work item", async () => {
+    const url = `${server.getUrl()}/scopes/scope-a/actions`;
+    const { status, data } = await httpPostJson(url, { action_type: "retry_work_item", target_id: "no-such-item" });
+    expect(status).toBe(422);
+    expect((data as { success: boolean }).success).toBe(false);
+  });
+
+  it("returns 404 for actions on unknown scope", async () => {
+    const url = `${server.getUrl()}/scopes/unknown/actions`;
+    const { status, data } = await httpPostJson(url, { action_type: "retry_work_item", target_id: "wi-failed" });
+    expect(status).toBe(404);
+    expect((data as { error: string }).error).toBe("Scope not found");
+  });
+
+  it("rejects rebuild_views when callback unavailable", async () => {
+    const url = `${server.getUrl()}/scopes/scope-a/actions`;
+    const { status, data } = await httpPostJson(url, { action_type: "rebuild_views" });
+    expect(status).toBe(422);
+    expect((data as { success: boolean }).success).toBe(false);
+    expect((data as { reason?: string }).reason).toContain("not available");
+  });
+
+  it("rejects request_redispatch when callback unavailable", async () => {
+    const url = `${server.getUrl()}/scopes/scope-a/actions`;
+    const { status, data } = await httpPostJson(url, { action_type: "request_redispatch" });
+    expect(status).toBe(422);
+    expect((data as { success: boolean }).success).toBe(false);
+    expect((data as { reason?: string }).reason).toContain("not available");
   });
 });

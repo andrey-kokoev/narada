@@ -324,5 +324,22 @@ export interface CoordinatorStore {
   insertOverride(override: PolicyOverrideRow): void;
   getOverridesByOutboundId(outboundId: string): PolicyOverrideRow[];
 
+  // Operator action requests
+  insertOperatorActionRequest(request: OperatorActionRequest): void;
+  getPendingOperatorActionRequests(scopeId?: string): OperatorActionRequest[];
+  markOperatorActionRequestExecuted(requestId: string, executedAt?: string): void;
+
   close(): void;
+}
+
+/** Safe operator action request — UI may request, never mutate control truth directly */
+export interface OperatorActionRequest {
+  request_id: string;
+  scope_id: string;
+  action_type: "retry_work_item" | "acknowledge_alert" | "rebuild_views" | "request_redispatch";
+  target_id: string | null;
+  payload_json: string | null;
+  status: "pending" | "executed" | "rejected";
+  requested_at: string;
+  executed_at: string | null;
 }

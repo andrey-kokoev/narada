@@ -135,6 +135,16 @@
       color: #fff;
     }
     .toolbar button.primary:hover { background: var(--accent-hover); }
+    button.small {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    button.small:hover { border-color: var(--muted); }
     .toolbar .spacer { flex: 1; }
     .toolbar .status {
       font-size: 12px;
@@ -244,6 +254,7 @@
     </header>
     <menu>
       <li><a href="#overview" class="active" data-page="overview">Overview</a></li>
+      <li><a href="#mailbox" data-page="mailbox">Mailbox</a></li>
       <li><a href="#timeline" data-page="timeline">Timeline</a></li>
       <li><a href="#facts" data-page="facts">Facts</a></li>
       <li><a href="#contexts" data-page="contexts">Contexts</a></li>
@@ -261,6 +272,8 @@
       <input id="searchInput" type="text" placeholder="Filter by ID, status, or type…" />
       <div class="spacer"></div>
       <span class="status" id="statusText">Loading scopes…</span>
+      <button id="redispatchBtn" title="Trigger dispatch phase">Redispatch</button>
+      <button id="rebuildBtn" title="Rebuild filesystem views">Rebuild views</button>
       <button id="refreshBtn" class="primary">Refresh</button>
     </div>
 
@@ -284,6 +297,30 @@
       const res = await fetch(`${API_BASE}${path}`);
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       return res.json();
+    }
+
+    async function apiPost(path, body) {
+      const res = await fetch(`${API_BASE}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.reason || data.error || `${res.status} ${res.statusText}`);
+      return data;
+    }
+
+    async function doAction(actionType, targetId) {
+      try {
+        const result = await apiPost(`/scopes/${encodeURIComponent(currentScope)}/actions`, {
+          action_type: actionType,
+          target_id: targetId,
+        });
+        $("statusText").textContent = `Action ${actionType} executed (${result.request_id})`;
+        setTimeout(() => loadPage(), 300);
+      } catch (err) {
+        setError(err);
+      }
     }
 
     async function loadScopes() {
@@ -351,6 +388,77 @@
         <div class="card">
           <h3>Pending intents</h3>
           ${intents.pending.length ? renderIntents(intents.pending.slice(0, 10)) : '<div class="empty">None</div>'}
+        </div>
+      `;
+      bindDetailLinks();
+    }
+
+    async function loadMailbox() {
+      const { view } = await api(`/scopes/${encodeURIComponent(currentScope)}/mailbox`);
+      const conversations = filterRows(view.conversations, ["context_id", "status", "primary_charter"]);
+      const outbound = filterRows(view.outbound, ["outbound_id", "action_type", "status"]);
+      const outputs = filterRows(view.outputs, ["output_id", "context_id", "charter_id", "summary"]);
+
+      const conversationRows = conversations.map(r => `
+        <tr>
+          <td class="mono truncate"><a class="link" data-context-id="${esc(r.context_id)}">${esc(r.context_id)}</a></td>
+          <td>${badge(r.status)}</td>
+          <td class="mono">${esc(r.primary_charter)}</td>
+          <td>${esc(r.assigned_agent || "—")}</td>
+          <td>${fmtDate(r.last_inbound_at)}</td>
+          <td>${fmtDate(r.last_outbound_at)}</td>
+          <td>${fmtDate(r.last_message_at)}</td>
+        </tr>
+      `).join("");
+
+      const outboundRows = outbound.map(r => `
+        <tr>
+          <td class="mono truncate">${esc(r.outbound_id)}</td>
+          <td class="mono">${esc(r.action_type)}</td>
+          <td>${badge(r.status)}</td>
+          <td class="mono truncate"><a class="link" data-context-id="${esc(r.conversation_id)}">${esc(r.conversation_id)}</a></td>
+          <td>${fmtDate(r.submitted_at)}</td>
+          <td>${fmtDate(r.confirmed_at)}</td>
+        </tr>
+      `).join("");
+
+      const outputRows = outputs.map(r => `
+        <tr>
+          <td class="mono truncate">${esc(r.output_id)}</td>
+          <td class="mono truncate"><a class="link" data-context-id="${esc(r.context_id)}">${esc(r.context_id)}</a></td>
+          <td class="mono">${esc(r.charter_id)}</td>
+          <td class="truncate">${esc(r.summary)}</td>
+          <td>${fmtDate(r.analyzed_at)}</td>
+        </tr>
+      `).join("");
+
+      $("content").innerHTML = `
+        <div class="card">
+          <h3>Conversations (${esc(conversations.length)})</h3>
+          ${conversations.length ? `
+            <table>
+              <thead><tr><th>Context ID</th><th>Status</th><th>Charter</th><th>Assigned</th><th>Last inbound</th><th>Last outbound</th><th>Last message</th></tr></thead>
+              <tbody>${conversationRows}</tbody>
+            </table>
+          ` : '<div class="empty">No conversations.</div>'}
+        </div>
+        <div class="card">
+          <h3>Outbound commands (${esc(outbound.length)})</h3>
+          ${outbound.length ? `
+            <table>
+              <thead><tr><th>Outbound ID</th><th>Action</th><th>Status</th><th>Context</th><th>Submitted</th><th>Confirmed</th></tr></thead>
+              <tbody>${outboundRows}</tbody>
+            </table>
+          ` : '<div class="empty">No outbound commands.</div>'}
+        </div>
+        <div class="card">
+          <h3>Charter outputs (${esc(outputs.length)})</h3>
+          ${outputs.length ? `
+            <table>
+              <thead><tr><th>Output ID</th><th>Context</th><th>Charter</th><th>Summary</th><th>Analyzed</th></tr></thead>
+              <tbody>${outputRows}</tbody>
+            </table>
+          ` : '<div class="empty">No charter outputs.</div>'}
         </div>
       `;
       bindDetailLinks();
@@ -597,15 +705,19 @@
           <h3>Failed work items (${esc(rows.length)})</h3>
           ${rows.length ? `
             <table>
-              <thead><tr><th>Work item ID</th><th>Context ID</th><th>Status</th><th>Error</th><th>Updated</th></tr></thead>
+              <thead><tr><th>Work item ID</th><th>Context ID</th><th>Status</th><th>Error</th><th>Updated</th><th>Actions</th></tr></thead>
               <tbody>
                 ${rows.map(r => `
                   <tr>
-                    <td class="mono truncate" title="${esc(r.work_item_id)}">${esc(r.work_item_id)}</td>
+                    <td class="mono truncate" title="${esc(r.work_item_id)}"><a class="link" data-work-item-id="${esc(r.work_item_id)}">${esc(r.work_item_id)}</a></td>
                     <td class="mono truncate" title="${esc(r.context_id)}">${esc(r.context_id)}</td>
                     <td>${badge(r.status)}</td>
                     <td class="truncate" title="${esc(r.error_message || '')}">${esc(r.error_message || "—")}</td>
                     <td>${fmtDate(r.updated_at)}</td>
+                    <td>
+                      ${r.status === 'failed_retryable' ? `<button class="small" onclick="doAction('retry_work_item', '${esc(r.work_item_id)}')">Retry</button>` : ''}
+                      ${(r.status === 'failed_retryable' || r.status === 'failed_terminal') ? `<button class="small" onclick="doAction('acknowledge_alert', '${esc(r.work_item_id)}')">Ack</button>` : ''}
+                    </td>
                   </tr>
                 `).join("")}
               </tbody>
@@ -846,6 +958,10 @@
                   ${timeline.superseded_by ? `<tr><th>Superseded by</th><td class="mono"><a class="link" data-work-item-id="${esc(timeline.superseded_by)}">${esc(timeline.superseded_by)}</a></td></tr>` : ''}
                 </tbody>
               </table>
+              <div style="margin-top:12px;display:flex;gap:8px;">
+                ${wi.status === 'failed_retryable' ? `<button onclick="doAction('retry_work_item', '${esc(wi.work_item_id)}')">Retry now</button>` : ''}
+                ${(wi.status === 'failed_retryable' || wi.status === 'failed_terminal') ? `<button onclick="doAction('acknowledge_alert', '${esc(wi.work_item_id)}')">Acknowledge</button>` : ''}
+              </div>
             ` : '<div class="empty">Work item not found.</div>'}
           </div>
           <div class="card">
@@ -936,6 +1052,7 @@
       try {
         const map = {
           overview: loadOverview,
+          mailbox: loadMailbox,
           timeline: loadTimeline,
           facts: loadFacts,
           contexts: loadContexts,
@@ -958,6 +1075,25 @@
     });
 
     $("refreshBtn").addEventListener("click", () => loadPage());
+
+    $("rebuildBtn").addEventListener("click", async () => {
+      try {
+        const result = await apiPost(`/scopes/${encodeURIComponent(currentScope)}/actions`, { action_type: "rebuild_views" });
+        $("statusText").textContent = `Views rebuilt (${result.request_id})`;
+      } catch (err) {
+        setError(err);
+      }
+    });
+
+    $("redispatchBtn").addEventListener("click", async () => {
+      try {
+        const result = await apiPost(`/scopes/${encodeURIComponent(currentScope)}/actions`, { action_type: "request_redispatch" });
+        $("statusText").textContent = `Redispatch requested (${result.request_id})`;
+        setTimeout(() => loadPage(), 500);
+      } catch (err) {
+        setError(err);
+      }
+    });
 
     $("searchInput").addEventListener("input", () => {
       if (currentScope) loadPage();

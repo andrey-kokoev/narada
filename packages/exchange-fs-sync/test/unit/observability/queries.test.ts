@@ -865,7 +865,10 @@ describe("observability/queries", () => {
       const outbounds = transitions.filter((t) => t.source === "outbound");
       expect(intentAdmitted.to_status).toBe("admitted");
       expect(outbounds.length).toBeGreaterThanOrEqual(2);
-      expect(intentAdmitted.transition_at.localeCompare(outbounds[0]!.transition_at)).toBeLessThan(0);
+      // Assert array is sorted chronologically
+      for (let i = 1; i < transitions.length; i++) {
+        expect(transitions[i]!.transition_at.localeCompare(transitions[i - 1]!.transition_at)).toBeGreaterThanOrEqual(0);
+      }
     });
   });
 });

@@ -225,6 +225,9 @@ async function createMailboxDispatchContext(
   _globalConfig: ExchangeFsSyncConfig,
   opts: SyncServiceConfig,
   logger: ReturnType<typeof createLogger>,
+  callbacks?: {
+    rebuildViews?: () => Promise<void>;
+  },
 ) {
   const rootDir = scope.root_dir;
   const messageStore = new FileMessageStore({ rootDir });
@@ -566,6 +569,8 @@ async function createMailboxDispatchContext(
       executionStore: deps.processExecutionStore,
       workerRegistry: deps.workerRegistry,
       factStore: deps.factStore,
+      rebuildViews: callbacks?.rebuildViews,
+      runDispatchPhase,
     };
   }
 
@@ -655,7 +660,9 @@ async function createScopeService(
     rebuildViewsAfterSync: scope.runtime.rebuild_views_after_sync,
   });
 
-  const dispatchContext = await createMailboxDispatchContext(scope, globalConfig, opts, logger);
+  const dispatchContext = await createMailboxDispatchContext(scope, globalConfig, opts, logger, {
+    rebuildViews: () => viewStore.rebuildAll(),
+  });
 
   return { scope, runner, dispatchContext };
 }

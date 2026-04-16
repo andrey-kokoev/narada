@@ -21,6 +21,7 @@ import type {
   AgentSession,
   ToolCallRecord,
   ToolCallStatus,
+  OperatorActionRequest,
 } from "./types.js";
 import { isValidCreatedBy } from "./types.js";
 
@@ -185,6 +186,19 @@ function rowToPolicyOverride(row: Record<string, unknown>): PolicyOverrideRow {
     overridden_by: String(row.overridden_by),
     reason: String(row.reason),
     created_at: String(row.created_at),
+  };
+}
+
+function rowToOperatorActionRequest(row: Record<string, unknown>): OperatorActionRequest {
+  return {
+    request_id: String(row.request_id),
+    scope_id: String(row.scope_id),
+    action_type: String(row.action_type) as OperatorActionRequest["action_type"],
+    target_id: row.target_id ? String(row.target_id) : null,
+    payload_json: row.payload_json ? String(row.payload_json) : null,
+    status: String(row.status) as OperatorActionRequest["status"],
+    requested_at: String(row.requested_at),
+    executed_at: row.executed_at ? String(row.executed_at) : null,
   };
 }
 
@@ -475,6 +489,21 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
 
       create index if not exists idx_tool_call_records_work_item
         on tool_call_records(work_item_id, started_at);
+
+      -- operator action requests (safe UI mutations only)
+      create table if not exists operator_action_requests (
+        request_id text primary key,
+        scope_id text not null,
+        action_type text not null,
+        target_id text,
+        payload_json text,
+        status text not null default 'pending',
+        requested_at text not null default (datetime('now')),
+        executed_at text
+      );
+
+      create index if not exists idx_operator_actions_scope_status
+        on operator_action_requests(scope_id, status, requested_at);
     `);
 
     this.migrateThreadRecordsToConversationRecords();
@@ -1172,6 +1201,40 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     this.db.prepare(`
       update agent_sessions set resume_hint = ?, updated_at = ? where session_id = ?
     `).run(hint, now, sessionId);
+  }
+
+  insertOperatorActionRequest(request: OperatorActionRequest): void {
+    this.db.prepare(`
+      insert into operator_action_requests (
+        request_id, scope_id, action_type, target_id, payload_json,
+        status, requested_at, executed_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      request.request_id,
+      request.scope_id,
+      request.action_type,
+      request.target_id,
+      request.payload_json,
+      request.status,
+      request.requested_at,
+      request.executed_at,
+    );
+  }
+
+  getPendingOperatorActionRequests(scopeId?: string): OperatorActionRequest[] {
+    const sql = scopeId
+      ? `select * from operator_action_requests where scope_id = ? and status = 'pending' order by requested_at asc`
+      : `select * from operator_action_requests where status = 'pending' order by requested_at asc`;
+    const rows = scopeId
+      ? (this.db.prepare(sql).all(scopeId) as Record<string, unknown>[])
+      : (this.db.prepare(sql).all() as Record<string, unknown>[]);
+    return rows.map(rowToOperatorActionRequest);
+  }
+
+  markOperatorActionRequestExecuted(requestId: string, executedAt?: string): void {
+    this.db.prepare(`
+      update operator_action_requests set status = 'executed', executed_at = ? where request_id = ?
+    `).run(executedAt ?? new Date().toISOString(), requestId);
   }
 
   close(): void {

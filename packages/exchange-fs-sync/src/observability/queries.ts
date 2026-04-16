@@ -39,6 +39,8 @@ import type {
   OverviewSnapshot,
   ScopeOverview,
   OverviewFailureSummary,
+  MailboxVerticalView,
+  MailboxConversationSummary,
 } from "./types.js";
 import type { PolicyContext } from "../foreman/context.js";
 import {
@@ -890,6 +892,70 @@ export function getContextSummaries(
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
   }));
+}
+
+export function getMailboxVerticalView(
+  coordinatorStore: Pick<CoordinatorStore, "db">,
+  outboundStore: OutboundStore,
+  scopeId: string,
+): MailboxVerticalView {
+  const conversationRows = coordinatorStore.db
+    .prepare(
+      `select conversation_id, mailbox_id, status, primary_charter, assigned_agent,
+              last_message_at, last_inbound_at, last_outbound_at, created_at, updated_at
+       from conversation_records
+       where mailbox_id = ?
+       order by updated_at desc
+       limit 100`,
+    )
+    .all(scopeId) as Record<string, unknown>[];
+
+  const conversations: MailboxConversationSummary[] = conversationRows.map((row) => ({
+    context_id: String(row.conversation_id),
+    scope_id: String(row.mailbox_id),
+    status: String(row.status),
+    primary_charter: String(row.primary_charter),
+    assigned_agent: row.assigned_agent ? String(row.assigned_agent) : null,
+    last_message_at: row.last_message_at ? String(row.last_message_at) : null,
+    last_inbound_at: row.last_inbound_at ? String(row.last_inbound_at) : null,
+    last_outbound_at: row.last_outbound_at ? String(row.last_outbound_at) : null,
+    created_at: String(row.created_at),
+    updated_at: String(row.updated_at),
+  }));
+
+  const outbound = getRecentOutboundCommands(outboundStore, 50).filter(
+    (o) => o.mailbox_id === scopeId,
+  );
+
+  const outputRows = coordinatorStore.db
+    .prepare(
+      `select output_id, context_id, scope_id, charter_id, summary, analyzed_at
+       from charter_outputs
+       where scope_id = ?
+       order by analyzed_at desc
+       limit 50`,
+    )
+    .all(scopeId) as Array<{
+      output_id: string;
+      context_id: string;
+      scope_id: string;
+      charter_id: string;
+      summary: string;
+      analyzed_at: string;
+    }>;
+
+  return {
+    scope_id: scopeId,
+    conversations,
+    outbound,
+    outputs: outputRows.map((row) => ({
+      output_id: row.output_id,
+      context_id: row.context_id,
+      charter_id: row.charter_id,
+      summary: row.summary,
+      analyzed_at: row.analyzed_at,
+    })),
+  };
 }
 
 export function getWorkerStatuses(

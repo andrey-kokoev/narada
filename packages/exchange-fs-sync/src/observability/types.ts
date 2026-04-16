@@ -321,6 +321,34 @@ export interface OverviewSnapshot {
   };
 }
 
+/** Mailbox-vertical conversation summary with mail-specific timing */
+export interface MailboxConversationSummary {
+  context_id: string;
+  scope_id: string;
+  status: string;
+  primary_charter: string;
+  assigned_agent: string | null;
+  last_message_at: string | null;
+  last_inbound_at: string | null;
+  last_outbound_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Mailbox-vertical view — sits above the kernel-neutral shell */
+export interface MailboxVerticalView {
+  scope_id: string;
+  conversations: MailboxConversationSummary[];
+  outbound: OutboundHandoffSummary[];
+  outputs: {
+    output_id: string;
+    context_id: string;
+    charter_id: string;
+    summary: string;
+    analyzed_at: string;
+  }[];
+}
+
 export interface ScopeOverview {
   scope_id: string;
   last_activity_at: string | null;

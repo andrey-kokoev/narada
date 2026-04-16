@@ -1,11 +1,11 @@
 /**
  * Observation API Server
  *
- * Read-only HTTP API for UI consumption of the observation plane.
+ * HTTP API for UI consumption of the observation plane and safe operator actions.
  *
  * Invariants:
- * - All responses are derived from durable state.
- * - No endpoint performs writes.
+ * - All GET responses are derived from durable state (read-only).
+ * - All write paths are validated, audited, and delegated to operator-actions.ts.
  * - Reconstructible from SQLite stores alone.
  */
 
@@ -17,6 +17,7 @@ import {
   buildObservationPlaneSnapshot,
   getRecentFacts,
   getContextSummaries,
+  getMailboxVerticalView,
   getActiveWorkItems,
   getRecentFailedWorkItems,
   getWorkItemsAwaitingRetry,
@@ -37,6 +38,7 @@ import {
   type WorkItemLifecycleSummary,
 } from "@narada/exchange-fs-sync";
 import { createLogger } from "./lib/logger.js";
+import { executeOperatorAction, type OperatorActionPayload } from "./operator-actions.js";
 
 export interface ObservationServerConfig {
   port: number;
@@ -54,6 +56,10 @@ export interface ObservationApiScope {
   executionStore: ProcessExecutionStore;
   workerRegistry: WorkerRegistry;
   factStore: FactStore;
+  /** Optional callback to rebuild filesystem views (scope-specific) */
+  rebuildViews?: () => Promise<void>;
+  /** Optional callback to trigger a dispatch phase for this scope */
+  runDispatchPhase?: () => Promise<void>;
 }
 
 export interface ObservationServer {
@@ -177,6 +183,19 @@ export function createObservationServer(
         const limit = parseLimit(searchParams, 100);
         const contexts = getContextSummaries(scope.coordinatorStore, limit);
         jsonResponse(res, 200, { scope_id: scope.scope_id, contexts });
+      },
+    },
+    {
+      method: "GET",
+      pattern: new RegExp(`^${prefix}/scopes/([^/]+)/mailbox$`),
+      handler: async (_req, res, params) => {
+        const scope = getScope(params[1]!);
+        if (!scope) {
+          jsonResponse(res, 404, { error: "Scope not found" });
+          return;
+        }
+        const view = getMailboxVerticalView(scope.coordinatorStore, scope.outboundStore, scope.scope_id);
+        jsonResponse(res, 200, { scope_id: scope.scope_id, view });
       },
     },
     {
@@ -343,15 +362,60 @@ export function createObservationServer(
         jsonResponse(res, 200, { status: "ok", observation_api: true });
       },
     },
+    {
+      method: "POST",
+      pattern: new RegExp(`^${prefix}/scopes/([^/]+)/actions$`),
+      handler: async (req, res, params) => {
+        const scope = getScope(params[1]!);
+        if (!scope) {
+          jsonResponse(res, 404, { error: "Scope not found" });
+          return;
+        }
+
+        let body = "";
+        for await (const chunk of req) {
+          body += chunk;
+          if (body.length > 65536) {
+            jsonResponse(res, 413, { error: "Payload too large" });
+            return;
+          }
+        }
+
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(body);
+        } catch {
+          jsonResponse(res, 400, { error: "Invalid JSON" });
+          return;
+        }
+
+        const payload = parsed as OperatorActionPayload;
+        if (!payload.action_type || typeof payload.action_type !== "string") {
+          jsonResponse(res, 400, { error: "Missing or invalid action_type" });
+          return;
+        }
+
+        const result = await executeOperatorAction(
+          {
+            scope_id: scope.scope_id,
+            coordinatorStore: scope.coordinatorStore,
+            rebuildViews: scope.rebuildViews,
+            runDispatchPhase: scope.runDispatchPhase,
+          },
+          payload,
+        );
+
+        if (result.status === "executed") {
+          jsonResponse(res, 200, result);
+        } else {
+          jsonResponse(res, 422, result);
+        }
+      },
+    },
   ];
 
   async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
-      if (req.method !== "GET") {
-        jsonResponse(res, 405, { error: "Method not allowed" });
-        return;
-      }
-
       const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
       const pathname = url.pathname;
 
@@ -361,6 +425,11 @@ export function createObservationServer(
           await route.handler(req, res, match, url.searchParams);
           return;
         }
+      }
+
+      if (req.method !== "GET" && req.method !== "POST") {
+        jsonResponse(res, 405, { error: "Method not allowed" });
+        return;
       }
 
       jsonResponse(res, 404, { error: "Not found" });
