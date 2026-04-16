@@ -6,6 +6,12 @@
  */
 
 import type { WorkItemStatus, ExecutionAttemptStatus, ToolCallStatus } from "../coordinator/types.js";
+
+/** Data-source trust classification for UI transparency */
+export type SourceTrust = "authoritative" | "derived" | "decorative";
+
+/** @source derived — Summary of a single daemon sync+dispatch cycle */
+export interface DaemonCycleSummary {
 import type { OutboundStatus } from "../outbound/types.js";
 import type { ExecutionPhase, ConfirmationStatus } from "../executors/lifecycle.js";
 
@@ -24,7 +30,7 @@ export interface DaemonCycleSummary {
   errors: number;
 }
 
-/** Per-mailbox dispatch summary */
+/** @source derived — Per-mailbox dispatch summary */
 export interface MailboxDispatchSummary {
   mailbox_id: string;
   last_sync_at: string | null;
@@ -37,7 +43,7 @@ export interface MailboxDispatchSummary {
   recent_decisions_count: number;
 }
 
-/** Work-item lifecycle summary for observability */
+/** @source authoritative — Work-item lifecycle summary for observability (mirrors durable work_items row) */
 export interface WorkItemLifecycleSummary {
   work_item_id: string;
   context_id: string;
@@ -54,7 +60,7 @@ export interface WorkItemLifecycleSummary {
   updated_at: string;
 }
 
-/** Execution attempt summary */
+/** @source authoritative — Execution attempt summary (mirrors durable execution_attempts row) */
 export interface ExecutionAttemptSummary {
   execution_id: string;
   work_item_id: string;
@@ -66,7 +72,7 @@ export interface ExecutionAttemptSummary {
   error_message: string | null;
 }
 
-/** Tool call summary */
+/** @source authoritative — Tool call summary (mirrors durable tool_call_records row) */
 export interface ToolCallSummary {
   call_id: string;
   execution_id: string;
@@ -79,7 +85,7 @@ export interface ToolCallSummary {
   completed_at: string;
 }
 
-/** Outbound handoff summary */
+/** @source authoritative — Outbound handoff summary (mirrors durable outbound_commands row) */
 export interface OutboundHandoffSummary {
   outbound_id: string;
   conversation_id: string;
@@ -94,7 +100,7 @@ export interface OutboundHandoffSummary {
   idempotency_key: string;
 }
 
-/** Active lease summary for operability view */
+/** @source derived — Active lease summary for operability view (joins lease + work item) */
 export interface LeaseSummary {
   lease_id: string;
   work_item_id: string;
@@ -105,7 +111,7 @@ export interface LeaseSummary {
   work_item_status: string;
 }
 
-/** Stale lease recovery event for operability view */
+/** @source derived — Stale lease recovery event for operability view */
 export interface StaleLeaseRecoveryEvent {
   lease_id: string;
   work_item_id: string;
@@ -115,7 +121,7 @@ export interface StaleLeaseRecoveryEvent {
   reason: string;
 }
 
-/** Quiescence and backlog indicator */
+/** @source derived — Quiescence and backlog indicator (computed from multiple tables) */
 export interface QuiescenceIndicator {
   is_quiescent: boolean;
   opened_count: number;
@@ -128,7 +134,7 @@ export interface QuiescenceIndicator {
   oldest_lease_acquired_at: string | null;
 }
 
-/** Aggregated control-plane status snapshot */
+/** @source derived — Aggregated control-plane status snapshot */
 export interface ControlPlaneStatusSnapshot {
   captured_at: string;
   work_items: {
@@ -163,7 +169,7 @@ export interface ControlPlaneStatusSnapshot {
   mailbox_summary: MailboxDispatchSummary | null;
 }
 
-/** Process execution summary for observability */
+/** @source derived — Process execution summary for observability (unifies intent + execution stores) */
 export interface ProcessExecutionSummary {
   execution_id: string;
   intent_id: string;
@@ -177,7 +183,7 @@ export interface ProcessExecutionSummary {
   created_at: string;
 }
 
-/** Intent summary for observability */
+/** @source authoritative — Intent summary for observability (mirrors durable intents row) */
 export interface IntentSummary {
   intent_id: string;
   intent_type: string;
@@ -192,7 +198,7 @@ export interface IntentSummary {
   updated_at: string;
 }
 
-/** Unified intent execution summary — mail and process under one lifecycle model */
+/** @source derived — Unified intent execution summary (joins intent + execution + outbound stores) */
 export interface IntentExecutionSummary {
   intent_id: string;
   intent_type: string;
@@ -289,7 +295,7 @@ export interface IntentLifecycleTransition {
   detail: string | null;
 }
 
-/** Worker status observation — derived from registry + durable state */
+/** @source derived — Worker status observation (derived from in-memory registry + durable state) */
 export interface WorkerStatusObservation {
   worker_id: string;
   executor_family: string;
@@ -303,9 +309,13 @@ export interface WorkerStatusObservation {
   pending_count: number;
 }
 
-/** Scope and vertical overview for operator UI */
+/** @source derived — Scope and vertical overview for operator UI */
 export interface OverviewSnapshot {
   captured_at: string;
+  /** Source-trust metadata for each top-level section */
+  _meta: {
+    source_classifications: Record<string, SourceTrust>;
+  };
   scopes: ScopeOverview[];
   facts: {
     total_recent: number;
@@ -381,7 +391,7 @@ export interface OverviewFailureSummary {
 }
 
 /** Unified observation plane snapshot */
-/** Context summary for operator UI */
+/** @source authoritative — Context summary for operator UI (mirrors durable conversation_records row) */
 export interface ContextSummary {
   context_id: string;
   scope_id: string;
@@ -393,7 +403,7 @@ export interface ContextSummary {
   updated_at: string;
 }
 
-/** Fact summary for operator UI (lightweight provenance) */
+/** @source authoritative — Fact summary for operator UI (mirrors durable facts row) */
 export interface FactSummary {
   fact_id: string;
   fact_type: string;
@@ -403,7 +413,7 @@ export interface FactSummary {
   created_at: string;
 }
 
-/** Timeline event for unified kernel flow view */
+/** @source derived — Timeline event for unified kernel flow view (computed chronology) */
 export interface TimelineEvent {
   event_at: string;
   kind: "fact_ingested" | "fact_admitted" | "context_formed" | "work_opened" | "work_superseded" | "work_resolved" | "work_failed";
@@ -496,6 +506,10 @@ export interface ScopeOverview {
 /** Top-level kernel overview snapshot for the operator dashboard */
 export interface OverviewSnapshot {
   captured_at: string;
+  /** Source-trust metadata for each top-level section */
+  _meta: {
+    source_classifications: Record<string, SourceTrust>;
+  };
   scopes: ScopeOverview[];
   facts: {
     total_recent: number;

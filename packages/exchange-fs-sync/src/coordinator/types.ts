@@ -332,6 +332,46 @@ export interface CoordinatorStore {
   close(): void;
 }
 
+/** Read-only view of CoordinatorStore for observability and UI consumption */
+export type CoordinatorStoreView = Omit<
+  CoordinatorStore,
+  | "initSchema"
+  | "close"
+  | "upsertThread"
+  | "upsertConversationRecord"
+  | "nextRevisionOrdinal"
+  | "recordRevision"
+  | "insertWorkItem"
+  | "updateWorkItemStatus"
+  | "insertLease"
+  | "updateLeaseExpiry"
+  | "releaseLease"
+  | "recoverStaleLeases"
+  | "insertExecutionAttempt"
+  | "updateExecutionAttemptStatus"
+  | "insertEvaluation"
+  | "insertCharterOutput"
+  | "insertAgentSession"
+  | "updateAgentSessionStatus"
+  | "updateAgentSessionResumeHint"
+  | "insertDecision"
+  | "linkDecisionToOutbound"
+  | "insertToolCallRecord"
+  | "updateToolCallRecord"
+  | "insertOverride"
+  | "insertOperatorActionRequest"
+  | "markOperatorActionRequestExecuted"
+>;
+
+/** Operator-action view of CoordinatorStore — allows only audited, validated mutations via executeOperatorAction */
+export type CoordinatorStoreOperatorView = CoordinatorStoreView &
+  Pick<
+    CoordinatorStore,
+    | "updateWorkItemStatus"
+    | "insertOperatorActionRequest"
+    | "markOperatorActionRequestExecuted"
+  >;
+
 /** Safe operator action request — UI may request, never mutate control truth directly */
 export interface OperatorActionRequest {
   request_id: string;

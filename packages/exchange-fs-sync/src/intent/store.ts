@@ -23,6 +23,12 @@ export interface IntentStore {
   close(): void;
 }
 
+/** Read-only view of IntentStore for observability and UI consumption */
+export type IntentStoreView = Omit<
+  IntentStore,
+  "initSchema" | "close" | "admit" | "updateStatus"
+>;
+
 export interface SqliteIntentStoreOptions {
   dbPath: string;
 }

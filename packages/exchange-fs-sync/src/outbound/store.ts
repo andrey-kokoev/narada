@@ -55,6 +55,20 @@ export interface OutboundStore {
   close(): void;
 }
 
+/** Read-only view of OutboundStore for observability and UI consumption */
+export type OutboundStoreView = Omit<
+  OutboundStore,
+  | "initSchema"
+  | "close"
+  | "createCommand"
+  | "supersedePriorVersions"
+  | "appendTransition"
+  | "updateCommandStatus"
+  | "fetchNextEligible"
+  | "fetchNextByStatus"
+  | "setManagedDraft"
+>;
+
 export interface SqliteOutboundStoreOptions {
   dbPath: string;
 }

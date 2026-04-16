@@ -3,10 +3,17 @@
  *
  * All UI-facing mutations are validated, executed, and logged here.
  * The observability layer remains read-only.
+ *
+ * Authority boundary (Task 073):
+ * - This is the ONLY permitted write path from the operator console.
+ * - Actions cannot bypass the intent boundary (no direct intent inserts).
+ * - Actions cannot bypass scheduler/foreman authority (no direct work_item creation,
+ *   no lease manipulation, no foreman decision injection).
+ * - Every action is logged to operator_action_requests for audit.
  */
 
 import type {
-  CoordinatorStore,
+  CoordinatorStoreOperatorView,
   OperatorActionRequest,
 } from "@narada/exchange-fs-sync";
 
@@ -31,7 +38,7 @@ export interface OperatorActionResult {
 
 export interface OperatorActionContext {
   scope_id: string;
-  coordinatorStore: CoordinatorStore;
+  coordinatorStore: CoordinatorStoreOperatorView;
   rebuildViews?: () => Promise<void>;
   runDispatchPhase?: () => Promise<void>;
 }

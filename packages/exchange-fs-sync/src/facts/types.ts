@@ -55,3 +55,9 @@ export interface FactStore {
   markAdmitted(factIds: string[]): void;
   close(): void;
 }
+
+/** Read-only view of FactStore for observability and UI consumption */
+export type FactStoreView = Omit<
+  FactStore,
+  "initSchema" | "close" | "ingest" | "markAdmitted"
+>;

@@ -5,12 +5,12 @@
  * They are safe to call at any time and must never be used for correctness decisions.
  */
 
-import type { CoordinatorStore, ExecutionAttempt } from "../coordinator/types.js";
-import type { OutboundStore } from "../outbound/store.js";
-import type { ProcessExecutionStore } from "../executors/store.js";
-import type { IntentStore } from "../intent/store.js";
-import type { FactStore } from "../facts/types.js";
-import type { WorkerRegistry } from "../workers/registry.js";
+import type { CoordinatorStoreView, ExecutionAttempt } from "../coordinator/types.js";
+import type { OutboundStoreView } from "../outbound/store.js";
+import type { ProcessExecutionStoreView } from "../executors/store.js";
+import type { IntentStoreView } from "../intent/store.js";
+import type { FactStoreView } from "../facts/types.js";
+import type { WorkerRegistryView } from "../workers/registry.js";
 import type {
   ControlPlaneStatusSnapshot,
   ExecutionAttemptSummary,
@@ -123,7 +123,7 @@ function rowToOutboundSummary(row: Record<string, unknown>): OutboundHandoffSumm
 }
 
 export function getActiveWorkItems(
-  store: CoordinatorStore,
+  store: CoordinatorStoreView,
   limit = 50,
 ): WorkItemLifecycleSummary[] {
   const rows = store.db
@@ -138,7 +138,7 @@ export function getActiveWorkItems(
 }
 
 export function getRecentFailedWorkItems(
-  store: CoordinatorStore,
+  store: CoordinatorStoreView,
   limit = 50,
 ): WorkItemLifecycleSummary[] {
   const rows = store.db
@@ -153,7 +153,7 @@ export function getRecentFailedWorkItems(
 }
 
 export function getWorkItemsAwaitingRetry(
-  store: CoordinatorStore,
+  store: CoordinatorStoreView,
   now = new Date().toISOString(),
 ): WorkItemLifecycleSummary[] {
   const rows = store.db
@@ -168,7 +168,7 @@ export function getWorkItemsAwaitingRetry(
 }
 
 export function getRecentOutboundCommands(
-  outboundStore: OutboundStore,
+  outboundStore: OutboundStoreView,
   limit = 50,
 ): OutboundHandoffSummary[] {
   const rows = outboundStore.db
@@ -182,7 +182,7 @@ export function getRecentOutboundCommands(
 }
 
 export function getRecentSessionsAndExecutions(
-  store: CoordinatorStore,
+  store: CoordinatorStoreView,
   limit = 50,
 ): ExecutionAttemptSummary[] {
   const rows = store.db
@@ -196,7 +196,7 @@ export function getRecentSessionsAndExecutions(
 }
 
 export function getToolCallSummary(
-  store: CoordinatorStore,
+  store: CoordinatorStoreView,
   limit = 50,
 ): { recent: ToolCallSummary[]; by_status: Record<string, number>; total_count: number } {
   const recentRows = store.db
@@ -228,8 +228,8 @@ export function getToolCallSummary(
 }
 
 export function buildMailboxDispatchSummary(
-  store: CoordinatorStore,
-  outboundStore: OutboundStore,
+  store: CoordinatorStoreView,
+  outboundStore: OutboundStoreView,
   mailboxId: string,
 ): MailboxDispatchSummary {
   const active = store.db
@@ -278,7 +278,7 @@ export function buildMailboxDispatchSummary(
 }
 
 export function getActiveLeases(
-  store: CoordinatorStore,
+  store: CoordinatorStoreView,
   limit = 50,
 ): LeaseSummary[] {
   const rows = store.db
@@ -311,7 +311,7 @@ export function getActiveLeases(
 }
 
 export function getRecentStaleLeaseRecoveries(
-  store: CoordinatorStore,
+  store: CoordinatorStoreView,
   limit = 50,
 ): StaleLeaseRecoveryEvent[] {
   const rows = store.db
@@ -342,7 +342,7 @@ export function getRecentStaleLeaseRecoveries(
 }
 
 export function getQuiescenceIndicator(
-  store: CoordinatorStore,
+  store: CoordinatorStoreView,
   now = new Date().toISOString(),
 ): QuiescenceIndicator {
   const opened = store.db
@@ -382,8 +382,8 @@ export function getQuiescenceIndicator(
 }
 
 export function buildControlPlaneSnapshot(
-  coordinatorStore: CoordinatorStore,
-  outboundStore: OutboundStore,
+  coordinatorStore: CoordinatorStoreView,
+  outboundStore: OutboundStoreView,
   mailboxId?: string,
 ): ControlPlaneStatusSnapshot {
   const capturedAt = new Date().toISOString();
@@ -499,7 +499,7 @@ function rowToIntentSummary(row: Record<string, unknown>): IntentSummary {
 }
 
 export function getProcessExecutionSummaries(
-  executionStore: ProcessExecutionStore,
+  executionStore: ProcessExecutionStoreView,
   limit = 50,
 ): { active: ProcessExecutionSummary[]; recent: ProcessExecutionSummary[]; failed_recent: ProcessExecutionSummary[]; total_count: number } {
   const activeRows = executionStore.db
@@ -547,7 +547,7 @@ function intentSummarySql(whereClause: string, orderClause: string): string {
 }
 
 export function getIntentSummaries(
-  intentStore: IntentStore,
+  intentStore: IntentStoreView,
 ): { pending: IntentSummary[]; executing: IntentSummary[]; failed_terminal: IntentSummary[]; total_count: number } {
   const pendingRows = intentStore.db
     .prepare(intentSummarySql("i.status = 'admitted'", "i.created_at asc"))
@@ -574,7 +574,7 @@ export function getIntentSummaries(
 }
 
 export function getIntentExecutionSummaries(
-  intentStore: IntentStore,
+  intentStore: IntentStoreView,
   limit = 100,
 ): { recent: IntentExecutionSummary[]; failed_recent: IntentExecutionSummary[]; total_count: number } {
   const sql = `select
@@ -694,7 +694,7 @@ export function getIntentExecutionSummaries(
 }
 
 export function getProcessExecutionDetails(
-  executionStore: ProcessExecutionStore,
+  executionStore: ProcessExecutionStoreView,
   limit = 50,
 ): ProcessExecutionDetail[] {
   const rows = executionStore.db
@@ -724,7 +724,7 @@ export function getProcessExecutionDetails(
 }
 
 export function getMailExecutionDetails(
-  outboundStore: OutboundStore,
+  outboundStore: OutboundStoreView,
   limit = 50,
 ): MailExecutionDetail[] {
   const commands = outboundStore.db
@@ -846,7 +846,7 @@ export function getIntentLifecycleTransitions(
 }
 
 export function getRecentFacts(
-  factStore: Pick<FactStore, "db">,
+  factStore: Pick<FactStoreView, "db">,
   limit = 100,
 ): FactSummary[] {
   const rows = factStore.db
@@ -869,7 +869,7 @@ export function getRecentFacts(
 }
 
 export function getContextSummaries(
-  coordinatorStore: Pick<CoordinatorStore, "db">,
+  coordinatorStore: Pick<CoordinatorStoreView, "db">,
   limit = 100,
 ): ContextSummary[] {
   const rows = coordinatorStore.db
@@ -895,8 +895,8 @@ export function getContextSummaries(
 }
 
 export function getMailboxVerticalView(
-  coordinatorStore: Pick<CoordinatorStore, "db">,
-  outboundStore: OutboundStore,
+  coordinatorStore: Pick<CoordinatorStoreView, "db">,
+  outboundStore: OutboundStoreView,
   scopeId: string,
 ): MailboxVerticalView {
   const conversationRows = coordinatorStore.db
@@ -959,10 +959,10 @@ export function getMailboxVerticalView(
 }
 
 export function getWorkerStatuses(
-  registry: WorkerRegistry,
-  coordinatorStore: CoordinatorStore,
-  intentStore: IntentStore,
-  executionStore: ProcessExecutionStore,
+  registry: WorkerRegistryView,
+  coordinatorStore: CoordinatorStoreView,
+  intentStore: IntentStoreView,
+  executionStore: ProcessExecutionStoreView,
 ): WorkerStatusObservation[] {
   const workers = registry.listWorkers();
 
@@ -1001,7 +1001,7 @@ export function getWorkerStatuses(
 }
 
 export function getWorkItemTimeline(
-  coordinatorStore: CoordinatorStore,
+  coordinatorStore: CoordinatorStoreView,
   workItemId: string,
 ): WorkItemTimeline {
   const workItem = coordinatorStore.getWorkItem(workItemId);
@@ -1051,7 +1051,7 @@ export function getWorkItemTimeline(
 }
 
 export function getContextTimeline(
-  coordinatorStore: CoordinatorStore,
+  coordinatorStore: CoordinatorStoreView,
   contextId: string,
 ): ContextTimeline {
   const context = coordinatorStore.getConversationRecord(contextId);
@@ -1106,8 +1106,8 @@ function rowToConversationRecord(row: Record<string, unknown>): ContextSummary {
 }
 
 export function getFactTimeline(
-  coordinatorStore: CoordinatorStore,
-  factStore: Pick<FactStore, "getById">,
+  coordinatorStore: CoordinatorStoreView,
+  factStore: Pick<FactStoreView, "getById">,
   factId: string,
 ): FactTimeline {
   const fact = factStore.getById(factId);
@@ -1138,8 +1138,8 @@ export function getFactTimeline(
 }
 
 export function getUnifiedTimeline(
-  coordinatorStore: CoordinatorStore,
-  factStore: Pick<FactStore, "db">,
+  coordinatorStore: CoordinatorStoreView,
+  factStore: Pick<FactStoreView, "db">,
   limit = 100,
 ): TimelineEvent[] {
   const events: TimelineEvent[] = [];
@@ -1225,10 +1225,10 @@ function detectVerticalFromFactType(factType: string): string {
 }
 
 export function buildOverviewSnapshot(
-  coordinatorStore: CoordinatorStore,
-  intentStore: IntentStore,
-  executionStore: ProcessExecutionStore,
-  factStore?: Pick<FactStore, "db">,
+  coordinatorStore: CoordinatorStoreView,
+  intentStore: IntentStoreView,
+  executionStore: ProcessExecutionStoreView,
+  factStore?: Pick<FactStoreView, "db">,
 ): OverviewSnapshot {
   const capturedAt = new Date().toISOString();
 
@@ -1443,6 +1443,14 @@ export function buildOverviewSnapshot(
 
   return {
     captured_at: capturedAt,
+    _meta: {
+      source_classifications: {
+        scopes: "derived",
+        facts: "authoritative",
+        recent_failures: "derived",
+        global: "derived",
+      },
+    },
     scopes: Array.from(scopeMap.values()).sort((a, b) => (b.last_activity_at ?? "").localeCompare(a.last_activity_at ?? "")),
     facts: {
       total_recent: totalRecentFacts,
@@ -1460,17 +1468,26 @@ export function buildOverviewSnapshot(
 }
 
 export function buildObservationPlaneSnapshot(
-  registry: WorkerRegistry,
-  coordinatorStore: CoordinatorStore,
-  outboundStore: OutboundStore,
-  intentStore: IntentStore,
-  executionStore: ProcessExecutionStore,
+  registry: WorkerRegistryView,
+  coordinatorStore: CoordinatorStoreView,
+  outboundStore: OutboundStoreView,
+  intentStore: IntentStoreView,
+  executionStore: ProcessExecutionStoreView,
   mailboxId?: string,
 ): ObservationPlaneSnapshot {
   const capturedAt = new Date().toISOString();
 
   return {
     captured_at: capturedAt,
+    _meta: {
+      source_classifications: {
+        workers: "derived",
+        control_plane: "derived",
+        process_executions: "derived",
+        intents: "authoritative",
+        intent_executions: "derived",
+      },
+    },
     workers: getWorkerStatuses(registry, coordinatorStore, intentStore, executionStore),
     control_plane: buildControlPlaneSnapshot(coordinatorStore, outboundStore, mailboxId),
     process_executions: getProcessExecutionSummaries(executionStore, 50),

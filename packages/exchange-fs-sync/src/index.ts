@@ -98,7 +98,7 @@ export type {
   OutboundTransition,
 } from "./outbound/types.js";
 export { SqliteOutboundStore } from "./outbound/store.js";
-export type { OutboundStore, SqliteOutboundStoreOptions, SqliteOutboundStoreDbOptions } from "./outbound/store.js";
+export type { OutboundStore, OutboundStoreView, SqliteOutboundStoreOptions, SqliteOutboundStoreDbOptions } from "./outbound/store.js";
 
 // Coordinator exports
 export { SqliteCoordinatorStore } from "./coordinator/store.js";
@@ -120,6 +120,8 @@ export type {
   ToolCallRecord,
   ToolCallStatus,
   OperatorActionRequest,
+  CoordinatorStoreView,
+  CoordinatorStoreOperatorView,
 } from "./coordinator/types.js";
 export type { SqliteCoordinatorStoreOptions } from "./coordinator/store.js";
 export { deriveThreadId } from "./coordinator/thread-id.js";
@@ -189,7 +191,7 @@ export { SqliteAgentTraceStore } from "./agent/traces/store.js";
 export { SqliteFactStore } from "./facts/store.js";
 export { SqliteIntentStore } from "./intent/store.js";
 export { SqliteProcessExecutionStore } from "./executors/store.js";
-export type { ProcessExecutionStore, SqliteProcessExecutionStoreOptions, SqliteProcessExecutionStoreDbOptions } from "./executors/store.js";
+export type { ProcessExecutionStore, ProcessExecutionStoreView, SqliteProcessExecutionStoreOptions, SqliteProcessExecutionStoreDbOptions } from "./executors/store.js";
 export { ProcessExecutor } from "./executors/process-executor.js";
 export type { ProcessExecutorDeps } from "./executors/process-executor.js";
 export type { ProcessExecution, ProcessRunPayload } from "./executors/types.js";
@@ -226,8 +228,8 @@ export type {
   CompositeConfirmationResolverDeps,
 } from "./executors/confirmation.js";
 export { DefaultWorkerRegistry, drainWorker } from "./workers/registry.js";
-export type { WorkerRegistry, RegisteredWorker, WorkerIdentity, WorkerFn, WorkerExecutionResult, ConcurrencyPolicy } from "./workers/index.js";
-export type { IntentStore, SqliteIntentStoreOptions, SqliteIntentStoreDbOptions } from "./intent/store.js";
+export type { WorkerRegistry, WorkerRegistryView, RegisteredWorker, WorkerIdentity, WorkerFn, WorkerExecutionResult, ConcurrencyPolicy } from "./workers/index.js";
+export type { IntentStore, IntentStoreView, SqliteIntentStoreOptions, SqliteIntentStoreDbOptions } from "./intent/store.js";
 export type { Intent, IntentType, IntentStatus } from "./intent/types.js";
 export { IntentHandoff } from "./intent/handoff.js";
 export {
@@ -243,7 +245,7 @@ export type {
   SchemaProperty,
 } from "./intent/registry.js";
 export type { IntentHandoffDeps } from "./intent/handoff.js";
-export type { Fact, FactStore, FactType, FactProvenance } from "./facts/types.js";
+export type { Fact, FactStore, FactStoreView, FactType, FactProvenance } from "./facts/types.js";
 export { buildFactId } from "./ids/fact-id.js";
 export { sourceRecordToFact } from "./facts/record-to-fact.js";
 export type {

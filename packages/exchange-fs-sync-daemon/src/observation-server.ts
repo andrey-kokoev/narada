@@ -3,9 +3,11 @@
  *
  * HTTP API for UI consumption of the observation plane and safe operator actions.
  *
- * Invariants:
+ * Authority boundary (Task 073):
  * - All GET responses are derived from durable state (read-only).
  * - All write paths are validated, audited, and delegated to operator-actions.ts.
+ * - ObservationApiScope exposes only *View / *OperatorView store interfaces.
+ *   Future contributors cannot call hidden store mutations from route handlers.
  * - Reconstructible from SQLite stores alone.
  */
 
@@ -29,12 +31,12 @@ import {
   getContextTimeline,
   getFactTimeline,
   getUnifiedTimeline,
-  type CoordinatorStore,
-  type OutboundStore,
-  type IntentStore,
-  type ProcessExecutionStore,
-  type FactStore,
-  type WorkerRegistry,
+  type CoordinatorStoreOperatorView,
+  type OutboundStoreView,
+  type IntentStoreView,
+  type ProcessExecutionStoreView,
+  type FactStoreView,
+  type WorkerRegistryView,
   type WorkItemLifecycleSummary,
 } from "@narada/exchange-fs-sync";
 import { createLogger } from "./lib/logger.js";
@@ -50,12 +52,12 @@ export interface ObservationServerConfig {
 
 export interface ObservationApiScope {
   scope_id: string;
-  coordinatorStore: CoordinatorStore;
-  outboundStore: OutboundStore;
-  intentStore: IntentStore;
-  executionStore: ProcessExecutionStore;
-  workerRegistry: WorkerRegistry;
-  factStore: FactStore;
+  coordinatorStore: CoordinatorStoreOperatorView;
+  outboundStore: OutboundStoreView;
+  intentStore: IntentStoreView;
+  executionStore: ProcessExecutionStoreView;
+  workerRegistry: WorkerRegistryView;
+  factStore: FactStoreView;
   /** Optional callback to rebuild filesystem views (scope-specific) */
   rebuildViews?: () => Promise<void>;
   /** Optional callback to trigger a dispatch phase for this scope */

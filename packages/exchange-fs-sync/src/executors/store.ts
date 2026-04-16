@@ -25,6 +25,12 @@ export interface ProcessExecutionStore {
   close(): void;
 }
 
+/** Read-only view of ProcessExecutionStore for observability and UI consumption */
+export type ProcessExecutionStoreView = Omit<
+  ProcessExecutionStore,
+  "initSchema" | "close" | "create" | "updateStatus" | "recoverStaleExecutions"
+>;
+
 export interface SqliteProcessExecutionStoreOptions {
   dbPath: string;
 }

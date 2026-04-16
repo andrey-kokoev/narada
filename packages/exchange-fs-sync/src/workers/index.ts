@@ -12,5 +12,6 @@ export {
 
 export type {
   WorkerRegistry,
+  WorkerRegistryView,
   RegisteredWorker,
 } from "./registry.js";

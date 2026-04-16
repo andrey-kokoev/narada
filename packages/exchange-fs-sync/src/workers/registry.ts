@@ -20,6 +20,12 @@ export interface WorkerRegistry {
   isRunning(workerId: string): boolean;
 }
 
+/** Read-only view of WorkerRegistry for observability and UI consumption */
+export type WorkerRegistryView = Pick<
+  WorkerRegistry,
+  "getWorker" | "listWorkers" | "isRunning"
+>;
+
 interface InFlightState {
   promise: Promise<WorkerExecutionResult>;
   hasPendingLatest: boolean;

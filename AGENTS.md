@@ -214,6 +214,12 @@ narada/
 14. **Bounded Evaluation**: Charters run inside frozen `CharterInvocationEnvelope`s with immutable capability envelopes
 15. **Decision Before Command**: `foreman_decision` is append-only; `outbound_command` is worker-mutable; one decision produces at most one command
 
+### Observation / UI
+16. **Observation is read-only projection**: `exchange-fs-sync/src/observability/` must never contain writes (`.run(`, `.exec(`, direct mutation calls). It derives its data exclusively from durable stores.
+17. **UI cannot become hidden authority**: The operator console (`exchange-fs-sync-daemon/src/ui/`) may only mutate through the audited `executeOperatorAction()` path in `operator-actions.ts`. Direct store mutations from the observation API are forbidden.
+18. **Observation API uses view types**: `ObservationApiScope` exposes only `*View` / `*OperatorView` store interfaces, removing named mutation methods at the type level.
+19. **All UI data sources are classified**: Every observation type is marked as `authoritative` (mirrors one durable row), `derived` (computed from multiple sources), or `decorative` (presentational only).
+
 ### Outbound
 10. **Draft-First Delivery**: Agents and workers never send directly; they always create a draft first
 11. **Two-Stage Completion**: A command reaches `submitted` when Graph accepts it, and `confirmed` only after inbound reconciliation observes the result
