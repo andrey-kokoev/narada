@@ -1,10 +1,11 @@
 /**
  * Operator action routes — the only permitted write path from the operator console.
  *
- * Authority boundary (Task 073/074):
- * - This module contains ONLY the POST /actions route.
+ * Authority boundary (Task 073/074/083):
+ * - This module contains ONLY the POST /control/scopes/:id/actions route.
  * - Every action is validated, audited, and delegated to executeOperatorAction.
  * - No direct store mutations from route handlers.
+ * - Control namespace is explicitly separated from observation namespace.
  */
 
 import type { ServerResponse, IncomingMessage } from "http";
@@ -29,7 +30,7 @@ export function createOperatorActionRoutes(
   return [
     {
       method: "POST",
-      pattern: new RegExp(`^${prefix}/scopes/([^/]+)/actions$`),
+      pattern: new RegExp(`^${prefix}/control/scopes/([^/]+)/actions$`),
       handler: async (req: IncomingMessage, res: ServerResponse, params: RegExpExecArray) => {
         const scope = getScope(params[1]!);
         if (!scope) {

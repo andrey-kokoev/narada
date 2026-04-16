@@ -20,10 +20,13 @@ const __dirname = dirname(__filename);
 
 const projectRoot = resolve(__dirname, "..", "..", "..", "..");
 const daemonSrc = resolve(projectRoot, "packages", "exchange-fs-sync-daemon", "src");
+const coreSrc = resolve(projectRoot, "packages", "exchange-fs-sync", "src");
 const uiHtmlPath = resolve(daemonSrc, "ui", "index.html");
 const operatorActionsPath = resolve(daemonSrc, "operator-actions.ts");
 const observationRoutesPath = resolve(daemonSrc, "observation-routes.ts");
 const operatorActionRoutesPath = resolve(daemonSrc, "operator-action-routes.ts");
+const observabilityTypesPath = resolve(coreSrc, "observability", "types.ts");
+const observabilityQueriesPath = resolve(coreSrc, "observability", "queries.ts");
 
 describe("daemon authority guardrails", () => {
   it("observation routes are exclusively GET", () => {
@@ -35,12 +38,28 @@ describe("daemon authority guardrails", () => {
     }
   });
 
+  it("observation routes contain no control or action paths", () => {
+    const routes = createObservationRoutes("", new Map());
+    for (const route of routes) {
+      expect(route.pattern.source).not.toContain("/control/");
+      expect(route.pattern.source).not.toContain("/actions");
+    }
+  });
+
   it("operator action routes are exclusively POST", () => {
     const routes = createOperatorActionRoutes("", new Map());
     const methods = routes.map((r) => r.method);
     expect(methods.length).toBeGreaterThan(0);
     for (const method of methods) {
       expect(method).toBe("POST");
+    }
+  });
+
+  it("operator action routes are mounted under /control namespace", () => {
+    const routes = createOperatorActionRoutes("", new Map());
+    for (const route of routes) {
+      expect(route.pattern.test("/control/scopes/scope-a/actions")).toBe(true);
+      expect(route.pattern.test("/scopes/scope-a/actions")).toBe(false);
     }
   });
 
@@ -87,8 +106,8 @@ describe("daemon authority guardrails", () => {
     // One definition + one call inside doAction = 2 occurrences
     expect(apiPostCalls.length).toBe(2);
 
-    // doAction must target only /actions
-    expect(html).toContain("apiPost(`/scopes/${encodeURIComponent(currentScope)}/actions`");
+    // doAction must target only /control/scopes/.../actions
+    expect(html).toContain("apiPost(`/control/scopes/${encodeURIComponent(currentScope)}/actions`");
 
     // No inline onclick handlers that are not doAction or restoreDetailState
     const onclickMatches = html.matchAll(/onclick\s*=\s*"([^"]*)"/gi);
@@ -134,5 +153,78 @@ describe("daemon authority guardrails", () => {
     for (const pattern of forbiddenPatterns) {
       expect(source).not.toContain(pattern);
     }
+  });
+
+  // Task 085 — Freeze observation boundary invariants
+  it("observability queries are SELECT-only (no .run or .exec)", () => {
+    const source = readFileSync(observabilityQueriesPath, "utf8");
+    expect(source).not.toMatch(/\.run\s*\(/);
+    expect(source).not.toMatch(/\.exec\s*\(/);
+  });
+
+  function stripBlocks(source: string, blockPrefixes: string[]): string {
+    let stripped = source;
+    for (const prefix of blockPrefixes) {
+      let startIdx = stripped.indexOf(prefix);
+      while (startIdx !== -1) {
+        // Find the next top-level export after this block
+        let endIdx = stripped.length;
+        const searchFrom = startIdx + prefix.length;
+        const nextExport = stripped.indexOf("\nexport ", searchFrom);
+        if (nextExport !== -1) endIdx = nextExport;
+        stripped = stripped.slice(0, startIdx) + stripped.slice(endIdx);
+        startIdx = stripped.indexOf(prefix);
+      }
+    }
+    return stripped;
+  }
+
+  it("generic observability types contain no mailbox-era leakage", () => {
+    const source = readFileSync(observabilityTypesPath, "utf8");
+    const stripped = stripBlocks(source, [
+      "export interface MailExecutionDetail",
+      "export interface MailboxConversationSummary",
+      "export interface MailboxVerticalView",
+    ]);
+    expect(stripped).not.toContain("conversation_id");
+    expect(stripped).not.toContain("mailbox_id");
+  });
+
+  it("generic observability queries contain no mailbox-era leakage", () => {
+    const source = readFileSync(observabilityQueriesPath, "utf8");
+    const stripped = stripBlocks(source, [
+      "export function getMailboxVerticalView",
+      "export function getMailExecutionDetails",
+    ]);
+    expect(stripped).not.toContain("conversation_id");
+    expect(stripped).not.toContain("mailbox_id");
+  });
+
+  it("UI shell nav menu is vertical-neutral at top level", () => {
+    const html = readFileSync(uiHtmlPath, "utf8");
+    // Extract the nav menu items
+    const navMatch = html.match(/<nav>[\s\S]*?<\/nav>/i);
+    expect(navMatch).toBeTruthy();
+    const nav = navMatch![0];
+    // Top-level nav should not contain mail-specific labels
+    expect(nav).not.toContain("Mailbox");
+    expect(nav).not.toContain("Mail");
+    // But it should contain generic sections
+    expect(nav).toContain("Overview");
+    expect(nav).toContain("Facts");
+    expect(nav).toContain("Contexts");
+    expect(nav).toContain("Work");
+    expect(nav).toContain("Verticals");
+  });
+
+  it("UI shell generic pages do not use mailbox-first framing", () => {
+    const html = readFileSync(uiHtmlPath, "utf8");
+    // Generic function names and page titles should be vertical-neutral.
+    // loadMailbox is allowed as a vertical-specific page under Verticals,
+    // but generic surfaces must remain kernel-first.
+    expect(html).toMatch(/function\s+loadOverview\b/);
+    expect(html).toMatch(/function\s+loadFacts\b/);
+    expect(html).toMatch(/function\s+loadContexts\b/);
+    expect(html).toMatch(/function\s+loadWork\b/);
   });
 });

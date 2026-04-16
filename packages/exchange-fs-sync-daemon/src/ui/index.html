@@ -311,7 +311,7 @@
 
     async function doAction(actionType, targetId) {
       try {
-        const result = await apiPost(`/scopes/${encodeURIComponent(currentScope)}/actions`, {
+        const result = await apiPost(`/control/scopes/${encodeURIComponent(currentScope)}/actions`, {
           action_type: actionType,
           target_id: targetId,
         });

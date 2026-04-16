@@ -387,8 +387,7 @@ export interface OverviewFailureSummary {
   vertical: string;
 }
 
-/** Unified observation plane snapshot */
-/** @source authoritative — Context summary for operator UI (mirrors durable conversation_records row) */
+/** @source authoritative — Context summary for operator UI (mirrors durable context_records view) */
 export interface ContextSummary {
   context_id: string;
   scope_id: string;

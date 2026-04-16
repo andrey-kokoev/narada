@@ -183,6 +183,24 @@ export class SqliteOutboundStore implements OutboundStore {
       create index if not exists idx_outbound_commands_mailbox
         on outbound_commands(mailbox_id);
 
+      -- Neutral observation compatibility view (Task 082)
+      create view if not exists outbound_handoffs as
+      select
+        outbound_id,
+        conversation_id as context_id,
+        mailbox_id as scope_id,
+        action_type,
+        status,
+        latest_version,
+        created_at,
+        created_by,
+        submitted_at,
+        confirmed_at,
+        blocked_reason,
+        terminal_reason,
+        idempotency_key
+      from outbound_commands;
+
       create table if not exists outbound_versions (
         outbound_id text not null,
         version integer not null,

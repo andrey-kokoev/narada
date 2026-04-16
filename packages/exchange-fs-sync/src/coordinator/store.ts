@@ -61,6 +61,24 @@ function rowToConversationRecord(row: Record<string, unknown>): ConversationReco
   };
 }
 
+function rowToContextRecord(row: Record<string, unknown>): import("./types.js").ContextRecord {
+  return {
+    context_id: String(row.conversation_id),
+    scope_id: String(row.mailbox_id),
+    primary_charter: String(row.primary_charter),
+    secondary_charters_json: String(row.secondary_charters_json),
+    status: String(row.status) as import("./types.js").ContextRecord["status"],
+    assigned_agent: row.assigned_agent ? String(row.assigned_agent) : null,
+    last_message_at: row.last_message_at ? String(row.last_message_at) : null,
+    last_inbound_at: row.last_inbound_at ? String(row.last_inbound_at) : null,
+    last_outbound_at: row.last_outbound_at ? String(row.last_outbound_at) : null,
+    last_analyzed_at: row.last_analyzed_at ? String(row.last_analyzed_at) : null,
+    last_triaged_at: row.last_triaged_at ? String(row.last_triaged_at) : null,
+    created_at: String(row.created_at),
+    updated_at: String(row.updated_at),
+  };
+}
+
 function rowToWorkItem(row: Record<string, unknown>): WorkItem {
   return {
     work_item_id: String(row.work_item_id),
@@ -291,6 +309,32 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
 
       create index if not exists idx_conversation_revisions_lookup
         on conversation_revisions(conversation_id, ordinal);
+
+      -- Neutral observation compatibility views (Task 082)
+      create view if not exists context_records as
+      select
+        conversation_id as context_id,
+        mailbox_id as scope_id,
+        status,
+        primary_charter,
+        secondary_charters_json,
+        assigned_agent,
+        last_message_at,
+        last_inbound_at,
+        last_outbound_at,
+        last_analyzed_at,
+        last_triaged_at,
+        created_at,
+        updated_at
+      from conversation_records;
+
+      create view if not exists context_revisions as
+      select
+        conversation_id as context_id,
+        ordinal,
+        observed_at,
+        trigger_event_id
+      from conversation_revisions;
 
       -- v2 work_items (terminal schedulable unit)
       create table if not exists work_items (
@@ -635,6 +679,49 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     return row ? rowToConversationRecord(row) : undefined;
   }
 
+  upsertContextRecord(record: import("./types.js").ContextRecord): void {
+    this.db.prepare(`
+      insert into conversation_records (
+        conversation_id, mailbox_id, primary_charter, secondary_charters_json, status,
+        assigned_agent, last_message_at, last_inbound_at, last_outbound_at,
+        last_analyzed_at, last_triaged_at, created_at, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      on conflict(conversation_id) do update set
+        mailbox_id = excluded.mailbox_id,
+        primary_charter = excluded.primary_charter,
+        secondary_charters_json = excluded.secondary_charters_json,
+        status = excluded.status,
+        assigned_agent = excluded.assigned_agent,
+        last_message_at = excluded.last_message_at,
+        last_inbound_at = excluded.last_inbound_at,
+        last_outbound_at = excluded.last_outbound_at,
+        last_analyzed_at = excluded.last_analyzed_at,
+        last_triaged_at = excluded.last_triaged_at,
+        updated_at = excluded.updated_at
+    `).run(
+      record.context_id,
+      record.scope_id,
+      record.primary_charter,
+      record.secondary_charters_json,
+      record.status,
+      record.assigned_agent,
+      record.last_message_at,
+      record.last_inbound_at,
+      record.last_outbound_at,
+      record.last_analyzed_at,
+      record.last_triaged_at,
+      record.created_at,
+      record.updated_at,
+    );
+  }
+
+  getContextRecord(contextId: string): import("./types.js").ContextRecord | undefined {
+    const row = this.db.prepare(`
+      select * from conversation_records where conversation_id = ?
+    `).get(contextId) as Record<string, unknown> | undefined;
+    return row ? rowToContextRecord(row) : undefined;
+  }
+
   nextRevisionOrdinal(conversationId: string): number {
     const tx = this.db.transaction(() => {
       const current = this.db.prepare(`
@@ -659,6 +746,17 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
       insert into conversation_revisions (conversation_id, ordinal, observed_at, trigger_event_id)
       values (?, ?, datetime('now'), ?)
     `).run(conversationId, ordinal, triggerEventId);
+  }
+
+  recordContextRevision(
+    contextId: string,
+    ordinal: number,
+    triggerEventId: string | null = null,
+  ): void {
+    this.db.prepare(`
+      insert into conversation_revisions (conversation_id, ordinal, observed_at, trigger_event_id)
+      values (?, ?, datetime('now'), ?)
+    `).run(contextId, ordinal, triggerEventId);
   }
 
   getLatestRevisionOrdinal(conversationId: string): number | null {

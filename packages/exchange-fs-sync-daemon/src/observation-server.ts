@@ -3,13 +3,14 @@
  *
  * HTTP server for UI consumption of the observation plane and safe operator actions.
  *
- * Architecture (Task 074):
- * - observation-routes.ts  -> all read-only GET endpoints
- * - operator-action-routes.ts -> the single audited POST /actions endpoint
+ * Architecture (Task 074/083):
+ * - observation-routes.ts  -> all read-only GET endpoints under /scopes/...
+ * - operator-action-routes.ts -> the single audited POST /control/scopes/.../actions endpoint
  * - observation-server.ts  -> server lifecycle, request dispatch, and shared types
  *
- * Authority boundary (Task 073):
- * - All GET responses are derived from durable state (read-only).
+ * Authority boundary (Task 073/083):
+ * - Observation namespace (/scopes/...) is strictly read-only GET.
+ * - Control namespace (/control/...) is the only permitted write surface.
  * - All write paths are validated, audited, and delegated to operator-actions.ts.
  * - ObservationApiScope exposes only *View / *OperatorView store interfaces.
  *   Future contributors cannot call hidden store mutations from route handlers.
@@ -117,6 +118,20 @@ export function createObservationServer(
           await route.handler(req, res, match, url.searchParams);
           return;
         }
+      }
+
+      // Task 083 — explicit namespace separation
+      const isControlPath = pathname.startsWith(`${prefix}/control/`);
+      const isObservationPath = !isControlPath && pathname.startsWith(`${prefix}/scopes/`);
+
+      if (isObservationPath && req.method !== "GET") {
+        jsonResponse(res, 405, { error: "Method not allowed" });
+        return;
+      }
+
+      if (isControlPath && req.method !== "POST") {
+        jsonResponse(res, 405, { error: "Method not allowed" });
+        return;
       }
 
       if (req.method !== "GET" && req.method !== "POST") {

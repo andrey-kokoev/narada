@@ -175,8 +175,8 @@ export function getRecentOutboundCommands(
     .prepare(
       `select
          outbound_id,
-         conversation_id as context_id,
-         mailbox_id as scope_id,
+         context_id,
+         scope_id,
          action_type,
          status,
          latest_version,
@@ -185,7 +185,7 @@ export function getRecentOutboundCommands(
          confirmed_at,
          terminal_reason,
          idempotency_key
-       from outbound_commands
+       from outbound_handoffs
        order by created_at desc
        limit ?`,
     )
@@ -261,7 +261,7 @@ export function buildScopeDispatchSummary(
     .get(scopeId) as { c: number };
   const pendingOutbound = outboundStore.db
     .prepare(
-      `select count(*) as c from outbound_commands where mailbox_id = ? and status in ('pending', 'draft_creating', 'draft_ready')`,
+      `select count(*) as c from outbound_handoffs where scope_id = ? and status in ('pending', 'draft_creating', 'draft_ready')`,
     )
     .get(scopeId) as { c: number };
   const recentDecisions = store.db
@@ -413,10 +413,10 @@ export function buildControlPlaneSnapshot(
 
   const recentOutbound = getRecentOutboundCommands(outboundStore, 50);
   const outboundCounts = outboundStore.db
-    .prepare(`select status, count(*) as c from outbound_commands group by status`)
+    .prepare(`select status, count(*) as c from outbound_handoffs group by status`)
     .all() as Array<{ status: string; c: number }>;
   const outboundTotal = outboundStore.db
-    .prepare(`select count(*) as c from outbound_commands`)
+    .prepare(`select count(*) as c from outbound_handoffs`)
     .get() as { c: number };
 
   const outboundByStatus: Record<string, number> = {};
@@ -886,17 +886,17 @@ export function getContextSummaries(
 ): ContextSummary[] {
   const rows = coordinatorStore.db
     .prepare(
-      `select conversation_id, mailbox_id, status, primary_charter, assigned_agent,
+      `select context_id, scope_id, status, primary_charter, assigned_agent,
               last_message_at, created_at, updated_at
-       from conversation_records
+       from context_records
        order by updated_at desc
        limit ?`,
     )
     .all(limit) as Record<string, unknown>[];
 
   return rows.map((row) => ({
-    context_id: String(row.conversation_id),
-    scope_id: String(row.mailbox_id),
+    context_id: String(row.context_id),
+    scope_id: String(row.scope_id),
     status: String(row.status),
     primary_charter: String(row.primary_charter),
     assigned_agent: row.assigned_agent ? String(row.assigned_agent) : null,
@@ -1070,11 +1070,13 @@ export function getContextTimeline(
   coordinatorStore: CoordinatorStoreView,
   contextId: string,
 ): ContextTimeline {
-  const context = coordinatorStore.getConversationRecord(contextId);
+  const contextRow = coordinatorStore.db
+    .prepare(`select * from context_records where context_id = ?`)
+    .get(contextId) as Record<string, unknown> | undefined;
 
   const revisionRows = coordinatorStore.db
     .prepare(
-      `select ordinal, observed_at, trigger_event_id from conversation_revisions where conversation_id = ? order by ordinal asc`,
+      `select ordinal, observed_at, trigger_event_id from context_revisions where context_id = ? order by ordinal asc`,
     )
     .all(contextId) as Array<{ ordinal: number; observed_at: string; trigger_event_id: string | null }>;
 
@@ -1084,7 +1086,7 @@ export function getContextTimeline(
     )
     .all(contextId) as Record<string, unknown>[];
 
-  const scopeId = context?.mailbox_id ?? "";
+  const scopeId = contextRow ? String(contextRow.scope_id) : "";
   const outputs = scopeId
     ? coordinatorStore.getOutputsByContext(contextId, scopeId).map((o) => ({
         output_id: o.output_id,
@@ -1095,9 +1097,7 @@ export function getContextTimeline(
     : [];
 
   return {
-    context: context
-      ? rowToContextSummary(context as unknown as Record<string, unknown>)
-      : null,
+    context: contextRow ? rowToContextSummary(contextRow) : null,
     revisions: revisionRows.map((r) => ({
       ordinal: r.ordinal,
       observed_at: r.observed_at,
@@ -1110,8 +1110,8 @@ export function getContextTimeline(
 
 function rowToContextSummary(row: Record<string, unknown>): ContextSummary {
   return {
-    context_id: String(row.conversation_id),
-    scope_id: String(row.mailbox_id),
+    context_id: String(row.context_id),
+    scope_id: String(row.scope_id),
     status: String(row.status),
     primary_charter: String(row.primary_charter),
     assigned_agent: row.assigned_agent ? String(row.assigned_agent) : null,
@@ -1206,15 +1206,15 @@ export function getUnifiedTimeline(
   }
 
   const revisionRows = coordinatorStore.db
-    .prepare(`select conversation_id, ordinal, observed_at, trigger_event_id from conversation_revisions order by observed_at desc limit ?`)
-    .all(limit) as Array<{ conversation_id: string; ordinal: number; observed_at: string; trigger_event_id: string | null }>;
+    .prepare(`select context_id, ordinal, observed_at, trigger_event_id from context_revisions order by observed_at desc limit ?`)
+    .all(limit) as Array<{ context_id: string; ordinal: number; observed_at: string; trigger_event_id: string | null }>;
 
   for (const row of revisionRows) {
     events.push({
       event_at: row.observed_at,
       kind: "context_formed",
       scope_id: "",
-      context_id: row.conversation_id,
+      context_id: row.context_id,
       fact_id: row.trigger_event_id,
       work_item_id: null,
       detail: `revision ${row.ordinal}`,

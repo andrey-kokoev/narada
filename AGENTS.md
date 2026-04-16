@@ -216,9 +216,16 @@ narada/
 
 ### Observation / UI
 16. **Observation is read-only projection**: `exchange-fs-sync/src/observability/` must never contain writes (`.run(`, `.exec(`, direct mutation calls). It derives its data exclusively from durable stores.
-17. **UI cannot become hidden authority**: The operator console (`exchange-fs-sync-daemon/src/ui/`) may only mutate through the audited `executeOperatorAction()` path in `operator-actions.ts`. Direct store mutations from the observation API are forbidden.
-18. **Observation API uses view types**: `ObservationApiScope` exposes only `*View` / `*OperatorView` store interfaces, removing named mutation methods at the type level.
-19. **All UI data sources are classified**: Every observation type is marked as `authoritative` (mirrors one durable row), `derived` (computed from multiple sources), or `decorative` (presentational only).
+17. **Control surface is explicitly separated**: Operator actions are mounted under `/control/scopes/:scope_id/actions`. The observation namespace (`/scopes/...`) is strictly GET-only.
+18. **UI cannot become hidden authority**: The operator console (`exchange-fs-sync-daemon/src/ui/`) may only mutate through the audited `executeOperatorAction()` path in `operator-actions.ts`. Direct store mutations from the observation API are forbidden.
+19. **Observation API uses view types**: `ObservationApiScope` exposes only `*View` / `*OperatorView` store interfaces, removing named mutation methods at the type level.
+20. **All UI data sources are classified**: Every observation type is marked as `authoritative` (mirrors one durable row), `derived` (computed from multiple sources), or `decorative` (presentational only).
+
+### Do Not Regress These Boundaries (Task 085)
+21. **No mailbox leakage into generic observation**: `conversation_id` and `mailbox_id` must not appear in generic observability types/queries. They are allowed only inside mail-specific types (`MailExecutionDetail`, `MailboxVerticalView`) and mail-specific query functions (`getMailboxVerticalView`, `getMailExecutionDetails`).
+22. **Observation queries are SELECT-only**: Files in `exchange-fs-sync/src/observability/` must not contain `.run(` or `.exec(`. Only `.all(`, `.get(`, and `.pluck(` are permitted.
+23. **Control endpoints stay in `/control/`**: No POST route may be registered under `/scopes/...` in the observation namespace. The action route must remain under `/control/scopes/:scope_id/actions`.
+24. **UI shell stays vertical-neutral**: The top-level nav menu must not contain mail-specific labels (e.g., "Mailbox"). Mail-specific views must live under the "Verticals" page, not as primary navigation.
 
 ### Outbound
 10. **Draft-First Delivery**: Agents and workers never send directly; they always create a draft first

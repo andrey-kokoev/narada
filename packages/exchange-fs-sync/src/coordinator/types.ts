@@ -43,6 +43,25 @@ export interface ConversationRecord {
   updated_at: string;
 }
 
+/** Neutral observation-facing context record (Task 084).
+ *  Semantically identical to ConversationRecord but uses vertical-neutral naming.
+ */
+export interface ContextRecord {
+  context_id: string;
+  scope_id: string;
+  primary_charter: string;
+  secondary_charters_json: string;
+  status: "active" | "archived" | "deleted";
+  assigned_agent: string | null;
+  last_message_at: string | null;
+  last_inbound_at: string | null;
+  last_outbound_at: string | null;
+  last_analyzed_at: string | null;
+  last_triaged_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /** Revision ordinal tracking for deterministic conversation snapshots. */
 export interface ConversationRevision {
   revision_record_id: number;
@@ -250,10 +269,17 @@ export interface CoordinatorStore {
   upsertConversationRecord(record: ConversationRecord): void;
   getConversationRecord(conversationId: string): ConversationRecord | undefined;
 
+  // Neutral context records (Task 084) — adapter over conversation_records
+  upsertContextRecord(record: ContextRecord): void;
+  getContextRecord(contextId: string): ContextRecord | undefined;
+
   // Conversation revisions
   nextRevisionOrdinal(conversationId: string): number;
   recordRevision(conversationId: string, ordinal: number, triggerEventId?: string | null): void;
   getLatestRevisionOrdinal(conversationId: string): number | null;
+
+  // Neutral context revisions (Task 084)
+  recordContextRevision(contextId: string, ordinal: number, triggerEventId?: string | null): void;
 
   // Work items
   insertWorkItem(item: WorkItem): void;

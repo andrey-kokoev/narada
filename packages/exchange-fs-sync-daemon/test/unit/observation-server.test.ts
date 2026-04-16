@@ -203,10 +203,10 @@ describe("observation server", () => {
     values (?, ?, ?, ?, ?, ?, ?)
   `).run("lease-stale", "wi-failed", "runner-b", "2026-04-13T11:00:00Z", "2026-04-13T11:05:00Z", "2026-04-13T11:10:00Z", "abandoned");
 
-  // Task 081 — Non-mail vertical fixtures (timer, filesystem, webhook)
-  coordinatorStore.upsertConversationRecord({
-    conversation_id: "timer:job-1",
-    mailbox_id: "scope-a",
+  // Task 084 — Non-mail vertical fixtures via neutral context adapter (no mailbox-shaped seeding)
+  coordinatorStore.upsertContextRecord({
+    context_id: "timer:job-1",
+    scope_id: "scope-a",
     primary_charter: "timer_steward",
     secondary_charters_json: "[]",
     status: "active",
@@ -219,6 +219,7 @@ describe("observation server", () => {
     created_at: "2026-04-13T12:00:00Z",
     updated_at: "2026-04-13T12:00:00Z",
   });
+  coordinatorStore.recordContextRevision("timer:job-1", 1, "fact-timer-1");
 
   coordinatorStore.insertWorkItem({
     work_item_id: "wi-timer-1",
@@ -237,9 +238,9 @@ describe("observation server", () => {
     updated_at: "2026-04-13T12:00:00Z",
   });
 
-  coordinatorStore.upsertConversationRecord({
-    conversation_id: "filesystem:scan-1",
-    mailbox_id: "scope-a",
+  coordinatorStore.upsertContextRecord({
+    context_id: "filesystem:scan-1",
+    scope_id: "scope-a",
     primary_charter: "fs_steward",
     secondary_charters_json: "[]",
     status: "active",
@@ -252,6 +253,7 @@ describe("observation server", () => {
     created_at: "2026-04-13T12:00:00Z",
     updated_at: "2026-04-13T12:00:00Z",
   });
+  coordinatorStore.recordContextRevision("filesystem:scan-1", 1, "fact-fs-1");
 
   coordinatorStore.insertWorkItem({
     work_item_id: "wi-fs-1",
@@ -270,9 +272,9 @@ describe("observation server", () => {
     updated_at: "2026-04-13T12:00:00Z",
   });
 
-  coordinatorStore.upsertConversationRecord({
-    conversation_id: "webhook:evt-1",
-    mailbox_id: "scope-a",
+  coordinatorStore.upsertContextRecord({
+    context_id: "webhook:evt-1",
+    scope_id: "scope-a",
     primary_charter: "webhook_steward",
     secondary_charters_json: "[]",
     status: "active",
@@ -285,6 +287,7 @@ describe("observation server", () => {
     created_at: "2026-04-13T12:00:00Z",
     updated_at: "2026-04-13T12:00:00Z",
   });
+  coordinatorStore.recordContextRevision("webhook:evt-1", 1, "fact-webhook-1");
 
   coordinatorStore.insertWorkItem({
     work_item_id: "wi-wh-1",
@@ -558,8 +561,14 @@ describe("observation server", () => {
     expect(body.error).toBe("Scope not found");
   });
 
-  it("executes retry_work_item action", async () => {
+  it("observation namespace no longer hosts actions", async () => {
     const url = `${server.getUrl()}/scopes/scope-a/actions`;
+    const { status } = await httpPostJson(url, { action_type: "retry_work_item", target_id: "wi-failed" });
+    expect(status).toBe(405);
+  });
+
+  it("executes retry_work_item action via control namespace", async () => {
+    const url = `${server.getUrl()}/control/scopes/scope-a/actions`;
     const { status, data } = await httpPostJson(url, { action_type: "retry_work_item", target_id: "wi-failed" });
     expect(status).toBe(200);
     expect((data as { success: boolean }).success).toBe(true);
@@ -569,7 +578,7 @@ describe("observation server", () => {
   });
 
   it("executes acknowledge_alert action", async () => {
-    const url = `${server.getUrl()}/scopes/scope-a/actions`;
+    const url = `${server.getUrl()}/control/scopes/scope-a/actions`;
     const { status, data } = await httpPostJson(url, { action_type: "acknowledge_alert", target_id: "wi-failed" });
     expect(status).toBe(200);
     expect((data as { success: boolean }).success).toBe(true);
@@ -580,7 +589,7 @@ describe("observation server", () => {
   });
 
   it("rejects action for unknown work item", async () => {
-    const url = `${server.getUrl()}/scopes/scope-a/actions`;
+    const url = `${server.getUrl()}/control/scopes/scope-a/actions`;
     const { status, data } = await httpPostJson(url, { action_type: "retry_work_item", target_id: "no-such-item" });
     expect(status).toBe(422);
     expect((data as { success: boolean }).success).toBe(false);
@@ -666,7 +675,7 @@ describe("observation server", () => {
   });
 
   it("returns 404 for actions on unknown scope", async () => {
-    const url = `${server.getUrl()}/scopes/unknown/actions`;
+    const url = `${server.getUrl()}/control/scopes/unknown/actions`;
     const { status, data } = await httpPostJson(url, { action_type: "retry_work_item", target_id: "wi-failed" });
     expect(status).toBe(404);
     expect((data as { error: string }).error).toBe("Scope not found");
@@ -707,6 +716,26 @@ describe("observation server", () => {
     const factIds = body.events.map(e => e.fact_id).filter(Boolean);
     expect(contextIds).toContain("timer:job-1");
     expect(factIds).toContain("fact-fs-1");
+  });
+
+  it("neutral context adapter stores and retrieves non-mail contexts", async () => {
+    const record = coordinatorStore.getContextRecord("timer:job-1");
+    expect(record).toBeDefined();
+    expect(record!.context_id).toBe("timer:job-1");
+    expect(record!.scope_id).toBe("scope-a");
+  });
+
+  it("context timeline includes non-mail revisions from neutral adapter", async () => {
+    const url = `${server.getUrl()}/scopes/scope-a/contexts/timer%3Ajob-1/timeline`;
+    const body = (await httpGetJson(url)) as {
+      scope_id: string;
+      context_id: string;
+      timeline: { revisions: Array<{ ordinal: number; trigger_event_id: string | null }> };
+    };
+    expect(body.scope_id).toBe("scope-a");
+    expect(body.context_id).toBe("timer:job-1");
+    expect(body.timeline.revisions.length).toBeGreaterThanOrEqual(1);
+    expect(body.timeline.revisions[0].trigger_event_id).toBe("fact-timer-1");
   });
 
   it("shows non-mail verticals in overview", async () => {
@@ -768,7 +797,7 @@ describe("observation server", () => {
   });
 
   it("rejects rebuild_views when callback unavailable", async () => {
-    const url = `${server.getUrl()}/scopes/scope-a/actions`;
+    const url = `${server.getUrl()}/control/scopes/scope-a/actions`;
     const { status, data } = await httpPostJson(url, { action_type: "rebuild_views" });
     expect(status).toBe(422);
     expect((data as { success: boolean }).success).toBe(false);
@@ -776,7 +805,7 @@ describe("observation server", () => {
   });
 
   it("rejects request_redispatch when callback unavailable", async () => {
-    const url = `${server.getUrl()}/scopes/scope-a/actions`;
+    const url = `${server.getUrl()}/control/scopes/scope-a/actions`;
     const { status, data } = await httpPostJson(url, { action_type: "request_redispatch" });
     expect(status).toBe(422);
     expect((data as { success: boolean }).success).toBe(false);
@@ -793,14 +822,20 @@ describe("observation server", () => {
     }
   });
 
-  it("rejects POST to unknown endpoints with 404", async () => {
+  it("rejects POST to unknown observation paths with 405", async () => {
     const url = `${server.getUrl()}/scopes/scope-a/nonexistent`;
+    const { status } = await httpPostJson(url, { action_type: "retry_work_item" });
+    expect(status).toBe(405);
+  });
+
+  it("rejects POST to unknown non-observation paths with 404", async () => {
+    const url = `${server.getUrl()}/unknown/path`;
     const { status } = await httpPostJson(url, { action_type: "retry_work_item" });
     expect(status).toBe(404);
   });
 
   it("rejects unknown action types", async () => {
-    const url = `${server.getUrl()}/scopes/scope-a/actions`;
+    const url = `${server.getUrl()}/control/scopes/scope-a/actions`;
     const { status, data } = await httpPostJson(url, { action_type: "inject_decision", target_id: "wi-1" });
     expect(status).toBe(422);
     expect((data as { success: boolean }).success).toBe(false);
@@ -809,7 +844,7 @@ describe("observation server", () => {
 
   it("does not allow direct work item creation via actions", async () => {
     const beforeCount = coordinatorStore.db.prepare("select count(*) as c from work_items").get() as { c: number };
-    const url = `${server.getUrl()}/scopes/scope-a/actions`;
+    const url = `${server.getUrl()}/control/scopes/scope-a/actions`;
     const { status, data } = await httpPostJson(url, { action_type: "create_work_item", target_id: "new-wi" });
     expect(status).toBe(422);
     expect((data as { success: boolean }).success).toBe(false);
@@ -819,20 +854,20 @@ describe("observation server", () => {
 
   // Task 080 — Authority guardrails and regression tests
   it("rejects malformed JSON to actions", async () => {
-    const url = `${server.getUrl()}/scopes/scope-a/actions`;
+    const url = `${server.getUrl()}/control/scopes/scope-a/actions`;
     const { status, data } = await httpRequestJson(url, "POST", "not-json");
     expect(status).toBe(400);
     expect((data as { error: string }).error).toBe("Invalid JSON");
   });
 
   it("rejects actions missing action_type", async () => {
-    const url = `${server.getUrl()}/scopes/scope-a/actions`;
+    const url = `${server.getUrl()}/control/scopes/scope-a/actions`;
     const { status, data } = await httpPostJson(url, { target_id: "wi-1" });
     expect(status).toBe(400);
     expect((data as { error: string }).error).toBe("Missing or invalid action_type");
   });
 
-  it("rejects POST to observation endpoints", async () => {
+  it("rejects POST to observation endpoints with 405", async () => {
     const endpoints = [
       "/scopes/scope-a/snapshot",
       "/scopes/scope-a/overview",
@@ -843,12 +878,12 @@ describe("observation server", () => {
     for (const path of endpoints) {
       const url = `${server.getUrl()}${path}`;
       const { status } = await httpPostJson(url, { action_type: "retry_work_item" });
-      expect(status).toBe(404);
+      expect(status).toBe(405);
     }
   });
 
   it("rejects PUT and PATCH to actions endpoint", async () => {
-    const url = `${server.getUrl()}/scopes/scope-a/actions`;
+    const url = `${server.getUrl()}/control/scopes/scope-a/actions`;
     for (const method of ["PUT", "PATCH"]) {
       const { status, data } = await httpRequestJson(url, method);
       expect(status).toBe(405);
