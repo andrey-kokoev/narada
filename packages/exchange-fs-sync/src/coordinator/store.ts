@@ -63,8 +63,8 @@ function rowToConversationRecord(row: Record<string, unknown>): ConversationReco
 function rowToWorkItem(row: Record<string, unknown>): WorkItem {
   return {
     work_item_id: String(row.work_item_id),
-    conversation_id: String(row.conversation_id),
-    mailbox_id: String(row.mailbox_id),
+    context_id: String(row.conversation_id),
+    scope_id: String(row.mailbox_id),
     status: String(row.status) as WorkItemStatus,
     priority: Number(row.priority),
     opened_for_revision_id: String(row.opened_for_revision_id),
@@ -112,7 +112,7 @@ function rowToExecutionAttempt(row: Record<string, unknown>): ExecutionAttempt {
 function rowToAgentSession(row: Record<string, unknown>): AgentSession {
   return {
     session_id: String(row.session_id),
-    conversation_id: String(row.conversation_id),
+    context_id: String(row.conversation_id),
     work_item_id: String(row.work_item_id ?? ''),
     started_at: String(row.started_at),
     ended_at: row.ended_at ? String(row.ended_at) : null,
@@ -191,7 +191,7 @@ function rowToToolCallRecord(row: Record<string, unknown>): ToolCallRecord {
     call_id: String(row.call_id),
     execution_id: String(row.execution_id),
     work_item_id: String(row.work_item_id),
-    conversation_id: String(row.conversation_id),
+    context_id: String(row.conversation_id),
     tool_id: String(row.tool_id),
     request_args_json: String(row.request_args_json),
     exit_status: String(row.exit_status) as ToolCallStatus,
@@ -636,8 +636,8 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       item.work_item_id,
-      item.conversation_id,
-      item.mailbox_id,
+      item.context_id,
+      item.scope_id,
       item.status,
       item.priority,
       item.opened_for_revision_id,
@@ -697,23 +697,23 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     return row ? rowToWorkItem(row) : undefined;
   }
 
-  getActiveWorkItemForConversation(conversationId: string): WorkItem | undefined {
+  getActiveWorkItemForContext(contextId: string): WorkItem | undefined {
     const row = this.db.prepare(`
       select * from work_items
       where conversation_id = ? and status in ('opened', 'leased', 'executing')
       order by created_at desc
       limit 1
-    `).get(conversationId) as Record<string, unknown> | undefined;
+    `).get(contextId) as Record<string, unknown> | undefined;
     return row ? rowToWorkItem(row) : undefined;
   }
 
-  getLatestWorkItemForConversation(conversationId: string): WorkItem | undefined {
+  getLatestWorkItemForContext(contextId: string): WorkItem | undefined {
     const row = this.db.prepare(`
       select * from work_items
       where conversation_id = ?
       order by created_at desc
       limit 1
-    `).get(conversationId) as Record<string, unknown> | undefined;
+    `).get(contextId) as Record<string, unknown> | undefined;
     return row ? rowToWorkItem(row) : undefined;
   }
 
@@ -1015,7 +1015,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
       record.call_id,
       record.execution_id,
       record.work_item_id,
-      record.conversation_id,
+      record.context_id,
       record.tool_id,
       record.request_args_json,
       record.exit_status,
@@ -1090,7 +1090,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
       ) values (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       session.session_id,
-      session.conversation_id,
+      session.context_id,
       session.work_item_id,
       session.started_at,
       session.ended_at,
@@ -1113,24 +1113,24 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     return row ? rowToAgentSession(row) : undefined;
   }
 
-  getSessionsForConversation(conversationId: string): AgentSession[] {
+  getSessionsForContext(contextId: string): AgentSession[] {
     const rows = this.db.prepare(`
       select * from agent_sessions where conversation_id = ? order by started_at desc
-    `).all(conversationId) as Record<string, unknown>[];
+    `).all(contextId) as Record<string, unknown>[];
     return rows.map(rowToAgentSession);
   }
 
-  getResumableSessions(mailboxId?: string): AgentSession[] {
+  getResumableSessions(scopeId?: string): AgentSession[] {
     let sql: string;
     let params: string[];
-    if (mailboxId) {
+    if (scopeId) {
       sql = `
         select s.* from agent_sessions s
         join work_items wi on wi.work_item_id = s.work_item_id
         where wi.mailbox_id = ? and s.status in ('opened', 'idle', 'active')
         order by s.updated_at desc
       `;
-      params = [mailboxId];
+      params = [scopeId];
     } else {
       sql = `
         select * from agent_sessions

@@ -114,8 +114,8 @@ export type WorkItemStatus =
 /** Terminal schedulable unit of control work */
 export interface WorkItem {
   work_item_id: string;
-  conversation_id: string;
-  mailbox_id: string;
+  context_id: string;
+  scope_id: string;
   status: WorkItemStatus;
   priority: number;
   opened_for_revision_id: string;
@@ -194,7 +194,7 @@ export interface ToolCallRecord {
   call_id: string;
   execution_id: string;
   work_item_id: string;
-  conversation_id: string;
+  context_id: string;
   tool_id: string;
   request_args_json: string;
   exit_status: ToolCallStatus;
@@ -227,7 +227,7 @@ export type AgentSessionStatus =
 /** Operator-facing interpretive session record */
 export interface AgentSession {
   session_id: string;
-  conversation_id: string;
+  context_id: string;
   work_item_id: string;
   started_at: string;
   ended_at: string | null;
@@ -263,8 +263,8 @@ export interface CoordinatorStore {
     >,
   ): void;
   getWorkItem(workItemId: string): WorkItem | undefined;
-  getActiveWorkItemForConversation(conversationId: string): WorkItem | undefined;
-  getLatestWorkItemForConversation(conversationId: string): WorkItem | undefined;
+  getActiveWorkItemForContext(contextId: string): WorkItem | undefined;
+  getLatestWorkItemForContext(contextId: string): WorkItem | undefined;
 
   // Work item leases
   insertLease(lease: WorkItemLease): void;
@@ -296,8 +296,8 @@ export interface CoordinatorStore {
   insertAgentSession(session: AgentSession): void;
   getAgentSession(sessionId: string): AgentSession | undefined;
   getSessionForWorkItem(workItemId: string): AgentSession | undefined;
-  getSessionsForConversation(conversationId: string): AgentSession[];
-  getResumableSessions(mailboxId?: string): AgentSession[];
+  getSessionsForContext(contextId: string): AgentSession[];
+  getResumableSessions(scopeId?: string): AgentSession[];
   updateAgentSessionStatus(sessionId: string, status: AgentSession["status"], endedAt?: string): void;
   updateAgentSessionResumeHint(sessionId: string, hint: string): void;
 

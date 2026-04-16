@@ -87,8 +87,8 @@ export function insertWorkItem(h: Harness, overrides?: Partial<WorkItem>): WorkI
   const now = new Date().toISOString();
   const item: WorkItem = {
     work_item_id: `wi_${Math.random().toString(36).slice(2)}`,
-    conversation_id: "conv-1",
-    mailbox_id: "mb-1",
+    context_id: "conv-1",
+    scope_id: "mb-1",
     status: "opened",
     priority: 0,
     opened_for_revision_id: "conv-1:rev:1",

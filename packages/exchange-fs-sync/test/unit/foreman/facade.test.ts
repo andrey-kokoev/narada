@@ -82,8 +82,8 @@ describe("DefaultForemanFacade", () => {
   ): WorkItem {
     const item: WorkItem = {
       work_item_id: `wi_${conversationId}_${Date.now()}`,
-      conversation_id: conversationId,
-      mailbox_id: "mb-1",
+      context_id: conversationId,
+      scope_id: "mb-1",
       status,
       priority: 0,
       opened_for_revision_id: openedForRevisionId,
@@ -156,20 +156,20 @@ describe("DefaultForemanFacade", () => {
       const result = await facade.onSyncCompleted(signal);
 
       expect(result.opened).toHaveLength(1);
-      expect(result.opened[0]!.conversation_id).toBe("conv-1");
+      expect(result.opened[0]!.context_id).toBe("conv-1");
       expect(result.nooped).toHaveLength(0);
 
       const record = coordinatorStore.getConversationRecord("conv-1");
       expect(record).toBeDefined();
 
-      const active = coordinatorStore.getActiveWorkItemForConversation("conv-1");
+      const active = coordinatorStore.getActiveWorkItemForContext("conv-1");
       expect(active).toBeDefined();
       expect(active!.status).toBe("opened");
 
       const session = coordinatorStore.getSessionForWorkItem(active!.work_item_id);
       expect(session).toBeDefined();
       expect(session!.status).toBe("opened");
-      expect(session!.conversation_id).toBe("conv-1");
+      expect(session!.context_id).toBe("conv-1");
     });
 
     it("no-ops when change is only draft_observed", async () => {
@@ -189,7 +189,7 @@ describe("DefaultForemanFacade", () => {
       const existing = insertWorkItem("conv-1", "opened", "conv-1:rev:1");
       coordinatorStore.insertAgentSession({
         session_id: "sess-old",
-        conversation_id: "conv-1",
+        context_id: "conv-1",
         work_item_id: existing.work_item_id,
         started_at: new Date().toISOString(),
         ended_at: null,
@@ -294,7 +294,7 @@ describe("DefaultForemanFacade", () => {
       const wi = insertWorkItem("conv-1", "executing", "conv-1:rev:1");
       coordinatorStore.insertAgentSession({
         session_id: "sess-exec",
-        conversation_id: "conv-1",
+        context_id: "conv-1",
         work_item_id: wi.work_item_id,
         started_at: new Date().toISOString(),
         ended_at: null,

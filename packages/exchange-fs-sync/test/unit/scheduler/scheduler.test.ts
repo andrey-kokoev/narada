@@ -58,8 +58,8 @@ describe("SqliteScheduler", () => {
     const now = new Date().toISOString();
     const item: WorkItem = {
       work_item_id: `wi_${Math.random().toString(36).slice(2)}`,
-      conversation_id: "conv-1",
-      mailbox_id: "mb-1",
+      context_id: "conv-1",
+      scope_id: "mb-1",
       status: "opened",
       priority: 0,
       opened_for_revision_id: "conv-1:rev:1",
@@ -79,7 +79,7 @@ describe("SqliteScheduler", () => {
   // U1: Select runnable with status = 'opened'
   it("U1: selects opened work items as runnable", () => {
     createConversation("conv-1");
-    insertWorkItem({ conversation_id: "conv-1", status: "opened" });
+    insertWorkItem({ context_id: "conv-1", status: "opened" });
 
     const runnable = scheduler.scanForRunnableWork("mb-1", 10);
     expect(runnable).toHaveLength(1);
@@ -89,7 +89,7 @@ describe("SqliteScheduler", () => {
   // U2: Select skips leased work item
   it("U2: skips leased work items", () => {
     createConversation("conv-1");
-    insertWorkItem({ conversation_id: "conv-1", status: "leased" });
+    insertWorkItem({ context_id: "conv-1", status: "leased" });
 
     const runnable = scheduler.scanForRunnableWork("mb-1", 10);
     expect(runnable).toHaveLength(0);
@@ -98,7 +98,7 @@ describe("SqliteScheduler", () => {
   // U3: Select skips superseded work item
   it("U3: skips superseded work items", () => {
     createConversation("conv-1");
-    insertWorkItem({ conversation_id: "conv-1", status: "superseded" });
+    insertWorkItem({ context_id: "conv-1", status: "superseded" });
 
     const runnable = scheduler.scanForRunnableWork("mb-1", 10);
     expect(runnable).toHaveLength(0);
@@ -107,7 +107,7 @@ describe("SqliteScheduler", () => {
   // U4: Lease acquisition succeeds atomically
   it("U4: acquires lease atomically and transitions status to leased", () => {
     createConversation("conv-1");
-    const item = insertWorkItem({ conversation_id: "conv-1", status: "opened" });
+    const item = insertWorkItem({ context_id: "conv-1", status: "opened" });
 
     const result = scheduler.acquireLease(item.work_item_id);
     expect(result.success).toBe(true);
@@ -124,7 +124,7 @@ describe("SqliteScheduler", () => {
   // U5: Concurrent lease acquisition on same work item — exactly one succeeds
   it("U5: concurrent lease acquisition allows only one winner", () => {
     createConversation("conv-1");
-    const item = insertWorkItem({ conversation_id: "conv-1", status: "opened" });
+    const item = insertWorkItem({ context_id: "conv-1", status: "opened" });
 
     const schedA = new SqliteScheduler(store, { runnerId: "runner-a", leaseDurationMs: 60_000 });
     const schedB = new SqliteScheduler(store, { runnerId: "runner-b", leaseDurationMs: 60_000 });
@@ -142,7 +142,7 @@ describe("SqliteScheduler", () => {
   // U6: Heartbeat extends expiry
   it("U6: heartbeat renews lease expiry", () => {
     createConversation("conv-1");
-    const item = insertWorkItem({ conversation_id: "conv-1", status: "opened" });
+    const item = insertWorkItem({ context_id: "conv-1", status: "opened" });
     const result = scheduler.acquireLease(item.work_item_id);
     expect(result.success).toBe(true);
 
@@ -159,7 +159,7 @@ describe("SqliteScheduler", () => {
   // U7: Stale lease detection
   it("U7: stale lease scanner recovers abandoned work items and idles session", () => {
     createConversation("conv-1");
-    const item = insertWorkItem({ conversation_id: "conv-1", status: "opened" });
+    const item = insertWorkItem({ context_id: "conv-1", status: "opened" });
     scheduler.acquireLease(item.work_item_id);
     scheduler.startExecution(item.work_item_id, "conv-1:rev:1", "{}");
 
@@ -184,7 +184,7 @@ describe("SqliteScheduler", () => {
   // U8: Execution start writes attempt record
   it("U8: startExecution writes execution_attempts row with status active and creates session", () => {
     createConversation("conv-1");
-    const item = insertWorkItem({ conversation_id: "conv-1", status: "opened" });
+    const item = insertWorkItem({ context_id: "conv-1", status: "opened" });
     scheduler.acquireLease(item.work_item_id);
 
     const attempt = scheduler.startExecution(item.work_item_id, "conv-1:rev:1", "{}");
@@ -206,7 +206,7 @@ describe("SqliteScheduler", () => {
   // U9: Success path
   it("U9: completeExecution releases lease and marks attempt succeeded", () => {
     createConversation("conv-1");
-    const item = insertWorkItem({ conversation_id: "conv-1", status: "opened" });
+    const item = insertWorkItem({ context_id: "conv-1", status: "opened" });
     scheduler.acquireLease(item.work_item_id);
     const attempt = scheduler.startExecution(item.work_item_id, "conv-1:rev:1", "{}");
 
@@ -223,7 +223,7 @@ describe("SqliteScheduler", () => {
   // U10: Crash path increments retry
   it("U10: failExecution marks crashed, releases lease, sets session idle, and increments retry", () => {
     createConversation("conv-1");
-    const item = insertWorkItem({ conversation_id: "conv-1", status: "opened" });
+    const item = insertWorkItem({ context_id: "conv-1", status: "opened" });
     scheduler.acquireLease(item.work_item_id);
     const attempt = scheduler.startExecution(item.work_item_id, "conv-1:rev:1", "{}");
 
@@ -246,7 +246,7 @@ describe("SqliteScheduler", () => {
   // U11: Max retries → terminal
   it("U11: failExecution transitions to failed_terminal and abandons session after max retries exceeded", () => {
     createConversation("conv-1");
-    const item = insertWorkItem({ conversation_id: "conv-1", status: "opened", retry_count: 2 });
+    const item = insertWorkItem({ context_id: "conv-1", status: "opened", retry_count: 2 });
     scheduler.acquireLease(item.work_item_id);
     const attempt = scheduler.startExecution(item.work_item_id, "conv-1:rev:1", "{}");
 
@@ -264,7 +264,7 @@ describe("SqliteScheduler", () => {
   it("U12: superseded work item is not runnable", () => {
     createConversation("conv-1");
     insertWorkItem({ conversation_id: "conv-1", status: "superseded" });
-    insertWorkItem({ conversation_id: "conv-1", status: "opened" });
+    insertWorkItem({ context_id: "conv-1", status: "opened" });
 
     const runnable = scheduler.scanForRunnableWork("mb-1", 10);
     expect(runnable).toHaveLength(1);
@@ -276,18 +276,18 @@ describe("SqliteScheduler", () => {
     createConversation("conv-2");
     const t1 = new Date(Date.now() - 2000).toISOString();
     const t2 = new Date(Date.now() - 1000).toISOString();
-    insertWorkItem({ conversation_id: "conv-1", status: "opened", priority: 0, created_at: t1 });
-    insertWorkItem({ conversation_id: "conv-2", status: "opened", priority: 5, created_at: t2 });
+    insertWorkItem({ context_id: "conv-1", status: "opened", priority: 0, created_at: t1 });
+    insertWorkItem({ context_id: "conv-2", status: "opened", priority: 5, created_at: t2 });
 
     const runnable = scheduler.scanForRunnableWork("mb-1", 10);
-    expect(runnable[0]!.conversation_id).toBe("conv-2");
-    expect(runnable[1]!.conversation_id).toBe("conv-1");
+    expect(runnable[0]!.context_id).toBe("conv-2");
+    expect(runnable[1]!.context_id).toBe("conv-1");
   });
 
   it("enforces conversation-level serialization (only one active work item per conversation)", () => {
     createConversation("conv-1");
     insertWorkItem({ conversation_id: "conv-1", status: "leased" });
-    insertWorkItem({ conversation_id: "conv-1", status: "opened" });
+    insertWorkItem({ context_id: "conv-1", status: "opened" });
 
     const runnable = scheduler.scanForRunnableWork("mb-1", 10);
     expect(runnable).toHaveLength(0);
@@ -296,7 +296,7 @@ describe("SqliteScheduler", () => {
   it("failed_retryable becomes runnable only after next_retry_at", () => {
     createConversation("conv-1");
     const future = new Date(Date.now() + 60_000).toISOString();
-    const item = insertWorkItem({ conversation_id: "conv-1", status: "failed_retryable", next_retry_at: future });
+    const item = insertWorkItem({ context_id: "conv-1", status: "failed_retryable", next_retry_at: future });
 
     let runnable = scheduler.scanForRunnableWork("mb-1", 10);
     expect(runnable).toHaveLength(0);
@@ -312,7 +312,7 @@ describe("SqliteScheduler", () => {
     createConversation("conv-1");
     expect(scheduler.isQuiescent("mb-1")).toBe(true);
 
-    insertWorkItem({ conversation_id: "conv-1", status: "opened" });
+    insertWorkItem({ context_id: "conv-1", status: "opened" });
     expect(scheduler.isQuiescent("mb-1")).toBe(false);
   });
 

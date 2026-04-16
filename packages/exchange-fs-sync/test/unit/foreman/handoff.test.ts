@@ -61,8 +61,8 @@ describe("OutboundHandoff", () => {
   function insertWorkItem(overrides?: Partial<WorkItem>): WorkItem {
     const item: WorkItem = {
       work_item_id: "wi-1",
-      conversation_id: "thread-1",
-      mailbox_id: "mb-1",
+      context_id: "thread-1",
+      scope_id: "mb-1",
       status: "executing",
       priority: 0,
       opened_for_revision_id: "rev-1",

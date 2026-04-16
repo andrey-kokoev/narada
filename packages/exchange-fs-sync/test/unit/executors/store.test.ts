@@ -37,6 +37,9 @@ describe("SqliteProcessExecutionStore", () => {
     expect(found).toBeDefined();
     expect(found!.command).toBe("/bin/echo");
     expect(found!.status).toBe("pending");
+    expect(found!.phase).toBe("pending");
+    expect(found!.executor_family).toBe("process");
+    expect(found!.confirmation_status).toBe("unconfirmed");
   });
 
   it("retrieves by intent_id", () => {

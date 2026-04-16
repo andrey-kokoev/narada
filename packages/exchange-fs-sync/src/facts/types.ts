@@ -12,7 +12,8 @@ export type FactType =
   | "mail.message.removed"
   // Future expansion points:
   | "timer.tick"
-  | "filesystem.change";
+  | "filesystem.change"
+  | "webhook.received";
 
 export interface FactProvenance {
   /** Source instance that produced this fact */
@@ -48,5 +49,9 @@ export interface FactStore {
   getById(factId: string): Fact | undefined;
   getBySourceRecord(sourceId: string, sourceRecordId: string): Fact | undefined;
   getFactsForCursor(sourceId: string, sourceCursor: string): Fact[];
+  /** Return facts that have not yet been admitted to the control plane */
+  getUnadmittedFacts(sourceId?: string, limit?: number): Fact[];
+  /** Mark facts as admitted (idempotent) */
+  markAdmitted(factIds: string[]): void;
   close(): void;
 }

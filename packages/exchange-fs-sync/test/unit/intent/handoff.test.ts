@@ -206,8 +206,8 @@ describe("IntentHandoff", () => {
     it("resolves work item when command exists (Path B)", () => {
       coordinatorStore.insertWorkItem({
         work_item_id: "wi-1",
-        conversation_id: "thread-1",
-        mailbox_id: "mb-1",
+        context_id: "thread-1",
+        scope_id: "mb-1",
         status: "executing",
         priority: 0,
         opened_for_revision_id: "rev-1",

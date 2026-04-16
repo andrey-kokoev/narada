@@ -135,8 +135,8 @@ export class SqliteScheduler implements Scheduler {
 
     const mapper = (row: Record<string, unknown>): WorkItem => ({
       work_item_id: String(row.work_item_id),
-      conversation_id: String(row.conversation_id),
-      mailbox_id: String(row.mailbox_id),
+      context_id: String(row.conversation_id),
+      scope_id: String(row.mailbox_id),
       status: String(row.status) as WorkItem["status"],
       priority: Number(row.priority),
       opened_for_revision_id: String(row.opened_for_revision_id),
@@ -237,7 +237,7 @@ export class SqliteScheduler implements Scheduler {
       }
 
       const workItem = this.store.getWorkItem(workItemId);
-      const conversationId = workItem?.conversation_id ?? "";
+      const contextId = workItem?.context_id ?? "";
 
       // Reuse existing session or create one
       let sessionId: string;
@@ -249,7 +249,7 @@ export class SqliteScheduler implements Scheduler {
         sessionId = `sess_${randomUUID()}`;
         this.store.insertAgentSession({
           session_id: sessionId,
-          conversation_id: conversationId,
+          context_id: contextId,
           work_item_id: workItemId,
           started_at: now,
           ended_at: null,

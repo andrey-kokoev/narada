@@ -48,8 +48,8 @@ describe("observability/queries", () => {
     const now = new Date().toISOString();
     const item: WorkItem = {
       work_item_id: `wi-${Math.random().toString(36).slice(2)}`,
-      conversation_id: "conv-1",
-      mailbox_id: "mb-1",
+      context_id: "conv-1",
+      scope_id: "mb-1",
       status: "opened",
       priority: 0,
       opened_for_revision_id: "rev-1",
@@ -91,7 +91,7 @@ describe("observability/queries", () => {
       call_id: `tc-${Math.random().toString(36).slice(2)}`,
       execution_id: "ex-1",
       work_item_id: "wi-1",
-      conversation_id: "conv-1",
+      context_id: "conv-1",
       tool_id: "echo_test",
       request_args_json: "{}",
       exit_status: "success",

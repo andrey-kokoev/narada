@@ -33,7 +33,7 @@ describe("Replay and Recovery Tests", () => {
   describe("Work Item Replay (W1-W4)", () => {
     it("W1: same work item replayed does not acquire lease or duplicate command", async () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "resolved", resolution_outcome: "action_created" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "resolved", resolution_outcome: "action_created" });
 
       // Simulate a prior outbound command
       const decisionId = `fd_${wi.work_item_id}_send_reply`;
@@ -99,7 +99,7 @@ describe("Replay and Recovery Tests", () => {
 
     it("W2: replay after partial execution recovers stale lease to failed_retryable", () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "opened" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "opened" });
       h.scheduler.acquireLease(wi.work_item_id);
       const exId = `ex_${wi.work_item_id}`;
       insertExecutionAttempt(h, wi.work_item_id, exId, makeInvocationEnvelope(wi.work_item_id, exId));
@@ -130,7 +130,7 @@ describe("Replay and Recovery Tests", () => {
 
     it("W3: replay after process restart recovers stale lease deterministically", async () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "opened" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "opened" });
       h.scheduler.acquireLease(wi.work_item_id);
       const exId = `ex_${wi.work_item_id}`;
       insertExecutionAttempt(h, wi.work_item_id, exId, makeInvocationEnvelope(wi.work_item_id, exId));
@@ -166,7 +166,7 @@ describe("Replay and Recovery Tests", () => {
 
     it("W4: replay after stale lease expiry transitions work item to failed_retryable", () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "opened" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "opened" });
       h.scheduler.acquireLease(wi.work_item_id);
       const past = new Date(Date.now() - 300_000).toISOString();
       const lease = h.coordinatorStore.getActiveLeaseForWorkItem(wi.work_item_id)!;
@@ -195,7 +195,7 @@ describe("Replay and Recovery Tests", () => {
     it("R1: new revision before work lease superseded and exactly one runnable remains", async () => {
       insertConversation(h, "conv-1");
       h.coordinatorStore.nextRevisionOrdinal("conv-1"); // 1
-      const wiA = insertWorkItem(h, { conversation_id: "conv-1", status: "opened", opened_for_revision_id: "conv-1:rev:1" });
+      const wiA = insertWorkItem(h, { context_id: "conv-1", status: "opened", opened_for_revision_id: "conv-1:rev:1" });
 
       // Compiler observes rev 4 (simulate by advancing ordinals)
       h.coordinatorStore.nextRevisionOrdinal("conv-1"); // 2
@@ -215,14 +215,14 @@ describe("Replay and Recovery Tests", () => {
       expect(oldItem.status).toBe("superseded");
 
       const runnable = h.scheduler.scanForRunnableWork("mb-1", 10);
-      const nonSuperseded = runnable.filter((r) => r.conversation_id === "conv-1" && r.status !== "superseded");
+      const nonSuperseded = runnable.filter((r) => r.context_id === "conv-1" && r.status !== "superseded");
       expect(nonSuperseded).toHaveLength(1);
     });
 
     it("R2: new revision during execution aborts commit and superseded old work item", async () => {
       insertConversation(h, "conv-1");
       h.coordinatorStore.nextRevisionOrdinal("conv-1"); // 1
-      const wiA = insertWorkItem(h, { conversation_id: "conv-1", status: "executing", opened_for_revision_id: "conv-1:rev:1" });
+      const wiA = insertWorkItem(h, { context_id: "conv-1", status: "executing", opened_for_revision_id: "conv-1:rev:1" });
       const exId = `ex_${wiA.work_item_id}`;
       const envelope = makeInvocationEnvelope(wiA.work_item_id, exId);
       insertExecutionAttempt(h, wiA.work_item_id, exId, envelope, "active");
@@ -255,14 +255,14 @@ describe("Replay and Recovery Tests", () => {
     it("R3: new revision after evaluation but before command creation aborts transaction", async () => {
       insertConversation(h, "conv-1");
       h.coordinatorStore.nextRevisionOrdinal("conv-1"); // 1
-      const wiA = insertWorkItem(h, { conversation_id: "conv-1", status: "executing", opened_for_revision_id: "conv-1:rev:1" });
+      const wiA = insertWorkItem(h, { context_id: "conv-1", status: "executing", opened_for_revision_id: "conv-1:rev:1" });
       const exId = `ex_${wiA.work_item_id}`;
       const envelope = makeInvocationEnvelope(wiA.work_item_id, exId);
       insertExecutionAttempt(h, wiA.work_item_id, exId, envelope, "active");
 
       // Simulate that a new work item wi_B was created for rev 5 between evaluation and commit
       const later = new Date(Date.now() + 1000).toISOString();
-      insertWorkItem(h, { conversation_id: "conv-1", status: "opened", opened_for_revision_id: "conv-1:rev:5", created_at: later, updated_at: later });
+      insertWorkItem(h, { context_id: "conv-1", status: "opened", opened_for_revision_id: "conv-1:rev:5", created_at: later, updated_at: later });
 
       // Foreman attempts to write decision + command for wi_A
       const evaluation = makeEvaluation(wiA.work_item_id, exId);
@@ -281,7 +281,7 @@ describe("Replay and Recovery Tests", () => {
 
     it("R4: no-op supersession leaves old work item superseded and new resolved without lease or command", () => {
       insertConversation(h, "conv-1");
-      const wiA = insertWorkItem(h, { conversation_id: "conv-1", status: "opened", opened_for_revision_id: "conv-1:rev:1" });
+      const wiA = insertWorkItem(h, { context_id: "conv-1", status: "opened", opened_for_revision_id: "conv-1:rev:1" });
 
       // Simulate foreman creating wi_B as resolved no-op and superseding wi_A
       const now = new Date().toISOString();
@@ -316,7 +316,7 @@ describe("Replay and Recovery Tests", () => {
   describe("Outbound Idempotency (O1-O4)", () => {
     it("O1: duplicate command creation attempts abort silently with exactly one command", async () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "executing" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "executing" });
       const exId = `ex_${wi.work_item_id}`;
       const envelope = makeInvocationEnvelope(wi.work_item_id, exId);
       insertExecutionAttempt(h, wi.work_item_id, exId, envelope, "active");
@@ -336,7 +336,7 @@ describe("Replay and Recovery Tests", () => {
 
     it("O2: repeated evaluation with identical payload does not duplicate outbound commands", async () => {
       insertConversation(h, "conv-1");
-      const wiA = insertWorkItem(h, { conversation_id: "conv-1", status: "failed_retryable", retry_count: 1 });
+      const wiA = insertWorkItem(h, { context_id: "conv-1", status: "failed_retryable", retry_count: 1 });
       const exId1 = `ex_${wiA.work_item_id}_1`;
       const envelope1 = makeInvocationEnvelope(wiA.work_item_id, exId1);
       insertExecutionAttempt(h, wiA.work_item_id, exId1, envelope1, "succeeded");
@@ -365,7 +365,7 @@ describe("Replay and Recovery Tests", () => {
 
     it("O3: command exists but scheduler state missing does not block outbound worker", async () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "executing" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "executing" });
       const exId = `ex_${wi.work_item_id}`;
       const envelope = makeInvocationEnvelope(wi.work_item_id, exId);
       insertExecutionAttempt(h, wi.work_item_id, exId, envelope, "active");
@@ -387,7 +387,7 @@ describe("Replay and Recovery Tests", () => {
 
     it("O4: scheduler thinks work unresolved but outbound command already exists recovers correctly", async () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "executing" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "executing" });
       const exId = `ex_${wi.work_item_id}`;
       const envelope = makeInvocationEnvelope(wi.work_item_id, exId);
       insertExecutionAttempt(h, wi.work_item_id, exId, envelope, "active");
@@ -415,7 +415,7 @@ describe("Replay and Recovery Tests", () => {
   describe("Tool/Runtime Failure (T1-T5)", () => {
     it("T1: charter timeout recovers stale lease to failed_retryable without decision", () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "opened" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "opened" });
       h.scheduler.acquireLease(wi.work_item_id);
       const exId = `ex_${wi.work_item_id}`;
       const envelope = makeInvocationEnvelope(wi.work_item_id, exId);
@@ -442,7 +442,7 @@ describe("Replay and Recovery Tests", () => {
 
     it("T2: tool denial records permission_denied and execution continues", async () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "executing" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "executing" });
       const exId = `ex_${wi.work_item_id}`;
       const envelope = makeInvocationEnvelope(wi.work_item_id, exId);
       insertExecutionAttempt(h, wi.work_item_id, exId, envelope, "active");
@@ -451,7 +451,7 @@ describe("Replay and Recovery Tests", () => {
         call_id: `tc_${exId}_1`,
         execution_id: exId,
         work_item_id: wi.work_item_id,
-        conversation_id: "conv-1",
+        context_id: "conv-1",
         tool_id: "bad_tool",
         request_args_json: "{}",
         exit_status: "permission_denied",
@@ -479,7 +479,7 @@ describe("Replay and Recovery Tests", () => {
 
     it("T3: tool timeout records timeout status and execution continues", async () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "executing" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "executing" });
       const exId = `ex_${wi.work_item_id}`;
       const envelope = makeInvocationEnvelope(wi.work_item_id, exId);
       insertExecutionAttempt(h, wi.work_item_id, exId, envelope, "active");
@@ -488,7 +488,7 @@ describe("Replay and Recovery Tests", () => {
         call_id: `tc_${exId}_1`,
         execution_id: exId,
         work_item_id: wi.work_item_id,
-        conversation_id: "conv-1",
+        context_id: "conv-1",
         tool_id: "sentry_query",
         request_args_json: JSON.stringify({ timeout_ms: 1000 }),
         exit_status: "timeout",
@@ -514,7 +514,7 @@ describe("Replay and Recovery Tests", () => {
 
     it("T4: missing binding omits source and execution proceeds without work item failure", async () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "executing" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "executing" });
       const exId = `ex_${wi.work_item_id}`;
       // Simulate invocation envelope with a missing binding source omitted
       const envelope = makeInvocationEnvelope(wi.work_item_id, exId);
@@ -529,7 +529,7 @@ describe("Replay and Recovery Tests", () => {
 
     it("T5: transient runtime crash marks attempt crashed and work item retryable", () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "opened" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "opened" });
       h.scheduler.acquireLease(wi.work_item_id);
       const exId = `ex_${wi.work_item_id}`;
       const envelope = makeInvocationEnvelope(wi.work_item_id, exId);
@@ -557,7 +557,7 @@ describe("Replay and Recovery Tests", () => {
   describe("Commentary Separation (C1-C4)", () => {
     it("C1: traces deleted before work resolution does not block decision commit", async () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "executing" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "executing" });
       const exId = `ex_${wi.work_item_id}`;
       const envelope = makeInvocationEnvelope(wi.work_item_id, exId);
       insertExecutionAttempt(h, wi.work_item_id, exId, envelope, "active");
@@ -587,7 +587,7 @@ describe("Replay and Recovery Tests", () => {
 
     it("C2: traces deleted before outbound dedupe does not block confirmation", async () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "executing" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "executing" });
       const exId = `ex_${wi.work_item_id}`;
       const envelope = makeInvocationEnvelope(wi.work_item_id, exId);
       insertExecutionAttempt(h, wi.work_item_id, exId, envelope, "active");
@@ -636,7 +636,7 @@ describe("Replay and Recovery Tests", () => {
     it("C4: no trace store exists — full cycle is correct without trace writes", async () => {
       // Use a harness without trace store by simply not writing traces
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "opened" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "opened" });
       h.scheduler.acquireLease(wi.work_item_id);
       const exId = `ex_${wi.work_item_id}`;
       const envelope = makeInvocationEnvelope(wi.work_item_id, exId);
@@ -663,7 +663,7 @@ describe("Replay and Recovery Tests", () => {
   describe("Daemon/Wake Duplication (D1-D4)", () => {
     it("D1: duplicate wake signals produce exactly one lease and one execution attempt", () => {
       insertConversation(h, "conv-1");
-      insertWorkItem(h, { conversation_id: "conv-1", status: "opened" });
+      insertWorkItem(h, { context_id: "conv-1", status: "opened" });
 
       // First wake
       h.scheduler.recoverStaleLeases();
@@ -694,8 +694,8 @@ describe("Replay and Recovery Tests", () => {
     it("D2: wake during active execution filters out executing work item", () => {
       insertConversation(h, "conv-1");
       insertConversation(h, "conv-2");
-      const wiA = insertWorkItem(h, { conversation_id: "conv-1", status: "opened" });
-      const wiB = insertWorkItem(h, { conversation_id: "conv-2", status: "opened" });
+      const wiA = insertWorkItem(h, { context_id: "conv-1", status: "opened" });
+      const wiB = insertWorkItem(h, { context_id: "conv-2", status: "opened" });
 
       // wi_A becomes executing
       h.scheduler.acquireLease(wiA.work_item_id);
@@ -718,7 +718,7 @@ describe("Replay and Recovery Tests", () => {
 
     it("D3: wake after crash recovery runs recovery scanner before lease acquisition", async () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "opened" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "opened" });
       h.scheduler.acquireLease(wi.work_item_id);
       const past = new Date(Date.now() - 120_000).toISOString();
       const lease = h.coordinatorStore.getActiveLeaseForWorkItem(wi.work_item_id)!;
@@ -743,8 +743,8 @@ describe("Replay and Recovery Tests", () => {
 
     it("D4: quiescent loop with no runnable work acquires no leases", () => {
       insertConversation(h, "conv-1");
-      insertWorkItem(h, { conversation_id: "conv-1", status: "resolved" });
-      insertWorkItem(h, { conversation_id: "conv-1", status: "failed_retryable", next_retry_at: new Date(Date.now() + 3600_000).toISOString() });
+      insertWorkItem(h, { context_id: "conv-1", status: "resolved" });
+      insertWorkItem(h, { context_id: "conv-1", status: "failed_retryable", next_retry_at: new Date(Date.now() + 3600_000).toISOString() });
 
       for (let i = 0; i < 5; i++) {
         h.scheduler.recoverStaleLeases();
@@ -768,7 +768,7 @@ describe("Replay and Recovery Tests", () => {
   describe("Critical Assertions", () => {
     it("assertion 1: lease uniqueness — at most one active lease per work item", () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "opened" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "opened" });
       h.scheduler.acquireLease(wi.work_item_id);
       // Attempt second lease
       const second = h.scheduler.acquireLease(wi.work_item_id);
@@ -778,7 +778,7 @@ describe("Replay and Recovery Tests", () => {
 
     it("assertion 2: active execution bounded by valid lease", () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "opened" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "opened" });
       h.scheduler.acquireLease(wi.work_item_id);
       const exId = `ex_${wi.work_item_id}`;
       const envelope = makeInvocationEnvelope(wi.work_item_id, exId);
@@ -793,7 +793,7 @@ describe("Replay and Recovery Tests", () => {
 
     it("assertion 3: no decision without work item", async () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "executing" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "executing" });
       const exId = `ex_${wi.work_item_id}`;
       const envelope = makeInvocationEnvelope(wi.work_item_id, exId);
       insertExecutionAttempt(h, wi.work_item_id, exId, envelope, "active");
@@ -809,7 +809,7 @@ describe("Replay and Recovery Tests", () => {
 
     it("assertion 4: no duplicate commands for same decision", async () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "executing" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "executing" });
       const exId = `ex_${wi.work_item_id}`;
       const envelope = makeInvocationEnvelope(wi.work_item_id, exId);
       insertExecutionAttempt(h, wi.work_item_id, exId, envelope, "active");
@@ -832,7 +832,7 @@ describe("Replay and Recovery Tests", () => {
 
     it("assertion 5: superseded is terminal — status never changes after superseded", () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "opened" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "opened" });
       h.coordinatorStore.updateWorkItemStatus(wi.work_item_id, "superseded");
 
       // Any attempt to change status should be blocked by test assertion of current state
@@ -843,7 +843,7 @@ describe("Replay and Recovery Tests", () => {
 
     it("assertion 6: stale lease recovery within one scheduler cycle", () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "opened" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "opened" });
       h.scheduler.acquireLease(wi.work_item_id);
       const past = new Date(Date.now() - 60_000).toISOString();
       const lease = h.coordinatorStore.getActiveLeaseForWorkItem(wi.work_item_id)!;
@@ -857,7 +857,7 @@ describe("Replay and Recovery Tests", () => {
 
     it("assertion 7: trace independence — deleting traces does not change work_item or outbound_command status", async () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "executing" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "executing" });
       const exId = `ex_${wi.work_item_id}`;
       const envelope = makeInvocationEnvelope(wi.work_item_id, exId);
       insertExecutionAttempt(h, wi.work_item_id, exId, envelope, "active");
@@ -887,7 +887,7 @@ describe("Replay and Recovery Tests", () => {
 
     it("assertion 8: duplicate wake idempotency — identical end state after multiple wakes", () => {
       insertConversation(h, "conv-1");
-      insertWorkItem(h, { conversation_id: "conv-1", status: "opened" });
+      insertWorkItem(h, { context_id: "conv-1", status: "opened" });
 
       const runWake = () => {
         h.scheduler.recoverStaleLeases();
@@ -908,7 +908,7 @@ describe("Replay and Recovery Tests", () => {
 
     it("assertion 9: every executed tool call has a tool_call_record row", () => {
       insertConversation(h, "conv-1");
-      const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "executing" });
+      const wi = insertWorkItem(h, { context_id: "conv-1", status: "executing" });
       const exId = `ex_${wi.work_item_id}`;
       const envelope = makeInvocationEnvelope(wi.work_item_id, exId);
       insertExecutionAttempt(h, wi.work_item_id, exId, envelope, "active");
@@ -917,7 +917,7 @@ describe("Replay and Recovery Tests", () => {
         call_id: `tc_${exId}`,
         execution_id: exId,
         work_item_id: wi.work_item_id,
-        conversation_id: "conv-1",
+        context_id: "conv-1",
         tool_id: "test_tool",
         request_args_json: "{}",
         exit_status: "success",
@@ -939,7 +939,7 @@ describe("Replay and Recovery Tests", () => {
     it("assertion 10: failed_retryable not selected until next_retry_at <= now", () => {
       insertConversation(h, "conv-1");
       const future = new Date(Date.now() + 300_000).toISOString();
-      insertWorkItem(h, { conversation_id: "conv-1", status: "failed_retryable", next_retry_at: future });
+      insertWorkItem(h, { context_id: "conv-1", status: "failed_retryable", next_retry_at: future });
 
       const runnable = h.scheduler.scanForRunnableWork("mb-1", 10);
       expect(runnable).toHaveLength(0);

@@ -24,6 +24,17 @@ export { DefaultGraphAdapter } from "./adapter/graph/adapter.js";
 export { ExchangeSource } from "./adapter/graph/exchange-source.js";
 export { TimerSource } from "./sources/timer-source.js";
 export type { TimerSourceOptions, TimerTickPayload } from "./sources/timer-source.js";
+export {
+  WebhookSource,
+  InMemoryWebhookEventQueue,
+  FileWebhookEventQueue,
+} from "./sources/webhook-source.js";
+export type {
+  WebhookSourceOptions,
+  WebhookReceivedPayload,
+  WebhookEventQueue,
+  WebhookQueueRecord,
+} from "./sources/webhook-source.js";
 export { GraphHttpClient } from "./adapter/graph/client.js";
 export { GraphDeltaWalker } from "./adapter/graph/delta.js";
 export {
@@ -107,6 +118,11 @@ export type {
   ForemanFacadeDeps,
   ForemanFacadeOptions,
 } from "./foreman/facade.js";
+export {
+  MailboxContextStrategy,
+  TimerContextStrategy,
+  WebhookContextStrategy,
+} from "./foreman/context.js";
 export type {
   ForemanFacade,
   SyncCompletionSignal,
@@ -127,6 +143,8 @@ export type {
   ProposedAction,
   EscalationProposal,
   ToolInvocationRequest,
+  PolicyContext,
+  ContextFormationStrategy,
 } from "./foreman/types.js";
 export { validateCharterOutput, arbitrateEvaluations } from "./foreman/validation.js";
 export { OutboundHandoff } from "./foreman/handoff.js";
@@ -162,6 +180,27 @@ export type { ProcessExecutionStore, SqliteProcessExecutionStoreOptions, SqliteP
 export { ProcessExecutor } from "./executors/process-executor.js";
 export type { ProcessExecutorDeps } from "./executors/process-executor.js";
 export type { ProcessExecution, ProcessRunPayload } from "./executors/types.js";
+export {
+  isValidPhaseTransition,
+  isTerminalPhase,
+  canConfirm,
+  mapOutboundStatusToPhase,
+  mapOutboundStatusToConfirmation,
+  deriveConfirmationOnComplete,
+  assertValidPhaseTransition,
+} from "./executors/lifecycle.js";
+export type {
+  ExecutionPhase,
+  ConfirmationStatus,
+  ExecutionLifecycle,
+} from "./executors/lifecycle.js";
+export {
+  outboundCommandToExecutionLifecycle,
+  MailLifecycleAdapter,
+} from "./executors/mail-lifecycle.js";
+export type { MailLifecycleQueryDeps } from "./executors/mail-lifecycle.js";
+export { ExecutionCoordinator } from "./executors/coordinator.js";
+export type { ExecutionCoordinatorDeps } from "./executors/coordinator.js";
 export { DefaultWorkerRegistry, drainWorker } from "./workers/registry.js";
 export type { WorkerRegistry, RegisteredWorker, WorkerIdentity, WorkerFn, WorkerExecutionResult, ConcurrencyPolicy } from "./workers/index.js";
 export type { IntentStore, SqliteIntentStoreOptions, SqliteIntentStoreDbOptions } from "./intent/store.js";

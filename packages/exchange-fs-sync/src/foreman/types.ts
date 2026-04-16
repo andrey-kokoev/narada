@@ -55,13 +55,13 @@ export interface WorkOpeningResult {
 
 export interface OpenedWorkItem {
   work_item_id: string;
-  conversation_id: string;
+  context_id: string;
   revision_id: string;
 }
 
 export interface SupersededWorkItem {
   work_item_id: string;
-  conversation_id: string;
+  context_id: string;
   new_work_item_id: string;
 }
 
@@ -81,8 +81,13 @@ export interface ResolutionResult {
 
 export interface ForemanFacade {
   onSyncCompleted(signal: SyncCompletionSignal): Promise<WorkOpeningResult>;
+  /** Admit facts into the control plane and open/supersede work items as needed */
+  onFactsAdmitted(facts: import("../facts/types.js").Fact[], scopeId: string): Promise<WorkOpeningResult>;
   resolveWorkItem(resolveReq: ResolveWorkItemRequest): Promise<ResolutionResult>;
 }
+
+// Re-export context types for convenience
+export type { PolicyContext, ContextFormationStrategy } from "./context.js";
 
 // ---------------------------------------------------------------------------
 // Charter Invocation Envelope

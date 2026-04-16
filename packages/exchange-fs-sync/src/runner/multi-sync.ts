@@ -7,6 +7,7 @@
 
 import { mkdir } from "node:fs/promises";
 import { resolve, join } from "node:path";
+import Database from "better-sqlite3";
 import type { MultiMailboxConfig, MailboxConfig } from "../config/multi-mailbox.js";
 import { ResourceManager } from "../utils/resources.js";
 import type { MailboxSyncResult } from "../health-multi.js";
@@ -27,6 +28,7 @@ import { createHealthWriter } from "../health.js";
 import { sleep } from "../utils/timing.js";
 import type { ApplyEventResult } from "../types/runtime.js";
 import type { NormalizedEvent } from "../types/normalized.js";
+import { SqliteFactStore } from "../facts/store.js";
 
 /** Options for multi-sync operation */
 export interface MultiSyncOptions {
@@ -189,27 +191,10 @@ async function syncSingleMailbox(
       tombstonesEnabled: mailbox.sync?.tombstones_enabled ?? true,
     });
 
-    // Track changed conversations for dispatch
-    const changedConversations = new Map<string, Set<string>>();
-    function trackEventChanges(event: NormalizedEvent, result: ApplyEventResult): void {
-      for (const threadId of result.dirty_views.by_thread) {
-        const kinds = changedConversations.get(threadId) ?? new Set<string>();
-        if (event.event_kind === "created" || event.event_kind === "upsert") {
-          kinds.add("new_message");
-        } else if (event.event_kind === "updated") {
-          kinds.add("new_message");
-        } else if (event.event_kind === "deleted" || event.event_kind === "delete") {
-          kinds.add("moved");
-        }
-        changedConversations.set(threadId, kinds);
-      }
-    }
-
     const projector = {
       applyRecord: async (record: { payload: unknown }): Promise<ApplyEventResult> => {
         const event = record.payload as NormalizedEvent;
         const result = await baseProjector.applyEvent(event);
-        trackEventChanges(event, result);
         return result;
       },
     };
@@ -226,12 +211,21 @@ async function syncSingleMailbox(
       mailboxId: mailbox.mailbox_id,
     });
 
+    // Create fact store for durable canonical boundary
+    const factDbDir = join(rootDir, ".narada");
+    await mkdir(factDbDir, { recursive: true });
+    const factDb = new Database(join(factDbDir, "facts.db"));
+    factDb.pragma("journal_mode = WAL");
+    const factStore = new SqliteFactStore({ db: factDb });
+    factStore.initSchema();
+
     // Create sync runner
     const runner = new DefaultSyncRunner({
       rootDir,
       source,
       cursorStore,
       applyLogStore,
+      factStore,
       projector,
       cleanupTmp: mailbox.sync?.cleanup_tmp_on_startup
         ? () => cleanupTmp({ rootDir })
@@ -267,9 +261,7 @@ async function syncSingleMailbox(
       messagesSynced: syncResult.applied_count,
       eventsApplied: syncResult.applied_count,
       eventsSkipped: syncResult.skipped_count,
-      changedConversations: Array.from(changedConversations.entries()).map(
-        ([conversation_id, kinds]) => ({ conversation_id, change_kinds: Array.from(kinds) }),
-      ),
+      changedConversations: [],
     };
 
     return result;

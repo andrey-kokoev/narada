@@ -16,6 +16,9 @@ function inferFactType(record: SourceRecord): FactType {
     if (payload.kind === "timer.tick") {
       return "timer.tick";
     }
+    if (payload.kind === "webhook.received") {
+      return "webhook.received";
+    }
     const eventKind = payload.event_kind;
     if (typeof eventKind === "string") {
       if (eventKind === "created" || eventKind === "upsert") {

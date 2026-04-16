@@ -72,7 +72,7 @@ describe("Timer to Process Execution", () => {
     });
 
     insertConversation(h, "conv-1");
-    const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "executing" });
+    const wi = insertWorkItem(h, { context_id: "conv-1", status: "executing" });
     const exId = `ex_${wi.work_item_id}`;
     const envelope = makeInvocationEnvelope(wi.work_item_id, exId, ["process_run"]);
     insertExecutionAttempt(h, wi.work_item_id, exId, envelope, "active");
@@ -125,7 +125,7 @@ describe("Timer to Process Execution", () => {
     });
 
     insertConversation(h, "conv-1");
-    const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "executing" });
+    const wi = insertWorkItem(h, { context_id: "conv-1", status: "executing" });
     const exId = `ex_${wi.work_item_id}`;
     const envelope = makeInvocationEnvelope(wi.work_item_id, exId, ["process_run"]);
     insertExecutionAttempt(h, wi.work_item_id, exId, envelope, "active");
@@ -185,7 +185,7 @@ describe("Timer to Process Execution", () => {
     });
 
     insertConversation(h, "conv-1");
-    const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "executing" });
+    const wi = insertWorkItem(h, { context_id: "conv-1", status: "executing" });
     const exId = `ex_${wi.work_item_id}`;
     const envelope = makeInvocationEnvelope(wi.work_item_id, exId, ["process_run"]);
     insertExecutionAttempt(h, wi.work_item_id, exId, envelope, "active");

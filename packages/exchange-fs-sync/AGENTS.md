@@ -1,6 +1,6 @@
 # AGENTS.md — exchange-fs-sync package
 
-> **Package Guide**: This file covers conventions specific to the `exchange-fs-sync` package. For project overview and navigation, see the [root AGENTS.md](../../AGENTS.md).
+> **Package Guide**: This file covers conventions specific to the `exchange-fs-sync` package. For the canonical kernel lawbook, see [`docs/00-kernel.md`](docs/00-kernel.md). For project overview and navigation, see the [root AGENTS.md](../../AGENTS.md).
 >
 > **Control Plane Architecture**: For the integrated end-to-end control-plane v2 model, see [`20260414-011-chief-integration-control-plane-v2.md`](../../.ai/tasks/20260414-011-chief-integration-control-plane-v2.md).
 
@@ -133,8 +133,9 @@ The control plane sits above the deterministic inbound compiler and manages firs
 
 Key principles:
 - The compiler (`exchange-fs-sync`) determines mailbox truth; the control plane decides what to do about it.
-- `work_item` is the terminal schedulable unit per conversation.
-- At most one non-terminal work item per conversation may be `leased` or `executing`.
+- `work_item` is the terminal generalized schedulable unit. It uses `context_id` (was `conversation_id`) and `scope_id` (was `mailbox_id`) so timer/process and future verticals can produce first-class work without mailbox semantics.
+- Work opening derives from `PolicyContext` through a `ContextFormationStrategy` (e.g. `MailboxContextStrategy`, `TimerContextStrategy`).
+- At most one non-terminal work item per context may be `leased` or `executing`.
 - Charters run inside bounded `execution_attempt`s with frozen capability envelopes.
 - Only the outbound worker may create or mutate managed drafts.
 - Recovery must succeed using only `work_item`, `execution_attempt`, and `outbound_command` state.

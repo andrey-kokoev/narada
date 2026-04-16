@@ -170,19 +170,6 @@ export class DefaultSyncRunner implements SyncRunner {
       const totalEvents = batch.records.length;
       this.reportProgress("fetch", 1, 1, `Fetched ${totalEvents} records`);
 
-      // Materialize facts as the canonical durable boundary
-      if (this.deps.factStore) {
-        for (const record of batch.records) {
-          try {
-            const fact = sourceRecordToFact(record, batch.nextCheckpoint ?? null);
-            this.deps.factStore.ingest(fact);
-          } catch (factError) {
-            addError("persist", factError, { actionTaken: "logged_only" });
-            // Continue: fact persistence failures should not abort sync
-          }
-        }
-      }
-
       let appliedCount = 0;
       let skippedCount = 0;
       const dirtyAggregate = {
@@ -217,6 +204,17 @@ export class DefaultSyncRunner implements SyncRunner {
         if (alreadyApplied) {
           skippedCount += 1;
           continue;
+        }
+
+        // Materialize fact for this unapplied record as the canonical durable boundary
+        if (this.deps.factStore) {
+          try {
+            const fact = sourceRecordToFact(record, batch.nextCheckpoint ?? null);
+            this.deps.factStore.ingest(fact);
+          } catch (factError) {
+            addError("persist", factError, { actionTaken: "logged_only" });
+            // Continue: fact persistence failures should not abort sync
+          }
         }
 
         let result: ApplyEventResult;

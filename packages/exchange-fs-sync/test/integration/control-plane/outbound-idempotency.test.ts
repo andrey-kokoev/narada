@@ -35,7 +35,7 @@ describe("Outbound Idempotency Boundary (Task 029)", () => {
 
   it("A: retry after crash produces exactly one outbound command", async () => {
     insertConversation(h, "conv-1");
-    const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "executing" });
+    const wi = insertWorkItem(h, { context_id: "conv-1", status: "executing" });
     const exId = `ex_${wi.work_item_id}`;
     const envelope = makeInvocationEnvelope(wi.work_item_id, exId);
     insertExecutionAttempt(h, wi.work_item_id, exId, envelope, "active");
@@ -61,7 +61,7 @@ describe("Outbound Idempotency Boundary (Task 029)", () => {
 
   it("B: duplicate runtime output does not duplicate outbound command", async () => {
     insertConversation(h, "conv-1");
-    const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "executing" });
+    const wi = insertWorkItem(h, { context_id: "conv-1", status: "executing" });
     const exId = `ex_${wi.work_item_id}`;
     const envelope = makeInvocationEnvelope(wi.work_item_id, exId);
     insertExecutionAttempt(h, wi.work_item_id, exId, envelope, "active");
@@ -130,7 +130,7 @@ describe("Outbound Idempotency Boundary (Task 029)", () => {
 
   it("D: replay after restart does not create additional side effects", async () => {
     insertConversation(h, "conv-1");
-    const wi = insertWorkItem(h, { conversation_id: "conv-1", status: "executing" });
+    const wi = insertWorkItem(h, { context_id: "conv-1", status: "executing" });
     const exId = `ex_${wi.work_item_id}`;
     const envelope = makeInvocationEnvelope(wi.work_item_id, exId);
     insertExecutionAttempt(h, wi.work_item_id, exId, envelope, "active");

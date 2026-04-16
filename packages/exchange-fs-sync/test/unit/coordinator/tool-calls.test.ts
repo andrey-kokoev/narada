@@ -31,8 +31,8 @@ describe("SqliteCoordinatorStore — tool_call_records", () => {
 
     const workItem: WorkItem = {
       work_item_id: "wi-1",
-      conversation_id: "conv-1",
-      mailbox_id: "mb-1",
+      context_id: "conv-1",
+      scope_id: "mb-1",
       status: "executing",
       priority: 0,
       opened_for_revision_id: "rev-1",
@@ -72,7 +72,7 @@ describe("SqliteCoordinatorStore — tool_call_records", () => {
       call_id: "tc-1",
       execution_id: "ex-1",
       work_item_id: "wi-1",
-      conversation_id: "conv-1",
+      context_id: "conv-1",
       tool_id: "lookup_customer",
       request_args_json: JSON.stringify({ email: "a@b.com" }),
       exit_status: "pending",

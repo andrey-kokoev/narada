@@ -22,7 +22,7 @@ describe("AgentSession store operations", () => {
     const now = new Date().toISOString();
     const session: AgentSession = {
       session_id: `sess_${Math.random().toString(36).slice(2)}`,
-      conversation_id: "conv-1",
+      context_id: "conv-1",
       work_item_id: `wi_${Math.random().toString(36).slice(2)}`,
       started_at: now,
       ended_at: null,
@@ -41,7 +41,7 @@ describe("AgentSession store operations", () => {
     expect(fetched).toBeDefined();
     expect(fetched!.status).toBe("opened");
     expect(fetched!.work_item_id).toBe(session.work_item_id);
-    expect(fetched!.conversation_id).toBe("conv-1");
+    expect(fetched!.context_id).toBe("conv-1");
   });
 
   it("returns undefined for missing session", () => {
@@ -60,11 +60,11 @@ describe("AgentSession store operations", () => {
   });
 
   it("getSessionsForConversation returns all sessions ordered by started_at desc", () => {
-    insertSession({ conversation_id: "conv-1", status: "opened", started_at: "2024-01-01T00:00:00.000Z" });
-    insertSession({ conversation_id: "conv-1", status: "active", started_at: "2024-01-02T00:00:00.000Z" });
-    insertSession({ conversation_id: "conv-2", status: "opened", started_at: "2024-01-03T00:00:00.000Z" });
+    insertSession({ context_id: "conv-1", status: "opened", started_at: "2024-01-01T00:00:00.000Z" });
+    insertSession({ context_id: "conv-1", status: "active", started_at: "2024-01-02T00:00:00.000Z" });
+    insertSession({ context_id: "conv-2", status: "opened", started_at: "2024-01-03T00:00:00.000Z" });
 
-    const sessions = store.getSessionsForConversation("conv-1");
+    const sessions = store.getSessionsForContext("conv-1");
     expect(sessions).toHaveLength(2);
     expect(sessions[0]!.status).toBe("active");
     expect(sessions[1]!.status).toBe("opened");

@@ -1,6 +1,6 @@
 # AGENTS.md — exchange-fs-sync-root
 
-> **Navigation Hub**: This file provides orientation. For detailed documentation, see the numbered guides in [`packages/exchange-fs-sync/docs/`](packages/exchange-fs-sync/docs/).
+> **Navigation Hub**: This file provides orientation. For the canonical kernel lawbook, see [`packages/exchange-fs-sync/docs/00-kernel.md`](packages/exchange-fs-sync/docs/00-kernel.md). For detailed documentation, see the numbered guides in [`packages/exchange-fs-sync/docs/`](packages/exchange-fs-sync/docs/).
 
 ---
 
@@ -16,9 +16,9 @@ Narada is a generalized, deterministic kernel for turning remote source deltas i
 - Mailbox policy/charters as one policy family
 - `mail.*` intents as one intent/executor family
 
-**Peer Verticals**: `TimerSource`, `process.run`, and future automations are first-class peers that travel through the same kernel pipeline (Source → Fact → Policy → Intent → Execution → Observation).
+**Peer Verticals**: `TimerSource`, `WebhookSource`, `process.run`, and future automations are first-class peers that travel through the same kernel pipeline (Source → Fact → Policy → Intent → Execution → Observation).
 
-**Control Plane v2**: Above the compiler, a control plane manages first-class work objects (`work_item`, `execution_attempt`, `outbound_command`). For the integrated end-to-end model, see [`.ai/tasks/20260414-011-chief-integration-control-plane-v2.md`](.ai/tasks/20260414-011-chief-integration-control-plane-v2.md).
+**Control Plane v2**: Above the compiler, a control plane manages first-class generalized work objects (`work_item`, `execution_attempt`, `outbound_command`). Work is derived from `PolicyContext` via `ContextFormationStrategy`, making mailbox one vertical among many (timer, process, etc.). For the integrated end-to-end model, see [`.ai/tasks/20260414-011-chief-integration-control-plane-v2.md`](.ai/tasks/20260414-011-chief-integration-control-plane-v2.md).
 
 ---
 
@@ -26,7 +26,8 @@ Narada is a generalized, deterministic kernel for turning remote source deltas i
 
 | Doc | Topic | Read If You... |
 |-----|-------|----------------|
-| [01-spec.md](packages/exchange-fs-sync/docs/01-spec.md) | Dearbitrized formal specification | Need to understand the theoretical model and invariants |
+| [00-kernel.md](packages/exchange-fs-sync/docs/00-kernel.md) | **Irreducible kernel spec** — the canonical lawbook | Need the vertical-agnostic normative core |
+| [01-spec.md](packages/exchange-fs-sync/docs/01-spec.md) | Dearbitrized formal specification (mailbox vertical) | Need to understand the mailbox-specific theoretical model |
 | [02-architecture.md](packages/exchange-fs-sync/docs/02-architecture.md) | Component layers, data flow, interfaces | Want to understand how the system is organized |
 | [03-persistence.md](packages/exchange-fs-sync/docs/03-persistence.md) | Filesystem layout, atomic writes, crash recovery | Need to understand storage or debug data issues |
 | [04-identity.md](packages/exchange-fs-sync/docs/04-identity.md) | Event IDs, stable serialization, content hashing | Are working with event identity or deduplication |
@@ -58,6 +59,9 @@ Narada is a generalized, deterministic kernel for turning remote source deltas i
 | Modify send-reply worker | [`src/outbound/send-reply-worker.ts`](packages/exchange-fs-sync/src/outbound/send-reply-worker.ts) |
 | Modify reconciler | [`src/outbound/reconciler.ts`](packages/exchange-fs-sync/src/outbound/reconciler.ts) |
 | Modify non-send worker | [`src/outbound/non-send-worker.ts`](packages/exchange-fs-sync/src/outbound/non-send-worker.ts) |
+| Add a webhook vertical source | [`src/sources/webhook-source.ts`](packages/exchange-fs-sync/src/sources/webhook-source.ts) |
+| Add a webhook context strategy | [`src/foreman/context.ts`](packages/exchange-fs-sync/src/foreman/context.ts) |
+| Add a generic webhook HTTP server | [`packages/exchange-fs-sync-daemon/src/generic-webhook-server.ts`](packages/exchange-fs-sync-daemon/src/generic-webhook-server.ts) |
 | Change charter runtime envelope | [`packages/charters/src/runtime/envelope.ts`](packages/charters/src/runtime/envelope.ts) |
 | Add a charter runner | [`packages/charters/src/runtime/runner.ts`](packages/charters/src/runtime/runner.ts) |
 | Add a tool catalog entry | [`packages/charters/src/tools/resolver.ts`](packages/charters/src/tools/resolver.ts) |
@@ -194,13 +198,13 @@ narada/
 5. **Apply Ordering**: `apply(e)` → `mark_applied(e)` → `cursor_commit` (never reorder)
 
 ### Control Plane
-6. **Foreman owns work opening**: Only `DefaultForemanFacade.onSyncCompleted()` may insert `work_item` rows.
+6. **Foreman owns work opening**: Only `DefaultForemanFacade.onContextsAdmitted()` (derived from facts via `ContextFormationStrategy`) may insert `work_item` rows.
 7. **Foreman owns resolution**: Only `DefaultForemanFacade.resolveWorkItem()` may transition a `work_item` to `resolved`, `failed_terminal`, or `failed_retryable` based on charter output.
 8. **Scheduler owns leases**: Only `SqliteScheduler` may insert/release `work_item_leases` and transition `work_item` between `opened ↔ leased ↔ executing ↔ failed_retryable`.
 9. **OutboundHandoff owns command creation**: All `outbound_commands` + `outbound_versions` must be created inside `OutboundHandoff.createCommandFromDecision()` (atomic with decision insert).
 10. **Outbound workers own mutation**: Only the outbound worker layer may call Graph API to create drafts / send messages / move items.
 11. **Charter runtime is read-only sandbox**: It may only read the `CharterInvocationEnvelope` and produce a `CharterOutputEnvelope`. It must NOT write to coordinator or outbound stores directly.
-12. **Work Object Authority**: A `work_item` is the terminal schedulable unit; at most one non-terminal work item per conversation may be `leased` or `executing`
+12. **Work Object Authority**: A `work_item` is the terminal generalized schedulable unit (kernel fields: `context_id`, `scope_id`); at most one non-terminal work item per context may be `leased` or `executing`
 13. **Lease Uniqueness**: A work item has at most one unreleased, unexpired lease at any time
 14. **Bounded Evaluation**: Charters run inside frozen `CharterInvocationEnvelope`s with immutable capability envelopes
 15. **Decision Before Command**: `foreman_decision` is append-only; `outbound_command` is worker-mutable; one decision produces at most one command
@@ -294,7 +298,19 @@ Resolved in `validateCharterRuntimeConfig()`.
 3. Export types from [`packages/exchange-fs-sync-cli/src/index.ts`](packages/exchange-fs-sync-cli/src/index.ts)
 3. Use [`loadConfig()`](packages/exchange-fs-sync/src/config/load.ts) for config handling
 
-### 5. Change Mailbox Policy Binding
+### 5. Add a New Non-Mail Vertical
+
+The kernel supports arbitrary verticals through the same Source → Fact → Policy → Intent → Execution spine. To add one (e.g., filesystem, webhook, API):
+
+1. Implement `Source` in [`src/sources/{vertical}-source.ts`](packages/exchange-fs-sync/src/sources/)
+2. Add fact type to [`src/facts/types.ts`](packages/exchange-fs-sync/src/facts/types.ts) and mapping in [`src/facts/record-to-fact.ts`](packages/exchange-fs-sync/src/facts/record-to-fact.ts)
+3. Add `ContextFormationStrategy` in [`src/foreman/context.ts`](packages/exchange-fs-sync/src/foreman/context.ts)
+4. Provide a projector (may be no-op for non-filesystem verticals)
+5. Wire executor family in intent handoff if the vertical produces effects
+6. Add unit + integration tests proving replay safety and idempotency
+7. Update this AGENTS.md to list the new vertical as a peer
+
+### 6. Change Mailbox Policy Binding
 
 Mailbox policy determines charter routing, allowed actions, and tool catalog for a mailbox. To modify:
 

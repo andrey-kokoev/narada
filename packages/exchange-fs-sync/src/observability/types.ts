@@ -39,8 +39,8 @@ export interface MailboxDispatchSummary {
 /** Work-item lifecycle summary for observability */
 export interface WorkItemLifecycleSummary {
   work_item_id: string;
-  conversation_id: string;
-  mailbox_id: string;
+  context_id: string;
+  scope_id: string;
   status: WorkItemStatus;
   priority: number;
   opened_for_revision_id: string;
@@ -70,7 +70,7 @@ export interface ToolCallSummary {
   call_id: string;
   execution_id: string;
   work_item_id: string;
-  conversation_id: string;
+  context_id: string;
   tool_id: string;
   exit_status: ToolCallStatus;
   duration_ms: number;

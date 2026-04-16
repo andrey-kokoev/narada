@@ -51,13 +51,13 @@ describe("LeaseScanner", () => {
     });
   }
 
-  function insertWorkItem(overrides?: { conversation_id?: string; mailbox_id?: string; status?: "opened" | "leased" | "executing" | "failed_retryable" | "failed_terminal" | "superseded"; priority?: number; retry_count?: number; next_retry_at?: string | null }): string {
+  function insertWorkItem(overrides?: { context_id?: string; scope_id?: string; status?: "opened" | "leased" | "executing" | "failed_retryable" | "failed_terminal" | "superseded"; priority?: number; retry_count?: number; next_retry_at?: string | null }): string {
     const now = new Date().toISOString();
     const workItemId = `wi_${Math.random().toString(36).slice(2)}`;
     store.insertWorkItem({
       work_item_id: workItemId,
-      conversation_id: "conv-1",
-      mailbox_id: "mb-1",
+      context_id: "conv-1",
+      scope_id: "mb-1",
       status: "opened",
       priority: 0,
       opened_for_revision_id: "conv-1:rev:1",

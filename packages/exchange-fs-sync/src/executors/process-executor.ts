@@ -3,6 +3,10 @@
  *
  * Consumes process intents and launches local subprocesses.
  * Durable results are persisted through ProcessExecutionStore.
+ *
+ * Unified lifecycle:
+ * - pending → running → completed (confirmed immediately by exit code)
+ * - pending → running → failed (confirmation_failed)
  */
 
 import { spawn } from "node:child_process";
@@ -28,6 +32,23 @@ function truncateOutput(data: string): string {
     return data.slice(0, MAX_OUTPUT_BYTES) + "\n[truncated]";
   }
   return data;
+}
+
+function buildResultJson(
+  payload: ProcessRunPayload,
+  stdout: string,
+  stderr: string,
+  exitCode: number | null,
+): string {
+  return JSON.stringify({
+    command: payload.command,
+    args: payload.args ?? [],
+    cwd: payload.cwd ?? null,
+    env: payload.env ?? null,
+    stdout,
+    stderr,
+    exit_code: exitCode ?? -1,
+  });
 }
 
 export class ProcessExecutor {
@@ -78,6 +99,9 @@ export class ProcessExecutor {
     this.deps.executionStore.create({
       execution_id: executionId,
       intent_id: candidate.intent_id,
+      executor_family: "process",
+      phase: "pending",
+      confirmation_status: "unconfirmed",
       command: payload.command,
       args_json: JSON.stringify(payload.args ?? []),
       cwd: payload.cwd ?? null,
@@ -88,6 +112,10 @@ export class ProcessExecutor {
       stderr: "",
       started_at: null,
       completed_at: null,
+      confirmed_at: null,
+      error_message: null,
+      artifact_id: null,
+      result_json: buildResultJson(payload, "", "", null),
       lease_expires_at: null,
       lease_runner_id: null,
     });
@@ -95,6 +123,7 @@ export class ProcessExecutor {
     // Mark intent as executing to prevent duplicate execution on retry.
     this.deps.intentStore.updateStatus(candidate.intent_id, "executing", { target_id: executionId });
     this.deps.executionStore.updateStatus(executionId, "running", {
+      phase: "running",
       started_at: now,
       lease_expires_at: leaseExpiresAt,
       lease_runner_id: runnerId,
@@ -106,10 +135,15 @@ export class ProcessExecutor {
 
       const success = exitCode === 0;
       this.deps.executionStore.updateStatus(executionId, success ? "completed" : "failed", {
+        phase: success ? "completed" : "failed",
+        confirmation_status: success ? "confirmed" : "confirmation_failed",
         exit_code: exitCode ?? -1,
         stdout: truncateOutput(stdout),
         stderr: truncateOutput(stderr),
         completed_at: completedAt,
+        confirmed_at: success ? completedAt : null,
+        error_message: success ? null : `Process exited with code ${exitCode}`,
+        result_json: buildResultJson(payload, truncateOutput(stdout), truncateOutput(stderr), exitCode),
       });
 
       this.deps.intentStore.updateStatus(candidate.intent_id, success ? "completed" : "failed_terminal", {
@@ -122,10 +156,14 @@ export class ProcessExecutor {
       const message = execError instanceof Error ? execError.message : String(execError);
 
       this.deps.executionStore.updateStatus(executionId, "failed", {
+        phase: "failed",
+        confirmation_status: "confirmation_failed",
         exit_code: -1,
         stdout: "",
         stderr: truncateOutput(message),
         completed_at: completedAt,
+        error_message: `Execution error: ${message}`,
+        result_json: buildResultJson(payload, "", truncateOutput(message), -1),
       });
 
       this.deps.intentStore.updateStatus(candidate.intent_id, "failed_terminal", {
@@ -148,10 +186,13 @@ export class ProcessExecutor {
 
     for (const execution of recovered) {
       this.deps.executionStore.updateStatus(execution.execution_id, "failed", {
+        phase: "failed",
+        confirmation_status: "confirmation_failed",
         exit_code: -1,
         stdout: "",
         stderr: "Recovered stale execution: lease expired",
         completed_at: t,
+        error_message: "Recovered stale execution: lease expired",
         lease_expires_at: null,
         lease_runner_id: null,
       });

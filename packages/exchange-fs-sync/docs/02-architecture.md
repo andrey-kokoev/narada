@@ -1,5 +1,7 @@
 # Architecture
 
+> For the canonical, vertical-agnostic kernel lawbook, see [`00-kernel.md`](00-kernel.md).
+
 ## Component Overview
 
 The system is organized into **eleven layers**: five control-plane layers above six deterministic compiler layers.
@@ -459,7 +461,8 @@ These boundaries are enforced by code structure and must not be bypassed:
 
 ## See Also
 
-- [01-spec.md](01-spec.md) — The theoretical foundation this architecture implements
+- [00-kernel.md](00-kernel.md) — The irreducible, vertical-agnostic kernel lawbook
+- [01-spec.md](01-spec.md) — Mailbox-vertical theoretical foundation
 - [03-persistence.md](03-persistence.md) — Details on atomic writes and storage
 - [07-graph-adapter.md](07-graph-adapter.md) — Graph API integration specifics
 - [05-testing.md](05-testing.md) — How we verify these architectural properties

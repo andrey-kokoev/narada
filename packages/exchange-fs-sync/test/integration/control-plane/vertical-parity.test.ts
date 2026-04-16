@@ -171,13 +171,13 @@ describe("vertical parity — mailbox and timer/process share the same kernel", 
     insertConversation(h, "conv-process");
 
     // Mail vertical work item
-    const wiMail = insertWorkItem(h, { conversation_id: "conv-mail", status: "executing" });
+    const wiMail = insertWorkItem(h, { context_id: "conv-mail", status: "executing" });
     const exMail = `ex_${wiMail.work_item_id}`;
     const envelopeMail = makeInvocationEnvelope(wiMail.work_item_id, exMail, ["send_reply"]);
     insertExecutionAttempt(h, wiMail.work_item_id, exMail, envelopeMail, "active");
 
     // Process vertical work item
-    const wiProc = insertWorkItem(h, { conversation_id: "conv-process", status: "executing" });
+    const wiProc = insertWorkItem(h, { context_id: "conv-process", status: "executing" });
     const exProc = `ex_${wiProc.work_item_id}`;
     const envelopeProc = makeInvocationEnvelope(wiProc.work_item_id, exProc, ["process_run"]);
     insertExecutionAttempt(h, wiProc.work_item_id, exProc, envelopeProc, "active");

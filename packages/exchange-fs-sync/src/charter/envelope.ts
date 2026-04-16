@@ -90,17 +90,17 @@ export async function buildInvocationEnvelope(
   const { coordinatorStore, messageStore, rootDir } = deps;
   const { executionId, workItem, maxPriorEvaluations = 3, tools } = opts;
 
-  const conversationRecord = coordinatorStore.getConversationRecord(workItem.conversation_id);
+  const conversationRecord = coordinatorStore.getConversationRecord(workItem.context_id);
   if (!conversationRecord) {
     throw new Error(
-      `Cannot build invocation envelope: no conversation record found for ${workItem.conversation_id}`,
+      `Cannot build invocation envelope: no conversation record found for ${workItem.context_id}`,
     );
   }
   const charterId = conversationRecord.primary_charter;
   const role: "primary" | "secondary" = "primary";
-  const policy = deps.getRuntimePolicy(workItem.mailbox_id);
+  const policy = deps.getRuntimePolicy(workItem.scope_id);
 
-  const messageIds = await getThreadMessageIds(rootDir, workItem.conversation_id);
+  const messageIds = await getThreadMessageIds(rootDir, workItem.context_id);
   const messages: NormalizedMessage[] = [];
   for (const messageId of messageIds) {
     const record = await messageStore.readRecord(messageId);
@@ -116,8 +116,8 @@ export async function buildInvocationEnvelope(
   });
 
   const threadContext: NormalizedThreadContext = {
-    conversation_id: workItem.conversation_id,
-    mailbox_id: workItem.mailbox_id,
+    conversation_id: workItem.context_id,
+    mailbox_id: workItem.scope_id,
     revision_id: workItem.opened_for_revision_id,
     messages,
   };
@@ -141,8 +141,8 @@ export async function buildInvocationEnvelope(
     invocation_version: "2.0",
     execution_id: executionId,
     work_item_id: workItem.work_item_id,
-    conversation_id: workItem.conversation_id,
-    mailbox_id: workItem.mailbox_id,
+    conversation_id: workItem.context_id,
+    mailbox_id: workItem.scope_id,
     charter_id: charterId,
     role,
     invoked_at: new Date().toISOString(),
@@ -158,18 +158,18 @@ export async function buildInvocationEnvelope(
 
 export interface BuildEvaluationRecordOptions {
   output: CharterOutputEnvelope;
-  attempt: { execution_id: string; work_item_id: string; conversation_id: string };
+  attempt: { execution_id: string; work_item_id: string; context_id: string };
 }
 
 export function buildEvaluationRecord(
   output: CharterOutputEnvelope,
-  attempt: { execution_id: string; work_item_id: string; conversation_id: string },
+  attempt: { execution_id: string; work_item_id: string; context_id: string },
 ): EvaluationEnvelope {
   return {
     evaluation_id: `ev_${attempt.execution_id}`,
     execution_id: attempt.execution_id,
     work_item_id: attempt.work_item_id,
-    conversation_id: attempt.conversation_id,
+    conversation_id: attempt.context_id,
     charter_id: output.charter_id,
     role: output.role,
     output_version: output.output_version,

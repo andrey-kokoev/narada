@@ -58,6 +58,9 @@ describe("ProcessExecutor", () => {
 
     const execution = executionStore.getById(result.executionId!)!;
     expect(execution.status).toBe("completed");
+    expect(execution.phase).toBe("completed");
+    expect(execution.confirmation_status).toBe("confirmed");
+    expect(execution.confirmed_at).not.toBeNull();
     expect(execution.exit_code).toBe(0);
     expect(execution.stdout.trim()).toBe("hello");
   });
@@ -92,6 +95,8 @@ describe("ProcessExecutor", () => {
 
     const execution = executionStore.getById(result.executionId!)!;
     expect(execution.status).toBe("failed");
+    expect(execution.phase).toBe("failed");
+    expect(execution.confirmation_status).toBe("confirmation_failed");
     expect(execution.exit_code).toBe(1);
   });
 

@@ -38,6 +38,7 @@ import {
   DefaultWorkerRegistry,
   drainWorker,
   DefaultForemanFacade,
+  MailboxContextStrategy,
   SqliteScheduler,
   MockCharterRunner,
   buildInvocationEnvelope,
@@ -46,9 +47,7 @@ import {
   loadCharterEnv,
   type ExchangeFsSyncConfig,
   type NormalizedEvent,
-  type ApplyEventResult,
   type SyncCompletionSignal,
-  type ChangedConversation,
   type CharterRunner,
   type GraphAdapter,
   type WorkItem,
@@ -277,6 +276,7 @@ async function createMailboxDispatchContext(
     workerRegistry: InstanceType<typeof DefaultWorkerRegistry>;
     processExecutionStore: InstanceType<typeof SqliteProcessExecutionStore>;
     processExecutor: InstanceType<typeof ProcessExecutor>;
+    factStore: InstanceType<typeof SqliteFactStore>;
   } | null = null;
 
   async function initDispatchDeps(): Promise<NonNullable<typeof dispatchDeps>> {
@@ -303,6 +303,12 @@ async function createMailboxDispatchContext(
     const traceStore = new SqliteAgentTraceStore({ db });
     traceStore.initSchema();
 
+    const factDb = new Database(join(dbDir, 'facts.db'));
+    factDb.pragma('journal_mode = WAL');
+    factDb.pragma('synchronous = NORMAL');
+    const factStore = new SqliteFactStore({ db: factDb });
+    factStore.initSchema();
+
     const getRuntimePolicy = (_mailboxId: string) => config.policy ?? {
       primary_charter: 'support_steward',
       allowed_actions: ['draft_reply', 'send_reply', 'send_new_message', 'mark_read', 'move_message', 'archive', 'no_action'],
@@ -315,6 +321,7 @@ async function createMailboxDispatchContext(
       db,
       foremanId: config.mailbox_id,
       getRuntimePolicy,
+      contextFormationStrategy: new MailboxContextStrategy(),
     });
 
     const scheduler = new SqliteScheduler(coordinatorStore, {
@@ -342,39 +349,26 @@ async function createMailboxDispatchContext(
       fn: () => processExecutor.processNext(),
     });
 
-    dispatchDeps = { db, coordinatorStore, outboundStore, intentStore, traceStore, foreman, scheduler, charterRunner, toolCatalog, toolDefinitions, processExecutionStore, workerRegistry, processExecutor };
+    dispatchDeps = { db, coordinatorStore, outboundStore, intentStore, traceStore, foreman, scheduler, charterRunner, toolCatalog, toolDefinitions, processExecutionStore, workerRegistry, processExecutor, factStore };
     return dispatchDeps;
   }
 
-  async function runDispatchPhase(
-    changedConversations: Map<string, Set<ChangedConversation['change_kinds'][number]>>,
-  ): Promise<void> {
+  async function runDispatchPhase(): Promise<void> {
     const deps = await initDispatchDeps();
-    const now = new Date().toISOString();
 
-    if (changedConversations.size > 0) {
-      const changed: ChangedConversation[] = [];
-      for (const [conversationId, kindsSet] of changedConversations) {
-        const previousOrdinal = deps.coordinatorStore.getLatestRevisionOrdinal(conversationId);
-        const currentOrdinal = (previousOrdinal ?? 0) + 1;
-        changed.push({
-          conversation_id: conversationId,
-          previous_revision_ordinal: previousOrdinal,
-          current_revision_ordinal: currentOrdinal,
-          change_kinds: Array.from(kindsSet),
-        });
-      }
+    // Fact-driven admission: read unadmitted facts and route them through the foreman
+    const facts = deps.factStore.getUnadmittedFacts(config.mailbox_id, 1000);
 
+    if (facts.length > 0) {
+      logger.info('Dispatch phase starting', { facts: facts.length });
+
+      const openResult = await deps.foreman.onFactsAdmitted(facts, config.mailbox_id);
       const signal: SyncCompletionSignal = {
-        signal_id: `sync_${now}_${Math.random().toString(36).slice(2)}`,
+        signal_id: `fact_${Date.now()}_${Math.random().toString(36).slice(2)}`,
         mailbox_id: config.mailbox_id,
-        synced_at: now,
-        changed_conversations: changed,
+        synced_at: new Date().toISOString(),
+        changed_conversations: [],
       };
-
-      logger.info('Dispatch phase starting', { conversations: changed.length });
-
-      const openResult = await deps.foreman.onSyncCompleted(signal);
       await opts.dispatchHooks?.afterSyncCompleted?.(signal, openResult);
       for (const opened of openResult.opened) {
         const openedItem = deps.coordinatorStore.getWorkItem(opened.work_item_id);
@@ -382,13 +376,15 @@ async function createMailboxDispatchContext(
           await opts.dispatchHooks?.afterWorkOpened?.(openedItem);
         }
       }
+
+      deps.factStore.markAdmitted(facts.map((f) => f.fact_id));
     }
 
     function persistRejectedToolCall(
       request: { tool_id: string; arguments_json: string; purpose: string },
       reason: string,
       executionId: string,
-      workItem: { work_item_id: string; conversation_id: string },
+      workItem: { work_item_id: string; context_id: string },
     ): void {
       const now = new Date().toISOString();
       try {
@@ -404,7 +400,7 @@ async function createMailboxDispatchContext(
             `tc_${executionId}_${Date.now()}_${request.tool_id}`,
             executionId,
             workItem.work_item_id,
-            workItem.conversation_id,
+            workItem.context_id,
             request.tool_id,
             request.arguments_json,
             'rejected_policy',
@@ -521,7 +517,7 @@ async function createMailboxDispatchContext(
             const result = await toolRunner.executeToolCall(request, catalogTool, {
               execution_id: attempt.execution_id,
               work_item_id: workItem.work_item_id,
-              conversation_id: workItem.conversation_id,
+              conversation_id: workItem.context_id,
               sanitized_args: sanitizedArgs,
             });
             logger.info('Tool executed', {
@@ -540,7 +536,7 @@ async function createMailboxDispatchContext(
         const evaluation = buildEvaluationRecord(output, {
           execution_id: attempt.execution_id,
           work_item_id: workItem.work_item_id,
-          conversation_id: workItem.conversation_id,
+          context_id: workItem.context_id,
         });
 
         await opts.dispatchHooks?.beforeResolveWorkItem?.(workItem, attempt, evaluation);
@@ -592,6 +588,7 @@ async function createMailboxDispatchContext(
 
   async function close(): Promise<void> {
     if (dispatchDeps) {
+      dispatchDeps.factStore.close();
       dispatchDeps.db.close();
     }
   }
@@ -718,22 +715,6 @@ async function createSingleMailboxService(
     acquireTimeoutMs: config.runtime.acquire_lock_timeout_ms,
   });
 
-  const changedConversations = new Map<string, Set<ChangedConversation['change_kinds'][number]>>();
-
-  function trackEventChanges(event: NormalizedEvent, result: ApplyEventResult): void {
-    for (const threadId of result.dirty_views.by_thread) {
-      const kinds = changedConversations.get(threadId) ?? new Set();
-      if (event.event_kind === 'created' || event.event_kind === 'upsert') {
-        kinds.add('new_message');
-      } else if (event.event_kind === 'updated') {
-        kinds.add('new_message');
-      } else if (event.event_kind === 'deleted' || event.event_kind === 'delete') {
-        kinds.add('moved');
-      }
-      changedConversations.set(threadId, kinds);
-    }
-  }
-
   const source = new ExchangeSource({ adapter, sourceId: config.mailbox_id });
 
   const runner = new DefaultSyncRunner({
@@ -755,7 +736,6 @@ async function createSingleMailboxService(
           },
           event,
         );
-        trackEventChanges(event, result);
         return result;
       },
     },
@@ -787,7 +767,6 @@ async function createSingleMailboxService(
 
   async function runSingleSync(): Promise<'success' | 'retryable' | 'fatal'> {
     logger.info('Starting sync cycle');
-    changedConversations.clear();
 
     try {
       const result = await runner.syncOnce();
@@ -805,7 +784,7 @@ async function createSingleMailboxService(
         });
 
         try {
-          await dispatchContext.runDispatchPhase(changedConversations);
+          await dispatchContext.runDispatchPhase();
         } catch (dispatchError) {
           const msg = dispatchError instanceof Error ? dispatchError.message : String(dispatchError);
           logger.error('Dispatch phase error', { error: msg });
@@ -1079,7 +1058,7 @@ async function createMultiMailboxService(
         const dispatchContexts = new Map<string, Awaited<ReturnType<typeof createMailboxDispatchContext>>>();
 
         for (const r of result.results) {
-          if (r.success && r.changedConversations && r.changedConversations.length > 0) {
+          if (r.success) {
             const mailbox = config.mailboxes.find((m) => m.id === r.mailboxId);
             if (!mailbox) continue;
 
@@ -1089,11 +1068,7 @@ async function createMultiMailboxService(
                 dispatchContexts.set(mailbox.id, await createMailboxDispatchContext(singleConfig, opts, logger));
               }
               const ctx = dispatchContexts.get(mailbox.id)!;
-              const changedMap = new Map<string, Set<ChangedConversation['change_kinds'][number]>>();
-              for (const c of r.changedConversations) {
-                changedMap.set(c.conversation_id, new Set(c.change_kinds as ChangedConversation['change_kinds'][number][]));
-              }
-              await ctx.runDispatchPhase(changedMap);
+              await ctx.runDispatchPhase();
             } catch (dispatchError) {
               const msg = dispatchError instanceof Error ? dispatchError.message : String(dispatchError);
               logger.error('Dispatch phase error', { mailbox_id: r.mailboxId, error: msg });

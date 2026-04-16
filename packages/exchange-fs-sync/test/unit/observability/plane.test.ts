@@ -66,8 +66,8 @@ describe("observation plane", () => {
     const now = new Date().toISOString();
     coordinatorStore.insertWorkItem({
       work_item_id: `wi-${Math.random().toString(36).slice(2)}`,
-      conversation_id: "conv-1",
-      mailbox_id: "mb-1",
+      context_id: "conv-1",
+      scope_id: "mb-1",
       status: status as any,
       priority: 0,
       opened_for_revision_id: "rev-1",

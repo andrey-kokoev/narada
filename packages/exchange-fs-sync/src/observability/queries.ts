@@ -26,8 +26,8 @@ import type {
 function rowToWorkItemSummary(row: Record<string, unknown>): WorkItemLifecycleSummary {
   return {
     work_item_id: String(row.work_item_id),
-    conversation_id: String(row.conversation_id),
-    mailbox_id: String(row.mailbox_id),
+    context_id: String(row.conversation_id),
+    scope_id: String(row.mailbox_id),
     status: String(row.status) as WorkItemLifecycleSummary["status"],
     priority: Number(row.priority ?? 0),
     opened_for_revision_id: String(row.opened_for_revision_id),
@@ -59,7 +59,7 @@ function rowToToolCallSummary(row: Record<string, unknown>): ToolCallSummary {
     call_id: String(row.call_id),
     execution_id: String(row.execution_id),
     work_item_id: String(row.work_item_id),
-    conversation_id: String(row.conversation_id),
+    context_id: String(row.conversation_id),
     tool_id: String(row.tool_id),
     exit_status: String(row.exit_status) as ToolCallSummary["exit_status"],
     duration_ms: Number(row.duration_ms ?? 0),

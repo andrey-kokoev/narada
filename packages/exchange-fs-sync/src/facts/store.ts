@@ -39,7 +39,8 @@ export class SqliteFactStore implements FactStore {
         source_cursor text,
         provenance_json text not null,
         payload_json text not null,
-        created_at text not null default (datetime('now'))
+        created_at text not null default (datetime('now')),
+        admitted_at text
       );
 
       create index if not exists idx_facts_source_record
@@ -50,6 +51,9 @@ export class SqliteFactStore implements FactStore {
 
       create index if not exists idx_facts_type
         on facts(fact_type, created_at);
+
+      create index if not exists idx_facts_admitted
+        on facts(source_id, admitted_at, created_at);
     `);
   }
 
@@ -107,6 +111,28 @@ export class SqliteFactStore implements FactStore {
       )
       .all(sourceId, sourceCursor) as Record<string, unknown>[];
     return rows.map(rowToFact);
+  }
+
+  getUnadmittedFacts(sourceId?: string, limit = 1000): Fact[] {
+    const sql = sourceId
+      ? `select * from facts where source_id = ? and admitted_at is null order by created_at asc limit ?`
+      : `select * from facts where admitted_at is null order by created_at asc limit ?`;
+    const rows = sourceId
+      ? (this.db.prepare(sql).all(sourceId, limit) as Record<string, unknown>[])
+      : (this.db.prepare(sql).all(limit) as Record<string, unknown>[]);
+    return rows.map(rowToFact);
+  }
+
+  markAdmitted(factIds: string[]): void {
+    if (factIds.length === 0) return;
+    const now = new Date().toISOString();
+    const stmt = this.db.prepare(`update facts set admitted_at = ? where fact_id = ? and admitted_at is null`);
+    const tx = this.db.transaction(() => {
+      for (const id of factIds) {
+        stmt.run(now, id);
+      }
+    });
+    tx();
   }
 
   close(): void {

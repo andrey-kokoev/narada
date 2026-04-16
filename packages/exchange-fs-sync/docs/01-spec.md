@@ -1,5 +1,7 @@
 # Dearbitrized Specification
 
+> This document specifies the **mailbox vertical**. For the generalized, vertical-agnostic kernel lawbook, see [`00-kernel.md`](00-kernel.md).
+
 ## 0. Objective
 
 Construct a system that transforms a remote, mutable mailbox (Microsoft Graph / Exchange)
