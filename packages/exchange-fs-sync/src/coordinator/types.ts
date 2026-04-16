@@ -63,8 +63,8 @@ export interface NormalizedThreadContext {
 /** Persisted output from charter analysis of a thread */
 export interface CharterOutputRow {
   output_id: string;
-  conversation_id: string;
-  mailbox_id: string;
+  context_id: string;
+  scope_id: string;
   charter_id: string;
   role: "primary" | "secondary";
   output_version: string;
@@ -81,8 +81,8 @@ export interface CharterOutputRow {
 /** Record of a foreman decision and its outbound handoff */
 export interface ForemanDecisionRow {
   decision_id: string;
-  conversation_id: string;
-  mailbox_id: string;
+  context_id: string;
+  scope_id: string;
   source_charter_ids_json: string;
   approved_action: string;
   payload_json: string;
@@ -124,6 +124,7 @@ export interface WorkItem {
   error_message: string | null;
   retry_count: number;
   next_retry_at: string | null;
+  context_json: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -166,7 +167,8 @@ export interface Evaluation {
   evaluation_id: string;
   execution_id: string;
   work_item_id: string;
-  conversation_id: string;
+  context_id: string;
+  scope_id: string;
   charter_id: string;
   role: "primary" | "secondary";
   output_version: string;
@@ -290,7 +292,7 @@ export interface CoordinatorStore {
 
   // Charter outputs
   insertCharterOutput(output: CharterOutputRow): void;
-  getOutputsByConversation(conversationId: string, mailboxId: string): CharterOutputRow[];
+  getOutputsByContext(contextId: string, scopeId: string): CharterOutputRow[];
 
   // Agent sessions
   insertAgentSession(session: AgentSession): void;
@@ -303,7 +305,7 @@ export interface CoordinatorStore {
 
   // Decisions
   insertDecision(decision: ForemanDecisionRow): void;
-  getDecisionsByConversation(conversationId: string, mailboxId: string): ForemanDecisionRow[];
+  getDecisionsByContext(contextId: string, scopeId: string): ForemanDecisionRow[];
   getDecisionById(decisionId: string): ForemanDecisionRow | undefined;
   linkDecisionToOutbound(decisionId: string, outboundId: string): void;
 

@@ -203,6 +203,7 @@ export async function backupCommand(
   // Load config to get root directory
   logger.debug('Loading config', { path: configPath });
   const config = await loadConfig({ path: configPath });
+  const scopeId = config.scopes[0]?.scope_id ?? 'unknown';
   const rootDir = resolve(config.root_dir);
   
   // Default to all components if not specified
@@ -316,7 +317,7 @@ export async function backupCommand(
         manifest: {
           version: BACKUP_VERSION,
           created: new Date().toISOString(),
-          sourceMailbox: config.mailbox_id,
+          sourceMailbox: scopeId,
           sourceRootDir: rootDir,
           contents,
           checksums: {},
@@ -344,7 +345,7 @@ export async function backupCommand(
   const manifest: BackupManifest = {
     version: BACKUP_VERSION,
     created: new Date().toISOString(),
-    sourceMailbox: config.mailbox_id,
+    sourceMailbox: scopeId,
     sourceRootDir: rootDir,
     contents,
     checksums,

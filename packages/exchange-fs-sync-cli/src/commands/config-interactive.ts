@@ -21,7 +21,7 @@ export interface ConfigInteractiveOptions {
 }
 
 interface ConfigValues {
-  mailbox_id: string;
+  scope_id: string;
   root_dir: string;
   graph_user_id: string;
   container_ref: string;
@@ -129,13 +129,12 @@ async function runPrompts(defaultOutputPath: string): Promise<ConfigValues | nul
 
   const group = await p.group(
     {
-      mailbox_id: () =>
+      scope_id: () =>
         p.text({
-          message: 'Mailbox ID (email address):',
+          message: 'Scope ID (e.g. email address):',
           placeholder: 'user@example.com',
           validate(value) {
-            if (!value) return 'Mailbox ID is required';
-            if (!value.includes('@')) return 'Please enter a valid email address';
+            if (!value) return 'Scope ID is required';
           },
         }),
 
@@ -149,8 +148,8 @@ async function runPrompts(defaultOutputPath: string): Promise<ConfigValues | nul
       graph_user_id: ({ results }) =>
         p.text({
           message: 'Graph API User ID:',
-          placeholder: results.mailbox_id || 'user@example.com',
-          defaultValue: results.mailbox_id || 'user@example.com',
+          placeholder: results.scope_id || 'user@example.com',
+          defaultValue: results.scope_id || 'user@example.com',
         }),
 
       container_ref: () =>
@@ -214,18 +213,29 @@ export async function configInteractiveCommand(
 
   // Build config object
   const config = {
-    mailbox_id: values.mailbox_id,
     root_dir: values.root_dir,
-    graph: {
-      ...DEFAULT_CONFIG.graph,
-      user_id: values.graph_user_id,
-    },
-    scope: {
-      ...DEFAULT_CONFIG.scope,
-      included_container_refs: [values.container_ref.trim()].filter(Boolean),
-    },
-    normalize: DEFAULT_CONFIG.normalize,
-    runtime: DEFAULT_CONFIG.runtime,
+    scopes: [
+      {
+        scope_id: values.scope_id,
+        root_dir: values.root_dir,
+        sources: [
+          {
+            type: 'graph',
+            ...DEFAULT_CONFIG.graph,
+            user_id: values.graph_user_id,
+          },
+        ],
+        context_strategy: 'mailbox',
+        scope: {
+          ...DEFAULT_CONFIG.scope,
+          included_container_refs: [values.container_ref.trim()].filter(Boolean),
+        },
+        normalize: DEFAULT_CONFIG.normalize,
+        runtime: DEFAULT_CONFIG.runtime,
+        charter: DEFAULT_CONFIG.charter,
+        policy: DEFAULT_CONFIG.policy,
+      },
+    ],
     lifecycle: DEFAULT_CONFIG.lifecycle,
     charter: DEFAULT_CONFIG.charter,
     policy: DEFAULT_CONFIG.policy,
@@ -287,10 +297,12 @@ export async function configInteractiveCommand(
 
   // Human-readable output
   fmt.section('Configuration Summary');
-  fmt.kv('Mailbox', config.mailbox_id);
+  const scope = config.scopes[0];
+  const graphSource = scope?.sources.find((s) => s.type === 'graph');
+  fmt.kv('Scope', scope?.scope_id ?? 'unknown');
   fmt.kv('Data directory', config.root_dir);
-  fmt.kv('Graph User ID', config.graph.user_id);
-  fmt.kv('Folders', config.scope.included_container_refs.join(', '));
+  fmt.kv('Graph User ID', graphSource?.user_id ?? 'unknown');
+  fmt.kv('Folders', scope?.scope.included_container_refs.join(', ') ?? '');
 
   console.log('');
   fmt.message('Next Steps:', 'info');

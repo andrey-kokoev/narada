@@ -206,7 +206,7 @@ describe("SqliteCoordinatorStore", () => {
       const output = createCharterOutput();
       store.insertCharterOutput(output);
 
-      const fetched = store.getOutputsByConversation(thread.conversation_id, thread.mailbox_id);
+      const fetched = store.getOutputsByContext(thread.conversation_id, thread.mailbox_id);
       expect(fetched).toHaveLength(1);
       expect(fetched[0]).toEqual(output);
     });
@@ -221,7 +221,7 @@ describe("SqliteCoordinatorStore", () => {
       store.insertCharterOutput(output1);
       store.insertCharterOutput(output2);
 
-      const fetched = store.getOutputsByConversation(thread.conversation_id, thread.mailbox_id);
+      const fetched = store.getOutputsByContext(thread.conversation_id, thread.mailbox_id);
       expect(fetched.map((o) => o.output_id)).toEqual(["o2", "o1"]);
     });
 
@@ -235,7 +235,7 @@ describe("SqliteCoordinatorStore", () => {
         thread.conversation_id,
       );
 
-      const fetched = store.getOutputsByConversation(thread.conversation_id, thread.mailbox_id);
+      const fetched = store.getOutputsByContext(thread.conversation_id, thread.mailbox_id);
       expect(fetched).toHaveLength(0);
     });
   });
@@ -249,7 +249,7 @@ describe("SqliteCoordinatorStore", () => {
       const decision = createForemanDecision();
       store.insertDecision(decision);
 
-      const fetched = store.getDecisionsByConversation(thread.conversation_id, thread.mailbox_id);
+      const fetched = store.getDecisionsByContext(thread.conversation_id, thread.mailbox_id);
       expect(fetched).toHaveLength(1);
       expect(fetched[0]).toEqual(decision);
     });
@@ -264,7 +264,7 @@ describe("SqliteCoordinatorStore", () => {
 
       store.linkDecisionToOutbound(decision.decision_id, "outbound-123");
 
-      const fetched = store.getDecisionsByConversation(thread.conversation_id, thread.mailbox_id);
+      const fetched = store.getDecisionsByContext(thread.conversation_id, thread.mailbox_id);
       expect(fetched[0]!.outbound_id).toBe("outbound-123");
     });
 
@@ -278,7 +278,7 @@ describe("SqliteCoordinatorStore", () => {
         thread.conversation_id,
       );
 
-      const fetched = store.getDecisionsByConversation(thread.conversation_id, thread.mailbox_id);
+      const fetched = store.getDecisionsByContext(thread.conversation_id, thread.mailbox_id);
       expect(fetched).toHaveLength(0);
     });
   });
@@ -334,7 +334,7 @@ describe("SqliteCoordinatorStore", () => {
       });
       store.insertDecision(decision);
 
-      const fetched = store.getDecisionsByConversation(thread.conversation_id, thread.mailbox_id);
+      const fetched = store.getDecisionsByContext(thread.conversation_id, thread.mailbox_id);
       expect(fetched[0]!.created_by).toBe("foreman:fm-001/charter:support_steward,obligation_keeper");
     });
   });

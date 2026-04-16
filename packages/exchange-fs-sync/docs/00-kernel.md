@@ -275,12 +275,11 @@ These boundaries are enforced by code structure:
 
 The following are acknowledged boundaries between the spec and the current implementation:
 
-1. **Config loading** still uses mailbox-centric naming (`mailbox_id`, `root_dir`) at the top level. Multi-vertical configuration is not yet first-class.
-2. **Graph adapter** is the most mature adapter; webhook and timer sources exist but lack production-hardened retry and backoff policies.
-3. **Observation plane** is complete for local SQLite queries, but no remote telemetry or metrics exporter exists.
-4. **Multi-source scope** — running multiple sources for the same scope with consistent checkpointing is not yet implemented.
-5. **Filesystem vertical** is listed as a future expansion point; only mailbox, timer, and webhook have real implementations.
-6. **Confirmation for process family** currently stops at `completed` / `failed`; there is no external reconciliation loop equivalent to mail's `submitted → confirmed` binding.
+1. **Graph adapter** is the most mature adapter; webhook and timer sources exist but lack production-hardened retry and backoff policies.
+2. **Observation plane** is complete for local SQLite queries, but no remote telemetry or metrics exporter exists.
+3. **Multi-source scope** — running multiple sources for the same scope with consistent checkpointing is not yet implemented.
+4. **Filesystem vertical** is listed as a future expansion point; only mailbox, timer, and webhook have real implementations.
+5. **Confirmation for process family** currently stops at `completed` / `failed`; there is no external reconciliation loop equivalent to mail's `submitted → confirmed` binding.
 
 ---
 

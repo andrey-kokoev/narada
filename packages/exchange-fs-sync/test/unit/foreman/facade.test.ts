@@ -92,6 +92,7 @@ describe("DefaultForemanFacade", () => {
       error_message: null,
       retry_count: 0,
       next_retry_at: null,
+      context_json: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -128,7 +129,7 @@ describe("DefaultForemanFacade", () => {
       evaluation_id: `eval_${executionId}`,
       execution_id: executionId,
       work_item_id: workItemId,
-      conversation_id: "conv-1",
+      context_id: "conv-1",
       charter_id: "support_steward",
       role: "primary",
       output_version: "2.0",

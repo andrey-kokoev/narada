@@ -128,9 +128,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run lint
-        run: pnpm lint
-        working-directory: packages/exchange-fs-sync
+      - name: Run kernel invariant lint
+        run: pnpm kernel-lint
 
       - name: Check formatting
         run: pnpm fmt --check

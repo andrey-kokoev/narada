@@ -9,10 +9,13 @@ import { resolve } from "node:path";
 import type { SecureStorage } from "../auth/secure-storage.js";
 import { resolveSecrets, isSecureRef } from "./secure-config.js";
 import type { AttachmentPolicy, BodyPolicy, FolderRef } from "../types/index.js";
-import type { CharterRuntimeConfig, RuntimePolicy, LifecycleConfig } from "./types.js";
+import type { CharterRuntimeConfig, RuntimePolicy, LifecycleConfig, ScopeConfig } from "./types.js";
 import type { ChangeType } from "../adapter/graph/subscription.js";
 
-/** Configuration for a single mailbox */
+/**
+ * @deprecated Use ScopeConfig from ./types.js instead.
+ * Configuration for a single mailbox (legacy multi-mailbox format)
+ */
 export interface MailboxConfig {
   /** Unique identifier for this mailbox config */
   id: string;
@@ -100,7 +103,9 @@ export interface MultiMailboxGlobalConfig {
   shutdown_timeout_ms: number;
 }
 
-/** Multi-mailbox configuration root */
+/**
+ * @deprecated Use ExchangeFsSyncConfig with scopes[] instead.
+ */
 export interface MultiMailboxConfig {
   /** Array of mailbox configurations */
   mailboxes: MailboxConfig[];
@@ -149,6 +154,8 @@ export interface LoadMultiMailboxOptions {
 /** Result of loading multi-mailbox config */
 export interface LoadMultiMailboxResult {
   config: MultiMailboxConfig;
+  /** Scopes converted from mailboxes for forward compatibility */
+  scopes: ScopeConfig[];
   /** Validation errors by mailbox id */
   validationErrors: Map<string, string[]>;
   /** Whether config is valid */
@@ -524,6 +531,7 @@ export async function loadMultiMailboxConfig(
   if (!isObject(parsed)) {
     return {
       config: { mailboxes: [] },
+      scopes: [],
       validationErrors: new Map([["root", ["Config must be an object"]]]),
       valid: false,
     };
@@ -534,6 +542,7 @@ export async function loadMultiMailboxConfig(
   if (!Array.isArray(mailboxesRaw)) {
     return {
       config: { mailboxes: [] },
+      scopes: [],
       validationErrors: new Map([["mailboxes", ["mailboxes must be an array"]]]),
       valid: false,
     };
@@ -600,11 +609,59 @@ export async function loadMultiMailboxConfig(
   };
 
   const valid = validationErrors.size === 0 && mailboxes.length > 0;
+  const scopes = mailboxes.map(toScopeConfig);
 
   return {
     config,
+    scopes,
     validationErrors,
     valid,
+  };
+}
+
+/**
+ * Convert a legacy MailboxConfig to a ScopeConfig.
+ */
+export function toScopeConfig(mailbox: MailboxConfig): ScopeConfig {
+  return {
+    scope_id: mailbox.mailbox_id,
+    root_dir: mailbox.root_dir,
+    sources: [
+      {
+        type: "graph",
+        ...(mailbox.graph.tenant_id ? { tenant_id: mailbox.graph.tenant_id } : {}),
+        ...(mailbox.graph.client_id ? { client_id: mailbox.graph.client_id } : {}),
+        ...(mailbox.graph.client_secret ? { client_secret: mailbox.graph.client_secret } : {}),
+        user_id: mailbox.graph.user_id,
+        ...(mailbox.graph.base_url ? { base_url: mailbox.graph.base_url } : {}),
+        prefer_immutable_ids: mailbox.graph.prefer_immutable_ids,
+      },
+    ],
+    context_strategy: "mailbox",
+    scope: mailbox.scope ?? {
+      included_container_refs: ["inbox", "sentitems", "drafts", "archive"],
+      included_item_kinds: ["message"],
+    },
+    normalize: {
+      attachment_policy: mailbox.sync?.attachment_policy ?? "metadata_only",
+      body_policy: mailbox.sync?.body_policy ?? "text_only",
+      include_headers: mailbox.sync?.include_headers ?? false,
+      tombstones_enabled: mailbox.sync?.tombstones_enabled ?? true,
+    },
+    runtime: {
+      polling_interval_ms: mailbox.sync?.polling_interval_ms ?? 60000,
+      acquire_lock_timeout_ms: mailbox.sync?.acquire_lock_timeout_ms ?? 30000,
+      cleanup_tmp_on_startup: mailbox.sync?.cleanup_tmp_on_startup ?? true,
+      rebuild_views_after_sync: mailbox.sync?.rebuild_views_after_sync ?? true,
+    },
+    ...(mailbox.charter ? { charter: mailbox.charter } : {}),
+    policy: mailbox.policy ?? {
+      primary_charter: "support_steward",
+      allowed_actions: ["draft_reply", "send_reply", "mark_read", "no_action"],
+    },
+    ...(mailbox.lifecycle ? { lifecycle: mailbox.lifecycle } : {}),
+    ...(mailbox.webhook ? { webhook: mailbox.webhook } : {}),
+    graph: mailbox.graph,
   };
 }
 
@@ -619,8 +676,13 @@ export function getMailboxById(
 }
 
 /**
- * Check if a config is a multi-mailbox config (has mailboxes array)
+ * Check if a config is a multi-scope config (has mailboxes array or scopes array).
  */
-export function isMultiMailboxConfig(obj: unknown): obj is { mailboxes: unknown[] } {
-  return isObject(obj) && Array.isArray(obj.mailboxes);
+export function isMultiMailboxConfig(obj: unknown): obj is { mailboxes: unknown[] } | { scopes: unknown[] } {
+  return isObject(obj) && (Array.isArray(obj.mailboxes) || Array.isArray(obj.scopes));
 }
+
+/**
+ * Alias for isMultiMailboxConfig using scope terminology.
+ */
+export const isMultiScopeConfig = isMultiMailboxConfig;

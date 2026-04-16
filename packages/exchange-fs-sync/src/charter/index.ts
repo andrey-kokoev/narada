@@ -9,5 +9,14 @@ export type {
   BuildInvocationEnvelopeDeps,
   BuildInvocationEnvelopeOptions,
   BuildEvaluationRecordOptions,
+  ContextMaterializer,
 } from "./envelope.js";
-export { buildInvocationEnvelope, buildEvaluationRecord } from "./envelope.js";
+export {
+  buildInvocationEnvelope,
+  buildEvaluationRecord,
+  normalizeMessageForEnvelope,
+  MailboxContextMaterializer,
+  TimerContextMaterializer,
+  WebhookContextMaterializer,
+  FilesystemContextMaterializer,
+} from "./envelope.js";

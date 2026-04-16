@@ -1,4 +1,4 @@
-import type { AttachmentPolicy, BodyPolicy, FolderRef, MailboxId } from "../types/index.js";
+import type { AttachmentPolicy, BodyPolicy, FolderRef } from "../types/index.js";
 import type { AllowedAction } from "../foreman/types.js";
 import type { ChangeType } from "../adapter/graph/subscription.js";
 
@@ -41,11 +41,70 @@ export interface RuntimePolicy {
   require_human_approval?: boolean;
 }
 
-export interface ExchangeFsSyncConfig {
-  mailbox_id: MailboxId;
-  root_dir: string;
+/** Source configuration for a scope (e.g. Graph API, timer, webhook) */
+export interface SourceConfig {
+  type: 'graph' | 'timer' | 'webhook';
+  tenant_id?: string;
+  client_id?: string;
+  client_secret?: string;
+  user_id?: string;
+  base_url?: string;
+  prefer_immutable_ids?: boolean;
+  /**
+   * @deprecated Legacy field for backward compatibility. Prefer source-specific config objects.
+   */
+  [key: string]: unknown;
+}
 
-  graph: {
+/** Executor binding for a scope */
+export interface ExecutorConfig {
+  family: string;
+  options?: Record<string, unknown>;
+}
+
+/** Context strategy for scope admission */
+export type ContextStrategy = 'mailbox' | 'timer' | 'filesystem' | 'webhook' | string;
+
+/** Vertical-neutral configuration for a single scope */
+export interface ScopeConfig {
+  /** Unique identifier for this scope */
+  scope_id: string;
+  /** Root directory for this scope's data */
+  root_dir: string;
+  /** Source configurations */
+  sources: SourceConfig[];
+  /** Context strategy for admission */
+  context_strategy: ContextStrategy;
+  /** Scope filters (folders, item kinds, etc.) */
+  scope: {
+    included_container_refs: FolderRef[];
+    included_item_kinds: string[];
+  };
+  /** Normalization settings */
+  normalize: {
+    attachment_policy: AttachmentPolicy;
+    body_policy: BodyPolicy;
+    include_headers: boolean;
+    tombstones_enabled: boolean;
+  };
+  /** Runtime settings */
+  runtime: {
+    polling_interval_ms: number;
+    acquire_lock_timeout_ms: number;
+    cleanup_tmp_on_startup: boolean;
+    rebuild_views_after_sync: boolean;
+  };
+  /** Charter runtime configuration */
+  charter?: CharterRuntimeConfig;
+  /** Policy binding */
+  policy: RuntimePolicy;
+  /** Executor bindings */
+  executors?: ExecutorConfig[];
+
+  /**
+   * @deprecated Legacy Graph API field. Prefer sources[] instead.
+   */
+  graph?: {
     tenant_id?: string;
     client_id?: string;
     client_secret?: string;
@@ -54,85 +113,88 @@ export interface ExchangeFsSyncConfig {
     prefer_immutable_ids: boolean;
   };
 
-  scope: {
+  /**
+   * @deprecated Legacy webhook field. Prefer global webhook or source-specific webhook config.
+   */
+  webhook?: {
+    enabled: boolean;
+    public_url?: string;
+    port?: number;
+    host?: string;
+    path?: string;
+    client_state?: string;
+    hmac_secret?: string;
+    subscription_expiration_minutes?: number;
+    auto_renew?: boolean;
+    change_types?: ChangeType[];
+    lifecycle_url?: string;
+    fallback_poll_minutes?: number;
+    hybrid_mode?: boolean;
+    rate_limit_max_requests?: number;
+    max_body_size?: number;
+  };
+
+  /**
+   * @deprecated Legacy lifecycle field. Prefer global lifecycle.
+   */
+  lifecycle?: LifecycleConfig;
+}
+
+/** Root configuration supporting multiple concurrent verticals */
+export interface ExchangeFsSyncConfig {
+  root_dir: string;
+  scopes: ScopeConfig[];
+  lifecycle?: LifecycleConfig;
+
+  /** Global webhook configuration (optional) */
+  webhook?: {
+    enabled: boolean;
+    public_url?: string;
+    port?: number;
+    host?: string;
+    path?: string;
+    client_state?: string;
+    hmac_secret?: string;
+    subscription_expiration_minutes?: number;
+    auto_renew?: boolean;
+    change_types?: ChangeType[];
+    lifecycle_url?: string;
+    fallback_poll_minutes?: number;
+    hybrid_mode?: boolean;
+    rate_limit_max_requests?: number;
+    max_body_size?: number;
+  };
+
+  /**
+   * @deprecated Legacy single-scope fields. Prefer scopes[] instead.
+   * When scopes is absent, the loader auto-promotes these fields into a single ScopeConfig.
+   */
+  scope_id?: string;
+  mailbox_id?: string;
+  graph?: {
+    tenant_id?: string;
+    client_id?: string;
+    client_secret?: string;
+    user_id: string;
+    base_url?: string;
+    prefer_immutable_ids: boolean;
+  };
+  scope?: {
     included_container_refs: FolderRef[];
     included_item_kinds: string[];
   };
-
-  normalize: {
+  normalize?: {
     attachment_policy: AttachmentPolicy;
     body_policy: BodyPolicy;
     include_headers: boolean;
     tombstones_enabled: boolean;
   };
-
-  runtime: {
+  runtime?: {
     polling_interval_ms: number;
     acquire_lock_timeout_ms: number;
     cleanup_tmp_on_startup: boolean;
     rebuild_views_after_sync: boolean;
   };
-
-  lifecycle: LifecycleConfig;
-
-  /**
-   * Charter runtime configuration
-   */
   charter?: CharterRuntimeConfig;
-
-  /**
-   * Mailbox policy binding that determines charter routing,
-   * allowed actions, and available tools for this mailbox.
-   */
-  policy: RuntimePolicy;
-
-  /**
-   * Webhook configuration for real-time sync
-   */
-  webhook?: {
-    /** Enable webhook notifications */
-    enabled: boolean;
-    
-    /** Public URL for receiving notifications (required when enabled) */
-    public_url?: string;
-    
-    /** Local port for webhook server (required when enabled) */
-    port?: number;
-    
-    /** Host to bind to */
-    host?: string;
-    
-    /** Webhook endpoint path */
-    path?: string;
-    
-    /** Client state secret for validation (required when enabled) */
-    client_state?: string;
-    
-    /** Optional HMAC secret for signature validation */
-    hmac_secret?: string;
-    
-    /** Subscription expiration in minutes (max 4230) */
-    subscription_expiration_minutes?: number;
-    
-    /** Auto-renew subscriptions before expiration */
-    auto_renew?: boolean;
-    
-    /** Change types to monitor */
-    change_types?: ChangeType[];
-    
-    /** Lifecycle notification URL (defaults to public_url) */
-    lifecycle_url?: string;
-    
-    /** Fallback poll interval when webhooks fail (minutes) */
-    fallback_poll_minutes?: number;
-    
-    /** Enable hybrid mode (webhooks + polling fallback) */
-    hybrid_mode?: boolean;
-    
-    /** Rate limit: max requests per minute */
-    rate_limit_max_requests?: number;
-    
-    /** Maximum request body size in bytes */
-    max_body_size?: number;
-  };
+  policy?: RuntimePolicy;
 }

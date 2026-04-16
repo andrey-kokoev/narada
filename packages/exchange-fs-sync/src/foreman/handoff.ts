@@ -43,7 +43,7 @@ export class OutboundHandoff {
     }
 
     const idempotencyKey = computeIdempotencyKey(
-      decision.conversation_id,
+      decision.context_id,
       decision.approved_action,
       payload,
     );
@@ -59,8 +59,8 @@ export class OutboundHandoff {
 
     const command: OutboundCommand = {
       outbound_id: outboundId,
-      conversation_id: decision.conversation_id,
-      mailbox_id: decision.mailbox_id,
+      conversation_id: decision.context_id,
+      mailbox_id: decision.scope_id,
       action_type: decision.approved_action as OutboundCommand["action_type"],
       status: "pending",
       latest_version: 1,
@@ -127,7 +127,7 @@ export class OutboundHandoff {
     conversationId: string,
     mailboxId: string,
   ): string | null {
-    const decisions = this.deps.coordinatorStore.getDecisionsByConversation(conversationId, mailboxId);
+    const decisions = this.deps.coordinatorStore.getDecisionsByContext(conversationId, mailboxId);
     // Only recover decisions that belong to this specific work item.
     // Decision IDs are formatted as fd_${workItemId}_${actionType}.
     const materialized = decisions.find((d) => d.outbound_id !== null && d.decision_id.startsWith(`fd_${workItemId}`));

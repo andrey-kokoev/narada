@@ -7,9 +7,14 @@
 
 import type { IntentStore } from "../intent/store.js";
 import type { OutboundStore } from "../outbound/store.js";
-import type { ExecutionLifecycle } from "./lifecycle.js";
+import type { ExecutionLifecycle, ConfirmationStatus } from "./lifecycle.js";
 import type { ProcessExecutionStore } from "./store.js";
 import { MailLifecycleAdapter } from "./mail-lifecycle.js";
+import {
+  ProcessConfirmationResolver,
+  MailConfirmationResolver,
+  type ConfirmationResolver,
+} from "./confirmation.js";
 
 export interface ExecutionCoordinatorDeps {
   processStore: ProcessExecutionStore;
@@ -19,9 +24,18 @@ export interface ExecutionCoordinatorDeps {
 
 export class ExecutionCoordinator {
   private readonly mailAdapter: MailLifecycleAdapter;
+  private readonly processConfirmationResolver: ConfirmationResolver;
+  private readonly mailConfirmationResolver: ConfirmationResolver;
 
   constructor(private readonly deps: ExecutionCoordinatorDeps) {
     this.mailAdapter = new MailLifecycleAdapter({ outboundStore: deps.outboundStore });
+    this.processConfirmationResolver = new ProcessConfirmationResolver({
+      executionStore: deps.processStore,
+    });
+    this.mailConfirmationResolver = new MailConfirmationResolver({
+      outboundStore: deps.outboundStore,
+      intentStore: deps.intentStore,
+    });
   }
 
   /**
@@ -82,6 +96,21 @@ export class ExecutionCoordinator {
    * semantic outcome: stale running executions become failed and
    * their intents are reset for retry.
    */
+  /**
+   * Resolve confirmation for an intent across executor families.
+   *
+   * Durable for process; read-only projection for mail.
+   */
+  resolveConfirmation(intentId: string, executorFamily: string): ConfirmationStatus {
+    if (executorFamily === "process") {
+      return this.processConfirmationResolver.resolve(intentId);
+    }
+    if (executorFamily === "mail") {
+      return this.mailConfirmationResolver.resolve(intentId);
+    }
+    return "unconfirmed";
+  }
+
   recoverStaleExecutions(now?: string): ExecutionLifecycle[] {
     const recovered = this.deps.processStore.recoverStaleExecutions(now);
     return recovered.map((ex) => ({

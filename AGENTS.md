@@ -18,6 +18,10 @@ Narada is a generalized, deterministic kernel for turning remote source deltas i
 
 **Peer Verticals**: `TimerSource`, `WebhookSource`, `process.run`, and future automations are first-class peers that travel through the same kernel pipeline (Source → Fact → Policy → Intent → Execution → Observation).
 
+**Fact Boundary**: Facts are the first canonical durable boundary. All replay determinism derives from fact identity. No kernel section may assume mailbox, conversation, or message semantics.
+
+**Intent Boundary**: `Intent` is the universal durable effect boundary. All side effects (mail sends, process spawns, future automations) must be represented as an Intent before execution. Idempotency is enforced at `idempotency_key`.
+
 **Control Plane v2**: Above the compiler, a control plane manages first-class generalized work objects (`work_item`, `execution_attempt`, `outbound_command`). Work is derived from `PolicyContext` via `ContextFormationStrategy`, making mailbox one vertical among many (timer, process, etc.). For the integrated end-to-end model, see [`.ai/tasks/20260414-011-chief-integration-control-plane-v2.md`](.ai/tasks/20260414-011-chief-integration-control-plane-v2.md).
 
 ---
@@ -36,6 +40,7 @@ Narada is a generalized, deterministic kernel for turning remote source deltas i
 | [07-graph-adapter.md](packages/exchange-fs-sync/docs/07-graph-adapter.md) | Microsoft Graph API integration | Are working with the Graph API layer |
 | [08-quickstart.md](packages/exchange-fs-sync/docs/08-quickstart.md) | Setup and first sync | Are setting up for the first time |
 | [09-troubleshooting.md](packages/exchange-fs-sync/docs/09-troubleshooting.md) | Common issues and solutions | Are debugging a problem |
+| [10-ui-read-model-audit.md](packages/exchange-fs-sync/docs/10-ui-read-model-audit.md) | UI read surfaces, gaps, and authority rules | Are building operator UI |
 
 ---
 
@@ -59,8 +64,8 @@ Narada is a generalized, deterministic kernel for turning remote source deltas i
 | Modify send-reply worker | [`src/outbound/send-reply-worker.ts`](packages/exchange-fs-sync/src/outbound/send-reply-worker.ts) |
 | Modify reconciler | [`src/outbound/reconciler.ts`](packages/exchange-fs-sync/src/outbound/reconciler.ts) |
 | Modify non-send worker | [`src/outbound/non-send-worker.ts`](packages/exchange-fs-sync/src/outbound/non-send-worker.ts) |
-| Add a webhook vertical source | [`src/sources/webhook-source.ts`](packages/exchange-fs-sync/src/sources/webhook-source.ts) |
-| Add a webhook context strategy | [`src/foreman/context.ts`](packages/exchange-fs-sync/src/foreman/context.ts) |
+| Add a new vertical source | [`src/sources/{vertical}-source.ts`](packages/exchange-fs-sync/src/sources/) |
+| Add a context strategy | [`src/foreman/context.ts`](packages/exchange-fs-sync/src/foreman/context.ts) |
 | Add a generic webhook HTTP server | [`packages/exchange-fs-sync-daemon/src/generic-webhook-server.ts`](packages/exchange-fs-sync-daemon/src/generic-webhook-server.ts) |
 | Change charter runtime envelope | [`packages/charters/src/runtime/envelope.ts`](packages/charters/src/runtime/envelope.ts) |
 | Add a charter runner | [`packages/charters/src/runtime/runner.ts`](packages/charters/src/runtime/runner.ts) |
@@ -93,7 +98,7 @@ Narada is a generalized, deterministic kernel for turning remote source deltas i
 | **outbound command** | Durable mailbox mutation intent | [`src/outbound/types.ts`](packages/exchange-fs-sync/src/outbound/types.ts) |
 | **ManagedDraft** | Graph draft bound to a command version | [`src/outbound/store.ts`](packages/exchange-fs-sync/src/outbound/store.ts) |
 | **trace** | Commentary record (non-authoritative) anchored to `execution_id` | [`src/agent/traces/types.ts`](packages/exchange-fs-sync/src/agent/traces/types.ts) |
-| **mailbox policy** | Charter routing, allowed actions, and tool catalog binding | [`src/config/types.ts`](packages/exchange-fs-sync/src/config/types.ts) |
+| **runtime policy** | Charter routing, allowed actions, and tool catalog binding | [`src/config/types.ts`](packages/exchange-fs-sync/src/config/types.ts) |
 | **SendReplyWorker** | Draft creation, reuse, and send | [`src/outbound/send-reply-worker.ts`](packages/exchange-fs-sync/src/outbound/send-reply-worker.ts) |
 | **OutboundReconciler** | Submitted → confirmed binding | [`src/outbound/reconciler.ts`](packages/exchange-fs-sync/src/outbound/reconciler.ts) |
 | **CharterInvocationEnvelope** | Runtime envelope for charter evaluation | [`packages/charters/src/runtime/envelope.ts`](packages/charters/src/runtime/envelope.ts) |
@@ -180,7 +185,7 @@ narada/
 │   │
 │   ├── exchange-fs-sync-daemon/       # Long-running daemon
 │   ├── exchange-fs-sync-search/       # Full-text search (FTS5)
-│   └── charters/                      # Mailbox charter definitions and policy types
+│   └── charters/                      # Charter definitions and policy types
 │
 ├── scripts/                           # Build and utility scripts
 └── .github/workflows/                 # CI/CD pipelines
@@ -252,11 +257,15 @@ Resolved in `validateCharterRuntimeConfig()`.
 ## Extension Points
 
 **Allowed** (preserves invariants):
-- Richer payload (attachments, html)
+- New vertical sources (filesystem, webhook, API)
+- New fact types
+- New context formation strategies
+- New executor families
+- Richer payloads (attachments, html)
 - Stronger integrity checks
 - Multi-folder support (requires explicit redesign)
 - Alternative projections (search index, analytics)
-- New outbound actions (e.g., set flags, move messages) via the durable command pipeline
+- New outbound actions via the durable intent pipeline
 
 **Disallowed** without full redesign:
 - Implicit deletes
@@ -310,9 +319,9 @@ The kernel supports arbitrary verticals through the same Source → Fact → Pol
 6. Add unit + integration tests proving replay safety and idempotency
 7. Update this AGENTS.md to list the new vertical as a peer
 
-### 6. Change Mailbox Policy Binding
+### 6. Change Policy Binding
 
-Mailbox policy determines charter routing, allowed actions, and tool catalog for a mailbox. To modify:
+Runtime policy determines charter routing, allowed actions, and tool catalog for a scope. To modify:
 
 1. Update [`RuntimePolicy`](packages/exchange-fs-sync/src/config/types.ts) type
 2. Update parsing/defaults in [`src/config/load.ts`](packages/exchange-fs-sync/src/config/load.ts) and [`src/config/defaults.ts`](packages/exchange-fs-sync/src/config/defaults.ts)

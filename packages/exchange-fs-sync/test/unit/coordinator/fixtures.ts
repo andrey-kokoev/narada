@@ -50,8 +50,8 @@ export function createCharterOutput(overrides?: Partial<CharterOutputRow>): Char
   const now = new Date().toISOString();
   return {
     output_id: "output-1",
-    conversation_id: "thread-1",
-    mailbox_id: "mailbox-1",
+    context_id: "thread-1",
+    scope_id: "mailbox-1",
     charter_id: "support_steward",
     role: "primary",
     output_version: "1.0.0",
@@ -71,8 +71,8 @@ export function createForemanDecision(overrides?: Partial<ForemanDecisionRow>): 
   const now = new Date().toISOString();
   return {
     decision_id: "decision-1",
-    conversation_id: "thread-1",
-    mailbox_id: "mailbox-1",
+    context_id: "thread-1",
+    scope_id: "mailbox-1",
     source_charter_ids_json: '["support_steward"]',
     approved_action: "send_reply",
     payload_json: "{}",

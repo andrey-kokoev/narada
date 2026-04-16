@@ -39,8 +39,8 @@ describe("Replay and Recovery Tests", () => {
       const decisionId = `fd_${wi.work_item_id}_send_reply`;
       h.coordinatorStore.insertDecision({
         decision_id: decisionId,
-        conversation_id: "conv-1",
-        mailbox_id: "mb-1",
+        context_id: "conv-1",
+        scope_id: "mb-1",
         source_charter_ids_json: "[\"support_steward\"]",
         approved_action: "send_reply",
         payload_json: JSON.stringify({ subject: "Hi" }),

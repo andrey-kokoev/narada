@@ -38,9 +38,10 @@ describe('config command', () => {
 
     expect(config.mailbox_id).toBe('user@example.com');
     expect(config.root_dir).toBe('./data');
-    expect(config.graph.user_id).toBe('user@example.com');
-    expect(config.graph.prefer_immutable_ids).toBe(true);
-    expect(config.scope.included_container_refs).toContain('inbox');
+    expect(config.scopes[0].scope_id).toBe('user@example.com');
+    expect(config.scopes[0].sources[0].user_id).toBe('user@example.com');
+    expect(config.scopes[0].sources[0].prefer_immutable_ids).toBe(true);
+    expect(config.scopes[0].scope.included_container_refs).toContain('inbox');
   });
 
   it('overwrites existing file with force flag', async () => {

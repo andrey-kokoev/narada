@@ -97,11 +97,11 @@ describe("AgentSession store operations", () => {
       values ('conv-mb2', 'mb-2', 'steward', '[]', 'active', null, null, null, null, null, null, ?, ?)
     `).run(now, now);
     store.db.prepare(`
-      insert into work_items (work_item_id, conversation_id, mailbox_id, status, priority, opened_for_revision_id, created_at, updated_at)
+      insert into work_items (work_item_id, context_id, scope_id, status, priority, opened_for_revision_id, created_at, updated_at)
       values ('wi-mb1', 'conv-mb1', 'mb-1', 'opened', 0, 'rev-1', ?, ?)
     `).run(now, now);
     store.db.prepare(`
-      insert into work_items (work_item_id, conversation_id, mailbox_id, status, priority, opened_for_revision_id, created_at, updated_at)
+      insert into work_items (work_item_id, context_id, scope_id, status, priority, opened_for_revision_id, created_at, updated_at)
       values ('wi-mb2', 'conv-mb2', 'mb-2', 'opened', 0, 'rev-1', ?, ?)
     `).run(now, now);
 

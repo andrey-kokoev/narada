@@ -37,6 +37,9 @@ export class MockCharterRunner implements CharterRunner {
     const outcome = this.opts.fixedOutcome ?? this.inferOutcome(envelope);
     const confidenceOverall = this.opts.fixedConfidence ?? "high";
 
+    const mat = envelope.context_materialization as Record<string, unknown> | undefined;
+    const matLength = mat && Array.isArray(mat.messages) ? mat.messages.length : 0;
+
     const proposedActions =
       outcome === "no_op" || outcome === "escalation"
         ? []
@@ -44,7 +47,7 @@ export class MockCharterRunner implements CharterRunner {
             action_type: action,
             authority: "recommended" as const,
             payload_json: JSON.stringify({ generated_by: "mock_runner" }),
-            rationale: `Mock runner recommends ${action} for conversation ${envelope.conversation_id}`,
+            rationale: `Mock runner recommends ${action} for context ${envelope.context_id}`,
           }));
 
     return {
@@ -58,7 +61,7 @@ export class MockCharterRunner implements CharterRunner {
         overall: confidenceOverall,
         uncertainty_flags: [],
       },
-      summary: `Mock analysis completed for ${envelope.conversation_id} (${envelope.thread_context.messages.length} messages)`,
+      summary: `Mock analysis completed for ${envelope.context_id} (${matLength} messages)`,
       classifications: [],
       facts: [],
       proposed_actions: proposedActions,

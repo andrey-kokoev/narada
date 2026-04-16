@@ -184,6 +184,7 @@ describe("vertical parity — mailbox and timer/process share the same kernel", 
 
     // Resolve mail intent
     const mailEval = makeEvaluation(wiMail.work_item_id, exMail, {
+      context_id: "conv-mail",
       proposed_actions: [
         {
           action_type: "send_reply",
@@ -204,6 +205,7 @@ describe("vertical parity — mailbox and timer/process share the same kernel", 
 
     // Resolve process intent
     const processEval = makeEvaluation(wiProc.work_item_id, exProc, {
+      context_id: "conv-process",
       proposed_actions: [
         {
           action_type: "process_run",

@@ -59,8 +59,9 @@ describe("ProcessExecutor", () => {
     const execution = executionStore.getById(result.executionId!)!;
     expect(execution.status).toBe("completed");
     expect(execution.phase).toBe("completed");
-    expect(execution.confirmation_status).toBe("confirmed");
-    expect(execution.confirmed_at).not.toBeNull();
+    // Confirmation is resolved separately (Task 060)
+    expect(execution.confirmation_status).toBe("unconfirmed");
+    expect(execution.confirmed_at).toBeNull();
     expect(execution.exit_code).toBe(0);
     expect(execution.stdout.trim()).toBe("hello");
   });
@@ -96,12 +97,15 @@ describe("ProcessExecutor", () => {
     const execution = executionStore.getById(result.executionId!)!;
     expect(execution.status).toBe("failed");
     expect(execution.phase).toBe("failed");
-    expect(execution.confirmation_status).toBe("confirmation_failed");
+    // Confirmation is resolved separately (Task 060)
+    expect(execution.confirmation_status).toBe("unconfirmed");
     expect(execution.exit_code).toBe(1);
   });
 
   it("marks intent failed_terminal for invalid payload_json", async () => {
-    admitProcessIntent({ payload_json: "not-json" });
+    admitProcessIntent();
+    // Corrupt payload directly to bypass registry validation and test executor defense.
+    db.prepare("update intents set payload_json = ? where intent_id = ?").run("not-json", "int-test");
 
     const result = await executor.processNext();
     expect(result.processed).toBe(true);
@@ -112,7 +116,9 @@ describe("ProcessExecutor", () => {
   });
 
   it("marks intent failed_terminal for missing command", async () => {
-    admitProcessIntent({ payload_json: JSON.stringify({ args: [] }) });
+    admitProcessIntent();
+    // Corrupt payload directly to bypass registry validation and test executor defense.
+    db.prepare("update intents set payload_json = ? where intent_id = ?").run(JSON.stringify({ args: [] }), "int-test");
 
     const result = await executor.processNext();
     expect(result.processed).toBe(true);
@@ -180,6 +186,8 @@ describe("ProcessExecutor", () => {
 
     const execution = executionStore.getById("pe-stale")!;
     expect(execution.status).toBe("failed");
+    expect(execution.phase).toBe("failed");
+    expect(execution.confirmation_status).toBe("unconfirmed");
     expect(execution.stderr).toContain("Recovered stale execution");
 
     const intent = intentStore.getById("int-stale")!;

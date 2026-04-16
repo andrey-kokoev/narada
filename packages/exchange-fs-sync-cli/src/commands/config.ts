@@ -12,28 +12,45 @@ export interface ConfigOptions {
 }
 
 const DEFAULT_CONFIG = {
-  mailbox_id: 'user@example.com',
   root_dir: './data',
-  graph: {
-    user_id: 'user@example.com',
-    prefer_immutable_ids: true,
-  },
-  scope: {
-    included_container_refs: ['inbox', 'sentitems', 'drafts', 'archive'],
-    included_item_kinds: ['message'],
-  },
-  normalize: {
-    attachment_policy: 'metadata_only',
-    body_policy: 'text_only',
-    include_headers: false,
-    tombstones_enabled: true,
-  },
-  runtime: {
-    polling_interval_ms: 60000,
-    acquire_lock_timeout_ms: 30000,
-    cleanup_tmp_on_startup: true,
-    rebuild_views_after_sync: false,
-  },
+  mailbox_id: 'user@example.com',
+  scopes: [
+    {
+      scope_id: 'user@example.com',
+      root_dir: './data',
+      sources: [
+        {
+          type: 'graph',
+          user_id: 'user@example.com',
+          prefer_immutable_ids: true,
+        },
+      ],
+      context_strategy: 'mailbox',
+      scope: {
+        included_container_refs: ['inbox', 'sentitems', 'drafts', 'archive'],
+        included_item_kinds: ['message'],
+      },
+      normalize: {
+        attachment_policy: 'metadata_only',
+        body_policy: 'text_only',
+        include_headers: false,
+        tombstones_enabled: true,
+      },
+      runtime: {
+        polling_interval_ms: 60000,
+        acquire_lock_timeout_ms: 30000,
+        cleanup_tmp_on_startup: true,
+        rebuild_views_after_sync: false,
+      },
+      charter: {
+        runtime: 'mock',
+      },
+      policy: {
+        primary_charter: 'support_steward',
+        allowed_actions: ['draft_reply', 'send_reply', 'mark_read', 'no_action'],
+      },
+    },
+  ],
   lifecycle: {
     tombstone_retention_days: 30,
     archive_after_days: 90,
@@ -47,13 +64,6 @@ const DEFAULT_CONFIG = {
       frequency: 'manual',
       max_run_time_minutes: 60,
     },
-  },
-  charter: {
-    runtime: 'mock',
-  },
-  policy: {
-    primary_charter: 'support_steward',
-    allowed_actions: ['draft_reply', 'send_reply', 'mark_read', 'no_action'],
   },
 };
 
@@ -115,10 +125,11 @@ export async function configCommand(
   fmt.message(`Configuration created: ${outputPath}`, 'success');
   
   fmt.section('Configuration Details');
-  fmt.kv('Mailbox', DEFAULT_CONFIG.mailbox_id);
+  const defaultScope = DEFAULT_CONFIG.scopes[0]!;
+  fmt.kv('Scope', defaultScope.scope_id);
   fmt.kv('Data directory', DEFAULT_CONFIG.root_dir);
-  fmt.kv('Sync folders', DEFAULT_CONFIG.scope.included_container_refs.join(', '));
-  fmt.kv('Polling interval', `${DEFAULT_CONFIG.runtime.polling_interval_ms / 1000}s`);
+  fmt.kv('Sync folders', defaultScope.scope.included_container_refs.join(', '));
+  fmt.kv('Polling interval', `${defaultScope.runtime.polling_interval_ms / 1000}s`);
   
   fmt.section('Next Steps');
   fmt.list(result.next_steps);

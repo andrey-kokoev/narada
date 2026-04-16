@@ -105,7 +105,7 @@ describe("SqliteIntentStore", () => {
 
     it("filters by executor family", () => {
       store.admit(makeIntent({ intent_id: "int-1", idempotency_key: "k1", executor_family: "mail" }));
-      store.admit(makeIntent({ intent_id: "int-2", idempotency_key: "k2", executor_family: "process" }));
+      store.admit(makeIntent({ intent_id: "int-2", idempotency_key: "k2", intent_type: "process.run", executor_family: "process", payload_json: JSON.stringify({ command: "/bin/echo" }) }));
 
       const pending = store.getPendingIntents("mail");
       expect(pending).toHaveLength(1);

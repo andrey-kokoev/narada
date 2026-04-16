@@ -66,8 +66,8 @@ describe("IntentHandoff", () => {
     const now = new Date().toISOString();
     return {
       decision_id: "fd-1",
-      conversation_id: "thread-1",
-      mailbox_id: "mb-1",
+      context_id: "thread-1",
+      scope_id: "mb-1",
       source_charter_ids_json: '["support_steward"]',
       approved_action: "send_reply",
       payload_json: JSON.stringify({ subject: "Hello", to: ["a@b.com"], body_text: "Hi" }),

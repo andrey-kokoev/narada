@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
-import type { RunResult, ExchangeFsSyncConfig } from '@narada/exchange-fs-sync';
+import type { RunResult, ScopeConfig, ExchangeFsSyncConfig } from '@narada/exchange-fs-sync';
 import {
   loadConfig,
   buildGraphTokenProvider,
@@ -60,6 +60,23 @@ export async function syncCommand(
   }
 
   const config = await loadConfig({ path: configPath });
+  const scope = config.scopes[0];
+  if (!scope) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: { status: 'error', error: 'No scopes configured' },
+    };
+  }
+
+  const graphSource = scope.graph ?? scope.sources.find((s) => s.type === 'graph');
+  if (!graphSource || !('user_id' in graphSource)) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: { status: 'error', error: 'No graph source configured for first scope' },
+    };
+  }
+  const graph = graphSource as { user_id: string; tenant_id?: string; client_id?: string; client_secret?: string; base_url?: string; prefer_immutable_ids?: boolean };
+
   const rootDir = resolve(config.root_dir);
 
   if (options.dryRun) {
@@ -67,32 +84,33 @@ export async function syncCommand(
   }
 
   logger.info('Initializing Graph client', {
-    user: config.graph.user_id,
-    mailbox: config.mailbox_id,
+    user: graph.user_id,
+    scope: scope.scope_id,
   });
 
   // Set up token provider
-  const tokenProvider = buildGraphTokenProvider({ config });
+  const tokenProvider = buildGraphTokenProvider({ graph: graph as ScopeConfig['graph'] });
 
   // Create Graph HTTP client
   const graphClient = new GraphHttpClient({
     tokenProvider,
-    baseUrl: config.graph.base_url,
-    preferImmutableIds: config.graph.prefer_immutable_ids,
+    baseUrl: graph.base_url,
+    preferImmutableIds: graph.prefer_immutable_ids ?? true,
   });
 
   // Create adapter
   const adapter = new DefaultGraphAdapter({
-    mailbox_id: config.mailbox_id,
-    user_id: config.graph.user_id,
+    mailbox_id: scope.scope_id,
+    user_id: graph.user_id,
     client: graphClient,
     adapter_scope: {
-      mailbox_id: config.mailbox_id,
-      ...config.scope,
+      mailbox_id: scope.scope_id,
+      included_container_refs: scope.scope.included_container_refs,
+      included_item_kinds: scope.scope.included_item_kinds,
     },
-    body_policy: config.normalize.body_policy,
-    attachment_policy: config.normalize.attachment_policy,
-    include_headers: config.normalize.include_headers,
+    body_policy: scope.normalize.body_policy,
+    attachment_policy: scope.normalize.attachment_policy,
+    include_headers: scope.normalize.include_headers,
     normalize_folder_ref: normalizeFolderRef,
     normalize_flagged: normalizeFlagged,
   });
@@ -100,26 +118,26 @@ export async function syncCommand(
   // Create persistence stores
   const cursorStore = new FileCursorStore({
     rootDir,
-    mailboxId: config.mailbox_id,
+    mailboxId: scope.scope_id,
   });
 
   const applyLogStore = new FileApplyLogStore({ rootDir });
 
   const projector = new DefaultProjector({
     rootDir,
-    tombstonesEnabled: config.normalize.tombstones_enabled,
+    tombstonesEnabled: scope.normalize.tombstones_enabled,
   });
 
   // Create lock mechanism
   const lock = new FileLock({
     rootDir,
-    acquireTimeoutMs: config.runtime.acquire_lock_timeout_ms,
+    acquireTimeoutMs: scope.runtime.acquire_lock_timeout_ms,
   });
 
   // Run sync or a read-only preview
   logger.info('Starting sync cycle', { dryRun: options.dryRun });
 
-  const source = new ExchangeSource({ adapter, sourceId: config.mailbox_id });
+  const source = new ExchangeSource({ adapter, sourceId: scope.scope_id });
 
   const result = options.dryRun
     ? await previewSync({ adapter, cursorStore, applyLogStore, logger })
@@ -129,11 +147,11 @@ export async function syncCommand(
         cursorStore,
         applyLogStore,
         projector,
-        cleanupTmp: config.runtime.cleanup_tmp_on_startup
+        cleanupTmp: scope.runtime.cleanup_tmp_on_startup
           ? () => cleanupTmp({ rootDir })
           : undefined,
         acquireLock: () => lock.acquire(),
-        rebuildViewsAfterSync: config.runtime.rebuild_views_after_sync,
+        rebuildViewsAfterSync: scope.runtime.rebuild_views_after_sync,
       }).syncOnce();
 
   logger.info('Sync complete', {

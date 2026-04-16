@@ -7,7 +7,7 @@
 cd packages/exchange-fs-sync
 
 # 1. Verify config is valid
-node -e "import('./src/config/load.js').then(m => m.loadConfig({path:'./config.json'})).then(c => console.log('Config OK:', c.mailbox_id))"
+node -e "import('./src/config/load.js').then(m => m.loadConfig({path:'./config.json'})).then(c => console.log('Config OK:', c.scopes.length, 'scope(s)'))"
 
 # 2. Check data directory structure
 ls -la data/
@@ -140,10 +140,10 @@ cat data/state/sync.lock/meta.json 2>/dev/null
 
 ### "Mailbox mismatch"
 
-**Cause**: Configured `mailbox_id` doesn't match cursor's stored `mailbox_id`.
+**Cause**: Configured scope ID doesn't match cursor's stored `mailbox_id`.
 
 **Fix**:
-- Update config to match cursor, OR
+- Update config scope to match cursor, OR
 - Delete cursor to start fresh:
   ```bash
   rm data/state/cursor.json
@@ -341,7 +341,7 @@ When reporting issues, include:
 
 1. **Config** (redact secrets):
    ```bash
-   cat config.json | jq '{mailbox_id, root_dir, scope, normalize}'
+   cat config.json | jq '{root_dir, scopes: [.scopes[] | {scope_id, root_dir, scope, normalize}]}'
    ```
 
 2. **Last sync result**:

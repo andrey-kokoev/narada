@@ -1,10 +1,17 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import type { ExchangeFsSyncConfig } from "./types.js";
+import type { ExchangeFsSyncConfig, ScopeConfig } from "./types.js";
 import type { ChangeType } from "../adapter/graph/subscription.js";
 import { DEFAULT_EXCHANGE_FS_SYNC_CONFIG } from "./defaults.js";
 import type { SecureStorage } from "../auth/secure-storage.js";
 import { resolveSecrets, isSecureRef } from "./secure-config.js";
+
+const DEFAULTS = DEFAULT_EXCHANGE_FS_SYNC_CONFIG as typeof DEFAULT_EXCHANGE_FS_SYNC_CONFIG & {
+  normalize: ScopeConfig["normalize"];
+  runtime: ScopeConfig["runtime"];
+  policy: ScopeConfig["policy"];
+  lifecycle: NonNullable<ExchangeFsSyncConfig["lifecycle"]>;
+};
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -59,7 +66,7 @@ function expectStringArray(value: unknown, path: string): string[] {
 function expectAttachmentPolicy(
   value: unknown,
   path: string,
-): ExchangeFsSyncConfig["normalize"]["attachment_policy"] {
+): ScopeConfig["normalize"]["attachment_policy"] {
   if (
     value === "exclude" ||
     value === "metadata_only" ||
@@ -76,7 +83,7 @@ function expectAttachmentPolicy(
 function expectBodyPolicy(
   value: unknown,
   path: string,
-): ExchangeFsSyncConfig["normalize"]["body_policy"] {
+): ScopeConfig["normalize"]["body_policy"] {
   if (
     value === "text_only" ||
     value === "html_only" ||
@@ -110,7 +117,7 @@ const ALLOWED_ACTIONS = new Set([
   "no_action",
 ]);
 
-function expectAllowedActions(value: unknown, path: string): ExchangeFsSyncConfig["policy"]["allowed_actions"] {
+function expectAllowedActions(value: unknown, path: string): ScopeConfig["policy"]["allowed_actions"] {
   if (!Array.isArray(value)) {
     throw new Error(`${path} must be an array of allowed actions`);
   }
@@ -119,7 +126,7 @@ function expectAllowedActions(value: unknown, path: string): ExchangeFsSyncConfi
     if (!ALLOWED_ACTIONS.has(action)) {
       throw new Error(`${path}[${index}] must be a valid allowed action, got "${action}"`);
     }
-    return action as ExchangeFsSyncConfig["policy"]["allowed_actions"][number];
+    return action as ScopeConfig["policy"]["allowed_actions"][number];
   });
   if (actions.length === 0) {
     throw new Error(`${path} must contain at least one allowed action`);
@@ -149,6 +156,326 @@ export interface LoadConfigOptions {
   storage?: SecureStorage;
 }
 
+function loadScopeConfig(rawScope: unknown, pathPrefix: string): ScopeConfig {
+  const scope = expectObject(rawScope, pathPrefix);
+
+  const scopeId = expectString(
+    scope.scope_id ?? scope.id ?? scope.mailbox_id,
+    `${pathPrefix}.scope_id`,
+  );
+  const rootDir = expectString(scope.root_dir, `${pathPrefix}.root_dir`);
+
+  // Sources
+  const sourcesRaw = Array.isArray(scope.sources) ? scope.sources : [];
+  const hasLegacyGraph = isObject(scope.graph);
+  if (sourcesRaw.length === 0 && hasLegacyGraph) {
+    const graphObj = scope.graph as Record<string, unknown>;
+    sourcesRaw.push({
+      type: "graph",
+      ...(isNonEmptyString(graphObj.tenant_id) ? { tenant_id: graphObj.tenant_id.trim() } : {}),
+      ...(isNonEmptyString(graphObj.client_id) ? { client_id: graphObj.client_id.trim() } : {}),
+      ...(isNonEmptyString(graphObj.client_secret) ? { client_secret: graphObj.client_secret.trim() } : {}),
+      ...(isNonEmptyString(graphObj.user_id) ? { user_id: graphObj.user_id.trim() } : {}),
+      ...(isNonEmptyString(graphObj.base_url) ? { base_url: graphObj.base_url.trim() } : {}),
+      ...(isBoolean(graphObj.prefer_immutable_ids) ? { prefer_immutable_ids: graphObj.prefer_immutable_ids } : {}),
+    });
+  }
+  if (sourcesRaw.length === 0) {
+    throw new Error(`${pathPrefix}.sources must contain at least one source`);
+  }
+  const sources = sourcesRaw.map((s, i) => {
+    const src = expectObject(s, `${pathPrefix}.sources[${i}]`);
+    const type = expectString(src.type, `${pathPrefix}.sources[${i}].type`);
+    if (!["graph", "timer", "webhook"].includes(type)) {
+      throw new Error(`${pathPrefix}.sources[${i}].type must be one of: graph, timer, webhook`);
+    }
+    return { type, ...src } as ScopeConfig["sources"][number];
+  });
+
+  // Context strategy
+  const contextStrategy = isNonEmptyString(scope.context_strategy)
+    ? scope.context_strategy.trim()
+    : "mailbox";
+
+  // Scope filters
+  const scopeObj = isObject(scope.scope) ? scope.scope : {};
+  const scopeFilters = {
+    included_container_refs: Array.isArray(scopeObj.included_container_refs)
+      ? expectStringArray(scopeObj.included_container_refs, `${pathPrefix}.scope.included_container_refs`)
+      : ["inbox", "sentitems", "drafts", "archive"],
+    included_item_kinds: Array.isArray(scopeObj.included_item_kinds)
+      ? expectStringArray(scopeObj.included_item_kinds, `${pathPrefix}.scope.included_item_kinds`)
+      : ["message"],
+  };
+
+  // Normalize
+  const normalizeRaw = isObject(scope.normalize) ? scope.normalize : {};
+  const normalize = {
+    attachment_policy: expectAttachmentPolicy(
+      normalizeRaw.attachment_policy ?? DEFAULTS.normalize.attachment_policy,
+      `${pathPrefix}.normalize.attachment_policy`,
+    ),
+    body_policy: expectBodyPolicy(
+      normalizeRaw.body_policy ?? DEFAULTS.normalize.body_policy,
+      `${pathPrefix}.normalize.body_policy`,
+    ),
+    include_headers: expectBoolean(
+      normalizeRaw.include_headers ?? DEFAULTS.normalize.include_headers,
+      `${pathPrefix}.normalize.include_headers`,
+    ),
+    tombstones_enabled: expectBoolean(
+      normalizeRaw.tombstones_enabled ?? DEFAULTS.normalize.tombstones_enabled,
+      `${pathPrefix}.normalize.tombstones_enabled`,
+    ),
+  };
+
+  // Runtime
+  const runtimeRaw = isObject(scope.runtime) ? scope.runtime : {};
+  const runtime = {
+    polling_interval_ms: expectNumber(
+      runtimeRaw.polling_interval_ms ?? DEFAULTS.runtime.polling_interval_ms,
+      `${pathPrefix}.runtime.polling_interval_ms`,
+    ),
+    acquire_lock_timeout_ms: expectNumber(
+      runtimeRaw.acquire_lock_timeout_ms ?? DEFAULTS.runtime.acquire_lock_timeout_ms,
+      `${pathPrefix}.runtime.acquire_lock_timeout_ms`,
+    ),
+    cleanup_tmp_on_startup: expectBoolean(
+      runtimeRaw.cleanup_tmp_on_startup ?? DEFAULTS.runtime.cleanup_tmp_on_startup,
+      `${pathPrefix}.runtime.cleanup_tmp_on_startup`,
+    ),
+    rebuild_views_after_sync: expectBoolean(
+      runtimeRaw.rebuild_views_after_sync ?? DEFAULTS.runtime.rebuild_views_after_sync,
+      `${pathPrefix}.runtime.rebuild_views_after_sync`,
+    ),
+  };
+
+  // Charter
+  const charterRaw = isObject(scope.charter) ? scope.charter : {};
+  const charter = {
+    runtime:
+      typeof charterRaw.runtime === "string" && charterRaw.runtime.length > 0
+        ? charterRaw.runtime.trim()
+        : (DEFAULTS.charter?.runtime ?? "mock"),
+    ...(isNonEmptyString(charterRaw.api_key)
+      ? { api_key: charterRaw.api_key.trim() }
+      : {}),
+    ...(isNonEmptyString(charterRaw.model)
+      ? { model: charterRaw.model.trim() }
+      : {}),
+    ...(isNonEmptyString(charterRaw.base_url)
+      ? { base_url: charterRaw.base_url.trim() }
+      : {}),
+    ...(charterRaw.timeout_ms !== undefined
+      ? { timeout_ms: expectNumber(charterRaw.timeout_ms, `${pathPrefix}.charter.timeout_ms`) }
+      : {}),
+  };
+
+  // Policy
+  const policyRaw = isObject(scope.policy) ? scope.policy : {};
+  const policy = {
+    primary_charter: isNonEmptyString(policyRaw.primary_charter)
+      ? policyRaw.primary_charter.trim()
+      : DEFAULTS.policy.primary_charter,
+    allowed_actions:
+      policyRaw.allowed_actions !== undefined
+        ? expectAllowedActions(policyRaw.allowed_actions, `${pathPrefix}.policy.allowed_actions`)
+        : DEFAULTS.policy.allowed_actions,
+    ...(Array.isArray(policyRaw.secondary_charters) && policyRaw.secondary_charters.length > 0
+      ? { secondary_charters: expectStringArray(policyRaw.secondary_charters, `${pathPrefix}.policy.secondary_charters`) }
+      : {}),
+    ...(Array.isArray(policyRaw.allowed_tools) && policyRaw.allowed_tools.length > 0
+      ? { allowed_tools: expectStringArray(policyRaw.allowed_tools, `${pathPrefix}.policy.allowed_tools`) }
+      : {}),
+    ...(isBoolean(policyRaw.require_human_approval)
+      ? { require_human_approval: policyRaw.require_human_approval }
+      : {}),
+  };
+
+  // Executors
+  const executorsRaw = Array.isArray(scope.executors) ? scope.executors : [];
+  const executors = executorsRaw.length > 0
+    ? executorsRaw.map((e, i) => {
+        const ex = expectObject(e, `${pathPrefix}.executors[${i}]`);
+        return {
+          family: expectString(ex.family, `${pathPrefix}.executors[${i}].family`),
+          ...(isObject(ex.options) ? { options: ex.options } : {}),
+        };
+      })
+    : undefined;
+
+  // Webhook (scope-local, optional)
+  const webhookRaw = isObject(scope.webhook) ? scope.webhook : null;
+  const webhook = webhookRaw ? buildWebhookConfig(webhookRaw, `${pathPrefix}.webhook`) : undefined;
+
+  // Lifecycle (scope-local, optional)
+  const lifecycleRaw = isObject(scope.lifecycle) ? scope.lifecycle : null;
+  const lifecycle = lifecycleRaw ? buildLifecycleConfig(lifecycleRaw, `${pathPrefix}.lifecycle`) : undefined;
+
+  // Legacy graph field for backward compat
+  const graph = hasLegacyGraph
+    ? {
+        ...(isNonEmptyString((scope.graph as Record<string, unknown>).tenant_id)
+          ? { tenant_id: ((scope.graph as Record<string, unknown>).tenant_id as string).trim() }
+          : {}),
+        ...(isNonEmptyString((scope.graph as Record<string, unknown>).client_id)
+          ? { client_id: ((scope.graph as Record<string, unknown>).client_id as string).trim() }
+          : {}),
+        ...(isNonEmptyString((scope.graph as Record<string, unknown>).client_secret)
+          ? { client_secret: ((scope.graph as Record<string, unknown>).client_secret as string).trim() }
+          : {}),
+        user_id: expectString((scope.graph as Record<string, unknown>).user_id, `${pathPrefix}.graph.user_id`),
+        ...(isNonEmptyString((scope.graph as Record<string, unknown>).base_url)
+          ? { base_url: ((scope.graph as Record<string, unknown>).base_url as string).trim() }
+          : {}),
+        prefer_immutable_ids: expectBoolean(
+          (scope.graph as Record<string, unknown>).prefer_immutable_ids,
+          `${pathPrefix}.graph.prefer_immutable_ids`,
+        ),
+      }
+    : undefined;
+
+  return {
+    scope_id: scopeId,
+    root_dir: rootDir,
+    sources,
+    context_strategy: contextStrategy,
+    scope: scopeFilters,
+    normalize,
+    runtime,
+    charter,
+    policy,
+    ...(executors ? { executors } : {}),
+    ...(webhook ? { webhook } : {}),
+    ...(lifecycle ? { lifecycle } : {}),
+    ...(graph ? { graph } : {}),
+  };
+}
+
+function buildWebhookConfig(webhookRaw: Record<string, unknown>, path: string): NonNullable<ExchangeFsSyncConfig["webhook"]> {
+  const enabled = webhookRaw.enabled;
+  if (typeof enabled !== "boolean") {
+    throw new Error(`${path}.enabled must be a boolean`);
+  }
+  if (enabled) {
+    if (!isNonEmptyString(webhookRaw.public_url)) {
+      throw new Error(`${path}.public_url is required when webhook is enabled`);
+    }
+    if (typeof webhookRaw.port !== "number") {
+      throw new Error(`${path}.port is required when webhook is enabled`);
+    }
+    if (!isNonEmptyString(webhookRaw.client_state)) {
+      throw new Error(`${path}.client_state is required when webhook is enabled`);
+    }
+  }
+  return {
+    enabled,
+    ...(isNonEmptyString(webhookRaw.public_url)
+      ? { public_url: (webhookRaw.public_url as string).trim() }
+      : {}),
+    ...(typeof webhookRaw.port === "number" ? { port: webhookRaw.port as number } : {}),
+    ...(isNonEmptyString(webhookRaw.host) ? { host: (webhookRaw.host as string).trim() } : {}),
+    ...(isNonEmptyString(webhookRaw.path) ? { path: (webhookRaw.path as string).trim() } : {}),
+    ...(isNonEmptyString(webhookRaw.client_state)
+      ? { client_state: (webhookRaw.client_state as string).trim() }
+      : {}),
+    ...(isNonEmptyString(webhookRaw.hmac_secret)
+      ? { hmac_secret: (webhookRaw.hmac_secret as string).trim() }
+      : {}),
+    ...(typeof webhookRaw.subscription_expiration_minutes === "number"
+      ? { subscription_expiration_minutes: webhookRaw.subscription_expiration_minutes as number }
+      : {}),
+    ...(typeof webhookRaw.auto_renew === "boolean"
+      ? { auto_renew: webhookRaw.auto_renew as boolean }
+      : {}),
+    ...(Array.isArray(webhookRaw.change_types)
+      ? { change_types: webhookRaw.change_types as ChangeType[] }
+      : {}),
+    ...(isNonEmptyString(webhookRaw.lifecycle_url)
+      ? { lifecycle_url: (webhookRaw.lifecycle_url as string).trim() }
+      : {}),
+    ...(typeof webhookRaw.fallback_poll_minutes === "number"
+      ? { fallback_poll_minutes: webhookRaw.fallback_poll_minutes as number }
+      : {}),
+    ...(typeof webhookRaw.hybrid_mode === "boolean"
+      ? { hybrid_mode: webhookRaw.hybrid_mode as boolean }
+      : {}),
+    ...(typeof webhookRaw.rate_limit_max_requests === "number"
+      ? { rate_limit_max_requests: webhookRaw.rate_limit_max_requests as number }
+      : {}),
+    ...(typeof webhookRaw.max_body_size === "number"
+      ? { max_body_size: webhookRaw.max_body_size as number }
+      : {}),
+  };
+}
+
+function buildLifecycleConfig(lifecycleRaw: Record<string, unknown>, path: string): NonNullable<ExchangeFsSyncConfig["lifecycle"]> {
+  const retentionRaw = isObject(lifecycleRaw.retention) ? lifecycleRaw.retention : {};
+  const scheduleRaw = isObject(lifecycleRaw.schedule) ? lifecycleRaw.schedule : {};
+  return {
+    tombstone_retention_days: expectNumber(
+      lifecycleRaw.tombstone_retention_days ?? DEFAULTS.lifecycle.tombstone_retention_days,
+      `${path}.tombstone_retention_days`,
+    ),
+    archive_after_days: expectNumber(
+      lifecycleRaw.archive_after_days ?? DEFAULTS.lifecycle.archive_after_days,
+      `${path}.archive_after_days`,
+    ),
+    archive_dir: expectString(
+      lifecycleRaw.archive_dir ?? DEFAULTS.lifecycle.archive_dir,
+      `${path}.archive_dir`,
+    ),
+    compress_archives: expectBoolean(
+      lifecycleRaw.compress_archives ?? DEFAULTS.lifecycle.compress_archives,
+      `${path}.compress_archives`,
+    ),
+    retention: {
+      max_age_days:
+        retentionRaw.max_age_days !== undefined
+          ? expectNumber(retentionRaw.max_age_days, `${path}.retention.max_age_days`)
+          : undefined,
+      max_total_size:
+        retentionRaw.max_total_size !== undefined
+          ? expectString(retentionRaw.max_total_size, `${path}.retention.max_total_size`)
+          : undefined,
+      max_message_count:
+        retentionRaw.max_message_count !== undefined
+          ? expectNumber(retentionRaw.max_message_count, `${path}.retention.max_message_count`)
+          : undefined,
+      preserve_flagged: expectBoolean(
+        retentionRaw.preserve_flagged ?? DEFAULTS.lifecycle.retention.preserve_flagged,
+        `${path}.retention.preserve_flagged`,
+      ),
+      preserve_unread: expectBoolean(
+        retentionRaw.preserve_unread ?? DEFAULTS.lifecycle.retention.preserve_unread,
+        `${path}.retention.preserve_unread`,
+      ),
+    },
+    schedule: {
+      frequency:
+        scheduleRaw.frequency === "daily" ||
+        scheduleRaw.frequency === "weekly" ||
+        scheduleRaw.frequency === "on-sync" ||
+        scheduleRaw.frequency === "manual"
+          ? scheduleRaw.frequency
+          : DEFAULTS.lifecycle.schedule.frequency,
+      max_run_time_minutes: expectNumber(
+        scheduleRaw.max_run_time_minutes ?? DEFAULTS.lifecycle.schedule.max_run_time_minutes,
+        `${path}.schedule.max_run_time_minutes`,
+      ),
+      time_window:
+        isObject(scheduleRaw.time_window) &&
+        isNonEmptyString(scheduleRaw.time_window.start) &&
+        isNonEmptyString(scheduleRaw.time_window.end)
+          ? {
+              start: scheduleRaw.time_window.start.trim(),
+              end: scheduleRaw.time_window.end.trim(),
+            }
+          : undefined,
+    },
+  };
+}
+
 export async function loadConfig(
   opts: LoadConfigOptions,
 ): Promise<ExchangeFsSyncConfig> {
@@ -170,276 +497,85 @@ export async function loadConfig(
   }
 
   const root = expectObject(parsed, "config");
-  const graph = expectObject(root.graph, "config.graph");
-  const scope = expectObject(root.scope, "config.scope");
+  const rootDir = expectString(root.root_dir, "config.root_dir");
 
-  const normalizeRaw = isObject(root.normalize) ? root.normalize : {};
-  const runtimeRaw = isObject(root.runtime) ? root.runtime : {};
-  const lifecycleRaw = isObject(root.lifecycle) ? root.lifecycle : {};
-  const charterRaw = isObject(root.charter) ? root.charter : {};
-  const retentionRaw = isObject(lifecycleRaw.retention) ? lifecycleRaw.retention : {};
-  const scheduleRaw = isObject(lifecycleRaw.schedule) ? lifecycleRaw.schedule : {};
+  // Global webhook
+  const globalWebhookRaw = isObject(root.webhook) ? root.webhook : null;
+  const globalWebhook = globalWebhookRaw ? buildWebhookConfig(globalWebhookRaw, "config.webhook") : undefined;
 
-  const mailbox_id = expectString(root.mailbox_id, "config.mailbox_id");
-  const root_dir = expectString(root.root_dir, "config.root_dir");
+  // Global lifecycle
+  const globalLifecycleRaw = isObject(root.lifecycle) ? root.lifecycle : null;
+  const isLegacyMode = !Array.isArray(root.scopes) || root.scopes.length === 0;
+  const globalLifecycle = globalLifecycleRaw
+    ? buildLifecycleConfig(globalLifecycleRaw, "config.lifecycle")
+    : isLegacyMode
+      ? buildLifecycleConfig({}, "config.lifecycle")
+      : undefined;
 
-  const merged: ExchangeFsSyncConfig = {
-    mailbox_id,
-    root_dir,
-    graph: {
-      ...(isNonEmptyString(graph.tenant_id)
-        ? { tenant_id: graph.tenant_id.trim() }
-        : {}),
-      ...(isNonEmptyString(graph.client_id)
-        ? { client_id: graph.client_id.trim() }
-        : {}),
-      ...(isNonEmptyString(graph.client_secret)
-        ? { client_secret: graph.client_secret.trim() }
-        : {}),
-      user_id: expectString(graph.user_id, "config.graph.user_id"),
-      ...(isNonEmptyString(graph.base_url)
-        ? { base_url: graph.base_url.trim() }
-        : {}),
-      prefer_immutable_ids: expectBoolean(
-        graph.prefer_immutable_ids,
-        "config.graph.prefer_immutable_ids",
-      ),
-    },
-    scope: {
-      included_container_refs: expectStringArray(
-        scope.included_container_refs,
-        "config.scope.included_container_refs",
-      ),
-      included_item_kinds: expectStringArray(
-        scope.included_item_kinds,
-        "config.scope.included_item_kinds",
-      ),
-    },
-    normalize: {
-      attachment_policy: expectAttachmentPolicy(
-        normalizeRaw.attachment_policy ??
-          DEFAULT_EXCHANGE_FS_SYNC_CONFIG.normalize.attachment_policy,
-        "config.normalize.attachment_policy",
-      ),
-      body_policy: expectBodyPolicy(
-        normalizeRaw.body_policy ??
-          DEFAULT_EXCHANGE_FS_SYNC_CONFIG.normalize.body_policy,
-        "config.normalize.body_policy",
-      ),
-      include_headers: expectBoolean(
-        normalizeRaw.include_headers ??
-          DEFAULT_EXCHANGE_FS_SYNC_CONFIG.normalize.include_headers,
-        "config.normalize.include_headers",
-      ),
-      tombstones_enabled: expectBoolean(
-        normalizeRaw.tombstones_enabled ??
-          DEFAULT_EXCHANGE_FS_SYNC_CONFIG.normalize.tombstones_enabled,
-        "config.normalize.tombstones_enabled",
-      ),
-    },
-    runtime: {
-      polling_interval_ms: expectNumber(
-        runtimeRaw.polling_interval_ms ??
-          DEFAULT_EXCHANGE_FS_SYNC_CONFIG.runtime.polling_interval_ms,
-        "config.runtime.polling_interval_ms",
-      ),
-      acquire_lock_timeout_ms: expectNumber(
-        runtimeRaw.acquire_lock_timeout_ms ??
-          DEFAULT_EXCHANGE_FS_SYNC_CONFIG.runtime.acquire_lock_timeout_ms,
-        "config.runtime.acquire_lock_timeout_ms",
-      ),
-      cleanup_tmp_on_startup: expectBoolean(
-        runtimeRaw.cleanup_tmp_on_startup ??
-          DEFAULT_EXCHANGE_FS_SYNC_CONFIG.runtime.cleanup_tmp_on_startup,
-        "config.runtime.cleanup_tmp_on_startup",
-      ),
-      rebuild_views_after_sync: expectBoolean(
-        runtimeRaw.rebuild_views_after_sync ??
-          DEFAULT_EXCHANGE_FS_SYNC_CONFIG.runtime.rebuild_views_after_sync,
-        "config.runtime.rebuild_views_after_sync",
-      ),
-    },
-    charter: {
-      runtime:
-        typeof charterRaw.runtime === "string" && charterRaw.runtime.length > 0
-          ? charterRaw.runtime.trim()
-          : (DEFAULT_EXCHANGE_FS_SYNC_CONFIG.charter?.runtime ?? "mock"),
-      ...(isNonEmptyString(charterRaw.api_key)
-        ? { api_key: charterRaw.api_key.trim() }
-        : {}),
-      ...(isNonEmptyString(charterRaw.model)
-        ? { model: charterRaw.model.trim() }
-        : {}),
-      ...(isNonEmptyString(charterRaw.base_url)
-        ? { base_url: charterRaw.base_url.trim() }
-        : {}),
-      ...(charterRaw.timeout_ms !== undefined
-        ? { timeout_ms: expectNumber(charterRaw.timeout_ms, "config.charter.timeout_ms") }
-        : {}),
-    },
-    policy: (() => {
-      const policyRaw = isObject(root.policy) ? root.policy : {};
-      const primaryCharter = isNonEmptyString(policyRaw.primary_charter)
-        ? policyRaw.primary_charter.trim()
-        : DEFAULT_EXCHANGE_FS_SYNC_CONFIG.policy.primary_charter;
-      const allowedActions =
-        policyRaw.allowed_actions !== undefined
-          ? expectAllowedActions(policyRaw.allowed_actions, "config.policy.allowed_actions")
-          : DEFAULT_EXCHANGE_FS_SYNC_CONFIG.policy.allowed_actions;
-      return {
-        primary_charter: primaryCharter,
-        allowed_actions: allowedActions,
-        ...(Array.isArray(policyRaw.secondary_charters) && policyRaw.secondary_charters.length > 0
-          ? {
-              secondary_charters: expectStringArray(
-                policyRaw.secondary_charters,
-                "config.policy.secondary_charters",
-              ),
-            }
-          : {}),
-        ...(Array.isArray(policyRaw.allowed_tools) && policyRaw.allowed_tools.length > 0
-          ? {
-              allowed_tools: expectStringArray(
-                policyRaw.allowed_tools,
-                "config.policy.allowed_tools",
-              ),
-            }
-          : {}),
-        ...(isBoolean(policyRaw.require_human_approval)
-          ? { require_human_approval: policyRaw.require_human_approval }
-          : {}),
-      };
-    })(),
-    webhook: (() => {
-      const webhookRaw = isObject(root.webhook) ? root.webhook : null;
-      if (!webhookRaw) {
-        return undefined;
-      }
-      const enabled = webhookRaw.enabled;
-      if (typeof enabled !== "boolean") {
-        throw new Error("config.webhook.enabled must be a boolean");
-      }
-      if (enabled) {
-        if (!isNonEmptyString(webhookRaw.public_url)) {
-          throw new Error("config.webhook.public_url is required when webhook is enabled");
-        }
-        if (typeof webhookRaw.port !== "number") {
-          throw new Error("config.webhook.port is required when webhook is enabled");
-        }
-        if (!isNonEmptyString(webhookRaw.client_state)) {
-          throw new Error("config.webhook.client_state is required when webhook is enabled");
-        }
-      }
-      return {
-        enabled,
-        ...(isNonEmptyString(webhookRaw.public_url)
-          ? { public_url: (webhookRaw.public_url as string).trim() }
-          : {}),
-        ...(typeof webhookRaw.port === "number" ? { port: webhookRaw.port as number } : {}),
-        ...(isNonEmptyString(webhookRaw.host) ? { host: (webhookRaw.host as string).trim() } : {}),
-        ...(isNonEmptyString(webhookRaw.path) ? { path: (webhookRaw.path as string).trim() } : {}),
-        ...(isNonEmptyString(webhookRaw.client_state)
-          ? { client_state: (webhookRaw.client_state as string).trim() }
-          : {}),
-        ...(isNonEmptyString(webhookRaw.hmac_secret)
-          ? { hmac_secret: (webhookRaw.hmac_secret as string).trim() }
-          : {}),
-        ...(typeof webhookRaw.subscription_expiration_minutes === "number"
-          ? { subscription_expiration_minutes: webhookRaw.subscription_expiration_minutes as number }
-          : {}),
-        ...(typeof webhookRaw.auto_renew === "boolean"
-          ? { auto_renew: webhookRaw.auto_renew as boolean }
-          : {}),
-        ...(Array.isArray(webhookRaw.change_types)
-          ? { change_types: webhookRaw.change_types as ChangeType[] }
-          : {}),
-        ...(isNonEmptyString(webhookRaw.lifecycle_url)
-          ? { lifecycle_url: (webhookRaw.lifecycle_url as string).trim() }
-          : {}),
-        ...(typeof webhookRaw.fallback_poll_minutes === "number"
-          ? { fallback_poll_minutes: webhookRaw.fallback_poll_minutes as number }
-          : {}),
-        ...(typeof webhookRaw.hybrid_mode === "boolean"
-          ? { hybrid_mode: webhookRaw.hybrid_mode as boolean }
-          : {}),
-        ...(typeof webhookRaw.rate_limit_max_requests === "number"
-          ? { rate_limit_max_requests: webhookRaw.rate_limit_max_requests as number }
-          : {}),
-        ...(typeof webhookRaw.max_body_size === "number"
-          ? { max_body_size: webhookRaw.max_body_size as number }
-          : {}),
-      };
-    })(),
-    lifecycle: {
-      tombstone_retention_days: expectNumber(
-        lifecycleRaw.tombstone_retention_days ??
-          DEFAULT_EXCHANGE_FS_SYNC_CONFIG.lifecycle.tombstone_retention_days,
-        "config.lifecycle.tombstone_retention_days",
-      ),
-      archive_after_days: expectNumber(
-        lifecycleRaw.archive_after_days ??
-          DEFAULT_EXCHANGE_FS_SYNC_CONFIG.lifecycle.archive_after_days,
-        "config.lifecycle.archive_after_days",
-      ),
-      archive_dir: expectString(
-        lifecycleRaw.archive_dir ??
-          DEFAULT_EXCHANGE_FS_SYNC_CONFIG.lifecycle.archive_dir,
-        "config.lifecycle.archive_dir",
-      ),
-      compress_archives: expectBoolean(
-        lifecycleRaw.compress_archives ??
-          DEFAULT_EXCHANGE_FS_SYNC_CONFIG.lifecycle.compress_archives,
-        "config.lifecycle.compress_archives",
-      ),
-      retention: {
-        max_age_days:
-          retentionRaw.max_age_days !== undefined
-            ? expectNumber(retentionRaw.max_age_days, "config.lifecycle.retention.max_age_days")
-            : undefined,
-        max_total_size:
-          retentionRaw.max_total_size !== undefined
-            ? expectString(retentionRaw.max_total_size, "config.lifecycle.retention.max_total_size")
-            : undefined,
-        max_message_count:
-          retentionRaw.max_message_count !== undefined
-            ? expectNumber(retentionRaw.max_message_count, "config.lifecycle.retention.max_message_count")
-            : undefined,
-        preserve_flagged: expectBoolean(
-          retentionRaw.preserve_flagged ??
-            DEFAULT_EXCHANGE_FS_SYNC_CONFIG.lifecycle.retention.preserve_flagged,
-          "config.lifecycle.retention.preserve_flagged",
-        ),
-        preserve_unread: expectBoolean(
-          retentionRaw.preserve_unread ??
-            DEFAULT_EXCHANGE_FS_SYNC_CONFIG.lifecycle.retention.preserve_unread,
-          "config.lifecycle.retention.preserve_unread",
-        ),
-      },
-      schedule: {
-        frequency:
-          scheduleRaw.frequency === "daily" ||
-          scheduleRaw.frequency === "weekly" ||
-          scheduleRaw.frequency === "on-sync" ||
-          scheduleRaw.frequency === "manual"
-            ? scheduleRaw.frequency
-            : DEFAULT_EXCHANGE_FS_SYNC_CONFIG.lifecycle.schedule.frequency,
-        max_run_time_minutes: expectNumber(
-          scheduleRaw.max_run_time_minutes ??
-            DEFAULT_EXCHANGE_FS_SYNC_CONFIG.lifecycle.schedule.max_run_time_minutes,
-          "config.lifecycle.schedule.max_run_time_minutes",
-        ),
-        time_window:
-          isObject(scheduleRaw.time_window) &&
-          isNonEmptyString(scheduleRaw.time_window.start) &&
-          isNonEmptyString(scheduleRaw.time_window.end)
+  let scopes: ScopeConfig[];
+
+  if (Array.isArray(root.scopes) && root.scopes.length > 0) {
+    scopes = root.scopes.map((s, i) => loadScopeConfig(s, `config.scopes[${i}]`));
+  } else {
+    // Legacy bridge: auto-promote top-level single-scope fields into a ScopeConfig
+    const legacyScopeId = root.scope_id ?? root.mailbox_id;
+    if (!isNonEmptyString(legacyScopeId)) {
+      throw new Error(
+        "Config must define either scopes[] or a legacy scope_id/mailbox_id for backward compatibility",
+      );
+    }
+
+    const legacyScope = {
+      scope_id: legacyScopeId,
+      root_dir: rootDir,
+      graph: root.graph,
+      scope: root.scope,
+      normalize: root.normalize,
+      runtime: root.runtime,
+      lifecycle: root.lifecycle,
+      charter: root.charter,
+      policy: root.policy,
+      webhook: root.webhook,
+      sources: [], // will be backfilled from graph
+      context_strategy: root.context_strategy ?? "mailbox",
+      executors: root.executors,
+    };
+
+    scopes = [loadScopeConfig(legacyScope, "config(legacy)")];
+  }
+
+  const firstScope = scopes[0];
+
+  const config: ExchangeFsSyncConfig = {
+    root_dir: rootDir,
+    scopes,
+    ...(globalLifecycle ? { lifecycle: globalLifecycle } : {}),
+    ...(globalWebhook ? { webhook: globalWebhook } : {}),
+    // Legacy backward-compatibility: hoist first scope fields to top level
+    ...(firstScope
+      ? {
+          scope_id: firstScope.scope_id,
+          mailbox_id: firstScope.scope_id,
+          ...(firstScope.sources[0]
             ? {
-                start: scheduleRaw.time_window.start.trim(),
-                end: scheduleRaw.time_window.end.trim(),
+                graph: {
+                  user_id: firstScope.sources[0].user_id ?? "",
+                  prefer_immutable_ids: firstScope.sources[0].prefer_immutable_ids ?? false,
+                  ...(firstScope.sources[0].tenant_id !== undefined ? { tenant_id: firstScope.sources[0].tenant_id } : {}),
+                  ...(firstScope.sources[0].client_id !== undefined ? { client_id: firstScope.sources[0].client_id } : {}),
+                  ...(firstScope.sources[0].client_secret !== undefined ? { client_secret: firstScope.sources[0].client_secret } : {}),
+                  ...(firstScope.sources[0].base_url !== undefined ? { base_url: firstScope.sources[0].base_url } : {}),
+                },
               }
-            : undefined,
-      },
-    },
+            : {}),
+          scope: firstScope.scope,
+          normalize: firstScope.normalize,
+          runtime: firstScope.runtime,
+          ...(firstScope.charter !== undefined ? { charter: firstScope.charter } : {}),
+          policy: firstScope.policy,
+        }
+      : {}),
   };
 
-  return merged;
+  return config;
 }

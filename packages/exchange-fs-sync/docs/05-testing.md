@@ -247,12 +247,12 @@ Test configuration loading and validation:
 describe("loadConfig", () => {
   it("loads valid config file", async () => {
     const config = await loadConfig({ path: "valid.json" });
-    expect(config.mailbox_id).toBe("test");
+    expect(config.scopes[0].scope_id).toBe("test");
   });
 
   it("throws on missing required field", async () => {
     await expect(loadConfig({ path: "invalid.json" }))
-      .rejects.toThrow("mailbox_id must be a non-empty string");
+      .rejects.toThrow("scope_id must be a non-empty string");
   });
 });
 ```

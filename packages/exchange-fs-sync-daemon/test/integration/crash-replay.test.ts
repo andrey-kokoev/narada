@@ -216,7 +216,7 @@ function countRows(dbPath: string, sql: string, params: unknown[] = []): number 
 
 function getWorkItem(dbPath: string, conversationId: string): Record<string, unknown> | undefined {
   const db = new Database(dbPath);
-  const row = db.prepare("select * from work_items where conversation_id = ? order by created_at desc limit 1").get(conversationId) as Record<string, unknown> | undefined;
+  const row = db.prepare("select * from work_items where context_id = ? order by created_at desc limit 1").get(conversationId) as Record<string, unknown> | undefined;
   db.close();
   return row;
 }
@@ -494,7 +494,7 @@ describe("crash replay determinism", { timeout: 30000 }, () => {
     const commands = getCommands(dbPath, conversationId);
     expect(commands.length).toBe(1);
 
-    const decisions = countRows(dbPath, "select count(*) as c from foreman_decisions where conversation_id = ?", [conversationId]);
+    const decisions = countRows(dbPath, "select count(*) as c from foreman_decisions where context_id = ?", [conversationId]);
     expect(decisions).toBe(1);
   });
 
@@ -608,7 +608,7 @@ describe("crash replay determinism", { timeout: 30000 }, () => {
 
     // Verify deterministic terminal state
     const db = new Database(dbPath);
-    const items = db.prepare("select * from work_items where conversation_id = ? order by created_at asc").all(conversationId) as Array<Record<string, unknown>>;
+    const items = db.prepare("select * from work_items where context_id = ? order by created_at asc").all(conversationId) as Array<Record<string, unknown>>;
     db.close();
 
     expect(items.length).toBe(2);
@@ -693,7 +693,7 @@ describe("crash replay determinism", { timeout: 30000 }, () => {
     const commands = getCommands(dbPath, conversationId);
     expect(commands.length).toBe(1);
 
-    const decisions = countRows(dbPath, "select count(*) as c from foreman_decisions where conversation_id = ?", [conversationId]);
+    const decisions = countRows(dbPath, "select count(*) as c from foreman_decisions where context_id = ?", [conversationId]);
     expect(decisions).toBe(1);
   });
 });

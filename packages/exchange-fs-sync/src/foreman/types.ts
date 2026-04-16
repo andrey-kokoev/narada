@@ -8,9 +8,8 @@
  * Spec: .ai/tasks/20260414-006-assignment-agent-b-charter-invocation-v2.md
  * Spec: .ai/tasks/20260414-008-assignment-agent-d-outbound-handoff-v2.md
  * Spec: .ai/tasks/20260414-010-assignment-agent-f-daemon-foreman-dispatch.md
+ * Spec: .ai/tasks/20260415-054-de-mailbox-charter-envelope.md
  */
-
-import type { NormalizedThreadContext } from "../coordinator/types.js";
 
 export type CharterId = string;
 
@@ -97,13 +96,14 @@ export interface CharterInvocationEnvelope {
   invocation_version: "2.0";
   execution_id: string;
   work_item_id: string;
-  conversation_id: string;
-  mailbox_id: string;
+  context_id: string;
+  scope_id: string;
   charter_id: CharterId;
   role: "primary" | "secondary";
   invoked_at: string;
   revision_id: string;
-  thread_context: NormalizedThreadContext;
+  context_materialization: unknown;
+  vertical_hints?: Record<string, unknown>;
   allowed_actions: AllowedAction[];
   available_tools: ToolCatalogEntry[];
   coordinator_flags: string[];
@@ -196,7 +196,7 @@ export interface EvaluationEnvelope {
   evaluation_id: string;
   execution_id: string;
   work_item_id: string;
-  conversation_id: string;
+  context_id: string;
   charter_id: CharterId;
   role: "primary" | "secondary";
   output_version: string;

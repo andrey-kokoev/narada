@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig } from "../../../src/config/load.js";
+import type { ExchangeFsSyncConfig } from "../../../src/config/types.js";
 
 async function writeConfigFile(value: unknown): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "exchange-fs-sync-config-"));
@@ -13,6 +14,12 @@ async function writeConfigFile(value: unknown): Promise<string> {
 
 async function cleanupConfigFile(path: string): Promise<void> {
   await rm(join(path, ".."), { recursive: true, force: true });
+}
+
+/** Normalize new multi-scope config to legacy flat shape for test assertions */
+function legacyShape(config: ExchangeFsSyncConfig): Omit<ExchangeFsSyncConfig, "scopes" | "scope_id"> {
+  const { scopes: _scopes, scope_id: _scopeId, ...rest } = config;
+  return rest;
 }
 
 describe("loadConfig", () => {
@@ -40,7 +47,7 @@ describe("loadConfig", () => {
 
     const config = await loadConfig({ path });
 
-    expect(config).toEqual({
+    expect(legacyShape(config)).toEqual({
       mailbox_id: "mailbox_primary",
       root_dir: "./data/mail-sync",
       graph: {
@@ -201,7 +208,7 @@ describe("loadConfig", () => {
     createdPaths.push(path);
 
     await expect(loadConfig({ path })).rejects.toThrow(
-      /config\.mailbox_id must be a non-empty string/,
+      /Config must define either scopes\[\] or a legacy scope_id\/mailbox_id/,
     );
   });
 
@@ -217,7 +224,7 @@ describe("loadConfig", () => {
     createdPaths.push(path);
 
     await expect(loadConfig({ path })).rejects.toThrow(
-      /config\.graph must be an object/,
+      /config\(legacy\)\.sources must contain at least one source/,
     );
   });
 
@@ -240,7 +247,7 @@ describe("loadConfig", () => {
     createdPaths.push(path);
 
     await expect(loadConfig({ path })).rejects.toThrow(
-      /config\.normalize\.attachment_policy must be one of/,
+      /config\(legacy\)\.normalize\.attachment_policy must be one of/,
     );
   });
 
@@ -263,7 +270,7 @@ describe("loadConfig", () => {
     createdPaths.push(path);
 
     await expect(loadConfig({ path })).rejects.toThrow(
-      /config\.normalize\.body_policy must be one of/,
+      /config\(legacy\)\.normalize\.body_policy must be one of/,
     );
   });
 
@@ -283,7 +290,7 @@ describe("loadConfig", () => {
     createdPaths.push(path);
 
     await expect(loadConfig({ path })).rejects.toThrow(
-      /config\.graph\.prefer_immutable_ids must be a boolean/,
+      /config\(legacy\)\.graph\.prefer_immutable_ids must be a boolean/,
     );
   });
 
@@ -306,7 +313,7 @@ describe("loadConfig", () => {
     createdPaths.push(path);
 
     await expect(loadConfig({ path })).rejects.toThrow(
-      /config\.runtime\.polling_interval_ms must be a non-negative finite number/,
+      /config\(legacy\)\.runtime\.polling_interval_ms must be a non-negative finite number/,
     );
   });
 
@@ -326,7 +333,7 @@ describe("loadConfig", () => {
     createdPaths.push(path);
 
     await expect(loadConfig({ path })).rejects.toThrow(
-      /config\.scope\.included_container_refs\[1\] must be a non-empty string/,
+      /config\(legacy\)\.scope\.included_container_refs\[1\] must be a non-empty string/,
     );
   });
 
@@ -350,7 +357,7 @@ describe("loadConfig", () => {
     createdPaths.push(path);
 
     await expect(loadConfig({ path })).rejects.toThrow(
-      /config\.policy\.allowed_actions\[1\] must be a valid allowed action/,
+      /config\(legacy\)\.policy\.allowed_actions\[1\] must be a valid allowed action/,
     );
   });
 
@@ -459,7 +466,7 @@ describe("loadConfig", () => {
     createdPaths.push(path);
 
     await expect(loadConfig({ path })).rejects.toThrow(
-      /config\.policy\.allowed_actions must contain at least one allowed action/,
+      /config\(legacy\)\.policy\.allowed_actions must contain at least one allowed action/,
     );
   });
 });

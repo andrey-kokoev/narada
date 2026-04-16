@@ -5,8 +5,11 @@
  * Durable results are persisted through ProcessExecutionStore.
  *
  * Unified lifecycle:
- * - pending → running → completed (confirmed immediately by exit code)
- * - pending → running → failed (confirmation_failed)
+ * - pending → running → completed
+ * - pending → running → failed
+ *
+ * Confirmation is resolved separately by ConfirmationResolver.
+ * Invariant: execution completion ≠ confirmation.
  */
 
 import { spawn } from "node:child_process";
@@ -136,12 +139,10 @@ export class ProcessExecutor {
       const success = exitCode === 0;
       this.deps.executionStore.updateStatus(executionId, success ? "completed" : "failed", {
         phase: success ? "completed" : "failed",
-        confirmation_status: success ? "confirmed" : "confirmation_failed",
         exit_code: exitCode ?? -1,
         stdout: truncateOutput(stdout),
         stderr: truncateOutput(stderr),
         completed_at: completedAt,
-        confirmed_at: success ? completedAt : null,
         error_message: success ? null : `Process exited with code ${exitCode}`,
         result_json: buildResultJson(payload, truncateOutput(stdout), truncateOutput(stderr), exitCode),
       });
@@ -157,7 +158,6 @@ export class ProcessExecutor {
 
       this.deps.executionStore.updateStatus(executionId, "failed", {
         phase: "failed",
-        confirmation_status: "confirmation_failed",
         exit_code: -1,
         stdout: "",
         stderr: truncateOutput(message),
@@ -187,7 +187,6 @@ export class ProcessExecutor {
     for (const execution of recovered) {
       this.deps.executionStore.updateStatus(execution.execution_id, "failed", {
         phase: "failed",
-        confirmation_status: "confirmation_failed",
         exit_code: -1,
         stdout: "",
         stderr: "Recovered stale execution: lease expired",

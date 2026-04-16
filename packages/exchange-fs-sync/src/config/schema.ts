@@ -22,8 +22,8 @@ const GraphConfigSchema = z.object({
   prefer_immutable_ids: z.boolean(),
 });
 
-// Scope configuration schema
-const ScopeConfigSchema = z.object({
+// Scope filter schema
+const ScopeFilterSchema = z.object({
   included_container_refs: z.array(FolderRefSchema).min(1, 'At least one folder reference is required'),
   included_item_kinds: z.array(ItemKindSchema).min(1, 'At least one item kind is required'),
 });
@@ -131,18 +131,63 @@ const WebhookConfigSchema = z.object({
   message: 'public_url, port, and client_state are required when webhook is enabled',
 });
 
-// Main configuration schema
-export const ConfigSchema = z.object({
-  mailbox_id: z.string().min(1, 'Mailbox ID is required'),
+// Source configuration schema
+const SourceConfigSchema = z.object({
+  type: z.enum(['graph', 'timer', 'webhook']),
+  tenant_id: z.string().min(1).optional(),
+  client_id: z.string().min(1).optional(),
+  client_secret: z.string().min(1).optional(),
+  user_id: z.string().min(1).optional(),
+  base_url: z.string().url().optional(),
+  prefer_immutable_ids: z.boolean().optional(),
+}).catchall(z.unknown());
+
+// Executor configuration schema
+const ExecutorConfigSchema = z.object({
+  family: z.string().min(1),
+  options: z.record(z.unknown()).optional(),
+});
+
+// Scope configuration schema
+const ScopeConfigSchema = z.object({
+  scope_id: z.string().min(1, 'Scope ID is required'),
   root_dir: z.string().min(1, 'Root directory is required'),
-  graph: GraphConfigSchema,
-  scope: ScopeConfigSchema,
+  sources: z.array(SourceConfigSchema).min(1, 'At least one source is required'),
+  context_strategy: z.string().min(1).default('mailbox'),
+  scope: ScopeFilterSchema,
   normalize: NormalizeConfigSchema.default({}),
   runtime: RuntimeConfigSchema.default({}),
-  lifecycle: LifecycleConfigSchema.default({}),
   charter: CharterRuntimeConfigSchema.default({}),
   policy: RuntimePolicySchema.default({ allowed_actions: ['no_action'] }),
+  executors: z.array(ExecutorConfigSchema).optional(),
+  graph: GraphConfigSchema.optional(),
+  lifecycle: LifecycleConfigSchema.optional().default({}),
   webhook: WebhookConfigSchema.optional(),
+});
+
+// Main configuration schema
+export const ConfigSchema = z.object({
+  root_dir: z.string().min(1, 'Root directory is required'),
+  scopes: z.array(ScopeConfigSchema).min(1, 'At least one scope is required').optional(),
+  lifecycle: LifecycleConfigSchema.optional().default({}),
+  webhook: WebhookConfigSchema.optional(),
+
+  // Legacy single-scope fields (auto-promoted to scopes[] by loader)
+  scope_id: z.string().min(1).optional(),
+  mailbox_id: z.string().min(1).optional(),
+  graph: GraphConfigSchema.optional(),
+  scope: ScopeFilterSchema.optional(),
+  normalize: NormalizeConfigSchema.optional().default({}),
+  runtime: RuntimeConfigSchema.optional().default({}),
+  charter: CharterRuntimeConfigSchema.optional().default({}),
+  policy: RuntimePolicySchema.optional().default({ allowed_actions: ['no_action'] }),
+}).refine((data) => {
+  // Require either scopes array or legacy single-scope fields
+  const hasScopes = Array.isArray(data.scopes) && data.scopes.length > 0;
+  const hasLegacy = !!(data.scope_id || data.mailbox_id);
+  return hasScopes || hasLegacy;
+}, {
+  message: 'Either scopes[] or legacy scope_id/mailbox_id is required',
 });
 
 // Export inferred type

@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from "vitest";
 import Database from "better-sqlite3";
 import { SqliteCoordinatorStore } from "../../../src/coordinator/store.js";
 import { SqliteOutboundStore } from "../../../src/outbound/store.js";
+import { SqliteIntentStore } from "../../../src/intent/store.js";
+import { SqliteProcessExecutionStore } from "../../../src/executors/store.js";
 import {
   getActiveWorkItems,
   getRecentFailedWorkItems,
@@ -11,6 +13,14 @@ import {
   getToolCallSummary,
   buildMailboxDispatchSummary,
   buildControlPlaneSnapshot,
+  getActiveLeases,
+  getRecentStaleLeaseRecoveries,
+  getQuiescenceIndicator,
+  getIntentSummaries,
+  getIntentExecutionSummaries,
+  getProcessExecutionDetails,
+  getMailExecutionDetails,
+  getIntentLifecycleTransitions,
 } from "../../../src/observability/queries.js";
 import type { WorkItem, ExecutionAttempt, ToolCallRecord } from "../../../src/coordinator/types.js";
 
@@ -18,13 +28,19 @@ describe("observability/queries", () => {
   let db: Database.Database;
   let coordinatorStore: SqliteCoordinatorStore;
   let outboundStore: SqliteOutboundStore;
+  let intentStore: SqliteIntentStore;
+  let executionStore: SqliteProcessExecutionStore;
 
   beforeEach(() => {
     db = new Database(":memory:");
     coordinatorStore = new SqliteCoordinatorStore({ db });
     outboundStore = new SqliteOutboundStore({ db });
+    intentStore = new SqliteIntentStore({ db });
+    executionStore = new SqliteProcessExecutionStore({ db });
     coordinatorStore.initSchema();
     outboundStore.initSchema();
+    intentStore.initSchema();
+    executionStore.initSchema();
 
     // Seed conversation record for FK compliance
     coordinatorStore.upsertConversationRecord({
@@ -256,8 +272,8 @@ describe("observability/queries", () => {
 
       coordinatorStore.insertDecision({
         decision_id: "fd-1",
-        conversation_id: "conv-1",
-        mailbox_id: "mb-1",
+        context_id: "conv-1",
+        scope_id: "mb-1",
         source_charter_ids_json: "[\"support_steward\"]",
         approved_action: "send_reply",
         payload_json: "{}",
@@ -365,6 +381,491 @@ describe("observability/queries", () => {
       expect(after.work_items.failed_recent).toHaveLength(1);
       expect(after.executions.recent).toHaveLength(1);
       expect(after.work_items.total_count).toBe(before.work_items.total_count);
+    });
+  });
+
+  describe("lease and quiescence queries", () => {
+    it("getActiveLeases returns unreleased leases with work item context", () => {
+      const item = insertWorkItem({ work_item_id: "wi-leased", status: "leased" });
+      coordinatorStore.insertLease({
+        lease_id: "ls-1",
+        work_item_id: item.work_item_id,
+        runner_id: "runner-a",
+        acquired_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 60000).toISOString(),
+        released_at: null,
+        release_reason: null,
+      });
+
+      const result = getActiveLeases(coordinatorStore);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.lease_id).toBe("ls-1");
+      expect(result[0]!.conversation_id).toBe("conv-1");
+      expect(result[0]!.work_item_status).toBe("leased");
+    });
+
+    it("getActiveLeases excludes released leases", () => {
+      const item = insertWorkItem({ work_item_id: "wi-released", status: "resolved" });
+      coordinatorStore.insertLease({
+        lease_id: "ls-released",
+        work_item_id: item.work_item_id,
+        runner_id: "runner-a",
+        acquired_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 60000).toISOString(),
+        released_at: new Date().toISOString(),
+        release_reason: "success",
+      });
+
+      const result = getActiveLeases(coordinatorStore);
+      expect(result).toHaveLength(0);
+    });
+
+    it("getRecentStaleLeaseRecoveries returns abandoned leases", () => {
+      const item = insertWorkItem({ work_item_id: "wi-abandoned", status: "failed_retryable" });
+      coordinatorStore.insertLease({
+        lease_id: "ls-abandoned",
+        work_item_id: item.work_item_id,
+        runner_id: "runner-a",
+        acquired_at: new Date(Date.now() - 120000).toISOString(),
+        expires_at: new Date(Date.now() - 60000).toISOString(),
+        released_at: new Date().toISOString(),
+        release_reason: "abandoned",
+      });
+
+      const result = getRecentStaleLeaseRecoveries(coordinatorStore);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.reason).toBe("abandoned");
+      expect(result[0]!.conversation_id).toBe("conv-1");
+    });
+
+    it("getQuiescenceIndicator reflects backlog and stale leases", () => {
+      insertWorkItem({ work_item_id: "wi-opened", status: "opened" });
+      insertWorkItem({ work_item_id: "wi-leased", status: "leased" });
+      insertWorkItem({ work_item_id: "wi-executing", status: "executing" });
+      insertWorkItem({ work_item_id: "wi-retry", status: "failed_retryable", next_retry_at: new Date(Date.now() - 1000).toISOString() });
+      const staleItem = insertWorkItem({ work_item_id: "wi-stale", status: "executing" });
+      coordinatorStore.insertLease({
+        lease_id: "ls-stale",
+        work_item_id: staleItem.work_item_id,
+        runner_id: "runner-a",
+        acquired_at: new Date(Date.now() - 120000).toISOString(),
+        expires_at: new Date(Date.now() - 60000).toISOString(),
+        released_at: null,
+        release_reason: null,
+      });
+
+      const result = getQuiescenceIndicator(coordinatorStore);
+      expect(result.is_quiescent).toBe(false);
+      expect(result.opened_count).toBe(1);
+      expect(result.leased_count).toBe(1);
+      expect(result.executing_count).toBe(2); // wi-executing + wi-stale
+      expect(result.awaiting_retry_count).toBe(1);
+      expect(result.has_stale_leases).toBe(true);
+      expect(result.stale_lease_count).toBe(1);
+      expect(result.oldest_lease_acquired_at).not.toBeNull();
+    });
+
+    it("getQuiescenceIndicator returns quiescent when no runnable work", () => {
+      const result = getQuiescenceIndicator(coordinatorStore);
+      expect(result.is_quiescent).toBe(true);
+      expect(result.has_stale_leases).toBe(false);
+      expect(result.oldest_lease_acquired_at).toBeNull();
+    });
+
+    it("buildControlPlaneSnapshot includes leases, recoveries, and quiescence", () => {
+      const item = insertWorkItem({ work_item_id: "wi-snap", status: "leased" });
+      coordinatorStore.insertLease({
+        lease_id: "ls-snap",
+        work_item_id: item.work_item_id,
+        runner_id: "runner-a",
+        acquired_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 60000).toISOString(),
+        released_at: null,
+        release_reason: null,
+      });
+
+      const snapshot = buildControlPlaneSnapshot(coordinatorStore, outboundStore, "mb-1");
+      expect(snapshot.leases.total_count).toBe(1);
+      expect(snapshot.leases.active).toHaveLength(1);
+      expect(snapshot.stale_recoveries.total_count).toBe(0);
+      expect(snapshot.quiescence.is_quiescent).toBe(false);
+      expect(snapshot.quiescence.leased_count).toBe(1);
+    });
+  });
+
+  describe("intent observability", () => {
+    it("getIntentSummaries includes idempotency_key and confirmation_status", () => {
+      intentStore.admit({
+        intent_id: "int-1",
+        intent_type: "process.run",
+        executor_family: "process",
+        payload_json: JSON.stringify({ command: "echo" }),
+        idempotency_key: "idem-1",
+        status: "admitted",
+        context_id: "ctx-1",
+        target_id: null,
+        terminal_reason: null,
+      });
+
+      const result = getIntentSummaries(intentStore);
+      expect(result.pending).toHaveLength(1);
+      const summary = result.pending[0]!;
+      expect(summary.idempotency_key).toBe("idem-1");
+      expect(summary.confirmation_status).toBe("unconfirmed");
+    });
+
+    it("getIntentSummaries derives confirmed for completed process execution", () => {
+      intentStore.admit({
+        intent_id: "int-2",
+        intent_type: "process.run",
+        executor_family: "process",
+        payload_json: JSON.stringify({ command: "echo" }),
+        idempotency_key: "idem-2",
+        status: "executing",
+        context_id: "ctx-1",
+        target_id: null,
+        terminal_reason: null,
+      });
+      executionStore.create({
+        execution_id: "pe-2",
+        intent_id: "int-2",
+        command: "echo",
+        args_json: "[]",
+        cwd: null,
+        env_json: null,
+        status: "completed",
+        phase: "completed",
+        confirmation_status: "confirmed",
+        exit_code: 0,
+        stdout: "",
+        stderr: "",
+        started_at: new Date().toISOString(),
+        completed_at: new Date().toISOString(),
+        confirmed_at: new Date().toISOString(),
+        lease_expires_at: null,
+        lease_runner_id: null,
+      });
+
+      const result = getIntentSummaries(intentStore);
+      expect(result.executing).toHaveLength(1);
+      expect(result.executing[0]!.confirmation_status).toBe("confirmed");
+    });
+
+    it("getIntentExecutionSummaries unifies mail and process under one model", () => {
+      // Process intent
+      intentStore.admit({
+        intent_id: "int-p",
+        intent_type: "process.run",
+        executor_family: "process",
+        payload_json: JSON.stringify({ command: "echo" }),
+        idempotency_key: "idem-p",
+        status: "executing",
+        context_id: "ctx-1",
+        target_id: null,
+        terminal_reason: null,
+      });
+      executionStore.create({
+        execution_id: "pe-p",
+        intent_id: "int-p",
+        command: "echo",
+        args_json: "[]",
+        cwd: null,
+        env_json: null,
+        status: "running",
+        phase: "running",
+        confirmation_status: "unconfirmed",
+        exit_code: null,
+        stdout: "",
+        stderr: "",
+        started_at: new Date().toISOString(),
+        completed_at: null,
+        confirmed_at: null,
+        lease_expires_at: null,
+        lease_runner_id: null,
+      });
+
+      // Mail intent
+      intentStore.admit({
+        intent_id: "int-m",
+        intent_type: "mail.send_reply",
+        executor_family: "mail",
+        payload_json: "{}",
+        idempotency_key: "idem-m",
+        status: "executing",
+        context_id: "ctx-1",
+        target_id: "ob-m",
+        terminal_reason: null,
+      });
+      outboundStore.createCommand(
+        {
+          outbound_id: "ob-m",
+          conversation_id: "conv-1",
+          mailbox_id: "mb-1",
+          action_type: "send_reply",
+          status: "submitted",
+          latest_version: 1,
+          created_at: new Date().toISOString(),
+          created_by: "foreman:test",
+          submitted_at: new Date().toISOString(),
+          confirmed_at: null,
+          blocked_reason: null,
+          terminal_reason: null,
+          idempotency_key: "idem-m-cmd",
+        },
+        {
+          outbound_id: "ob-m",
+          version: 1,
+          reply_to_message_id: null,
+          to: ["a@example.com"],
+          cc: [],
+          bcc: [],
+          subject: "Re: test",
+          body_text: "reply body",
+          body_html: "",
+          idempotency_key: "idem-m-cmd",
+          policy_snapshot_json: "{}",
+          payload_json: "{}",
+          created_at: new Date().toISOString(),
+          superseded_at: null,
+        },
+      );
+
+      const result = getIntentExecutionSummaries(intentStore);
+      expect(result.recent).toHaveLength(2);
+      const processRow = result.recent.find((r) => r.intent_id === "int-p")!;
+      const mailRow = result.recent.find((r) => r.intent_id === "int-m")!;
+
+      expect(processRow.executor_family).toBe("process");
+      expect(processRow.phase).toBe("running");
+      expect(processRow.confirmation_status).toBe("unconfirmed");
+      expect(processRow.process_command).toBe("echo");
+      expect(processRow.mail_outbound_id).toBeNull();
+
+      expect(mailRow.executor_family).toBe("mail");
+      expect(mailRow.phase).toBe("completed"); // submitted -> completed
+      expect(mailRow.confirmation_status).toBe("unconfirmed"); // not confirmed yet
+      expect(mailRow.mail_action_type).toBe("send_reply");
+      expect(mailRow.process_execution_id).toBeNull();
+    });
+
+    it("getIntentExecutionSummaries surfaces failed_recent correctly", () => {
+      intentStore.admit({
+        intent_id: "int-fail",
+        intent_type: "process.run",
+        executor_family: "process",
+        payload_json: JSON.stringify({ command: "echo" }),
+        idempotency_key: "idem-fail",
+        status: "failed_terminal",
+        context_id: "ctx-1",
+        target_id: null,
+        terminal_reason: "crash",
+      });
+      executionStore.create({
+        execution_id: "pe-fail",
+        intent_id: "int-fail",
+        command: "echo",
+        args_json: "[]",
+        cwd: null,
+        env_json: null,
+        status: "failed",
+        phase: "failed",
+        confirmation_status: "confirmation_failed",
+        exit_code: 1,
+        stdout: "",
+        stderr: "err",
+        started_at: new Date().toISOString(),
+        completed_at: new Date().toISOString(),
+        confirmed_at: new Date().toISOString(),
+        lease_expires_at: null,
+        lease_runner_id: null,
+      });
+
+      const result = getIntentExecutionSummaries(intentStore);
+      expect(result.failed_recent).toHaveLength(1);
+      expect(result.failed_recent[0]!.terminal_reason).toBe("crash");
+    });
+  });
+
+  describe("execution detail observability", () => {
+    it("getProcessExecutionDetails includes phase, confirmation, and stdout preview", () => {
+      intentStore.admit({
+        intent_id: "int-d",
+        intent_type: "process.run",
+        executor_family: "process",
+        payload_json: JSON.stringify({ command: "echo" }),
+        idempotency_key: "idem-d",
+        status: "executing",
+        context_id: "ctx-1",
+        target_id: null,
+        terminal_reason: null,
+      });
+      executionStore.create({
+        execution_id: "pe-d",
+        intent_id: "int-d",
+        command: "echo",
+        args_json: '["hello"]',
+        cwd: "/tmp",
+        env_json: '{"KEY":"val"}',
+        status: "completed",
+        phase: "completed",
+        confirmation_status: "confirmed",
+        exit_code: 0,
+        stdout: "hello world",
+        stderr: "",
+        started_at: new Date().toISOString(),
+        completed_at: new Date().toISOString(),
+        confirmed_at: new Date().toISOString(),
+        lease_expires_at: null,
+        lease_runner_id: "runner-1",
+      });
+
+      const result = getProcessExecutionDetails(executionStore);
+      expect(result).toHaveLength(1);
+      const detail = result[0]!;
+      expect(detail.phase).toBe("completed");
+      expect(detail.confirmation_status).toBe("confirmed");
+      expect(detail.args).toEqual(["hello"]);
+      expect(detail.cwd).toBe("/tmp");
+      expect(detail.env_keys).toEqual(["KEY"]);
+      expect(detail.stdout_preview).toBe("hello world");
+      expect(detail.lease_runner_id).toBe("runner-1");
+    });
+
+    it("getMailExecutionDetails includes transitions and version preview", () => {
+      outboundStore.createCommand(
+        {
+          outbound_id: "ob-d",
+          conversation_id: "conv-1",
+          mailbox_id: "mb-1",
+          action_type: "send_reply",
+          status: "confirmed",
+          latest_version: 1,
+          created_at: new Date().toISOString(),
+          created_by: "foreman:test",
+          submitted_at: new Date().toISOString(),
+          confirmed_at: new Date().toISOString(),
+          blocked_reason: null,
+          terminal_reason: null,
+          idempotency_key: "idem-ob-d",
+        },
+        {
+          outbound_id: "ob-d",
+          version: 1,
+          reply_to_message_id: null,
+          to: ["to@example.com"],
+          cc: ["cc@example.com"],
+          bcc: [],
+          subject: "Subject",
+          body_text: "Body text",
+          body_html: "",
+          idempotency_key: "idem-ob-d",
+          policy_snapshot_json: "{}",
+          payload_json: "{}",
+          created_at: new Date().toISOString(),
+          superseded_at: null,
+        },
+      );
+      outboundStore.appendTransition({
+        outbound_id: "ob-d",
+        from_status: "pending",
+        to_status: "submitted",
+        reason: "handoff",
+        transition_at: new Date().toISOString(),
+      });
+      outboundStore.appendTransition({
+        outbound_id: "ob-d",
+        from_status: "submitted",
+        to_status: "confirmed",
+        reason: "graph_confirm",
+        transition_at: new Date().toISOString(),
+      });
+
+      const result = getMailExecutionDetails(outboundStore);
+      expect(result).toHaveLength(1);
+      const detail = result[0]!;
+      expect(detail.status).toBe("confirmed");
+      expect(detail.transitions.length).toBeGreaterThanOrEqual(2);
+      const tSubmitted = detail.transitions.find((t) => t.to_status === "submitted")!;
+      const tConfirmed = detail.transitions.find((t) => t.to_status === "confirmed")!;
+      expect(tSubmitted.from_status).toBe("pending");
+      expect(tConfirmed.from_status).toBe("submitted");
+      expect(detail.latest_version_detail).not.toBeNull();
+      expect(detail.latest_version_detail!.subject).toBe("Subject");
+      expect(detail.latest_version_detail!.to).toEqual(["to@example.com"]);
+      expect(detail.latest_version_detail!.body_text_preview).toBe("Body text");
+    });
+  });
+
+  describe("intent lifecycle transitions", () => {
+    it("getIntentLifecycleTransitions returns chronological transitions across sources", () => {
+      // Admit intent first
+      intentStore.admit({
+        intent_id: "int-t",
+        intent_type: "mail.send_reply",
+        executor_family: "mail",
+        payload_json: "{}",
+        idempotency_key: "idem-t",
+        status: "admitted",
+        context_id: "ctx-1",
+        target_id: "ob-t",
+        terminal_reason: null,
+      });
+      // Create command after intent admission
+      outboundStore.createCommand(
+        {
+          outbound_id: "ob-t",
+          conversation_id: "conv-1",
+          mailbox_id: "mb-1",
+          action_type: "send_reply",
+          status: "confirmed",
+          latest_version: 1,
+          created_at: "2024-01-01T00:00:10Z",
+          created_by: "foreman:test",
+          submitted_at: "2024-01-01T00:01:00Z",
+          confirmed_at: "2024-01-01T00:02:00Z",
+          blocked_reason: null,
+          terminal_reason: null,
+          idempotency_key: "idem-ob-t",
+        },
+        {
+          outbound_id: "ob-t",
+          version: 1,
+          reply_to_message_id: null,
+          to: [],
+          cc: [],
+          bcc: [],
+          subject: "",
+          body_text: "",
+          body_html: "",
+          idempotency_key: "idem-ob-t",
+          policy_snapshot_json: "{}",
+          payload_json: "{}",
+          created_at: "2024-01-01T00:00:10Z",
+          superseded_at: null,
+        },
+      );
+      outboundStore.appendTransition({
+        outbound_id: "ob-t",
+        from_status: "pending",
+        to_status: "submitted",
+        reason: null,
+        transition_at: "2024-01-01T00:01:00Z",
+      });
+      outboundStore.appendTransition({
+        outbound_id: "ob-t",
+        from_status: "submitted",
+        to_status: "confirmed",
+        reason: null,
+        transition_at: "2024-01-01T00:02:00Z",
+      });
+
+      const transitions = getIntentLifecycleTransitions(db, "int-t");
+      expect(transitions.length).toBeGreaterThanOrEqual(3);
+      const intentAdmitted = transitions.find((t) => t.source === "intent")!;
+      const outbounds = transitions.filter((t) => t.source === "outbound");
+      expect(intentAdmitted.to_status).toBe("admitted");
+      expect(outbounds.length).toBeGreaterThanOrEqual(2);
+      expect(intentAdmitted.transition_at.localeCompare(outbounds[0]!.transition_at)).toBeLessThan(0);
     });
   });
 });

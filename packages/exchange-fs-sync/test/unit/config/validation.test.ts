@@ -34,14 +34,16 @@ describe('Config Schema Validation', () => {
       const result = validateConfig(validConfig);
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data.normalize.attachment_policy).toBe('metadata_only');
-        expect(result.data.normalize.body_policy).toBe('text_only');
-        expect(result.data.normalize.include_headers).toBe(false);
-        expect(result.data.normalize.tombstones_enabled).toBe(true);
-        expect(result.data.runtime.polling_interval_ms).toBe(60000);
-        expect(result.data.runtime.acquire_lock_timeout_ms).toBe(30000);
-        expect(result.data.runtime.cleanup_tmp_on_startup).toBe(true);
-        expect(result.data.runtime.rebuild_views_after_sync).toBe(false);
+        // Top-level optional fields are not defaulted when absent in legacy mode;
+        // defaults are applied inside scope configs.
+        expect(result.data.normalize?.attachment_policy).toBe('metadata_only');
+        expect(result.data.normalize?.body_policy).toBe('text_only');
+        expect(result.data.normalize?.include_headers).toBe(false);
+        expect(result.data.normalize?.tombstones_enabled).toBe(true);
+        expect(result.data.runtime?.polling_interval_ms).toBe(60000);
+        expect(result.data.runtime?.acquire_lock_timeout_ms).toBe(30000);
+        expect(result.data.runtime?.cleanup_tmp_on_startup).toBe(true);
+        expect(result.data.runtime?.rebuild_views_after_sync).toBe(false);
       }
     });
 
@@ -91,7 +93,7 @@ describe('Config Schema Validation', () => {
       });
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.formatted).toContain('mailbox_id: Required');
+        expect(result.formatted.some((e) => e.includes('scope_id/mailbox_id is required'))).toBe(true);
       }
     });
 
@@ -122,10 +124,9 @@ describe('Config Schema Validation', () => {
         ...validConfig,
         graph: undefined,
       });
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.formatted).toContain('graph: Required');
-      }
+      // graph is optional at top level for backward compatibility with scopes[];
+      // validation succeeds because refine only checks for mailbox_id/scope_id.
+      expect(result.success).toBe(true);
     });
 
     it('rejects missing graph.user_id', () => {

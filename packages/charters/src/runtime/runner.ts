@@ -37,7 +37,7 @@ export interface EvaluationRecord {
   evaluation_id: string;
   execution_id: string;
   work_item_id: string;
-  conversation_id: string;
+  context_id: string;
   charter_id: string;
   role: "primary" | "secondary";
   output_version: string;
@@ -56,7 +56,7 @@ export interface EvaluationRecord {
 export interface TraceRecord {
   trace_id: string;
   execution_id: string;
-  conversation_id: string;
+  context_id: string;
   work_item_id: string;
   charter_id: string;
   envelope_json: string;
@@ -161,7 +161,7 @@ export class CodexCharterRunner implements CharterRunner {
       .join("\n") || "(none)";
 
     return `
-You are a mailbox charter agent. Your charter_id is "${envelope.charter_id}" and your role is "${envelope.role}".
+You are a charter agent. Your charter_id is "${envelope.charter_id}" and your role is "${envelope.role}".
 You MUST respond with a single JSON object matching the CharterOutputEnvelope schema.
 
 Rules:
@@ -182,12 +182,21 @@ ${tools}
   }
 
   private buildUserPrompt(envelope: CharterInvocationEnvelope): string {
-    const messages = envelope.thread_context.messages
-      .map(
-        (m) =>
-          `[${m.received_at ?? "unknown"}] ${m.from.map((f) => f.email ?? "unknown").join(", ")}: ${m.subject ?? "(no subject)"}\n${m.body_preview ?? ""}`,
-      )
-      .join("\n---\n");
+    const mat = envelope.context_materialization as Record<string, unknown> | undefined;
+
+    // Best-effort formatting if materialization contains messages (common to mail vertical)
+    let contextBody: string;
+    if (mat && Array.isArray(mat.messages)) {
+      const messages = (mat.messages as Array<Record<string, unknown>>)
+        .map(
+          (m) =>
+            `[${m.received_at ?? "unknown"}] ${JSON.stringify(m.from ?? "unknown")}: ${m.subject ?? "(no subject)"}\n${m.body_preview ?? ""}`,
+        )
+        .join("\n---\n");
+      contextBody = `Context messages:\n${messages}`;
+    } else {
+      contextBody = `Context materialization:\n${JSON.stringify(envelope.context_materialization, null, 2)}`;
+    }
 
     const priors =
       envelope.prior_evaluations.length > 0
@@ -197,15 +206,14 @@ ${tools}
         : "(none)";
 
     return `
-Mailbox: ${envelope.mailbox_id}
-Conversation: ${envelope.conversation_id}
+Scope: ${envelope.scope_id}
+Context: ${envelope.context_id}
 Revision: ${envelope.revision_id}
 Work item: ${envelope.work_item_id}
 Execution: ${envelope.execution_id}
 Coordinator flags: ${envelope.coordinator_flags.join(", ") || "(none)"}
 
-Thread messages:
-${messages}
+${contextBody}
 
 Prior evaluations (up to ${envelope.max_prior_evaluations}):
 ${priors}
@@ -238,7 +246,7 @@ ${priors}
         evaluation_id: `eval_${envelope.execution_id}`,
         execution_id: envelope.execution_id,
         work_item_id: envelope.work_item_id,
-        conversation_id: envelope.conversation_id,
+        context_id: envelope.context_id,
         charter_id: envelope.charter_id,
         role: envelope.role,
         output_version: output.output_version,
@@ -260,7 +268,7 @@ ${priors}
       const trace: TraceRecord = {
         trace_id: `trace_${envelope.execution_id}`,
         execution_id: envelope.execution_id,
-        conversation_id: envelope.conversation_id,
+        context_id: envelope.context_id,
         work_item_id: envelope.work_item_id,
         charter_id: envelope.charter_id,
         envelope_json: JSON.stringify(output),

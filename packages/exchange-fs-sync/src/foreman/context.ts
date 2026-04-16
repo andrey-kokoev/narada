@@ -227,3 +227,63 @@ export class WebhookContextStrategy implements ContextFormationStrategy {
     return contexts;
   }
 }
+
+export class FilesystemContextStrategy implements ContextFormationStrategy {
+  formContexts(
+    facts: Fact[],
+    scopeId: string,
+    options?: {
+      getLatestRevisionOrdinal?: (contextId: string) => number | null;
+    },
+  ): PolicyContext[] {
+    const groups = new Map<string, Fact[]>();
+
+    for (const fact of facts) {
+      if (fact.fact_type !== "filesystem.change") {
+        continue;
+      }
+
+      let watchId: string | undefined;
+
+      try {
+        const payload = JSON.parse(fact.payload_json) as Record<string, unknown>;
+        const event = payload.event as Record<string, unknown> | undefined;
+        if (event && typeof event === "object" && typeof event.watch_id === "string") {
+          watchId = event.watch_id;
+        }
+      } catch {
+        continue;
+      }
+
+      if (!watchId) {
+        continue;
+      }
+
+      const contextId = `fs:${watchId}`;
+      const group = groups.get(contextId) ?? [];
+      group.push(fact);
+      groups.set(contextId, group);
+    }
+
+    const now = new Date().toISOString();
+    const contexts: PolicyContext[] = [];
+
+    for (const [contextId, groupFacts] of groups) {
+      const previousOrdinal = options?.getLatestRevisionOrdinal?.(contextId) ?? null;
+      const currentOrdinal = (previousOrdinal ?? 0) + 1;
+
+      contexts.push({
+        context_id: contextId,
+        scope_id: scopeId,
+        revision_id: makeRevisionId(contextId, currentOrdinal),
+        previous_revision_ordinal: previousOrdinal,
+        current_revision_ordinal: currentOrdinal,
+        change_kinds: ["new_message"],
+        facts: groupFacts,
+        synced_at: now,
+      });
+    }
+
+    return contexts;
+  }
+}

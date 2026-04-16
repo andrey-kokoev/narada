@@ -6,6 +6,7 @@
 
 import Database from "better-sqlite3";
 import type { Intent, IntentStatus } from "./types.js";
+import { assertValidIntent } from "./registry.js";
 
 export interface IntentStore {
   readonly db: import("better-sqlite3").Database;
@@ -108,6 +109,8 @@ export class SqliteIntentStore implements IntentStore {
       if (existing) {
         return { intent: rowToIntent(existing), isNew: false };
       }
+
+      assertValidIntent(intent);
 
       insert.run(
         intent.intent_id,

@@ -4,6 +4,7 @@
  * TypeScript types and Zod schemas for charter invocation and output.
  *
  * Spec: .ai/tasks/20260414-006-assignment-agent-b-charter-invocation-v2.md
+ * Spec: .ai/tasks/20260415-054-de-mailbox-charter-envelope.md
  */
 
 import { z } from "zod";
@@ -21,6 +22,7 @@ export const AllowedActionSchema = z.enum([
   "extract_obligations",
   "create_followup",
   "tool_request",
+  "process_run",
   "no_action",
 ]);
 export type AllowedAction = z.infer<typeof AllowedActionSchema>;
@@ -91,13 +93,14 @@ export const CharterInvocationEnvelopeSchema = z.object({
   invocation_version: z.literal("2.0"),
   execution_id: z.string().min(1),
   work_item_id: z.string().min(1),
-  conversation_id: z.string().min(1),
-  mailbox_id: z.string().min(1),
+  context_id: z.string().min(1),
+  scope_id: z.string().min(1),
   charter_id: CharterIdSchema,
   role: z.enum(["primary", "secondary"]),
   invoked_at: z.string().datetime(),
   revision_id: z.string().min(1),
-  thread_context: NormalizedThreadContextSchema,
+  context_materialization: z.any(),
+  vertical_hints: z.record(z.unknown()).optional(),
   allowed_actions: AllowedActionSchema.array(),
   available_tools: ToolCatalogEntrySchema.array(),
   coordinator_flags: z.string().array(),

@@ -86,7 +86,7 @@ describe("observation plane", () => {
       intent_id: overrides?.intent_id ?? `int-${Math.random().toString(36).slice(2)}`,
       intent_type: "process.run",
       executor_family: overrides?.executor_family ?? "process",
-      payload_json: "{}",
+      payload_json: JSON.stringify({ command: "/bin/echo" }),
       idempotency_key: `key-${Math.random().toString(36).slice(2)}`,
       status: (overrides?.status as any) ?? "admitted",
       context_id: "ctx-1",

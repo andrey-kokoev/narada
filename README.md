@@ -106,16 +106,21 @@ Fallback to AES-256-GCM encrypted file storage if keychain unavailable.
 
 ```json
 {
-  "mailbox_id": "user@example.com",
   "root_dir": "./data",
-  "graph": {
-    "user_id": "user@example.com",
-    "prefer_immutable_ids": true
-  },
-  "scope": {
-    "included_container_refs": ["inbox"],
-    "included_item_kinds": ["message"]
-  }
+  "scopes": [
+    {
+      "scope_id": "user@example.com",
+      "sources": [{ "type": "graph" }],
+      "graph": {
+        "user_id": "user@example.com",
+        "prefer_immutable_ids": true
+      },
+      "scope": {
+        "included_container_refs": ["inbox"],
+        "included_item_kinds": ["message"]
+      }
+    }
+  ]
 }
 ```
 
@@ -151,7 +156,7 @@ pnpm typecheck
 - `packages/exchange-fs-sync-cli/` - Command-line interface
 - `packages/exchange-fs-sync-daemon/` - Long-running daemon
 - `packages/exchange-fs-sync-search/` - Full-text search (SQLite FTS5)
-- `packages/charters/` - Mailbox charter definitions and coordinator policy types
+- `packages/charters/` - Charter definitions and policy types
 
 ## Documentation
 

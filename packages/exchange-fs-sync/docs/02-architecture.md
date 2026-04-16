@@ -11,7 +11,7 @@ The system is organized into **eleven layers**: five control-plane layers above 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                      Daemon Layer                                │
-│  (polling loop, per-mailbox dispatch context, sync-to-dispatch  │
+│  (polling loop, per-scope dispatch context, sync-to-dispatch    │
 │   sequence, lease renewal, quiescence)                           │
 ├─────────────────────────────────────────────────────────────────┤
 │                      Foreman Layer                               │
@@ -185,12 +185,12 @@ Daemon sleeps until next wake (webhook, poll, retry timer, manual)
 ### Step Descriptions
 
 1. **Remote Source Change** — Graph API (mailbox vertical) or timer tick reports a change.
-2. **Sync / Ingest** — The compiler fetches deltas (or the timer emits a fact), normalizes to `Fact` records, applies to `messages/` and `views/`, writes `apply-log` markers, and commits the cursor.
-3. **Work Opening** — The daemon calls `foreman.onSyncCompleted(signal)`. The foreman inserts `work_item` rows for changed conversations, superseding stale ones when necessary.
+2. **Sync / Ingest** — The compiler fetches deltas (or the timer emits a fact), normalizes to `Fact` records, applies to the local projection (e.g. `messages/` and `views/`), writes `apply-log` markers, and commits the cursor.
+3. **Work Opening** — The daemon calls `foreman.onSyncCompleted(signal)`. The foreman inserts `work_item` rows for changed contexts, superseding stale ones when necessary.
 4. **Scheduling** — The scheduler scans for runnable work items, acquires leases, and transitions items to `leased`.
 5. **Evaluation** — The scheduler inserts an `execution_attempt` and transitions the item to `executing`. The charter runtime receives a frozen `CharterInvocationEnvelope` and produces a `CharterOutputEnvelope`.
 6. **Tool Execution** — Approved *read-only* tool requests are executed by the tool runner, with results logged to `tool_call_records`. Non-read-only requests are rejected with `rejected_policy` records (Phase A guardrail).
-7. **Proposal / Intent Creation** — The foreman validates output (`validation.ts`), applies governance (`governance.ts`), writes a `foreman_decisions` row, and creates an `intent` (and `outbound_command` for mail effects) in the same SQLite transaction. The work item transitions to `resolved`.
+7. **Proposal / Intent Creation** — The foreman validates output (`validation.ts`), applies governance (`governance.ts`), writes a `foreman_decisions` row, and creates an `intent` in the same SQLite transaction. The work item transitions to `resolved`.
 8. **Worker Execution** — The appropriate worker claims the intent and executes the effect: outbound worker creates drafts/sends for `mail.*` intents; `ProcessExecutor` spawns a subprocess for `process.run` intents.
 9. **Terminal Quiescence** — The scheduler finds no runnable work, valid leases, or expired retry timers. The daemon sleeps until the next wake.
 

@@ -132,7 +132,7 @@ The control plane sits above the deterministic inbound compiler and manages firs
 - **Outbound Handoff**: [`src/foreman/handoff.ts`](src/foreman/handoff.ts)
 
 Key principles:
-- The compiler (`exchange-fs-sync`) determines mailbox truth; the control plane decides what to do about it.
+- The compiler (`exchange-fs-sync`) determines source truth; the control plane decides what to do about it.
 - `work_item` is the terminal generalized schedulable unit. It uses `context_id` (was `conversation_id`) and `scope_id` (was `mailbox_id`) so timer/process and future verticals can produce first-class work without mailbox semantics.
 - Work opening derives from `PolicyContext` through a `ContextFormationStrategy` (e.g. `MailboxContextStrategy`, `TimerContextStrategy`).
 - At most one non-terminal work item per context may be `leased` or `executing`.
@@ -245,7 +245,7 @@ describe("feature", () => {
     
     try {
       // Test with real stores
-      const cursorStore = new FileCursorStore({ rootDir, mailboxId: "m" });
+      const cursorStore = new FileCursorStore({ rootDir, scopeId: "s1" });
       // ... test code
     } finally {
       // Cleanup (or leave for OS temp cleanup)

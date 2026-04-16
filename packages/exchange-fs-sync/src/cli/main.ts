@@ -42,71 +42,83 @@ async function main() {
   
   console.log(`Loading config from: ${configPath}`);
   const config = await loadConfig({ path: configPath });
-  
+  const scope = config.scopes[0];
+  if (!scope) {
+    console.error("No scopes configured");
+    process.exit(1);
+  }
+  const graphSource = scope.graph ?? scope.sources.find((s) => s.type === "graph");
+  if (!graphSource || typeof graphSource !== "object" || !("user_id" in graphSource)) {
+    console.error("No graph source configured for first scope");
+    process.exit(1);
+  }
+  const graph = graphSource as { user_id: string; tenant_id?: string; client_id?: string; client_secret?: string; base_url?: string; prefer_immutable_ids?: boolean };
+
   const rootDir = resolve(config.root_dir);
-  
+
   // Set up token provider for Graph API
-  const tenantId = config.graph.tenant_id;
-  const clientId = config.graph.client_id;
-  const clientSecret = config.graph.client_secret;
-  
+  const tenantId = graph.tenant_id;
+  const clientId = graph.client_id;
+  const clientSecret = graph.client_secret;
+
   if (!tenantId || !clientId || !clientSecret) {
     console.error("Missing required Graph credentials: tenant_id, client_id, client_secret");
     process.exit(1);
   }
-  
+
   const tokenProvider = new ClientCredentialsTokenProvider({
     tenantId,
     clientId,
     clientSecret,
     scope: "https://graph.microsoft.com/Mail.Read",
   });
-  
+
   // Create Graph HTTP client
   const graphClient = new GraphHttpClient({
     tokenProvider,
-    baseUrl: config.graph.base_url,
-    preferImmutableIds: config.graph.prefer_immutable_ids,
+    baseUrl: graph.base_url,
+    preferImmutableIds: graph.prefer_immutable_ids,
   });
-  
+
   // Create adapter
   const adapter = new DefaultGraphAdapter({
-    mailbox_id: config.mailbox_id,
-    user_id: config.graph.user_id,
+    mailbox_id: scope.scope_id,
+    user_id: graph.user_id,
     client: graphClient,
     adapter_scope: {
-      mailbox_id: config.mailbox_id,
-      ...config.scope,
+      mailbox_id: scope.scope_id,
+      included_container_refs: scope.scope.included_container_refs,
+      included_item_kinds: scope.scope.included_item_kinds,
     },
-    body_policy: config.normalize.body_policy,
-    attachment_policy: config.normalize.attachment_policy,
-    include_headers: config.normalize.include_headers,
+    body_policy: scope.normalize.body_policy,
+    attachment_policy: scope.normalize.attachment_policy,
+    include_headers: scope.normalize.include_headers,
     normalize_folder_ref: normalizeFolderRef,
     normalize_flagged: normalizeFlagged,
   });
-  
+
   // Create persistence stores
   const cursorStore = new FileCursorStore({
     rootDir,
-    mailboxId: config.mailbox_id,
+    mailboxId: scope.scope_id,
   });
-  
-  const applyLogStore = new FileApplyLogStore({ rootDir });
-  
 
-  
+  const applyLogStore = new FileApplyLogStore({ rootDir });
+
+
+
   const projector = new DefaultProjector({
     rootDir,
-    tombstonesEnabled: config.normalize.tombstones_enabled,
+    tombstonesEnabled: scope.normalize.tombstones_enabled,
   });
-  
+
   // Create lock mechanism
   const lock = new FileLock({
     rootDir,
-    acquireTimeoutMs: config.runtime.acquire_lock_timeout_ms,
+    acquireTimeoutMs: scope.runtime.acquire_lock_timeout_ms,
   });
-  
-  const source = new ExchangeSource({ adapter, sourceId: config.mailbox_id });
+
+  const source = new ExchangeSource({ adapter, sourceId: scope.scope_id });
 
   // Create sync runner
   const runner = new DefaultSyncRunner({
@@ -115,11 +127,11 @@ async function main() {
     cursorStore,
     applyLogStore,
     projector,
-    cleanupTmp: config.runtime.cleanup_tmp_on_startup
+    cleanupTmp: scope.runtime.cleanup_tmp_on_startup
       ? () => cleanupTmp({ rootDir })
       : undefined,
     acquireLock: () => lock.acquire(),
-    rebuildViewsAfterSync: config.runtime.rebuild_views_after_sync,
+    rebuildViewsAfterSync: scope.runtime.rebuild_views_after_sync,
   });
   
   // Run sync

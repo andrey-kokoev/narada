@@ -55,7 +55,7 @@ export class IntentHandoff {
     }
 
     const idempotencyKey = computeIdempotencyKey(
-      decision.conversation_id,
+      decision.context_id,
       decision.approved_action,
       payload,
     );
@@ -72,7 +72,7 @@ export class IntentHandoff {
       payload_json: decision.payload_json,
       idempotency_key: idempotencyKey,
       status: "admitted",
-      context_id: decision.conversation_id,
+      context_id: decision.context_id,
       target_id: null,
       terminal_reason: null,
     });

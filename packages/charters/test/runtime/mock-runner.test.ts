@@ -7,16 +7,13 @@ function makeInvocation(overrides?: Partial<CharterInvocationEnvelope>): Charter
     invocation_version: "2.0",
     execution_id: "ex-1",
     work_item_id: "wi-1",
-    conversation_id: "conv-1",
-    mailbox_id: "mb-1",
+    context_id: "conv-1",
+    scope_id: "mb-1",
     charter_id: "support_steward",
     role: "primary",
     invoked_at: new Date().toISOString(),
     revision_id: "conv-1:rev:1",
-    thread_context: {
-      conversation_id: "conv-1",
-      mailbox_id: "mb-1",
-      revision_id: "conv-1:rev:1",
+    context_materialization: {
       messages: [
         {
           message_id: "msg-1",
@@ -38,6 +35,7 @@ function makeInvocation(overrides?: Partial<CharterInvocationEnvelope>): Charter
         },
       ],
     },
+    vertical_hints: { vertical: "mail" },
     allowed_actions: ["send_reply"],
     available_tools: [],
     coordinator_flags: [],

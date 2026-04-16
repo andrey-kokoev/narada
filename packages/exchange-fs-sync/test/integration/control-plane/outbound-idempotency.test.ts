@@ -159,8 +159,8 @@ describe("Outbound Idempotency Boundary (Task 029)", () => {
 
     const decision1 = {
       decision_id: "fd-1",
-      conversation_id: "conv-1",
-      mailbox_id: "mb-1",
+      context_id: "conv-1",
+      scope_id: "mb-1",
       source_charter_ids_json: '["support_steward"]',
       approved_action: "send_reply",
       payload_json: JSON.stringify({ to: ["a@example.com"], body_text: "Hello" }),
@@ -171,8 +171,8 @@ describe("Outbound Idempotency Boundary (Task 029)", () => {
     };
     const decision2 = {
       decision_id: "fd-2",
-      conversation_id: "conv-1",
-      mailbox_id: "mb-1",
+      context_id: "conv-1",
+      scope_id: "mb-1",
       source_charter_ids_json: '["support_steward"]',
       approved_action: "send_reply",
       payload_json: JSON.stringify({ to: ["a@example.com"], body_text: "Goodbye" }),
@@ -200,8 +200,8 @@ describe("Outbound Idempotency Boundary (Task 029)", () => {
 
     const decision1 = {
       decision_id: "fd-1",
-      conversation_id: "conv-1",
-      mailbox_id: "mb-1",
+      context_id: "conv-1",
+      scope_id: "mb-1",
       source_charter_ids_json: '["support_steward"]',
       approved_action: "send_reply",
       payload_json: JSON.stringify(payload),
@@ -212,8 +212,8 @@ describe("Outbound Idempotency Boundary (Task 029)", () => {
     };
     const decision2 = {
       decision_id: "fd-2",
-      conversation_id: "conv-1",
-      mailbox_id: "mb-1",
+      context_id: "conv-1",
+      scope_id: "mb-1",
       source_charter_ids_json: '["support_steward"]',
       approved_action: "send_reply",
       payload_json: JSON.stringify(payload),

@@ -48,17 +48,17 @@ export class SqliteScheduler implements Scheduler {
     if (scopeId) {
       sql = `
         select wi.* from work_items wi
-        where wi.mailbox_id = ?
+        where wi.scope_id = ?
           and wi.status = 'opened'
           and not exists (
             select 1 from work_items wi2
-            where wi2.conversation_id = wi.conversation_id
+            where wi2.context_id = wi.context_id
               and wi2.status in ('leased', 'executing')
               and wi2.work_item_id != wi.work_item_id
           )
           and not exists (
             select 1 from work_items wi3
-            where wi3.conversation_id = wi.conversation_id
+            where wi3.context_id = wi.context_id
               and wi3.status = 'superseded'
               and wi3.work_item_id = wi.work_item_id
           )
@@ -72,13 +72,13 @@ export class SqliteScheduler implements Scheduler {
         where wi.status = 'opened'
           and not exists (
             select 1 from work_items wi2
-            where wi2.conversation_id = wi.conversation_id
+            where wi2.context_id = wi.context_id
               and wi2.status in ('leased', 'executing')
               and wi2.work_item_id != wi.work_item_id
           )
           and not exists (
             select 1 from work_items wi3
-            where wi3.conversation_id = wi.conversation_id
+            where wi3.context_id = wi.context_id
               and wi3.status = 'superseded'
               and wi3.work_item_id = wi.work_item_id
           )
@@ -97,12 +97,12 @@ export class SqliteScheduler implements Scheduler {
     if (scopeId) {
       retrySql = `
         select wi.* from work_items wi
-        where wi.mailbox_id = ?
+        where wi.scope_id = ?
           and wi.status = 'failed_retryable'
           and (wi.next_retry_at is null or wi.next_retry_at <= ?)
           and not exists (
             select 1 from work_items wi2
-            where wi2.conversation_id = wi.conversation_id
+            where wi2.context_id = wi.context_id
               and wi2.status in ('leased', 'executing')
               and wi2.work_item_id != wi.work_item_id
           )
@@ -117,7 +117,7 @@ export class SqliteScheduler implements Scheduler {
           and (wi.next_retry_at is null or wi.next_retry_at <= ?)
           and not exists (
             select 1 from work_items wi2
-            where wi2.conversation_id = wi.conversation_id
+            where wi2.context_id = wi.context_id
               and wi2.status in ('leased', 'executing')
               and wi2.work_item_id != wi.work_item_id
           )
@@ -135,8 +135,8 @@ export class SqliteScheduler implements Scheduler {
 
     const mapper = (row: Record<string, unknown>): WorkItem => ({
       work_item_id: String(row.work_item_id),
-      context_id: String(row.conversation_id),
-      scope_id: String(row.mailbox_id),
+      context_id: String(row.context_id),
+      scope_id: String(row.scope_id),
       status: String(row.status) as WorkItem["status"],
       priority: Number(row.priority),
       opened_for_revision_id: String(row.opened_for_revision_id),
@@ -147,6 +147,7 @@ export class SqliteScheduler implements Scheduler {
       error_message: row.error_message ? String(row.error_message) : null,
       retry_count: Number(row.retry_count ?? 0),
       next_retry_at: row.next_retry_at ? String(row.next_retry_at) : null,
+      context_json: row.context_json ? String(row.context_json) : null,
       created_at: String(row.created_at),
       updated_at: String(row.updated_at),
     });
@@ -385,7 +386,7 @@ export class SqliteScheduler implements Scheduler {
     if (scopeId) {
       sql = `
         select count(*) as c from work_items
-        where mailbox_id = ?
+        where scope_id = ?
           and (
             status in ('opened', 'leased', 'executing')
             or (status = 'failed_retryable' and (next_retry_at is null or next_retry_at <= ?))

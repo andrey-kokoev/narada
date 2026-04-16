@@ -57,7 +57,7 @@ function nowMs(): number {
   return Date.now();
 }
 
-async function ensureRootLayout(rootDir: string): Promise<void> {
+export async function ensureRootLayout(rootDir: string): Promise<void> {
   await Promise.all([
     mkdir(join(rootDir, "state"), { recursive: true }),
     mkdir(join(rootDir, "messages"), { recursive: true }),

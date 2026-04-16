@@ -1,10 +1,11 @@
 
-import type { ExchangeFsSyncConfig } from "./types.js";
+import type { ExchangeFsSyncConfig, ScopeConfig } from "./types.js";
 
 export const DEFAULT_EXCHANGE_FS_SYNC_CONFIG: Omit<
   ExchangeFsSyncConfig,
-  "mailbox_id" | "root_dir" | "graph" | "scope"
-> = {
+  "root_dir" | "scopes"
+> & { scopes: ScopeConfig[] } = {
+  scopes: [],
   normalize: {
     attachment_policy: "metadata_only",
     body_policy: "text_only",

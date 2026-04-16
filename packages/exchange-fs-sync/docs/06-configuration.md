@@ -4,6 +4,8 @@
 
 Configuration is loaded from JSON files and environment variables. The system uses explicit validation at load time—no partial configs or silent fallbacks for required fields.
 
+The canonical configuration surface is **scope-first and vertical-neutral**. A scope is an independently configured unit of sync and dispatch. The mailbox vertical is one scope among many.
+
 ---
 
 ## Configuration Schema
@@ -11,37 +13,55 @@ Configuration is loaded from JSON files and environment variables. The system us
 ### TypeScript Interface
 
 ```typescript
-interface ExchangeFsSyncConfig {
-  mailbox_id: string;                    // Logical mailbox identifier
-  root_dir: string;                      // Base directory for all data
+interface SourceConfig {
+  type: string;
+  // source-specific fields
+}
 
-  graph: {
+interface ExecutorConfig {
+  type: string;
+  // executor-specific fields
+}
+
+interface ScopeConfig {
+  scope_id: string;                      // Logical scope identifier
+  root_dir: string;                      // Base directory for scope data
+  sources?: SourceConfig[];              // Vertical sources for this scope
+  context_strategy?: string;             // Context formation strategy
+  graph?: {
     tenant_id?: string;                  // Azure AD tenant
     client_id?: string;                  // App registration ID
     client_secret?: string;              // App secret
-    user_id: string;                     // Mailbox owner
+    user_id: string;                     // Mailbox owner (mail vertical)
     base_url?: string;                   // Graph API endpoint
     prefer_immutable_ids: boolean;       // Use immutable message IDs
   };
-
-  scope: {
+  scope?: {
     included_container_refs: string[];   // Folder IDs to sync
     included_item_kinds: string[];       // Item types ("message")
   };
-
-  normalize: {
+  normalize?: {
     attachment_policy: "exclude" | "metadata_only" | "include_content";
     body_policy: "text_only" | "html_only" | "text_and_html";
     include_headers: boolean;            // Store internet message headers
     tombstones_enabled: boolean;         // Keep deletion records
   };
-
-  runtime: {
+  runtime?: {
     polling_interval_ms: number;         // Sync frequency
     acquire_lock_timeout_ms: number;     // Lock acquisition timeout
     cleanup_tmp_on_startup: boolean;     // Clean tmp/ on start
     rebuild_views_after_sync: boolean;   // Rebuild views each cycle
   };
+  charter?: CharterRuntimeConfig;
+  policy?: RuntimePolicy;
+  executors?: ExecutorConfig[];
+  webhook?: WebhookConfig;
+  lifecycle?: LifecycleConfig;
+}
+
+interface ExchangeFsSyncConfig {
+  root_dir: string;                      // Global base directory
+  scopes: ScopeConfig[];                 // One or more scopes
 }
 ```
 
@@ -53,32 +73,38 @@ interface ExchangeFsSyncConfig {
 
 ```json
 {
-  "mailbox_id": "user@example.com",
   "root_dir": "./data",
-  
-  "graph": {
-    "user_id": "user@example.com",
-    "prefer_immutable_ids": true
-  },
-  
-  "scope": {
-    "included_container_refs": ["inbox"],
-    "included_item_kinds": ["message"]
-  },
-  
-  "normalize": {
-    "attachment_policy": "metadata_only",
-    "body_policy": "text_only",
-    "include_headers": false,
-    "tombstones_enabled": true
-  },
-  
-  "runtime": {
-    "polling_interval_ms": 60000,
-    "acquire_lock_timeout_ms": 30000,
-    "cleanup_tmp_on_startup": true,
-    "rebuild_views_after_sync": false
-  }
+  "scopes": [
+    {
+      "scope_id": "user@example.com",
+      "root_dir": "./data/mail",
+      "sources": [{ "type": "graph" }],
+      "graph": {
+        "user_id": "user@example.com",
+        "prefer_immutable_ids": true
+      },
+      "scope": {
+        "included_container_refs": ["inbox"],
+        "included_item_kinds": ["message"]
+      },
+      "normalize": {
+        "attachment_policy": "metadata_only",
+        "body_policy": "text_only",
+        "include_headers": false,
+        "tombstones_enabled": true
+      },
+      "runtime": {
+        "polling_interval_ms": 60000,
+        "acquire_lock_timeout_ms": 30000,
+        "cleanup_tmp_on_startup": true,
+        "rebuild_views_after_sync": false
+      },
+      "policy": {
+        "primary_charter": "support_steward",
+        "allowed_actions": ["draft_reply", "send_reply", "mark_read", "no_action"]
+      }
+    }
+  ]
 }
 ```
 
@@ -91,9 +117,41 @@ const config = await loadConfig({ path: "./config.json" });
 ```
 
 **Validation Errors**:
-- Missing required field → throws with path (e.g., `"config.graph.user_id must be a non-empty string"`)
+- Missing required field → throws with path (e.g., `"config.scopes[0].scope_id must be a non-empty string"`)
 - Wrong type → throws with expected type
 - Empty string → treated as missing
+
+---
+
+## Legacy Bridge
+
+Old configs that use top-level `mailbox_id` or `scope_id` are **automatically promoted** into a single-element `scopes` array at load time. This avoids a flag-day rewrite of existing configs and tests.
+
+```json
+{
+  "mailbox_id": "user@example.com",
+  "root_dir": "./data",
+  "graph": { "user_id": "user@example.com", "prefer_immutable_ids": true }
+}
+```
+
+The loader converts the above into:
+
+```json
+{
+  "root_dir": "./data",
+  "scopes": [
+    {
+      "scope_id": "user@example.com",
+      "root_dir": "./data",
+      "sources": [{ "type": "graph" }],
+      "graph": { "user_id": "user@example.com", "prefer_immutable_ids": true }
+    }
+  ]
+}
+```
+
+**Do not write new configs using the legacy form.** It exists only for backward compatibility.
 
 ---
 
@@ -131,9 +189,9 @@ function buildGraphTokenProvider(opts: { config: ExchangeFsSyncConfig }): GraphT
   }
 
   // 2. Client credentials from env or config
-  const tenantId = env.tenant_id ?? cfg.graph.tenant_id;
-  const clientId = env.client_id ?? cfg.graph.client_id;
-  const clientSecret = env.client_secret ?? cfg.graph.client_secret;
+  const tenantId = env.tenant_id ?? cfg.graph?.tenant_id;
+  const clientId = env.client_id ?? cfg.graph?.client_id;
+  const clientSecret = env.client_secret ?? cfg.graph?.client_secret;
 
   if (tenantId && clientId && clientSecret) {
     return new ClientCredentialsTokenProvider({
@@ -160,10 +218,12 @@ export GRAPH_ACCESS_TOKEN="eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsIng1dCI6..."
 Config file needs minimal Graph config:
 ```json
 {
-  "graph": {
-    "user_id": "user@example.com",
-    "prefer_immutable_ids": true
-  }
+  "scopes": [{
+    "graph": {
+      "user_id": "user@example.com",
+      "prefer_immutable_ids": true
+    }
+  }]
 }
 ```
 
@@ -180,13 +240,15 @@ export GRAPH_CLIENT_SECRET="secret-from-app-registration"
 Or in config:
 ```json
 {
-  "graph": {
-    "tenant_id": "contoso.onmicrosoft.com",
-    "client_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-    "client_secret": "secret",
-    "user_id": "user@example.com",
-    "prefer_immutable_ids": true
-  }
+  "scopes": [{
+    "graph": {
+      "tenant_id": "contoso.onmicrosoft.com",
+      "client_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "client_secret": "secret",
+      "user_id": "user@example.com",
+      "prefer_immutable_ids": true
+    }
+  }]
 }
 ```
 
@@ -224,10 +286,12 @@ Credentials can be referenced in config using the `{ "$secure": "key" }` syntax:
 
 ```json
 {
-  "graph": {
-    "client_secret": { "$secure": "graph_client_secret" },
-    "tenant_id": { "$secure": "graph_tenant_id" }
-  }
+  "scopes": [{
+    "graph": {
+      "client_secret": { "$secure": "graph_client_secret" },
+      "tenant_id": { "$secure": "graph_tenant_id" }
+    }
+  }]
 }
 ```
 
@@ -242,7 +306,7 @@ If no OS keychain is available, credentials are encrypted using AES-256-GCM with
 ```typescript
 import { createSecureStorage } from '@narada/exchange-fs-sync';
 
-const storage = await createSecureStorage('my-mailbox');
+const storage = await createSecureStorage('my-scope');
 await storage.setCredential('client_secret', 'secret-value');
 const secret = await storage.getCredential('client_secret');
 ```
@@ -270,30 +334,36 @@ const DEFAULTS = {
 };
 ```
 
-**Note**: No defaults for `mailbox_id`, `root_dir`, `graph.user_id`, or `scope` fields—these are always required.
+**Note**: No defaults for `scope_id`, `root_dir`, or `graph.user_id` when the mail vertical is used—these are always required.
 
 ---
 
 ## Scope Configuration
 
-### Current Limitation
+### Multiple Scopes
 
-The current implementation requires exactly one folder:
+The canonical config supports multiple scopes, each with its own vertical sources and policy:
 
 ```json
 {
-  "scope": {
-    "included_container_refs": ["inbox"]
-  }
+  "root_dir": "./data",
+  "scopes": [
+    {
+      "scope_id": "mailbox-a",
+      "sources": [{ "type": "graph" }],
+      "graph": { "user_id": "a@example.com", "prefer_immutable_ids": true }
+    },
+    {
+      "scope_id": "timer-scope",
+      "sources": [{ "type": "timer" }]
+    }
+  ]
 }
 ```
 
-Multiple folders will throw:
-```
-Error: Current implementation requires exactly one included_container_ref
-```
+The daemon iterates all scopes concurrently.
 
-### Folder Reference Formats
+### Folder Reference Formats (Mail Vertical)
 
 Folder refs can be:
 - Graph folder ID: `"AQMkADAwATM0..."`
@@ -333,9 +403,11 @@ Graph API provides both content types; this controls which are persisted.
 
 ```json
 {
-  "runtime": {
-    "polling_interval_ms": 60000
-  }
+  "scopes": [{
+    "runtime": {
+      "polling_interval_ms": 60000
+    }
+  }]
 }
 ```
 
@@ -347,9 +419,11 @@ Graph API provides both content types; this controls which are persisted.
 
 ```json
 {
-  "runtime": {
-    "acquire_lock_timeout_ms": 30000
-  }
+  "scopes": [{
+    "runtime": {
+      "acquire_lock_timeout_ms": 30000
+    }
+  }]
 }
 ```
 
@@ -361,9 +435,11 @@ Graph API provides both content types; this controls which are persisted.
 
 ```json
 {
-  "runtime": {
-    "cleanup_tmp_on_startup": true
-  }
+  "scopes": [{
+    "runtime": {
+      "cleanup_tmp_on_startup": true
+    }
+  }]
 }
 ```
 
@@ -375,9 +451,11 @@ Graph API provides both content types; this controls which are persisted.
 
 ```json
 {
-  "runtime": {
-    "rebuild_views_after_sync": false
-  }
+  "scopes": [{
+    "runtime": {
+      "rebuild_views_after_sync": false
+    }
+  }]
 }
 ```
 
@@ -407,9 +485,9 @@ function expectAttachmentPolicy(value: unknown, path: string): AttachmentPolicy;
 Validation errors include the full path to the invalid field:
 
 ```
-config.graph.user_id must be a non-empty string
-config.normalize.attachment_policy must be one of: exclude, metadata_only, include_content
-config.runtime.polling_interval_ms must be a non-negative finite number
+config.scopes[0].graph.user_id must be a non-empty string
+config.scopes[0].normalize.attachment_policy must be one of: exclude, metadata_only, include_content
+config.scopes[0].runtime.polling_interval_ms must be a non-negative finite number
 ```
 
 ---
@@ -423,10 +501,12 @@ Never commit secrets to config files:
 ```json
 // config.json (safe to commit)
 {
-  "graph": {
-    "user_id": "user@example.com",
-    "prefer_immutable_ids": true
-  }
+  "scopes": [{
+    "graph": {
+      "user_id": "user@example.com",
+      "prefer_immutable_ids": true
+    }
+  }]
 }
 ```
 
@@ -455,9 +535,11 @@ Always enable for production:
 
 ```json
 {
-  "graph": {
-    "prefer_immutable_ids": true
-  }
+  "scopes": [{
+    "graph": {
+      "prefer_immutable_ids": true
+    }
+  }]
 }
 ```
 

@@ -49,12 +49,8 @@ describe("Webhook Vertical Integration", () => {
 
   beforeEach(async () => {
     rootDir = await mkdtemp(join(tmpdir(), "efs-webhook-"));
-    const dbPath = join(rootDir, "coordinator.db");
-    db = new Database(dbPath);
-    db.pragma("journal_mode = WAL");
-    const factDbPath = join(rootDir, "facts.db");
-    factDb = new Database(factDbPath);
-    factDb.pragma("journal_mode = WAL");
+    db = new Database(":memory:");
+    factDb = new Database(":memory:");
   });
 
   afterEach(async () => {
@@ -139,16 +135,14 @@ describe("Webhook Vertical Integration", () => {
       invocation_version: "2.0",
       execution_id: `ex_${workItem.work_item_id}_${Date.now()}`,
       work_item_id: workItem.work_item_id,
-      conversation_id: workItem.context_id,
-      mailbox_id: scopeId,
+      context_id: workItem.context_id,
+      scope_id: scopeId,
       charter_id: "webhook_handler",
       role: "primary",
       invoked_at: new Date().toISOString(),
       revision_id: workItem.opened_for_revision_id,
-      thread_context: {
-        conversation_id: workItem.context_id,
-        messages: [],
-      },
+      context_materialization: { messages: [] },
+      vertical_hints: { vertical: "webhook" },
       allowed_actions: ["process_run", "no_action"],
       available_tools: [],
       coordinator_flags: [],
@@ -167,7 +161,7 @@ describe("Webhook Vertical Integration", () => {
       evaluation_id: `eval_${workItem.work_item_id}`,
       execution_id: attempt.execution_id,
       work_item_id: workItem.work_item_id,
-      conversation_id: workItem.context_id,
+      context_id: workItem.context_id,
       charter_id: "webhook_handler",
       role: "primary",
       output_version: "2.0",

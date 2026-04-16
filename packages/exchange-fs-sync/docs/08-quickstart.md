@@ -83,16 +83,21 @@ Edit `config.json`:
 
 ```json
 {
-  "mailbox_id": "your-email@example.com",
   "root_dir": "./data",
-  "graph": {
-    "user_id": "your-email@example.com",
-    "prefer_immutable_ids": true
-  },
-  "scope": {
-    "included_container_refs": ["inbox"],
-    "included_item_kinds": ["message"]
-  }
+  "scopes": [
+    {
+      "scope_id": "your-email@example.com",
+      "sources": [{ "type": "graph" }],
+      "graph": {
+        "user_id": "your-email@example.com",
+        "prefer_immutable_ids": true
+      },
+      "scope": {
+        "included_container_refs": ["inbox"],
+        "included_item_kinds": ["message"]
+      }
+    }
+  ]
 }
 ```
 
@@ -168,34 +173,35 @@ import { cleanupTmp } from "./src/recovery/cleanup-tmp.js";
 async function main() {
   const config = await loadConfig({ path: "./config.json" });
   
-  const tokenProvider = buildGraphTokenProvider({ config });
+  const scope = config.scopes[0];
+  const tokenProvider = buildGraphTokenProvider({ config: scope });
   const client = new GraphHttpClient({
     tokenProvider,
-    preferImmutableIds: config.graph.prefer_immutable_ids,
+    preferImmutableIds: scope.graph.prefer_immutable_ids,
   });
   
   const adapter = new DefaultGraphAdapter({
-    mailbox_id: config.mailbox_id,
-    user_id: config.graph.user_id,
+    mailbox_id: scope.scope_id,
+    user_id: scope.graph.user_id,
     client,
     adapter_scope: {
-      mailbox_id: config.mailbox_id,
-      included_container_refs: config.scope.included_container_refs,
-      included_item_kinds: config.scope.included_item_kinds,
-      attachment_policy: config.normalize.attachment_policy,
-      body_policy: config.normalize.body_policy,
+      mailbox_id: scope.scope_id,
+      included_container_refs: scope.scope.included_container_refs,
+      included_item_kinds: scope.scope.included_item_kinds,
+      attachment_policy: scope.normalize.attachment_policy,
+      body_policy: scope.normalize.body_policy,
     },
-    body_policy: config.normalize.body_policy,
-    attachment_policy: config.normalize.attachment_policy,
-    include_headers: config.normalize.include_headers,
+    body_policy: scope.normalize.body_policy,
+    attachment_policy: scope.normalize.attachment_policy,
+    include_headers: scope.normalize.include_headers,
     normalize_folder_ref: (message) => [message.parentFolderId ?? "unknown"],
     normalize_flagged: (flag) => flag?.flagStatus === "flagged",
   });
   
-  const rootDir = config.root_dir;
+  const rootDir = scope.root_dir;
   const cursorStore = new FileCursorStore({
     rootDir,
-    mailboxId: config.mailbox_id,
+    mailboxId: scope.scope_id,
   });
   const applyLogStore = new FileApplyLogStore({ rootDir });
   const messageStore = new FileMessageStore({ rootDir });
@@ -204,7 +210,7 @@ async function main() {
   const blobStore = new FileBlobStore({ rootDir });
   const lock = new FileLock({
     rootDir,
-    acquireTimeoutMs: config.runtime.acquire_lock_timeout_ms,
+    acquireTimeoutMs: scope.runtime.acquire_lock_timeout_ms,
   });
   
   const runner = new DefaultSyncRunner({
@@ -220,7 +226,7 @@ async function main() {
             messages: messageStore,
             tombstones: tombstoneStore,
             views: viewStore,
-            tombstones_enabled: config.normalize.tombstones_enabled,
+            tombstones_enabled: scope.normalize.tombstones_enabled,
           },
           event,
         ),
@@ -228,7 +234,7 @@ async function main() {
     cleanupTmp: () => cleanupTmp({ rootDir }),
     acquireLock: () => lock.acquire(),
     rebuildViews: () => viewStore.rebuildAll(),
-    rebuildViewsAfterSync: config.runtime.rebuild_views_after_sync,
+    rebuildViewsAfterSync: scope.runtime.rebuild_views_after_sync,
   });
   
   console.log("Starting sync...");

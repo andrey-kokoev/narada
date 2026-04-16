@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Narada Operator Console</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-2: #21262d;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-secondary: #8b949e;
+      --accent: #58a6ff;
+      --accent-hover: #79c0ff;
+      --success: #3fb950;
+      --warning: #d29922;
+      --danger: #f85149;
+      --muted: #484f58;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+    }
+    nav {
+      width: 220px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+    nav header {
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    nav header h1 {
+      margin: 0;
+      font-size: 16px;
+      letter-spacing: 0.3px;
+    }
+    nav header p {
+      margin: 4px 0 0;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    nav menu {
+      list-style: none;
+      margin: 0;
+      padding: 10px 0;
+      flex: 1;
+    }
+    nav menu li a {
+      display: block;
+      padding: 10px 20px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 13px;
+      border-left: 3px solid transparent;
+    }
+    nav menu li a:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+    nav menu li a.active {
+      color: var(--text);
+      background: rgba(88,166,255,0.08);
+      border-left-color: var(--accent);
+    }
+    .link {
+      color: var(--accent);
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .link:hover { text-decoration: underline; }
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+    .breadcrumb button {
+      background: transparent;
+      border: none;
+      color: var(--accent);
+      cursor: pointer;
+      padding: 0;
+      font-size: 13px;
+    }
+    .timeline-row td { padding: 12px; }
+    .timeline-event { display: flex; align-items: flex-start; gap: 12px; }
+    .timeline-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; background: var(--muted); }
+    .timeline-dot.fact { background: var(--accent); }
+    .timeline-dot.context { background: var(--warning); }
+    .timeline-dot.work { background: var(--success); }
+    .timeline-meta { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .toolbar select, .toolbar input {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .toolbar input { min-width: 220px; }
+    .toolbar button {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .toolbar button:hover { border-color: var(--muted); }
+    .toolbar button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .toolbar button.primary:hover { background: var(--accent-hover); }
+    .toolbar .spacer { flex: 1; }
+    .toolbar .status {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .content {
+      flex: 1;
+      overflow: auto;
+      padding: 20px;
+    }
+    .empty {
+      color: var(--text-secondary);
+      font-size: 14px;
+      padding: 40px 0;
+    }
+    .error {
+      background: rgba(248,81,73,0.1);
+      border: 1px solid rgba(248,81,73,0.3);
+      color: var(--danger);
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .card h3 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: var(--text-secondary);
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px;
+    }
+    .metric {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .metric .value {
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .metric .label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      color: var(--text-secondary);
+      font-weight: 500;
+      position: sticky;
+      top: 0;
+      background: var(--surface);
+    }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.2px;
+    }
+    .badge-opened { background: rgba(88,166,255,0.15); color: var(--accent); }
+    .badge-leased { background: rgba(211,153,33,0.15); color: var(--warning); }
+    .badge-executing { background: rgba(211,153,33,0.25); color: #e3b341; }
+    .badge-resolved { background: rgba(63,185,80,0.15); color: var(--success); }
+    .badge-failed { background: rgba(248,81,73,0.15); color: var(--danger); }
+    .badge-admitted { background: rgba(88,166,255,0.15); color: var(--accent); }
+    .badge-running { background: rgba(211,153,33,0.25); color: #e3b341; }
+    .badge-completed { background: rgba(63,185,80,0.15); color: var(--success); }
+    .badge-timer, .badge-webhook, .badge-filesystem, .badge-mail {
+      background: var(--surface-2);
+      color: var(--text-secondary);
+    }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; }
+    .truncate { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .hide { display: none !important; }
+  </style>
+</head>
+<body>
+  <nav>
+    <header>
+      <h1>Narada</h1>
+      <p>Operator Console</p>
+    </header>
+    <menu>
+      <li><a href="#overview" class="active" data-page="overview">Overview</a></li>
+      <li><a href="#timeline" data-page="timeline">Timeline</a></li>
+      <li><a href="#facts" data-page="facts">Facts</a></li>
+      <li><a href="#contexts" data-page="contexts">Contexts</a></li>
+      <li><a href="#work" data-page="work">Work</a></li>
+      <li><a href="#intents" data-page="intents">Intents</a></li>
+      <li><a href="#executions" data-page="executions">Executions</a></li>
+      <li><a href="#workers" data-page="workers">Workers</a></li>
+      <li><a href="#failures" data-page="failures">Failures</a></li>
+    </menu>
+  </nav>
+
+  <main>
+    <div class="toolbar">
+      <select id="scopeSelect"><option value="">Select scope…</option></select>
+      <input id="searchInput" type="text" placeholder="Filter by ID, status, or type…" />
+      <div class="spacer"></div>
+      <span class="status" id="statusText">Loading scopes…</span>
+      <button id="refreshBtn" class="primary">Refresh</button>
+    </div>
+
+    <div class="content" id="content">
+      <div class="empty">Select a scope to begin.</div>
+    </div>
+  </main>
+
+  <script>
+    const API_BASE = window.location.origin;
+    let scopes = [];
+    let currentScope = "";
+    let currentPage = "overview";
+    let abortController = null;
+    let detailState = null; // { type: 'fact'|'context'|'work_item', id: string, returnPage: string }
+
+    const $ = (id) => document.getElementById(id);
+    const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+    async function api(path) {
+      const res = await fetch(`${API_BASE}${path}`);
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      return res.json();
+    }
+
+    async function loadScopes() {
+      const data = await api("/scopes");
+      scopes = data.scopes || [];
+      const select = $("scopeSelect");
+      select.innerHTML = '<option value="">Select scope…</option>' +
+        scopes.map(s => `<option value="${esc(s.scope_id)}">${esc(s.scope_id)}</option>`).join("");
+      $("statusText").textContent = scopes.length === 0 ? "No scopes available" : `${scopes.length} scope(s)`;
+      if (scopes.length === 1) {
+        currentScope = scopes[0].scope_id;
+        select.value = currentScope;
+        await loadPage();
+      }
+    }
+
+    function esc(str) {
+      return String(str ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+    }
+
+    function fmtDate(iso) {
+      if (!iso) return "—";
+      const d = new Date(iso);
+      return d.toLocaleString();
+    }
+
+    function badge(text, extraClass = "") {
+      return `<span class="badge badge-${text.toLowerCase().replace(/\s+/g, "-")} ${extraClass}">${esc(text)}</span>`;
+    }
+
+    function setLoading() {
+      $("content").innerHTML = '<div class="empty">Loading…</div>';
+    }
+
+    function setError(err) {
+      $("content").innerHTML = `<div class="error">${esc(err.message || String(err))}</div>`;
+    }
+
+    function filterRows(rows, keys) {
+      const q = $("searchInput").value.trim().toLowerCase();
+      if (!q) return rows;
+      return rows.filter(r => keys.some(k => String(r[k] ?? "").toLowerCase().includes(q)));
+    }
+
+    async function loadOverview() {
+      const { snapshot } = await api(`/scopes/${encodeURIComponent(currentScope)}/snapshot`);
+      const cp = snapshot.control_plane;
+      const proc = snapshot.process_executions;
+      const intents = snapshot.intents;
+      const workers = snapshot.workers;
+
+      $("content").innerHTML = `
+        <div class="metrics">
+          <div class="metric"><div class="value">${esc(cp.work_items.total_count)}</div><div class="label">Work items</div></div>
+          <div class="metric"><div class="value">${esc(cp.executions.total_count)}</div><div class="label">Executions</div></div>
+          <div class="metric"><div class="value">${esc(intents.total_count)}</div><div class="label">Intents</div></div>
+          <div class="metric"><div class="value">${esc(cp.outbound.total_count)}</div><div class="label">Outbound</div></div>
+          <div class="metric"><div class="value">${esc(proc.total_count)}</div><div class="label">Process runs</div></div>
+          <div class="metric"><div class="value">${esc(workers.length)}</div><div class="label">Workers</div></div>
+        </div>
+        <div class="card">
+          <h3>Active work items</h3>
+          ${cp.work_items.active.length ? renderWorkItems(cp.work_items.active.slice(0, 10)) : '<div class="empty">None</div>'}
+        </div>
+        <div class="card">
+          <h3>Pending intents</h3>
+          ${intents.pending.length ? renderIntents(intents.pending.slice(0, 10)) : '<div class="empty">None</div>'}
+        </div>
+      `;
+      bindDetailLinks();
+    }
+
+    async function loadFacts() {
+      const { facts } = await api(`/scopes/${encodeURIComponent(currentScope)}/facts`);
+      const rows = filterRows(facts, ["fact_id", "fact_type", "source_id"]);
+      $("content").innerHTML = `
+        <div class="card">
+          <h3>Recent facts (${esc(rows.length)})</h3>
+          ${rows.length ? `
+            <table>
+              <thead><tr><th>Fact ID</th><th>Type</th><th>Source</th><th>Admitted</th><th>Created</th></tr></thead>
+              <tbody>
+                ${rows.map(r => `
+                  <tr>
+                    <td class="mono truncate"><a class="link" data-fact-id="${esc(r.fact_id)}">${esc(r.fact_id)}</a></td>
+                    <td>${badge(r.fact_type.split(".").pop())}</td>
+                    <td class="mono">${esc(r.source_id)}</td>
+                    <td>${r.admitted ? "Yes" : "No"}</td>
+                    <td>${fmtDate(r.created_at)}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          ` : '<div class="empty">No facts match.</div>'}
+        </div>
+      `;
+      $$('a[data-fact-id]').forEach(a => a.addEventListener('click', (e) => {
+        e.preventDefault();
+        showFactDetail(a.dataset.factId);
+      }));
+    }
+
+    async function loadContexts() {
+      const { contexts } = await api(`/scopes/${encodeURIComponent(currentScope)}/contexts`);
+      const rows = filterRows(contexts, ["context_id", "status", "primary_charter"]);
+      $("content").innerHTML = `
+        <div class="card">
+          <h3>Contexts (${esc(rows.length)})</h3>
+          ${rows.length ? `
+            <table>
+              <thead><tr><th>Context ID</th><th>Status</th><th>Charter</th><th>Assigned</th><th>Updated</th></tr></thead>
+              <tbody>
+                ${rows.map(r => `
+                  <tr>
+                    <td class="mono truncate"><a class="link" data-context-id="${esc(r.context_id)}">${esc(r.context_id)}</a></td>
+                    <td>${badge(r.status)}</td>
+                    <td class="mono">${esc(r.primary_charter)}</td>
+                    <td>${esc(r.assigned_agent || "—")}</td>
+                    <td>${fmtDate(r.updated_at)}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          ` : '<div class="empty">No contexts match.</div>'}
+        </div>
+      `;
+      $$('a[data-context-id]').forEach(a => a.addEventListener('click', (e) => {
+        e.preventDefault();
+        showContextDetail(a.dataset.contextId);
+      }));
+    }
+
+    function renderWorkItems(items, linkable = true) {
+      return `
+        <table>
+          <thead><tr><th>Work item ID</th><th>Context ID</th><th>Status</th><th>Priority</th><th>Retry</th><th>Updated</th></tr></thead>
+          <tbody>
+            ${items.map(r => `
+              <tr>
+                <td class="mono truncate">${linkable ? `<a class="link" data-work-item-id="${esc(r.work_item_id)}">${esc(r.work_item_id)}</a>` : esc(r.work_item_id)}</td>
+                <td class="mono truncate">${linkable ? `<a class="link" data-context-id="${esc(r.context_id)}">${esc(r.context_id)}</a>` : esc(r.context_id)}</td>
+                <td>${badge(r.status)}</td>
+                <td>${esc(r.priority)}</td>
+                <td>${esc(r.retry_count)}</td>
+                <td>${fmtDate(r.updated_at)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function bindDetailLinks() {
+      $$('a[data-work-item-id]').forEach(a => a.addEventListener('click', (e) => {
+        e.preventDefault();
+        showWorkItemDetail(a.dataset.workItemId);
+      }));
+      $$('a[data-context-id]').forEach(a => a.addEventListener('click', (e) => {
+        e.preventDefault();
+        showContextDetail(a.dataset.contextId);
+      }));
+      $$('a[data-fact-id]').forEach(a => a.addEventListener('click', (e) => {
+        e.preventDefault();
+        showFactDetail(a.dataset.factId);
+      }));
+    }
+
+    async function loadWork() {
+      const statuses = ["", "failed", "awaiting_retry"];
+      const status = $("searchInput").dataset.workStatus || "";
+      const endpoint = status ? `?status=${encodeURIComponent(status)}` : "";
+      const { items } = await api(`/scopes/${encodeURIComponent(currentScope)}/work-items${endpoint}`);
+      const rows = filterRows(items, ["work_item_id", "context_id", "status"]);
+      $("content").innerHTML = `
+        <div class="card">
+          <div style="display:flex;gap:8px;margin-bottom:12px;">
+            ${statuses.map(s => `
+              <button class="${s === status ? 'primary' : ''}" data-set-status="${s}">
+                ${s ? esc(s.replace('_', ' ')) : 'Active'}
+              </button>
+            `).join('')}
+          </div>
+          <h3>Work items (${esc(rows.length)})</h3>
+          ${rows.length ? renderWorkItems(rows) : '<div class="empty">No work items match.</div>'}
+        </div>
+      `;
+      $$("[data-set-status]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          $("searchInput").dataset.workStatus = btn.dataset.setStatus;
+          loadPage();
+        });
+      });
+      bindDetailLinks();
+    }
+
+    function renderIntents(items) {
+      return `
+        <table>
+          <thead><tr><th>Intent ID</th><th>Type</th><th>Family</th><th>Status</th><th>Context ID</th><th>Created</th></tr></thead>
+          <tbody>
+            ${items.map(r => `
+              <tr>
+                <td class="mono truncate" title="${esc(r.intent_id)}">${esc(r.intent_id)}</td>
+                <td class="mono">${esc(r.intent_type)}</td>
+                <td class="mono">${esc(r.executor_family)}</td>
+                <td>${badge(r.status)}</td>
+                <td class="mono truncate" title="${esc(r.context_id)}">${esc(r.context_id)}</td>
+                <td>${fmtDate(r.created_at)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    async function loadIntents() {
+      const { pending, executing, failed_terminal, total_count } = await api(`/scopes/${encodeURIComponent(currentScope)}/intents`);
+      const all = [...pending, ...executing, ...failed_terminal];
+      const rows = filterRows(all, ["intent_id", "intent_type", "executor_family", "status", "context_id"]);
+      $("content").innerHTML = `
+        <div class="metrics">
+          <div class="metric"><div class="value">${esc(pending.length)}</div><div class="label">Pending</div></div>
+          <div class="metric"><div class="value">${esc(executing.length)}</div><div class="label">Executing</div></div>
+          <div class="metric"><div class="value">${esc(failed_terminal.length)}</div><div class="label">Failed terminal</div></div>
+          <div class="metric"><div class="value">${esc(total_count)}</div><div class="label">Total</div></div>
+        </div>
+        <div class="card">
+          <h3>Intents (${esc(rows.length)})</h3>
+          ${rows.length ? renderIntents(rows) : '<div class="empty">No intents match.</div>'}
+        </div>
+      `;
+    }
+
+    async function loadExecutions() {
+      const { charter_executions, process_executions } = await api(`/scopes/${encodeURIComponent(currentScope)}/executions`);
+      const rows = filterRows(charter_executions, ["execution_id", "work_item_id", "status"]);
+      const procRows = filterRows(process_executions.active.concat(process_executions.recent), ["execution_id", "command", "status"]);
+      $("content").innerHTML = `
+        <div class="card">
+          <h3>Charter executions (${esc(rows.length)})</h3>
+          ${rows.length ? `
+            <table>
+              <thead><tr><th>Execution ID</th><th>Work item</th><th>Status</th><th>Started</th></tr></thead>
+              <tbody>
+                ${rows.map(r => `
+                  <tr>
+                    <td class="mono truncate" title="${esc(r.execution_id)}">${esc(r.execution_id)}</td>
+                    <td class="mono truncate" title="${esc(r.work_item_id)}">${esc(r.work_item_id)}</td>
+                    <td>${badge(r.status)}</td>
+                    <td>${fmtDate(r.started_at)}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          ` : '<div class="empty">None</div>'}
+        </div>
+        <div class="card">
+          <h3>Process executions (${esc(procRows.length)})</h3>
+          ${procRows.length ? `
+            <table>
+              <thead><tr><th>Execution ID</th><th>Command</th><th>Status</th><th>Started</th></tr></thead>
+              <tbody>
+                ${procRows.map(r => `
+                  <tr>
+                    <td class="mono truncate" title="${esc(r.execution_id)}">${esc(r.execution_id)}</td>
+                    <td class="mono truncate" title="${esc(r.command)}">${esc(r.command)}</td>
+                    <td>${badge(r.status)}</td>
+                    <td>${fmtDate(r.started_at)}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          ` : '<div class="empty">None</div>'}
+        </div>
+      `;
+    }
+
+    async function loadWorkers() {
+      const { workers } = await api(`/scopes/${encodeURIComponent(currentScope)}/workers`);
+      const rows = filterRows(workers, ["worker_id", "executor_family", "concurrency_policy"]);
+      $("content").innerHTML = `
+        <div class="card">
+          <h3>Workers (${esc(rows.length)})</h3>
+          ${rows.length ? `
+            <table>
+              <thead><tr><th>Worker ID</th><th>Family</th><th>Policy</th><th>Registered</th><th>Active work</th><th>Pending</th></tr></thead>
+              <tbody>
+                ${rows.map(r => `
+                  <tr>
+                    <td class="mono">${esc(r.worker_id)}</td>
+                    <td class="mono">${esc(r.executor_family)}</td>
+                    <td class="mono">${esc(r.concurrency_policy)}</td>
+                    <td>${r.registered ? "Yes" : "No"}</td>
+                    <td>${r.has_active_work ? "Yes" : "No"}</td>
+                    <td>${esc(r.pending_count)}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          ` : '<div class="empty">No workers match.</div>'}
+        </div>
+      `;
+    }
+
+    async function loadFailures() {
+      const { work_items, process_executions } = await api(`/scopes/${encodeURIComponent(currentScope)}/failures`);
+      const rows = filterRows(work_items, ["work_item_id", "context_id", "error_message"]);
+      const procRows = filterRows(process_executions, ["execution_id", "command", "error_message"]);
+      $("content").innerHTML = `
+        <div class="card">
+          <h3>Failed work items (${esc(rows.length)})</h3>
+          ${rows.length ? `
+            <table>
+              <thead><tr><th>Work item ID</th><th>Context ID</th><th>Status</th><th>Error</th><th>Updated</th></tr></thead>
+              <tbody>
+                ${rows.map(r => `
+                  <tr>
+                    <td class="mono truncate" title="${esc(r.work_item_id)}">${esc(r.work_item_id)}</td>
+                    <td class="mono truncate" title="${esc(r.context_id)}">${esc(r.context_id)}</td>
+                    <td>${badge(r.status)}</td>
+                    <td class="truncate" title="${esc(r.error_message || '')}">${esc(r.error_message || "—")}</td>
+                    <td>${fmtDate(r.updated_at)}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          ` : '<div class="empty">None</div>'}
+        </div>
+        <div class="card">
+          <h3>Failed process executions (${esc(procRows.length)})</h3>
+          ${procRows.length ? `
+            <table>
+              <thead><tr><th>Execution ID</th><th>Command</th><th>Exit code</th><th>Error</th></tr></thead>
+              <tbody>
+                ${procRows.map(r => `
+                  <tr>
+                    <td class="mono truncate" title="${esc(r.execution_id)}">${esc(r.execution_id)}</td>
+                    <td class="mono truncate" title="${esc(r.command)}">${esc(r.command)}</td>
+                    <td>${r.exit_code !== null && r.exit_code !== undefined ? esc(r.exit_code) : '—'}</td>
+                    <td class="truncate" title="${esc(r.error_message || '')}">${esc(r.error_message || "—")}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          ` : '<div class="empty">None</div>'}
+        </div>
+      `;
+    }
+
+    async function loadTimeline() {
+      const { events } = await api(`/scopes/${encodeURIComponent(currentScope)}/timeline?limit=100`);
+      const q = $("searchInput").value.trim().toLowerCase();
+      const rows = q ? events.filter(e =>
+        (e.detail && e.detail.toLowerCase().includes(q)) ||
+        (e.fact_id && e.fact_id.toLowerCase().includes(q)) ||
+        (e.context_id && e.context_id.toLowerCase().includes(q)) ||
+        (e.work_item_id && e.work_item_id.toLowerCase().includes(q))
+      ) : events;
+
+      const kindBadge = (kind) => {
+        const color = {
+          fact_ingested: 'badge-admitted',
+          fact_admitted: 'badge-admitted',
+          context_formed: 'badge-leased',
+          work_opened: 'badge-opened',
+          work_superseded: 'badge-executing',
+          work_resolved: 'badge-resolved',
+          work_failed: 'badge-failed',
+        }[kind] || '';
+        return badge(kind.replace(/_/g, ' '), color);
+      };
+
+      $("content").innerHTML = `
+        <div class="card">
+          <h3>Unified timeline (${esc(rows.length)})</h3>
+          ${rows.length ? `
+            <table>
+              <tbody>
+                ${rows.map(r => `
+                  <tr class="timeline-row">
+                    <td>
+                      <div class="timeline-event">
+                        <div class="timeline-dot ${r.kind.startsWith('fact') ? 'fact' : r.kind.startsWith('context') ? 'context' : 'work'}"></div>
+                        <div>
+                          <div>${kindBadge(r.kind)} <span style="color:var(--text)">${esc(r.detail)}</span></div>
+                          <div class="timeline-meta">
+                            ${fmtDate(r.event_at)}
+                            ${r.fact_id ? ` · Fact: <a class="link" data-fact-id="${esc(r.fact_id)}">${esc(r.fact_id)}</a>` : ''}
+                            ${r.context_id ? ` · Context: <a class="link" data-context-id="${esc(r.context_id)}">${esc(r.context_id)}</a>` : ''}
+                            ${r.work_item_id ? ` · Work: <a class="link" data-work-item-id="${esc(r.work_item_id)}">${esc(r.work_item_id)}</a>` : ''}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          ` : '<div class="empty">No events match.</div>'}
+        </div>
+      `;
+      bindDetailLinks();
+    }
+
+    async function showFactDetail(factId) {
+      detailState = { type: 'fact', id: factId, returnPage: currentPage };
+      setLoading();
+      try {
+        const { timeline } = await api(`/scopes/${encodeURIComponent(currentScope)}/facts/${encodeURIComponent(factId)}/timeline`);
+        const fact = timeline.fact;
+        const workItems = timeline.work_items || [];
+        $("content").innerHTML = `
+          <div class="breadcrumb">
+            <button onclick="restoreDetailState()">← Back</button>
+            <span>Fact detail</span>
+          </div>
+          <div class="card">
+            <h3>Fact</h3>
+            ${fact ? `
+              <table>
+                <tbody>
+                  <tr><th>ID</th><td class="mono">${esc(fact.fact_id)}</td></tr>
+                  <tr><th>Type</th><td>${esc(fact.fact_type)}</td></tr>
+                  <tr><th>Source</th><td class="mono">${esc(fact.source_id)}</td></tr>
+                  <tr><th>Record ID</th><td class="mono">${esc(fact.source_record_id)}</td></tr>
+                  <tr><th>Created</th><td>${fmtDate(fact.created_at)}</td></tr>
+                </tbody>
+              </table>
+            ` : '<div class="empty">Fact not found.</div>'}
+          </div>
+          <div class="card">
+            <h3>Downstream work items (${esc(workItems.length)})</h3>
+            ${workItems.length ? `
+              <table>
+                <thead><tr><th>Work item ID</th><th>Context ID</th><th>Status</th><th>Created</th></tr></thead>
+                <tbody>
+                  ${workItems.map(r => `
+                    <tr>
+                      <td class="mono truncate"><a class="link" data-work-item-id="${esc(r.work_item_id)}">${esc(r.work_item_id)}</a></td>
+                      <td class="mono truncate"><a class="link" data-context-id="${esc(r.context_id)}">${esc(r.context_id)}</a></td>
+                      <td>${badge(r.status)}</td>
+                      <td>${fmtDate(r.created_at)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            ` : '<div class="empty">No downstream work items.</div>'}
+          </div>
+        `;
+        bindDetailLinks();
+        $("statusText").textContent = `Scope: ${esc(currentScope)} · fact · ${esc(factId)}`;
+      } catch (err) {
+        if (err.name !== "AbortError") setError(err);
+      }
+    }
+
+    async function showContextDetail(contextId) {
+      detailState = { type: 'context', id: contextId, returnPage: currentPage };
+      setLoading();
+      try {
+        const { timeline } = await api(`/scopes/${encodeURIComponent(currentScope)}/contexts/${encodeURIComponent(contextId)}/timeline`);
+        const ctx = timeline.context;
+        const revisions = timeline.revisions || [];
+        const workItems = timeline.work_items || [];
+        const outputs = timeline.outputs || [];
+        $("content").innerHTML = `
+          <div class="breadcrumb">
+            <button onclick="restoreDetailState()">← Back</button>
+            <span>Context detail</span>
+          </div>
+          <div class="card">
+            <h3>Context</h3>
+            ${ctx ? `
+              <table>
+                <tbody>
+                  <tr><th>ID</th><td class="mono">${esc(ctx.context_id)}</td></tr>
+                  <tr><th>Status</th><td>${badge(ctx.status)}</td></tr>
+                  <tr><th>Charter</th><td class="mono">${esc(ctx.primary_charter)}</td></tr>
+                  <tr><th>Assigned</th><td>${esc(ctx.assigned_agent || '—')}</td></tr>
+                  <tr><th>Created</th><td>${fmtDate(ctx.created_at)}</td></tr>
+                  <tr><th>Updated</th><td>${fmtDate(ctx.updated_at)}</td></tr>
+                </tbody>
+              </table>
+            ` : '<div class="empty">Context not found.</div>'}
+          </div>
+          <div class="card">
+            <h3>Revisions (${esc(revisions.length)})</h3>
+            ${revisions.length ? `
+              <table>
+                <thead><tr><th>Ordinal</th><th>Observed</th><th>Trigger fact</th></tr></thead>
+                <tbody>
+                  ${revisions.map(r => `
+                    <tr>
+                      <td>${esc(r.ordinal)}</td>
+                      <td>${fmtDate(r.observed_at)}</td>
+                      <td class="mono truncate">${r.trigger_event_id ? `<a class="link" data-fact-id="${esc(r.trigger_event_id)}">${esc(r.trigger_event_id)}</a>` : '—'}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            ` : '<div class="empty">No revisions.</div>'}
+          </div>
+          <div class="card">
+            <h3>Work items (${esc(workItems.length)})</h3>
+            ${workItems.length ? renderWorkItems(workItems) : '<div class="empty">No work items.</div>'}
+          </div>
+          <div class="card">
+            <h3>Outputs (${esc(outputs.length)})</h3>
+            ${outputs.length ? `
+              <table>
+                <thead><tr><th>Output ID</th><th>Charter</th><th>Summary</th><th>Analyzed</th></tr></thead>
+                <tbody>
+                  ${outputs.map(o => `
+                    <tr>
+                      <td class="mono truncate">${esc(o.output_id)}</td>
+                      <td class="mono">${esc(o.charter_id)}</td>
+                      <td class="truncate">${esc(o.summary)}</td>
+                      <td>${fmtDate(o.analyzed_at)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            ` : '<div class="empty">No outputs.</div>'}
+          </div>
+        `;
+        bindDetailLinks();
+        $("statusText").textContent = `Scope: ${esc(currentScope)} · context · ${esc(contextId)}`;
+      } catch (err) {
+        if (err.name !== "AbortError") setError(err);
+      }
+    }
+
+    async function showWorkItemDetail(workItemId) {
+      detailState = { type: 'work_item', id: workItemId, returnPage: currentPage };
+      setLoading();
+      try {
+        const { timeline } = await api(`/scopes/${encodeURIComponent(currentScope)}/work-items/${encodeURIComponent(workItemId)}/timeline`);
+        const wi = timeline.work_item;
+        const facts = timeline.context_facts || [];
+        const executions = timeline.executions || [];
+        const decisions = timeline.decisions || [];
+        $("content").innerHTML = `
+          <div class="breadcrumb">
+            <button onclick="restoreDetailState()">← Back</button>
+            <span>Work item detail</span>
+          </div>
+          <div class="card">
+            <h3>Work item</h3>
+            ${wi ? `
+              <table>
+                <tbody>
+                  <tr><th>ID</th><td class="mono">${esc(wi.work_item_id)}</td></tr>
+                  <tr><th>Context</th><td class="mono"><a class="link" data-context-id="${esc(wi.context_id)}">${esc(wi.context_id)}</a></td></tr>
+                  <tr><th>Status</th><td>${badge(wi.status)}</td></tr>
+                  <tr><th>Priority</th><td>${esc(wi.priority)}</td></tr>
+                  <tr><th>Retries</th><td>${esc(wi.retry_count)}</td></tr>
+                  <tr><th>Revision</th><td class="mono">${esc(wi.opened_for_revision_id)}</td></tr>
+                  <tr><th>Created</th><td>${fmtDate(wi.created_at)}</td></tr>
+                  <tr><th>Updated</th><td>${fmtDate(wi.updated_at)}</td></tr>
+                  ${timeline.superseded_by ? `<tr><th>Superseded by</th><td class="mono"><a class="link" data-work-item-id="${esc(timeline.superseded_by)}">${esc(timeline.superseded_by)}</a></td></tr>` : ''}
+                </tbody>
+              </table>
+            ` : '<div class="empty">Work item not found.</div>'}
+          </div>
+          <div class="card">
+            <h3>Context facts (${esc(facts.length)})</h3>
+            ${facts.length ? `
+              <table>
+                <thead><tr><th>Fact ID</th><th>Type</th><th>Source</th></tr></thead>
+                <tbody>
+                  ${facts.map(f => `
+                    <tr>
+                      <td class="mono truncate"><a class="link" data-fact-id="${esc(f.fact_id)}">${esc(f.fact_id)}</a></td>
+                      <td>${esc(f.fact_type)}</td>
+                      <td class="mono">${esc(f.source_id)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            ` : '<div class="empty">No context facts.</div>'}
+          </div>
+          <div class="card">
+            <h3>Execution attempts (${esc(executions.length)})</h3>
+            ${executions.length ? `
+              <table>
+                <thead><tr><th>Attempt ID</th><th>Intent ID</th><th>Status</th><th>Started</th><th>Completed</th></tr></thead>
+                <tbody>
+                  ${executions.map(e => `
+                    <tr>
+                      <td class="mono truncate">${esc(e.attempt_id)}</td>
+                      <td class="mono truncate">${esc(e.intent_id)}</td>
+                      <td>${badge(e.status)}</td>
+                      <td>${fmtDate(e.started_at)}</td>
+                      <td>${fmtDate(e.completed_at)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            ` : '<div class="empty">No executions.</div>'}
+          </div>
+          <div class="card">
+            <h3>Decisions (${esc(decisions.length)})</h3>
+            ${decisions.length ? `
+              <table>
+                <thead><tr><th>Decision ID</th><th>Action</th><th>Decided at</th></tr></thead>
+                <tbody>
+                  ${decisions.map(d => `
+                    <tr>
+                      <td class="mono truncate">${esc(d.decision_id)}</td>
+                      <td class="mono">${esc(d.approved_action)}</td>
+                      <td>${fmtDate(d.decided_at)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            ` : '<div class="empty">No decisions.</div>'}
+          </div>
+        `;
+        bindDetailLinks();
+        $("statusText").textContent = `Scope: ${esc(currentScope)} · work item · ${esc(workItemId)}`;
+      } catch (err) {
+        if (err.name !== "AbortError") setError(err);
+      }
+    }
+
+    window.restoreDetailState = function restoreDetailState() {
+      if (detailState) {
+        currentPage = detailState.returnPage || 'overview';
+        detailState = null;
+        $$('nav menu li a').forEach(a => {
+          a.classList.toggle('active', a.dataset.page === currentPage);
+        });
+        loadPage();
+      } else {
+        currentPage = 'overview';
+        $$('nav menu li a').forEach(a => a.classList.remove('active'));
+        document.querySelector('nav menu li a[data-page="overview"]').classList.add('active');
+        loadPage();
+      }
+    };
+
+    async function loadPage() {
+      if (!currentScope) {
+        $("content").innerHTML = '<div class="empty">Select a scope to begin.</div>';
+        return;
+      }
+      if (abortController) abortController.abort();
+      abortController = new AbortController();
+      setLoading();
+      try {
+        const map = {
+          overview: loadOverview,
+          timeline: loadTimeline,
+          facts: loadFacts,
+          contexts: loadContexts,
+          work: loadWork,
+          intents: loadIntents,
+          executions: loadExecutions,
+          workers: loadWorkers,
+          failures: loadFailures,
+        };
+        await map[currentPage]();
+        $("statusText").textContent = `Scope: ${esc(currentScope)} · ${esc(currentPage)}`;
+      } catch (err) {
+        if (err.name !== "AbortError") setError(err);
+      }
+    }
+
+    $("scopeSelect").addEventListener("change", (e) => {
+      currentScope = e.target.value;
+      loadPage();
+    });
+
+    $("refreshBtn").addEventListener("click", () => loadPage());
+
+    $("searchInput").addEventListener("input", () => {
+      if (currentScope) loadPage();
+    });
+
+    $$("nav menu li a").forEach(a => {
+      a.addEventListener("click", (e) => {
+        e.preventDefault();
+        currentPage = a.dataset.page;
+        $$("nav menu li a").forEach(x => x.classList.remove("active"));
+        a.classList.add("active");
+        loadPage();
+      });
+    });
+
+    loadScopes();
+  </script>
+</body>
+</html>

@@ -221,10 +221,10 @@ describe("generalized work object model", () => {
 
     // Either opened (superseded + new) or nooped — total count per context must not grow unbounded
     const mailWorkItems = db
-      .prepare("select * from work_items where conversation_id = ?")
+      .prepare("select * from work_items where context_id = ?")
       .all("conv-replay") as Array<Record<string, unknown>>;
     const timerWorkItems = db
-      .prepare("select * from work_items where conversation_id = ?")
+      .prepare("select * from work_items where context_id = ?")
       .all("timer:timer-replay") as Array<Record<string, unknown>>;
 
     expect(mailWorkItems.length).toBeGreaterThanOrEqual(1);

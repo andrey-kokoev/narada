@@ -131,10 +131,10 @@ export class DefaultForemanFacade implements ForemanFacade {
           });
           this.closeSessionForWorkItem(activeWorkItem.work_item_id, "superseded", context.synced_at);
           this.handoff.cancelUnsentCommandsForThread(contextId, "superseded_by_new_revision");
-          const newWorkItem = this.openWorkItem(contextId, scopeId, makeRevisionId(contextId, ordinal), context.synced_at);
+          const newWorkItem = this.openWorkItem(context);
           result.superseded.push({
             work_item_id: activeWorkItem.work_item_id,
-            context_id: contextId,
+            context_id: context.context_id,
             new_work_item_id: newWorkItem.work_item_id,
           });
           result.opened.push({
@@ -148,7 +148,7 @@ export class DefaultForemanFacade implements ForemanFacade {
       } else {
         // No active work item — open one if change is relevant
         if (this.isChangeRelevant(context)) {
-          const newWorkItem = this.openWorkItem(contextId, scopeId, makeRevisionId(contextId, ordinal), context.synced_at);
+          const newWorkItem = this.openWorkItem(context);
           result.opened.push({
             work_item_id: newWorkItem.work_item_id,
             context_id: contextId,
@@ -173,7 +173,7 @@ export class DefaultForemanFacade implements ForemanFacade {
     }
 
     if (workItem.status === "resolved") {
-      const decisions = this.deps.coordinatorStore.getDecisionsByConversation(workItem.context_id, workItem.scope_id);
+      const decisions = this.deps.coordinatorStore.getDecisionsByContext(workItem.context_id, workItem.scope_id);
       const materialized = decisions.find((d) => d.outbound_id !== null);
       if (materialized?.outbound_id) {
         return {
@@ -261,8 +261,8 @@ export class DefaultForemanFacade implements ForemanFacade {
       if (!existingDecision) {
         this.deps.coordinatorStore.insertDecision({
           decision_id: decisionId,
-          conversation_id: workItem.context_id,
-          mailbox_id: workItem.scope_id,
+          context_id: workItem.context_id,
+          scope_id: workItem.scope_id,
           source_charter_ids_json: JSON.stringify([evaluation.charter_id]),
           approved_action: "escalate_to_human",
           payload_json: JSON.stringify({ reason: evaluation.escalations[0]?.reason ?? "escalation" }),
@@ -345,8 +345,8 @@ export class DefaultForemanFacade implements ForemanFacade {
       if (!existingDecision) {
         this.deps.coordinatorStore.insertDecision({
           decision_id: decisionId,
-          conversation_id: workItem.context_id,
-          mailbox_id: workItem.scope_id,
+          context_id: workItem.context_id,
+          scope_id: workItem.scope_id,
           source_charter_ids_json: JSON.stringify([evaluation.charter_id]),
           approved_action: "escalate_to_human",
           payload_json: JSON.stringify({ reason: governance.reason }),
@@ -384,8 +384,8 @@ export class DefaultForemanFacade implements ForemanFacade {
       if (!existingDecision) {
         this.deps.coordinatorStore.insertDecision({
           decision_id: decisionId,
-          conversation_id: workItem.context_id,
-          mailbox_id: workItem.scope_id,
+          context_id: workItem.context_id,
+          scope_id: workItem.scope_id,
           source_charter_ids_json: JSON.stringify([evaluation.charter_id]),
           approved_action: "pending_approval",
           payload_json: JSON.stringify({ reason: governance.reason }),
@@ -420,8 +420,8 @@ export class DefaultForemanFacade implements ForemanFacade {
       if (!existingDecision) {
         this.deps.coordinatorStore.insertDecision({
           decision_id: decisionId,
-          conversation_id: workItem.context_id,
-          mailbox_id: workItem.scope_id,
+          context_id: workItem.context_id,
+          scope_id: workItem.scope_id,
           source_charter_ids_json: JSON.stringify([evaluation.charter_id]),
           approved_action: action.action_type,
           payload_json: action.payload_json,
@@ -443,7 +443,7 @@ export class DefaultForemanFacade implements ForemanFacade {
     const chosenAction = governance.governed_action!;
 
     // Persist evaluation first (outside the main tx to keep it simple, but could be inside)
-    this.persistEvaluation(evaluation);
+    this.persistEvaluation(evaluation, workItem.scope_id);
 
     // Atomic handoff transaction
     const now = new Date().toISOString();
@@ -466,8 +466,8 @@ export class DefaultForemanFacade implements ForemanFacade {
         if (!existingDecision) {
           this.deps.coordinatorStore.insertDecision({
             decision_id: decisionId,
-            conversation_id: workItem.context_id,
-            mailbox_id: workItem.scope_id,
+            context_id: workItem.context_id,
+            scope_id: workItem.scope_id,
             source_charter_ids_json: JSON.stringify([evaluation.charter_id]),
             approved_action: chosenAction.action_type,
             payload_json: chosenAction.payload_json,
@@ -480,8 +480,8 @@ export class DefaultForemanFacade implements ForemanFacade {
 
         const obId = this.handoff.admitIntentFromDecision({
           decision_id: decisionId,
-          conversation_id: workItem.context_id,
-          mailbox_id: workItem.scope_id,
+          context_id: workItem.context_id,
+          scope_id: workItem.scope_id,
           source_charter_ids_json: JSON.stringify([evaluation.charter_id]),
           approved_action: chosenAction.action_type,
           payload_json: chosenAction.payload_json,
@@ -552,28 +552,29 @@ export class DefaultForemanFacade implements ForemanFacade {
     };
   }
 
-  private openWorkItem(contextId: string, scopeId: string, revisionId: string, syncedAt: string): WorkItem {
+  private openWorkItem(context: PolicyContext): WorkItem {
     const workItemId = `wi_${randomUUID()}`;
-    const now = syncedAt;
+    const now = context.synced_at;
     const item: WorkItem = {
       work_item_id: workItemId,
-      context_id: contextId,
-      scope_id: scopeId,
+      context_id: context.context_id,
+      scope_id: context.scope_id,
       status: "opened",
       priority: 0,
-      opened_for_revision_id: revisionId,
+      opened_for_revision_id: context.revision_id,
       resolved_revision_id: null,
       resolution_outcome: null,
       error_message: null,
       retry_count: 0,
       next_retry_at: null,
+      context_json: JSON.stringify(context),
       created_at: now,
       updated_at: now,
     };
     this.deps.coordinatorStore.insertWorkItem(item);
     this.deps.coordinatorStore.insertAgentSession({
       session_id: `sess_${randomUUID()}`,
-      context_id: contextId,
+      context_id: context.context_id,
       work_item_id: workItemId,
       started_at: now,
       ended_at: null,
@@ -615,7 +616,7 @@ export class DefaultForemanFacade implements ForemanFacade {
     return context.change_kinds.some((k) => k !== "draft_observed");
   }
 
-  private persistEvaluation(evaluation: EvaluationEnvelope): void {
+  private persistEvaluation(evaluation: EvaluationEnvelope, scopeId: string): void {
     const existing = this.deps.coordinatorStore.getEvaluationByExecutionId(evaluation.execution_id);
     if (existing) {
       return;
@@ -624,7 +625,8 @@ export class DefaultForemanFacade implements ForemanFacade {
       evaluation_id: evaluation.evaluation_id,
       execution_id: evaluation.execution_id,
       work_item_id: evaluation.work_item_id,
-      conversation_id: evaluation.conversation_id,
+      context_id: evaluation.context_id,
+      scope_id: scopeId,
       charter_id: evaluation.charter_id,
       role: evaluation.role,
       output_version: evaluation.output_version,

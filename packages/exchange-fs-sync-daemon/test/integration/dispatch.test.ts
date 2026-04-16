@@ -176,7 +176,7 @@ describe("daemon dispatch phase integration", { timeout: 30000 }, () => {
     const store = new SqliteCoordinatorStore({ db });
 
     const workItems = store.db
-      .prepare("select * from work_items where conversation_id = ?")
+      .prepare("select * from work_items where context_id = ?")
       .all(conversationId) as Array<Record<string, unknown>>;
 
     expect(workItems.length).toBeGreaterThanOrEqual(1);

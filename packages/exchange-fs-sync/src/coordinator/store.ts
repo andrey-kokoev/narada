@@ -63,8 +63,8 @@ function rowToConversationRecord(row: Record<string, unknown>): ConversationReco
 function rowToWorkItem(row: Record<string, unknown>): WorkItem {
   return {
     work_item_id: String(row.work_item_id),
-    context_id: String(row.conversation_id),
-    scope_id: String(row.mailbox_id),
+    context_id: String(row.context_id),
+    scope_id: String(row.scope_id),
     status: String(row.status) as WorkItemStatus,
     priority: Number(row.priority),
     opened_for_revision_id: String(row.opened_for_revision_id),
@@ -75,6 +75,7 @@ function rowToWorkItem(row: Record<string, unknown>): WorkItem {
     error_message: row.error_message ? String(row.error_message) : null,
     retry_count: Number(row.retry_count ?? 0),
     next_retry_at: row.next_retry_at ? String(row.next_retry_at) : null,
+    context_json: row.context_json ? String(row.context_json) : null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
   };
@@ -112,7 +113,7 @@ function rowToExecutionAttempt(row: Record<string, unknown>): ExecutionAttempt {
 function rowToAgentSession(row: Record<string, unknown>): AgentSession {
   return {
     session_id: String(row.session_id),
-    context_id: String(row.conversation_id),
+    context_id: String(row.context_id),
     work_item_id: String(row.work_item_id ?? ''),
     started_at: String(row.started_at),
     ended_at: row.ended_at ? String(row.ended_at) : null,
@@ -127,7 +128,8 @@ function rowToEvaluation(row: Record<string, unknown>): Evaluation {
     evaluation_id: String(row.evaluation_id),
     execution_id: String(row.execution_id),
     work_item_id: String(row.work_item_id),
-    conversation_id: String(row.conversation_id),
+    context_id: String(row.context_id),
+    scope_id: String(row.scope_id),
     charter_id: String(row.charter_id),
     role: String(row.role) as Evaluation["role"],
     output_version: String(row.output_version),
@@ -145,8 +147,8 @@ function rowToEvaluation(row: Record<string, unknown>): Evaluation {
 function rowToCharterOutput(row: Record<string, unknown>): CharterOutputRow {
   return {
     output_id: String(row.output_id),
-    conversation_id: String(row.conversation_id),
-    mailbox_id: String(row.mailbox_id),
+    context_id: String(row.context_id),
+    scope_id: String(row.scope_id),
     charter_id: String(row.charter_id),
     role: String(row.role) as CharterOutputRow["role"],
     output_version: String(row.output_version),
@@ -164,8 +166,8 @@ function rowToCharterOutput(row: Record<string, unknown>): CharterOutputRow {
 function rowToForemanDecision(row: Record<string, unknown>): ForemanDecisionRow {
   return {
     decision_id: String(row.decision_id),
-    conversation_id: String(row.conversation_id),
-    mailbox_id: String(row.mailbox_id),
+    context_id: String(row.context_id),
+    scope_id: String(row.scope_id),
     source_charter_ids_json: String(row.source_charter_ids_json),
     approved_action: String(row.approved_action),
     payload_json: String(row.payload_json),
@@ -191,7 +193,7 @@ function rowToToolCallRecord(row: Record<string, unknown>): ToolCallRecord {
     call_id: String(row.call_id),
     execution_id: String(row.execution_id),
     work_item_id: String(row.work_item_id),
-    context_id: String(row.conversation_id),
+    context_id: String(row.context_id),
     tool_id: String(row.tool_id),
     request_args_json: String(row.request_args_json),
     exit_status: String(row.exit_status) as ToolCallStatus,
@@ -279,8 +281,8 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
       -- v2 work_items (terminal schedulable unit)
       create table if not exists work_items (
         work_item_id text primary key,
-        conversation_id text not null,
-        mailbox_id text not null,
+        context_id text not null,
+        scope_id text not null,
         status text not null default 'opened',
         priority integer not null default 0,
         opened_for_revision_id text not null,
@@ -289,18 +291,19 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
         error_message text,
         retry_count integer not null default 0,
         next_retry_at text,
+        context_json text,
         created_at text not null default (datetime('now')),
         updated_at text not null default (datetime('now')),
-        foreign key (conversation_id) references conversation_records(conversation_id)
+        foreign key (context_id) references conversation_records(conversation_id)
           on delete cascade
       );
 
       create index if not exists idx_work_items_runnable
-        on work_items(conversation_id, status, priority, created_at);
-      create index if not exists idx_work_items_mailbox_status
-        on work_items(mailbox_id, status, updated_at);
+        on work_items(context_id, status, priority, created_at);
+      create index if not exists idx_work_items_scope_status
+        on work_items(scope_id, status, updated_at);
       create index if not exists idx_work_items_retry
-        on work_items(mailbox_id, status, next_retry_at);
+        on work_items(scope_id, status, next_retry_at);
 
       -- v2 work_item_leases (crash-safe scheduling)
       create table if not exists work_item_leases (
@@ -346,7 +349,8 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
         evaluation_id text primary key,
         execution_id text not null unique,
         work_item_id text not null,
-        conversation_id text not null,
+        context_id text not null,
+        scope_id text not null,
         charter_id text not null,
         role text not null check (role in ('primary', 'secondary')),
         output_version text not null,
@@ -361,18 +365,20 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
         foreign key (execution_id) references execution_attempts(execution_id)
           on delete cascade,
         foreign key (work_item_id) references work_items(work_item_id)
+          on delete cascade,
+        foreign key (context_id) references conversation_records(conversation_id)
           on delete cascade
       );
 
-      create index if not exists idx_evaluations_conversation
-        on evaluations(conversation_id, analyzed_at);
+      create index if not exists idx_evaluations_context
+        on evaluations(context_id, analyzed_at);
       create index if not exists idx_evaluations_work_item
         on evaluations(work_item_id, analyzed_at);
 
       create table if not exists charter_outputs (
         output_id text primary key,
-        conversation_id text not null,
-        mailbox_id text not null,
+        context_id text not null,
+        scope_id text not null,
         charter_id text not null,
         role text not null,
         output_version text not null,
@@ -384,20 +390,20 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
         proposed_actions_json text not null default '[]',
         tool_requests_json text not null default '[]',
         created_at text not null,
-        foreign key (conversation_id) references conversation_records(conversation_id)
+        foreign key (context_id) references conversation_records(conversation_id)
           on delete cascade
       );
 
-      create index if not exists idx_charter_outputs_thread
-        on charter_outputs(conversation_id, mailbox_id, analyzed_at desc);
+      create index if not exists idx_charter_outputs_context
+        on charter_outputs(context_id, scope_id, analyzed_at desc);
 
       create index if not exists idx_charter_outputs_charter
         on charter_outputs(charter_id, analyzed_at desc);
 
       create table if not exists foreman_decisions (
         decision_id text primary key,
-        conversation_id text not null,
-        mailbox_id text not null,
+        context_id text not null,
+        scope_id text not null,
         source_charter_ids_json text not null,
         approved_action text not null,
         payload_json text not null,
@@ -405,12 +411,12 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
         decided_at text not null,
         outbound_id text,
         created_by text not null,
-        foreign key (conversation_id) references conversation_records(conversation_id)
+        foreign key (context_id) references conversation_records(conversation_id)
           on delete cascade
       );
 
-      create index if not exists idx_foreman_decisions_thread
-        on foreman_decisions(conversation_id, mailbox_id, decided_at desc);
+      create index if not exists idx_foreman_decisions_context
+        on foreman_decisions(context_id, scope_id, decided_at desc);
 
       create index if not exists idx_foreman_decisions_outbound
         on foreman_decisions(outbound_id);
@@ -429,7 +435,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
 
       create table if not exists agent_sessions (
         session_id text primary key,
-        conversation_id text not null,
+        context_id text not null,
         work_item_id text not null,
         started_at text not null,
         ended_at text,
@@ -438,8 +444,8 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
         resume_hint text
       );
 
-      create index if not exists idx_agent_sessions_conversation
-        on agent_sessions(conversation_id);
+      create index if not exists idx_agent_sessions_context
+        on agent_sessions(context_id);
 
       create index if not exists idx_agent_sessions_work_item
         on agent_sessions(work_item_id);
@@ -448,7 +454,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
         call_id text primary key,
         execution_id text not null,
         work_item_id text not null,
-        conversation_id text not null,
+        context_id text not null,
         tool_id text not null,
         request_args_json text not null default '{}',
         exit_status text not null default 'pending',
@@ -473,6 +479,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
 
     this.migrateThreadRecordsToConversationRecords();
     this.migrateAgentSessionsSchema();
+    this.migrateWorkItemsContextJson();
   }
 
   private migrateAgentSessionsSchema(): void {
@@ -488,6 +495,14 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     }
     if (!names.has('resume_hint')) {
       this.db.prepare(`alter table agent_sessions add column resume_hint text`).run();
+    }
+  }
+
+  private migrateWorkItemsContextJson(): void {
+    const columns = this.db.prepare(`pragma table_info(work_items)`).all() as Array<{ name: string }>;
+    const names = new Set(columns.map((c) => c.name));
+    if (!names.has('context_json')) {
+      this.db.prepare(`alter table work_items add column context_json text`).run();
     }
   }
 
@@ -630,10 +645,10 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
   insertWorkItem(item: WorkItem): void {
     this.db.prepare(`
       insert into work_items (
-        work_item_id, conversation_id, mailbox_id, status, priority,
+        work_item_id, context_id, scope_id, status, priority,
         opened_for_revision_id, resolved_revision_id, resolution_outcome,
-        error_message, retry_count, next_retry_at, created_at, updated_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        error_message, retry_count, next_retry_at, context_json, created_at, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       item.work_item_id,
       item.context_id,
@@ -646,6 +661,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
       item.error_message,
       item.retry_count,
       item.next_retry_at,
+      item.context_json,
       item.created_at,
       item.updated_at,
     );
@@ -700,7 +716,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
   getActiveWorkItemForContext(contextId: string): WorkItem | undefined {
     const row = this.db.prepare(`
       select * from work_items
-      where conversation_id = ? and status in ('opened', 'leased', 'executing')
+      where context_id = ? and status in ('opened', 'leased', 'executing')
       order by created_at desc
       limit 1
     `).get(contextId) as Record<string, unknown> | undefined;
@@ -710,7 +726,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
   getLatestWorkItemForContext(contextId: string): WorkItem | undefined {
     const row = this.db.prepare(`
       select * from work_items
-      where conversation_id = ?
+      where context_id = ?
       order by created_at desc
       limit 1
     `).get(contextId) as Record<string, unknown> | undefined;
@@ -865,15 +881,16 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
   insertEvaluation(evaluation: Evaluation): void {
     this.db.prepare(`
       insert into evaluations (
-        evaluation_id, execution_id, work_item_id, conversation_id, charter_id, role,
+        evaluation_id, execution_id, work_item_id, context_id, scope_id, charter_id, role,
         output_version, analyzed_at, summary, classifications_json, facts_json,
         escalations_json, proposed_actions_json, tool_requests_json, created_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       evaluation.evaluation_id,
       evaluation.execution_id,
       evaluation.work_item_id,
-      evaluation.conversation_id,
+      evaluation.context_id,
+      evaluation.scope_id,
       evaluation.charter_id,
       evaluation.role,
       evaluation.output_version,
@@ -905,14 +922,14 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
   insertCharterOutput(output: CharterOutputRow): void {
     this.db.prepare(`
       insert into charter_outputs (
-        output_id, conversation_id, mailbox_id, charter_id, role, output_version,
+        output_id, context_id, scope_id, charter_id, role, output_version,
         analyzed_at, summary, classifications_json, facts_json, escalations_json,
         proposed_actions_json, tool_requests_json, created_at
       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       output.output_id,
-      output.conversation_id,
-      output.mailbox_id,
+      output.context_id,
+      output.scope_id,
       output.charter_id,
       output.role,
       output.output_version,
@@ -927,12 +944,12 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     );
   }
 
-  getOutputsByConversation(conversationId: string, mailboxId: string): CharterOutputRow[] {
+  getOutputsByContext(contextId: string, scopeId: string): CharterOutputRow[] {
     const rows = this.db.prepare(`
       select * from charter_outputs
-      where conversation_id = ? and mailbox_id = ?
+      where context_id = ? and scope_id = ?
       order by analyzed_at desc
-    `).all(conversationId, mailboxId) as Record<string, unknown>[];
+    `).all(contextId, scopeId) as Record<string, unknown>[];
     return rows.map(rowToCharterOutput);
   }
 
@@ -944,13 +961,13 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     }
     this.db.prepare(`
       insert into foreman_decisions (
-        decision_id, conversation_id, mailbox_id, source_charter_ids_json,
+        decision_id, context_id, scope_id, source_charter_ids_json,
         approved_action, payload_json, rationale, decided_at, outbound_id, created_by
       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       decision.decision_id,
-      decision.conversation_id,
-      decision.mailbox_id,
+      decision.context_id,
+      decision.scope_id,
       decision.source_charter_ids_json,
       decision.approved_action,
       decision.payload_json,
@@ -961,12 +978,12 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     );
   }
 
-  getDecisionsByConversation(conversationId: string, mailboxId: string): ForemanDecisionRow[] {
+  getDecisionsByContext(contextId: string, scopeId: string): ForemanDecisionRow[] {
     const rows = this.db.prepare(`
       select * from foreman_decisions
-      where conversation_id = ? and mailbox_id = ?
+      where context_id = ? and scope_id = ?
       order by decided_at desc
-    `).all(conversationId, mailboxId) as Record<string, unknown>[];
+    `).all(contextId, scopeId) as Record<string, unknown>[];
     return rows.map(rowToForemanDecision);
   }
 
@@ -1007,7 +1024,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
   insertToolCallRecord(record: ToolCallRecord): void {
     this.db.prepare(`
       insert into tool_call_records (
-        call_id, execution_id, work_item_id, conversation_id, tool_id,
+        call_id, execution_id, work_item_id, context_id, tool_id,
         request_args_json, exit_status, stdout, stderr, structured_output_json,
         started_at, completed_at, duration_ms
       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1086,7 +1103,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
   insertAgentSession(session: AgentSession): void {
     this.db.prepare(`
       insert into agent_sessions (
-        session_id, conversation_id, work_item_id, started_at, ended_at, updated_at, status, resume_hint
+        session_id, context_id, work_item_id, started_at, ended_at, updated_at, status, resume_hint
       ) values (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       session.session_id,
@@ -1115,7 +1132,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
 
   getSessionsForContext(contextId: string): AgentSession[] {
     const rows = this.db.prepare(`
-      select * from agent_sessions where conversation_id = ? order by started_at desc
+      select * from agent_sessions where context_id = ? order by started_at desc
     `).all(contextId) as Record<string, unknown>[];
     return rows.map(rowToAgentSession);
   }
@@ -1127,7 +1144,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
       sql = `
         select s.* from agent_sessions s
         join work_items wi on wi.work_item_id = s.work_item_id
-        where wi.mailbox_id = ? and s.status in ('opened', 'idle', 'active')
+        where wi.scope_id = ? and s.status in ('opened', 'idle', 'active')
         order by s.updated_at desc
       `;
       params = [scopeId];

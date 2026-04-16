@@ -21,7 +21,7 @@ function makeEvaluation(overrides?: Partial<EvaluationEnvelope>): EvaluationEnve
     evaluation_id: "eval-1",
     execution_id: "ex-1",
     work_item_id: "wi-1",
-    conversation_id: "conv-1",
+    context_id: "conv-1",
     charter_id: "support_steward",
     role: "primary",
     output_version: "2.0",

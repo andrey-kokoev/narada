@@ -7,18 +7,14 @@ function makeInvocation(overrides?: Partial<CharterInvocationEnvelope>): Charter
     invocation_version: "2.0",
     execution_id: "ex-1",
     work_item_id: "wi-1",
-    conversation_id: "conv-1",
-    mailbox_id: "mb-1",
+    context_id: "conv-1",
+    scope_id: "mb-1",
     charter_id: "support_steward",
     role: "primary",
     invoked_at: new Date().toISOString(),
     revision_id: "conv-1:rev:1",
-    thread_context: {
-      conversation_id: "conv-1",
-      mailbox_id: "mb-1",
-      revision_id: "conv-1:rev:1",
-      messages: [],
-    },
+    context_materialization: { messages: [] },
+    vertical_hints: { vertical: "mail" },
     allowed_actions: ["send_reply"],
     available_tools: [],
     coordinator_flags: [],
@@ -98,7 +94,7 @@ describe("CodexCharterRunner", () => {
     expect(traces).toHaveLength(1);
     expect((traces[0] as { reasoning_log?: string }).reasoning_log).toBe("thinking...");
     expect((traces[0] as { execution_id: string }).execution_id).toBe("ex-1");
-    expect((traces[0] as { conversation_id: string }).conversation_id).toBe("conv-1");
+    expect((traces[0] as { context_id: string }).context_id).toBe("conv-1");
     expect((traces[0] as { work_item_id: string }).work_item_id).toBe("wi-1");
     expect((traces[0] as { charter_id: string }).charter_id).toBe("support_steward");
   });

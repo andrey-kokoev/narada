@@ -9,7 +9,6 @@ export {
   validateConfigOrThrow,
   isValidConfig,
   type ConfigSchemaType,
-  type ValidationResult,
 } from "./config/schema.js";
 export type {
   Checkpoint,
@@ -35,6 +34,16 @@ export type {
   WebhookEventQueue,
   WebhookQueueRecord,
 } from "./sources/webhook-source.js";
+export {
+  FilesystemSource,
+  InMemoryFilesystemEventQueue,
+} from "./sources/filesystem-source.js";
+export type {
+  FilesystemSourceOptions,
+  FilesystemChangePayload,
+  FilesystemEventQueue,
+  FilesystemQueueRecord,
+} from "./sources/filesystem-source.js";
 export { GraphHttpClient } from "./adapter/graph/client.js";
 export { GraphDeltaWalker } from "./adapter/graph/delta.js";
 export {
@@ -61,6 +70,8 @@ export { normalizeFolderRef, normalizeFlagged } from "./adapter/graph/scope.js";
 export { MockGraphAdapter, createMockAdapter } from "./adapter/graph/mock-adapter.js";
 export { normalizeBatch } from "./normalize/batch.js";
 export { DefaultSyncRunner } from "./runner/sync-once.js";
+export { MultiSourceSyncRunner } from "./runner/multi-source-sync.js";
+export { ScopeCursorStore } from "./persistence/scope-cursor.js";
 export { FileCursorStore } from "./persistence/cursor.js";
 export { FileApplyLogStore } from "./persistence/apply-log.js";
 export { DefaultProjector, applyEvent } from "./projector/apply-event.js";
@@ -122,6 +133,7 @@ export {
   MailboxContextStrategy,
   TimerContextStrategy,
   WebhookContextStrategy,
+  FilesystemContextStrategy,
 } from "./foreman/context.js";
 export type {
   ForemanFacade,
@@ -201,11 +213,34 @@ export {
 export type { MailLifecycleQueryDeps } from "./executors/mail-lifecycle.js";
 export { ExecutionCoordinator } from "./executors/coordinator.js";
 export type { ExecutionCoordinatorDeps } from "./executors/coordinator.js";
+export {
+  ProcessConfirmationResolver,
+  MailConfirmationResolver,
+  CompositeConfirmationResolver,
+} from "./executors/confirmation.js";
+export type {
+  ConfirmationResolver,
+  ProcessConfirmationResolverDeps,
+  MailConfirmationResolverDeps,
+  CompositeConfirmationResolverDeps,
+} from "./executors/confirmation.js";
 export { DefaultWorkerRegistry, drainWorker } from "./workers/registry.js";
 export type { WorkerRegistry, RegisteredWorker, WorkerIdentity, WorkerFn, WorkerExecutionResult, ConcurrencyPolicy } from "./workers/index.js";
 export type { IntentStore, SqliteIntentStoreOptions, SqliteIntentStoreDbOptions } from "./intent/store.js";
 export type { Intent, IntentType, IntentStatus } from "./intent/types.js";
 export { IntentHandoff } from "./intent/handoff.js";
+export {
+  getIntentFamily,
+  validateIntent,
+  assertValidIntent,
+  INTENT_FAMILIES,
+} from "./intent/registry.js";
+export type {
+  IntentFamily,
+  IdempotencyScope,
+  ConfirmationModel,
+  SchemaProperty,
+} from "./intent/registry.js";
 export type { IntentHandoffDeps } from "./intent/handoff.js";
 export type { Fact, FactStore, FactType, FactProvenance } from "./facts/types.js";
 export { buildFactId } from "./ids/fact-id.js";
@@ -331,8 +366,22 @@ export type {
   ControlPlaneStatusSnapshot,
   ProcessExecutionSummary,
   IntentSummary,
+  IntentExecutionSummary,
+  ProcessExecutionDetail,
+  MailExecutionDetail,
+  MailExecutionTransition,
+  IntentLifecycleTransition,
   WorkerStatusObservation,
+  ContextSummary,
+  FactSummary,
+  TimelineEvent,
+  WorkItemTimeline,
+  ContextTimeline,
+  FactTimeline,
   ObservationPlaneSnapshot,
+  LeaseSummary,
+  StaleLeaseRecoveryEvent,
+  QuiescenceIndicator,
 } from "./observability/types.js";
 export {
   OperatorErrorCategory,
@@ -352,8 +401,21 @@ export {
   buildControlPlaneSnapshot,
   getProcessExecutionSummaries,
   getIntentSummaries,
+  getIntentExecutionSummaries,
+  getProcessExecutionDetails,
+  getMailExecutionDetails,
+  getIntentLifecycleTransitions,
   getWorkerStatuses,
+  getRecentFacts,
+  getContextSummaries,
+  getWorkItemTimeline,
+  getContextTimeline,
+  getFactTimeline,
+  getUnifiedTimeline,
   buildObservationPlaneSnapshot,
+  getActiveLeases,
+  getRecentStaleLeaseRecoveries,
+  getQuiescenceIndicator,
 } from "./observability/queries.js";
 export { ObservationPlane } from "./observability/plane.js";
 export type { ObservationPlaneDeps } from "./observability/plane.js";
@@ -511,6 +573,7 @@ export type { SecureRef } from "./config/secure-config.js";
 // Type exports
 export type {
   ExchangeFsSyncConfig,
+  ScopeConfig,
 } from "./config/types.js";
 export type {
   GraphAdapterConfig,
@@ -523,6 +586,7 @@ export type {
   SyncError,
   DetailedSyncResult,
 } from "./runner/sync-once.js";
+export type { MultiSyncOnceDeps } from "./runner/multi-source-sync.js";
 export {
   isSyncSuccess,
   isSyncRetryable,

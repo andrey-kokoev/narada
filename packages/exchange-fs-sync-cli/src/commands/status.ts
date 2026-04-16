@@ -8,6 +8,9 @@ import {
   isMultiMailboxConfig,
   loadMultiMailboxConfig,
   type ControlPlaneStatusSnapshot,
+  type LeaseSummary,
+  type StaleLeaseRecoveryEvent,
+  type QuiescenceIndicator,
 } from '@narada/exchange-fs-sync';
 
 // Lazy-load better-sqlite3 to avoid eager native-module load in test environments
@@ -53,6 +56,11 @@ interface StatusReport {
   health: 'healthy' | 'stale' | 'empty' | 'error';
   message?: string;
   controlPlane?: ControlPlaneStatusSnapshot;
+  operability?: {
+    activeLeases: LeaseSummary[];
+    staleRecoveries: StaleLeaseRecoveryEvent[];
+    quiescence: QuiescenceIndicator;
+  };
 }
 
 export async function statusCommand(
@@ -118,7 +126,7 @@ export async function statusCommand(
     };
   }
 
-  let config: { mailbox_id: string; root_dir: string };
+  let config;
   try {
     config = await loadConfig({ path: configPath });
   } catch (error) {
@@ -132,7 +140,15 @@ export async function statusCommand(
     };
   }
 
-  const report = await buildStatusReport(config.mailbox_id, resolve(config.root_dir));
+  const scope = config.scopes[0];
+  if (!scope) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: { status: 'error', error: 'No scopes configured', health: 'error' },
+    };
+  }
+
+  const report = await buildStatusReport(scope.scope_id, resolve(config.root_dir));
 
   return {
     exitCode: ExitCode.SUCCESS,
@@ -169,6 +185,13 @@ async function buildStatusReport(mailboxId: string, rootDir: string): Promise<St
     const dbStat = await stat(dbPath);
     if (dbStat.isFile()) {
       report.controlPlane = await loadControlPlaneSnapshot(dbPath, mailboxId);
+      if (report.controlPlane) {
+        report.operability = {
+          activeLeases: report.controlPlane.leases.active,
+          staleRecoveries: report.controlPlane.stale_recoveries.recent,
+          quiescence: report.controlPlane.quiescence,
+        };
+      }
     }
   } catch {
     // No control-plane database yet; leave controlPlane undefined

@@ -158,7 +158,7 @@ describe("fact-driven admission", () => {
     expect(allUnadmitted).toHaveLength(0);
 
     const workItems = db
-      .prepare("select * from work_items where conversation_id in (?, ?)")
+      .prepare("select * from work_items where context_id in (?, ?)")
       .all("conv-mail-2", "timer:maintenance") as Array<Record<string, unknown>>;
     expect(workItems).toHaveLength(2);
   });
