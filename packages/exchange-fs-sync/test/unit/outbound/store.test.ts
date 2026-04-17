@@ -44,11 +44,11 @@ describe("SqliteOutboundStore", () => {
 
   describe("active unsent uniqueness", () => {
     it("allows a second active unsent command for same thread+action when idempotency key differs", () => {
-      const cmd1 = createOutboundCommand({ outbound_id: "o1", conversation_id: "t1", action_type: "send_reply" });
+      const cmd1 = createOutboundCommand({ outbound_id: "o1", context_id: "t1", action_type: "send_reply" });
       const ver1 = createOutboundVersion({ outbound_id: "o1", version: 1 });
       store.createCommand(cmd1, ver1);
 
-      const cmd2 = createOutboundCommand({ outbound_id: "o2", conversation_id: "t1", action_type: "send_reply" });
+      const cmd2 = createOutboundCommand({ outbound_id: "o2", context_id: "t1", action_type: "send_reply" });
       const ver2 = createOutboundVersion({ outbound_id: "o2", version: 1 });
 
       expect(() => store.createCommand(cmd2, ver2)).not.toThrow();
@@ -56,11 +56,11 @@ describe("SqliteOutboundStore", () => {
     });
 
     it("silently deduplicates when idempotency key is identical", () => {
-      const cmd1 = createOutboundCommand({ outbound_id: "o1", conversation_id: "t1", action_type: "send_reply", idempotency_key: "shared-key" });
+      const cmd1 = createOutboundCommand({ outbound_id: "o1", context_id: "t1", action_type: "send_reply", idempotency_key: "shared-key" });
       const ver1 = createOutboundVersion({ outbound_id: "o1", version: 1, idempotency_key: "shared-key" });
       store.createCommand(cmd1, ver1);
 
-      const cmd2 = createOutboundCommand({ outbound_id: "o2", conversation_id: "t1", action_type: "send_reply", idempotency_key: "shared-key" });
+      const cmd2 = createOutboundCommand({ outbound_id: "o2", context_id: "t1", action_type: "send_reply", idempotency_key: "shared-key" });
       const ver2 = createOutboundVersion({ outbound_id: "o2", version: 1, idempotency_key: "shared-key" });
 
       expect(() => store.createCommand(cmd2, ver2)).not.toThrow();
@@ -68,22 +68,22 @@ describe("SqliteOutboundStore", () => {
     });
 
     it("allows a new command after the prior one is terminal", () => {
-      const cmd1 = createOutboundCommand({ outbound_id: "o1", conversation_id: "t1", action_type: "send_reply" });
+      const cmd1 = createOutboundCommand({ outbound_id: "o1", context_id: "t1", action_type: "send_reply" });
       const ver1 = createOutboundVersion({ outbound_id: "o1", version: 1 });
       store.createCommand(cmd1, ver1);
 
       store.updateCommandStatus("o1", "confirmed", { confirmed_at: new Date().toISOString() });
 
-      const cmd2 = createOutboundCommand({ outbound_id: "o2", conversation_id: "t1", action_type: "send_reply" });
+      const cmd2 = createOutboundCommand({ outbound_id: "o2", context_id: "t1", action_type: "send_reply" });
       const ver2 = createOutboundVersion({ outbound_id: "o2", version: 1 });
       expect(() => store.createCommand(cmd2, ver2)).not.toThrow();
     });
 
     it("allows different action types on the same thread", () => {
-      const cmd1 = createOutboundCommand({ outbound_id: "o1", conversation_id: "t1", action_type: "send_reply" });
+      const cmd1 = createOutboundCommand({ outbound_id: "o1", context_id: "t1", action_type: "send_reply" });
       store.createCommand(cmd1, createOutboundVersion({ outbound_id: "o1" }));
 
-      const cmd2 = createOutboundCommand({ outbound_id: "o2", conversation_id: "t1", action_type: "mark_read" });
+      const cmd2 = createOutboundCommand({ outbound_id: "o2", context_id: "t1", action_type: "mark_read" });
       expect(() => store.createCommand(cmd2, createOutboundVersion({ outbound_id: "o2" }))).not.toThrow();
     });
   });
@@ -177,10 +177,10 @@ describe("SqliteOutboundStore", () => {
 
   describe("fetchNextEligible", () => {
     it("returns commands in draft_ready status with latest unsuperseded version", () => {
-      const cmd1 = createOutboundCommand({ outbound_id: "o1", mailbox_id: "m1", status: "draft_ready" });
+      const cmd1 = createOutboundCommand({ outbound_id: "o1", scope_id: "m1", status: "draft_ready" });
       store.createCommand(cmd1, createOutboundVersion({ outbound_id: "o1", version: 1 }));
 
-      const cmd2 = createOutboundCommand({ outbound_id: "o2", mailbox_id: "m2", conversation_id: "t2", status: "pending" });
+      const cmd2 = createOutboundCommand({ outbound_id: "o2", scope_id: "m2", context_id: "t2", status: "pending" });
       store.createCommand(cmd2, createOutboundVersion({ outbound_id: "o2", version: 1 }));
 
       const eligible = store.fetchNextEligible();
@@ -189,11 +189,11 @@ describe("SqliteOutboundStore", () => {
       expect(eligible[0]!.version.version).toBe(1);
     });
 
-    it("filters by mailbox_id when provided", () => {
-      const cmd1 = createOutboundCommand({ outbound_id: "o1", mailbox_id: "m1", status: "draft_ready" });
+    it("filters by scope_id when provided", () => {
+      const cmd1 = createOutboundCommand({ outbound_id: "o1", scope_id: "m1", status: "draft_ready" });
       store.createCommand(cmd1, createOutboundVersion({ outbound_id: "o1", version: 1 }));
 
-      const cmd2 = createOutboundCommand({ outbound_id: "o2", mailbox_id: "m2", conversation_id: "t2", status: "draft_ready" });
+      const cmd2 = createOutboundCommand({ outbound_id: "o2", scope_id: "m2", context_id: "t2", status: "draft_ready" });
       store.createCommand(cmd2, createOutboundVersion({ outbound_id: "o2", version: 1 }));
 
       const eligible = store.fetchNextEligible("m2");
@@ -233,19 +233,19 @@ describe("SqliteOutboundStore", () => {
 
   describe("getActiveCommandsForContext", () => {
     it("returns only active unsent commands for the context", () => {
-      const cmd1 = createOutboundCommand({ outbound_id: "o1", conversation_id: "t1", action_type: "send_reply", status: "pending" });
+      const cmd1 = createOutboundCommand({ outbound_id: "o1", context_id: "t1", action_type: "send_reply", status: "pending" });
       store.createCommand(cmd1, createOutboundVersion({ outbound_id: "o1" }));
 
-      const cmd2 = createOutboundCommand({ outbound_id: "o2", conversation_id: "t1", action_type: "mark_read", status: "pending" });
+      const cmd2 = createOutboundCommand({ outbound_id: "o2", context_id: "t1", action_type: "mark_read", status: "pending" });
       store.createCommand(cmd2, createOutboundVersion({ outbound_id: "o2" }));
 
       // Make cmd1 terminal so we can create another send_reply for the same context
       store.updateCommandStatus("o1", "confirmed", { confirmed_at: new Date().toISOString() });
 
-      const cmd3 = createOutboundCommand({ outbound_id: "o3", conversation_id: "t1", action_type: "send_reply", status: "confirmed" });
+      const cmd3 = createOutboundCommand({ outbound_id: "o3", context_id: "t1", action_type: "send_reply", status: "confirmed" });
       store.createCommand(cmd3, createOutboundVersion({ outbound_id: "o3" }));
 
-      const cmd4 = createOutboundCommand({ outbound_id: "o4", conversation_id: "t2", action_type: "send_reply", status: "pending" });
+      const cmd4 = createOutboundCommand({ outbound_id: "o4", context_id: "t2", action_type: "send_reply", status: "pending" });
       store.createCommand(cmd4, createOutboundVersion({ outbound_id: "o4" }));
 
       const active = store.getActiveCommandsForContext("t1");
@@ -256,14 +256,7 @@ describe("SqliteOutboundStore", () => {
       expect(store.getActiveCommandsForContext("no-such-context")).toEqual([]);
     });
 
-    it("compatibility wrapper getActiveCommandsForThread delegates to getActiveCommandsForContext", () => {
-      const cmd = createOutboundCommand({ outbound_id: "o1", conversation_id: "t1", action_type: "send_reply", status: "pending" });
-      store.createCommand(cmd, createOutboundVersion({ outbound_id: "o1" }));
 
-      const viaContext = store.getActiveCommandsForContext("t1");
-      const viaThread = store.getActiveCommandsForThread("t1");
-      expect(viaThread).toEqual(viaContext);
-    });
   });
 
   describe("managed drafts", () => {
@@ -381,8 +374,8 @@ describe("SqliteOutboundStore", () => {
       // Verify read through mailbox compatibility view works
       const cmd = store.getCommand('o1');
       expect(cmd).toBeDefined();
-      expect(cmd!.conversation_id).toBe('c1');
-      expect(cmd!.mailbox_id).toBe('m1');
+      expect(cmd!.context_id).toBe('c1');
+      expect(cmd!.scope_id).toBe('m1');
     });
   });
 });

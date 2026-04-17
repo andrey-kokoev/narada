@@ -161,7 +161,7 @@ describe("daemon policy routing integration", { timeout: 30000 }, () => {
     const db = new Database(dbPath);
     const store = new SqliteCoordinatorStore({ db });
 
-    const record = store.getConversationRecord(conversationId);
+    const record = store.getContextRecord(conversationId);
     expect(record).toBeDefined();
     expect(record!.primary_charter).toBe("obligation_keeper");
 
@@ -265,7 +265,7 @@ describe("daemon policy routing integration", { timeout: 30000 }, () => {
     const db = new Database(dbPath);
     const store = new SqliteCoordinatorStore({ db });
 
-    const record = store.getConversationRecord(conversationId);
+    const record = store.getContextRecord(conversationId);
     expect(record).toBeDefined();
     expect(record!.primary_charter).toBe("support_steward");
 

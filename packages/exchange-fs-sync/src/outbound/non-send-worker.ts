@@ -59,12 +59,12 @@ export class NonSendWorker {
    */
   async processNext(
     actionType: "mark_read" | "move_message" | "set_categories",
-    mailboxId?: string,
+    scopeId?: string,
   ): Promise<{ processed: boolean; outboundId?: string }> {
     const candidates = this.deps.store.fetchNextByStatus(
       actionType,
       ["pending", "draft_ready"],
-      mailboxId,
+      scopeId,
     );
 
     if (candidates.length === 0) {
@@ -113,7 +113,7 @@ export class NonSendWorker {
     this.transition(command.outbound_id, "draft_ready", "sending");
 
     try {
-      const userId = this.deps.resolveUserId(command.mailbox_id);
+      const userId = this.deps.resolveUserId(command.scope_id);
       await this.executeAction(userId, payload, command.action_type);
     } catch (error) {
       logger?.warn("Non-send action execution failed", {

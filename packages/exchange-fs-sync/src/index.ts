@@ -177,11 +177,16 @@ export type { CharterRunner, MockCharterRunnerOptions } from "./charter/index.js
 export {
   buildInvocationEnvelope,
   buildEvaluationRecord,
+  VerticalMaterializerRegistry,
+  TimerContextMaterializer,
+  WebhookContextMaterializer,
+  FilesystemContextMaterializer,
 } from "./charter/index.js";
 export type {
   BuildInvocationEnvelopeDeps,
   BuildInvocationEnvelopeOptions,
   BuildEvaluationRecordOptions,
+  MaterializerFactory,
 } from "./charter/index.js";
 export {
   normalizeMessageForEnvelope,

@@ -174,8 +174,8 @@ describe("OutboundHandoff", () => {
       outboundStore.createCommand(
         {
           outbound_id: "ob_fd-1",
-          conversation_id: "ctx-1",
-          mailbox_id: "mb-1",
+          context_id: "ctx-1",
+          scope_id: "mb-1",
           action_type: "send_reply",
           status: "pending",
           latest_version: 1,
@@ -219,8 +219,8 @@ describe("OutboundHandoff", () => {
       outboundStore.createCommand(
         {
           outbound_id: "o1",
-          conversation_id: "ctx-1",
-          mailbox_id: "mb-1",
+          context_id: "ctx-1",
+          scope_id: "mb-1",
           action_type: "send_reply",
           status: "pending",
           latest_version: 1,
@@ -253,8 +253,8 @@ describe("OutboundHandoff", () => {
       outboundStore.createCommand(
         {
           outbound_id: "o2",
-          conversation_id: "ctx-1",
-          mailbox_id: "mb-1",
+          context_id: "ctx-1",
+          scope_id: "mb-1",
           action_type: "mark_read",
           status: "confirmed",
           latest_version: 1,

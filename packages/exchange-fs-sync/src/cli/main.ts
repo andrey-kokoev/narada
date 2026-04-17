@@ -100,7 +100,7 @@ async function main() {
   // Create persistence stores
   const cursorStore = new FileCursorStore({
     rootDir,
-    mailboxId: scope.scope_id,
+    scopeId: scope.scope_id,
   });
 
   const applyLogStore = new FileApplyLogStore({ rootDir });

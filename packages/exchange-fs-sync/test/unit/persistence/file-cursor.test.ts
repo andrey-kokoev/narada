@@ -6,7 +6,7 @@ describe('FileCursorStore', () => {
   it('reads null when cursor does not exist', async () => {
     const store = new FileCursorStore({
       rootDir: '/test/data',
-      mailboxId: 'test@example.com',
+      scopeId: 'test@example.com',
     });
 
     const cursor = await store.read();
@@ -18,7 +18,7 @@ describe('FileCursorStore', () => {
 
     const store = new FileCursorStore({
       rootDir: '/test/data',
-      mailboxId: 'test@example.com',
+      scopeId: 'test@example.com',
     });
 
     await store.commit('test-cursor-123');
@@ -34,7 +34,7 @@ describe('FileCursorStore', () => {
 
     const store = new FileCursorStore({
       rootDir: '/test/data',
-      mailboxId: 'test@example.com',
+      scopeId: 'test@example.com',
     });
 
     await store.commit('new-cursor');
@@ -48,14 +48,14 @@ describe('FileCursorStore', () => {
 
     const store = new FileCursorStore({
       rootDir: '/test/data',
-      mailboxId: 'test@example.com',
+      scopeId: 'test@example.com',
     });
 
     await store.commit('cursor-data');
 
     const stored = vol.readFileSync('/test/data/state/cursor.json', 'utf8');
     expect(JSON.parse(stored)).toMatchObject({
-      mailbox_id: 'test@example.com',
+      scope_id: 'test@example.com',
       committed_cursor: 'cursor-data',
     });
   });
@@ -65,7 +65,7 @@ describe('FileCursorStore', () => {
 
     const store = new FileCursorStore({
       rootDir: '/test/data',
-      mailboxId: 'test@example.com',
+      scopeId: 'test@example.com',
     });
 
     // Simulate concurrent writes

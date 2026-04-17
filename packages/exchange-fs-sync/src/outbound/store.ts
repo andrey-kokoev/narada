@@ -80,8 +80,8 @@ export interface SqliteOutboundStoreDbOptions {
 function rowToCommand(row: Record<string, unknown>): OutboundCommand {
   return {
     outbound_id: String(row.outbound_id),
-    conversation_id: String(row.conversation_id ?? row.context_id),
-    mailbox_id: String(row.mailbox_id ?? row.scope_id),
+    context_id: String(row.context_id),
+    scope_id: String(row.scope_id),
     action_type: String(row.action_type) as OutboundCommand["action_type"],
     status: String(row.status) as OutboundStatus,
     latest_version: Number(row.latest_version),
@@ -134,7 +134,7 @@ function rowToManagedDraft(row: Record<string, unknown>): ManagedDraft {
 /**
  * SQLite-backed implementation of the outbound store.
  *
- * Uniqueness of at most one active unsent command per (conversation_id, action_type)
+ * Uniqueness of at most one active unsent command per (context_id, action_type)
  * is enforced at the application level inside a transaction. This is preferred
  * over a partial unique index because the "active unsent" status set may
  * evolve, and we want explicit error messages and the ability to supersede.
@@ -347,8 +347,8 @@ export class SqliteOutboundStore implements OutboundStore {
 
       insertCmd.run(
         command.outbound_id,
-        command.conversation_id,
-        command.mailbox_id,
+        command.context_id,
+        command.scope_id,
         command.action_type,
         command.status,
         command.latest_version,
@@ -393,14 +393,14 @@ export class SqliteOutboundStore implements OutboundStore {
 
   getCommandByIdempotencyKey(idempotencyKey: string): OutboundCommand | undefined {
     const row = this.db.prepare(
-      "select *, context_id as conversation_id, scope_id as mailbox_id from outbound_handoffs where idempotency_key = ?",
+      "select * from outbound_handoffs where idempotency_key = ?",
     ).get(idempotencyKey) as Record<string, unknown> | undefined;
     return row ? rowToCommand(row) : undefined;
   }
 
   getCommand(outbound_id: string): OutboundCommand | undefined {
     const row = this.db.prepare(
-      "select *, context_id as conversation_id, scope_id as mailbox_id from outbound_handoffs where outbound_id = ?",
+      "select * from outbound_handoffs where outbound_id = ?",
     ).get(outbound_id) as Record<string, unknown> | undefined;
     return row ? rowToCommand(row) : undefined;
   }
@@ -433,15 +433,10 @@ export class SqliteOutboundStore implements OutboundStore {
 
   getActiveCommandsForContext(context_id: string): OutboundCommand[] {
     const rows = this.db.prepare(`
-      select *, context_id as conversation_id, scope_id as mailbox_id from outbound_handoffs
+      select * from outbound_handoffs
       where context_id = ? and status in (${ACTIVE_UNSENT_STATUSES.map(() => "?").join(", ")})
     `).all(context_id, ...ACTIVE_UNSENT_STATUSES) as Record<string, unknown>[];
     return rows.map(rowToCommand);
-  }
-
-  /** @deprecated Mail-vertical compatibility wrapper — use getActiveCommandsForContext */
-  getActiveCommandsForThread(conversation_id: string): OutboundCommand[] {
-    return this.getActiveCommandsForContext(conversation_id);
   }
 
   supersedePriorVersions(outbound_id: string, newVersion: number): void {
@@ -520,7 +515,7 @@ export class SqliteOutboundStore implements OutboundStore {
     const scopeFilter = scope_id ? "and c.scope_id = ?" : "";
     const statusPlaceholders = statuses.map(() => "?").join(", ");
     const sql = `
-      select c.*, context_id as conversation_id, scope_id as mailbox_id, v.*
+      select c.*, v.*
       from outbound_handoffs c
       join outbound_versions v
         on c.outbound_id = v.outbound_id

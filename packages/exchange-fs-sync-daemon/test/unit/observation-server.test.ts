@@ -106,9 +106,9 @@ describe("observation server", () => {
   });
 
   // Seed data
-  coordinatorStore.upsertConversationRecord({
-    conversation_id: "ctx-1",
-    mailbox_id: "scope-a",
+  coordinatorStore.upsertContextRecord({
+    context_id: "ctx-1",
+    scope_id: "scope-a",
     primary_charter: "support_steward",
     secondary_charters_json: "[]",
     status: "active",

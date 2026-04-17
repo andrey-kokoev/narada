@@ -86,16 +86,16 @@ export class SendReplyWorker {
    * Process the next eligible send_reply or draft_reply command.
    * Returns whether a command was processed.
    */
-  async processNext(mailboxId?: string): Promise<{ processed: boolean; outboundId?: string }> {
+  async processNext(scopeId?: string): Promise<{ processed: boolean; outboundId?: string }> {
     const sendReplyCandidates = this.deps.store.fetchNextByStatus(
       "send_reply",
       ["pending", "draft_creating", "draft_ready"],
-      mailboxId,
+      scopeId,
     );
     const draftReplyCandidates = this.deps.store.fetchNextByStatus(
       "draft_reply",
       ["pending", "draft_creating", "draft_ready"],
-      mailboxId,
+      scopeId,
     );
 
     const candidates = [...sendReplyCandidates, ...draftReplyCandidates];
@@ -181,7 +181,7 @@ export class SendReplyWorker {
   ): Promise<void> {
     const { store, logger } = this.deps;
     try {
-      const userId = this.deps.resolveUserId(command.mailbox_id);
+      const userId = this.deps.resolveUserId(command.scope_id);
       const payload = buildDraftPayload(command.outbound_id, version);
       const created = await this.deps.draftClient.createDraft(userId, payload);
 
@@ -226,7 +226,7 @@ export class SendReplyWorker {
     let managed = store.getManagedDraft(command.outbound_id, version.version);
     if (managed) {
       try {
-        const verified = await this.verifyManagedDraft(managed, version, command.mailbox_id);
+        const verified = await this.verifyManagedDraft(managed, version, command.scope_id);
         if (verified) {
           this.transition(command.outbound_id, "draft_creating", "draft_ready");
           return;
@@ -315,7 +315,7 @@ export class SendReplyWorker {
     }
 
     try {
-      const verified = await this.verifyManagedDraft(managed, version, command.mailbox_id);
+      const verified = await this.verifyManagedDraft(managed, version, command.scope_id);
       if (!verified) {
         // verifyManagedDraft handles its own transitions on failure
         return;
@@ -340,8 +340,8 @@ export class SendReplyWorker {
     // Policy gate
     try {
       const participants = await participantResolver.getParticipants(
-        command.mailbox_id,
-        command.conversation_id,
+        command.scope_id,
+        command.context_id,
       );
       const allRecipients = new Set([...version.to, ...version.cc, ...version.bcc]);
       for (const recipient of allRecipients) {
@@ -368,7 +368,7 @@ export class SendReplyWorker {
 
     // Send the draft
     try {
-      const userId = this.deps.resolveUserId(command.mailbox_id);
+      const userId = this.deps.resolveUserId(command.scope_id);
       await this.deps.draftClient.sendDraft(userId, managed.draft_id);
     } catch (error) {
       logger?.warn("Send draft failed", {
@@ -452,7 +452,7 @@ export class SendReplyWorker {
     }
 
     try {
-      const verified = await this.verifyManagedDraft(managed, version, command.mailbox_id);
+      const verified = await this.verifyManagedDraft(managed, version, command.scope_id);
       if (!verified) {
         return;
       }

@@ -64,7 +64,7 @@ describe("Webhook Vertical Integration", () => {
     const queue = new InMemoryWebhookEventQueue();
     const source = new WebhookSource({ sourceId: scopeId, queue });
 
-    const cursorStore = new FileCursorStore({ rootDir, mailboxId: scopeId });
+    const cursorStore = new FileCursorStore({ rootDir, scopeId: scopeId });
     const applyLogStore = new FileApplyLogStore({ rootDir });
     const factStore = new SqliteFactStore({ db: factDb });
     factStore.initSchema();
@@ -226,7 +226,7 @@ describe("Webhook Vertical Integration", () => {
     const queue = new InMemoryWebhookEventQueue();
     const source = new WebhookSource({ sourceId: scopeId, queue });
 
-    const cursorStore = new FileCursorStore({ rootDir, mailboxId: scopeId });
+    const cursorStore = new FileCursorStore({ rootDir, scopeId: scopeId });
     const applyLogStore = new FileApplyLogStore({ rootDir });
     const factStore = new SqliteFactStore({ db: factDb });
     factStore.initSchema();

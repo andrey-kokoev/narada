@@ -13,14 +13,13 @@ import type {
 import type { PolicyContext } from "../foreman/context.js";
 import type { CoordinatorStore, WorkItem } from "../coordinator/types.js";
 import type { RuntimePolicy } from "../config/types.js";
-import { MailboxContextMaterializer } from "./mailbox/materializer.js";
 
 export interface BuildInvocationEnvelopeDeps {
   coordinatorStore: CoordinatorStore;
   rootDir: string;
   getRuntimePolicy: (scopeId: string) => RuntimePolicy;
-  /** Optional message store, required only when using the mail materializer fallback. */
-  messageStore?: import("../persistence/messages.js").FileMessageStore;
+  /** Explicit registry that maps verticals to context materializers. */
+  materializerRegistry: VerticalMaterializerRegistry;
 }
 
 export interface BuildInvocationEnvelopeOptions {
@@ -33,6 +32,34 @@ export interface BuildInvocationEnvelopeOptions {
 
 export interface ContextMaterializer {
   materialize(context: PolicyContext): Promise<unknown>;
+}
+
+/**
+ * Factory that creates a ContextMaterializer for a given vertical.
+ */
+export type MaterializerFactory = (deps: BuildInvocationEnvelopeDeps) => ContextMaterializer;
+
+/**
+ * Explicit vertical materializer registry.
+ *
+ * Callers must register a materializer for every vertical they intend to support.
+ * No implicit mailbox fallback exists.
+ */
+export class VerticalMaterializerRegistry {
+  private readonly map = new Map<string, MaterializerFactory>();
+
+  register(vertical: string, factory: MaterializerFactory): this {
+    this.map.set(vertical, factory);
+    return this;
+  }
+
+  resolve(vertical: string, deps: BuildInvocationEnvelopeDeps): ContextMaterializer {
+    const factory = this.map.get(vertical);
+    if (!factory) {
+      throw new Error(`No materializer registered for vertical: ${vertical}`);
+    }
+    return factory(deps);
+  }
 }
 
 /**
@@ -134,33 +161,14 @@ export class FilesystemContextMaterializer implements ContextMaterializer {
   }
 }
 
-// CLASSIFICATION: historical residue with acceptable fallback — the prefix-based
-// dispatch is neutral, but falling back to MailboxContextMaterializer encodes a
-// mail-default assumption. Future cleanup should use an explicit materializer
-// registry (e.g., Map<vertical, ContextMaterializer>) injected by the caller.
 function selectMaterializer(
   context: PolicyContext,
   deps: BuildInvocationEnvelopeDeps,
 ): ContextMaterializer {
-  if (context.context_id.startsWith("timer:")) {
-    return new TimerContextMaterializer();
-  }
-  if (context.context_id.startsWith("webhook:")) {
-    return new WebhookContextMaterializer();
-  }
-  if (context.context_id.startsWith("fs:")) {
-    return new FilesystemContextMaterializer();
-  }
-  if (!deps.messageStore) {
-    throw new Error("messageStore is required for mailbox context materialization");
-  }
-  return new MailboxContextMaterializer(deps.rootDir, deps.messageStore);
+  const vertical = resolveVertical(context);
+  return deps.materializerRegistry.resolve(vertical, deps);
 }
 
-// CLASSIFICATION: kernel-generic with mail-default residue — the function is
-// vertically neutral, but the "mail" fallback is a vestige of mailbox-as-default.
-// It is harmless as a runtime hint, yet should become explicit once vertical
-// registration is introduced.
 function resolveVertical(context: PolicyContext): string {
   if (context.context_id.startsWith("timer:")) return "timer";
   if (context.context_id.startsWith("webhook:")) return "webhook";

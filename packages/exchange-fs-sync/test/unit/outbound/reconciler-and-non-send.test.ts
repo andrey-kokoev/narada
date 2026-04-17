@@ -10,8 +10,8 @@ function createCommand(
   const now = new Date().toISOString();
   return {
     outbound_id: `out-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    conversation_id: "thread-1",
-    mailbox_id: "mailbox-1",
+    context_id: "thread-1",
+    scope_id: "mailbox-1",
     action_type: "send_reply",
     status: "pending",
     latest_version: 1,
@@ -236,7 +236,7 @@ describe("NonSendWorker", () => {
     worker = new NonSendWorker({
       store,
       graphClient,
-      resolveUserId: (mailboxId) => `user-${mailboxId}`,
+      resolveUserId: (scopeId) => `user-${scopeId}`,
       logger: undefined,
     });
   });

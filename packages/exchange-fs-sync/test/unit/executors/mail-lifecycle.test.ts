@@ -20,8 +20,8 @@ describe("mail lifecycle adapter", () => {
   function makeCommand(status: OutboundCommand["status"]): OutboundCommand {
     return {
       outbound_id: "ob-1",
-      conversation_id: "conv-1",
-      mailbox_id: "mb-1",
+      context_id: "conv-1",
+      scope_id: "mb-1",
       action_type: "send_reply",
       status,
       latest_version: 1,
@@ -76,8 +76,8 @@ describe("mail lifecycle adapter", () => {
     outboundStore.createCommand(
       {
         outbound_id: "ob-1",
-        conversation_id: "conv-1",
-        mailbox_id: "mb-1",
+        context_id: "conv-1",
+        scope_id: "mb-1",
         action_type: "send_reply",
         status: "submitted",
         latest_version: 1,

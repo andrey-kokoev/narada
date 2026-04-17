@@ -52,8 +52,8 @@ describe("Replay and Recovery Tests", () => {
       h.outboundStore.createCommand(
         {
           outbound_id: `ob_${decisionId}`,
-          conversation_id: "conv-1",
-          mailbox_id: "mb-1",
+          context_id: "conv-1",
+          scope_id: "mb-1",
           action_type: "send_reply",
           status: "pending",
           latest_version: 1,
@@ -287,7 +287,7 @@ describe("Replay and Recovery Tests", () => {
       const now = new Date().toISOString();
       const wiB = insertWorkItem(h, {
         work_item_id: `wi_${Math.random().toString(36).slice(2)}`,
-        conversation_id: "conv-1",
+        context_id: "conv-1",
         status: "resolved",
         opened_for_revision_id: "conv-1:rev:2",
         resolved_revision_id: "conv-1:rev:2",

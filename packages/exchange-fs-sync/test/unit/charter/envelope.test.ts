@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { buildInvocationEnvelope } from "../../../src/charter/envelope.js";
-import { normalizeMessageForEnvelope } from "../../../src/charter/mailbox/materializer.js";
+import { buildInvocationEnvelope, VerticalMaterializerRegistry } from "../../../src/charter/envelope.js";
+import { normalizeMessageForEnvelope, MailboxContextMaterializer } from "../../../src/charter/mailbox/materializer.js";
 import type { NormalizedMessage } from "../../../src/types/normalized.js";
 import type { CoordinatorStore, WorkItem } from "../../../src/coordinator/types.js";
 import type { RuntimePolicy } from "../../../src/config/types.js";
@@ -34,6 +34,20 @@ function makeMockMessageStore(): FileMessageStore {
   return {
     readRecord: async () => null,
   } as unknown as FileMessageStore;
+}
+
+function makeRegistry(rootDir: string, messageStore: FileMessageStore): VerticalMaterializerRegistry {
+  return new VerticalMaterializerRegistry()
+    .register("timer", () => ({
+      materialize: async () => ({ schedule_id: "test", tick_at: new Date().toISOString() }),
+    }))
+    .register("webhook", () => ({
+      materialize: async () => ({ endpoint_id: "test", received_at: new Date().toISOString() }),
+    }))
+    .register("filesystem", () => ({
+      materialize: async () => ({ watch_id: "test", changed_at: new Date().toISOString() }),
+    }))
+    .register("mail", () => new MailboxContextMaterializer(rootDir, messageStore));
 }
 
 function makeRuntimePolicy(overrides?: Partial<RuntimePolicy>): RuntimePolicy {
@@ -177,10 +191,11 @@ describe("normalizeMessageForEnvelope", () => {
     };
 
     it("uses the conversation record's primary charter without fallback", async () => {
+      const messageStore = makeMockMessageStore();
       const envelope = await buildInvocationEnvelope(
         {
           coordinatorStore: makeMockStore({ primary_charter: "custom_charter" }),
-          messageStore: makeMockMessageStore(),
+          materializerRegistry: makeRegistry("/tmp", messageStore),
           rootDir: "/tmp",
           getRuntimePolicy: () => makeRuntimePolicy(),
         },
@@ -190,11 +205,12 @@ describe("normalizeMessageForEnvelope", () => {
     });
 
     it("throws when no context record exists", async () => {
+      const messageStore = makeMockMessageStore();
       await expect(
         buildInvocationEnvelope(
           {
             coordinatorStore: makeMockStore(undefined),
-            messageStore: makeMockMessageStore(),
+            materializerRegistry: makeRegistry("/tmp", messageStore),
             rootDir: "/tmp",
             getRuntimePolicy: () => makeRuntimePolicy(),
           },
@@ -204,10 +220,11 @@ describe("normalizeMessageForEnvelope", () => {
     });
 
     it("derives allowed_actions from mailbox policy", async () => {
+      const messageStore = makeMockMessageStore();
       const envelope = await buildInvocationEnvelope(
         {
           coordinatorStore: makeMockStore({ primary_charter: "support_steward" }),
-          messageStore: makeMockMessageStore(),
+          materializerRegistry: makeRegistry("/tmp", messageStore),
           rootDir: "/tmp",
           getRuntimePolicy: () => makeRuntimePolicy({ allowed_actions: ["send_reply", "no_action"] }),
         },

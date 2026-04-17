@@ -107,10 +107,10 @@ export class IntentHandoff {
    */
   recoverWorkItemIfCommandExists(
     workItemId: string,
-    conversationId: string,
-    mailboxId: string,
+    contextId: string,
+    scopeId: string,
   ): string | null {
-    return this.outboundHandoff.recoverWorkItemIfCommandExists(workItemId, conversationId, mailboxId);
+    return this.outboundHandoff.recoverWorkItemIfCommandExists(workItemId, contextId, scopeId);
   }
 
   /**

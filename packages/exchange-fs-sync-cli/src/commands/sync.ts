@@ -118,7 +118,7 @@ export async function syncCommand(
   // Create persistence stores
   const cursorStore = new FileCursorStore({
     rootDir,
-    mailboxId: scope.scope_id,
+    scopeId: scope.scope_id,
   });
 
   const applyLogStore = new FileApplyLogStore({ rootDir });
@@ -221,7 +221,7 @@ async function syncMultiMailbox(
         normalize_flagged: normalizeFlagged,
       });
       const rootDir = resolve(mailbox.root_dir);
-      const cursorStore = new FileCursorStore({ rootDir, mailboxId: mailbox.mailbox_id });
+      const cursorStore = new FileCursorStore({ rootDir, scopeId: mailbox.mailbox_id });
       const applyLogStore = new FileApplyLogStore({ rootDir });
       const result = await previewSync({ adapter, cursorStore, applyLogStore, logger });
       results.push(result);

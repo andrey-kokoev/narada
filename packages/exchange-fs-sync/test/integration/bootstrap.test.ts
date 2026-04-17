@@ -75,7 +75,7 @@ describe("bootstrap", () => {
 
     const cursorStore = new FileCursorStore({
       rootDir,
-      mailboxId: "mailbox_primary",
+      scopeId: "mailbox_primary",
     });
 
     const applyLogStore = new FileApplyLogStore({ rootDir });

@@ -159,10 +159,10 @@ export async function statusCommand(
   };
 }
 
-async function buildStatusReport(mailboxId: string, rootDir: string): Promise<StatusReport> {
+async function buildStatusReport(scopeId: string, rootDir: string): Promise<StatusReport> {
   const report: StatusReport = {
     mailbox: {
-      id: mailboxId,
+      id: scopeId,
       rootDir: rootDir,
     },
     sync: {
@@ -184,7 +184,7 @@ async function buildStatusReport(mailboxId: string, rootDir: string): Promise<St
   try {
     const dbStat = await stat(dbPath);
     if (dbStat.isFile()) {
-      report.controlPlane = await loadControlPlaneSnapshot(dbPath, mailboxId);
+      report.controlPlane = await loadControlPlaneSnapshot(dbPath, scopeId);
       if (report.controlPlane) {
         report.operability = {
           activeLeases: report.controlPlane.leases.active,

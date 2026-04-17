@@ -73,7 +73,7 @@ describe("update", () => {
 
     const cursorStore = new FileCursorStore({
       rootDir,
-      mailboxId: "mailbox_primary",
+      scopeId: "mailbox_primary",
     });
     const applyLogStore = new FileApplyLogStore({ rootDir });
     const messageStore = new FileMessageStore({ rootDir });

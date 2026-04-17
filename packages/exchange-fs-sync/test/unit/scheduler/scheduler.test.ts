@@ -21,10 +21,10 @@ describe("SqliteScheduler", () => {
     db.close();
   });
 
-  function createConversation(conversationId: string, mailboxId: string = "mb-1"): void {
+  function createConversation(conversationId: string, scopeId: string = "mb-1"): void {
     store.upsertContextRecord({
       context_id: conversationId,
-      scope_id: mailboxId,
+      scope_id: scopeId,
       primary_charter: "support_steward",
       secondary_charters_json: "[]",
       status: "active",
@@ -248,7 +248,7 @@ describe("SqliteScheduler", () => {
   // U12: Supersession during retry — old item superseded, new opened
   it("U12: superseded work item is not runnable", () => {
     createConversation("conv-1");
-    insertWorkItem({ conversation_id: "conv-1", status: "superseded" });
+    insertWorkItem({ context_id: "conv-1", status: "superseded" });
     insertWorkItem({ context_id: "conv-1", status: "opened" });
 
     const runnable = scheduler.scanForRunnableWork("mb-1", 10);
@@ -271,7 +271,7 @@ describe("SqliteScheduler", () => {
 
   it("enforces conversation-level serialization (only one active work item per conversation)", () => {
     createConversation("conv-1");
-    insertWorkItem({ conversation_id: "conv-1", status: "leased" });
+    insertWorkItem({ context_id: "conv-1", status: "leased" });
     insertWorkItem({ context_id: "conv-1", status: "opened" });
 
     const runnable = scheduler.scanForRunnableWork("mb-1", 10);

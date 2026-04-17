@@ -205,7 +205,7 @@ describe('I/O: Cursor Store', () => {
   bench('cursor write - atomicity', async () => {
     const rootDir = await mkdtemp(join(tmpdir(), 'io-bench-'));
     const { FileCursorStore } = require('../../src/persistence/cursor.js');
-    const store = new FileCursorStore({ rootDir, mailboxId: 'test@example.com' });
+    const store = new FileCursorStore({ rootDir, scopeId: 'test@example.com' });
 
     try {
       // Cursor writes should be atomic (temp + rename)
@@ -221,7 +221,7 @@ describe('I/O: Cursor Store', () => {
   bench('cursor read - cached', async () => {
     const rootDir = await mkdtemp(join(tmpdir(), 'io-bench-'));
     const { FileCursorStore } = require('../../src/persistence/cursor.js');
-    const store = new FileCursorStore({ rootDir, mailboxId: 'test@example.com' });
+    const store = new FileCursorStore({ rootDir, scopeId: 'test@example.com' });
 
     try {
       await store.commit('delta-token-12345');

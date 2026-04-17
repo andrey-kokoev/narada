@@ -86,8 +86,8 @@ describe("Outbound Idempotency Boundary (Task 029)", () => {
     // Direct store-level boundary test: simulate rapid duplicate attempts
     const cmd = {
       outbound_id: "ob-1",
-      conversation_id: "conv-1",
-      mailbox_id: "mb-1",
+      context_id: "conv-1",
+      scope_id: "mb-1",
       action_type: "send_reply" as const,
       status: "pending" as const,
       latest_version: 1,

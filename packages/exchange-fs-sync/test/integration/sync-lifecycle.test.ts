@@ -102,7 +102,7 @@ describe('Full Sync Lifecycle', () => {
       },
     };
 
-    const cursorStore = new FileCursorStore({ rootDir, mailboxId });
+    const cursorStore = new FileCursorStore({ rootDir, scopeId: mailboxId });
     const applyLogStore = new FileApplyLogStore({ rootDir });
     const messageStore = new FileMessageStore({ rootDir });
     const views = new FileViewStore({ rootDir });
@@ -193,7 +193,7 @@ describe('Full Sync Lifecycle', () => {
       },
     };
 
-    const cursorStore = new FileCursorStore({ rootDir, mailboxId });
+    const cursorStore = new FileCursorStore({ rootDir, scopeId: mailboxId });
     const applyLogStore = new FileApplyLogStore({ rootDir });
     const messageStore = new FileMessageStore({ rootDir });
     const views = new FileViewStore({ rootDir });
@@ -265,7 +265,7 @@ describe('Full Sync Lifecycle', () => {
       },
     };
 
-    const cursorStore = new FileCursorStore({ rootDir, mailboxId });
+    const cursorStore = new FileCursorStore({ rootDir, scopeId: mailboxId });
     const applyLogStore = new FileApplyLogStore({ rootDir });
     const messageStore = new FileMessageStore({ rootDir });
     const views = new FileViewStore({ rootDir });
@@ -331,7 +331,7 @@ describe('Full Sync Lifecycle', () => {
       },
     };
 
-    const cursorStore = new FileCursorStore({ rootDir, mailboxId });
+    const cursorStore = new FileCursorStore({ rootDir, scopeId: mailboxId });
     const applyLogStore = new FileApplyLogStore({ rootDir });
     const messageStore = new FileMessageStore({ rootDir });
     const views = new FileViewStore({ rootDir });
@@ -385,11 +385,11 @@ describe('Full Sync Lifecycle', () => {
       fetch_since: async () => createBatch(events, null, 'cursor-1'),
     };
 
-    const cursorStore = new FileCursorStore({ rootDir, mailboxId });
+    const cursorStore = new FileCursorStore({ rootDir, scopeId: mailboxId });
     const applyLogStore = new FileApplyLogStore({ rootDir });
     const messageStore = new FileMessageStore({ rootDir });
     const views = new FileViewStore({ rootDir });
-    const healthStore = new FileHealthStore({ rootDir, mailboxId });
+    const healthStore = new FileHealthStore({ rootDir, scopeId: mailboxId });
 
     const runner = new DefaultSyncRunner({
       rootDir,

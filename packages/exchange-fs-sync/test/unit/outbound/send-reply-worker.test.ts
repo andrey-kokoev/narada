@@ -16,8 +16,8 @@ function createCommand(overrides?: Partial<OutboundCommand>): OutboundCommand {
   const now = new Date().toISOString();
   return {
     outbound_id: `out-${Date.now()}`,
-    conversation_id: "thread-1",
-    mailbox_id: "mailbox-1",
+    context_id: "thread-1",
+    scope_id: "mailbox-1",
     action_type: "send_reply",
     status: "pending",
     latest_version: 1,
@@ -131,7 +131,7 @@ describe("SendReplyWorker", () => {
       store,
       draftClient,
       participantResolver: createParticipantResolver(),
-      resolveUserId: (mailboxId) => `user-${mailboxId}`,
+      resolveUserId: (scopeId) => `user-${scopeId}`,
       logger: undefined,
     });
   });
@@ -375,7 +375,7 @@ describe("SendReplyWorker", () => {
       store,
       draftClient,
       participantResolver: createParticipantResolver(["alice@example.com"]),
-      resolveUserId: (mailboxId) => `user-${mailboxId}`,
+      resolveUserId: (scopeId) => `user-${scopeId}`,
       logger: undefined,
     });
 

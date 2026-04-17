@@ -5,7 +5,7 @@ import type { CursorToken } from "../types/normalized.js";
 import { CorruptionError, StorageError, wrapError, ErrorCode } from "../errors.js";
 
 interface CursorFileShape {
-  mailbox_id: string;
+  scope_id: string;
   committed_cursor: string;
   committed_at: string;
 }
@@ -30,10 +30,10 @@ function validateCursorFileShape(value: unknown): CursorFileShape {
 
   const record = value as Record<string, unknown>;
 
-  if (typeof record.mailbox_id !== "string" || !record.mailbox_id.trim()) {
-    throw new CorruptionError("Invalid cursor file: mailbox_id must be a non-empty string", {
+  if (typeof record.scope_id !== "string" || !record.scope_id.trim()) {
+    throw new CorruptionError("Invalid cursor file: scope_id must be a non-empty string", {
       phase: "cursor:validate",
-      metadata: { receivedMailboxId: record.mailbox_id },
+      metadata: { receivedScopeId: record.scope_id },
     });
   }
 
@@ -58,7 +58,7 @@ function validateCursorFileShape(value: unknown): CursorFileShape {
   }
 
   return {
-    mailbox_id: record.mailbox_id,
+    scope_id: record.scope_id,
     committed_cursor: record.committed_cursor,
     committed_at: record.committed_at,
   };
@@ -66,7 +66,7 @@ function validateCursorFileShape(value: unknown): CursorFileShape {
 
 export interface FileCursorStoreOptions {
   rootDir: string;
-  mailboxId: string;
+  scopeId: string;
   /** If true, attempt to recover from corrupted cursor files by resetting to null */
   autoRecoverCorruption?: boolean;
 }
@@ -74,13 +74,13 @@ export interface FileCursorStoreOptions {
 export class FileCursorStore implements CursorStore {
   private readonly cursorPath: string;
   private readonly tmpDir: string;
-  private readonly mailboxId: string;
+  private readonly scopeId: string;
   private readonly autoRecoverCorruption: boolean;
 
   constructor(params: FileCursorStoreOptions) {
     this.cursorPath = join(params.rootDir, "state", "cursor.json");
     this.tmpDir = join(params.rootDir, "tmp");
-    this.mailboxId = params.mailboxId;
+    this.scopeId = params.scopeId;
     this.autoRecoverCorruption = params.autoRecoverCorruption ?? false;
   }
 
@@ -115,12 +115,12 @@ export class FileCursorStore implements CursorStore {
         throw validationError;
       }
 
-      if (cursorState.mailbox_id !== this.mailboxId) {
+      if (cursorState.scope_id !== this.scopeId) {
         throw new CorruptionError(
-          `Cursor mailbox mismatch: expected ${this.mailboxId}, got ${cursorState.mailbox_id}`,
+          `Cursor scope mismatch: expected ${this.scopeId}, got ${cursorState.scope_id}`,
           {
             phase: "cursor:read",
-            metadata: { expectedMailbox: this.mailboxId, actualMailbox: cursorState.mailbox_id },
+            metadata: { expectedScope: this.scopeId, actualScope: cursorState.scope_id },
           },
         );
       }
@@ -162,7 +162,7 @@ export class FileCursorStore implements CursorStore {
     );
 
     const payload: CursorFileShape = {
-      mailbox_id: this.mailboxId,
+      scope_id: this.scopeId,
       committed_cursor: nextCursor,
       committed_at: nowIso(),
     };
@@ -213,16 +213,16 @@ export class FileCursorStore implements CursorStore {
   /**
    * Get cursor file metadata for diagnostics
    */
-  async getMetadata(): Promise<{ exists: boolean; path: string; mailboxId: string }> {
+  async getMetadata(): Promise<{ exists: boolean; path: string; scopeId: string }> {
     try {
       await readFile(this.cursorPath, "utf8");
-      return { exists: true, path: this.cursorPath, mailboxId: this.mailboxId };
+      return { exists: true, path: this.cursorPath, scopeId: this.scopeId };
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       return {
         exists: code !== "ENOENT",
         path: this.cursorPath,
-        mailboxId: this.mailboxId,
+        scopeId: this.scopeId,
       };
     }
   }

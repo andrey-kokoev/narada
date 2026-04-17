@@ -31,7 +31,7 @@ async function setupBenchmark(messageCount: number): Promise<SyncBenchmarkContex
   });
 
   // Create stores
-  const cursorStore = new FileCursorStore({ rootDir, mailboxId: 'bench@example.com' });
+  const cursorStore = new FileCursorStore({ rootDir, scopeId: 'bench@example.com' });
   const applyLogStore = new FileApplyLogStore({ rootDir });
   const projector = new DefaultProjector({ rootDir, tombstonesEnabled: false });
   const lock = new FileLock({ rootDir, acquireTimeoutMs: 5000 });

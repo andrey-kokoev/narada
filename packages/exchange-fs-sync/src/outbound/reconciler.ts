@@ -55,11 +55,11 @@ export class OutboundReconciler {
   /**
    * Process the next submitted command awaiting confirmation.
    */
-  async processNext(mailboxId?: string): Promise<{ processed: boolean; outboundId?: string }> {
+  async processNext(scopeId?: string): Promise<{ processed: boolean; outboundId?: string }> {
     const candidates = this.deps.store.fetchNextByStatus(
       "send_reply",
       ["submitted"],
-      mailboxId,
+      scopeId,
     );
 
     // Also scan non-send actions in submitted
@@ -69,7 +69,7 @@ export class OutboundReconciler {
       "set_categories",
     ];
     for (const action of nonSendActions) {
-      const more = this.deps.store.fetchNextByStatus(action, ["submitted"], mailboxId);
+      const more = this.deps.store.fetchNextByStatus(action, ["submitted"], scopeId);
       candidates.push(...more);
     }
 
@@ -104,7 +104,7 @@ export class OutboundReconciler {
     try {
       if (command.action_type === "send_reply") {
         const message = await messageFinder.findByOutboundId(
-          command.mailbox_id,
+          command.scope_id,
           command.outbound_id,
         );
         if (message) {
@@ -126,7 +126,7 @@ export class OutboundReconciler {
         }
 
         const message = await messageFinder.findByMessageId(
-          command.mailbox_id,
+          command.scope_id,
           targetMessageId,
         );
 

@@ -37,8 +37,8 @@ export interface HealthFileData {
   timestamp: string;
   /** Current health status */
   status: HealthStatus;
-  /** Mailbox identifier */
-  mailboxId: string;
+  /** Scope identifier */
+  scopeId: string;
   /** ISO 8601 timestamp of last successful sync, or null if never */
   lastSyncAt: string | null;
   /** Total number of events applied in last sync */
@@ -64,15 +64,15 @@ export interface HealthFileData {
 export interface HealthWriterOptions {
   /** Root directory where .health.json will be written */
   rootDir: string;
-  /** Mailbox identifier */
-  mailboxId: string;
+  /** Scope identifier */
+  scopeId: string;
 }
 
 export interface LegacyHealthRecord {
   status: HealthStatus;
   consecutive_failures: number;
   total_errors: number;
-  mailbox_id: string;
+  scope_id: string;
   last_sync_at: string | null;
 }
 
@@ -103,10 +103,10 @@ export async function writeHealthFile(
  * Create a health writer bound to a specific root directory and mailbox
  *
  * Returns a function that can be called to update the health file
- * without repeating the rootDir and mailboxId parameters.
+ * without repeating the rootDir and scopeId parameters.
  */
 export function createHealthWriter(options: HealthWriterOptions): {
-  write: (data: Omit<HealthFileData, "timestamp" | "mailboxId">) => Promise<void>;
+  write: (data: Omit<HealthFileData, "timestamp" | "scopeId">) => Promise<void>;
   markError: (error: Error | string, previousData?: Partial<HealthFileData>) => Promise<void>;
   markSuccess: (
     eventsApplied: number,
@@ -115,13 +115,13 @@ export function createHealthWriter(options: HealthWriterOptions): {
     previousData?: Partial<HealthFileData>,
   ) => Promise<void>;
 } {
-  const { rootDir, mailboxId } = options;
+  const { rootDir, scopeId } = options;
 
   return {
     async write(data) {
       await writeHealthFile(rootDir, {
         ...data,
-        mailboxId,
+        scopeId,
       });
     },
 
@@ -146,7 +146,7 @@ export function createHealthWriter(options: HealthWriterOptions): {
 
       await writeHealthFile(rootDir, {
         status: "error",
-        mailboxId,
+        scopeId,
         lastSyncAt: previousData?.lastSyncAt ?? null,
         eventsApplied: 0,
         eventsSkipped: 0,
@@ -177,7 +177,7 @@ export function createHealthWriter(options: HealthWriterOptions): {
 
       await writeHealthFile(rootDir, {
         status: "healthy",
-        mailboxId,
+        scopeId,
         lastSyncAt: new Date().toISOString(),
         eventsApplied,
         eventsSkipped,
@@ -199,11 +199,11 @@ export function createHealthWriter(options: HealthWriterOptions): {
 
 export class FileHealthStore {
   private readonly rootDir: string;
-  private readonly mailboxId: string;
+  private readonly scopeId: string;
 
   constructor(options: HealthWriterOptions) {
     this.rootDir = options.rootDir;
-    this.mailboxId = options.mailboxId;
+    this.scopeId = options.scopeId;
   }
 
   async recordSuccess(
@@ -214,7 +214,7 @@ export class FileHealthStore {
     const previous = await this.readRaw().catch(() => null);
     const writer = createHealthWriter({
       rootDir: this.rootDir,
-      mailboxId: this.mailboxId,
+      scopeId: this.scopeId,
     });
     await writer.markSuccess(eventsApplied, eventsSkipped, durationMs, previous ?? undefined);
   }
@@ -223,7 +223,7 @@ export class FileHealthStore {
     const previous = await this.readRaw().catch(() => null);
     const writer = createHealthWriter({
       rootDir: this.rootDir,
-      mailboxId: this.mailboxId,
+      scopeId: this.scopeId,
     });
     await writer.markError(error, previous ?? undefined);
   }
@@ -234,7 +234,7 @@ export class FileHealthStore {
       status: raw.status,
       consecutive_failures: raw.metrics.consecutiveFailures,
       total_errors: raw.totalErrors,
-      mailbox_id: raw.mailboxId,
+      scope_id: raw.scopeId,
       last_sync_at: raw.lastSyncAt,
     };
   }

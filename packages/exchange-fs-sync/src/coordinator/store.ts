@@ -25,8 +25,8 @@ import { isValidCreatedBy } from "./types.js";
 
 function rowToContextRecord(row: Record<string, unknown>): import("./types.js").ContextRecord {
   return {
-    context_id: String(row.context_id ?? row.conversation_id),
-    scope_id: String(row.scope_id ?? row.mailbox_id),
+    context_id: String(row.context_id),
+    scope_id: String(row.scope_id),
     primary_charter: String(row.primary_charter),
     secondary_charters_json: String(row.secondary_charters_json),
     status: String(row.status) as import("./types.js").ContextRecord["status"],

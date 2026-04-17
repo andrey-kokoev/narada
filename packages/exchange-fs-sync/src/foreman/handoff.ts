@@ -59,12 +59,8 @@ export class OutboundHandoff {
 
     const command: OutboundCommand = {
       outbound_id: outboundId,
-      // CLASSIFICATION: mail-vertical essential — the outbound command schema is
-      // currently mail-shaped because the only mature effect vertical is mail.
-      // When a new effect vertical matures, introduce a generalized intent schema
-      // or a vertical-specific handoff subclass.
-      conversation_id: decision.context_id,
-      mailbox_id: decision.scope_id,
+      context_id: decision.context_id,
+      scope_id: decision.scope_id,
       action_type: decision.approved_action as OutboundCommand["action_type"],
       status: "pending",
       latest_version: 1,

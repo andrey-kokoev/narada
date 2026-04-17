@@ -80,7 +80,7 @@ describe("delete", () => {
     const runner = new DefaultSyncRunner({
       rootDir,
       source: new ExchangeSource({ adapter, sourceId: "test" }),
-      cursorStore: new FileCursorStore({ rootDir, mailboxId: "mailbox_primary" }),
+      cursorStore: new FileCursorStore({ rootDir, scopeId: "mailbox_primary" }),
       applyLogStore: new FileApplyLogStore({ rootDir }),
       projector: {
         applyRecord: (record) => {

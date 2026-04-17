@@ -18,10 +18,10 @@ describe("LeaseScanner", () => {
     db.close();
   });
 
-  function createConversation(conversationId: string, mailboxId: string = "mb-1"): void {
+  function createConversation(conversationId: string, scopeId: string = "mb-1"): void {
     store.upsertContextRecord({
       context_id: conversationId,
-      scope_id: mailboxId,
+      scope_id: scopeId,
       primary_charter: "support_steward",
       secondary_charters_json: "[]",
       status: "active",

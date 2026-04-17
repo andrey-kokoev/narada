@@ -35,8 +35,8 @@ export class KeychainStorage implements SecureStorage {
   private account: string;
   private keytar: typeof import("keytar") | null = null;
 
-  constructor(mailboxId: string) {
-    this.account = mailboxId;
+  constructor(scopeId: string) {
+    this.account = scopeId;
   }
 
   private async getKeytar(): Promise<typeof import("keytar")> {
@@ -80,9 +80,9 @@ export class FileSecureStorage implements SecureStorage {
   private readonly storageDir: string;
   private readonly key: Buffer;
 
-  constructor(mailboxId: string) {
+  constructor(scopeId: string) {
     // Store in OS-specific config directory
-    this.storageDir = join(homedir(), ".exchange-fs-sync", "credentials", mailboxId);
+    this.storageDir = join(homedir(), ".exchange-fs-sync", "credentials", scopeId);
     this.key = this.getOrCreateKey();
   }
 
@@ -209,13 +209,13 @@ import { rm } from "node:fs/promises";
  * Factory to create the best available secure storage
  */
 export async function createSecureStorage(
-  mailboxId: string,
+  scopeId: string,
   preferFileStorage = false,
 ): Promise<SecureStorage> {
   if (!preferFileStorage && (await isKeytarAvailable())) {
-    return new KeychainStorage(mailboxId);
+    return new KeychainStorage(scopeId);
   }
-  return new FileSecureStorage(mailboxId);
+  return new FileSecureStorage(scopeId);
 }
 
 /**

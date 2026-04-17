@@ -181,7 +181,7 @@ async function syncSingleMailbox(
     // Create persistence stores
     const cursorStore = new FileCursorStore({
       rootDir,
-      mailboxId: mailbox.mailbox_id,
+      scopeId: mailbox.mailbox_id,
     });
 
     const applyLogStore = new FileApplyLogStore({ rootDir });
@@ -208,7 +208,7 @@ async function syncSingleMailbox(
 
     const healthWriter = createHealthWriter({
       rootDir,
-      mailboxId: mailbox.mailbox_id,
+      scopeId: mailbox.mailbox_id,
     });
 
     // Create fact store for durable canonical boundary

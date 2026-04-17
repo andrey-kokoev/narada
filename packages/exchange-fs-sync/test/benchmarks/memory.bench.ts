@@ -72,7 +72,7 @@ describe('Memory: Sync Operations', () => {
     try {
       const mem = await memoryBenchmark(async () => {
         const adapter = createMockAdapter({ initialMessageCount: 100 });
-        const cursorStore = new FileCursorStore({ rootDir, mailboxId: 'test@example.com' });
+        const cursorStore = new FileCursorStore({ rootDir, scopeId: 'test@example.com' });
         const applyLogStore = new FileApplyLogStore({ rootDir });
         const projector = new DefaultProjector({ rootDir, tombstonesEnabled: false });
         const lock = new FileLock({ rootDir, acquireTimeoutMs: 5000 });
@@ -110,7 +110,7 @@ describe('Memory: Sync Operations', () => {
         const { FileLock } = require('../../src/persistence/lock.js');
 
         const adapter = createMockAdapter({ initialMessageCount: 1000 });
-        const cursorStore = new FileCursorStore({ rootDir, mailboxId: 'test@example.com' });
+        const cursorStore = new FileCursorStore({ rootDir, scopeId: 'test@example.com' });
         const applyLogStore = new FileApplyLogStore({ rootDir });
         const projector = new DefaultProjector({ rootDir, tombstonesEnabled: false });
         const lock = new FileLock({ rootDir, acquireTimeoutMs: 5000 });
@@ -257,7 +257,7 @@ describe('Memory: Stress Tests', () => {
         const { FileLock } = require('../../src/persistence/lock.js');
 
         const adapter = createMockAdapter({ initialMessageCount: 50 });
-        const cursorStore = new FileCursorStore({ rootDir, mailboxId: 'test@example.com' });
+        const cursorStore = new FileCursorStore({ rootDir, scopeId: 'test@example.com' });
         const applyLogStore = new FileApplyLogStore({ rootDir });
         const projector = new DefaultProjector({ rootDir, tombstonesEnabled: false });
         const lock = new FileLock({ rootDir, acquireTimeoutMs: 5000 });

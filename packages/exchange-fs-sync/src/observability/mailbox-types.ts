@@ -21,8 +21,8 @@ export interface MailExecutionTransition {
 export interface MailExecutionDetail {
   outbound_id: string;
   intent_id: string;
-  conversation_id: string;
-  mailbox_id: string;
+  context_id: string;
+  scope_id: string;
   action_type: string;
   status: OutboundStatus;
   latest_version: number;

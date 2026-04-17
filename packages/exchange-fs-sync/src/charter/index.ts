@@ -10,10 +10,12 @@ export type {
   BuildInvocationEnvelopeOptions,
   BuildEvaluationRecordOptions,
   ContextMaterializer,
+  MaterializerFactory,
 } from "./envelope.js";
 export {
   buildInvocationEnvelope,
   buildEvaluationRecord,
+  VerticalMaterializerRegistry,
   TimerContextMaterializer,
   WebhookContextMaterializer,
   FilesystemContextMaterializer,

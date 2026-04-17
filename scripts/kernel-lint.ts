@@ -93,23 +93,9 @@ export const ALLOWLIST: Record<string, string[]> = {
     "normalized_types_import",
   ],
 
-  // Rationale: `charter/envelope.ts` is a generic orchestration module that
-  // delegates to the mail-specific materializer via an injected interface.
-  // It must be allowed to import from the mailbox sub-directory.
-  "charter/envelope.ts": ["mailbox_runtime_import"],
-
   // Rationale: `foreman/mailbox/context-strategy.ts` is explicitly mail-vertical.
   // It forms PolicyContext from mailbox-specific facts (conversation_id / thread_id).
   "foreman/mailbox/context-strategy.ts": ["conversation_id", "thread_id"],
-
-  // Rationale: `OutboundHandoff` creates outbound commands from foreman
-  // decisions. It uses conversation_id / mailbox_id when translating neutral
-  // context/scope into mail-shaped outbound command rows.
-  "foreman/handoff.ts": ["conversation_id", "mailbox_id"],
-
-  // Rationale: `SqliteCoordinatorStore` retains mailbox-era column fallbacks
-  // in `rowToContextRecord` for compatibility with legacy views.
-  "coordinator/store.ts": ["conversation_id", "mailbox_id"],
 
   // Rationale: `mailbox-thread-context.ts` hydrates mailbox-specific thread context
   // from filesystem views. It is inherently mail-vertical.
@@ -126,10 +112,6 @@ export const ALLOWLIST: Record<string, string[]> = {
     "thread_id",
     "normalized_types_import",
   ],
-
-  // Rationale: `observability/mailbox-types.ts` is the dedicated mail-vertical
-  // observation type surface. Generic modules must not import this file.
-  "observability/mailbox-types.ts": ["conversation_id", "mailbox_id"],
 
   // Rationale: `observability/mailbox.ts` is the dedicated mail-vertical
   // observation query surface. Generic modules must not import this file.

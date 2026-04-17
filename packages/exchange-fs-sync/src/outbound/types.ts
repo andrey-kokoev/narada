@@ -31,8 +31,8 @@ export type OutboundStatus =
 /** Canonical outbound command */
 export interface OutboundCommand {
   outbound_id: string;
-  conversation_id: string;
-  mailbox_id: string;
+  context_id: string;
+  scope_id: string;
   action_type: OutboundActionType;
   status: OutboundStatus;
   latest_version: number;

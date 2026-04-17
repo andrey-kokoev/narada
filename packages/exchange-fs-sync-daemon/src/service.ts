@@ -41,6 +41,11 @@ import {
   MockCharterRunner,
   buildInvocationEnvelope,
   buildEvaluationRecord,
+  VerticalMaterializerRegistry,
+  TimerContextMaterializer,
+  WebhookContextMaterializer,
+  FilesystemContextMaterializer,
+  MailboxContextMaterializer,
   validateCharterRuntimeConfig,
   loadCharterEnv,
   type ExchangeFsSyncConfig,
@@ -232,6 +237,12 @@ async function createMailboxDispatchContext(
   const rootDir = scope.root_dir;
   const messageStore = new FileMessageStore({ rootDir });
 
+  const materializerRegistry = new VerticalMaterializerRegistry()
+    .register('timer', () => new TimerContextMaterializer())
+    .register('webhook', () => new WebhookContextMaterializer())
+    .register('filesystem', () => new FilesystemContextMaterializer())
+    .register('mail', () => new MailboxContextMaterializer(rootDir, messageStore));
+
   let dispatchDeps: {
     db: InstanceType<typeof Database>;
     coordinatorStore: InstanceType<typeof SqliteCoordinatorStore>;
@@ -279,7 +290,7 @@ async function createMailboxDispatchContext(
     const factStore = new SqliteFactStore({ db: factDb });
     factStore.initSchema();
 
-    const getRuntimePolicy = (_mailboxId: string) => scope.policy;
+    const getRuntimePolicy = (_scopeId: string) => scope.policy;
 
     const foreman = new DefaultForemanFacade({
       coordinatorStore,
@@ -399,7 +410,7 @@ async function createMailboxDispatchContext(
       await opts.dispatchHooks?.afterLeaseAcquired?.(workItem, leaseResult);
 
       const envelope = await buildInvocationEnvelope(
-        { coordinatorStore: deps.coordinatorStore, messageStore, rootDir, getRuntimePolicy: (_mailboxId: string) => scope.policy },
+        { coordinatorStore: deps.coordinatorStore, materializerRegistry, rootDir, getRuntimePolicy: (_scopeId: string) => scope.policy },
         { executionId: `ex_${workItem.work_item_id}_${Date.now()}`, workItem, tools: deps.toolCatalog },
       );
 
@@ -613,7 +624,7 @@ async function createScopeService(
     normalize_flagged: normalizeFlagged,
   });
 
-  const cursorStore = new FileCursorStore({ rootDir, mailboxId: scope.scope_id });
+  const cursorStore = new FileCursorStore({ rootDir, scopeId: scope.scope_id });
   const applyLogStore = new FileApplyLogStore({ rootDir });
   const factDbDir = join(rootDir, '.narada');
   await mkdir(factDbDir, { recursive: true });

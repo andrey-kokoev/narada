@@ -20,7 +20,7 @@ export function getMailExecutionDetails(
   limit = 50,
 ): MailExecutionDetail[] {
   const commands = outboundStore.db
-    .prepare(`select *, context_id as conversation_id, scope_id as mailbox_id from outbound_handoffs order by created_at desc limit ?`)
+    .prepare(`select * from outbound_handoffs order by created_at desc limit ?`)
     .all(limit) as Record<string, unknown>[];
 
   const transitionsMap = new Map<string, MailExecutionTransition[]>();
@@ -56,8 +56,8 @@ export function getMailExecutionDetails(
     return {
       outbound_id: outboundId,
       intent_id: "", // Will be resolved by caller if needed; kept intentionally shallow here
-      conversation_id: String(row.conversation_id),
-      mailbox_id: String(row.mailbox_id),
+      context_id: String(row.context_id),
+      scope_id: String(row.scope_id),
       action_type: String(row.action_type),
       status: String(row.status) as MailExecutionDetail["status"],
       latest_version: Number(row.latest_version ?? 1),

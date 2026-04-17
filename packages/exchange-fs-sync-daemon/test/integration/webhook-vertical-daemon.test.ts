@@ -56,7 +56,7 @@ describe("daemon webhook vertical integration", () => {
       expect(batch.records[0]!.recordId).toBe(json.record_id);
 
       // Run it through the sync runner to prove fact ingestion works end-to-end
-      const cursorStore = new FileCursorStore({ rootDir, mailboxId: "daemon-test" });
+      const cursorStore = new FileCursorStore({ rootDir, scopeId: "daemon-test" });
       const applyLogStore = new FileApplyLogStore({ rootDir });
       const factDb = new Database(join(rootDir, "facts.db"));
       const factStore = new SqliteFactStore({ db: factDb });

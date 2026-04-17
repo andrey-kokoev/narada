@@ -16,7 +16,7 @@ function sha256(input: string): string {
  * Compute a deterministic idempotency key for an outbound intent.
  *
  * The key is derived from:
- * - conversation_id (canonical identity)
+ * - context_id (canonical identity)
  * - action_type
  * - canonical payload (stable JSON ordering)
  *
@@ -24,12 +24,12 @@ function sha256(input: string): string {
  * logical intent will converge to the same key.
  */
 export function computeIdempotencyKey(
-  conversationId: string,
+  contextId: string,
   actionType: string,
   payload: unknown,
 ): string {
   const canonicalPayload = stableStringify(payload);
-  const input = `${conversationId}:${actionType}:${canonicalPayload}`;
+  const input = `${contextId}:${actionType}:${canonicalPayload}`;
   return sha256(input).slice(0, 32);
 }
 

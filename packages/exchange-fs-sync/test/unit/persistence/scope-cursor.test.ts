@@ -9,7 +9,7 @@ describe('ScopeCursorStore', () => {
   });
 
   it('returns empty object when no cursor exists', async () => {
-    const inner = new FileCursorStore({ rootDir: '/test/data', mailboxId: 'm1' });
+    const inner = new FileCursorStore({ rootDir: '/test/data', scopeId: 'm1' });
     const store = new ScopeCursorStore({ inner, defaultSourceId: 'graph' });
 
     const all = await store.readAll();
@@ -19,13 +19,13 @@ describe('ScopeCursorStore', () => {
   it('reads legacy plain-string cursor as default source checkpoint', async () => {
     vol.fromJSON({
       '/test/data/state/cursor.json': JSON.stringify({
-        mailbox_id: 'm1',
+        scope_id: 'm1',
         committed_cursor: 'legacy-cursor-123',
         committed_at: new Date().toISOString(),
       }),
     });
 
-    const inner = new FileCursorStore({ rootDir: '/test/data', mailboxId: 'm1' });
+    const inner = new FileCursorStore({ rootDir: '/test/data', scopeId: 'm1' });
     const store = new ScopeCursorStore({ inner, defaultSourceId: 'graph' });
 
     const all = await store.readAll();
@@ -35,13 +35,13 @@ describe('ScopeCursorStore', () => {
   it('reads composite cursor from JSON object', async () => {
     vol.fromJSON({
       '/test/data/state/cursor.json': JSON.stringify({
-        mailbox_id: 'm1',
+        scope_id: 'm1',
         committed_cursor: JSON.stringify({ graph: 'c1', timer: 'c2' }),
         committed_at: new Date().toISOString(),
       }),
     });
 
-    const inner = new FileCursorStore({ rootDir: '/test/data', mailboxId: 'm1' });
+    const inner = new FileCursorStore({ rootDir: '/test/data', scopeId: 'm1' });
     const store = new ScopeCursorStore({ inner, defaultSourceId: 'graph' });
 
     const all = await store.readAll();
@@ -50,7 +50,7 @@ describe('ScopeCursorStore', () => {
 
   it('commits composite cursor as JSON when multiple sources present', async () => {
     vol.fromJSON({});
-    const inner = new FileCursorStore({ rootDir: '/test/data', mailboxId: 'm1' });
+    const inner = new FileCursorStore({ rootDir: '/test/data', scopeId: 'm1' });
     const store = new ScopeCursorStore({ inner, defaultSourceId: 'graph' });
 
     await store.commitAll({ graph: 'g1', timer: 't1' });
@@ -64,7 +64,7 @@ describe('ScopeCursorStore', () => {
 
   it('commits single non-default source as JSON object', async () => {
     vol.fromJSON({});
-    const inner = new FileCursorStore({ rootDir: '/test/data', mailboxId: 'm1' });
+    const inner = new FileCursorStore({ rootDir: '/test/data', scopeId: 'm1' });
     const store = new ScopeCursorStore({ inner, defaultSourceId: 'graph' });
 
     await store.commitAll({ timer: 't1' });
@@ -75,7 +75,7 @@ describe('ScopeCursorStore', () => {
 
   it('commits single default source as plain string for backward compat', async () => {
     vol.fromJSON({});
-    const inner = new FileCursorStore({ rootDir: '/test/data', mailboxId: 'm1' });
+    const inner = new FileCursorStore({ rootDir: '/test/data', scopeId: 'm1' });
     const store = new ScopeCursorStore({ inner, defaultSourceId: 'graph' });
 
     await store.commitAll({ graph: 'g1' });
@@ -87,13 +87,13 @@ describe('ScopeCursorStore', () => {
   it('merges new checkpoints with existing ones', async () => {
     vol.fromJSON({
       '/test/data/state/cursor.json': JSON.stringify({
-        mailbox_id: 'm1',
+        scope_id: 'm1',
         committed_cursor: JSON.stringify({ graph: 'old-graph', timer: 'old-timer' }),
         committed_at: new Date().toISOString(),
       }),
     });
 
-    const inner = new FileCursorStore({ rootDir: '/test/data', mailboxId: 'm1' });
+    const inner = new FileCursorStore({ rootDir: '/test/data', scopeId: 'm1' });
     const store = new ScopeCursorStore({ inner, defaultSourceId: 'graph' });
 
     await store.commitAll({ graph: 'new-graph' });
@@ -105,13 +105,13 @@ describe('ScopeCursorStore', () => {
   it('removes a source checkpoint when explicitly set to null', async () => {
     vol.fromJSON({
       '/test/data/state/cursor.json': JSON.stringify({
-        mailbox_id: 'm1',
+        scope_id: 'm1',
         committed_cursor: JSON.stringify({ graph: 'g1', timer: 't1' }),
         committed_at: new Date().toISOString(),
       }),
     });
 
-    const inner = new FileCursorStore({ rootDir: '/test/data', mailboxId: 'm1' });
+    const inner = new FileCursorStore({ rootDir: '/test/data', scopeId: 'm1' });
     const store = new ScopeCursorStore({ inner, defaultSourceId: 'graph' });
 
     await store.commitAll({ timer: null });
@@ -122,7 +122,7 @@ describe('ScopeCursorStore', () => {
 
   it('ignores empty string checkpoints', async () => {
     vol.fromJSON({});
-    const inner = new FileCursorStore({ rootDir: '/test/data', mailboxId: 'm1' });
+    const inner = new FileCursorStore({ rootDir: '/test/data', scopeId: 'm1' });
     const store = new ScopeCursorStore({ inner, defaultSourceId: 'graph' });
 
     await store.commitAll({ graph: 'g1', timer: '' });
@@ -134,13 +134,13 @@ describe('ScopeCursorStore', () => {
   it('returns empty object and does not throw on corrupted JSON cursor', async () => {
     vol.fromJSON({
       '/test/data/state/cursor.json': JSON.stringify({
-        mailbox_id: 'm1',
+        scope_id: 'm1',
         committed_cursor: '{not valid json}',
         committed_at: new Date().toISOString(),
       }),
     });
 
-    const inner = new FileCursorStore({ rootDir: '/test/data', mailboxId: 'm1' });
+    const inner = new FileCursorStore({ rootDir: '/test/data', scopeId: 'm1' });
     const store = new ScopeCursorStore({ inner, defaultSourceId: 'graph' });
 
     const all = await store.readAll();
@@ -149,7 +149,7 @@ describe('ScopeCursorStore', () => {
 
   it('reset writes empty JSON object', async () => {
     vol.fromJSON({});
-    const inner = new FileCursorStore({ rootDir: '/test/data', mailboxId: 'm1' });
+    const inner = new FileCursorStore({ rootDir: '/test/data', scopeId: 'm1' });
     const store = new ScopeCursorStore({ inner, defaultSourceId: 'graph' });
 
     await store.commitAll({ graph: 'g1' });

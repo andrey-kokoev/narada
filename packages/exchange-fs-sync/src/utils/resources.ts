@@ -56,7 +56,7 @@ export class ResourceManager {
    * Check if a new sync can be started
    * Returns true if resources are available
    */
-  canStartSync(_mailboxId: string): boolean {
+  canStartSync(_scopeId: string): boolean {
     const currentMemory = this.getTotalMemoryUsage();
     const estimatedNewSyncMemory = this.limits.maxMemoryMB * 0.8; // Estimate 80% of limit for new sync
 
@@ -83,7 +83,7 @@ export class ResourceManager {
   /**
    * Start tracking a new sync
    */
-  trackSync(mailboxId: string, initialUsage?: Partial<ResourceUsage>): void {
+  trackSync(scopeId: string, initialUsage?: Partial<ResourceUsage>): void {
     const memory = getMemoryUsage();
     const usage: ResourceUsage = {
       memoryMB: initialUsage?.memoryMB ?? memory.heapUsedMB,
@@ -91,22 +91,22 @@ export class ResourceManager {
       networkRequestsPerSec: initialUsage?.networkRequestsPerSec ?? 0,
     };
 
-    this.activeSyncs.set(mailboxId, usage);
-    this.syncStartTimes.set(mailboxId, Date.now());
-    this.networkRequestTimestamps.set(mailboxId, []);
-    this.diskIOTimestamps.set(mailboxId, []);
+    this.activeSyncs.set(scopeId, usage);
+    this.syncStartTimes.set(scopeId, Date.now());
+    this.networkRequestTimestamps.set(scopeId, []);
+    this.diskIOTimestamps.set(scopeId, []);
   }
 
   /**
    * End tracking a sync
    */
-  endSync(mailboxId: string): ResourceUsage | undefined {
-    const usage = this.activeSyncs.get(mailboxId);
+  endSync(scopeId: string): ResourceUsage | undefined {
+    const usage = this.activeSyncs.get(scopeId);
     
-    this.activeSyncs.delete(mailboxId);
-    this.syncStartTimes.delete(mailboxId);
-    this.networkRequestTimestamps.delete(mailboxId);
-    this.diskIOTimestamps.delete(mailboxId);
+    this.activeSyncs.delete(scopeId);
+    this.syncStartTimes.delete(scopeId);
+    this.networkRequestTimestamps.delete(scopeId);
+    this.diskIOTimestamps.delete(scopeId);
 
     return usage;
   }
@@ -114,10 +114,10 @@ export class ResourceManager {
   /**
    * Update resource usage for a sync
    */
-  updateUsage(mailboxId: string, usage: Partial<ResourceUsage>): void {
-    const current = this.activeSyncs.get(mailboxId);
+  updateUsage(scopeId: string, usage: Partial<ResourceUsage>): void {
+    const current = this.activeSyncs.get(scopeId);
     if (current) {
-      this.activeSyncs.set(mailboxId, {
+      this.activeSyncs.set(scopeId, {
         ...current,
         ...usage,
       });
@@ -127,8 +127,8 @@ export class ResourceManager {
   /**
    * Record a network request for rate tracking
    */
-  recordNetworkRequest(mailboxId: string): void {
-    const timestamps = this.networkRequestTimestamps.get(mailboxId);
+  recordNetworkRequest(scopeId: string): void {
+    const timestamps = this.networkRequestTimestamps.get(scopeId);
     if (timestamps) {
       const now = Date.now();
       timestamps.push(now);
@@ -142,8 +142,8 @@ export class ResourceManager {
   /**
    * Record a disk I/O operation for rate tracking
    */
-  recordDiskIO(mailboxId: string): void {
-    const timestamps = this.diskIOTimestamps.get(mailboxId);
+  recordDiskIO(scopeId: string): void {
+    const timestamps = this.diskIOTimestamps.get(scopeId);
     if (timestamps) {
       const now = Date.now();
       timestamps.push(now);
@@ -157,8 +157,8 @@ export class ResourceManager {
   /**
    * Get current resource usage for a sync
    */
-  getUsage(mailboxId: string): ResourceUsage | undefined {
-    return this.activeSyncs.get(mailboxId);
+  getUsage(scopeId: string): ResourceUsage | undefined {
+    return this.activeSyncs.get(scopeId);
   }
 
   /**
@@ -256,15 +256,15 @@ export class ResourceManager {
   /**
    * Get list of active mailbox IDs
    */
-  getActiveMailboxIds(): string[] {
+  getActiveScopeIds(): string[] {
     return Array.from(this.activeSyncs.keys());
   }
 
   /**
    * Get sync duration for a mailbox
    */
-  getSyncDurationMs(mailboxId: string): number | undefined {
-    const startTime = this.syncStartTimes.get(mailboxId);
+  getSyncDurationMs(scopeId: string): number | undefined {
+    const startTime = this.syncStartTimes.get(scopeId);
     if (startTime) {
       return Date.now() - startTime;
     }

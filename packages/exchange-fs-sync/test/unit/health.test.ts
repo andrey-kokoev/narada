@@ -19,7 +19,7 @@ describe('Health File', () => {
     it('should write health file with all fields', async () => {
       const data: Omit<HealthFileData, 'timestamp'> = {
         status: 'healthy',
-        mailboxId: 'test@example.com',
+        scopeId: 'test@example.com',
         lastSyncAt: new Date().toISOString(),
         eventsApplied: 10,
         eventsSkipped: 2,
@@ -42,7 +42,7 @@ describe('Health File', () => {
       const parsed = JSON.parse(content);
 
       expect(parsed.status).toBe('healthy');
-      expect(parsed.mailboxId).toBe('test@example.com');
+      expect(parsed.scopeId).toBe('test@example.com');
       expect(parsed.eventsApplied).toBe(10);
       expect(parsed.metrics.messagesPerSecond).toBe(6.67);
       expect(parsed.timestamp).toBeDefined();
@@ -51,7 +51,7 @@ describe('Health File', () => {
     it('should include error information', async () => {
       const data: Omit<HealthFileData, 'timestamp'> = {
         status: 'error',
-        mailboxId: 'test@example.com',
+        scopeId: 'test@example.com',
         lastSyncAt: null,
         eventsApplied: 0,
         eventsSkipped: 0,
@@ -88,7 +88,7 @@ describe('Health File', () => {
     it('should mark success with metrics', async () => {
       const writer = createHealthWriter({
         rootDir: tempDir,
-        mailboxId: 'test@example.com',
+        scopeId: 'test@example.com',
       });
 
       await writer.markSuccess(50, 5, 2000);
@@ -109,7 +109,7 @@ describe('Health File', () => {
     it('should mark error with metrics', async () => {
       const writer = createHealthWriter({
         rootDir: tempDir,
-        mailboxId: 'test@example.com',
+        scopeId: 'test@example.com',
       });
 
       await writer.markError(new Error('Sync failed'));
@@ -128,7 +128,7 @@ describe('Health File', () => {
     it('should track recent errors', async () => {
       const writer = createHealthWriter({
         rootDir: tempDir,
-        mailboxId: 'test@example.com',
+        scopeId: 'test@example.com',
       });
 
       // First error
@@ -163,7 +163,7 @@ describe('Health File', () => {
     it('should limit recent errors to 10', async () => {
       const writer = createHealthWriter({
         rootDir: tempDir,
-        mailboxId: 'test@example.com',
+        scopeId: 'test@example.com',
       });
 
       // Create 15 previous errors
@@ -195,7 +195,7 @@ describe('Health File', () => {
     it('should preserve previous data on success', async () => {
       const writer = createHealthWriter({
         rootDir: tempDir,
-        mailboxId: 'test@example.com',
+        scopeId: 'test@example.com',
       });
 
       const previousData: Partial<HealthFileData> = {
@@ -220,7 +220,7 @@ describe('Health File', () => {
     it('should extract error code from error object', async () => {
       const writer = createHealthWriter({
         rootDir: tempDir,
-        mailboxId: 'test@example.com',
+        scopeId: 'test@example.com',
       });
 
       const error = new Error('Custom error') as Error & { code: string };
@@ -237,7 +237,7 @@ describe('Health File', () => {
     it('should allow custom write', async () => {
       const writer = createHealthWriter({
         rootDir: tempDir,
-        mailboxId: 'test@example.com',
+        scopeId: 'test@example.com',
       });
 
       await writer.write({

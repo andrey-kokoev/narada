@@ -54,7 +54,7 @@ describe('MultiSourceSyncRunner', () => {
   });
 
   async function setupRunner(sources: Source[], rootDir: string) {
-    const cursorStore = new FileCursorStore({ rootDir, mailboxId: 'test-scope' });
+    const cursorStore = new FileCursorStore({ rootDir, scopeId: 'test-scope' });
     const applyLogStore = new FileApplyLogStore({ rootDir });
 
     const projector = {
@@ -112,7 +112,7 @@ describe('MultiSourceSyncRunner', () => {
     ], 'cB');
 
     const appliedOrder: string[] = [];
-    const cursorStore = new FileCursorStore({ rootDir, mailboxId: 'test-scope' });
+    const cursorStore = new FileCursorStore({ rootDir, scopeId: 'test-scope' });
     const applyLogStore = new FileApplyLogStore({ rootDir });
 
     const runner = new MultiSourceSyncRunner({
@@ -144,7 +144,7 @@ describe('MultiSourceSyncRunner', () => {
     ], 'cA');
 
     const appliedOrder: string[] = [];
-    const cursorStore = new FileCursorStore({ rootDir, mailboxId: 'test-scope' });
+    const cursorStore = new FileCursorStore({ rootDir, scopeId: 'test-scope' });
     const applyLogStore = new FileApplyLogStore({ rootDir });
 
     const runner = new MultiSourceSyncRunner({
@@ -172,7 +172,7 @@ describe('MultiSourceSyncRunner', () => {
     const sourceA = new ArraySource('srcA', [makeRecord('a1', '2024-01-01T00:00:00Z', {}, 'srcA')], 'cA2');
     const sourceB = new ArraySource('srcB', [makeRecord('b1', '2024-01-01T00:00:00Z', {}, 'srcB')], 'cB2');
 
-    const cursorStore = new FileCursorStore({ rootDir, mailboxId: 'test-scope' });
+    const cursorStore = new FileCursorStore({ rootDir, scopeId: 'test-scope' });
     // Seed a composite cursor
     await cursorStore.commit(JSON.stringify({ srcA: 'cA1', srcB: 'cB1' }));
 
@@ -235,7 +235,7 @@ describe('MultiSourceSyncRunner', () => {
 
   it('reports prior cursor correctly when resuming composite', async () => {
     const rootDir = await mkdtemp(join(tmpdir(), 'exchange-fs-multi-sync-'));
-    const cursorStore = new FileCursorStore({ rootDir, mailboxId: 'test-scope' });
+    const cursorStore = new FileCursorStore({ rootDir, scopeId: 'test-scope' });
     await cursorStore.commit(JSON.stringify({ srcA: 'oldA', srcB: 'oldB' }));
 
     const sourceA = new ArraySource('srcA', [], 'newA');
@@ -280,7 +280,7 @@ describe('MultiSourceSyncRunner', () => {
 
   it('does not commit cursor when processing throws and continueOnError is false', async () => {
     const rootDir = await mkdtemp(join(tmpdir(), 'exchange-fs-multi-sync-'));
-    const cursorStore = new FileCursorStore({ rootDir, mailboxId: 'test-scope' });
+    const cursorStore = new FileCursorStore({ rootDir, scopeId: 'test-scope' });
     const source = new ArraySource('src1', [makeRecord('r1', '2024-01-01T00:00:00Z', {}, 'src1')], 'c1');
     const applyLogStore = new FileApplyLogStore({ rootDir });
 
@@ -318,7 +318,7 @@ describe('MultiSourceSyncRunner', () => {
       },
     };
 
-    const cursorStore = new FileCursorStore({ rootDir, mailboxId: 'test-scope' });
+    const cursorStore = new FileCursorStore({ rootDir, scopeId: 'test-scope' });
     const applyLogStore = new FileApplyLogStore({ rootDir });
     const runner = new MultiSourceSyncRunner({
       rootDir,
@@ -345,7 +345,7 @@ describe('MultiSourceSyncRunner', () => {
     const source = new ArraySource('src1', [], 'c1');
 
     let rebuilt = false;
-    const cursorStore = new FileCursorStore({ rootDir, mailboxId: 'test-scope' });
+    const cursorStore = new FileCursorStore({ rootDir, scopeId: 'test-scope' });
     const applyLogStore = new FileApplyLogStore({ rootDir });
     const runner = new MultiSourceSyncRunner({
       rootDir,

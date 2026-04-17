@@ -202,8 +202,8 @@ describe("ConfirmationResolver", () => {
       outboundStore.createCommand(
         {
           outbound_id: "ob-1",
-          conversation_id: "conv-1",
-          mailbox_id: "mb-1",
+          context_id: "conv-1",
+          scope_id: "mb-1",
           action_type: "send_reply",
           status: "confirmed",
           latest_version: 1,
@@ -252,8 +252,8 @@ describe("ConfirmationResolver", () => {
       outboundStore.createCommand(
         {
           outbound_id: "ob-1",
-          conversation_id: "conv-1",
-          mailbox_id: "mb-1",
+          context_id: "conv-1",
+          scope_id: "mb-1",
           action_type: "send_reply",
           status: "failed_terminal",
           latest_version: 1,
@@ -302,8 +302,8 @@ describe("ConfirmationResolver", () => {
       outboundStore.createCommand(
         {
           outbound_id: "ob-1",
-          conversation_id: "conv-1",
-          mailbox_id: "mb-1",
+          context_id: "conv-1",
+          scope_id: "mb-1",
           action_type: "send_reply",
           status: "pending",
           latest_version: 1,
@@ -409,8 +409,8 @@ describe("ConfirmationResolver", () => {
       outboundStore.createCommand(
         {
           outbound_id: "ob-1",
-          conversation_id: "conv-1",
-          mailbox_id: "mb-1",
+          context_id: "conv-1",
+          scope_id: "mb-1",
           action_type: "send_reply",
           status: "confirmed",
           latest_version: 1,
