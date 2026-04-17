@@ -1,7 +1,7 @@
 /**
  * SQLite-backed Coordinator Store
  *
- * Durable state for foreman, charter outputs, thread records, and policy overrides.
+ * Durable state for foreman, charter outputs, context records, and policy overrides.
  */
 
 import Database from "better-sqlite3";
@@ -22,30 +22,6 @@ import type {
   OperatorActionRequest,
 } from "./types.js";
 import { isValidCreatedBy } from "./types.js";
-import type {
-  ThreadRecord,
-  ConversationRecord,
-  MailCompatCoordinatorStore,
-} from "./mail-compat-types.js";
-import { contextRecordToConversationRecord } from "./mail-compat-types.js";
-
-function rowToThreadRecord(row: Record<string, unknown>): ThreadRecord {
-  return {
-    conversation_id: String(row.thread_id),
-    mailbox_id: String(row.mailbox_id),
-    primary_charter: String(row.primary_charter),
-    secondary_charters_json: String(row.secondary_charters_json),
-    status: String(row.status),
-    assigned_agent: row.assigned_agent ? String(row.assigned_agent) : null,
-    last_message_at: String(row.last_message_at),
-    last_inbound_at: row.last_inbound_at ? String(row.last_inbound_at) : null,
-    last_outbound_at: row.last_outbound_at ? String(row.last_outbound_at) : null,
-    last_analyzed_at: row.last_analyzed_at ? String(row.last_analyzed_at) : null,
-    last_triaged_at: row.last_triaged_at ? String(row.last_triaged_at) : null,
-    created_at: String(row.created_at),
-    updated_at: String(row.updated_at),
-  };
-}
 
 function rowToContextRecord(row: Record<string, unknown>): import("./types.js").ContextRecord {
   return {
@@ -228,7 +204,7 @@ export interface SqliteCoordinatorStoreOptions {
   db: Database.Database;
 }
 
-export class SqliteCoordinatorStore implements CoordinatorStore, MailCompatCoordinatorStore {
+export class SqliteCoordinatorStore implements CoordinatorStore {
   readonly db: Database.Database;
 
   constructor(opts: SqliteCoordinatorStoreOptions) {
@@ -236,33 +212,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore, MailCompatCoord
   }
 
   initSchema(): void {
-    this.migrateConversationRecordsToContextRecords();
-
     this.db.exec(`
-      -- Legacy thread_records (deprecated, retained for rollback safety)
-      create table if not exists thread_records (
-        thread_id text not null,
-        mailbox_id text not null,
-        primary_charter text not null,
-        secondary_charters_json text not null default '[]',
-        status text not null,
-        assigned_agent text,
-        last_message_at text not null,
-        last_inbound_at text,
-        last_outbound_at text,
-        last_analyzed_at text,
-        last_triaged_at text,
-        created_at text not null,
-        updated_at text not null,
-        primary key (thread_id, mailbox_id)
-      );
-
-      create index if not exists idx_thread_records_mailbox
-        on thread_records(mailbox_id, updated_at desc);
-
-      create index if not exists idx_thread_records_status
-        on thread_records(status, mailbox_id);
-
       -- v2 context_records (canonical control-plane context metadata)
       create table if not exists context_records (
         context_id text primary key,
@@ -297,32 +247,6 @@ export class SqliteCoordinatorStore implements CoordinatorStore, MailCompatCoord
 
       create index if not exists idx_context_revisions_lookup
         on context_revisions(context_id, ordinal);
-
-      -- Mailbox compatibility views (reverse of previous Task 082)
-      create view if not exists conversation_records as
-      select
-        context_id as conversation_id,
-        scope_id as mailbox_id,
-        status,
-        primary_charter,
-        secondary_charters_json,
-        assigned_agent,
-        last_message_at,
-        last_inbound_at,
-        last_outbound_at,
-        last_analyzed_at,
-        last_triaged_at,
-        created_at,
-        updated_at
-      from context_records;
-
-      create view if not exists conversation_revisions as
-      select
-        context_id as conversation_id,
-        ordinal,
-        observed_at,
-        trigger_event_id
-      from context_revisions;
 
       -- v2 work_items (terminal schedulable unit)
       create table if not exists work_items (
@@ -538,7 +462,6 @@ export class SqliteCoordinatorStore implements CoordinatorStore, MailCompatCoord
         on operator_action_requests(scope_id, status, requested_at);
     `);
 
-    this.migrateThreadRecordsToConversationRecords();
     this.migrateAgentSessionsSchema();
     this.migrateWorkItemsContextJson();
   }
@@ -567,133 +490,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore, MailCompatCoord
     }
   }
 
-  private migrateThreadRecordsToConversationRecords(): void {
-    this.db.prepare(`
-      insert or ignore into context_records (
-        context_id, scope_id, primary_charter, secondary_charters_json,
-        status, assigned_agent, last_message_at, last_inbound_at, last_outbound_at,
-        last_analyzed_at, last_triaged_at, created_at, updated_at
-      )
-      select
-        thread_id as context_id, mailbox_id as scope_id, primary_charter, secondary_charters_json,
-        status, assigned_agent, last_message_at, last_inbound_at, last_outbound_at,
-        last_analyzed_at, last_triaged_at, created_at, updated_at
-      from thread_records
-    `).run();
-  }
 
-  private migrateConversationRecordsToContextRecords(): void {
-    // Drop old compatibility views if they exist, so we can drop the old base tables
-    const contextRecordsType = this.db.prepare(`select type from sqlite_master where name = 'context_records'`).get() as { type: string } | undefined;
-    if (contextRecordsType?.type === 'view') {
-      this.db.prepare(`drop view if exists context_records`).run();
-    }
-    const contextRevisionsType = this.db.prepare(`select type from sqlite_master where name = 'context_revisions'`).get() as { type: string } | undefined;
-    if (contextRevisionsType?.type === 'view') {
-      this.db.prepare(`drop view if exists context_revisions`).run();
-    }
-
-    // Ensure neutral tables exist before attempting migration
-    this.db.prepare(`
-      create table if not exists context_records (
-        context_id text primary key,
-        scope_id text not null,
-        primary_charter text not null,
-        secondary_charters_json text not null default '[]',
-        status text not null default 'active',
-        assigned_agent text,
-        last_message_at text,
-        last_inbound_at text,
-        last_outbound_at text,
-        last_analyzed_at text,
-        last_triaged_at text,
-        created_at text not null default (datetime('now')),
-        updated_at text not null default (datetime('now'))
-      )
-    `).run();
-
-    this.db.prepare(`
-      create table if not exists context_revisions (
-        revision_record_id integer primary key autoincrement,
-        context_id text not null,
-        ordinal integer not null,
-        observed_at text not null default (datetime('now')),
-        trigger_event_id text,
-        unique (context_id, ordinal)
-      )
-    `).run();
-
-    // Migrate data from old base tables to new base tables if old tables still exist
-    const conversationRecordsType = this.db.prepare(`select type from sqlite_master where name = 'conversation_records'`).get() as { type: string } | undefined;
-    if (conversationRecordsType?.type === 'table') {
-      this.db.prepare(`
-        insert or ignore into context_records (
-          context_id, scope_id, primary_charter, secondary_charters_json,
-          status, assigned_agent, last_message_at, last_inbound_at, last_outbound_at,
-          last_analyzed_at, last_triaged_at, created_at, updated_at
-        )
-        select
-          conversation_id as context_id, mailbox_id as scope_id, primary_charter, secondary_charters_json,
-          status, assigned_agent, last_message_at, last_inbound_at, last_outbound_at,
-          last_analyzed_at, last_triaged_at, created_at, updated_at
-        from conversation_records
-      `).run();
-
-      this.db.prepare(`
-        insert or ignore into context_revisions (
-          context_id, ordinal, observed_at, trigger_event_id
-        )
-        select
-          conversation_id as context_id, ordinal, observed_at, trigger_event_id
-        from conversation_revisions
-      `).run();
-
-      this.db.prepare(`drop table if exists conversation_records`).run();
-      this.db.prepare(`drop table if exists conversation_revisions`).run();
-    }
-  }
-
-  upsertThread(record: ThreadRecord): void {
-    this.db.prepare(`
-      insert into thread_records (
-        thread_id, mailbox_id, primary_charter, secondary_charters_json, status,
-        assigned_agent, last_message_at, last_inbound_at, last_outbound_at,
-        last_analyzed_at, last_triaged_at, created_at, updated_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      on conflict(thread_id, mailbox_id) do update set
-        primary_charter = excluded.primary_charter,
-        secondary_charters_json = excluded.secondary_charters_json,
-        status = excluded.status,
-        assigned_agent = excluded.assigned_agent,
-        last_message_at = excluded.last_message_at,
-        last_inbound_at = excluded.last_inbound_at,
-        last_outbound_at = excluded.last_outbound_at,
-        last_analyzed_at = excluded.last_analyzed_at,
-        last_triaged_at = excluded.last_triaged_at,
-        updated_at = excluded.updated_at
-    `).run(
-      record.conversation_id,
-      record.mailbox_id,
-      record.primary_charter,
-      record.secondary_charters_json,
-      record.status,
-      record.assigned_agent,
-      record.last_message_at,
-      record.last_inbound_at,
-      record.last_outbound_at,
-      record.last_analyzed_at,
-      record.last_triaged_at,
-      record.created_at,
-      record.updated_at,
-    );
-  }
-
-  getThread(threadId: string, mailboxId: string): ThreadRecord | undefined {
-    const row = this.db.prepare(`
-      select * from thread_records where thread_id = ? and mailbox_id = ?
-    `).get(threadId, mailboxId) as Record<string, unknown> | undefined;
-    return row ? rowToThreadRecord(row) : undefined;
-  }
 
   upsertContextRecord(record: import("./types.js").ContextRecord): void {
     this.db.prepare(`
@@ -738,55 +535,30 @@ export class SqliteCoordinatorStore implements CoordinatorStore, MailCompatCoord
     return row ? rowToContextRecord(row) : undefined;
   }
 
-  /** @deprecated Mail-vertical compatibility wrapper — use upsertContextRecord */
-  upsertConversationRecord(record: ConversationRecord): void {
-    this.upsertContextRecord({
-      context_id: record.conversation_id,
-      scope_id: record.mailbox_id,
-      primary_charter: record.primary_charter,
-      secondary_charters_json: record.secondary_charters_json,
-      status: record.status,
-      assigned_agent: record.assigned_agent,
-      last_message_at: record.last_message_at,
-      last_inbound_at: record.last_inbound_at,
-      last_outbound_at: record.last_outbound_at,
-      last_analyzed_at: record.last_analyzed_at,
-      last_triaged_at: record.last_triaged_at,
-      created_at: record.created_at,
-      updated_at: record.updated_at,
-    });
-  }
-
-  /** @deprecated Mail-vertical compatibility wrapper — use getContextRecord */
-  getConversationRecord(conversationId: string): ConversationRecord | undefined {
-    const context = this.getContextRecord(conversationId);
-    return context ? contextRecordToConversationRecord(context) : undefined;
-  }
-
-  nextRevisionOrdinal(conversationId: string): number {
+  nextRevisionOrdinal(contextId: string): number {
     const tx = this.db.transaction(() => {
       const current = this.db.prepare(`
         select coalesce(max(ordinal), 0) as max_ordinal from context_revisions where context_id = ?
-      `).get(conversationId) as { max_ordinal: number };
+      `).get(contextId) as { max_ordinal: number };
       const next = current.max_ordinal + 1;
       this.db.prepare(`
         insert into context_revisions (context_id, ordinal, observed_at, trigger_event_id)
         values (?, ?, datetime('now'), null)
-      `).run(conversationId, next);
+      `).run(contextId, next);
       return next;
     });
     return tx();
   }
 
   recordRevision(
-    conversationId: string,
+    contextId: string,
     ordinal: number,
     triggerEventId: string | null = null,
   ): void {
     this.db.prepare(`
       insert into context_revisions (context_id, ordinal, observed_at, trigger_event_id)
       values (?, ?, datetime('now'), ?)
-    `).run(conversationId, ordinal, triggerEventId);
+    `).run(contextId, ordinal, triggerEventId);
   }
 
   recordContextRevision(
@@ -800,13 +572,13 @@ export class SqliteCoordinatorStore implements CoordinatorStore, MailCompatCoord
     `).run(contextId, ordinal, triggerEventId);
   }
 
-  getLatestRevisionOrdinal(conversationId: string): number | null {
+  getLatestRevisionOrdinal(contextId: string): number | null {
     const row = this.db.prepare(`
       select ordinal from context_revisions
       where context_id = ?
       order by ordinal desc
       limit 1
-    `).get(conversationId) as { ordinal: number } | undefined;
+    `).get(contextId) as { ordinal: number } | undefined;
     return row ? row.ordinal : null;
   }
 

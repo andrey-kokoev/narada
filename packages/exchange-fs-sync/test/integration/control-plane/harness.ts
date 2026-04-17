@@ -5,6 +5,7 @@ import { SqliteAgentTraceStore } from "../../../src/agent/traces/store.js";
 import { SqliteIntentStore } from "../../../src/intent/store.js";
 import { SqliteScheduler } from "../../../src/scheduler/scheduler.js";
 import { DefaultForemanFacade } from "../../../src/foreman/facade.js";
+import { MailboxContextStrategy } from "../../../src/foreman/mailbox/context-strategy.js";
 import type { SyncCompletionSignal, EvaluationEnvelope, CharterInvocationEnvelope } from "../../../src/foreman/types.js";
 import type { WorkItem, ExecutionAttempt } from "../../../src/coordinator/types.js";
 import type { RuntimePolicy } from "../../../src/config/types.js";
@@ -45,30 +46,16 @@ export function createHarness(runnerId = "runner-test"): Harness {
     db,
     foremanId: "fm-test",
     getRuntimePolicy: () => makeRuntimePolicy(),
+    contextFormationStrategy: new MailboxContextStrategy(),
   });
   return { db, coordinatorStore, outboundStore, intentStore, traceStore, scheduler, foreman };
 }
 
 export function insertConversation(h: Harness, conversationId: string, mailboxId = "mb-1"): void {
   const now = new Date().toISOString();
-  h.coordinatorStore.upsertConversationRecord({
-    conversation_id: conversationId,
-    mailbox_id: mailboxId,
-    primary_charter: "support_steward",
-    secondary_charters_json: "[]",
-    status: "active",
-    assigned_agent: null,
-    last_message_at: null,
-    last_inbound_at: null,
-    last_outbound_at: null,
-    last_analyzed_at: null,
-    last_triaged_at: null,
-    created_at: now,
-    updated_at: now,
-  });
-  h.coordinatorStore.upsertThread({
-    conversation_id: conversationId,
-    mailbox_id: mailboxId,
+  h.coordinatorStore.upsertContextRecord({
+    context_id: conversationId,
+    scope_id: mailboxId,
     primary_charter: "support_steward",
     secondary_charters_json: "[]",
     status: "active",

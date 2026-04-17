@@ -13,9 +13,9 @@ describe("SqliteCoordinatorStore — tool_call_records", () => {
     store.initSchema();
 
     // Seed required foreign-key rows
-    store.upsertConversationRecord({
-      conversation_id: "conv-1",
-      mailbox_id: "mb-1",
+    store.upsertContextRecord({
+      context_id: "conv-1",
+      scope_id: "mb-1",
       primary_charter: "support_steward",
       secondary_charters_json: "[]",
       status: "active",

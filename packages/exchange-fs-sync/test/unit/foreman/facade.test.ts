@@ -4,6 +4,7 @@ import { SqliteCoordinatorStore } from "../../../src/coordinator/store.js";
 import { SqliteOutboundStore } from "../../../src/outbound/store.js";
 import { SqliteIntentStore } from "../../../src/intent/store.js";
 import { DefaultForemanFacade } from "../../../src/foreman/facade.js";
+import { MailboxContextStrategy } from "../../../src/foreman/mailbox/context-strategy.js";
 import type { SyncCompletionSignal, EvaluationEnvelope } from "../../../src/foreman/types.js";
 import type { WorkItem } from "../../../src/coordinator/types.js";
 import type { RuntimePolicy } from "../../../src/config/types.js";
@@ -38,6 +39,7 @@ describe("DefaultForemanFacade", () => {
       db,
       foremanId: "fm-test",
       getRuntimePolicy: () => makeRuntimePolicy(),
+      contextFormationStrategy: new MailboxContextStrategy(),
     });
   });
 
@@ -58,9 +60,9 @@ describe("DefaultForemanFacade", () => {
   }
 
   function insertConversation(conversationId: string, mailboxId: string = "mb-1"): void {
-    coordinatorStore.upsertConversationRecord({
-      conversation_id: conversationId,
-      mailbox_id: mailboxId,
+    coordinatorStore.upsertContextRecord({
+      context_id: conversationId,
+      scope_id: mailboxId,
       primary_charter: "support_steward",
       secondary_charters_json: "[]",
       status: "active",
@@ -160,7 +162,7 @@ describe("DefaultForemanFacade", () => {
       expect(result.opened[0]!.context_id).toBe("conv-1");
       expect(result.nooped).toHaveLength(0);
 
-      const record = coordinatorStore.getConversationRecord("conv-1");
+      const record = coordinatorStore.getContextRecord("conv-1");
       expect(record).toBeDefined();
 
       const active = coordinatorStore.getActiveWorkItemForContext("conv-1");
@@ -561,12 +563,13 @@ describe("DefaultForemanFacade", () => {
         db,
         foremanId: "fm-test",
         getRuntimePolicy: () => makeRuntimePolicy({ primary_charter: "custom_charter" }),
+        contextFormationStrategy: new MailboxContextStrategy(),
       });
       const signal = makeSignal([
         { context_id: "conv-policy", previous_revision_ordinal: 0, current_revision_ordinal: 1, change_kinds: ["new_message"] },
       ]);
       await policyFacade.onSyncCompleted(signal);
-      const record = coordinatorStore.getConversationRecord("conv-policy");
+      const record = coordinatorStore.getContextRecord("conv-policy");
       expect(record).toBeDefined();
       expect(record!.primary_charter).toBe("custom_charter");
     });
@@ -579,12 +582,13 @@ describe("DefaultForemanFacade", () => {
         db,
         foremanId: "fm-test",
         getRuntimePolicy: () => makeRuntimePolicy({ secondary_charters: ["helper_1", "helper_2"] }),
+        contextFormationStrategy: new MailboxContextStrategy(),
       });
       const signal = makeSignal([
         { context_id: "conv-secondary", previous_revision_ordinal: 0, current_revision_ordinal: 1, change_kinds: ["new_message"] },
       ]);
       await policyFacade.onSyncCompleted(signal);
-      const record = coordinatorStore.getConversationRecord("conv-secondary");
+      const record = coordinatorStore.getContextRecord("conv-secondary");
       expect(record).toBeDefined();
       expect(JSON.parse(record!.secondary_charters_json)).toEqual(["helper_1", "helper_2"]);
     });
@@ -597,6 +601,7 @@ describe("DefaultForemanFacade", () => {
         db,
         foremanId: "fm-test",
         getRuntimePolicy: () => makeRuntimePolicy({ require_human_approval: true }),
+        contextFormationStrategy: new MailboxContextStrategy(),
       });
       insertConversation("conv-approval");
       const workItem = insertWorkItem("conv-approval", "executing", "rev-1");

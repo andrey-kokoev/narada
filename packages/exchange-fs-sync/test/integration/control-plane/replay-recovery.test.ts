@@ -609,9 +609,9 @@ describe("Replay and Recovery Tests", () => {
     it("C3: traces deleted before mailbox truth reconstruction does not break views", () => {
       insertConversation(h, "conv-1");
       h.coordinatorStore.nextRevisionOrdinal("conv-1");
-      h.coordinatorStore.upsertConversationRecord({
-        conversation_id: "conv-1",
-        mailbox_id: "mb-1",
+      h.coordinatorStore.upsertContextRecord({
+        context_id: "conv-1",
+        scope_id: "mb-1",
         primary_charter: "support_steward",
         secondary_charters_json: "[]",
         status: "active",
@@ -628,9 +628,9 @@ describe("Replay and Recovery Tests", () => {
       h.db.prepare("delete from agent_traces").run();
 
       // Rebuild views from durable coordinator state
-      const record = h.coordinatorStore.getConversationRecord("conv-1");
+      const record = h.coordinatorStore.getContextRecord("conv-1");
       expect(record).toBeDefined();
-      expect(record!.conversation_id).toBe("conv-1");
+      expect(record!.context_id).toBe("conv-1");
     });
 
     it("C4: no trace store exists — full cycle is correct without trace writes", async () => {

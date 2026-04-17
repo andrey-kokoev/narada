@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { normalizeMessageForEnvelope, buildInvocationEnvelope } from "../../../src/charter/envelope.js";
+import { buildInvocationEnvelope } from "../../../src/charter/envelope.js";
+import { normalizeMessageForEnvelope } from "../../../src/charter/mailbox/materializer.js";
 import type { NormalizedMessage } from "../../../src/types/normalized.js";
 import type { CoordinatorStore, WorkItem } from "../../../src/coordinator/types.js";
 import type { RuntimePolicy } from "../../../src/config/types.js";

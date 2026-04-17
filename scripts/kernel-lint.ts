@@ -73,6 +73,10 @@ export const PATTERNS = [
     name: "mailbox_obs_import",
     regex: /from\s+['"][^'"]*observability\/mailbox[^'"]*['"]/,
   },
+  {
+    name: "mailbox_runtime_import",
+    regex: /from\s+['"][^'"]*\/mailbox\/[^'"]*['"]/,
+  },
 ];
 
 /**
@@ -81,65 +85,47 @@ export const PATTERNS = [
  * Value: array of allowed pattern names. Use ["*"] to allow all patterns in a file.
  */
 export const ALLOWLIST: Record<string, string[]> = {
-  // Rationale: charter envelope is a hybrid module. It contains the generic
-  // `buildInvocationEnvelope` but also the mail-specific
-  // `normalizeMessageForEnvelope` materializer which imports message
-  // persistence and normalized message types.
-  "charter/envelope.ts": [
+  // Rationale: `charter/mailbox/materializer.ts` is the dedicated mail-vertical
+  // materializer. It intentionally imports normalized message types and the
+  // message store to project compiler filesystem state into charter envelopes.
+  "charter/mailbox/materializer.ts": [
     "persistence_messages_import",
     "normalized_types_import",
   ],
 
-  // Rationale: `MailboxContextStrategy` is explicitly mail-vertical. It forms
-  // PolicyContext from mailbox-specific facts (conversation_id / thread_id).
-  "foreman/context.ts": ["conversation_id", "thread_id"],
+  // Rationale: `charter/envelope.ts` is a generic orchestration module that
+  // delegates to the mail-specific materializer via an injected interface.
+  // It must be allowed to import from the mailbox sub-directory.
+  "charter/envelope.ts": ["mailbox_runtime_import"],
 
-  // Rationale: `DefaultForemanFacade` orchestrates mail-specific work opening.
-  // It maps context_id ↔ conversation_id and scope_id ↔ mailbox_id when
-  // building records for the mailbox compatibility layer.
-  "foreman/facade.ts": [
-    "conversation_id",
-    "mailbox_id",
-    "mail_compat_import",
-  ],
+  // Rationale: `foreman/mailbox/context-strategy.ts` is explicitly mail-vertical.
+  // It forms PolicyContext from mailbox-specific facts (conversation_id / thread_id).
+  "foreman/mailbox/context-strategy.ts": ["conversation_id", "thread_id"],
 
   // Rationale: `OutboundHandoff` creates outbound commands from foreman
   // decisions. It uses conversation_id / mailbox_id when translating neutral
   // context/scope into mail-shaped outbound command rows.
   "foreman/handoff.ts": ["conversation_id", "mailbox_id"],
 
-  // Rationale: `SqliteCoordinatorStore` implements migration from old
-  // mailbox-era tables to neutral base tables, and retains compatibility
-  // views + wrapper methods for the mail vertical.
-  "coordinator/store.ts": [
-    "conversation_id",
-    "thread_id",
-    "mailbox_id",
-    "conversation_records",
-    "conversation_revisions",
-    "mail_compat_import",
-  ],
+  // Rationale: `SqliteCoordinatorStore` retains mailbox-era column fallbacks
+  // in `rowToContextRecord` for compatibility with legacy views.
+  "coordinator/store.ts": ["conversation_id", "mailbox_id"],
 
-  // Rationale: `thread-context.ts` hydrates mailbox-specific thread context
+  // Rationale: `mailbox-thread-context.ts` hydrates mailbox-specific thread context
   // from filesystem views. It is inherently mail-vertical.
-  "coordinator/thread-context.ts": [
+  "coordinator/mailbox-thread-context.ts": [
     "conversation_id",
     "mailbox_id",
     "normalized_types_import",
-    "mail_compat_import",
   ],
 
-  // Rationale: `thread-id.ts` maps normalized messages to Exchange thread IDs.
+  // Rationale: `mailbox-thread-id.ts` maps normalized messages to Exchange thread IDs.
   // It is inherently mail-vertical and references NormalizedMessage.
-  "coordinator/thread-id.ts": [
+  "coordinator/mailbox-thread-id.ts": [
     "conversation_id",
     "thread_id",
     "normalized_types_import",
   ],
-
-  // Rationale: Dedicated mailbox compatibility type surface. Expected to
-  // contain mail-era identifiers and imports from normalized types.
-  "coordinator/mail-compat-types.ts": ["*"],
 
   // Rationale: `observability/mailbox-types.ts` is the dedicated mail-vertical
   // observation type surface. Generic modules must not import this file.

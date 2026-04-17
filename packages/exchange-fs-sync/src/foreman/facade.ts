@@ -24,26 +24,25 @@ import { validateCharterOutput } from "./validation.js";
 import { governEvaluation } from "./governance.js";
 import { IntentHandoff } from "../intent/handoff.js";
 import type { PolicyContext, ContextFormationStrategy } from "./context.js";
-import { MailboxContextStrategy } from "./context.js";
+
 import type {
   WorkItem,
   Evaluation,
   AgentSession,
+  CoordinatorStore,
 } from "../coordinator/types.js";
-import type { MailCompatCoordinatorStore } from "../coordinator/mail-compat-types.js";
 import type { OutboundStore } from "../outbound/store.js";
 import type { IntentStore } from "../intent/store.js";
 import type { RuntimePolicy } from "../config/types.js";
 
 export interface ForemanFacadeDeps {
-  coordinatorStore: MailCompatCoordinatorStore;
+  coordinatorStore: CoordinatorStore;
   outboundStore: OutboundStore;
   intentStore: IntentStore;
   db: Database.Database;
   foremanId: string;
   getRuntimePolicy: (scopeId: string) => RuntimePolicy;
-  /** Optional context formation strategy; defaults to MailboxContextStrategy */
-  contextFormationStrategy?: ContextFormationStrategy;
+  contextFormationStrategy: ContextFormationStrategy;
 }
 
 export interface ForemanFacadeOptions {
@@ -65,7 +64,7 @@ export class DefaultForemanFacade implements ForemanFacade {
       intentStore: deps.intentStore,
       outboundStore: deps.outboundStore,
     });
-    this.contextFormationStrategy = deps.contextFormationStrategy ?? new MailboxContextStrategy();
+    this.contextFormationStrategy = deps.contextFormationStrategy;
   }
 
   async onSyncCompleted(signal: SyncCompletionSignal): Promise<WorkOpeningResult> {
@@ -110,7 +109,6 @@ export class DefaultForemanFacade implements ForemanFacade {
       if (!record) {
         record = this.buildContextRecord(contextId, scopeId);
         this.deps.coordinatorStore.upsertContextRecord(record);
-        this.deps.coordinatorStore.upsertThread(this.toThreadRecord(record));
       }
 
       const latestOrdinal = this.deps.coordinatorStore.getLatestRevisionOrdinal(contextId) ?? 0;
@@ -213,12 +211,6 @@ export class DefaultForemanFacade implements ForemanFacade {
       invocation = JSON.parse(attempt.runtime_envelope_json) as CharterInvocationEnvelope;
     } catch {
       return { success: false, resolution_outcome: "failed", error: "Failed to parse runtime envelope" };
-    }
-
-    // Ensure legacy thread record exists for FK compliance (needed before any decision insert)
-    const contextRecord = this.deps.coordinatorStore.getContextRecord(workItem.context_id);
-    if (contextRecord) {
-      this.deps.coordinatorStore.upsertThread(this.toThreadRecord(contextRecord));
     }
 
     // Reconstruct CharterOutputEnvelope from evaluation for validation
@@ -530,24 +522,6 @@ export class DefaultForemanFacade implements ForemanFacade {
       last_triaged_at: null,
       created_at: now,
       updated_at: now,
-    };
-  }
-
-  private toThreadRecord(record: import("../coordinator/types.js").ContextRecord): import("../coordinator/mail-compat-types.js").ThreadRecord {
-    return {
-      conversation_id: record.context_id,
-      mailbox_id: record.scope_id,
-      primary_charter: record.primary_charter,
-      secondary_charters_json: record.secondary_charters_json,
-      status: record.status,
-      assigned_agent: record.assigned_agent,
-      last_message_at: record.last_message_at ?? new Date(0).toISOString(),
-      last_inbound_at: record.last_inbound_at,
-      last_outbound_at: record.last_outbound_at,
-      last_analyzed_at: record.last_analyzed_at,
-      last_triaged_at: record.last_triaged_at,
-      created_at: record.created_at,
-      updated_at: record.updated_at,
     };
   }
 

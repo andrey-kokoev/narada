@@ -14,9 +14,9 @@ export type {
 export {
   buildInvocationEnvelope,
   buildEvaluationRecord,
-  normalizeMessageForEnvelope,
-  MailboxContextMaterializer,
   TimerContextMaterializer,
   WebhookContextMaterializer,
   FilesystemContextMaterializer,
 } from "./envelope.js";
+
+

@@ -121,16 +121,8 @@ export type {
   CoordinatorStoreView,
   CoordinatorStoreOperatorView,
 } from "./coordinator/types.js";
-export type {
-  ThreadRecord,
-  ConversationRecord,
-  ConversationRevision,
-  NormalizedThreadContext,
-  MailCompatCoordinatorStore,
-} from "./coordinator/mail-compat-types.js";
 export type { SqliteCoordinatorStoreOptions } from "./coordinator/store.js";
-export { deriveThreadId } from "./coordinator/thread-id.js";
-export { contextRecordToConversationRecord } from "./coordinator/mail-compat-types.js";
+export { deriveThreadId } from "./coordinator/mailbox-thread-id.js";
 
 // Foreman exports
 export { DefaultForemanFacade } from "./foreman/facade.js";
@@ -138,8 +130,8 @@ export type {
   ForemanFacadeDeps,
   ForemanFacadeOptions,
 } from "./foreman/facade.js";
+export { MailboxContextStrategy } from "./foreman/mailbox/context-strategy.js";
 export {
-  MailboxContextStrategy,
   TimerContextStrategy,
   WebhookContextStrategy,
   FilesystemContextStrategy,
@@ -191,6 +183,10 @@ export type {
   BuildInvocationEnvelopeOptions,
   BuildEvaluationRecordOptions,
 } from "./charter/index.js";
+export {
+  normalizeMessageForEnvelope,
+  MailboxContextMaterializer,
+} from "./charter/mailbox/materializer.js";
 
 // Agent trace exports
 export { SqliteAgentTraceStore } from "./agent/traces/store.js";

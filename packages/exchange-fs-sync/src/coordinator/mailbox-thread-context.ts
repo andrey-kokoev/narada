@@ -10,7 +10,14 @@
 import { readFile, readdir, readlink } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { NormalizedMessage } from "../types/normalized.js";
-import type { NormalizedThreadContext } from "./mail-compat-types.js";
+
+/** Mail-vertical thread context hydrated from the compiler's filesystem views. */
+export interface NormalizedThreadContext {
+  conversation_id: string;
+  mailbox_id: string;
+  revision_id: string;
+  messages: NormalizedMessage[];
+}
 
 function safeSegment(value: string): string {
   return encodeURIComponent(value);
@@ -21,6 +28,9 @@ export interface ThreadContextHydratorOptions {
   rootDir: string;
 }
 
+// CLASSIFICATION: mail-vertical essential — this hydrator reads compiler
+// filesystem views (views/by-thread) that are specific to the mail vertical.
+// It must not be used by generic kernel code.
 export class ThreadContextHydrator {
   private readonly messagesDir: string;
   private readonly viewsDir: string;

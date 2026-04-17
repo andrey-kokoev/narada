@@ -37,10 +37,10 @@ describe("observation plane", () => {
       executionStore,
     });
 
-    // Seed conversation record for FK compliance
-    coordinatorStore.upsertConversationRecord({
-      conversation_id: "conv-1",
-      mailbox_id: "mb-1",
+    // Seed context record for FK compliance
+    coordinatorStore.upsertContextRecord({
+      context_id: "conv-1",
+      scope_id: "mb-1",
       primary_charter: "support_steward",
       secondary_charters_json: "[]",
       status: "active",

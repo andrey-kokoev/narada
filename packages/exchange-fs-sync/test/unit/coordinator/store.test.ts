@@ -3,8 +3,7 @@ import Database from "better-sqlite3";
 import { SqliteCoordinatorStore } from "../../../src/coordinator/store.js";
 import { SqliteOutboundStore } from "../../../src/outbound/store.js";
 import {
-  createThreadRecord,
-  createConversationRecord,
+  createContextRecord,
   createCharterOutput,
   createForemanDecision,
   createPolicyOverride,
@@ -30,133 +29,40 @@ describe("SqliteCoordinatorStore", () => {
     db.close();
   });
 
-  describe("thread records", () => {
-    it("inserts a new thread record", () => {
-      const record = createThreadRecord();
-      store.upsertThread(record);
+  describe("context records", () => {
+    it("inserts a new context record", () => {
+      const record = createContextRecord();
+      store.upsertContextRecord(record);
 
-      const fetched = store.getThread(record.conversation_id, record.mailbox_id);
+      const fetched = store.getContextRecord(record.context_id);
       expect(fetched).toEqual(record);
     });
 
-    it("updates an existing thread record on conflict", () => {
-      const record = createThreadRecord();
-      store.upsertThread(record);
+    it("updates an existing context record on conflict", () => {
+      const record = createContextRecord();
+      store.upsertContextRecord(record);
 
-      const updated = createThreadRecord({ status: "resolved", updated_at: new Date().toISOString() });
-      store.upsertThread(updated);
+      const updated = createContextRecord({ status: "archived", updated_at: new Date().toISOString() });
+      store.upsertContextRecord(updated);
 
-      const fetched = store.getThread(record.conversation_id, record.mailbox_id);
-      expect(fetched?.status).toBe("resolved");
-      expect(fetched?.updated_at).toBe(updated.updated_at);
-    });
-
-    it("returns undefined for missing thread", () => {
-      expect(store.getThread("missing", "missing")).toBeUndefined();
-    });
-  });
-
-  describe("conversation records", () => {
-    it("inserts a new conversation record", () => {
-      const record = createConversationRecord();
-      store.upsertConversationRecord(record);
-
-      const fetched = store.getConversationRecord(record.conversation_id);
-      expect(fetched).toEqual(record);
-    });
-
-    it("updates an existing conversation record on conflict", () => {
-      const record = createConversationRecord();
-      store.upsertConversationRecord(record);
-
-      const updated = createConversationRecord({ status: "archived", updated_at: new Date().toISOString() });
-      store.upsertConversationRecord(updated);
-
-      const fetched = store.getConversationRecord(record.conversation_id);
+      const fetched = store.getContextRecord(record.context_id);
       expect(fetched?.status).toBe("archived");
       expect(fetched?.updated_at).toBe(updated.updated_at);
     });
 
-    it("returns undefined for missing conversation", () => {
-      expect(store.getConversationRecord("missing")).toBeUndefined();
+    it("returns undefined for missing context", () => {
+      expect(store.getContextRecord("missing")).toBeUndefined();
     });
   });
 
-  describe("migration from thread_records to conversation_records", () => {
-    it("migrates legacy thread_records automatically on initSchema", () => {
-      // Simulate a legacy database by inserting directly into thread_records
-      // before calling initSchema on a fresh store.
-      const legacyDb = new Database(":memory:");
-      legacyDb.exec(`
-        create table thread_records (
-          thread_id text not null,
-          mailbox_id text not null,
-          primary_charter text not null,
-          secondary_charters_json text not null default '[]',
-          status text not null,
-          assigned_agent text,
-          last_message_at text not null,
-          last_inbound_at text,
-          last_outbound_at text,
-          last_analyzed_at text,
-          last_triaged_at text,
-          created_at text not null,
-          updated_at text not null,
-          primary key (thread_id, mailbox_id)
-        );
-      `);
-      const legacyRecord = createThreadRecord({ conversation_id: "legacy-thread", mailbox_id: "mb-1" });
-      legacyDb.prepare(`
-        insert into thread_records values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        legacyRecord.conversation_id,
-        legacyRecord.mailbox_id,
-        legacyRecord.primary_charter,
-        legacyRecord.secondary_charters_json,
-        legacyRecord.status,
-        legacyRecord.assigned_agent,
-        legacyRecord.last_message_at,
-        legacyRecord.last_inbound_at,
-        legacyRecord.last_outbound_at,
-        legacyRecord.last_analyzed_at,
-        legacyRecord.last_triaged_at,
-        legacyRecord.created_at,
-        legacyRecord.updated_at,
-      );
-
-      const migratedStore = new SqliteCoordinatorStore({ db: legacyDb });
-      migratedStore.initSchema();
-
-      const fetched = migratedStore.getConversationRecord("legacy-thread");
-      expect(fetched).toBeDefined();
-      expect(fetched?.conversation_id).toBe("legacy-thread");
-      expect(fetched?.mailbox_id).toBe("mb-1");
-      expect(fetched?.primary_charter).toBe(legacyRecord.primary_charter);
-
-      legacyDb.close();
-    });
-
-    it("migration is idempotent", () => {
-      const record = createThreadRecord({ conversation_id: "idempotent-thread" });
-      store.upsertThread(record);
-
-      // Calling initSchema again should not throw or duplicate rows.
-      store.initSchema();
-      store.initSchema();
-
-      const rows = db.prepare(`select count(*) as c from conversation_records where conversation_id = ?`).get("idempotent-thread") as { c: number };
-      expect(rows.c).toBe(1);
-    });
-  });
-
-  describe("conversation revisions", () => {
+  describe("context revisions", () => {
     it("nextRevisionOrdinal returns monotonically increasing values", () => {
-      const conv = createConversationRecord();
-      store.upsertConversationRecord(conv);
+      const ctx = createContextRecord();
+      store.upsertContextRecord(ctx);
 
-      const o1 = store.nextRevisionOrdinal(conv.conversation_id);
-      const o2 = store.nextRevisionOrdinal(conv.conversation_id);
-      const o3 = store.nextRevisionOrdinal(conv.conversation_id);
+      const o1 = store.nextRevisionOrdinal(ctx.context_id);
+      const o2 = store.nextRevisionOrdinal(ctx.context_id);
+      const o3 = store.nextRevisionOrdinal(ctx.context_id);
 
       expect(o1).toBe(1);
       expect(o2).toBe(2);
@@ -164,121 +70,123 @@ describe("SqliteCoordinatorStore", () => {
     });
 
     it("getLatestRevisionOrdinal returns the highest ordinal", () => {
-      const conv = createConversationRecord();
-      store.upsertConversationRecord(conv);
+      const ctx = createContextRecord();
+      store.upsertContextRecord(ctx);
 
-      expect(store.getLatestRevisionOrdinal(conv.conversation_id)).toBeNull();
+      expect(store.getLatestRevisionOrdinal(ctx.context_id)).toBeNull();
 
-      store.recordRevision(conv.conversation_id, 1, "evt-1");
-      store.recordRevision(conv.conversation_id, 2, "evt-2");
+      store.recordRevision(ctx.context_id, 1, "evt-1");
+      store.recordRevision(ctx.context_id, 2, "evt-2");
 
-      expect(store.getLatestRevisionOrdinal(conv.conversation_id)).toBe(2);
+      expect(store.getLatestRevisionOrdinal(ctx.context_id)).toBe(2);
     });
 
     it("recordRevision stores trigger_event_id", () => {
-      const conv = createConversationRecord();
-      store.upsertConversationRecord(conv);
+      const ctx = createContextRecord();
+      store.upsertContextRecord(ctx);
 
-      store.recordRevision(conv.conversation_id, 1, "trigger-123");
+      store.recordRevision(ctx.context_id, 1, "trigger-123");
 
-      const row = db.prepare(`select * from conversation_revisions where conversation_id = ? and ordinal = 1`).get(conv.conversation_id) as Record<string, unknown>;
+      const row = db
+        .prepare(`select * from context_revisions where context_id = ? and ordinal = 1`)
+        .get(ctx.context_id) as Record<string, unknown>;
       expect(row.trigger_event_id).toBe("trigger-123");
     });
 
-    it("revision ordinals are isolated per conversation", () => {
-      const convA = createConversationRecord({ conversation_id: "conv-a" });
-      const convB = createConversationRecord({ conversation_id: "conv-b" });
-      store.upsertConversationRecord(convA);
-      store.upsertConversationRecord(convB);
+    it("revision ordinals are isolated per context", () => {
+      const ctxA = createContextRecord({ context_id: "ctx-a" });
+      const ctxB = createContextRecord({ context_id: "ctx-b" });
+      store.upsertContextRecord(ctxA);
+      store.upsertContextRecord(ctxB);
 
-      expect(store.nextRevisionOrdinal("conv-a")).toBe(1);
-      expect(store.nextRevisionOrdinal("conv-b")).toBe(1);
-      expect(store.nextRevisionOrdinal("conv-a")).toBe(2);
+      expect(store.nextRevisionOrdinal("ctx-a")).toBe(1);
+      expect(store.nextRevisionOrdinal("ctx-b")).toBe(1);
+      expect(store.nextRevisionOrdinal("ctx-a")).toBe(2);
     });
   });
 
   describe("charter outputs", () => {
-    it("inserts and retrieves charter outputs by thread", () => {
-      const thread = createThreadRecord();
-      store.upsertThread(thread);
-      store.upsertConversationRecord(createConversationRecord({ conversation_id: thread.conversation_id, mailbox_id: thread.mailbox_id }));
+    it("inserts and retrieves charter outputs by context", () => {
+      const ctx = createContextRecord();
+      store.upsertContextRecord(ctx);
 
-      const output = createCharterOutput();
+      const output = createCharterOutput({ context_id: ctx.context_id, scope_id: ctx.scope_id });
       store.insertCharterOutput(output);
 
-      const fetched = store.getOutputsByContext(thread.conversation_id, thread.mailbox_id);
+      const fetched = store.getOutputsByContext(ctx.context_id, ctx.scope_id);
       expect(fetched).toHaveLength(1);
       expect(fetched[0]).toEqual(output);
     });
 
     it("returns outputs in analyzed_at desc order", () => {
-      const thread = createThreadRecord();
-      store.upsertThread(thread);
-      store.upsertConversationRecord(createConversationRecord({ conversation_id: thread.conversation_id, mailbox_id: thread.mailbox_id }));
+      const ctx = createContextRecord();
+      store.upsertContextRecord(ctx);
 
-      const output1 = createCharterOutput({ output_id: "o1", analyzed_at: "2024-01-01T00:00:00Z" });
-      const output2 = createCharterOutput({ output_id: "o2", analyzed_at: "2024-01-02T00:00:00Z" });
+      const output1 = createCharterOutput({
+        context_id: ctx.context_id,
+        scope_id: ctx.scope_id,
+        output_id: "o1",
+        analyzed_at: "2024-01-01T00:00:00Z",
+      });
+      const output2 = createCharterOutput({
+        context_id: ctx.context_id,
+        scope_id: ctx.scope_id,
+        output_id: "o2",
+        analyzed_at: "2024-01-02T00:00:00Z",
+      });
       store.insertCharterOutput(output1);
       store.insertCharterOutput(output2);
 
-      const fetched = store.getOutputsByContext(thread.conversation_id, thread.mailbox_id);
+      const fetched = store.getOutputsByContext(ctx.context_id, ctx.scope_id);
       expect(fetched.map((o) => o.output_id)).toEqual(["o2", "o1"]);
     });
 
-    it("cascades charter outputs when conversation is deleted", () => {
-      const thread = createThreadRecord();
-      store.upsertThread(thread);
-      store.upsertConversationRecord(createConversationRecord({ conversation_id: thread.conversation_id, mailbox_id: thread.mailbox_id }));
-      store.insertCharterOutput(createCharterOutput());
+    it("cascades charter outputs when context is deleted", () => {
+      const ctx = createContextRecord();
+      store.upsertContextRecord(ctx);
+      store.insertCharterOutput(createCharterOutput({ context_id: ctx.context_id, scope_id: ctx.scope_id }));
 
-      db.prepare("delete from context_records where context_id = ?").run(
-        thread.conversation_id,
-      );
+      db.prepare("delete from context_records where context_id = ?").run(ctx.context_id);
 
-      const fetched = store.getOutputsByContext(thread.conversation_id, thread.mailbox_id);
+      const fetched = store.getOutputsByContext(ctx.context_id, ctx.scope_id);
       expect(fetched).toHaveLength(0);
     });
   });
 
   describe("foreman decisions", () => {
-    it("inserts and retrieves decisions by conversation", () => {
-      const thread = createThreadRecord();
-      store.upsertThread(thread);
-      store.upsertConversationRecord(createConversationRecord({ conversation_id: thread.conversation_id, mailbox_id: thread.mailbox_id }));
+    it("inserts and retrieves decisions by context", () => {
+      const ctx = createContextRecord();
+      store.upsertContextRecord(ctx);
 
-      const decision = createForemanDecision();
+      const decision = createForemanDecision({ context_id: ctx.context_id, scope_id: ctx.scope_id });
       store.insertDecision(decision);
 
-      const fetched = store.getDecisionsByContext(thread.conversation_id, thread.mailbox_id);
+      const fetched = store.getDecisionsByContext(ctx.context_id, ctx.scope_id);
       expect(fetched).toHaveLength(1);
       expect(fetched[0]).toEqual(decision);
     });
 
     it("links a decision to an outbound command", () => {
-      const thread = createThreadRecord();
-      store.upsertThread(thread);
-      store.upsertConversationRecord(createConversationRecord({ conversation_id: thread.conversation_id, mailbox_id: thread.mailbox_id }));
+      const ctx = createContextRecord();
+      store.upsertContextRecord(ctx);
 
-      const decision = createForemanDecision();
+      const decision = createForemanDecision({ context_id: ctx.context_id, scope_id: ctx.scope_id });
       store.insertDecision(decision);
 
       store.linkDecisionToOutbound(decision.decision_id, "outbound-123");
 
-      const fetched = store.getDecisionsByContext(thread.conversation_id, thread.mailbox_id);
+      const fetched = store.getDecisionsByContext(ctx.context_id, ctx.scope_id);
       expect(fetched[0]!.outbound_id).toBe("outbound-123");
     });
 
-    it("cascades decisions when conversation is deleted", () => {
-      const thread = createThreadRecord();
-      store.upsertThread(thread);
-      store.upsertConversationRecord(createConversationRecord({ conversation_id: thread.conversation_id, mailbox_id: thread.mailbox_id }));
-      store.insertDecision(createForemanDecision());
+    it("cascades decisions when context is deleted", () => {
+      const ctx = createContextRecord();
+      store.upsertContextRecord(ctx);
+      store.insertDecision(createForemanDecision({ context_id: ctx.context_id, scope_id: ctx.scope_id }));
 
-      db.prepare("delete from context_records where context_id = ?").run(
-        thread.conversation_id,
-      );
+      db.prepare("delete from context_records where context_id = ?").run(ctx.context_id);
 
-      const fetched = store.getDecisionsByContext(thread.conversation_id, thread.mailbox_id);
+      const fetched = store.getDecisionsByContext(ctx.context_id, ctx.scope_id);
       expect(fetched).toHaveLength(0);
     });
   });
@@ -300,8 +208,16 @@ describe("SqliteCoordinatorStore", () => {
       const cmd = createOutboundCommand({ outbound_id: "o1" });
       outboundStore.createCommand(cmd, createOutboundVersion({ outbound_id: "o1" }));
 
-      const override1 = createPolicyOverride({ override_id: "ov1", outbound_id: "o1", created_at: "2024-01-02T00:00:00Z" });
-      const override2 = createPolicyOverride({ override_id: "ov2", outbound_id: "o1", created_at: "2024-01-01T00:00:00Z" });
+      const override1 = createPolicyOverride({
+        override_id: "ov1",
+        outbound_id: "o1",
+        created_at: "2024-01-02T00:00:00Z",
+      });
+      const override2 = createPolicyOverride({
+        override_id: "ov2",
+        outbound_id: "o1",
+        created_at: "2024-01-01T00:00:00Z",
+      });
       store.insertOverride(override1);
       store.insertOverride(override2);
 
@@ -312,127 +228,31 @@ describe("SqliteCoordinatorStore", () => {
 
   describe("shared database coexistence", () => {
     it("shares the same db connection with outbound store", () => {
-      const thread = createThreadRecord();
-      store.upsertThread(thread);
+      const ctx = createContextRecord();
+      store.upsertContextRecord(ctx);
 
-      const cmd = createOutboundCommand({ outbound_id: "shared-1", conversation_id: thread.conversation_id });
+      const cmd = createOutboundCommand({ outbound_id: "shared-1", context_id: ctx.context_id });
       outboundStore.createCommand(cmd, createOutboundVersion({ outbound_id: "shared-1" }));
 
-      expect(store.getThread(thread.conversation_id, thread.mailbox_id)).toBeDefined();
+      expect(store.getContextRecord(ctx.context_id)).toBeDefined();
       expect(outboundStore.getCommand("shared-1")).toBeDefined();
     });
   });
 
   describe("created_by format", () => {
     it("stores and retrieves the foreman created_by string", () => {
-      const thread = createThreadRecord();
-      store.upsertThread(thread);
-      store.upsertConversationRecord(createConversationRecord({ conversation_id: thread.conversation_id, mailbox_id: thread.mailbox_id }));
+      const ctx = createContextRecord();
+      store.upsertContextRecord(ctx);
 
       const decision = createForemanDecision({
+        context_id: ctx.context_id,
+        scope_id: ctx.scope_id,
         created_by: "foreman:fm-001/charter:support_steward,obligation_keeper",
       });
       store.insertDecision(decision);
 
-      const fetched = store.getDecisionsByContext(thread.conversation_id, thread.mailbox_id);
+      const fetched = store.getDecisionsByContext(ctx.context_id, ctx.scope_id);
       expect(fetched[0]!.created_by).toBe("foreman:fm-001/charter:support_steward,obligation_keeper");
-    });
-  });
-
-  describe("neutral table migration (Task 086)", () => {
-    it("migrates old conversation_records table to context_records and reverses views", () => {
-      const db = store.db;
-
-      // Simulate pre-migration schema by dropping new tables/views and creating old tables
-      db.prepare(`drop view if exists conversation_records`).run();
-      db.prepare(`drop view if exists conversation_revisions`).run();
-      db.prepare(`drop table if exists context_records`).run();
-      db.prepare(`drop table if exists context_revisions`).run();
-
-      db.prepare(`
-        create table conversation_records (
-          conversation_id text primary key,
-          mailbox_id text not null,
-          primary_charter text not null,
-          secondary_charters_json text not null default '[]',
-          status text not null default 'active',
-          assigned_agent text,
-          last_message_at text,
-          last_inbound_at text,
-          last_outbound_at text,
-          last_analyzed_at text,
-          last_triaged_at text,
-          created_at text not null default (datetime('now')),
-          updated_at text not null default (datetime('now'))
-        )
-      `).run();
-
-      db.prepare(`
-        create table conversation_revisions (
-          revision_record_id integer primary key autoincrement,
-          conversation_id text not null,
-          ordinal integer not null,
-          observed_at text not null default (datetime('now')),
-          trigger_event_id text,
-          unique (conversation_id, ordinal)
-        )
-      `).run();
-
-      // Create old compatibility views
-      db.prepare(`
-        create view context_records as
-        select conversation_id as context_id, mailbox_id as scope_id, status, primary_charter,
-               secondary_charters_json, assigned_agent, last_message_at, last_inbound_at,
-               last_outbound_at, last_analyzed_at, last_triaged_at, created_at, updated_at
-        from conversation_records
-      `).run();
-
-      db.prepare(`
-        create view context_revisions as
-        select conversation_id as context_id, ordinal, observed_at, trigger_event_id
-        from conversation_revisions
-      `).run();
-
-      // Seed old tables
-      db.prepare(`
-        insert into conversation_records (conversation_id, mailbox_id, primary_charter, status, created_at, updated_at)
-        values ('conv-1', 'mb-1', 'steward', 'active', '2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z')
-      `).run();
-      db.prepare(`
-        insert into conversation_revisions (conversation_id, ordinal, observed_at, trigger_event_id)
-        values ('conv-1', 1, '2024-01-01T00:00:00Z', 'evt-1')
-      `).run();
-
-      // Re-run schema init which should migrate
-      store.initSchema();
-
-      // Verify neutral tables are physical
-      const contextRecordsType = db.prepare(`select type from sqlite_master where name = 'context_records'`).get() as { type: string };
-      expect(contextRecordsType.type).toBe('table');
-      const contextRevisionsType = db.prepare(`select type from sqlite_master where name = 'context_revisions'`).get() as { type: string };
-      expect(contextRevisionsType.type).toBe('table');
-
-      // Verify compatibility views exist
-      const conversationRecordsType = db.prepare(`select type from sqlite_master where name = 'conversation_records'`).get() as { type: string };
-      expect(conversationRecordsType.type).toBe('view');
-      const conversationRevisionsType = db.prepare(`select type from sqlite_master where name = 'conversation_revisions'`).get() as { type: string };
-      expect(conversationRevisionsType.type).toBe('view');
-
-      // Verify data migrated to neutral tables
-      const context = store.getContextRecord('conv-1');
-      expect(context).toBeDefined();
-      expect(context!.context_id).toBe('conv-1');
-      expect(context!.scope_id).toBe('mb-1');
-
-      // Verify read through mailbox compatibility view works
-      const conversation = store.getConversationRecord('conv-1');
-      expect(conversation).toBeDefined();
-      expect(conversation!.conversation_id).toBe('conv-1');
-      expect(conversation!.mailbox_id).toBe('mb-1');
-
-      // Verify revision migrated
-      const latestOrdinal = store.getLatestRevisionOrdinal('conv-1');
-      expect(latestOrdinal).toBe(1);
     });
   });
 });

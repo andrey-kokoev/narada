@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { MailboxContextStrategy, TimerContextStrategy } from "../../../src/foreman/context.js";
+import { MailboxContextStrategy } from "../../../src/foreman/mailbox/context-strategy.js";
+import { TimerContextStrategy } from "../../../src/foreman/context.js";
 import type { Fact } from "../../../src/facts/types.js";
 
 function makeMailFact(

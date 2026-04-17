@@ -4,8 +4,6 @@
  * Helpers to construct invocation envelopes and evaluation records.
  */
 
-import { readdir } from "node:fs/promises";
-import { join } from "node:path";
 import type {
   CharterInvocationEnvelope,
   CharterOutputEnvelope,
@@ -14,33 +12,15 @@ import type {
 } from "../foreman/types.js";
 import type { PolicyContext } from "../foreman/context.js";
 import type { CoordinatorStore, WorkItem } from "../coordinator/types.js";
-import type { NormalizedMessage } from "../types/normalized.js";
-import { FileMessageStore } from "../persistence/messages.js";
 import type { RuntimePolicy } from "../config/types.js";
-
-function safeSegment(value: string): string {
-  return encodeURIComponent(value);
-}
-
-async function getThreadMessageIds(rootDir: string, conversationId: string): Promise<string[]> {
-  const membersDir = join(rootDir, "views", "by-thread", safeSegment(conversationId), "members");
-  try {
-    const entries = await readdir(membersDir);
-    return entries.map((e) => decodeURIComponent(e));
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === "ENOENT") {
-      return [];
-    }
-    throw error;
-  }
-}
+import { MailboxContextMaterializer } from "./mailbox/materializer.js";
 
 export interface BuildInvocationEnvelopeDeps {
   coordinatorStore: CoordinatorStore;
-  messageStore: FileMessageStore;
   rootDir: string;
   getRuntimePolicy: (scopeId: string) => RuntimePolicy;
+  /** Optional message store, required only when using the mail materializer fallback. */
+  messageStore?: import("../persistence/messages.js").FileMessageStore;
 }
 
 export interface BuildInvocationEnvelopeOptions {
@@ -53,38 +33,6 @@ export interface BuildInvocationEnvelopeOptions {
 
 export interface ContextMaterializer {
   materialize(context: PolicyContext): Promise<unknown>;
-}
-
-/**
- * Mailbox-specific context materializer.
- *
- * Reads thread messages from the filesystem view and returns them
- * inside the opaque context_materialization payload.
- */
-export class MailboxContextMaterializer implements ContextMaterializer {
-  constructor(
-    private rootDir: string,
-    private messageStore: FileMessageStore,
-  ) {}
-
-  async materialize(context: PolicyContext): Promise<unknown> {
-    const messageIds = await getThreadMessageIds(this.rootDir, context.context_id);
-    const messages: NormalizedMessage[] = [];
-    for (const messageId of messageIds) {
-      const record = await this.messageStore.readRecord(messageId);
-      if (record && typeof record === "object") {
-        messages.push(normalizeMessageForEnvelope(record as NormalizedMessage));
-      }
-    }
-
-    messages.sort((a, b) => {
-      const ta = a.received_at ?? "";
-      const tb = b.received_at ?? "";
-      return ta.localeCompare(tb);
-    });
-
-    return { messages };
-  }
 }
 
 /**
@@ -186,6 +134,10 @@ export class FilesystemContextMaterializer implements ContextMaterializer {
   }
 }
 
+// CLASSIFICATION: historical residue with acceptable fallback — the prefix-based
+// dispatch is neutral, but falling back to MailboxContextMaterializer encodes a
+// mail-default assumption. Future cleanup should use an explicit materializer
+// registry (e.g., Map<vertical, ContextMaterializer>) injected by the caller.
 function selectMaterializer(
   context: PolicyContext,
   deps: BuildInvocationEnvelopeDeps,
@@ -199,9 +151,16 @@ function selectMaterializer(
   if (context.context_id.startsWith("fs:")) {
     return new FilesystemContextMaterializer();
   }
+  if (!deps.messageStore) {
+    throw new Error("messageStore is required for mailbox context materialization");
+  }
   return new MailboxContextMaterializer(deps.rootDir, deps.messageStore);
 }
 
+// CLASSIFICATION: kernel-generic with mail-default residue — the function is
+// vertically neutral, but the "mail" fallback is a vestige of mailbox-as-default.
+// It is harmless as a runtime hint, yet should become explicit once vertical
+// registration is introduced.
 function resolveVertical(context: PolicyContext): string {
   if (context.context_id.startsWith("timer:")) return "timer";
   if (context.context_id.startsWith("webhook:")) return "webhook";
@@ -220,40 +179,6 @@ function buildPolicyContextFromWorkItem(workItem: WorkItem): PolicyContext {
     facts: [],
     synced_at: workItem.created_at,
   };
-}
-
-/**
- * Canonical projection from exchange-fs-sync message model into charter runtime model.
- *
- * This is the normative boundary between the compiler's filesystem state and the
- * charter runtime envelope. Any field mapping or default-value injection must be
- * explicit and stable.
- */
-export function normalizeMessageForEnvelope(msg: NormalizedMessage): NormalizedMessage {
-  const r = msg as unknown as Record<string, unknown>;
-  const bodyText =
-    typeof msg.body === "object" && msg.body && "text" in msg.body
-      ? (msg.body as { text?: string }).text?.slice(0, 200) ?? null
-      : null;
-  const mapAddr = (a: { email?: string; display_name?: string }): { email: string | null; name: string | null } => ({
-    email: a.email ?? null,
-    name: a.display_name ?? null,
-  });
-  return {
-    ...msg,
-    internet_message_id: (r.internet_message_id as string | undefined) ?? null,
-    body_preview: (r.body_preview as string | undefined) ?? bodyText,
-    from: Array.isArray(msg.from) ? msg.from.map(mapAddr) : msg.from ? [mapAddr(msg.from)] : [],
-    to: (msg.to ?? []).map(mapAddr),
-    cc: (msg.cc ?? []).map(mapAddr),
-    bcc: (msg.bcc ?? []).map(mapAddr),
-    sent_at: (r.sent_at as string | undefined) ?? null,
-    is_draft: msg.flags?.is_draft ?? false,
-    is_read: msg.flags?.is_read ?? false,
-    categories: msg.category_refs ?? [],
-    parent_folder_id: (r.parent_folder_id as string | undefined) ?? null,
-    importance: (r.importance as "low" | "normal" | "high" | undefined) ?? null,
-  } as NormalizedMessage;
 }
 
 export async function buildInvocationEnvelope(

@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { rm } from "node:fs/promises";
-import { ThreadContextHydrator } from "../../../src/coordinator/thread-context.js";
+import { ThreadContextHydrator } from "../../../src/coordinator/mailbox-thread-context.js";
 
 describe("ThreadContextHydrator", () => {
   let tmpDir: string;

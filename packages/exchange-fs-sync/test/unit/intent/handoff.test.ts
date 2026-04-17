@@ -23,24 +23,9 @@ describe("IntentHandoff", () => {
     intentStore.initSchema();
     handoff = new IntentHandoff({ coordinatorStore, outboundStore, intentStore });
 
-    coordinatorStore.upsertThread({
-      conversation_id: "ctx-1",
-      mailbox_id: "mb-1",
-      primary_charter: "support_steward",
-      secondary_charters_json: "[]",
-      status: "active",
-      assigned_agent: null,
-      last_message_at: new Date().toISOString(),
-      last_inbound_at: null,
-      last_outbound_at: null,
-      last_analyzed_at: null,
-      last_triaged_at: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    });
-    coordinatorStore.upsertConversationRecord({
-      conversation_id: "ctx-1",
-      mailbox_id: "mb-1",
+    coordinatorStore.upsertContextRecord({
+      context_id: "ctx-1",
+      scope_id: "mb-1",
       primary_charter: "support_steward",
       secondary_charters_json: "[]",
       status: "active",

@@ -5,7 +5,8 @@ import { SqliteCoordinatorStore } from "../../../src/coordinator/store.js";
 import { SqliteOutboundStore } from "../../../src/outbound/store.js";
 import { SqliteIntentStore } from "../../../src/intent/store.js";
 import { DefaultForemanFacade } from "../../../src/foreman/facade.js";
-import { MailboxContextStrategy, TimerContextStrategy } from "../../../src/foreman/context.js";
+import { MailboxContextStrategy } from "../../../src/foreman/mailbox/context-strategy.js";
+import { TimerContextStrategy } from "../../../src/foreman/context.js";
 import type { Fact } from "../../../src/facts/types.js";
 
 describe("fact-driven admission", () => {
@@ -111,7 +112,7 @@ describe("fact-driven admission", () => {
     expect(result.opened).toHaveLength(1);
     expect(result.opened[0]!.context_id).toBe("conv-mail-1");
 
-    const record = coordinatorStore.getConversationRecord("conv-mail-1");
+    const record = coordinatorStore.getContextRecord("conv-mail-1");
     expect(record).toBeDefined();
   });
 
@@ -123,7 +124,7 @@ describe("fact-driven admission", () => {
     expect(result.opened).toHaveLength(1);
     expect(result.opened[0]!.context_id).toBe("timer:heartbeat");
 
-    const record = coordinatorStore.getConversationRecord("timer:heartbeat");
+    const record = coordinatorStore.getContextRecord("timer:heartbeat");
     expect(record).toBeDefined();
   });
 

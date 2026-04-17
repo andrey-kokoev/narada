@@ -32,7 +32,7 @@ packages/exchange-fs-sync/
 │   ├── coordinator/             # SQLite coordinator store (control-plane durable state)
 │   │   ├── store.ts             # SqliteCoordinatorStore
 │   │   ├── types.ts             # WorkItem, ExecutionAttempt, Lease types
-│   │   └── thread-context.ts    # Thread context hydration
+│   │   └── mailbox-thread-context.ts    # Thread context hydration (mail-vertical)
 │   ├── foreman/                 # Control-plane foreman
 │   │   ├── facade.ts            # DefaultForemanFacade
 │   │   ├── handoff.ts           # Outbound handoff logic

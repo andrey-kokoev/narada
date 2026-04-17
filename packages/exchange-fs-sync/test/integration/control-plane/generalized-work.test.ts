@@ -5,7 +5,8 @@ import { SqliteOutboundStore } from "../../../src/outbound/store.js";
 import { SqliteIntentStore } from "../../../src/intent/store.js";
 import { SqliteScheduler } from "../../../src/scheduler/scheduler.js";
 import { DefaultForemanFacade } from "../../../src/foreman/facade.js";
-import { MailboxContextStrategy, TimerContextStrategy } from "../../../src/foreman/context.js";
+import { MailboxContextStrategy } from "../../../src/foreman/mailbox/context-strategy.js";
+import { TimerContextStrategy } from "../../../src/foreman/context.js";
 import type { Fact } from "../../../src/facts/types.js";
 
 describe("generalized work object model", () => {

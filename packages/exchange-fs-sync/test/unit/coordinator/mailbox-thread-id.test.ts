@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { deriveThreadId } from "../../../src/coordinator/thread-id.js";
+import { deriveThreadId } from "../../../src/coordinator/mailbox-thread-id.js";
 import type { NormalizedMessage } from "../../../src/types/normalized.js";
 
 describe("deriveThreadId", () => {

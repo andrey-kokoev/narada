@@ -47,11 +47,13 @@ describe("kernel invariant lint", () => {
       patternCount: number;
     };
 
-    // Current counts after Task 090 narrowing.
-    // If you need to increase these, you must document the rationale in ALLOWLIST comments
-    // and get sign-off because the invariant is: exceptions must be scarce and shrinking.
-    expect(fileKeys).toBeLessThanOrEqual(10);
-    expect(patternCount).toBeLessThanOrEqual(27);
+    // Current counts after Task 097 boundary tightening.
+    // Increased from 10 to 11 because we extracted mail-vertical code into
+    // dedicated */mailbox/* sub-modules (foreman/mailbox/context-strategy.ts,
+    // charter/mailbox/materializer.ts). This makes boundaries structurally obvious
+    // and the allowlist accurately reflects explicit vertical-local modules.
+    expect(fileKeys).toBeLessThanOrEqual(11);
+    expect(patternCount).toBeLessThanOrEqual(28);
   });
 
   it("only mail-compat-types.ts may use the wildcard allowlist", () => {
@@ -61,6 +63,6 @@ describe("kernel invariant lint", () => {
       cwd: resolve("..", ".."),
     });
     const wildcardFiles = JSON.parse(output.trim()) as string[];
-    expect(wildcardFiles).toEqual(["coordinator/mail-compat-types.ts"]);
+    expect(wildcardFiles).toEqual([]);
   });
 });
