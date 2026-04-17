@@ -350,6 +350,19 @@ Runtime policy determines charter routing, allowed actions, and tool catalog for
 
 ---
 
+## Review Checklist for Future Architecture Changes
+
+When proposing changes that touch public types, docs, or package surfaces, verify:
+
+- [ ] **Kernel-first framing**: Docs and comments describe the generalized behavior first, vertical specifics second.
+- [ ] **No mailbox-default types**: Generic interfaces use `scope_id` / `context_id`, not `mailbox_id` / `conversation_id`.
+- [ ] **Vertical parity**: New features for one vertical have a plausible path for peers (timer, webhook, filesystem, process).
+- [ ] **Authority boundaries preserved**: No new write paths bypass `ForemanFacade`, `Scheduler`, `IntentHandoff`, or `OutboundHandoff`.
+- [ ] **Observation remains read-only**: No UI-facing code mutates durable state directly.
+- [ ] **Kernel lint passes**: `pnpm kernel-lint` reports zero violations.
+
+---
+
 ## Package-Specific Guidance
 
 For detailed conventions, coding standards, and package-specific patterns, see [`packages/exchange-fs-sync/AGENTS.md`](packages/exchange-fs-sync/AGENTS.md).

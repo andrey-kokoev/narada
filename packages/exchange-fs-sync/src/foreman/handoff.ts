@@ -124,10 +124,10 @@ export class OutboundHandoff {
    */
   recoverWorkItemIfCommandExists(
     workItemId: string,
-    conversationId: string,
-    mailboxId: string,
+    contextId: string,
+    scopeId: string,
   ): string | null {
-    const decisions = this.deps.coordinatorStore.getDecisionsByContext(conversationId, mailboxId);
+    const decisions = this.deps.coordinatorStore.getDecisionsByContext(contextId, scopeId);
     // Only recover decisions that belong to this specific work item.
     // Decision IDs are formatted as fd_${workItemId}_${actionType}.
     const materialized = decisions.find((d) => d.outbound_id !== null && d.decision_id.startsWith(`fd_${workItemId}`));
@@ -153,8 +153,8 @@ export class OutboundHandoff {
    * Used when a work_item is superseded by a newer revision.
    * Returns the number of commands cancelled.
    */
-  cancelUnsentCommandsForThread(threadId: string, reason: string): number {
-    const active = this.deps.outboundStore.getActiveCommandsForThread(threadId);
+  cancelUnsentCommandsForContext(contextId: string, reason: string): number {
+    const active = this.deps.outboundStore.getActiveCommandsForContext(contextId);
     let cancelled = 0;
     for (const cmd of active) {
       if (

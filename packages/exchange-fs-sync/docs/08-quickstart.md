@@ -1,5 +1,7 @@
 # Quickstart Guide
 
+> **Scope of this guide**: This quickstart uses the Microsoft Exchange/Graph mailbox vertical because it is the first mature vertical and the easiest way to see the kernel in action. Timer, webhook, filesystem, and process automations are first-class peers that use the exact same pipeline.
+
 ## Prerequisites
 
 - **Node.js**: v18+ (tested on v20)

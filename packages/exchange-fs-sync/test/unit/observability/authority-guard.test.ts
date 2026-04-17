@@ -16,7 +16,7 @@ describe("observability authority guardrails", () => {
     { regex: String.raw`updateWorkItemStatus\s*\(`, description: "direct work item mutation" },
     { regex: String.raw`insertWorkItem\s*\(`, description: "direct work item creation" },
     { regex: String.raw`upsertThread\s*\(`, description: "direct thread mutation" },
-    { regex: String.raw`upsertConversationRecord\s*\(`, description: "direct conversation mutation" },
+    { regex: String.raw`upsertContextRecord\s*\(`, description: "direct context mutation" },
     { regex: String.raw`insertExecutionAttempt\s*\(`, description: "direct execution mutation" },
     { regex: String.raw`updateExecutionAttemptStatus\s*\(`, description: "direct execution mutation" },
     { regex: String.raw`insertAgentSession\s*\(`, description: "direct session mutation" },

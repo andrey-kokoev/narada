@@ -1,7 +1,7 @@
 {
   "name": "@narada/exchange-fs-sync-daemon",
   "version": "0.1.0",
-  "description": "Long-running daemon for Exchange filesystem synchronization",
+  "description": "Long-running daemon for the Narada deterministic state compiler and control plane",
   "main": "./dist/service.js",
   "types": "./dist/service.d.ts",
   "type": "module",
@@ -22,10 +22,13 @@
     "directory": "packages/exchange-fs-sync-daemon"
   },
   "keywords": [
+    "narada",
+    "state-compiler",
+    "sync",
     "exchange",
     "microsoft-graph",
     "email",
-    "sync",
+    "automation",
     "daemon"
   ],
   "author": "Narada <team@narada.dev>",

@@ -40,7 +40,7 @@ export interface BuildInvocationEnvelopeDeps {
   coordinatorStore: CoordinatorStore;
   messageStore: FileMessageStore;
   rootDir: string;
-  getRuntimePolicy: (mailboxId: string) => RuntimePolicy;
+  getRuntimePolicy: (scopeId: string) => RuntimePolicy;
 }
 
 export interface BuildInvocationEnvelopeOptions {
@@ -262,13 +262,13 @@ export async function buildInvocationEnvelope(
 ): Promise<CharterInvocationEnvelope> {
   const { workItem, maxPriorEvaluations = 3, tools } = opts;
 
-  const conversationRecord = deps.coordinatorStore.getConversationRecord(workItem.context_id);
-  if (!conversationRecord) {
+  const contextRecord = deps.coordinatorStore.getContextRecord(workItem.context_id);
+  if (!contextRecord) {
     throw new Error(
-      `Cannot build invocation envelope: no conversation record found for ${workItem.context_id}`,
+      `Cannot build invocation envelope: no context record found for ${workItem.context_id}`,
     );
   }
-  const charterId = conversationRecord.primary_charter;
+  const charterId = contextRecord.primary_charter;
   const role: "primary" | "secondary" = "primary";
   const policy = deps.getRuntimePolicy(workItem.scope_id);
 

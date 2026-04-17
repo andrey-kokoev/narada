@@ -48,12 +48,12 @@ describe("DefaultForemanFacade", () => {
     db.close();
   });
 
-  function makeSignal(changed: SyncCompletionSignal["changed_conversations"]): SyncCompletionSignal {
+  function makeSignal(changed: SyncCompletionSignal["changed_contexts"]): SyncCompletionSignal {
     return {
       signal_id: "sn-1",
-      mailbox_id: "mb-1",
+      scope_id: "mb-1",
       synced_at: new Date().toISOString(),
-      changed_conversations: changed,
+      changed_contexts: changed,
     };
   }
 
@@ -151,7 +151,7 @@ describe("DefaultForemanFacade", () => {
   describe("onSyncCompleted", () => {
     it("opens a new work item and session for a changed conversation", async () => {
       const signal = makeSignal([
-        { conversation_id: "conv-1", previous_revision_ordinal: null, current_revision_ordinal: 1, change_kinds: ["new_message"] },
+        { context_id: "conv-1", previous_revision_ordinal: null, current_revision_ordinal: 1, change_kinds: ["new_message"] },
       ]);
 
       const result = await facade.onSyncCompleted(signal);
@@ -175,7 +175,7 @@ describe("DefaultForemanFacade", () => {
 
     it("no-ops when change is only draft_observed", async () => {
       const signal = makeSignal([
-        { conversation_id: "conv-1", previous_revision_ordinal: null, current_revision_ordinal: 1, change_kinds: ["draft_observed"] },
+        { context_id: "conv-1", previous_revision_ordinal: null, current_revision_ordinal: 1, change_kinds: ["draft_observed"] },
       ]);
 
       const result = await facade.onSyncCompleted(signal);
@@ -200,7 +200,7 @@ describe("DefaultForemanFacade", () => {
       });
 
       const signal = makeSignal([
-        { conversation_id: "conv-1", previous_revision_ordinal: 1, current_revision_ordinal: 2, change_kinds: ["new_message"] },
+        { context_id: "conv-1", previous_revision_ordinal: 1, current_revision_ordinal: 2, change_kinds: ["new_message"] },
       ]);
 
       const result = await facade.onSyncCompleted(signal);
@@ -228,7 +228,7 @@ describe("DefaultForemanFacade", () => {
       const existing = insertWorkItem("conv-1", "leased", "conv-1:rev:1");
 
       const signal = makeSignal([
-        { conversation_id: "conv-1", previous_revision_ordinal: 1, current_revision_ordinal: 1, change_kinds: ["new_message"] },
+        { context_id: "conv-1", previous_revision_ordinal: 1, current_revision_ordinal: 1, change_kinds: ["new_message"] },
       ]);
 
       const result = await facade.onSyncCompleted(signal);
@@ -488,7 +488,7 @@ describe("DefaultForemanFacade", () => {
       );
 
       const signal = makeSignal([
-        { conversation_id: "conv-1", previous_revision_ordinal: 1, current_revision_ordinal: 2, change_kinds: ["new_message"] },
+        { context_id: "conv-1", previous_revision_ordinal: 1, current_revision_ordinal: 2, change_kinds: ["new_message"] },
       ]);
 
       const result = await facade.onSyncCompleted(signal);
@@ -541,7 +541,7 @@ describe("DefaultForemanFacade", () => {
       );
 
       const signal = makeSignal([
-        { conversation_id: "conv-1", previous_revision_ordinal: 1, current_revision_ordinal: 2, change_kinds: ["new_message"] },
+        { context_id: "conv-1", previous_revision_ordinal: 1, current_revision_ordinal: 2, change_kinds: ["new_message"] },
       ]);
 
       const result = await facade.onSyncCompleted(signal);
@@ -563,7 +563,7 @@ describe("DefaultForemanFacade", () => {
         getRuntimePolicy: () => makeRuntimePolicy({ primary_charter: "custom_charter" }),
       });
       const signal = makeSignal([
-        { conversation_id: "conv-policy", previous_revision_ordinal: 0, current_revision_ordinal: 1, change_kinds: ["new_message"] },
+        { context_id: "conv-policy", previous_revision_ordinal: 0, current_revision_ordinal: 1, change_kinds: ["new_message"] },
       ]);
       await policyFacade.onSyncCompleted(signal);
       const record = coordinatorStore.getConversationRecord("conv-policy");
@@ -581,7 +581,7 @@ describe("DefaultForemanFacade", () => {
         getRuntimePolicy: () => makeRuntimePolicy({ secondary_charters: ["helper_1", "helper_2"] }),
       });
       const signal = makeSignal([
-        { conversation_id: "conv-secondary", previous_revision_ordinal: 0, current_revision_ordinal: 1, change_kinds: ["new_message"] },
+        { context_id: "conv-secondary", previous_revision_ordinal: 0, current_revision_ordinal: 1, change_kinds: ["new_message"] },
       ]);
       await policyFacade.onSyncCompleted(signal);
       const record = coordinatorStore.getConversationRecord("conv-secondary");

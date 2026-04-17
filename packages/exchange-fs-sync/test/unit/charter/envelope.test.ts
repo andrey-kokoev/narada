@@ -7,11 +7,11 @@ import type { FileMessageStore } from "../../../src/persistence/messages.js";
 
 function makeMockStore(record?: { primary_charter: string }): CoordinatorStore {
   return {
-    getConversationRecord: () =>
+    getContextRecord: () =>
       record
         ? {
-            conversation_id: "conv-1",
-            mailbox_id: "mb-1",
+            context_id: "conv-1",
+            scope_id: "mb-1",
             primary_charter: record.primary_charter,
             secondary_charters_json: "[]",
             status: "active",
@@ -188,7 +188,7 @@ describe("normalizeMessageForEnvelope", () => {
       expect(envelope.charter_id).toBe("custom_charter");
     });
 
-    it("throws when no conversation record exists", async () => {
+    it("throws when no context record exists", async () => {
       await expect(
         buildInvocationEnvelope(
           {
@@ -199,7 +199,7 @@ describe("normalizeMessageForEnvelope", () => {
           },
           { executionId: "ex-1", workItem },
         ),
-      ).rejects.toThrow(/no conversation record found/);
+      ).rejects.toThrow(/no context record found/);
     });
 
     it("derives allowed_actions from mailbox policy", async () => {

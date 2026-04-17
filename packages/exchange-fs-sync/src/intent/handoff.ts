@@ -114,15 +114,15 @@ export class IntentHandoff {
   }
 
   /**
-   * Cancel all unsent outbound commands for a thread.
+   * Cancel all unsent outbound commands for a context.
    * Also cancels corresponding admitted intents.
    */
-  cancelUnsentCommandsForThread(threadId: string, reason: string): number {
-    const cancelled = this.outboundHandoff.cancelUnsentCommandsForThread(threadId, reason);
+  cancelUnsentCommandsForContext(contextId: string, reason: string): number {
+    const cancelled = this.outboundHandoff.cancelUnsentCommandsForContext(contextId, reason);
 
-    // Cancel any admitted intents for this thread that do not yet have a target.
+    // Cancel any admitted intents for this context that do not yet have a target.
     const pending = this.deps.intentStore.getPendingIntents("mail").filter(
-      (intent) => intent.context_id === threadId && intent.target_id === null,
+      (intent) => intent.context_id === contextId && intent.target_id === null,
     );
     for (const intent of pending) {
       this.deps.intentStore.updateStatus(intent.intent_id, "cancelled", { terminal_reason: reason });

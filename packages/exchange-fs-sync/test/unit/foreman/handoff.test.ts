@@ -21,7 +21,7 @@ describe("OutboundHandoff", () => {
 
     // Seed thread and conversation records so foreign keys are satisfied
     coordinatorStore.upsertThread({
-      conversation_id: "thread-1",
+      conversation_id: "ctx-1",
       mailbox_id: "mb-1",
       primary_charter: "support_steward",
       secondary_charters_json: "[]",
@@ -36,7 +36,7 @@ describe("OutboundHandoff", () => {
       updated_at: new Date().toISOString(),
     });
     coordinatorStore.upsertConversationRecord({
-      conversation_id: "thread-1",
+      conversation_id: "ctx-1",
       mailbox_id: "mb-1",
       primary_charter: "support_steward",
       secondary_charters_json: "[]",
@@ -61,7 +61,7 @@ describe("OutboundHandoff", () => {
   function insertWorkItem(overrides?: Partial<WorkItem>): WorkItem {
     const item: WorkItem = {
       work_item_id: "wi-1",
-      context_id: "thread-1",
+      context_id: "ctx-1",
       scope_id: "mb-1",
       status: "executing",
       priority: 0,
@@ -83,7 +83,7 @@ describe("OutboundHandoff", () => {
     const now = new Date().toISOString();
     return {
       decision_id: "fd-1",
-      context_id: "thread-1",
+      context_id: "ctx-1",
       scope_id: "mb-1",
       source_charter_ids_json: '["support_steward"]',
       approved_action: "send_reply",
@@ -178,7 +178,7 @@ describe("OutboundHandoff", () => {
   describe("recoverWorkItemIfCommandExists", () => {
     it("returns null when no materialized decision exists", () => {
       insertWorkItem();
-      const result = handoff.recoverWorkItemIfCommandExists("wi-1", "thread-1", "mb-1");
+      const result = handoff.recoverWorkItemIfCommandExists("wi-1", "ctx-1", "mb-1");
       expect(result).toBeNull();
     });
 
@@ -189,7 +189,7 @@ describe("OutboundHandoff", () => {
       outboundStore.createCommand(
         {
           outbound_id: "ob_fd-1",
-          conversation_id: "thread-1",
+          conversation_id: "ctx-1",
           mailbox_id: "mb-1",
           action_type: "send_reply",
           status: "pending",
@@ -220,7 +220,7 @@ describe("OutboundHandoff", () => {
         },
       );
 
-      const result = handoff.recoverWorkItemIfCommandExists("wi-1", "thread-1", "mb-1");
+      const result = handoff.recoverWorkItemIfCommandExists("wi-1", "ctx-1", "mb-1");
       expect(result).toBe("ob_fd-1");
 
       const workItem = coordinatorStore.getWorkItem("wi-1");
@@ -229,12 +229,12 @@ describe("OutboundHandoff", () => {
     });
   });
 
-  describe("cancelUnsentCommandsForThread", () => {
+  describe("cancelUnsentCommandsForContext", () => {
     it("cancels pending and draft_ready commands for the thread", () => {
       outboundStore.createCommand(
         {
           outbound_id: "o1",
-          conversation_id: "thread-1",
+          conversation_id: "ctx-1",
           mailbox_id: "mb-1",
           action_type: "send_reply",
           status: "pending",
@@ -268,7 +268,7 @@ describe("OutboundHandoff", () => {
       outboundStore.createCommand(
         {
           outbound_id: "o2",
-          conversation_id: "thread-1",
+          conversation_id: "ctx-1",
           mailbox_id: "mb-1",
           action_type: "mark_read",
           status: "confirmed",
@@ -299,7 +299,7 @@ describe("OutboundHandoff", () => {
         },
       );
 
-      const cancelled = handoff.cancelUnsentCommandsForThread("thread-1", "superseded_by_new_revision");
+      const cancelled = handoff.cancelUnsentCommandsForContext("ctx-1", "superseded_by_new_revision");
       expect(cancelled).toBe(1);
 
       const cmd1 = outboundStore.getCommand("o1");

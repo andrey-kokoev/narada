@@ -1,10 +1,12 @@
 import type {
-  ThreadRecord,
-  ConversationRecord,
   CharterOutputRow,
   ForemanDecisionRow,
   PolicyOverrideRow,
 } from "../../../src/coordinator/types.js";
+import type {
+  ThreadRecord,
+  ConversationRecord,
+} from "../../../src/coordinator/mail-compat-types.js";
 
 export function createThreadRecord(overrides?: Partial<ThreadRecord>): ThreadRecord {
   const now = new Date().toISOString();

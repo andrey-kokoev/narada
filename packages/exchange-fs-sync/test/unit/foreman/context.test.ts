@@ -112,7 +112,7 @@ describe("TimerContextStrategy", () => {
     expect(contexts).toHaveLength(2);
 
     const ctxA = contexts.find((c) => c.context_id === "timer:job-a")!;
-    expect(ctxA.change_kinds).toEqual(["new_message"]);
+    expect(ctxA.change_kinds).toEqual(["new_fact"]);
     expect(ctxA.facts).toHaveLength(2);
 
     const ctxB = contexts.find((c) => c.context_id === "timer:job-b")!;

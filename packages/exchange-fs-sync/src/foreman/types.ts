@@ -28,16 +28,17 @@ export type AllowedAction =
 
 export interface SyncCompletionSignal {
   signal_id: string;
-  mailbox_id: string;
+  scope_id: string;
   synced_at: string;
-  changed_conversations: ChangedConversation[];
+  changed_contexts: ChangedContext[];
 }
 
-export interface ChangedConversation {
-  conversation_id: string;
+export interface ChangedContext {
+  context_id: string;
   previous_revision_ordinal: number | null;
   current_revision_ordinal: number;
   change_kinds: (
+    | "new_fact"
     | "new_message"
     | "moved"
     | "flagged"
@@ -49,7 +50,7 @@ export interface ChangedConversation {
 export interface WorkOpeningResult {
   opened: OpenedWorkItem[];
   superseded: SupersededWorkItem[];
-  nooped: string[]; // conversation_ids
+  nooped: string[]; // context_ids
 }
 
 export interface OpenedWorkItem {
@@ -164,7 +165,7 @@ export interface CharterClassification {
 export interface ExtractedFact {
   kind: string;
   value_json: string;
-  source_message_ids: string[];
+  source_record_ids: string[];
   confidence: "low" | "medium" | "high";
 }
 

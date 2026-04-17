@@ -18,7 +18,7 @@ interface Violation {
   snippet: string;
 }
 
-const KERNEL_DIRS = [
+export const KERNEL_DIRS = [
   "packages/exchange-fs-sync/src/scheduler",
   "packages/exchange-fs-sync/src/facts",
   "packages/exchange-fs-sync/src/intent",
@@ -30,7 +30,7 @@ const KERNEL_DIRS = [
   "packages/exchange-fs-sync/src/observability",
 ];
 
-const PATTERNS = [
+export const PATTERNS = [
   { name: "conversation_id", regex: /\bconversation_id\b/ },
   { name: "thread_id", regex: /\bthread_id\b/ },
   { name: "mailbox_id", regex: /\bmailbox_id\b/ },
@@ -65,6 +65,14 @@ const PATTERNS = [
     name: "graph_types_import",
     regex: /from\s+['"][^'"]*types\/graph[^'"]*['"]/,
   },
+  {
+    name: "mail_compat_import",
+    regex: /from\s+['"][^'"]*mail-compat-types[^'"]*['"]/,
+  },
+  {
+    name: "mailbox_obs_import",
+    regex: /from\s+['"][^'"]*observability\/mailbox[^'"]*['"]/,
+  },
 ];
 
 /**
@@ -72,80 +80,74 @@ const PATTERNS = [
  * Key: file path relative to packages/exchange-fs-sync/src/
  * Value: array of allowed pattern names. Use ["*"] to allow all patterns in a file.
  */
-const ALLOWLIST: Record<string, string[]> = {
-  // Charter envelope contains mail-specific materializer alongside generic builders.
+export const ALLOWLIST: Record<string, string[]> = {
+  // Rationale: charter envelope is a hybrid module. It contains the generic
+  // `buildInvocationEnvelope` but also the mail-specific
+  // `normalizeMessageForEnvelope` materializer which imports message
+  // persistence and normalized message types.
   "charter/envelope.ts": [
     "persistence_messages_import",
     "normalized_types_import",
   ],
 
-  // Foreman context strategies include mail-specific formation.
-  "foreman/context.ts": ["conversation_id", "thread_id", "mailbox_id"],
+  // Rationale: `MailboxContextStrategy` is explicitly mail-vertical. It forms
+  // PolicyContext from mailbox-specific facts (conversation_id / thread_id).
+  "foreman/context.ts": ["conversation_id", "thread_id"],
 
-  // Foreman facade orchestrates mail-specific conversation opening.
-  "foreman/facade.ts": ["conversation_id", "mailbox_id"],
+  // Rationale: `DefaultForemanFacade` orchestrates mail-specific work opening.
+  // It maps context_id ↔ conversation_id and scope_id ↔ mailbox_id when
+  // building records for the mailbox compatibility layer.
+  "foreman/facade.ts": [
+    "conversation_id",
+    "mailbox_id",
+    "mail_compat_import",
+  ],
 
-  // Foreman handoff creates outbound commands for conversations.
+  // Rationale: `OutboundHandoff` creates outbound commands from foreman
+  // decisions. It uses conversation_id / mailbox_id when translating neutral
+  // context/scope into mail-shaped outbound command rows.
   "foreman/handoff.ts": ["conversation_id", "mailbox_id"],
 
-  // Foreman types include mail-vertical context types.
-  "foreman/types.ts": ["conversation_id", "mailbox_id"],
-
-  // Coordinator retains legacy thread/conversation tables for mail vertical.
+  // Rationale: `SqliteCoordinatorStore` implements migration from old
+  // mailbox-era tables to neutral base tables, and retains compatibility
+  // views + wrapper methods for the mail vertical.
   "coordinator/store.ts": [
     "conversation_id",
     "thread_id",
     "mailbox_id",
     "conversation_records",
     "conversation_revisions",
-  ],
-  "coordinator/schema.sql": [
-    "conversation_id",
-    "thread_id",
-    "mailbox_id",
-    "conversation_records",
-    "conversation_revisions",
-    "outbound_commands",
+    "mail_compat_import",
   ],
 
-  // Thread context hydration is mail-specific.
+  // Rationale: `thread-context.ts` hydrates mailbox-specific thread context
+  // from filesystem views. It is inherently mail-vertical.
   "coordinator/thread-context.ts": [
     "conversation_id",
     "mailbox_id",
     "normalized_types_import",
+    "mail_compat_import",
   ],
 
-  // Thread ID mapping is explicitly mail-specific.
+  // Rationale: `thread-id.ts` maps normalized messages to Exchange thread IDs.
+  // It is inherently mail-vertical and references NormalizedMessage.
   "coordinator/thread-id.ts": [
     "conversation_id",
     "thread_id",
-    "mailbox_id",
     "normalized_types_import",
   ],
 
-  // Coordinator types include mail-specific conversation records.
-  "coordinator/types.ts": [
-    "conversation_id",
-    "mailbox_id",
-    "conversation_records",
-    "normalized_types_import",
-  ],
+  // Rationale: Dedicated mailbox compatibility type surface. Expected to
+  // contain mail-era identifiers and imports from normalized types.
+  "coordinator/mail-compat-types.ts": ["*"],
 
-  // Outbound store retains mailbox-era compatibility view for mail vertical.
-  "outbound/store.ts": [
-    "conversation_id",
-    "mailbox_id",
-    "outbound_commands",
-  ],
-  "outbound/schema.sql": [
-    "conversation_id",
-    "mailbox_id",
-    "outbound_commands",
-  ],
+  // Rationale: `observability/mailbox-types.ts` is the dedicated mail-vertical
+  // observation type surface. Generic modules must not import this file.
+  "observability/mailbox-types.ts": ["conversation_id", "mailbox_id"],
 
-  // Observability has mailbox-specific drill-down types.
-  "observability/queries.ts": ["conversation_id", "mailbox_id"],
-  "observability/types.ts": ["conversation_id", "mailbox_id"],
+  // Rationale: `observability/mailbox.ts` is the dedicated mail-vertical
+  // observation query surface. Generic modules must not import this file.
+  "observability/mailbox.ts": ["conversation_id", "mailbox_id"],
 };
 
 function walk(dir: string, files: string[] = []): string[] {
@@ -165,6 +167,30 @@ function getSnippet(line: string, matchIndex: number): string {
   const start = Math.max(0, matchIndex - 20);
   const end = Math.min(line.length, matchIndex + 40);
   return line.slice(start, end).trim();
+}
+
+export interface StaleAllowlistEntry {
+  file: string;
+  pattern: string;
+}
+
+export function findStaleAllowlistEntries(): StaleAllowlistEntry[] {
+  const stale: StaleAllowlistEntry[] = [];
+  for (const [file, patterns] of Object.entries(ALLOWLIST)) {
+    if (patterns.includes("*")) continue;
+    const content = readFileSync(
+      `packages/exchange-fs-sync/src/${file}`,
+      "utf8",
+    );
+    for (const patternName of patterns) {
+      const pattern = PATTERNS.find((p) => p.name === patternName);
+      if (!pattern) continue;
+      if (!pattern.regex.test(content)) {
+        stale.push({ file, pattern: patternName });
+      }
+    }
+  }
+  return stale;
 }
 
 function main(): void {
@@ -245,4 +271,26 @@ function main(): void {
   process.exit(1);
 }
 
-main();
+if (process.argv[1]?.includes("kernel-lint.ts")) {
+  if (process.argv.includes("--stale")) {
+    console.log(JSON.stringify(findStaleAllowlistEntries()));
+    process.exit(0);
+  }
+  if (process.argv.includes("--stats")) {
+    const fileKeys = Object.keys(ALLOWLIST).length;
+    const patternCount = Object.values(ALLOWLIST).reduce(
+      (sum, p) => sum + p.length,
+      0,
+    );
+    console.log(JSON.stringify({ fileKeys, patternCount }));
+    process.exit(0);
+  }
+  if (process.argv.includes("--wildcards")) {
+    const wildcards = Object.entries(ALLOWLIST)
+      .filter(([, p]) => p.includes("*"))
+      .map(([f]) => f);
+    console.log(JSON.stringify(wildcards));
+    process.exit(0);
+  }
+  main();
+}

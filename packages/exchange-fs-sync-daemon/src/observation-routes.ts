@@ -13,7 +13,6 @@ import {
   buildOverviewSnapshot,
   getRecentFacts,
   getContextSummaries,
-  getMailboxVerticalView,
   getActiveWorkItems,
   getRecentFailedWorkItems,
   getWorkItemsAwaitingRetry,
@@ -21,7 +20,6 @@ import {
   getIntentExecutionSummaries,
   getProcessExecutionSummaries,
   getProcessExecutionDetails,
-  getMailExecutionDetails,
   getIntentLifecycleTransitions,
   getRecentSessionsAndExecutions,
   getWorkerStatuses,
@@ -32,6 +30,8 @@ import {
   getContextTimeline,
   getFactTimeline,
   getUnifiedTimeline,
+  getMailboxVerticalView,
+  getMailExecutionDetails,
   type WorkItemLifecycleSummary,
 } from "@narada/exchange-fs-sync";
 import type { RouteHandler } from "./routes.js";

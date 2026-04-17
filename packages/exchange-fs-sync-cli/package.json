@@ -1,7 +1,7 @@
 {
   "name": "@narada/exchange-fs-sync-cli",
   "version": "0.1.0",
-  "description": "CLI for Exchange filesystem synchronization",
+  "description": "CLI for the Narada deterministic state compiler and control plane",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "type": "module",
@@ -22,10 +22,13 @@
     "directory": "packages/exchange-fs-sync-cli"
   },
   "keywords": [
+    "narada",
+    "state-compiler",
+    "sync",
     "exchange",
     "microsoft-graph",
     "email",
-    "sync",
+    "automation",
     "cli"
   ],
   "author": "Narada <team@narada.dev>",

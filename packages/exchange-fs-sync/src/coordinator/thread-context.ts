@@ -10,7 +10,7 @@
 import { readFile, readdir, readlink } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { NormalizedMessage } from "../types/normalized.js";
-import type { NormalizedThreadContext } from "./types.js";
+import type { NormalizedThreadContext } from "./mail-compat-types.js";
 
 function safeSegment(value: string): string {
   return encodeURIComponent(value);

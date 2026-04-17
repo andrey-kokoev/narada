@@ -179,12 +179,12 @@ export function makeEvaluation(
   };
 }
 
-export function makeSignal(changed: SyncCompletionSignal["changed_conversations"], mailboxId = "mb-1"): SyncCompletionSignal {
+export function makeSignal(changed: SyncCompletionSignal["changed_contexts"], scopeId = "mb-1"): SyncCompletionSignal {
   return {
     signal_id: "sn-1",
-    mailbox_id: mailboxId,
+    scope_id: scopeId,
     synced_at: new Date().toISOString(),
-    changed_conversations: changed,
+    changed_contexts: changed,
   };
 }
 

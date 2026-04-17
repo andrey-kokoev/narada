@@ -119,7 +119,7 @@ export type CharterClassification = z.infer<typeof CharterClassificationSchema>;
 export const ExtractedFactSchema = z.object({
   kind: z.string(),
   value_json: z.string(),
-  source_message_ids: z.string().array(),
+  source_record_ids: z.string().array(),
   confidence: z.enum(["low", "medium", "high"]),
 });
 export type ExtractedFact = z.infer<typeof ExtractedFactSchema>;

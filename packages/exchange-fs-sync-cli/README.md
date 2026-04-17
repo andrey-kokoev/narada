@@ -1,6 +1,8 @@
 # @narada/exchange-fs-sync-cli
 
-Command-line interface for Exchange filesystem synchronization.
+Command-line interface for the Narada deterministic state compiler and control plane.
+
+> **How to read this package**: The CLI currently surfaces the Exchange/Graph mailbox vertical most prominently because it is the first mature vertical. Under the hood, all commands operate through the same kernel-agnostic `exchange-fs-sync` library, which also supports timer, webhook, filesystem, and process automations as first-class peers.
 
 ## Installation
 
@@ -48,9 +50,9 @@ exchange-sync init --force
 ```
 
 Interactive mode will prompt for:
-- Mailbox ID (email address)
+- Scope ID (e.g., mailbox email address)
 - Data directory
-- Graph API credentials
+- Graph API credentials (mailbox vertical)
 - Folders to sync
 - Test connection before saving
 

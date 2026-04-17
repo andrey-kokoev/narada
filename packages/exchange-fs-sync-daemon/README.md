@@ -1,10 +1,12 @@
-# exchange-fs-sync-daemon
+# @narada/exchange-fs-sync-daemon
 
-Long-running polling daemon for continuous mailbox synchronization.
+Long-running daemon for the Narada deterministic state compiler and control plane.
+
+> **How to read this package**: The daemon orchestrates the full kernel pipeline, from source polling through work scheduling to effect execution. The mailbox vertical is currently the most prominent source type, but timer, webhook, filesystem, and process automations are first-class peers.
 
 ## Overview
 
-This package provides a daemon/service that continuously polls Microsoft Graph for mailbox changes using the core `exchange-fs-sync` library.
+This package provides a daemon/service that continuously polls sources, dispatches `SyncCompletionSignal` to the foreman, schedules work via leases, and executes chartered effects. It is built on the core `exchange-fs-sync` library.
 
 ## Usage
 

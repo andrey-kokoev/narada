@@ -68,7 +68,7 @@ describe("governAction", () => {
       { overall: "high", uncertainty_flags: [] },
     );
     expect(result.allowed).toBe(false);
-    expect(result.reason).toContain("not allowed by mailbox policy");
+    expect(result.reason).toContain("not allowed by runtime policy");
   });
 
   it("rejects send_reply with missing recipients", () => {

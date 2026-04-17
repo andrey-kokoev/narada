@@ -1,7 +1,7 @@
 {
   "name": "@narada/exchange-fs-sync",
   "version": "0.1.0",
-  "description": "Sync Microsoft Exchange to filesystem",
+  "description": "Deterministic kernel for compiling remote source deltas into local state and durable side-effect intents",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "type": "module",
@@ -29,10 +29,14 @@
     "directory": "packages/exchange-fs-sync"
   },
   "keywords": [
+    "narada",
+    "state-compiler",
+    "sync",
     "exchange",
     "microsoft-graph",
     "email",
-    "sync"
+    "automation",
+    "kernel"
   ],
   "author": "Narada <team@narada.dev>",
   "license": "MIT",

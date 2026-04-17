@@ -30,7 +30,7 @@ const _assertInsertExecutionAttempt: AssertExcluded<"insertExecutionAttempt"> = 
 const _assertInsertEvaluation: AssertExcluded<"insertEvaluation"> = true;
 const _assertInsertCharterOutput: AssertExcluded<"insertCharterOutput"> = true;
 const _assertInsertToolCallRecord: AssertExcluded<"insertToolCallRecord"> = true;
-const _assertUpsertConversationRecord: AssertExcluded<"upsertConversationRecord"> = true;
+const _assertUpsertContextRecord: AssertExcluded<"upsertContextRecord"> = true;
 
 // Compile-time assertions: CoordinatorStoreOperatorView must still exclude core control-plane mutations
 type AssertOperatorExcluded<K extends string> = K extends keyof CoordinatorStoreOperatorView ? never : true;

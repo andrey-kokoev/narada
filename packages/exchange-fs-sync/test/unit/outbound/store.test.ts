@@ -231,15 +231,15 @@ describe("SqliteOutboundStore", () => {
     });
   });
 
-  describe("getActiveCommandsForThread", () => {
-    it("returns only active unsent commands for the thread", () => {
+  describe("getActiveCommandsForContext", () => {
+    it("returns only active unsent commands for the context", () => {
       const cmd1 = createOutboundCommand({ outbound_id: "o1", conversation_id: "t1", action_type: "send_reply", status: "pending" });
       store.createCommand(cmd1, createOutboundVersion({ outbound_id: "o1" }));
 
       const cmd2 = createOutboundCommand({ outbound_id: "o2", conversation_id: "t1", action_type: "mark_read", status: "pending" });
       store.createCommand(cmd2, createOutboundVersion({ outbound_id: "o2" }));
 
-      // Make cmd1 terminal so we can create another send_reply for the same thread
+      // Make cmd1 terminal so we can create another send_reply for the same context
       store.updateCommandStatus("o1", "confirmed", { confirmed_at: new Date().toISOString() });
 
       const cmd3 = createOutboundCommand({ outbound_id: "o3", conversation_id: "t1", action_type: "send_reply", status: "confirmed" });
@@ -248,12 +248,21 @@ describe("SqliteOutboundStore", () => {
       const cmd4 = createOutboundCommand({ outbound_id: "o4", conversation_id: "t2", action_type: "send_reply", status: "pending" });
       store.createCommand(cmd4, createOutboundVersion({ outbound_id: "o4" }));
 
-      const active = store.getActiveCommandsForThread("t1");
+      const active = store.getActiveCommandsForContext("t1");
       expect(active.map((c) => c.outbound_id).sort()).toEqual(["o2"]);
     });
 
-    it("returns empty array when thread has no commands", () => {
-      expect(store.getActiveCommandsForThread("no-such-thread")).toEqual([]);
+    it("returns empty array when context has no commands", () => {
+      expect(store.getActiveCommandsForContext("no-such-context")).toEqual([]);
+    });
+
+    it("compatibility wrapper getActiveCommandsForThread delegates to getActiveCommandsForContext", () => {
+      const cmd = createOutboundCommand({ outbound_id: "o1", conversation_id: "t1", action_type: "send_reply", status: "pending" });
+      store.createCommand(cmd, createOutboundVersion({ outbound_id: "o1" }));
+
+      const viaContext = store.getActiveCommandsForContext("t1");
+      const viaThread = store.getActiveCommandsForThread("t1");
+      expect(viaThread).toEqual(viaContext);
     });
   });
 

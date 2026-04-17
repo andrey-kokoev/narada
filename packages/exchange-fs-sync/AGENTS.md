@@ -108,7 +108,7 @@ packages/exchange-fs-sync/
 | [`src/scheduler/scheduler.ts`](src/scheduler/scheduler.ts) | `SqliteScheduler` — lease acquisition, execution lifecycle, stale-lease recovery |
 | [`src/scheduler/types.ts`](src/scheduler/types.ts) | `Scheduler`, `LeaseAcquisitionResult` |
 | [`src/foreman/facade.ts`](src/foreman/facade.ts) | `DefaultForemanFacade` — work opening, resolution, outbound handoff orchestration |
-| [`src/foreman/types.ts`](src/foreman/types.ts) | `SyncCompletionSignal`, `ChangedConversation`, `CharterOutputEnvelope`, `EvaluationEnvelope` |
+| [`src/foreman/types.ts`](src/foreman/types.ts) | `SyncCompletionSignal`, `ChangedContext`, `CharterOutputEnvelope`, `EvaluationEnvelope` |
 | [`src/foreman/validation.ts`](src/foreman/validation.ts) | 10-rule validation of charter output against invocation envelope |
 | [`src/foreman/governance.ts`](src/foreman/governance.ts) | `governEvaluation()` — policy enforcement, action bounding, confidence floors |
 | [`src/foreman/handoff.ts`](src/foreman/handoff.ts) | `OutboundHandoff` — atomic decision → outbound command transaction |
@@ -543,6 +543,19 @@ pnpm test             # Vitest
 pnpm benchmark        # Benchmark suite
 pnpm benchmark:compare # Compare with baseline
 ```
+
+---
+
+## Review Checklist for Future Architecture Changes
+
+When proposing changes that touch public types, docs, or package surfaces, verify:
+
+- [ ] **Kernel-first framing**: Docs and comments describe the generalized behavior first, vertical specifics second.
+- [ ] **No mailbox-default types**: Generic interfaces use `scope_id` / `context_id`, not `mailbox_id` / `conversation_id`.
+- [ ] **Vertical parity**: New features for one vertical have a plausible path for peers (timer, webhook, filesystem, process).
+- [ ] **Authority boundaries preserved**: No new write paths bypass `ForemanFacade`, `Scheduler`, `IntentHandoff`, or `OutboundHandoff`.
+- [ ] **Observation remains read-only**: No UI-facing code mutates durable state directly.
+- [ ] **Kernel lint passes**: `pnpm kernel-lint` reports zero violations.
 
 ---
 

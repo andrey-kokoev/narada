@@ -7,8 +7,6 @@
 import Database from "better-sqlite3";
 import type {
   CoordinatorStore,
-  ThreadRecord,
-  ConversationRecord,
   CharterOutputRow,
   ForemanDecisionRow,
   PolicyOverrideRow,
@@ -24,6 +22,12 @@ import type {
   OperatorActionRequest,
 } from "./types.js";
 import { isValidCreatedBy } from "./types.js";
+import type {
+  ThreadRecord,
+  ConversationRecord,
+  MailCompatCoordinatorStore,
+} from "./mail-compat-types.js";
+import { contextRecordToConversationRecord } from "./mail-compat-types.js";
 
 function rowToThreadRecord(row: Record<string, unknown>): ThreadRecord {
   return {
@@ -34,24 +38,6 @@ function rowToThreadRecord(row: Record<string, unknown>): ThreadRecord {
     status: String(row.status),
     assigned_agent: row.assigned_agent ? String(row.assigned_agent) : null,
     last_message_at: String(row.last_message_at),
-    last_inbound_at: row.last_inbound_at ? String(row.last_inbound_at) : null,
-    last_outbound_at: row.last_outbound_at ? String(row.last_outbound_at) : null,
-    last_analyzed_at: row.last_analyzed_at ? String(row.last_analyzed_at) : null,
-    last_triaged_at: row.last_triaged_at ? String(row.last_triaged_at) : null,
-    created_at: String(row.created_at),
-    updated_at: String(row.updated_at),
-  };
-}
-
-function rowToConversationRecord(row: Record<string, unknown>): ConversationRecord {
-  return {
-    conversation_id: String(row.conversation_id),
-    mailbox_id: String(row.mailbox_id),
-    primary_charter: String(row.primary_charter),
-    secondary_charters_json: String(row.secondary_charters_json),
-    status: String(row.status) as ConversationRecord["status"],
-    assigned_agent: row.assigned_agent ? String(row.assigned_agent) : null,
-    last_message_at: row.last_message_at ? String(row.last_message_at) : null,
     last_inbound_at: row.last_inbound_at ? String(row.last_inbound_at) : null,
     last_outbound_at: row.last_outbound_at ? String(row.last_outbound_at) : null,
     last_analyzed_at: row.last_analyzed_at ? String(row.last_analyzed_at) : null,
@@ -242,7 +228,7 @@ export interface SqliteCoordinatorStoreOptions {
   db: Database.Database;
 }
 
-export class SqliteCoordinatorStore implements CoordinatorStore {
+export class SqliteCoordinatorStore implements CoordinatorStore, MailCompatCoordinatorStore {
   readonly db: Database.Database;
 
   constructor(opts: SqliteCoordinatorStoreOptions) {
@@ -709,63 +695,6 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     return row ? rowToThreadRecord(row) : undefined;
   }
 
-  upsertConversationRecord(record: ConversationRecord): void {
-    this.db.prepare(`
-      insert into context_records (
-        context_id, scope_id, primary_charter, secondary_charters_json, status,
-        assigned_agent, last_message_at, last_inbound_at, last_outbound_at,
-        last_analyzed_at, last_triaged_at, created_at, updated_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      on conflict(context_id) do update set
-        scope_id = excluded.scope_id,
-        primary_charter = excluded.primary_charter,
-        secondary_charters_json = excluded.secondary_charters_json,
-        status = excluded.status,
-        assigned_agent = excluded.assigned_agent,
-        last_message_at = excluded.last_message_at,
-        last_inbound_at = excluded.last_inbound_at,
-        last_outbound_at = excluded.last_outbound_at,
-        last_analyzed_at = excluded.last_analyzed_at,
-        last_triaged_at = excluded.last_triaged_at,
-        updated_at = excluded.updated_at
-    `).run(
-      record.conversation_id,
-      record.mailbox_id,
-      record.primary_charter,
-      record.secondary_charters_json,
-      record.status,
-      record.assigned_agent,
-      record.last_message_at,
-      record.last_inbound_at,
-      record.last_outbound_at,
-      record.last_analyzed_at,
-      record.last_triaged_at,
-      record.created_at,
-      record.updated_at,
-    );
-  }
-
-  getConversationRecord(conversationId: string): ConversationRecord | undefined {
-    const row = this.db.prepare(`
-      select
-        context_id as conversation_id,
-        scope_id as mailbox_id,
-        status,
-        primary_charter,
-        secondary_charters_json,
-        assigned_agent,
-        last_message_at,
-        last_inbound_at,
-        last_outbound_at,
-        last_analyzed_at,
-        last_triaged_at,
-        created_at,
-        updated_at
-      from context_records where context_id = ?
-    `).get(conversationId) as Record<string, unknown> | undefined;
-    return row ? rowToConversationRecord(row) : undefined;
-  }
-
   upsertContextRecord(record: import("./types.js").ContextRecord): void {
     this.db.prepare(`
       insert into context_records (
@@ -807,6 +736,31 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
       select * from context_records where context_id = ?
     `).get(contextId) as Record<string, unknown> | undefined;
     return row ? rowToContextRecord(row) : undefined;
+  }
+
+  /** @deprecated Mail-vertical compatibility wrapper — use upsertContextRecord */
+  upsertConversationRecord(record: ConversationRecord): void {
+    this.upsertContextRecord({
+      context_id: record.conversation_id,
+      scope_id: record.mailbox_id,
+      primary_charter: record.primary_charter,
+      secondary_charters_json: record.secondary_charters_json,
+      status: record.status,
+      assigned_agent: record.assigned_agent,
+      last_message_at: record.last_message_at,
+      last_inbound_at: record.last_inbound_at,
+      last_outbound_at: record.last_outbound_at,
+      last_analyzed_at: record.last_analyzed_at,
+      last_triaged_at: record.last_triaged_at,
+      created_at: record.created_at,
+      updated_at: record.updated_at,
+    });
+  }
+
+  /** @deprecated Mail-vertical compatibility wrapper — use getContextRecord */
+  getConversationRecord(conversationId: string): ConversationRecord | undefined {
+    const context = this.getContextRecord(conversationId);
+    return context ? contextRecordToConversationRecord(context) : undefined;
   }
 
   nextRevisionOrdinal(conversationId: string): number {

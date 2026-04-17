@@ -8,7 +8,7 @@
 export type {
   ForemanFacade,
   SyncCompletionSignal,
-  ChangedConversation,
+  ChangedContext,
   WorkOpeningResult,
   OpenedWorkItem,
   SupersededWorkItem,

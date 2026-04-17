@@ -1,51 +1,13 @@
 /**
  * Coordinator Store Types
  *
- * Durable state for foreman, charter outputs, thread records, and policy overrides.
+ * Durable state for foreman, charter outputs, context records, and policy overrides.
  *
  * Spec: .ai/tasks/20260413-012-coordinator-state-and-foreman-handoff.md
  * Spec: .ai/tasks/20260414-004-coordinator-durable-state-v2.md
  */
 
-import type { NormalizedMessage } from "../types/normalized.js";
-
-/** Canonical thread state as seen by the coordinator */
-export interface ThreadRecord {
-  conversation_id: string;
-  mailbox_id: string;
-  primary_charter: string;
-  secondary_charters_json: string;
-  status: string;
-  assigned_agent: string | null;
-  last_message_at: string;
-  last_inbound_at: string | null;
-  last_outbound_at: string | null;
-  last_analyzed_at: string | null;
-  last_triaged_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-/** Control-plane conversation metadata (v2). */
-export interface ConversationRecord {
-  conversation_id: string;
-  mailbox_id: string;
-  primary_charter: string;
-  secondary_charters_json: string;
-  status: "active" | "archived" | "deleted";
-  assigned_agent: string | null;
-  last_message_at: string | null;
-  last_inbound_at: string | null;
-  last_outbound_at: string | null;
-  last_analyzed_at: string | null;
-  last_triaged_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-/** Neutral observation-facing context record (Task 084).
- *  Semantically identical to ConversationRecord but uses vertical-neutral naming.
- */
+/** Neutral observation-facing context record (Task 084). */
 export interface ContextRecord {
   context_id: string;
   scope_id: string;
@@ -62,21 +24,13 @@ export interface ContextRecord {
   updated_at: string;
 }
 
-/** Revision ordinal tracking for deterministic conversation snapshots. */
-export interface ConversationRevision {
+/** Revision ordinal tracking for deterministic context snapshots. */
+export interface ContextRevision {
   revision_record_id: number;
-  conversation_id: string;
+  context_id: string;
   ordinal: number;
   observed_at: string;
   trigger_event_id: string | null;
-}
-
-/** Thread context hydrated from the compiler's filesystem views. */
-export interface NormalizedThreadContext {
-  conversation_id: string;
-  mailbox_id: string;
-  revision_id: string;
-  messages: NormalizedMessage[];
 }
 
 /** Persisted output from charter analysis of a thread */
@@ -261,22 +215,14 @@ export interface CoordinatorStore {
   readonly db: import("better-sqlite3").Database;
   initSchema(): void;
 
-  // Threads (legacy — deprecated in favor of conversation records)
-  upsertThread(record: ThreadRecord): void;
-  getThread(threadId: string, mailboxId: string): ThreadRecord | undefined;
-
-  // Conversation records (v2)
-  upsertConversationRecord(record: ConversationRecord): void;
-  getConversationRecord(conversationId: string): ConversationRecord | undefined;
-
-  // Neutral context records (Task 086) — primary durable table; conversation_records is now a compatibility view
+  // Context records (v2) — primary durable contract
   upsertContextRecord(record: ContextRecord): void;
   getContextRecord(contextId: string): ContextRecord | undefined;
 
-  // Conversation revisions
-  nextRevisionOrdinal(conversationId: string): number;
-  recordRevision(conversationId: string, ordinal: number, triggerEventId?: string | null): void;
-  getLatestRevisionOrdinal(conversationId: string): number | null;
+  // Context revisions
+  nextRevisionOrdinal(contextId: string): number;
+  recordRevision(contextId: string, ordinal: number, triggerEventId?: string | null): void;
+  getLatestRevisionOrdinal(contextId: string): number | null;
 
   // Neutral context revisions (Task 084)
   recordContextRevision(contextId: string, ordinal: number, triggerEventId?: string | null): void;
@@ -363,8 +309,6 @@ export type CoordinatorStoreView = Omit<
   CoordinatorStore,
   | "initSchema"
   | "close"
-  | "upsertThread"
-  | "upsertConversationRecord"
   | "nextRevisionOrdinal"
   | "recordRevision"
   | "insertWorkItem"

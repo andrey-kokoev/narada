@@ -203,7 +203,7 @@ describe("Replay and Recovery Tests", () => {
       h.coordinatorStore.nextRevisionOrdinal("conv-1"); // 4
 
       const signal = makeSignal([
-        { conversation_id: "conv-1", previous_revision_ordinal: 1, current_revision_ordinal: 4, change_kinds: ["new_message"] },
+        { context_id: "conv-1", previous_revision_ordinal: 1, current_revision_ordinal: 4, change_kinds: ["new_message"] },
       ]);
 
       const result = await h.foreman.onSyncCompleted(signal);
@@ -235,7 +235,7 @@ describe("Replay and Recovery Tests", () => {
 
       // This creates wi_B opened for rev 5
       const signal = makeSignal([
-        { conversation_id: "conv-1", previous_revision_ordinal: 1, current_revision_ordinal: 5, change_kinds: ["new_message"] },
+        { context_id: "conv-1", previous_revision_ordinal: 1, current_revision_ordinal: 5, change_kinds: ["new_message"] },
       ]);
       await h.foreman.onSyncCompleted(signal);
 

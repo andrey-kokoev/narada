@@ -33,7 +33,7 @@ export interface OutboundStore {
   getCommandStatus(outbound_id: string): OutboundStatus | undefined;
   getLatestVersion(outbound_id: string): OutboundVersion | undefined;
   getVersions(outbound_id: string): OutboundVersion[];
-  getActiveCommandsForThread(conversation_id: string): OutboundCommand[];
+  getActiveCommandsForContext(context_id: string): OutboundCommand[];
   supersedePriorVersions(outbound_id: string, newVersion: number): void;
   appendTransition(transition: Omit<OutboundTransition, "id">): void;
   updateCommandStatus(
@@ -44,11 +44,11 @@ export interface OutboundStore {
       "latest_version" | "blocked_reason" | "terminal_reason" | "submitted_at" | "confirmed_at"
     >>,
   ): void;
-  fetchNextEligible(mailbox_id?: string): Array<{ command: OutboundCommand; version: OutboundVersion }>;
+  fetchNextEligible(scope_id?: string): Array<{ command: OutboundCommand; version: OutboundVersion }>;
   fetchNextByStatus(
     action_type: OutboundCommand["action_type"],
     statuses: OutboundStatus[],
-    mailbox_id?: string,
+    scope_id?: string,
   ): Array<{ command: OutboundCommand; version: OutboundVersion }>;
   setManagedDraft(draft: ManagedDraft): void;
   getManagedDraft(outbound_id: string, version: number): ManagedDraft | undefined;
@@ -431,12 +431,17 @@ export class SqliteOutboundStore implements OutboundStore {
     return rows.map(rowToVersion);
   }
 
-  getActiveCommandsForThread(conversation_id: string): OutboundCommand[] {
+  getActiveCommandsForContext(context_id: string): OutboundCommand[] {
     const rows = this.db.prepare(`
       select *, context_id as conversation_id, scope_id as mailbox_id from outbound_handoffs
       where context_id = ? and status in (${ACTIVE_UNSENT_STATUSES.map(() => "?").join(", ")})
-    `).all(conversation_id, ...ACTIVE_UNSENT_STATUSES) as Record<string, unknown>[];
+    `).all(context_id, ...ACTIVE_UNSENT_STATUSES) as Record<string, unknown>[];
     return rows.map(rowToCommand);
+  }
+
+  /** @deprecated Mail-vertical compatibility wrapper — use getActiveCommandsForContext */
+  getActiveCommandsForThread(conversation_id: string): OutboundCommand[] {
+    return this.getActiveCommandsForContext(conversation_id);
   }
 
   supersedePriorVersions(outbound_id: string, newVersion: number): void {
@@ -502,17 +507,17 @@ export class SqliteOutboundStore implements OutboundStore {
     ).run(...values);
   }
 
-  fetchNextEligible(mailbox_id?: string): Array<{ command: OutboundCommand; version: OutboundVersion }> {
-    return this.fetchNextByStatus("send_reply", ["draft_ready"], mailbox_id);
+  fetchNextEligible(scope_id?: string): Array<{ command: OutboundCommand; version: OutboundVersion }> {
+    return this.fetchNextByStatus("send_reply", ["draft_ready"], scope_id);
   }
 
   fetchNextByStatus(
     action_type: OutboundCommand["action_type"],
     statuses: OutboundStatus[],
-    mailbox_id?: string,
+    scope_id?: string,
   ): Array<{ command: OutboundCommand; version: OutboundVersion }> {
     if (statuses.length === 0) return [];
-    const mailboxFilter = mailbox_id ? "and c.scope_id = ?" : "";
+    const scopeFilter = scope_id ? "and c.scope_id = ?" : "";
     const statusPlaceholders = statuses.map(() => "?").join(", ");
     const sql = `
       select c.*, context_id as conversation_id, scope_id as mailbox_id, v.*
@@ -523,12 +528,12 @@ export class SqliteOutboundStore implements OutboundStore {
       where c.action_type = ?
         and c.status in (${statusPlaceholders})
         and v.superseded_at is null
-        ${mailboxFilter}
+        ${scopeFilter}
       order by c.created_at asc
     `;
 
     const params: (string | number | null)[] = [action_type, ...statuses];
-    if (mailbox_id) params.push(mailbox_id);
+    if (scope_id) params.push(scope_id);
 
     const rows = this.db.prepare(sql).all(...params) as Record<string, unknown>[];
 

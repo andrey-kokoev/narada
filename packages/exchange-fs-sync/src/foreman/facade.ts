@@ -26,23 +26,22 @@ import { IntentHandoff } from "../intent/handoff.js";
 import type { PolicyContext, ContextFormationStrategy } from "./context.js";
 import { MailboxContextStrategy } from "./context.js";
 import type {
-  CoordinatorStore,
-  ConversationRecord,
   WorkItem,
   Evaluation,
   AgentSession,
 } from "../coordinator/types.js";
+import type { MailCompatCoordinatorStore } from "../coordinator/mail-compat-types.js";
 import type { OutboundStore } from "../outbound/store.js";
 import type { IntentStore } from "../intent/store.js";
 import type { RuntimePolicy } from "../config/types.js";
 
 export interface ForemanFacadeDeps {
-  coordinatorStore: CoordinatorStore;
+  coordinatorStore: MailCompatCoordinatorStore;
   outboundStore: OutboundStore;
   intentStore: IntentStore;
   db: Database.Database;
   foremanId: string;
-  getRuntimePolicy: (mailboxId: string) => RuntimePolicy;
+  getRuntimePolicy: (scopeId: string) => RuntimePolicy;
   /** Optional context formation strategy; defaults to MailboxContextStrategy */
   contextFormationStrategy?: ContextFormationStrategy;
 }
@@ -52,8 +51,8 @@ export interface ForemanFacadeOptions {
   maxRetries?: number;
 }
 
-function makeRevisionId(conversationId: string, ordinal: number): string {
-  return `${conversationId}:rev:${ordinal}`;
+function makeRevisionId(contextId: string, ordinal: number): string {
+  return `${contextId}:rev:${ordinal}`;
 }
 
 export class DefaultForemanFacade implements ForemanFacade {
@@ -70,10 +69,10 @@ export class DefaultForemanFacade implements ForemanFacade {
   }
 
   async onSyncCompleted(signal: SyncCompletionSignal): Promise<WorkOpeningResult> {
-    const contexts: PolicyContext[] = signal.changed_conversations.map((changed) => ({
-      context_id: changed.conversation_id,
-      scope_id: signal.mailbox_id,
-      revision_id: makeRevisionId(changed.conversation_id, changed.current_revision_ordinal),
+    const contexts: PolicyContext[] = signal.changed_contexts.map((changed) => ({
+      context_id: changed.context_id,
+      scope_id: signal.scope_id,
+      revision_id: makeRevisionId(changed.context_id, changed.current_revision_ordinal),
       previous_revision_ordinal: changed.previous_revision_ordinal,
       current_revision_ordinal: changed.current_revision_ordinal,
       change_kinds: changed.change_kinds,
@@ -106,11 +105,11 @@ export class DefaultForemanFacade implements ForemanFacade {
       const contextId = context.context_id;
       const scopeId = context.scope_id;
 
-      // Ensure conversation record exists and record revision
-      let record = this.deps.coordinatorStore.getConversationRecord(contextId);
+      // Ensure context record exists and record revision
+      let record = this.deps.coordinatorStore.getContextRecord(contextId);
       if (!record) {
-        record = this.buildConversationRecord(contextId, scopeId);
-        this.deps.coordinatorStore.upsertConversationRecord(record);
+        record = this.buildContextRecord(contextId, scopeId);
+        this.deps.coordinatorStore.upsertContextRecord(record);
         this.deps.coordinatorStore.upsertThread(this.toThreadRecord(record));
       }
 
@@ -130,7 +129,7 @@ export class DefaultForemanFacade implements ForemanFacade {
             updated_at: context.synced_at,
           });
           this.closeSessionForWorkItem(activeWorkItem.work_item_id, "superseded", context.synced_at);
-          this.handoff.cancelUnsentCommandsForThread(contextId, "superseded_by_new_revision");
+          this.handoff.cancelUnsentCommandsForContext(contextId, "superseded_by_new_revision");
           const newWorkItem = this.openWorkItem(context);
           result.superseded.push({
             work_item_id: activeWorkItem.work_item_id,
@@ -193,7 +192,7 @@ export class DefaultForemanFacade implements ForemanFacade {
       return { success: false, resolution_outcome: "failed", error: `Work item status is ${workItem.status}` };
     }
 
-    // Supersession guard: if a newer work item exists for this conversation, supersede this one
+    // Supersession guard: if a newer work item exists for this context, supersede this one
     const latestWorkItem = store.getLatestWorkItemForContext(workItem.context_id);
     if (latestWorkItem && latestWorkItem.work_item_id !== workItem.work_item_id) {
       store.updateWorkItemStatus(workItem.work_item_id, "superseded", {
@@ -217,9 +216,9 @@ export class DefaultForemanFacade implements ForemanFacade {
     }
 
     // Ensure legacy thread record exists for FK compliance (needed before any decision insert)
-    const convRecord = this.deps.coordinatorStore.getConversationRecord(workItem.context_id);
-    if (convRecord) {
-      this.deps.coordinatorStore.upsertThread(this.toThreadRecord(convRecord));
+    const contextRecord = this.deps.coordinatorStore.getContextRecord(workItem.context_id);
+    if (contextRecord) {
+      this.deps.coordinatorStore.upsertThread(this.toThreadRecord(contextRecord));
     }
 
     // Reconstruct CharterOutputEnvelope from evaluation for validation
@@ -514,12 +513,12 @@ export class DefaultForemanFacade implements ForemanFacade {
     }
   }
 
-  private buildConversationRecord(conversationId: string, mailboxId: string): ConversationRecord {
-    const policy = this.deps.getRuntimePolicy(mailboxId);
+  private buildContextRecord(contextId: string, scopeId: string): import("../coordinator/types.js").ContextRecord {
+    const policy = this.deps.getRuntimePolicy(scopeId);
     const now = new Date().toISOString();
     return {
-      conversation_id: conversationId,
-      mailbox_id: mailboxId,
+      context_id: contextId,
+      scope_id: scopeId,
       primary_charter: policy.primary_charter,
       secondary_charters_json: JSON.stringify(policy.secondary_charters ?? []),
       status: "active",
@@ -534,10 +533,10 @@ export class DefaultForemanFacade implements ForemanFacade {
     };
   }
 
-  private toThreadRecord(record: ConversationRecord) {
+  private toThreadRecord(record: import("../coordinator/types.js").ContextRecord): import("../coordinator/mail-compat-types.js").ThreadRecord {
     return {
-      conversation_id: record.conversation_id,
-      mailbox_id: record.mailbox_id,
+      conversation_id: record.context_id,
+      mailbox_id: record.scope_id,
       primary_charter: record.primary_charter,
       secondary_charters_json: record.secondary_charters_json,
       status: record.status,
@@ -603,16 +602,18 @@ export class DefaultForemanFacade implements ForemanFacade {
     // Supersede if new revision is higher than what the work item was opened for
     const openedOrdinal = Number(activeWorkItem.opened_for_revision_id.split(":").pop());
     if (currentOrdinal > openedOrdinal) {
-      // Material change: new message or participant change
+      // Material change: new fact or participant change
       return (
-        context.change_kinds.includes("new_message") || context.change_kinds.includes("participant_change")
+        context.change_kinds.includes("new_fact") ||
+        context.change_kinds.includes("new_message") ||
+        context.change_kinds.includes("participant_change")
       );
     }
     return false;
   }
 
   private isChangeRelevant(context: PolicyContext): boolean {
-    // In v1, all non-draft changes that touch messages are relevant
+    // All non-draft changes that touch facts are relevant
     return context.change_kinds.some((k) => k !== "draft_observed");
   }
 

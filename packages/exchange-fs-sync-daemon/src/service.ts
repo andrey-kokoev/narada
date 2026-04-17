@@ -332,9 +332,9 @@ async function createMailboxDispatchContext(
       const openResult = await deps.foreman.onFactsAdmitted(facts, scope.scope_id);
       const signal: SyncCompletionSignal = {
         signal_id: `fact_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-        mailbox_id: scope.scope_id,
+        scope_id: scope.scope_id,
         synced_at: new Date().toISOString(),
-        changed_conversations: [],
+        changed_contexts: [],
       };
       await opts.dispatchHooks?.afterSyncCompleted?.(signal, openResult);
       for (const opened of openResult.opened) {

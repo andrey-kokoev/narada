@@ -19,9 +19,9 @@ import {
   getIntentSummaries,
   getIntentExecutionSummaries,
   getProcessExecutionDetails,
-  getMailExecutionDetails,
   getIntentLifecycleTransitions,
 } from "../../../src/observability/queries.js";
+import { getMailExecutionDetails } from "../../../src/observability/mailbox.js";
 import type { WorkItem, ExecutionAttempt, ToolCallRecord } from "../../../src/coordinator/types.js";
 
 describe("observability/queries", () => {

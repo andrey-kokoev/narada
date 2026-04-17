@@ -141,7 +141,7 @@ REMOTE SOURCE
           ▼
 ┌───────────────────┐
 │  Daemon           │  ← Emits SyncCompletionSignal
-│  (dispatch phase) │     { changed_conversations: [...] }
+│  (dispatch phase) │     { changed_contexts: [...] }
 └─────────┬─────────┘
           │
           ▼

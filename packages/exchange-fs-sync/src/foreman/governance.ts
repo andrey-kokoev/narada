@@ -204,7 +204,7 @@ export function governAction(
   if (!policy.allowed_actions.includes(action.action_type)) {
     return {
       allowed: false,
-      reason: "Action type not allowed by mailbox policy",
+      reason: "Action type not allowed by runtime policy",
       requires_approval: false,
       confidence_sufficient: false,
       payload_valid: true,

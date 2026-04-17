@@ -158,7 +158,7 @@ export class TimerContextStrategy implements ContextFormationStrategy {
         revision_id: makeRevisionId(contextId, currentOrdinal),
         previous_revision_ordinal: previousOrdinal,
         current_revision_ordinal: currentOrdinal,
-        change_kinds: ["new_message"],
+        change_kinds: ["new_fact"],
         facts: groupFacts,
         synced_at: now,
       });
@@ -218,7 +218,7 @@ export class WebhookContextStrategy implements ContextFormationStrategy {
         revision_id: makeRevisionId(contextId, currentOrdinal),
         previous_revision_ordinal: previousOrdinal,
         current_revision_ordinal: currentOrdinal,
-        change_kinds: ["new_message"],
+        change_kinds: ["new_fact"],
         facts: groupFacts,
         synced_at: now,
       });
@@ -278,7 +278,7 @@ export class FilesystemContextStrategy implements ContextFormationStrategy {
         revision_id: makeRevisionId(contextId, currentOrdinal),
         previous_revision_ordinal: previousOrdinal,
         current_revision_ordinal: currentOrdinal,
-        change_kinds: ["new_message"],
+        change_kinds: ["new_fact"],
         facts: groupFacts,
         synced_at: now,
       });

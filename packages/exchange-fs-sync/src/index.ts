@@ -104,10 +104,8 @@ export type { OutboundStore, OutboundStoreView, SqliteOutboundStoreOptions, Sqli
 export { SqliteCoordinatorStore } from "./coordinator/store.js";
 export type {
   CoordinatorStore,
-  ThreadRecord,
-  ConversationRecord,
-  ConversationRevision,
-  NormalizedThreadContext,
+  ContextRecord,
+  ContextRevision,
   CharterOutputRow,
   ForemanDecisionRow,
   PolicyOverrideRow,
@@ -123,8 +121,16 @@ export type {
   CoordinatorStoreView,
   CoordinatorStoreOperatorView,
 } from "./coordinator/types.js";
+export type {
+  ThreadRecord,
+  ConversationRecord,
+  ConversationRevision,
+  NormalizedThreadContext,
+  MailCompatCoordinatorStore,
+} from "./coordinator/mail-compat-types.js";
 export type { SqliteCoordinatorStoreOptions } from "./coordinator/store.js";
 export { deriveThreadId } from "./coordinator/thread-id.js";
+export { contextRecordToConversationRecord } from "./coordinator/mail-compat-types.js";
 
 // Foreman exports
 export { DefaultForemanFacade } from "./foreman/facade.js";
@@ -141,7 +147,7 @@ export {
 export type {
   ForemanFacade,
   SyncCompletionSignal,
-  ChangedConversation,
+  ChangedContext,
   WorkOpeningResult,
   OpenedWorkItem,
   SupersededWorkItem,
@@ -371,8 +377,6 @@ export type {
   IntentSummary,
   IntentExecutionSummary,
   ProcessExecutionDetail,
-  MailExecutionDetail,
-  MailExecutionTransition,
   IntentLifecycleTransition,
   WorkerStatusObservation,
   ContextSummary,
@@ -385,9 +389,13 @@ export type {
   LeaseSummary,
   StaleLeaseRecoveryEvent,
   QuiescenceIndicator,
+} from "./observability/types.js";
+export type {
+  MailExecutionDetail,
+  MailExecutionTransition,
   MailboxVerticalView,
   MailboxConversationSummary,
-} from "./observability/types.js";
+} from "./observability/mailbox-types.js";
 export {
   OperatorErrorCategory,
   classifyErrorToOperatorCategory,
@@ -408,12 +416,10 @@ export {
   getIntentSummaries,
   getIntentExecutionSummaries,
   getProcessExecutionDetails,
-  getMailExecutionDetails,
   getIntentLifecycleTransitions,
   getWorkerStatuses,
   getRecentFacts,
   getContextSummaries,
-  getMailboxVerticalView,
   getWorkItemTimeline,
   getContextTimeline,
   getFactTimeline,
@@ -424,6 +430,10 @@ export {
   getRecentStaleLeaseRecoveries,
   getQuiescenceIndicator,
 } from "./observability/queries.js";
+export {
+  getMailExecutionDetails,
+  getMailboxVerticalView,
+} from "./observability/mailbox.js";
 export { ObservationPlane } from "./observability/plane.js";
 export type { ObservationPlaneDeps } from "./observability/plane.js";
 

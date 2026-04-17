@@ -249,40 +249,6 @@ export interface ProcessExecutionDetail {
   created_at: string;
 }
 
-/** Mail execution transition for audit trail */
-export interface MailExecutionTransition {
-  transition_id: number;
-  from_status: OutboundStatus;
-  to_status: OutboundStatus;
-  reason: string | null;
-  created_at: string;
-}
-
-/** Mail execution detail for operator drill-down */
-export interface MailExecutionDetail {
-  outbound_id: string;
-  intent_id: string;
-  conversation_id: string;
-  mailbox_id: string;
-  action_type: string;
-  status: OutboundStatus;
-  latest_version: number;
-  idempotency_key: string;
-  submitted_at: string | null;
-  confirmed_at: string | null;
-  blocked_reason: string | null;
-  terminal_reason: string | null;
-  created_at: string;
-  transitions: MailExecutionTransition[];
-  latest_version_detail: {
-    to: string[];
-    cc: string[];
-    bcc: string[];
-    subject: string;
-    body_text_preview: string;
-  } | null;
-}
-
 /** Intent lifecycle transition for chronological audit */
 export interface IntentLifecycleTransition {
   transition_at: string;
@@ -326,34 +292,6 @@ export interface OverviewSnapshot {
     total_recent_facts: number;
     total_recent_failures: number;
   };
-}
-
-/** Mailbox-vertical conversation summary with mail-specific timing */
-export interface MailboxConversationSummary {
-  context_id: string;
-  scope_id: string;
-  status: string;
-  primary_charter: string;
-  assigned_agent: string | null;
-  last_message_at: string | null;
-  last_inbound_at: string | null;
-  last_outbound_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-/** Mailbox-vertical view — sits above the kernel-neutral shell */
-export interface MailboxVerticalView {
-  scope_id: string;
-  conversations: MailboxConversationSummary[];
-  outbound: OutboundHandoffSummary[];
-  outputs: {
-    output_id: string;
-    context_id: string;
-    charter_id: string;
-    summary: string;
-    analyzed_at: string;
-  }[];
 }
 
 export interface ScopeOverview {
@@ -466,60 +404,5 @@ export interface ObservationPlaneSnapshot {
   };
   _meta?: {
     source_classifications: Record<string, SourceTrust>;
-  };
-}
-
-/** Single-failure row for the overview dashboard */
-export interface OverviewFailureSummary {
-  scope_id: string;
-  context_id: string;
-  work_item_id: string | null;
-  execution_id: string | null;
-  failed_at: string;
-  error_message: string | null;
-  vertical: string;
-}
-
-/** Per-scope operational summary */
-export interface ScopeOverview {
-  scope_id: string;
-  last_activity_at: string | null;
-  active_verticals: string[];
-  work_items: {
-    opened: number;
-    leased: number;
-    executing: number;
-    failed_retryable: number;
-    failed_terminal: number;
-  };
-  intents: {
-    pending: number;
-    executing: number;
-  };
-  executions: {
-    active: number;
-    failed_recent: number;
-  };
-}
-
-/** Top-level kernel overview snapshot for the operator dashboard */
-export interface OverviewSnapshot {
-  captured_at: string;
-  /** Source-trust metadata for each top-level section */
-  _meta: {
-    source_classifications: Record<string, SourceTrust>;
-  };
-  scopes: ScopeOverview[];
-  facts: {
-    total_recent: number;
-    by_vertical: Record<string, number>;
-  };
-  recent_failures: OverviewFailureSummary[];
-  global: {
-    total_work_items: number;
-    total_active_executions: number;
-    total_pending_intents: number;
-    total_recent_facts: number;
-    total_recent_failures: number;
   };
 }
