@@ -195,7 +195,7 @@ function loadScopeConfig(rawScope: unknown, pathPrefix: string): ScopeConfig {
   // Context strategy
   const contextStrategy = isNonEmptyString(scope.context_strategy)
     ? scope.context_strategy.trim()
-    : "mailbox";
+    : "mail";
 
   // Scope filters
   const scopeObj = isObject(scope.scope) ? scope.scope : {};
@@ -537,7 +537,7 @@ export async function loadConfig(
       policy: root.policy,
       webhook: root.webhook,
       sources: [], // will be backfilled from graph
-      context_strategy: root.context_strategy ?? "mailbox",
+      context_strategy: root.context_strategy ?? "mail",
       executors: root.executors,
     };
 

@@ -25,7 +25,7 @@ const DEFAULT_CONFIG = {
           prefer_immutable_ids: true,
         },
       ],
-      context_strategy: 'mailbox',
+      context_strategy: 'mail',
       scope: {
         included_container_refs: ['inbox', 'sentitems', 'drafts', 'archive'],
         included_item_kinds: ['message'],

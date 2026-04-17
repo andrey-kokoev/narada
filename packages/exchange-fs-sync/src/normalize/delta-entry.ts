@@ -38,7 +38,7 @@ function buildDeleteEvent(input: NormalizeDeltaEntryInput): NormalizedEvent {
   const source_version = graph_message.changeKey?.trim();
 
   const event_id = buildEventId({
-    mailbox_id,
+    scope_id: mailbox_id,
     message_id,
     event_kind: "delete",
     source_version,
@@ -87,7 +87,7 @@ function buildUpsertEvent(input: NormalizeDeltaEntryInput): NormalizedEvent {
   const source_version = graph_message.changeKey?.trim();
 
   const event_id = buildEventId({
-    mailbox_id,
+    scope_id: mailbox_id,
     message_id,
     event_kind: "upsert",
     source_version,

@@ -225,7 +225,7 @@ export async function configInteractiveCommand(
             user_id: values.graph_user_id,
           },
         ],
-        context_strategy: 'mailbox',
+        context_strategy: 'mail',
         scope: {
           ...DEFAULT_CONFIG.scope,
           included_container_refs: [values.container_ref.trim()].filter(Boolean),

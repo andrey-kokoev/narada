@@ -1091,11 +1091,11 @@ function detectVerticalFromContext(contextId: string): string {
   if (contextId.startsWith("timer:")) return "timer";
   if (contextId.startsWith("webhook:")) return "webhook";
   if (contextId.startsWith("fs:") || contextId.startsWith("filesystem:")) return "filesystem";
-  return "mailbox";
+  return "mail";
 }
 
 function detectVerticalFromFactType(factType: string): string {
-  if (factType.startsWith("mail.")) return "mailbox";
+  if (factType.startsWith("mail.")) return "mail";
   if (factType.startsWith("timer.")) return "timer";
   if (factType.startsWith("webhook.")) return "webhook";
   if (factType.startsWith("filesystem.")) return "filesystem";
@@ -1175,7 +1175,7 @@ export function buildOverviewSnapshot(
     // Infer scope from context_id: if it looks like a timer context, we don't have direct scope.
     // Heuristic: use context_id as scope_id for timer/webhook, since we don't store scope_id on intents.
     const vertical = detectVerticalFromContext(row.context_id);
-    const scopeId = vertical === "mailbox" ? row.context_id : row.context_id;
+    const scopeId = vertical === "mail" ? row.context_id : row.context_id;
 
     let scope = scopeMap.get(scopeId);
     if (!scope) {

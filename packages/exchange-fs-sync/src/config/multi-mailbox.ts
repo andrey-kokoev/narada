@@ -637,7 +637,7 @@ export function toScopeConfig(mailbox: MailboxConfig): ScopeConfig {
         prefer_immutable_ids: mailbox.graph.prefer_immutable_ids,
       },
     ],
-    context_strategy: "mailbox",
+    context_strategy: "mail",
     scope: mailbox.scope ?? {
       included_container_refs: ["inbox", "sentitems", "drafts", "archive"],
       included_item_kinds: ["message"],

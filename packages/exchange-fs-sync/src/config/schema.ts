@@ -153,7 +153,7 @@ const ScopeConfigSchema = z.object({
   scope_id: z.string().min(1, 'Scope ID is required'),
   root_dir: z.string().min(1, 'Root directory is required'),
   sources: z.array(SourceConfigSchema).min(1, 'At least one source is required'),
-  context_strategy: z.string().min(1).default('mailbox'),
+  context_strategy: z.string().min(1).default('mail'),
   scope: ScopeFilterSchema,
   normalize: NormalizeConfigSchema.default({}),
   runtime: RuntimeConfigSchema.default({}),

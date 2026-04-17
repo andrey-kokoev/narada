@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import type {
   EventId,
   EventKind,
-  MailboxId,
   MessageId,
   NormalizedPayload,
   SourceVersion,
@@ -47,7 +46,7 @@ export function hashNormalizedPayload(
 }
 
 export interface BuildEventIdInput {
-  mailbox_id: MailboxId;
+  scope_id: string;
   message_id: MessageId;
   event_kind: EventKind;
   source_version?: SourceVersion;
@@ -69,7 +68,7 @@ export interface BuildEventIdInput {
  */
 export function buildEventId(input: BuildEventIdInput): EventId {
   const base: Record<string, unknown> = {
-    mailbox_id: input.mailbox_id,
+    scope_id: input.scope_id,
     message_id: input.message_id,
     event_kind: input.event_kind,
   };
@@ -96,7 +95,7 @@ export function buildEventId(input: BuildEventIdInput): EventId {
 
 export function computeEventId(input: BuildEventIdInput): EventId;
 export function computeEventId(input: BuildEventIdInput | {
-  mailbox_id: MailboxId;
+  scope_id: string;
   message_id: MessageId;
   event_kind: EventKind;
   source_version?: SourceVersion;

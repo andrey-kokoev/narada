@@ -63,7 +63,7 @@ export interface ExecutorConfig {
 }
 
 /** Context strategy for scope admission */
-export type ContextStrategy = 'mailbox' | 'timer' | 'filesystem' | 'webhook' | string;
+export type ContextStrategy = 'mail' | 'timer' | 'filesystem' | 'webhook' | string;
 
 /** Vertical-neutral configuration for a single scope */
 export interface ScopeConfig {
