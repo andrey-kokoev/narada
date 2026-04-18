@@ -31,6 +31,41 @@ export interface ToolArgSchema {
   description: string;
 }
 
+/** Explicit operational requirement for bootstrap/preflight tooling. */
+export type OperationalRequirement =
+  | {
+      kind: "env_var";
+      name: string;
+      description: string;
+      optional?: boolean;
+    }
+  | {
+      kind: "directory";
+      path: string;
+      description: string;
+      create_if_missing?: boolean;
+      optional?: boolean;
+    }
+  | {
+      kind: "local_file";
+      path: string;
+      description: string;
+      optional?: boolean;
+    }
+  | {
+      kind: "local_executable";
+      command: string;
+      description: string;
+      working_directory?: string;
+      optional?: boolean;
+    }
+  | {
+      kind: "http_endpoint";
+      url: string;
+      description: string;
+      optional?: boolean;
+    };
+
 /** Tool source types */
 export type ToolSourceType = "local_executable" | "http_endpoint" | "docker_image";
 
@@ -44,6 +79,7 @@ export interface ToolDefinition {
   url?: string;
   docker_image?: string;
   schema_args?: ToolArgSchema[];
+  setup_requirements?: OperationalRequirement[];
 }
 
 /** Binding of a tool to a charter within a mailbox */
@@ -132,6 +168,87 @@ export function validateMailboxBinding(
   }
 
   return true;
+}
+
+function makeImplicitRequirement(definition: ToolDefinition): OperationalRequirement | null {
+  if (definition.source_type === "local_executable" && definition.executable_path) {
+    return {
+      kind: "local_executable",
+      command: definition.executable_path,
+      description: `Executable for tool ${definition.id}`,
+      working_directory: definition.working_directory,
+    };
+  }
+
+  if (definition.source_type === "http_endpoint" && definition.url) {
+    return {
+      kind: "http_endpoint",
+      url: definition.url,
+      description: `HTTP endpoint for tool ${definition.id}`,
+    };
+  }
+
+  return null;
+}
+
+function requirementKey(requirement: OperationalRequirement): string {
+  switch (requirement.kind) {
+    case "env_var":
+      return `${requirement.kind}:${requirement.name}`;
+    case "directory":
+      return `${requirement.kind}:${requirement.path}`;
+    case "local_file":
+      return `${requirement.kind}:${requirement.path}`;
+    case "local_executable":
+      return `${requirement.kind}:${requirement.command}:${requirement.working_directory ?? ""}`;
+    case "http_endpoint":
+      return `${requirement.kind}:${requirement.url}`;
+  }
+}
+
+/**
+ * Collect explicit ops/bootstrap requirements induced by enabled tools
+ * for a mailbox and optional charter subset.
+ */
+export function collectOperationalRequirements(
+  config: CoordinatorConfig,
+  mailboxId: string,
+  charterIds?: CharterId[],
+): OperationalRequirement[] {
+  const binding = config.mailbox_bindings[mailboxId];
+  if (!binding) return [];
+
+  const targetCharters = charterIds ?? binding.available_charters;
+  const seenToolIds = new Set<string>();
+  const seenRequirements = new Set<string>();
+  const collected: OperationalRequirement[] = [];
+
+  for (const charterId of targetCharters) {
+    const toolBindings = (binding.charter_tools as Record<string, ToolBinding[]>)[charterId] ?? [];
+    for (const toolBinding of toolBindings) {
+      if (!toolBinding.enabled) continue;
+      if (seenToolIds.has(toolBinding.tool_id)) continue;
+      seenToolIds.add(toolBinding.tool_id);
+
+      const definition = config.tool_definitions[toolBinding.tool_id];
+      if (!definition) continue;
+
+      const implicit = makeImplicitRequirement(definition);
+      const requirements = [
+        ...(definition.setup_requirements ?? []),
+        ...(implicit ? [implicit] : []),
+      ];
+
+      for (const requirement of requirements) {
+        const key = requirementKey(requirement);
+        if (seenRequirements.has(key)) continue;
+        seenRequirements.add(key);
+        collected.push(requirement);
+      }
+    }
+  }
+
+  return collected;
 }
 
 /** @deprecated Use validateMailboxBinding */

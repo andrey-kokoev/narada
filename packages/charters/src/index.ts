@@ -1,5 +1,5 @@
 /**
- * @narada/charters
+ * @narada2/charters
  *
  * Charter contracts, knowledge sources, and coordinator bindings
  * for mailbox agents.
@@ -32,6 +32,7 @@ export type {
   InvocationMode,
   CharterInvocationPolicy,
   ToolArgSchema,
+  OperationalRequirement,
   ToolSourceType,
   ToolDefinition,
   ToolBinding,
@@ -43,6 +44,7 @@ export type {
 export {
   validateMailboxBinding,
   validateMailboxCharterBinding,
+  collectOperationalRequirements,
 } from "./types/coordinator.js";
 
 // Runtime exports
