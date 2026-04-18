@@ -9,7 +9,7 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from "http";
-import type { GraphNotification } from "@narada/exchange-fs-sync";
+import type { GraphNotification } from "@narada2/exchange-fs-sync";
 import {
   extractValidationToken,
   extractSignature,

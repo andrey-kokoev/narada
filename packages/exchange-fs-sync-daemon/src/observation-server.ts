@@ -28,7 +28,7 @@ import {
   type ProcessExecutionStoreView,
   type FactStoreView,
   type WorkerRegistryView,
-} from "@narada/exchange-fs-sync";
+} from "@narada2/exchange-fs-sync";
 import { createLogger } from "./lib/logger.js";
 import { createObservationRoutes } from "./observation-routes.js";
 import { createOperatorActionRoutes } from "./operator-action-routes.js";

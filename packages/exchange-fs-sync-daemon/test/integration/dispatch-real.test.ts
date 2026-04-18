@@ -12,7 +12,7 @@ import {
   type NormalizedBatch,
   type NormalizedEvent,
   type GraphAdapter,
-} from "@narada/exchange-fs-sync";
+} from "@narada2/exchange-fs-sync";
 
 const mockFetch = vi.fn();
 

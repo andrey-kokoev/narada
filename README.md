@@ -2,6 +2,8 @@
 
 A generalized, deterministic kernel for turning remote source deltas into locally materialized state and durable side-effect intents.
 
+Public examples now live in `~/src/narada.examples`.
+
 > **How to read this repo**: Start with the [kernel lawbook](packages/exchange-fs-sync/docs/00-kernel.md), then treat the Microsoft Graph/Exchange mailbox integration as the *first vertical* built on that kernel—not the essence of the system. Timer, webhook, filesystem, and process automations are first-class peers.
 
 ## What this is
@@ -38,25 +40,25 @@ The system is organized in five layers above six deterministic compiler layers:
 ### CLI (Recommended)
 
 ```bash
-npm install -g @narada/exchange-fs-sync-cli
+npm install -g @narada2/exchange-fs-sync-cli
 # or
-pnpm add -g @narada/exchange-fs-sync-cli
+pnpm add -g @narada2/exchange-fs-sync-cli
 ```
 
 ### Daemon
 
 ```bash
-npm install -g @narada/exchange-fs-sync-daemon
+npm install -g @narada2/exchange-fs-sync-daemon
 # or
-pnpm add -g @narada/exchange-fs-sync-daemon
+pnpm add -g @narada2/exchange-fs-sync-daemon
 ```
 
 ### Library
 
 ```bash
-npm install @narada/exchange-fs-sync
+npm install @narada2/exchange-fs-sync
 # or
-pnpm add @narada/exchange-fs-sync
+pnpm add @narada2/exchange-fs-sync
 ```
 
 ## Quick Start (Mailbox Vertical)
@@ -94,6 +96,7 @@ exchange-sync backup -o backup-$(date +%Y%m%d).tar.gz --encrypt
 - **[00-kernel.md](packages/exchange-fs-sync/docs/00-kernel.md)** — The canonical, vertical-agnostic kernel lawbook
 - **[02-architecture.md](packages/exchange-fs-sync/docs/02-architecture.md)** — Component layers and data flow
 - **[AGENTS.md](AGENTS.md)** — Navigation hub for contributors and agents
+- **[RELEASE.md](RELEASE.md)** — Local and CI publishing flow for `@narada2/*` packages
 - **[.ai/tasks/](.ai/tasks/)** — Design tasks and specifications
 
 ## Review Checklist for Future Architecture Changes

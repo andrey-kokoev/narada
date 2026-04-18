@@ -13,7 +13,7 @@ import {
   type NormalizedBatch,
   type NormalizedEvent,
   type GraphAdapter,
-} from "@narada/exchange-fs-sync";
+} from "@narada2/exchange-fs-sync";
 
 function createTempDir(): string {
   return mkdtempSync(join(tmpdir(), "efs-daemon-dispatch-"));

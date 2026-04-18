@@ -17,7 +17,7 @@ import {
   FileTombstoneStore,
   FileMessageStore,
   FileViewStore,
-} from '@narada/exchange-fs-sync';
+} from '@narada2/exchange-fs-sync';
 
 export interface CleanupOptions {
   config?: string;

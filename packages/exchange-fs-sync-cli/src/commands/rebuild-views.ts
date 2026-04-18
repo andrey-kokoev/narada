@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { loadConfig, FileViewStore } from '@narada/exchange-fs-sync';
+import { loadConfig, FileViewStore } from '@narada2/exchange-fs-sync';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';

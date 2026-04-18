@@ -15,7 +15,7 @@
 import type {
   CoordinatorStoreOperatorView,
   OperatorActionRequest,
-} from "@narada/exchange-fs-sync";
+} from "@narada2/exchange-fs-sync";
 
 export const PERMITTED_OPERATOR_ACTIONS = [
   "retry_work_item",

@@ -15,13 +15,16 @@ import { loadCharterEnv } from "./env.js";
 export function validateCharterRuntimeConfig(cfg: ExchangeFsSyncConfig): void {
   const runtime = cfg.charter?.runtime ?? "mock";
 
-  if (runtime === "codex-api") {
+  if (runtime === "codex-api" || runtime === "kimi-api") {
     const env = loadCharterEnv();
-    const apiKey = cfg.charter?.api_key ?? env.openai_api_key;
+    const apiKey =
+      cfg.charter?.api_key ??
+      (runtime === "kimi-api" ? env.kimi_api_key : env.openai_api_key);
     if (!apiKey) {
       throw new Error(
-        "Charter runtime is configured as codex-api but no API key is provided. " +
-          "Set config.charter.api_key or NARADA_OPENAI_API_KEY / OPENAI_API_KEY environment variable.",
+        runtime === "kimi-api"
+          ? "Charter runtime is configured as kimi-api but no API key is provided. Set config.charter.api_key or NARADA_KIMI_API_KEY / KIMI_API_KEY environment variable."
+          : "Charter runtime is configured as codex-api but no API key is provided. Set config.charter.api_key or NARADA_OPENAI_API_KEY / OPENAI_API_KEY environment variable.",
       );
     }
     return;
@@ -31,5 +34,5 @@ export function validateCharterRuntimeConfig(cfg: ExchangeFsSyncConfig): void {
     return;
   }
 
-  throw new Error(`Invalid charter runtime: ${runtime}. Expected 'codex-api' or 'mock'.`);
+  throw new Error(`Invalid charter runtime: ${runtime}. Expected 'codex-api', 'kimi-api', or 'mock'.`);
 }

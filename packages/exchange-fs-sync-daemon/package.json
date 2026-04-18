@@ -1,5 +1,5 @@
 {
-  "name": "@narada/exchange-fs-sync-daemon",
+  "name": "@narada2/exchange-fs-sync-daemon",
   "version": "0.1.0",
   "description": "Long-running daemon for the Narada deterministic state compiler and control plane",
   "main": "./dist/service.js",
@@ -18,7 +18,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/narada/exchange-fs-sync.git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
     "directory": "packages/exchange-fs-sync-daemon"
   },
   "keywords": [
@@ -43,13 +43,17 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@narada/exchange-fs-sync": "workspace:*",
-    "@narada/charters": "workspace:*"
+    "@narada2/exchange-fs-sync": "workspace:*",
+    "@narada2/charters": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
     "better-sqlite3": "^12.9.0",
     "typescript": "^5.3.0",
     "vitest": "^1.0.0"
+  },
+  "homepage": "https://github.com/andrey-kokoev/narada",
+  "bugs": {
+    "url": "https://github.com/andrey-kokoev/narada/issues"
   }
 }

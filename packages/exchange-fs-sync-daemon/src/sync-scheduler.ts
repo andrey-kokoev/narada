@@ -11,7 +11,7 @@ import type {
   GraphSubscriptionManager,
   Subscription,
   ChangeType,
-} from "@narada/exchange-fs-sync";
+} from "@narada2/exchange-fs-sync";
 import type {
   WebhookServer,
   WebhookServerConfig,

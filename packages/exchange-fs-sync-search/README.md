@@ -1,4 +1,4 @@
-# @narada/exchange-fs-sync-search
+# @narada2/exchange-fs-sync-search
 
 Full-text search index for Narada compiled local state.
 

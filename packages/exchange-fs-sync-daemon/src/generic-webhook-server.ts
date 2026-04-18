@@ -7,7 +7,7 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from "http";
-import type { WebhookEventQueue } from "@narada/exchange-fs-sync";
+import type { WebhookEventQueue } from "@narada2/exchange-fs-sync";
 import { createLogger } from "./lib/logger.js";
 
 export interface GenericWebhookServerConfig {

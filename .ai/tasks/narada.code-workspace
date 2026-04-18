@@ -1,8 +1,14 @@
 {
 	"folders": [
-		{
-			"path": "../.."
-		}
+    {
+      "path": "../.."
+    },
+    {
+      "path": "../../../narada.examples"
+    },
+    {
+      "path": "../../../narada.sonar"
+    }
   ],
   "settings": {}
 }

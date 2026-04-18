@@ -1,5 +1,5 @@
 {
-  "name": "@narada/charters",
+  "name": "@narada2/charters",
   "version": "0.1.0",
   "description": "Charter contracts, knowledge sources, and coordinator bindings for mailbox agents",
   "main": "./dist/index.js",
@@ -15,7 +15,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/narada/exchange-fs-sync.git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
     "directory": "packages/charters"
   },
   "keywords": [
@@ -41,5 +41,9 @@
   },
   "dependencies": {
     "zod": "^3.25.76"
+  },
+  "homepage": "https://github.com/andrey-kokoev/narada",
+  "bugs": {
+    "url": "https://github.com/andrey-kokoev/narada/issues"
   }
 }

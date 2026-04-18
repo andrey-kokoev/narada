@@ -11,7 +11,7 @@ import {
   type LeaseSummary,
   type StaleLeaseRecoveryEvent,
   type QuiescenceIndicator,
-} from '@narada/exchange-fs-sync';
+} from '@narada2/exchange-fs-sync';
 
 // Lazy-load better-sqlite3 to avoid eager native-module load in test environments
 async function loadControlPlaneSnapshot(
@@ -19,7 +19,7 @@ async function loadControlPlaneSnapshot(
   scopeId: string,
 ): Promise<ControlPlaneStatusSnapshot | undefined> {
   const { Database, SqliteCoordinatorStore, SqliteOutboundStore, buildControlPlaneSnapshot } = await import(
-    '@narada/exchange-fs-sync'
+    '@narada2/exchange-fs-sync'
   );
   const db = new Database(dbPath);
   try {

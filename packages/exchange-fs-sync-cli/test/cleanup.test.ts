@@ -7,7 +7,7 @@ import { cleanupCommand } from '../src/commands/cleanup.js';
 import type { CommandContext } from '../src/lib/command-wrapper.js';
 
 // Mock the core package exports used by cleanup.ts
-vi.mock('@narada/exchange-fs-sync', () => ({
+vi.mock('@narada2/exchange-fs-sync', () => ({
   loadConfig: vi.fn().mockResolvedValue({
     mailbox_id: 'test@example.com',
     root_dir: '/test-data',
@@ -136,7 +136,7 @@ describe('cleanup command', () => {
   });
   
   it('should handle config loading errors', async () => {
-    const { loadConfig } = await import('@narada/exchange-fs-sync');
+    const { loadConfig } = await import('@narada2/exchange-fs-sync');
     vi.mocked(loadConfig).mockRejectedValueOnce(new Error('Config not found'));
     
     const result = await cleanupCommand(

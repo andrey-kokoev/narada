@@ -12,7 +12,7 @@ import { pipeline } from 'node:stream/promises';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
-import { loadConfig } from '@narada/exchange-fs-sync';
+import { loadConfig } from '@narada2/exchange-fs-sync';
 import type { BackupManifest } from './backup.js';
 
 export interface RestoreOptions {

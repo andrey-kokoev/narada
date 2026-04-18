@@ -86,7 +86,7 @@ try {
             Copy-Item -Path ".\packages\exchange-fs-sync\package.json" -Destination $InstallDir -Force
         } else {
             Write-Info "Installing from npm..."
-            npm pack @narada/exchange-fs-sync --pack-destination $tempDir
+            npm pack @narada2/exchange-fs-sync --pack-destination $tempDir
             $tarball = Get-ChildItem $tempDir\*.tgz | Select-Object -First 1
             tar -xzf $tarball.FullName -C $tempDir
             Copy-Item -Path "$tempDir\package\dist" -Destination $InstallDir -Recurse -Force
@@ -94,7 +94,7 @@ try {
         }
     } else {
         Write-Info "Downloading version $Version..."
-        npm pack @narada/exchange-fs-sync@$Version --pack-destination $tempDir
+        npm pack @narada2/exchange-fs-sync@$Version --pack-destination $tempDir
         $tarball = Get-ChildItem $tempDir\*.tgz | Select-Object -First 1
         tar -xzf $tarball.FullName -C $tempDir
         Copy-Item -Path "$tempDir\package\dist" -Destination $InstallDir -Recurse -Force

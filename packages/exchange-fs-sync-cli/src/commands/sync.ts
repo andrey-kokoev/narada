@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
-import type { RunResult, ScopeConfig, ExchangeFsSyncConfig } from '@narada/exchange-fs-sync';
+import type { RunResult, ScopeConfig, ExchangeFsSyncConfig } from '@narada2/exchange-fs-sync';
 import {
   loadConfig,
   buildGraphTokenProvider,
@@ -22,7 +22,7 @@ import {
   isMultiMailboxConfig,
   syncMultiple,
   formatMultiSyncResult,
-} from '@narada/exchange-fs-sync';
+} from '@narada2/exchange-fs-sync';
 
 export interface SyncOptions {
   config?: string;

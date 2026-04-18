@@ -16,8 +16,8 @@ import {
   type GraphAdapter,
   type ToolCatalogEntry,
   type WorkItem,
-} from "@narada/exchange-fs-sync";
-import type { ToolDefinition } from "@narada/charters";
+} from "@narada2/exchange-fs-sync";
+import type { ToolDefinition } from "@narada2/charters";
 
 function createTempDir(): string {
   return mkdtempSync(join(tmpdir(), "efs-daemon-crash-"));

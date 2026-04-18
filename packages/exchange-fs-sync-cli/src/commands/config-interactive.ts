@@ -9,9 +9,9 @@ import * as p from '@clack/prompts';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
-import { buildGraphTokenProvider } from '@narada/exchange-fs-sync';
-import { GraphHttpClient } from '@narada/exchange-fs-sync';
-import type { GraphListResponse, GraphMessage } from '@narada/exchange-fs-sync';
+import { buildGraphTokenProvider } from '@narada2/exchange-fs-sync';
+import { GraphHttpClient } from '@narada2/exchange-fs-sync';
+import type { GraphListResponse, GraphMessage } from '@narada2/exchange-fs-sync';
 
 export interface ConfigInteractiveOptions {
   output?: string;

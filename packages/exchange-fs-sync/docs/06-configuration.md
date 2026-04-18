@@ -71,6 +71,9 @@ interface ExchangeFsSyncConfig {
 
 ### Example (`config.example.json`)
 
+A generated JSON Schema is also available at `packages/exchange-fs-sync/config.schema.json` for editor validation and external tooling.
+
+
 ```json
 {
   "root_dir": "./data",
@@ -304,7 +307,7 @@ If no OS keychain is available, credentials are encrypted using AES-256-GCM with
 ### Programmatic API
 
 ```typescript
-import { createSecureStorage } from '@narada/exchange-fs-sync';
+import { createSecureStorage } from '@narada2/exchange-fs-sync';
 
 const storage = await createSecureStorage('my-scope');
 await storage.setCredential('client_secret', 'secret-value');

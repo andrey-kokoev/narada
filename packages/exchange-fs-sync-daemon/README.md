@@ -1,4 +1,4 @@
-# @narada/exchange-fs-sync-daemon
+# @narada2/exchange-fs-sync-daemon
 
 Long-running daemon for the Narada deterministic state compiler and control plane.
 

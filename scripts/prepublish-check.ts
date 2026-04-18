@@ -2,11 +2,12 @@
 /**
  * Pre-publish check script
  *
- * Runs comprehensive checks before publishing to ensure package quality.
+ * Runs deterministic checks before publishing to ensure package quality.
  */
 
 import { execSync } from 'node:child_process';
-import { readFileSync, existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 interface CheckResult {
@@ -14,6 +15,15 @@ interface CheckResult {
   passed: boolean;
   error?: string;
 }
+
+const PACK_ONLY = process.argv.includes('--pack-only');
+const PACKAGES = [
+  'packages/exchange-fs-sync',
+  'packages/exchange-fs-sync-cli',
+  'packages/exchange-fs-sync-daemon',
+  'packages/exchange-fs-sync-search',
+  'packages/charters',
+] as const;
 
 const colors = {
   reset: '\x1b[0m',
@@ -36,10 +46,8 @@ function runCommand(command: string, cwd?: string): { success: boolean; output: 
     });
     return { success: true, output };
   } catch (error) {
-    return {
-      success: false,
-      output: error instanceof Error ? error.message : String(error),
-    };
+    const output = error instanceof Error && 'message' in error ? String(error.message) : String(error);
+    return { success: false, output };
   }
 }
 
@@ -48,58 +56,84 @@ function validateSemver(version: string): boolean {
   return semverRegex.test(version);
 }
 
-async function runChecks(): Promise<CheckResult[]> {
+function packageJson(pkgPath: string): any {
+  return JSON.parse(readFileSync(join(pkgPath, 'package.json'), 'utf8'));
+}
+
+function runPackSmokeCheck(): CheckResult {
+  log('\n📋 Running package tarball smoke check...', 'blue');
+  const tmp = mkdtempSync(join(tmpdir(), 'narada-pack-'));
+
+  try {
+    for (const pkgPath of PACKAGES) {
+      const before = new Set(readdirSync(tmp));
+      const result = runCommand(`pnpm pack --pack-destination ${JSON.stringify(tmp)}`, pkgPath);
+      if (!result.success) {
+        return {
+          name: 'Pack smoke check',
+          passed: false,
+          error: `Failed to pack ${pkgPath}`,
+        };
+      }
+
+      const after = readdirSync(tmp).filter((name) => !before.has(name) && name.endsWith('.tgz'));
+      if (after.length !== 1) {
+        return {
+          name: 'Pack smoke check',
+          passed: false,
+          error: `Unexpected pack output for ${pkgPath}`,
+        };
+      }
+    }
+
+    log('  ✓ All packages produced tarballs', 'green');
+    return { name: 'Pack smoke check', passed: true };
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+function runChecks(): CheckResult[] {
   const checks: CheckResult[] = [];
-  const packages = [
-    'packages/exchange-fs-sync',
-    'packages/exchange-fs-sync-cli',
-    'packages/exchange-fs-sync-daemon',
-    'packages/exchange-fs-sync-search',
-  ];
 
-  // Check 1: All tests pass
-  log('\n📋 Running tests...', 'blue');
-  const testResult = runCommand('pnpm test');
-  checks.push({
-    name: 'Tests pass',
-    passed: testResult.success,
-    error: testResult.success ? undefined : 'Tests failed',
-  });
-  log(testResult.success ? '  ✓ Tests passed' : '  ✗ Tests failed', testResult.success ? 'green' : 'red');
+  if (!PACK_ONLY) {
+    log('\n📋 Running tests...', 'blue');
+    const testResult = runCommand('pnpm test');
+    checks.push({
+      name: 'Tests pass',
+      passed: testResult.success,
+      error: testResult.success ? undefined : 'Tests failed',
+    });
+    log(testResult.success ? '  ✓ Tests passed' : '  ✗ Tests failed', testResult.success ? 'green' : 'red');
 
-  // Check 2: Builds succeed
-  log('\n📋 Building packages...', 'blue');
-  const buildResult = runCommand('pnpm build');
-  checks.push({
-    name: 'Build succeeds',
-    passed: buildResult.success,
-    error: buildResult.success ? undefined : 'Build failed',
-  });
-  log(buildResult.success ? '  ✓ Build succeeded' : '  ✗ Build failed', buildResult.success ? 'green' : 'red');
+    log('\n📋 Building packages...', 'blue');
+    const buildResult = runCommand('pnpm build');
+    checks.push({
+      name: 'Build succeeds',
+      passed: buildResult.success,
+      error: buildResult.success ? undefined : 'Build failed',
+    });
+    log(buildResult.success ? '  ✓ Build succeeded' : '  ✗ Build failed', buildResult.success ? 'green' : 'red');
 
-  // Check 3: No uncommitted changes
-  log('\n📋 Checking for uncommitted changes...', 'blue');
-  const gitStatus = runCommand('git status --porcelain');
-  const hasUncommitted = gitStatus.success && gitStatus.output.trim().length > 0;
-  checks.push({
-    name: 'No uncommitted changes',
-    passed: !hasUncommitted,
-    error: hasUncommitted ? 'There are uncommitted changes' : undefined,
-  });
-  log(hasUncommitted ? '  ✗ Uncommitted changes found' : '  ✓ No uncommitted changes', hasUncommitted ? 'red' : 'green');
+    log('\n📋 Checking for uncommitted changes...', 'blue');
+    const gitStatus = runCommand('git status --porcelain');
+    const hasUncommitted = gitStatus.success && gitStatus.output.trim().length > 0;
+    checks.push({
+      name: 'No uncommitted changes',
+      passed: !hasUncommitted,
+      error: hasUncommitted ? 'There are uncommitted changes' : undefined,
+    });
+    log(hasUncommitted ? '  ✗ Uncommitted changes found' : '  ✓ No uncommitted changes', hasUncommitted ? 'red' : 'green');
+  }
 
-  // Check 4: Valid semver versions
   log('\n📋 Validating package versions...', 'blue');
   let allVersionsValid = true;
-  for (const pkgPath of packages) {
-    const packageJsonPath = join(pkgPath, 'package.json');
-    if (existsSync(packageJsonPath)) {
-      const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
-      const isValid = validateSemver(pkg.version);
-      if (!isValid) {
-        allVersionsValid = false;
-        log(`  ✗ Invalid version in ${pkgPath}: ${pkg.version}`, 'red');
-      }
+  for (const pkgPath of PACKAGES) {
+    const pkg = packageJson(pkgPath);
+    const isValid = validateSemver(pkg.version);
+    if (!isValid) {
+      allVersionsValid = false;
+      log(`  ✗ Invalid version in ${pkgPath}: ${pkg.version}`, 'red');
     }
   }
   checks.push({
@@ -107,95 +141,70 @@ async function runChecks(): Promise<CheckResult[]> {
     passed: allVersionsValid,
     error: allVersionsValid ? undefined : 'Invalid semver version found',
   });
-  if (allVersionsValid) {
-    log('  ✓ All versions are valid semver', 'green');
-  }
+  if (allVersionsValid) log('  ✓ All versions are valid semver', 'green');
 
-  // Check 5: README exists in all packages
   log('\n📋 Checking for README files...', 'blue');
-  let allReadmesExist = true;
-  for (const pkgPath of packages) {
-    const readmePath = join(pkgPath, 'README.md');
-    if (!existsSync(readmePath)) {
-      allReadmesExist = false;
-      log(`  ✗ Missing README in ${pkgPath}`, 'red');
-    }
-  }
+  const missingReadmes = PACKAGES.filter((pkgPath) => !existsSync(join(pkgPath, 'README.md')));
   checks.push({
     name: 'README files exist',
-    passed: allReadmesExist,
-    error: allReadmesExist ? undefined : 'Missing README files',
+    passed: missingReadmes.length === 0,
+    error: missingReadmes.length === 0 ? undefined : `Missing README files: ${missingReadmes.join(', ')}`,
   });
-  if (allReadmesExist) {
-    log('  ✓ All README files exist', 'green');
-  }
+  log(missingReadmes.length === 0 ? '  ✓ All README files exist' : `  ✗ Missing README files: ${missingReadmes.join(', ')}`, missingReadmes.length === 0 ? 'green' : 'red');
 
-  // Check 6: LICENSE file present
-  log('\n📋 Checking for LICENSE files...', 'blue');
-  let allLicensesExist = true;
-  for (const pkgPath of packages) {
-    const licensePath = join(pkgPath, 'LICENSE');
-    if (!existsSync(licensePath)) {
-      allLicensesExist = false;
-      log(`  ✗ Missing LICENSE in ${pkgPath}`, 'red');
+  log('\n📋 Checking for LICENSE file...', 'blue');
+  const hasRootLicense = existsSync('LICENSE');
+  checks.push({
+    name: 'Root LICENSE exists',
+    passed: hasRootLicense,
+    error: hasRootLicense ? undefined : 'Missing root LICENSE',
+  });
+  log(hasRootLicense ? '  ✓ Root LICENSE exists' : '  ✗ Missing root LICENSE', hasRootLicense ? 'green' : 'red');
+
+  log('\n📋 Checking publish metadata...', 'blue');
+  let metadataOk = true;
+  for (const pkgPath of PACKAGES) {
+    const pkg = packageJson(pkgPath);
+    if (!pkg.repository?.url || !pkg.homepage || !pkg.bugs?.url) {
+      metadataOk = false;
+      log(`  ✗ Missing repository/homepage/bugs in ${pkgPath}`, 'red');
     }
   }
   checks.push({
-    name: 'LICENSE files exist',
-    passed: allLicensesExist,
-    error: allLicensesExist ? undefined : 'Missing LICENSE files',
+    name: 'Publish metadata complete',
+    passed: metadataOk,
+    error: metadataOk ? undefined : 'Missing publish metadata in one or more package manifests',
   });
-  if (allLicensesExist) {
-    log('  ✓ All LICENSE files exist', 'green');
-  }
+  if (metadataOk) log('  ✓ Repository, homepage, and bugs metadata present', 'green');
 
-  // Check 7: No console.log in production code (excluding cli/ scripts)
-  log('\n📋 Checking for console.log statements...', 'blue');
-  const consoleLogCheck = runCommand('grep -r "console.log" packages/*/src/ --include="*.ts" || true');
-  const hasConsoleLogs = consoleLogCheck.success && consoleLogCheck.output.trim().length > 0;
-  // This is a warning, not a failure
-  if (hasConsoleLogs) {
-    log('  ⚠ console.log statements found (review recommended):', 'yellow');
-    consoleLogCheck.output.split('\n').slice(0, 5).forEach(line => {
-      if (line.trim()) log(`    ${line}`, 'yellow');
-    });
-  } else {
-    log('  ✓ No console.log statements found', 'green');
-  }
-
-  // Check 8: No file: dependencies in published packages
   log('\n📋 Checking for file: dependencies...', 'blue');
   let noFileDependencies = true;
-  for (const pkgPath of packages) {
-    const packageJsonPath = join(pkgPath, 'package.json');
-    if (existsSync(packageJsonPath)) {
-      const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
-      const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-      for (const [name, version] of Object.entries(deps)) {
-        if (typeof version === 'string' && version.startsWith('file:')) {
-          noFileDependencies = false;
-          log(`  ✗ file: dependency found in ${pkgPath}: ${name}@${version}`, 'red');
-        }
+  for (const pkgPath of PACKAGES) {
+    const pkg = packageJson(pkgPath);
+    const deps = { ...pkg.dependencies, ...pkg.peerDependencies, ...pkg.optionalDependencies };
+    for (const [name, version] of Object.entries(deps)) {
+      if (typeof version === 'string' && version.startsWith('file:')) {
+        noFileDependencies = false;
+        log(`  ✗ file: dependency found in ${pkgPath}: ${name}@${version}`, 'red');
       }
     }
   }
   checks.push({
-    name: 'No file: dependencies',
+    name: 'No file: publish dependencies',
     passed: noFileDependencies,
-    error: noFileDependencies ? undefined : 'file: dependencies found',
+    error: noFileDependencies ? undefined : 'file: dependencies found in publish surface',
   });
-  if (noFileDependencies) {
-    log('  ✓ No file: dependencies found', 'green');
-  }
+  if (noFileDependencies) log('  ✓ No file: publish dependencies found', 'green');
 
+  checks.push(runPackSmokeCheck());
   return checks;
 }
 
-async function main(): Promise<void> {
-  log('🔍 Running pre-publish checks...\n', 'blue');
+function main(): void {
+  log(`🔍 Running ${PACK_ONLY ? 'pack-only ' : ''}pre-publish checks...\n`, 'blue');
 
-  const checks = await runChecks();
-  const failures = checks.filter(c => !c.passed);
+  const checks = runChecks();
+  const failures = checks.filter((c) => !c.passed);
 
   log('\n' + '='.repeat(50), 'blue');
   log(`Results: ${checks.length - failures.length}/${checks.length} checks passed`, failures.length === 0 ? 'green' : 'red');
@@ -203,18 +212,14 @@ async function main(): Promise<void> {
 
   if (failures.length > 0) {
     log('\n❌ Pre-publish checks failed:', 'red');
-    failures.forEach(f => {
-      log(`  - ${f.name}: ${f.error}`, 'red');
-    });
+    for (const failure of failures) {
+      log(`  - ${failure.name}: ${failure.error}`, 'red');
+    }
     process.exit(1);
-  } else {
-    log('\n✅ All pre-publish checks passed!', 'green');
-    log('\nReady to publish with: pnpm release', 'green');
-    process.exit(0);
   }
+
+  log(`\n✅ ${PACK_ONLY ? 'Pack check passed.' : 'All pre-publish checks passed!'}`, 'green');
+  log('\nReady for changeset versioning and publish.', 'green');
 }
 
-main().catch((error) => {
-  console.error('Unexpected error:', error);
-  process.exit(1);
-});
+main();

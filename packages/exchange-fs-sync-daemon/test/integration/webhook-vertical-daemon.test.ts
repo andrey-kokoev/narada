@@ -10,7 +10,7 @@ import {
   FileApplyLogStore,
   SqliteFactStore,
   DefaultSyncRunner,
-} from "@narada/exchange-fs-sync";
+} from "@narada2/exchange-fs-sync";
 import { createGenericWebhookServer } from "../../src/generic-webhook-server.js";
 import type { GenericWebhookServer } from "../../src/generic-webhook-server.js";
 

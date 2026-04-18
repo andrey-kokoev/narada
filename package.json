@@ -11,9 +11,10 @@
     "benchmark:compare": "tsx scripts/benchmark-compare.ts",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "pnpm build && changeset publish",
+    "release": "tsx scripts/publish-local.ts",
     "kernel-lint": "tsx scripts/kernel-lint.ts",
-    "prepublish-check": "tsx scripts/prepublish-check.ts"
+    "prepublish-check": "tsx scripts/prepublish-check.ts",
+    "pack:check": "tsx scripts/prepublish-check.ts --pack-only"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.1",

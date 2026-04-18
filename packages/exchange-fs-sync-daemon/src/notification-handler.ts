@@ -11,12 +11,12 @@ import type {
   GraphNotification,
   Notification,
   LifecycleNotification,
-} from "@narada/exchange-fs-sync";
+} from "@narada2/exchange-fs-sync";
 import {
   isChangeNotification,
   isLifecycleNotification,
   extractMessageId,
-} from "@narada/exchange-fs-sync";
+} from "@narada2/exchange-fs-sync";
 import type { ParsedNotification } from "./webhook-server.js";
 import { createLogger, type Logger } from "./lib/logger.js";
 

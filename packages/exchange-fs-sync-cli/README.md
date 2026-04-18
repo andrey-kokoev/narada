@@ -1,4 +1,4 @@
-# @narada/exchange-fs-sync-cli
+# @narada2/exchange-fs-sync-cli
 
 Command-line interface for the Narada deterministic state compiler and control plane.
 
@@ -7,9 +7,9 @@ Command-line interface for the Narada deterministic state compiler and control p
 ## Installation
 
 ```bash
-npm install -g @narada/exchange-fs-sync-cli
+npm install -g @narada2/exchange-fs-sync-cli
 # or
-pnpm add -g @narada/exchange-fs-sync-cli
+pnpm add -g @narada2/exchange-fs-sync-cli
 ```
 
 ## Quick Start

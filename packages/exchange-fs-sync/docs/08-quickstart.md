@@ -12,9 +12,9 @@
 ### Installation
 
 ```bash
-npm install -g @narada/exchange-fs-sync-cli
+npm install -g @narada2/exchange-fs-sync-cli
 # or
-pnpm add -g @narada/exchange-fs-sync-cli
+pnpm add -g @narada2/exchange-fs-sync-cli
 ```
 
 ### First-Time Setup

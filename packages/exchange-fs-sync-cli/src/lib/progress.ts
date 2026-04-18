@@ -3,7 +3,7 @@
  */
 
 import { MultiBar, SingleBar, Presets } from 'cli-progress';
-import type { ProgressEvent, SyncPhase } from '@narada/exchange-fs-sync';
+import type { ProgressEvent, SyncPhase } from '@narada2/exchange-fs-sync';
 
 interface BarState {
   phase: SyncPhase;

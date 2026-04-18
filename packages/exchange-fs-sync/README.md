@@ -1,4 +1,4 @@
-# @narada/exchange-fs-sync
+# @narada2/exchange-fs-sync
 
 Core library for the Narada deterministic state compiler and control plane.
 
@@ -17,9 +17,9 @@ Core library for the Narada deterministic state compiler and control plane.
 ## Installation
 
 ```bash
-npm install @narada/exchange-fs-sync
+npm install @narada2/exchange-fs-sync
 # or
-pnpm add @narada/exchange-fs-sync
+pnpm add @narada2/exchange-fs-sync
 ```
 
 ## Usage (Mailbox Vertical)
@@ -31,7 +31,7 @@ import {
   DefaultSyncRunner,
   FileCursorStore,
   FileApplyLogStore,
-} from '@narada/exchange-fs-sync';
+} from '@narada2/exchange-fs-sync';
 
 // Load configuration
 const config = await loadConfig({ path: './config.json' });
@@ -64,6 +64,7 @@ console.log(`Applied ${result.applied_count} events`);
 - [00-kernel.md](docs/00-kernel.md) — The canonical kernel lawbook
 - [02-architecture.md](docs/02-architecture.md) — Component layers and data flow
 - `config.example.json` — Full configuration template
+- `config.schema.json` — Generated JSON Schema for editor validation and tooling
 
 ## License
 

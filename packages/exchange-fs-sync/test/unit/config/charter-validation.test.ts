@@ -59,6 +59,11 @@ describe("validateCharterRuntimeConfig", () => {
     expect(() => validateCharterRuntimeConfig(cfg)).not.toThrow();
   });
 
+  it("passes for kimi-api runtime with api_key in config", () => {
+    const cfg = makeConfig({ charter: { runtime: "kimi-api", api_key: "kimi-test" } });
+    expect(() => validateCharterRuntimeConfig(cfg)).not.toThrow();
+  });
+
   it("fails for codex-api runtime without api_key or env var", () => {
     const cfg = makeConfig({ charter: { runtime: "codex-api" } });
     expect(() => validateCharterRuntimeConfig(cfg)).toThrow(
@@ -66,10 +71,17 @@ describe("validateCharterRuntimeConfig", () => {
     );
   });
 
+  it("fails for kimi-api runtime without api_key or env var", () => {
+    const cfg = makeConfig({ charter: { runtime: "kimi-api" } });
+    expect(() => validateCharterRuntimeConfig(cfg)).toThrow(
+      /Charter runtime is configured as kimi-api but no API key is provided/,
+    );
+  });
+
   it("fails for unsupported runtime values", () => {
     const cfg = makeConfig({ charter: { runtime: "unsupported" } });
     expect(() => validateCharterRuntimeConfig(cfg)).toThrow(
-      /Invalid charter runtime: unsupported\. Expected 'codex-api' or 'mock'/,
+      /Invalid charter runtime: unsupported\. Expected 'codex-api', 'kimi-api', or 'mock'/,
     );
   });
 

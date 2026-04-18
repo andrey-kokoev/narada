@@ -59,9 +59,9 @@ import {
   type LeaseAcquisitionResult,
   type SchedulerOptions,
   type ToolCatalogEntry,
-} from '@narada/exchange-fs-sync';
-import { CodexCharterRunner, ToolRunner } from '@narada/charters';
-import type { ToolDefinition, ToolInvocationRequest } from '@narada/charters';
+} from '@narada2/exchange-fs-sync';
+import { CodexCharterRunner, ToolRunner } from '@narada2/charters';
+import type { ToolDefinition, ToolInvocationRequest } from '@narada2/charters';
 import { createLogger } from './lib/logger.js';
 import { PidFile } from './lib/pid-file.js';
 import { HealthFile, type HealthStatus } from './lib/health.js';
@@ -88,11 +88,11 @@ export interface SyncServiceConfig {
 }
 
 export interface DispatchHooks {
-  afterSyncCompleted?: (signal: import("@narada/exchange-fs-sync").SyncCompletionSignal, result: import("@narada/exchange-fs-sync").WorkOpeningResult) => Promise<void>;
+  afterSyncCompleted?: (signal: import("@narada2/exchange-fs-sync").SyncCompletionSignal, result: import("@narada2/exchange-fs-sync").WorkOpeningResult) => Promise<void>;
   afterWorkOpened?: (workItem: WorkItem) => Promise<void>;
   afterLeaseAcquired?: (workItem: WorkItem, lease: LeaseAcquisitionResult) => Promise<void>;
-  beforeRuntimeInvoke?: (workItem: WorkItem, attempt: ExecutionAttempt, envelope: import("@narada/exchange-fs-sync").CharterInvocationEnvelope) => Promise<void>;
-  afterRuntimeComplete?: (workItem: WorkItem, attempt: ExecutionAttempt, output: import("@narada/exchange-fs-sync").CharterOutputEnvelope) => Promise<void>;
+  beforeRuntimeInvoke?: (workItem: WorkItem, attempt: ExecutionAttempt, envelope: import("@narada2/exchange-fs-sync").CharterInvocationEnvelope) => Promise<void>;
+  afterRuntimeComplete?: (workItem: WorkItem, attempt: ExecutionAttempt, output: import("@narada2/exchange-fs-sync").CharterOutputEnvelope) => Promise<void>;
   beforeToolExecution?: (workItem: WorkItem, attempt: ExecutionAttempt, requests: ToolInvocationRequest[]) => Promise<void>;
   duringToolExecution?: (workItem: WorkItem, attempt: ExecutionAttempt, request: ToolInvocationRequest, index: number) => Promise<void>;
   afterToolExecution?: (workItem: WorkItem, attempt: ExecutionAttempt) => Promise<void>;
@@ -175,8 +175,8 @@ function createDefaultCharterRunner(
   const env = loadCharterEnv();
   const runtime = cfg.charter?.runtime ?? 'mock';
 
-  if (runtime === 'codex-api') {
-    const apiKey = cfg.charter?.api_key ?? env.openai_api_key;
+  if (runtime === 'codex-api' || runtime === 'kimi-api') {
+    const apiKey = cfg.charter?.api_key ?? (runtime === 'kimi-api' ? env.kimi_api_key : env.openai_api_key);
     return new CodexCharterRunner(
       {
         apiKey: apiKey!,
@@ -222,7 +222,7 @@ function createDefaultCharterRunner(
     });
   }
 
-  throw new Error(`Invalid charter runtime: ${runtime}. Expected 'codex-api' or 'mock'.`);
+  throw new Error(`Invalid charter runtime: ${runtime}. Expected 'codex-api', 'kimi-api', or 'mock'.`);
 }
 
 async function createMailboxDispatchContext(

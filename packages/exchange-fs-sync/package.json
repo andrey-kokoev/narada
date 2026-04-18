@@ -1,5 +1,5 @@
 {
-  "name": "@narada/exchange-fs-sync",
+  "name": "@narada2/exchange-fs-sync",
   "version": "0.1.0",
   "description": "Deterministic kernel for compiling remote source deltas into local state and durable side-effect intents",
   "main": "./dist/index.js",
@@ -18,14 +18,15 @@
   "files": [
     "dist/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "config.schema.json"
   ],
   "engines": {
     "node": ">=18.0.0"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/narada/exchange-fs-sync.git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
     "directory": "packages/exchange-fs-sync"
   },
   "keywords": [
@@ -44,8 +45,9 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && pnpm run generate:config-schema",
     "typecheck": "tsc --noEmit",
+    "generate:config-schema": "pnpm exec tsx scripts/generate-config-schema.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
@@ -65,6 +67,11 @@
     "fast-check": "^3.15.0",
     "memfs": "^4.6.0",
     "typescript": "^5.3.0",
-    "vitest": "^1.0.0"
+    "vitest": "^1.0.0",
+    "zod-to-json-schema": "^3.25.2"
+  },
+  "homepage": "https://github.com/andrey-kokoev/narada",
+  "bugs": {
+    "url": "https://github.com/andrey-kokoev/narada/issues"
   }
 }

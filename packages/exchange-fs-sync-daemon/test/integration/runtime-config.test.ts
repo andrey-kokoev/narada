@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSyncService, type SyncService } from "../../src/service.js";
-import type { GraphAdapter } from "@narada/exchange-fs-sync";
+import type { GraphAdapter } from "@narada2/exchange-fs-sync";
 
 const noopAdapter: GraphAdapter = {
   async fetch_since() {

@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSyncService, type SyncService } from "../../src/service.js";
-import { Database, SqliteCoordinatorStore, MockCharterRunner, type NormalizedBatch, type NormalizedEvent, type GraphAdapter } from "@narada/exchange-fs-sync";
+import { Database, SqliteCoordinatorStore, MockCharterRunner, type NormalizedBatch, type NormalizedEvent, type GraphAdapter } from "@narada2/exchange-fs-sync";
 
 function createTempDir(): string {
   return mkdtempSync(join(tmpdir(), "efs-daemon-policy-"));
@@ -177,10 +177,10 @@ describe("daemon policy routing integration", { timeout: 30000 }, () => {
       allowed_tools: ["echo_test"],
     });
 
-    let capturedEnvelope: import("@narada/exchange-fs-sync").CharterInvocationEnvelope | undefined;
+    let capturedEnvelope: import("@narada2/exchange-fs-sync").CharterInvocationEnvelope | undefined;
 
     const charterRunner = {
-      async run(envelope: import("@narada/exchange-fs-sync").CharterInvocationEnvelope) {
+      async run(envelope: import("@narada2/exchange-fs-sync").CharterInvocationEnvelope) {
         capturedEnvelope = envelope;
         return {
           output_version: "2.0" as const,

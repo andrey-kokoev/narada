@@ -8,7 +8,7 @@ import {
   SqliteProcessExecutionStore,
   SqliteFactStore,
   DefaultWorkerRegistry,
-} from "@narada/exchange-fs-sync";
+} from "@narada2/exchange-fs-sync";
 import { createObservationServer, type ObservationApiScope } from "../../src/observation-server.js";
 
 async function httpGetJson(url: string): Promise<unknown> {

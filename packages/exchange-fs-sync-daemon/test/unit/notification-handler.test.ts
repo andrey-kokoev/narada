@@ -7,7 +7,7 @@ import {
   type NotificationHandlerOptions,
 } from "../../src/notification-handler.js";
 import type { ParsedNotification } from "../../src/webhook-server.js";
-import type { Notification, LifecycleNotification } from "@narada/exchange-fs-sync";
+import type { Notification, LifecycleNotification } from "@narada2/exchange-fs-sync";
 
 describe("SyncOnNotification", () => {
   let mockSync: SingleMessageSync;

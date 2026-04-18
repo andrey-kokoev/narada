@@ -33,7 +33,7 @@ import {
   getMailboxVerticalView,
   getMailExecutionDetails,
   type WorkItemLifecycleSummary,
-} from "@narada/exchange-fs-sync";
+} from "@narada2/exchange-fs-sync";
 import type { RouteHandler } from "./routes.js";
 import type { ObservationApiScope } from "./observation-server.js";
 
