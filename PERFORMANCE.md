@@ -1,6 +1,6 @@
 # Performance Targets
 
-This document defines the performance expectations and targets for the exchange-fs-sync system.
+This document defines the performance expectations and targets for the Narada kernel system.
 
 ## Benchmarks
 

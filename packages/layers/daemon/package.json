@@ -1,0 +1,61 @@
+{
+  "name": "@narada2/daemon",
+  "version": "0.1.0",
+  "description": "Long-running daemon for the Narada deterministic state compiler and control plane",
+  "main": "./dist/service.js",
+  "types": "./dist/service.d.ts",
+  "type": "module",
+  "bin": {
+    "narada-daemon": "./dist/index.js"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/layers/daemon"
+  },
+  "keywords": [
+    "narada",
+    "state-compiler",
+    "sync",
+    "exchange",
+    "microsoft-graph",
+    "email",
+    "automation",
+    "daemon"
+  ],
+  "author": "Narada <team@narada.dev>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:unit": "vitest run test/unit",
+    "test:integration": "vitest run test/integration"
+  },
+  "dependencies": {
+    "@narada2/control-plane": "workspace:*",
+    "@narada2/charters": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "better-sqlite3": "^12.9.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  },
+  "homepage": "https://github.com/andrey-kokoev/narada",
+  "bugs": {
+    "url": "https://github.com/andrey-kokoev/narada/issues"
+  }
+}

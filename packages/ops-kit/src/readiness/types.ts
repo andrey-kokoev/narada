@@ -16,7 +16,8 @@ export interface ReadinessCheck {
     | "endpoint"
     | "charter"
     | "tool"
-    | "activation";
+    | "activation"
+    | "source";
 
   /** Human-readable check name. */
   name: string;

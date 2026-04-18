@@ -3,38 +3,38 @@
  *
  * A posture is a named policy bundle. It does not invent new actions;
  * it selects from the existing `AllowedAction` universe.
+ *
+ * One coherent progression is used across all verticals:
+ *   observe-only → draft-only → review-required → autonomous
  */
 
-import type { AllowedAction } from "@narada2/exchange-fs-sync";
+import type { AllowedAction } from "@narada2/control-plane";
 
-/** Mailbox-specific posture presets. */
-export type MailboxPosturePreset =
-  | "draft-only"
-  | "draft-and-review"
-  | "send-allowed";
-
-/** Workflow-specific posture presets. */
-export type WorkflowPosturePreset =
+export type PosturePreset =
   | "observe-only"
-  | "draft-alert"
-  | "act-with-approval";
+  | "draft-only"
+  | "review-required"
+  | "autonomous";
 
-/** Any posture preset name. */
-export type PosturePreset = MailboxPosturePreset | WorkflowPosturePreset;
+/** Verticals that support posture presets. */
+export type PostureVertical = "mail" | "timer" | "filesystem" | "webhook";
 
-/** Mapping from preset name to allowed actions. */
-export const POSTURE_ACTIONS: Record<PosturePreset, AllowedAction[]> = {
-  // Mailbox postures
-  "draft-only": ["draft_reply", "mark_read", "no_action", "tool_request"],
-  "draft-and-review": [
-    "draft_reply",
-    "send_new_message",
-    "mark_read",
+/** Mailbox posture actions. */
+export const MAILBOX_POSTURE_ACTIONS: Record<PosturePreset, AllowedAction[]> = {
+  "observe-only": [
     "no_action",
     "tool_request",
     "extract_obligations",
   ],
-  "send-allowed": [
+  "draft-only": [
+    "draft_reply",
+    "mark_read",
+    "no_action",
+    "tool_request",
+    "extract_obligations",
+    "create_followup",
+  ],
+  "review-required": [
     "draft_reply",
     "send_reply",
     "send_new_message",
@@ -46,43 +46,107 @@ export const POSTURE_ACTIONS: Record<PosturePreset, AllowedAction[]> = {
     "extract_obligations",
     "create_followup",
   ],
-  // Workflow postures
-  "observe-only": ["no_action", "tool_request"],
-  "draft-alert": ["no_action", "tool_request", "extract_obligations"],
-  "act-with-approval": [
+  "autonomous": [
+    "draft_reply",
+    "send_reply",
+    "send_new_message",
+    "mark_read",
+    "move_message",
+    "set_categories",
+    "no_action",
+    "tool_request",
+    "extract_obligations",
+    "create_followup",
+  ],
+};
+
+/** Workflow posture actions. */
+export const WORKFLOW_POSTURE_ACTIONS: Record<PosturePreset, AllowedAction[]> = {
+  "observe-only": [
+    "no_action",
+    "tool_request",
+    "extract_obligations",
+  ],
+  "draft-only": [
+    "no_action",
+    "tool_request",
+    "extract_obligations",
+    "create_followup",
+  ],
+  "review-required": [
     "no_action",
     "tool_request",
     "process_run",
     "extract_obligations",
+    "create_followup",
   ],
+  "autonomous": [
+    "no_action",
+    "tool_request",
+    "process_run",
+    "extract_obligations",
+    "create_followup",
+  ],
+};
+
+/** Unified lookup for backward-compatible exports.
+ *  Prefer `resolvePostureActions(preset, vertical)` for new code. */
+export const POSTURE_ACTIONS: Record<PosturePreset, AllowedAction[]> = {
+  ...MAILBOX_POSTURE_ACTIONS,
 };
 
 /** Human-readable description of each preset. */
 export const POSTURE_DESCRIPTIONS: Record<PosturePreset, string> = {
-  "draft-only":
-    "Narada may draft replies and run read-only tools, but must not send anything.",
-  "draft-and-review":
-    "Narada may draft replies, draft new messages, and extract obligations. Sending requires manual review.",
-  "send-allowed":
-    "Narada may draft, send, move, categorize, and create follow-ups without human gate.",
   "observe-only":
     "Narada may observe and run read-only tools. No effects.",
-  "draft-alert":
-    "Narada may observe, run tools, and extract obligations. Alerts may be drafted but not sent automatically.",
-  "act-with-approval":
-    "Narada may run tools and process tasks. Requires explicit approval for irreversible actions.",
+  "draft-only":
+    "Narada may draft replies and run read-only tools, but must not send or execute irreversible actions.",
+  "review-required":
+    "Narada may perform external actions (send, execute), but requires explicit human approval for each one.",
+  "autonomous":
+    "Narada may perform all allowed actions without human gate. Use with caution.",
 };
 
-/** Resolve a preset name to its allowed actions. */
-export function resolvePostureActions(preset: PosturePreset): AllowedAction[] {
-  const actions = POSTURE_ACTIONS[preset];
+/** Resolve a preset name to its allowed actions for a given vertical. */
+export function resolvePostureActions(
+  preset: PosturePreset,
+  vertical: PostureVertical
+): AllowedAction[] {
+  const map =
+    vertical === "mail"
+      ? MAILBOX_POSTURE_ACTIONS
+      : WORKFLOW_POSTURE_ACTIONS;
+  const actions = map[preset];
   if (!actions) {
     throw new Error(`Unknown posture preset: ${preset}`);
   }
   return [...actions];
 }
 
+/** Detect the canonical preset name for a given action set and vertical.
+ *  Returns `null` if the actions do not exactly match a canonical preset. */
+export function detectPosturePreset(
+  actions: AllowedAction[],
+  vertical: PostureVertical
+): PosturePreset | null {
+  const map =
+    vertical === "mail"
+      ? MAILBOX_POSTURE_ACTIONS
+      : WORKFLOW_POSTURE_ACTIONS;
+  const sorted = [...actions].sort();
+  for (const [preset, presetActions] of Object.entries(map)) {
+    const sortedPreset = [...presetActions].sort();
+    if (
+      sortedPreset.length === sorted.length &&
+      sortedPreset.every((a, i) => a === sorted[i])
+    ) {
+      return preset as PosturePreset;
+    }
+  }
+  return null;
+}
+
 /** List all valid preset names. */
 export function listPosturePresets(): PosturePreset[] {
-  return Object.keys(POSTURE_ACTIONS) as PosturePreset[];
+  return ["observe-only", "draft-only", "review-required", "autonomous"];
 }

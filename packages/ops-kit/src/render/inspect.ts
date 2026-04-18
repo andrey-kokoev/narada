@@ -1,8 +1,8 @@
-import type { ScopeConfig } from "@narada2/exchange-fs-sync";
+import type { ScopeConfig } from "@narada2/control-plane";
 
 export function renderScopeInspect(scope: ScopeConfig): string {
   return [
-    `scope_id: ${scope.scope_id}`,
+    `operation: ${scope.scope_id}`,
     `context_strategy: ${scope.context_strategy}`,
     `root_dir: ${scope.root_dir}`,
     `primary_charter: ${scope.policy.primary_charter}`,

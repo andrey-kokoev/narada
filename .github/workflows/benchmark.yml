@@ -47,7 +47,7 @@ jobs:
 
       - name: Run benchmarks
         run: |
-          cd packages/exchange-fs-sync
+          cd packages/layers/control-plane
           pnpm vitest bench --run --reporter=json > benchmark-results.json
         env:
           NODE_ENV: production
@@ -56,7 +56,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: benchmark-results
-          path: packages/exchange-fs-sync/benchmark-results.json
+          path: packages/layers/control-plane/benchmark-results.json
 
       - name: Load baseline
         id: baseline
@@ -71,7 +71,7 @@ jobs:
       - name: Compare with baseline
         if: steps.baseline.outputs.exists == 'true'
         run: |
-          cd packages/exchange-fs-sync
+          cd packages/layers/control-plane
           node -e "
             const fs = require('fs');
             const current = JSON.parse(fs.readFileSync('benchmark-results.json', 'utf8'));
@@ -103,7 +103,7 @@ jobs:
 
       - name: Generate markdown report
         run: |
-          cd packages/exchange-fs-sync
+          cd packages/layers/control-plane
           node -e "
             const fs = require('fs');
             const results = JSON.parse(fs.readFileSync('benchmark-results.json', 'utf8'));
@@ -131,7 +131,7 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const markdown = fs.readFileSync('packages/exchange-fs-sync/benchmark-report.md', 'utf8');
+            const markdown = fs.readFileSync('packages/layers/control-plane/benchmark-report.md', 'utf8');
             
             github.rest.issues.createComment({
               issue_number: context.issue.number,
@@ -144,11 +144,11 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
           mkdir -p .benchmarks/baselines
-          cp packages/exchange-fs-sync/benchmark-results.json .benchmarks/baselines/latest.json
+          cp packages/layers/control-plane/benchmark-results.json .benchmarks/baselines/latest.json
           
           # Also save with version
           VERSION=$(node -p "require('./package.json').version")
-          cp packages/exchange-fs-sync/benchmark-results.json ".benchmarks/baselines/${VERSION}.json"
+          cp packages/layers/control-plane/benchmark-results.json ".benchmarks/baselines/${VERSION}.json"
           
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -182,7 +182,7 @@ jobs:
 
       - name: Run memory benchmarks
         run: |
-          cd packages/exchange-fs-sync
+          cd packages/layers/control-plane
           # Run with --expose-gc for accurate memory measurement
           node --expose-gc ../../node_modules/vitest/vitest.mjs bench --run test/benchmarks/memory.bench.ts
 
@@ -212,7 +212,7 @@ jobs:
 
       - name: Check performance targets
         run: |
-          cd packages/exchange-fs-sync
+          cd packages/layers/control-plane
           node -e "
             const targets = {
               'write single message': { maxMs: 50 },

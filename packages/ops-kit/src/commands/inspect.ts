@@ -1,4 +1,4 @@
-import type { ScopeConfig } from "@narada2/exchange-fs-sync";
+import type { ScopeConfig } from "@narada2/control-plane";
 import { readConfig, findScope } from "../lib/config-io.js";
 import { renderScopeInspect } from "../render/inspect.js";
 

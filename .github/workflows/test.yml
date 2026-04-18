@@ -41,20 +41,20 @@ jobs:
 
       - name: Run typecheck
         run: pnpm typecheck
-        working-directory: packages/exchange-fs-sync
+        working-directory: packages/layers/control-plane
 
       - name: Run tests
         run: pnpm test
-        working-directory: packages/exchange-fs-sync
+        working-directory: packages/layers/control-plane
 
       - name: Run tests with coverage
         run: pnpm vitest run --coverage
-        working-directory: packages/exchange-fs-sync
+        working-directory: packages/layers/control-plane
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v3
         with:
-          directory: packages/exchange-fs-sync/coverage
+          directory: packages/layers/control-plane/coverage
           flags: core
           name: core-coverage
 
@@ -92,20 +92,20 @@ jobs:
 
       - name: Run typecheck
         run: pnpm typecheck
-        working-directory: packages/exchange-fs-sync-cli
+        working-directory: packages/layers/cli
 
       - name: Run tests
         run: pnpm test
-        working-directory: packages/exchange-fs-sync-cli
+        working-directory: packages/layers/cli
 
       - name: Run tests with coverage
         run: pnpm vitest run --coverage
-        working-directory: packages/exchange-fs-sync-cli
+        working-directory: packages/layers/cli
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v3
         with:
-          directory: packages/exchange-fs-sync-cli/coverage
+          directory: packages/layers/cli/coverage
           flags: cli
           name: cli-coverage
 
@@ -128,9 +128,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run kernel invariant lint
-        run: pnpm kernel-lint
+      - name: Run control-plane invariant lint
+        run: pnpm control-plane-lint
 
       - name: Check formatting
         run: pnpm fmt --check
-        working-directory: packages/exchange-fs-sync
+        working-directory: packages/layers/control-plane

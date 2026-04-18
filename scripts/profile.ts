@@ -71,22 +71,22 @@ async function profileSync(options: ProfileOptions): Promise<void> {
 
   // Import required modules
   const { createMockAdapter } = await import(
-    '../packages/exchange-fs-sync/src/adapter/graph/mock-adapter.js'
+    '../packages/layers/control-plane/src/adapter/graph/mock-adapter.js'
   );
   const { DefaultSyncRunner } = await import(
-    '../packages/exchange-fs-sync/src/runner/sync-once.js'
+    '../packages/layers/control-plane/src/runner/sync-once.js'
   );
   const { FileCursorStore } = await import(
-    '../packages/exchange-fs-sync/src/persistence/cursor.js'
+    '../packages/layers/control-plane/src/persistence/cursor.js'
   );
   const { FileApplyLogStore } = await import(
-    '../packages/exchange-fs-sync/src/persistence/apply-log.js'
+    '../packages/layers/control-plane/src/persistence/apply-log.js'
   );
   const { DefaultProjector } = await import(
-    '../packages/exchange-fs-sync/src/projector/apply-event.js'
+    '../packages/layers/control-plane/src/projector/apply-event.js'
   );
   const { FileLock } = await import(
-    '../packages/exchange-fs-sync/src/persistence/lock.js'
+    '../packages/layers/control-plane/src/persistence/lock.js'
   );
 
   const rootDir = await mkdtemp(join(tmpdir(), 'profile-'));
@@ -148,10 +148,10 @@ async function profileNormalization(options: ProfileOptions): Promise<void> {
   console.log(`Starting normalization profile for ${options.durationMs}ms...`);
 
   const { normalizeMessage } = await import(
-    '../packages/exchange-fs-sync/src/normalize/message.js'
+    '../packages/layers/control-plane/src/normalize/message.js'
   );
   const { buildEventId } = await import(
-    '../packages/exchange-fs-sync/src/ids/event-id.js'
+    '../packages/layers/control-plane/src/ids/event-id.js'
   );
 
   const message = {

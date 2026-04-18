@@ -8,10 +8,11 @@ import { activate } from "./commands/activate.js";
 import { inspect } from "./commands/inspect.js";
 import { explain } from "./commands/explain.js";
 import { renderTargetPreflight } from "./commands/preflight.js";
+import { initRepo } from "./commands/init-repo.js";
 import type { PosturePreset } from "./intents/posture.js";
 
 const program = new Command();
-program.name("narada-ops");
+program.name("narada");
 
 program.command("want-mailbox")
   .argument("<mailbox-id>")
@@ -64,21 +65,21 @@ program.command("setup")
   });
 
 program.command("preflight")
-  .argument("<scope-id>")
+  .argument("<operation>")
   .option("-c, --config <path>")
   .action((scopeId, opts) => {
     console.log(renderTargetPreflight(scopeId, { configPath: opts.config }));
   });
 
 program.command("inspect")
-  .argument("<scope-id>")
+  .argument("<operation>")
   .option("-c, --config <path>")
   .action((scopeId, opts) => {
     console.log(inspect(scopeId, { configPath: opts.config }).summary);
   });
 
 program.command("explain")
-  .argument("<scope-id>")
+  .argument("<operation>")
   .option("-c, --config <path>")
   .action((scopeId, opts) => {
     const result = explain(scopeId, { configPath: opts.config });
@@ -95,7 +96,7 @@ program.command("explain")
   });
 
 program.command("activate")
-  .argument("<scope-id>")
+  .argument("<operation>")
   .option("-c, --config <path>")
   .action((scopeId, opts) => {
     const result = activate(scopeId, { configPath: opts.config });
@@ -104,7 +105,23 @@ program.command("activate")
       process.exitCode = 1;
       return;
     }
-    console.log(`${scopeId} activated at ${result.activatedAt}`);
+    console.log(`${scopeId} is now activated.`);
+    console.log("Activation marks this operation as live. It does not start the daemon or send mail.");
+    console.log(`When the daemon runs, Narada will process ${scopeId} according to its configured policy.`);
+    console.log(`Activated at: ${result.activatedAt}`);
+  });
+
+program.command("init-repo")
+  .argument("<path>")
+  .option("-n, --name <name>", "package name for the generated repo")
+  .action((repoPath, opts) => {
+    const result = initRepo(repoPath, { name: opts.name });
+    console.log(result.summary);
+    console.log("\nCreated:");
+    for (const f of result.createdFiles) console.log(`  ${f}`);
+    console.log("\nGold path — run these next:");
+    for (const step of result.nextSteps) console.log(`  ${step}`);
+    console.log("\nSee README.md in the repo for the full first-run guide.");
   });
 
 program.parse();

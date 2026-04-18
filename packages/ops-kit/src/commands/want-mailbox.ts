@@ -17,6 +17,7 @@ import { scaffoldGlobal, scaffoldMailbox } from "../lib/scaffold.js";
 import { buildMailboxScope } from "../lib/scope-builder.js";
 import type { ShapedMailbox } from "../intents/mailbox.js";
 import { resolvePostureActions } from "../intents/posture.js";
+import type { PosturePreset } from "../intents/posture.js";
 
 export interface WantMailboxOptions {
   configPath?: string;
@@ -42,6 +43,8 @@ export function wantMailbox(
   const contextId = `mail:${mailboxId}`;
   const existed = !!findScope(config, scopeId);
 
+  const posture = (options.posture ?? "draft-only") as PosturePreset;
+
   const scope = buildMailboxScope({
     scopeId,
     graphUserId: options.graphUserId ?? mailboxId,
@@ -49,7 +52,7 @@ export function wantMailbox(
     folders: options.folders,
     primaryCharter: options.primaryCharter,
     secondaryCharters: options.secondaryCharters,
-    posture: options.posture as "draft-only" | "draft-and-review" | "send-allowed" | undefined,
+    posture,
   });
 
   upsertScope(config, scope);
@@ -76,7 +79,7 @@ export function wantMailbox(
             `- secondary charters: ${scope.policy.secondary_charters.map((c) => `\`${c}\``).join(", ")}`,
           ]
         : []),
-      `- posture: \`${options.posture ?? "draft-only"}\``,
+      `- posture: \`${posture}\``,
       `- data root: \`${scope.root_dir}\``,
       "",
       "## Contents",
@@ -89,8 +92,7 @@ export function wantMailbox(
     fs.writeFileSync(readmePath, lines, "utf-8");
   }
 
-  const posture = options.posture ?? "draft-only";
-  const allowed = resolvePostureActions(posture as "draft-only" | "draft-and-review" | "send-allowed");
+  const allowed = resolvePostureActions(posture, "mail");
 
   return {
     scopeId,

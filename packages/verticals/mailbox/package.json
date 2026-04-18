@@ -1,0 +1,19 @@
+{
+  "name": "@narada2/mailbox",
+  "version": "0.1.0",
+  "description": "@narada2/mailbox_DESC",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist/", "README.md"],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  },
+  "engines": { "node": ">=18.0.0" }
+}

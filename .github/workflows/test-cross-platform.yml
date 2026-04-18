@@ -86,7 +86,7 @@ jobs:
         run: pnpm build
 
       - name: Run Windows tests
-        run: pnpm test -- --testPathPattern=test/windows
+        run: pnpm --filter='@narada2/control-plane' test -- --testPathPattern=test/windows
         env:
           CI: true
 
@@ -126,7 +126,7 @@ jobs:
         run: pnpm build
 
       - name: Run path utility tests
-        run: pnpm test -- --testPathPattern=test/unit/utils/path
+        run: pnpm --filter='@narada2/control-plane' test -- --testPathPattern=test/unit/utils/path
         env:
           CI: true
 

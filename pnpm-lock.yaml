@@ -11,6 +11,9 @@ importers:
       '@changesets/cli':
         specifier: ^2.27.1
         version: 2.30.0(@types/node@20.19.39)
+      '@types/better-sqlite3':
+        specifier: ^7.6.13
+        version: 7.6.13
       '@types/node':
         specifier: ^20.10.0
         version: 20.19.39
@@ -24,7 +27,7 @@ importers:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@20.19.39)
 
-  packages/charters:
+  packages/domains/charters:
     dependencies:
       zod:
         specifier: ^3.25.76
@@ -40,8 +43,51 @@ importers:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@20.19.39)
 
-  packages/exchange-fs-sync:
+  packages/layers/cli:
     dependencies:
+      '@clack/prompts':
+        specifier: ^0.7.0
+        version: 0.7.0
+      '@narada2/control-plane':
+        specifier: workspace:*
+        version: link:../control-plane
+      '@narada2/ops-kit':
+        specifier: workspace:*
+        version: link:../../ops-kit
+      chalk:
+        specifier: ^5.6.2
+        version: 5.6.2
+      cli-progress:
+        specifier: ^3.12.0
+        version: 3.12.0
+      commander:
+        specifier: ^11.1.0
+        version: 11.1.0
+    devDependencies:
+      '@types/cli-progress':
+        specifier: ^3.11.6
+        version: 3.11.6
+      '@types/node':
+        specifier: ^20.10.0
+        version: 20.19.39
+      '@vitest/coverage-v8':
+        specifier: ^1.0.0
+        version: 1.6.1(vitest@1.6.1(@types/node@20.19.39))
+      memfs:
+        specifier: ^4.6.0
+        version: 4.57.1(tslib@2.8.1)
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+      vitest:
+        specifier: ^1.0.0
+        version: 1.6.1(@types/node@20.19.39)
+
+  packages/layers/control-plane:
+    dependencies:
+      '@narada2/charters':
+        specifier: workspace:*
+        version: link:../../domains/charters
       better-sqlite3:
         specifier: ^12.9.0
         version: 12.9.0
@@ -74,51 +120,14 @@ importers:
         specifier: ^3.25.2
         version: 3.25.2(zod@3.25.76)
 
-  packages/exchange-fs-sync-cli:
-    dependencies:
-      '@clack/prompts':
-        specifier: ^0.7.0
-        version: 0.7.0
-      '@narada2/exchange-fs-sync':
-        specifier: workspace:*
-        version: link:../exchange-fs-sync
-      chalk:
-        specifier: ^5.6.2
-        version: 5.6.2
-      cli-progress:
-        specifier: ^3.12.0
-        version: 3.12.0
-      commander:
-        specifier: ^11.1.0
-        version: 11.1.0
-    devDependencies:
-      '@types/cli-progress':
-        specifier: ^3.11.6
-        version: 3.11.6
-      '@types/node':
-        specifier: ^20.10.0
-        version: 20.19.39
-      '@vitest/coverage-v8':
-        specifier: ^1.0.0
-        version: 1.6.1(vitest@1.6.1(@types/node@20.19.39))
-      memfs:
-        specifier: ^4.6.0
-        version: 4.57.1(tslib@2.8.1)
-      typescript:
-        specifier: ^5.3.0
-        version: 5.9.3
-      vitest:
-        specifier: ^1.0.0
-        version: 1.6.1(@types/node@20.19.39)
-
-  packages/exchange-fs-sync-daemon:
+  packages/layers/daemon:
     dependencies:
       '@narada2/charters':
         specifier: workspace:*
-        version: link:../charters
-      '@narada2/exchange-fs-sync':
+        version: link:../../domains/charters
+      '@narada2/control-plane':
         specifier: workspace:*
-        version: link:../exchange-fs-sync
+        version: link:../control-plane
     devDependencies:
       '@types/node':
         specifier: ^20.10.0
@@ -126,28 +135,6 @@ importers:
       better-sqlite3:
         specifier: ^12.9.0
         version: 12.9.0
-      typescript:
-        specifier: ^5.3.0
-        version: 5.9.3
-      vitest:
-        specifier: ^1.0.0
-        version: 1.6.1(@types/node@20.19.39)
-
-  packages/exchange-fs-sync-search:
-    dependencies:
-      '@narada2/exchange-fs-sync':
-        specifier: workspace:*
-        version: link:../exchange-fs-sync
-      better-sqlite3:
-        specifier: ^12.9.0
-        version: 12.9.0
-    devDependencies:
-      '@types/better-sqlite3':
-        specifier: ^7.6.9
-        version: 7.6.13
-      '@types/node':
-        specifier: ^20.10.0
-        version: 20.19.39
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -159,10 +146,10 @@ importers:
     dependencies:
       '@narada2/charters':
         specifier: workspace:*
-        version: link:../charters
-      '@narada2/exchange-fs-sync':
+        version: link:../domains/charters
+      '@narada2/control-plane':
         specifier: workspace:*
-        version: link:../exchange-fs-sync
+        version: link:../layers/control-plane
       commander:
         specifier: ^12.0.0
         version: 12.1.0
@@ -173,6 +160,37 @@ importers:
       tsx:
         specifier: ^4.7.0
         version: 4.21.0
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+      vitest:
+        specifier: ^1.0.0
+        version: 1.6.1(@types/node@20.19.39)
+
+  packages/verticals/mailbox:
+    devDependencies:
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+      vitest:
+        specifier: ^1.0.0
+        version: 1.6.1(@types/node@20.19.39)
+
+  packages/verticals/search:
+    dependencies:
+      '@narada2/control-plane':
+        specifier: workspace:*
+        version: link:../../layers/control-plane
+      better-sqlite3:
+        specifier: ^12.9.0
+        version: 12.9.0
+    devDependencies:
+      '@types/better-sqlite3':
+        specifier: ^7.6.9
+        version: 7.6.13
+      '@types/node':
+        specifier: ^20.10.0
+        version: 20.19.39
       typescript:
         specifier: ^5.3.0
         version: 5.9.3

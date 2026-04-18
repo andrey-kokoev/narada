@@ -33,7 +33,7 @@ jobs:
         run: pnpm build
 
       - name: Run Tests
-        run: pnpm test
+        run: ALLOW_FULL_TESTS=1 pnpm test:full
 
       - name: Create Release Pull Request or Publish
         id: changesets

@@ -2,9 +2,7 @@
 
 A generalized, deterministic kernel for turning remote source deltas into locally materialized state and durable side-effect intents.
 
-Public examples now live in `~/src/narada.examples`.
-
-> **How to read this repo**: Start with the [kernel lawbook](packages/exchange-fs-sync/docs/00-kernel.md), then treat the Microsoft Graph/Exchange mailbox integration as the *first vertical* built on that kernel—not the essence of the system. Timer, webhook, filesystem, and process automations are first-class peers.
+> **How to read this repo**: Start with the [kernel lawbook](packages/layers/control-plane/docs/00-kernel.md), then treat the Microsoft Graph/Exchange mailbox integration as the *first vertical* built on that kernel—not the essence of the system. Timer, webhook, filesystem, and process automations are first-class peers.
 
 ## What this is
 
@@ -14,87 +12,164 @@ Narada is **not** a sync client, cache, or email tool. It is a deterministic sta
 - **Mailbox as one vertical** — The Exchange/Graph integration is the first `Source` implementation and the first set of charter policies. It is not privileged in the kernel.
 - **Peer verticals** — `TimerSource`, `WebhookSource`, `FilesystemSource`, and `process.run` execute through the exact same control plane.
 
-## Architecture
+## The Ops-Repo Model
 
-The system is organized in five layers above six deterministic compiler layers:
+Narada is designed around **ops repos** — private repositories that contain one or more operations, plus their knowledge, scenarios, and local configuration.
 
-1. **Inbound Compiler** — `exchange-fs-sync` compiles remote source deltas into locally materialized state. It knows nothing of agents, charters, or control decisions.
-2. **Control Plane** — Manages first-class work objects (`work_item`, `execution_attempt`, `intent`) above the compiler. The daemon schedules work; the foreman decides it.
-3. **Charter Runtime** — Vertical-specific policy definitions (`packages/charters`) that guide bounded agent evaluation inside frozen capability envelopes.
-4. **Tool Runner** — Executes validated tool calls with timeout enforcement and durable `tool_call_records` logging.
-5. **Effect Workers** — Durable execution pipelines for each vertical: outbound worker for mail mutations, `ProcessExecutor` for subprocesses, and future workers for API automations.
+```bash
+narada init-repo ~/src/my-ops
+cd ~/src/my-ops
+pnpm install
+```
 
-## Features
+An ops repo is where you:
 
-- **🔒 Secure by Default** - Credentials encrypted with OS keychain (macOS Keychain, Windows Credential Manager, Linux libsecret)
-- **💾 Backup & Restore** - Full data backup with integrity verification and encryption
-- **🪟 Cross-Platform** - Native Windows, macOS, and Linux support
-- **⚡ High Performance** - Batch processing, memory-efficient streaming, 500+ records/sec
-- **📊 Observable** - Structured logging, metrics, health checks, OpenTelemetry tracing
-- **🔧 Resilient** - Automatic retry with exponential backoff, circuit breakers, crash recovery
-- **📦 Multi-Scope** - Sync multiple scopes with resource management
-- **🔌 Multi-Vertical** - Timer, webhook, filesystem, and process automations are first-class peers to mailbox sync
+- **Declare operations** (`want-mailbox`, `want-workflow`) — tell Narada what you want to run
+- **Apply safety postures** (`want-posture`) — set boundaries on what an operation can do
+- **Scaffold runtime directories** (`setup`) — create the data and log paths each operation needs
+- **Verify readiness** (`preflight`) — check credentials, connectivity, and policy before going live
+- **Understand behavior** (`explain`) — see what an operation will do and why it might be blocked
+- **Activate** (`activate`) — mark an operation as ready for the daemon to process
+- **Run** (`pnpm daemon`) — start the control plane that compiles deltas and executes governed side-effects
+
+Operations live in `config/config.json`. Logs, state, and backups live under the repo. The repo is yours — version it, branch it, share it within your team.
 
 ## Installation
 
 ### CLI (Recommended)
 
 ```bash
-npm install -g @narada2/exchange-fs-sync-cli
+npm install -g @narada2/cli
 # or
-pnpm add -g @narada2/exchange-fs-sync-cli
+pnpm add -g @narada2/cli
 ```
+
+The single `narada` CLI surfaces every command: runtime, backup, operation shaping, and repo bootstrapping.
 
 ### Daemon
 
 ```bash
-npm install -g @narada2/exchange-fs-sync-daemon
+npm install -g @narada2/daemon
 # or
-pnpm add -g @narada2/exchange-fs-sync-daemon
+pnpm add -g @narada2/daemon
 ```
+
+The daemon is typically started from inside an ops repo via `pnpm daemon`.
 
 ### Library
 
 ```bash
-npm install @narada2/exchange-fs-sync
+npm install @narada2/control-plane
 # or
-pnpm add @narada2/exchange-fs-sync
+pnpm add @narada2/control-plane
 ```
 
-## Quick Start (Mailbox Vertical)
+## First-Run Paths
 
-```bash
-# Interactive configuration (recommended)
-exchange-sync init --interactive
+Narada offers three entry paths, ordered from safest to live:
 
-# Or manual configuration
-exchange-sync init
+| Path | Command | What it gives you |
+|------|---------|-------------------|
+| **Show me** | `narada demo` | Zero-setup taste with synthetic data. No credentials, no config, no files created. |
+| **Try safely** | `narada init-repo --demo ~/src/my-tryout` | A non-live trial repo with a mock-backed operation. Explore the full shaping workflow without touching any external system. |
+| **Go live** | `narada init-repo ~/src/my-ops` | A real ops repo. Declare a mailbox, add credentials, preflight, activate, and run. |
 
-# Edit config.json with your Graph API credentials
-# Then run sync
-exchange-sync sync
-
-# Check status
-exchange-sync status
-
-# Create backup
-exchange-sync backup -o backup-$(date +%Y%m%d).tar.gz --encrypt
-```
+See [QUICKSTART.md](QUICKSTART.md) for the full gold-path guide.
 
 ## CLI Commands
 
+### Operation Shaping (ops-kit)
+
+These commands shape what the daemon will do when it runs. They are safe to run at any time — they change configuration, not live state.
+
 | Command | Description |
 |---------|-------------|
-| `init` | Create configuration file |
-| `init --interactive` | Interactive setup with prompts |
-| `sync` | Run synchronization |
+| `init-repo <path>` | Bootstrap a private ops repo |
+| `init-repo --demo <path>` | Bootstrap a non-live trial repo |
+| `want-mailbox <id>` | Declare a mailbox operation |
+| `want-workflow <id>` | Declare a timer workflow operation |
+| `want-posture <target> <preset>` | Apply a safety posture to an operation (`observe-only`, `draft-only`, `review-required`, `autonomous`) |
+| `setup [target]` | Scaffold directories for configured operations |
+| `preflight <operation>` | Verify operation readiness (credentials, connectivity, policy) |
+| `inspect <operation>` | Show operation configuration |
+| `explain <operation>` | Explain what an operation will do and why it may be blocked |
+| `activate <operation>` | Mark an operation as live for daemon processing |
+
+### Runtime & Data
+
+These commands operate on live state and data.
+
+| Command | Description |
+|---------|-------------|
+| `sync` | Run a single synchronization cycle |
 | `status` | Show sync status and health |
 | `integrity` | Check data integrity |
+| `rebuild-views` | Rebuild all derived views |
+| `init` | Create a new configuration file |
+| `cleanup` | Run data lifecycle cleanup operations |
+| `demo` | Zero-setup taste with synthetic data |
+
+### Backup & Restore
+
+| Command | Description |
+|---------|-------------|
+| `backup -o <path>` | Create a backup of sync data |
+| `restore -i <path>` | Restore data from backup |
+| `backup-verify -i <path>` | Verify backup integrity without extracting |
+| `backup-ls -i <path>` | List backup contents |
+
+### Global Options
+
+These options are available on every command:
+
+```bash
+-f, --format <format>       Output format: json, human, or auto (default: auto)
+--log-level <level>         Log level: debug, info, warn, error (default: info)
+--log-format <format>       Log format: pretty, json, or auto (default: auto)
+--metrics-output <file>     Write metrics to file on exit
+```
+
+Most runtime and data commands also accept:
+
+```bash
+-c, --config <path>         Config file path (default: ./config.json)
+-v, --verbose               Enable verbose output
+```
+
+The `init` command uses `-o, --output <path>` instead of `-c, --config`. The `demo` command does not accept `-c, --config`.
+
+## Architecture
+
+The system is organized in five layers above six deterministic compiler layers:
+
+1. **Inbound Compiler** — `packages/layers/control-plane` compiles remote source deltas into locally materialized state. It knows nothing of agents, charters, or control decisions.
+2. **Control Plane** — Manages first-class work objects (`work_item`, `execution_attempt`, `intent`) above the compiler. The daemon schedules work; the foreman decides it.
+3. **Charter Runtime** — Vertical-specific policy definitions (`packages/domains/charters`) that guide bounded agent evaluation inside frozen capability envelopes.
+4. **Tool Runner** — Executes validated tool calls with timeout enforcement and durable `tool_call_records` logging.
+5. **Effect Workers** — Durable execution pipelines for each vertical: outbound worker for mail mutations, `ProcessExecutor` for subprocesses, and future workers for API automations.
+
+## Verification Ladder
+
+After making changes, verify using the appropriate level:
+
+| Command | What it does | When to use |
+|---------|--------------|-------------|
+| `pnpm verify` | Typecheck + fast package tests (~8 sec) | **Default** — routine local verification |
+| `pnpm test:unit` | Unit tests across all packages | When you want tests without integration overhead |
+| `pnpm test:integration` | Integration tests only | When you changed durable-state or I/O logic |
+| `pnpm test:control-plane` | Control-plane tests only (~5 sec) | When you changed control-plane internals |
+| `pnpm test:daemon` | Daemon tests only (~90 sec) | When you changed daemon or integration surface |
+| `ALLOW_FULL_TESTS=1 pnpm test:full` | Full recursive suite (~2 min) | Explicit full verification (CI, release prep) |
+
+Root `pnpm test` is disabled to prevent accidental full-suite runs. Use `pnpm verify` for the fast default.
 
 ## Documentation
 
-- **[00-kernel.md](packages/exchange-fs-sync/docs/00-kernel.md)** — The canonical, vertical-agnostic kernel lawbook
-- **[02-architecture.md](packages/exchange-fs-sync/docs/02-architecture.md)** — Component layers and data flow
+- **[00-kernel.md](packages/layers/control-plane/docs/00-kernel.md)** — The canonical, vertical-agnostic kernel lawbook
+- **[02-architecture.md](packages/layers/control-plane/docs/02-architecture.md)** — Component layers and data flow
+- **[QUICKSTART.md](QUICKSTART.md)** — Gold-path first-run guide
+- **[SEMANTICS.md](SEMANTICS.md)** — Canonical ontology and vocabulary (single source of truth for all terms)
+- **[TERMINOLOGY.md](TERMINOLOGY.md)** — User-facing words for talking about Narada
 - **[AGENTS.md](AGENTS.md)** — Navigation hub for contributors and agents
 - **[RELEASE.md](RELEASE.md)** — Local and CI publishing flow for `@narada2/*` packages
 - **[.ai/tasks/](.ai/tasks/)** — Design tasks and specifications
@@ -108,7 +183,7 @@ When proposing changes that touch public types, docs, or package surfaces, verif
 - [ ] **Vertical parity**: New features for one vertical have a plausible path for peers (timer, webhook, filesystem, process).
 - [ ] **Authority boundaries preserved**: No new write paths bypass `ForemanFacade`, `Scheduler`, `IntentHandoff`, or `OutboundHandoff`.
 - [ ] **Observation remains read-only**: No UI-facing code mutates durable state directly.
-- [ ] **Kernel lint passes**: `pnpm kernel-lint` reports zero violations.
+- [ ] **Control-plane lint passes**: `pnpm control-plane-lint` reports zero violations.
 
 ## License
 

@@ -4,7 +4,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import type { ExchangeFsSyncConfig, ScopeConfig } from "@narada2/exchange-fs-sync";
+import type { ExchangeFsSyncConfig, ScopeConfig } from "@narada2/control-plane";
 
 const DEFAULT_CONFIG_PATH = "./config/config.json";
 

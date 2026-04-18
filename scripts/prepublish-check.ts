@@ -18,10 +18,10 @@ interface CheckResult {
 
 const PACK_ONLY = process.argv.includes('--pack-only');
 const PACKAGES = [
-  'packages/exchange-fs-sync',
-  'packages/exchange-fs-sync-cli',
-  'packages/exchange-fs-sync-daemon',
-  'packages/exchange-fs-sync-search',
+  'packages/layers/control-plane',
+  'packages/layers/cli',
+  'packages/layers/daemon',
+  'packages/verticals/search',
   'packages/charters',
 ] as const;
 
@@ -98,7 +98,7 @@ function runChecks(): CheckResult[] {
 
   if (!PACK_ONLY) {
     log('\n📋 Running tests...', 'blue');
-    const testResult = runCommand('pnpm test');
+    const testResult = runCommand('ALLOW_FULL_TESTS=1 pnpm test:full');
     checks.push({
       name: 'Tests pass',
       passed: testResult.success,

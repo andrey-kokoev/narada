@@ -1,10 +1,16 @@
 {
-  "name": "exchange-fs-sync-root",
+  "name": "narada",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "pnpm -r test",
+    "test": "tsx scripts/test-guard.ts",
+    "verify": "tsx scripts/verify.ts",
+    "test:unit": "tsx scripts/test-unit.ts",
+    "test:integration": "tsx scripts/test-integration.ts",
+    "test:full": "tsx scripts/test-full.ts",
+    "test:control-plane": "pnpm --filter @narada2/control-plane test",
+    "test:daemon": "pnpm --filter @narada2/daemon test",
     "typecheck": "pnpm -r typecheck",
     "build": "pnpm -r build",
     "benchmark": "pnpm -r benchmark",
@@ -12,12 +18,13 @@
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "tsx scripts/publish-local.ts",
-    "kernel-lint": "tsx scripts/kernel-lint.ts",
+    "control-plane-lint": "tsx scripts/control-plane-lint.ts",
     "prepublish-check": "tsx scripts/prepublish-check.ts",
     "pack:check": "tsx scripts/prepublish-check.ts --pack-only"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.10.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.0",

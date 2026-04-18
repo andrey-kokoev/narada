@@ -11,4 +11,5 @@ export * from "./commands/activate.js";
 export * from "./render/index.js";
 export * from "./lib/config-io.js";
 export * from "./lib/scaffold.js";
+export * from "./commands/init-repo.js";
 export * from "./lib/scope-builder.js";

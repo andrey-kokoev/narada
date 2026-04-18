@@ -46,6 +46,6 @@ export function setup(options: SetupOptions & { target?: string }): SetupResult 
     createdPaths,
     summary: options.target
       ? `Setup complete for ${options.target}: ${createdPaths.length} path(s) ensured.`
-      : `Setup complete for ${config.scopes.length} scope(s): ${createdPaths.length} path(s) ensured.`,
+      : `Setup complete for ${config.scopes.length} operation(s): ${createdPaths.length} path(s) ensured.`,
   };
 }

@@ -5,9 +5,7 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "bin": {
-    "narada-ops": "./dist/main.js"
-  },
+
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
@@ -15,7 +13,7 @@
   },
   "dependencies": {
     "@narada2/charters": "workspace:*",
-    "@narada2/exchange-fs-sync": "workspace:*",
+    "@narada2/control-plane": "workspace:*",
     "commander": "^12.0.0"
   },
   "devDependencies": {

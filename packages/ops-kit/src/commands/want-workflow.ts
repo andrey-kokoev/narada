@@ -17,6 +17,7 @@ import { scaffoldGlobal, scaffoldWorkflow } from "../lib/scaffold.js";
 import { buildWorkflowScope } from "../lib/scope-builder.js";
 import type { ShapedWorkflow } from "../intents/workflow.js";
 import { resolvePostureActions } from "../intents/posture.js";
+import type { PosturePreset } from "../intents/posture.js";
 
 export interface WantWorkflowOptions {
   configPath?: string;
@@ -40,13 +41,15 @@ export function wantWorkflow(
   const contextId = `timer:${workflowId}`;
   const existed = !!findScope(config, scopeId);
 
+  const posture = (options.posture ?? "observe-only") as PosturePreset;
+
   const scope = buildWorkflowScope({
     scopeId,
     workflowId,
     schedule: options.schedule,
     dataRootDir: dataRoot,
     primaryCharter: options.primaryCharter,
-    posture: options.posture as "observe-only" | "draft-alert" | "act-with-approval" | undefined,
+    posture,
   });
 
   upsertScope(config, scope);
@@ -71,7 +74,7 @@ export function wantWorkflow(
         schedule: options.schedule,
         description: options.description ?? `Timer workflow: ${workflowId}`,
         primary_charter: scope.policy.primary_charter,
-        posture: options.posture ?? "observe-only",
+        posture,
       },
       null,
       2
@@ -80,8 +83,7 @@ export function wantWorkflow(
   );
   touchedPaths.push(schedulePath);
 
-  const posture = options.posture ?? "observe-only";
-  const allowed = resolvePostureActions(posture as "observe-only" | "draft-alert" | "act-with-approval");
+  const allowed = resolvePostureActions(posture, "timer");
 
   return {
     scopeId,

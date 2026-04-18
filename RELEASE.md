@@ -4,11 +4,12 @@ This repo publishes public npm packages under `@narada2/*`.
 
 Current packages:
 
-- `@narada2/exchange-fs-sync`
-- `@narada2/exchange-fs-sync-cli`
-- `@narada2/exchange-fs-sync-daemon`
-- `@narada2/exchange-fs-sync-search`
+- `@narada2/control-plane`
+- `@narada2/cli`
+- `@narada2/daemon`
+- `@narada2/search`
 - `@narada2/charters`
+- `@narada2/ops-kit` (library only, no binary)
 
 ## Intended Split
 

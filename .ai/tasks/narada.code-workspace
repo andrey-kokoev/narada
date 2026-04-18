@@ -8,6 +8,9 @@
     },
     {
       "path": "../../../narada.sonar"
+    },
+    {
+      "path": "../../../thoughts"
     }
   ],
   "settings": {}

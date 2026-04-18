@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { CoordinatorConfig, OperationalRequirement } from "@narada2/charters";
 import { collectOperationalRequirements } from "@narada2/charters";
-import type { ScopeConfig } from "@narada2/exchange-fs-sync";
+import type { ScopeConfig } from "@narada2/control-plane";
 import { resolveConfigPath } from "../lib/config-io.js";
 import type { ReadinessCheck, ReadinessReport, ReadinessStatus } from "./types.js";
 
@@ -85,6 +85,7 @@ function checkRequirement(checks: ReadinessCheck[], requirement: OperationalRequ
 export function preflight(options: PreflightOptions): ReadinessReport {
   const checks: ReadinessCheck[] = [];
   const configPath = resolveConfigPath(options.configPath);
+  const configDir = path.dirname(configPath);
   pushCheck(checks, {
     category: "config",
     name: configPath,
@@ -94,14 +95,23 @@ export function preflight(options: PreflightOptions): ReadinessReport {
   });
 
   if (options.scope) {
-    const configDir = path.dirname(configPath);
     const resolvedRootDir = path.isAbsolute(options.scope.root_dir) ? options.scope.root_dir : path.resolve(configDir, options.scope.root_dir);
     pushCheck(checks, {
       category: "directory",
       name: resolvedRootDir,
       status: fs.existsSync(resolvedRootDir) ? "pass" : "fail",
-      detail: "Scope data root",
-      remediation: fs.existsSync(resolvedRootDir) ? undefined : `Create data root ${resolvedRootDir}`,
+      detail: "Operation data root",
+      remediation: fs.existsSync(resolvedRootDir) ? undefined : `Run \`narada setup\` to create ${resolvedRootDir}`,
+    });
+
+    const activatedPath = path.join(resolvedRootDir, ".activated");
+    const activated = fs.existsSync(activatedPath);
+    pushCheck(checks, {
+      category: "activation",
+      name: "activated",
+      status: activated ? "pass" : "warn",
+      detail: "Operation activation state",
+      remediation: activated ? undefined : `Run \`narada activate ${options.target}\` when ready to go live`,
     });
 
     const runtime = options.scope.charter?.runtime ?? "mock";
@@ -125,6 +135,45 @@ export function preflight(options: PreflightOptions): ReadinessReport {
       });
     }
   }
+
+  // Determine if this is a non-live trial scope
+  const isNonLive =
+    options.scope?.sources.some((s) => s.type === "mock") ||
+    options.scope?.charter?.runtime === "mock";
+
+  if (isNonLive) {
+    pushCheck(checks, {
+      category: "source",
+      name: "trial-mode",
+      status: "pass",
+      detail: "Non-live trial source — no external credentials required",
+      remediation: undefined,
+    });
+  } else {
+    // Graph credentials check (global, not scope-specific)
+    const hasTenant = !!process.env.GRAPH_TENANT_ID?.trim();
+    const hasClient = !!process.env.GRAPH_CLIENT_ID?.trim();
+    const hasSecret = !!process.env.GRAPH_CLIENT_SECRET?.trim();
+    const graphReady = hasTenant && hasClient && hasSecret;
+    pushCheck(checks, {
+      category: "env_var",
+      name: "graph-credentials",
+      status: graphReady ? "pass" : "fail",
+      detail: "Microsoft Graph API credentials (GRAPH_TENANT_ID, GRAPH_CLIENT_ID, GRAPH_CLIENT_SECRET)",
+      remediation: graphReady ? undefined : "Fill .env from .env.example with Graph API credentials",
+    });
+  }
+
+  // .env file check (informational)
+  const opsRoot = path.dirname(configDir);
+  const envPath = path.join(opsRoot, ".env");
+  pushCheck(checks, {
+    category: "file",
+    name: ".env",
+    status: fs.existsSync(envPath) ? "pass" : "warn",
+    detail: "Local environment file",
+    remediation: fs.existsSync(envPath) ? undefined : "Copy .env.example to .env and fill in secrets",
+  });
 
   if (options.coordinatorConfig && options.mailboxIdForTools) {
     for (const requirement of collectOperationalRequirements(options.coordinatorConfig, options.mailboxIdForTools)) {

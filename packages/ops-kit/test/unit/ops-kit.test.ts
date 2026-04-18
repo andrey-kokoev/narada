@@ -11,8 +11,9 @@ import { activate } from "../../src/commands/activate.js";
 import { inspect } from "../../src/commands/inspect.js";
 import { explain } from "../../src/commands/explain.js";
 import { preflight } from "../../src/commands/preflight.js";
+import { initRepo } from "../../src/commands/init-repo.js";
 import { readConfig, findScope, writeConfig } from "../../src/lib/config-io.js";
-import { POSTURE_ACTIONS } from "../../src/intents/posture.js";
+import { MAILBOX_POSTURE_ACTIONS } from "../../src/intents/posture.js";
 
 function makeOpsRepo(): { root: string; configPath: string } {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "narada-ops-kit-"));
@@ -29,7 +30,7 @@ describe("ops-kit", () => {
     const scope = findScope(config, "help@example.com")!;
     expect(result.scopeId).toBe("help@example.com");
     expect(scope.policy.primary_charter).toBe("support_steward");
-    expect(scope.policy.allowed_actions).toEqual(POSTURE_ACTIONS["draft-only"]);
+    expect(scope.policy.allowed_actions).toEqual(MAILBOX_POSTURE_ACTIONS["draft-only"]);
     expect(fs.existsSync(path.join(root, "mailboxes", "help@example.com", "README.md"))).toBe(true);
   });
 
@@ -43,13 +44,13 @@ describe("ops-kit", () => {
   it("applies a posture preset to an existing target", () => {
     const { configPath } = makeOpsRepo();
     wantMailbox("help@example.com", { configPath, posture: "draft-only" });
-    const result = wantPosture("help@example.com", "send-allowed", { configPath });
-    expect(result.newActions).toEqual(POSTURE_ACTIONS["send-allowed"]);
+    const result = wantPosture("help@example.com", "autonomous", { configPath });
+    expect(result.newActions).toEqual(MAILBOX_POSTURE_ACTIONS["autonomous"]);
     expect(findScope(readConfig(configPath)!, "help@example.com")!.policy.allowed_actions).toContain("send_reply");
   });
 
   it("setup, preflight, inspect, explain, and activate form a coherent lifecycle", () => {
-    const { configPath } = makeOpsRepo();
+    const { root, configPath } = makeOpsRepo();
     wantMailbox("help@example.com", { configPath, posture: "draft-only", scaffold: false });
 
     const before = preflight("help@example.com", { configPath });
@@ -58,11 +59,25 @@ describe("ops-kit", () => {
     const setupResult = setup({ configPath, target: "help@example.com" });
     expect(setupResult.createdPaths.length).toBeGreaterThan(0);
 
+    // Satisfy credential checks for preflight pass
+    const origTenant = process.env.GRAPH_TENANT_ID;
+    const origClient = process.env.GRAPH_CLIENT_ID;
+    const origSecret = process.env.GRAPH_CLIENT_SECRET;
+    process.env.GRAPH_TENANT_ID = "test-tenant";
+    process.env.GRAPH_CLIENT_ID = "test-client";
+    process.env.GRAPH_CLIENT_SECRET = "test-secret";
+    fs.writeFileSync(path.join(root, ".env"), "GRAPH_TENANT_ID=test\n", "utf-8");
+
     const activated = activate("help@example.com", { configPath });
     expect(activated.activated).toBe(true);
 
     const after = preflight("help@example.com", { configPath });
     expect(after.status).toBe("pass");
+
+    // Restore env
+    process.env.GRAPH_TENANT_ID = origTenant;
+    process.env.GRAPH_CLIENT_ID = origClient;
+    process.env.GRAPH_CLIENT_SECRET = origSecret;
 
     const inspected = inspect("help@example.com", { configPath });
     expect(inspected.summary).toContain("primary_charter: support_steward");
@@ -70,6 +85,49 @@ describe("ops-kit", () => {
     const explained = explain("help@example.com", { configPath });
     expect(explained.whyNoAction).toContain("Ready");
     expect(explained.operationalConsequences.some((line) => line.includes("draft replies"))).toBe(true);
+  });
+
+  it("init-repo creates a coherent private ops repo skeleton", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "narada-init-repo-"));
+    const repoPath = path.join(tmpDir, "narada.sonar");
+    const result = initRepo(repoPath, { name: "narada-sonar" });
+
+    expect(result.repoPath).toBe(repoPath);
+    expect(fs.existsSync(path.join(repoPath, "package.json"))).toBe(true);
+    expect(fs.existsSync(path.join(repoPath, ".gitignore"))).toBe(true);
+    expect(fs.existsSync(path.join(repoPath, ".env.example"))).toBe(true);
+    expect(fs.existsSync(path.join(repoPath, "config", "config.json"))).toBe(true);
+    expect(fs.existsSync(path.join(repoPath, "config", "config.example.json"))).toBe(true);
+    expect(fs.existsSync(path.join(repoPath, "mailboxes"))).toBe(true);
+    expect(fs.existsSync(path.join(repoPath, "workflows"))).toBe(true);
+    expect(fs.existsSync(path.join(repoPath, "logs"))).toBe(true);
+    expect(fs.existsSync(path.join(repoPath, "README.md"))).toBe(true);
+
+    const pkg = JSON.parse(fs.readFileSync(path.join(repoPath, "package.json"), "utf-8"));
+    expect(pkg.name).toBe("narada-sonar");
+    expect(pkg.dependencies["@narada2/control-plane"]).toBe("^0.1.0");
+    expect(pkg.dependencies["@narada2/cli"]).toBe("^0.1.0");
+
+    const config = JSON.parse(fs.readFileSync(path.join(repoPath, "config", "config.json"), "utf-8"));
+    expect(config.root_dir).toBe("./data");
+    expect(config.scopes).toEqual([]);
+
+    // Verify the repo works with existing shaping commands
+    const configPath = path.join(repoPath, "config", "config.json");
+    wantMailbox("help@example.com", { configPath, posture: "draft-only" });
+    const setupResult = setup({ configPath, target: "help@example.com" });
+    expect(setupResult.createdPaths.length).toBeGreaterThan(0);
+  });
+
+  it("init-repo --local-source generates link: dependencies", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "narada-init-repo-"));
+    const repoPath = path.join(tmpDir, "narada-local");
+    const result = initRepo(repoPath, { name: "narada-local", localSource: true });
+
+    expect(result.repoPath).toBe(repoPath);
+    const pkg = JSON.parse(fs.readFileSync(path.join(repoPath, "package.json"), "utf-8"));
+    expect(pkg.dependencies["@narada2/control-plane"]).toMatch(/^link:/);
+    expect(pkg.dependencies["@narada2/cli"]).toMatch(/^link:/);
   });
 
   it("preflight incorporates declared operational requirements", () => {

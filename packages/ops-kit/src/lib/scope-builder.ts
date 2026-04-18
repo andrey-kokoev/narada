@@ -2,7 +2,7 @@
  * Build `ScopeConfig` objects from user intents.
  */
 
-import type { AllowedAction, ScopeConfig } from "@narada2/exchange-fs-sync";
+import type { AllowedAction, ScopeConfig } from "@narada2/control-plane";
 import type { PosturePreset } from "../intents/posture.js";
 import { resolvePostureActions } from "../intents/posture.js";
 
@@ -21,7 +21,7 @@ export function buildMailboxScope(opts: {
   allowedActions?: AllowedAction[];
 }): ScopeConfig {
   const allowedActions =
-    opts.allowedActions ?? resolvePostureActions(opts.posture ?? "draft-only");
+    opts.allowedActions ?? resolvePostureActions(opts.posture ?? "draft-only", "mail");
 
   return {
     scope_id: opts.scopeId,
@@ -48,6 +48,7 @@ export function buildMailboxScope(opts: {
       primary_charter: opts.primaryCharter ?? "support_steward",
       secondary_charters: opts.secondaryCharters,
       allowed_actions: allowedActions,
+      require_human_approval: true,
     },
   };
 }
@@ -63,7 +64,7 @@ export function buildWorkflowScope(opts: {
   allowedActions?: AllowedAction[];
 }): ScopeConfig {
   const allowedActions =
-    opts.allowedActions ?? resolvePostureActions(opts.posture ?? "observe-only");
+    opts.allowedActions ?? resolvePostureActions(opts.posture ?? "observe-only", "timer");
 
   return {
     scope_id: opts.scopeId,
