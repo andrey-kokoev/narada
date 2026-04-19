@@ -4,16 +4,17 @@
  * This command bridges Narada proper (canonical user-facing runtime)
  * with narada.usc (compiler/artifact provider) by calling derive-class
  * USC library functions only.
+ *
+ * Dependency strategy: plugin/provider boundary
+ *   - `@narada2/cli` does NOT declare a hard dependency on `@narada.usc/*`
+ *   - USC packages are loaded dynamically at runtime
+ *   - If absent, the command fails with a clear installation message
+ *   - This keeps the CLI publishable without encoding machine-local paths
  */
 
 import { resolve, dirname, basename, join } from 'node:path';
 import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
-
-// USC compiler library functions (derive-class only)
-import { initRepo, plan } from '@narada.usc/compiler';
-import { refineIntent } from '@narada.usc/compiler/src/refine-intent.js';
-import { validateAll } from '@narada.usc/core/src/validator.js';
 
 export interface UscInitOptions {
   path: string;
@@ -25,14 +26,77 @@ export interface UscInitOptions {
   force?: boolean;
 }
 
-function resolveUscRoot(): string {
-  // Resolve the actual on-disk path of the compiler package (follows pnpm symlink)
-  const require = createRequire(import.meta.url);
-  const compilerPkgPath = require.resolve('@narada.usc/compiler/package.json');
-  // compilerPkgPath is at <usc-root>/packages/compiler/package.json
-  // Go up two levels to reach the narada.usc repo root
-  return resolve(dirname(compilerPkgPath), '../..');
+/* ── Dynamic USC module loading ─────────────────────────────────────────── */
+
+interface UscCompilerModule {
+  initRepo(options: Record<string, unknown>): string;
+  plan(options: Record<string, unknown>): {
+    taskGraphPath: string;
+    summary: {
+      task_count: number;
+      runnable_count: number;
+      blocked_count: number;
+    };
+  };
 }
+
+interface UscRefinementModule {
+  refineIntent(intent: string, domainHint?: string | null): Promise<Record<string, unknown>>;
+}
+
+interface UscValidatorModule {
+  validateAll(options?: { rootDir?: string; appPath?: string }): {
+    results: Array<{ name: string; valid: boolean; errors: string[] }>;
+    allPassed: boolean;
+  };
+}
+
+const USC_INSTALL_HINT =
+  'USC packages are not installed. To use narada init usc, install them:\n' +
+  '  pnpm add @narada.usc/compiler @narada.usc/core\n' +
+  'Or, for local development, link from the narada.usc repo:\n' +
+  '  cd packages/layers/cli && pnpm link <path-to-narada.usc>/packages/compiler\n' +
+  '  cd packages/layers/cli && pnpm link <path-to-narada.usc>/packages/core';
+
+async function loadUscCompiler(): Promise<UscCompilerModule> {
+  try {
+    return (await import('@narada.usc/compiler')) as UscCompilerModule;
+  } catch {
+    throw new Error(USC_INSTALL_HINT);
+  }
+}
+
+async function loadUscRefinement(): Promise<UscRefinementModule> {
+  try {
+    return (await import('@narada.usc/compiler/src/refine-intent.js')) as UscRefinementModule;
+  } catch {
+    throw new Error(USC_INSTALL_HINT);
+  }
+}
+
+async function loadUscValidator(): Promise<UscValidatorModule> {
+  try {
+    return (await import('@narada.usc/core/src/validator.js')) as UscValidatorModule;
+  } catch {
+    throw new Error(USC_INSTALL_HINT);
+  }
+}
+
+function resolveUscRoot(): string {
+  try {
+    const req = createRequire(import.meta.url);
+    const compilerPkgPath = req.resolve('@narada.usc/compiler/package.json');
+    // compilerPkgPath is at <usc-root>/packages/compiler/package.json
+    // Go up two levels to reach the narada.usc repo root
+    return resolve(dirname(compilerPkgPath), '../..');
+  } catch {
+    throw new Error(
+      'Cannot resolve USC root directory. ' + USC_INSTALL_HINT,
+    );
+  }
+}
+
+/* ── Rendering helpers ──────────────────────────────────────────────────── */
 
 function renderRefinementMd(refinement: Record<string, unknown>, intent: string): string {
   const ambiguities = (refinement.ambiguities as Array<{ layer: string; description: string; governing?: boolean }>) || [];
@@ -107,6 +171,8 @@ ${cisNote}
 `;
 }
 
+/* ── Command implementation ─────────────────────────────────────────────── */
+
 export async function uscInitCommand(options: UscInitOptions): Promise<void> {
   const targetPath = options.path;
   if (!targetPath) {
@@ -122,6 +188,9 @@ export async function uscInitCommand(options: UscInitOptions): Promise<void> {
   const domainHint = options.domain || undefined;
 
   const rootDir = resolveUscRoot();
+
+  // Load USC compiler dynamically
+  const { initRepo, plan } = await loadUscCompiler();
 
   // 1. Initialize repo via USC compiler
   initRepo({
@@ -143,6 +212,7 @@ export async function uscInitCommand(options: UscInitOptions): Promise<void> {
 
   // 3. If intent was provided, refine and plan
   if (options.intent) {
+    const { refineIntent } = await loadUscRefinement();
     const refinement = await refineIntent(options.intent, domainHint);
 
     const uscDir = join(targetDir, 'usc');
@@ -176,6 +246,7 @@ export async function uscInitCommand(options: UscInitOptions): Promise<void> {
   writeFileSync(readmePath, renderNaradaReadme(name, targetDir, useCis));
 
   // 5. Validate the generated repo
+  const { validateAll } = await loadUscValidator();
   const validation = validateAll({ appPath: targetDir });
   if (!validation.allPassed) {
     for (const result of validation.results) {
