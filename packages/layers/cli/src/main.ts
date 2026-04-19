@@ -12,6 +12,7 @@ import { verifyBackupCommand } from './commands/verify-backup.js';
 import { listBackupCommand } from './commands/backup-ls.js';
 import { cleanupCommand } from './commands/cleanup.js';
 import { demoCommand } from './commands/demo.js';
+import { uscInitCommand } from './commands/usc-init.js';
 import { wrapCommand } from './lib/command-wrapper.js';
 import {
   wantMailbox,
@@ -82,19 +83,47 @@ program
   .action(wrapCommand('rebuild-views', (opts, ctx) =>
     rebuildViewsCommand({ ...opts, format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto' }, ctx)));
 
-program
+const initCmd = program
   .command('init')
-  .description('Create a new configuration file')
+  .description('Create a new configuration file or USC repo')
   .option('-o, --output <path>', 'Output path for config file', './config.json')
   .option('-f, --force', 'Overwrite existing file', false)
-  .option('-i, --interactive', 'Interactive mode with prompts', false)
-  .action(wrapCommand('init', (opts, ctx) => {
-    const format = process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto';
-    if (opts.interactive) {
-      return configInteractiveCommand({ ...opts, format }, ctx);
+  .option('-i, --interactive', 'Interactive mode with prompts', false);
+
+initCmd
+  .command('usc <path>')
+  .description('Initialize a USC-governed construction repo')
+  .option('--name <name>', 'App/repo name (defaults to directory name)')
+  .option('--intent <text>', 'Initial intent statement')
+  .option('--domain <domain>', 'Domain hint for intent refinement')
+  .option('--cis', 'Include CIS admissibility policy', false)
+  .option('--principal <name>', 'Principal name', 'TBD')
+  .option('--force', 'Overwrite existing files', false)
+  .action(async (targetPath: string, opts: Record<string, unknown>) => {
+    try {
+      await uscInitCommand({
+        path: targetPath,
+        name: opts.name as string | undefined,
+        intent: opts.intent as string | undefined,
+        domain: opts.domain as string | undefined,
+        cis: opts.cis as boolean | undefined,
+        principal: opts.principal as string | undefined,
+        force: opts.force as boolean | undefined,
+      });
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      console.error(`init usc failed: ${err.message}`);
+      process.exit(1);
     }
-    return configCommand({ ...opts, format }, ctx);
-  }));
+  });
+
+initCmd.action(wrapCommand('init', (opts, ctx) => {
+  const format = process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto';
+  if (opts.interactive) {
+    return configInteractiveCommand({ ...opts, format }, ctx);
+  }
+  return configCommand({ ...opts, format }, ctx);
+}));
 
 program
   .command('demo')

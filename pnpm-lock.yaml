@@ -48,6 +48,12 @@ importers:
       '@clack/prompts':
         specifier: ^0.7.0
         version: 0.7.0
+      '@narada.usc/compiler':
+        specifier: link:../../../../narada.usc/packages/compiler
+        version: link:../../../../narada.usc/packages/compiler
+      '@narada.usc/core':
+        specifier: link:../../../../narada.usc/packages/core
+        version: link:../../../../narada.usc/packages/core
       '@narada2/control-plane':
         specifier: workspace:*
         version: link:../control-plane
