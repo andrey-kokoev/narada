@@ -4,6 +4,8 @@ A generalized, deterministic kernel for turning remote source deltas into locall
 
 > **How to read this repo**: Start with the [kernel lawbook](packages/layers/control-plane/docs/00-kernel.md), then treat the Microsoft Graph/Exchange mailbox integration as the *first vertical* built on that kernel—not the essence of the system. Timer, webhook, filesystem, and process automations are first-class peers.
 
+For a compact system diagram, see [docs/system.md](docs/system.md).
+
 ## What this is
 
 Narada is **not** a sync client, cache, or email tool. It is a deterministic state compiler from remote deltas into local canonical state, with a durable control plane for governed side-effects.
