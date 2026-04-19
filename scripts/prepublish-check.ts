@@ -22,7 +22,7 @@ const PACKAGES = [
   'packages/layers/cli',
   'packages/layers/daemon',
   'packages/verticals/search',
-  'packages/charters',
+  'packages/domains/charters',
 ] as const;
 
 const colors = {
