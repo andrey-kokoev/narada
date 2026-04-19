@@ -35,6 +35,7 @@ Narada is a generalized, deterministic kernel for turning remote source deltas i
 | Doc | Topic | Read If You... |
 |-----|-------|----------------|
 | [SEMANTICS.md](SEMANTICS.md) | **Canonical ontology** — single source of truth for all terms | Need a definition, identity format, or invariant |
+| [SEMANTICS.md §2.8](SEMANTICS.md) | Re-derivation / recovery operator family | Need to understand replay, preview, recovery, rebuild, or confirm operators |
 | [00-kernel.md](packages/layers/control-plane/docs/00-kernel.md) | **Irreducible kernel spec** — the canonical lawbook | Need the vertical-agnostic normative core |
 | [01-spec.md](packages/layers/control-plane/docs/01-spec.md) | Dearbitrized formal specification (mailbox vertical) | Need to understand the mailbox-specific theoretical model |
 | [02-architecture.md](packages/layers/control-plane/docs/02-architecture.md) | Component layers, data flow, interfaces | Want to understand how the system is organized |
@@ -109,6 +110,12 @@ Narada is a generalized, deterministic kernel for turning remote source deltas i
 | **CharterInvocationEnvelope** | Runtime envelope for charter evaluation | [`packages/domains/charters/src/runtime/envelope.ts`](packages/domains/charters/src/runtime/envelope.ts) |
 | **ToolRunner** | Subprocess/HTTP tool execution | [`packages/domains/charters/src/tools/runner.ts`](packages/domains/charters/src/tools/runner.ts) |
 | **authority class** | Policy-enforced capability classification (derive/propose/claim/execute/resolve/confirm/admin) | [`SEMANTICS.md`](SEMANTICS.md) |
+| **re-derivation operator** | Explicit operator that recomputes downstream state from durable boundaries | [`SEMANTICS.md §2.8`](SEMANTICS.md) |
+| **replay derivation** | `Fact` → `Work` re-derivation using canonical context formation + foreman admission | [`SEMANTICS.md §2.8`](SEMANTICS.md) |
+| **preview derivation** | `Fact` → `Evaluation` read-only inspection without work opening | [`SEMANTICS.md §2.8`](SEMANTICS.md) |
+| **recovery derivation** | `Fact` → `Context`/`Work` control-plane reconstruction after loss | [`SEMANTICS.md §2.8`](SEMANTICS.md) |
+| **projection rebuild** | `Durable state` → `Observation` non-authoritative derived view recomputation | [`SEMANTICS.md §2.8`](SEMANTICS.md) |
+| **confirmation replay** | `Execution` → `Confirmation` recomputation without re-performing effects | [`SEMANTICS.md §2.8`](SEMANTICS.md) |
 
 ---
 
@@ -245,7 +252,8 @@ narada/
 5. **Apply Ordering**: `apply(e)` → `mark_applied(e)` → `cursor_commit` (never reorder)
 
 ### Control Plane
-6. **Foreman owns work opening**: Only `DefaultForemanFacade.onSyncCompleted()` (or `onFactsAdmitted()`) may insert `work_item` rows. Both delegate to a private `onContextsAdmitted()` that performs the actual insert.
+6. **Foreman owns work opening**: Only `DefaultForemanFacade.onSyncCompleted()` (or `onFactsAdmitted()`) may insert `work_item` rows. Both delegate to a private `onContextsAdmitted()` that performs the actual insert. Replay derivation from stored facts must route through the same `onFactsAdmitted()` path.
+6a. **Re-derivation is explicit and bounded**: No family member (replay, preview, recovery, rebuild, confirm) may run automatically on normal daemon startup. All require explicit operator trigger with bounded selection (scope, context, time range, or fact set).
 7. **Foreman owns evaluation resolution**: Only `DefaultForemanFacade.resolveWorkItem()` may transition a `work_item` to `resolved` based on charter output and policy governance. It does not handle runtime or execution failures.
 8. **Foreman owns failure classification**: Only `DefaultForemanFacade.failWorkItem()` may transition a `work_item` to `failed_retryable` or `failed_terminal`. The scheduler releases leases and marks execution attempts crashed; the foreman classifies the semantic failure and applies retry backoff.
 9. **Scheduler owns leases and mechanical lifecycle**: Only `SqliteScheduler` may insert/release `work_item_leases` and transition a work item into `leased` or `executing`. The scheduler may mark execution attempts as crashed/abandoned and release leases, but it does **not** semantically classify work-item failure status.

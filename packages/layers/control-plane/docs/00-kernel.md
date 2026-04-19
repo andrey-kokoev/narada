@@ -279,7 +279,37 @@ These boundaries are enforced by code structure:
 
 ---
 
-## 8. Known Gaps (Honest)
+## 8. Re-Derivation and Recovery Operators
+
+The kernel supports a family of explicit operators that recompute downstream state from durable boundaries. These are formalized in [`SEMANTICS.md`](../../../../SEMANTICS.md) §2.8. In kernel terms:
+
+### 8.1 Operator Algebra
+
+```text
+Boundary A → Boundary B
+mode: live | replay | preview | recovery | rebuild | confirm
+effect: read-only | control-plane-mutating | external-confirmation-only
+```
+
+### 8.2 Durable Boundary Pairs
+
+| Upstream Boundary | Downstream Boundary | Canonical Path |
+|-------------------|---------------------|----------------|
+| `Fact` store | `Work` items | `ContextFormationStrategy` → `ForemanFacade.onFactsAdmitted()` |
+| `Fact` store | `PolicyContext`/`Evaluation` | Same path, stopping before `onFactsAdmitted()` |
+| `Durable state` (facts + decisions + intents) | `Observation` views | Rebuild functions in observability layer |
+| `Execution` / `OutboundCommand` | `Confirmation` | Reconciliation queries against external state |
+
+### 8.3 Kernel Invariants for Re-Derivation
+
+1. **Same Path**: Replay and preview must use the same `ContextFormationStrategy` and `ForemanFacade` interfaces as live admission. No parallel work-opening algorithm.
+2. **No Fabrication**: Replay, preview, and recovery must not create synthetic `Source` records or `Fact` payloads that did not originate from a real source pull.
+3. **Bounded Trigger**: All non-live operators are explicitly operator-triggered. The daemon must not automatically replay, recover, or rebuild on startup.
+4. **Authority Preserved**: Replay-derived work items are opened by the foreman, leased by the scheduler, and executed by registered workers — the same authority chain as live-derived work.
+
+---
+
+## 9. Known Gaps (Honest)
 
 The following are acknowledged boundaries between the spec and the current implementation:
 
@@ -291,7 +321,7 @@ The following are acknowledged boundaries between the spec and the current imple
 
 ---
 
-## 9. See Also
+## 10. See Also
 
 - [`01-spec.md`](01-spec.md) — Mailbox-vertical dearbitrized specification
 - [`02-architecture.md`](02-architecture.md) — Component layers and data flow

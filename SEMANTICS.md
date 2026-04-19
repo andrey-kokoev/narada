@@ -420,6 +420,77 @@ Overrides policy or changes structural configuration.
 
 ---
 
+### 2.8 Re-Derivation and Recovery Operator Family
+
+Narada defines a family of explicit operators that recompute downstream state from durable boundaries. These are not a single vague "replay" — each member has distinct semantics, authority requirements, and safety properties.
+
+#### 2.8.1 Operator Algebra
+
+Every member is described by:
+
+```text
+Boundary A → Boundary B
+mode: live | replay | preview | recovery | rebuild | confirm
+effect: read-only | control-plane-mutating | external-confirmation-only
+authority: <class from §2.7>
+```
+
+| Dimension | Meaning |
+|-----------|---------|
+| **Boundary A** | The durable upstream boundary used as input (e.g. `Fact`, `Execution`, `Durable state`) |
+| **Boundary B** | The downstream boundary being recomputed (e.g. `Work`, `Context`, `Observation`, `Confirmation`) |
+| **mode** | Whether the operator runs as part of live flow, replays a past path, previews a hypothetical, recovers from loss, rebuilds a projection, or replays confirmation |
+| **effect** | Whether the operator is read-only, mutates control-plane state, or only updates confirmation bindings |
+| **authority** | The authority class governing who may invoke the operator |
+
+#### 2.8.2 Family Members
+
+| Operator | A → B | Mode | Effect | Authority | Description |
+|----------|-------|------|--------|-----------|-------------|
+| **Live Fact Admission** | `Fact` → `Work` | `live` | `control-plane-mutating` | `resolve` (foreman) | Normal daemon dispatch: facts form contexts, foreman opens work. Baseline path, coupled to source sync. |
+| **Replay Derivation** | `Fact` → `Work` | `replay` | `control-plane-mutating` | `derive` + `resolve` | Explicit operator-triggered re-derivation of work from already-stored facts using the same context-formation + foreman admission path as live dispatch. No fresh source delta required. |
+| **Preview Derivation** | `Fact` → `PolicyContext`/`Evaluation` | `preview` | `read-only` | `derive` | Read-only inspection of what a charter would propose for a stored fact set. Runs context formation and charter evaluation but stops before work opening, lease claiming, or intent creation. |
+| **Recovery Derivation** | `Fact` → `Context`/`Work` | `recovery` | `control-plane-mutating` | `derive` + `resolve` + `admin` | Rebuilds recoverable control-plane state after control-plane loss while facts remain intact. Conservative: does not restore active leases or in-flight execution attempts. |
+| **Projection Rebuild** | `Durable state` → `Observation` | `rebuild` | `read-only`* | `derive` | Recomputes non-authoritative derived views (search indexes, observation read models) from canonical durable stores. May write to derived stores, but must not mutate canonical truth. |
+| **Confirmation Replay** | `Execution`/`Outbound` → `Confirmation` | `confirm` | `external-confirmation-only` | `confirm` | Recomputes confirmation state from durable execution/outbound records plus current observation, without re-performing the effect. |
+
+\* Projection rebuild writes to derived stores but not to canonical durable boundaries; its effect on system correctness is read-only.
+
+#### 2.8.3 Semantic Distinctions
+
+These six modes must never be treated as a single vague "replay" bucket:
+
+| Distinction | Rule |
+|-------------|------|
+| **Live vs Replay** | Live admission is coupled to source sync and marks facts `admitted`; replay reads stored facts independently of `admitted_at` |
+| **Replay vs Preview** | Replay advances control-plane state (opens work); preview is read-only |
+| **Replay vs Recovery** | Replay is bounded, operator-triggered, and scoped; recovery is loss-shaped and may re-derive broader control-plane state |
+| **Recovery vs Rebuild** | Recovery rebuilds authoritative control-plane state; rebuild only reconstructs non-authoritative projections |
+| **Replay/Rebuild vs Confirm** | Replay and rebuild derive from upstream durable boundaries; confirm derives from execution/outbound state outward |
+| **All vs Live** | No family member may run automatically on normal daemon startup unless it is live admission |
+
+#### 2.8.4 Safety Properties
+
+1. **Boundedness**: Every operator accepts explicit selection bounds (scope, context, time range, fact set). No background component continuously re-derives.
+2. **Authority Preservation**: Replay and recovery preserve foreman authority over work opening, scheduler authority over leases, and outbound handoff authority over command creation.
+3. **No Fabrication**: Replay, preview, and recovery must not fabricate source events or fresh inbound deltas.
+4. **Conservative Recovery**: Recovery does not restore active leases, in-flight execution attempts, or already-submitted outbound effects blindly.
+5. **Projection Non-Authority**: Rebuild may discard and recompute derived stores without affecting correctness.
+
+#### 2.8.5 Relationship to Authority Classes
+
+- `derive`: Required by preview, rebuild, and the computation phase of replay/recovery
+- `resolve`: Required when the operator advances work-item lifecycle state (live, replay, recovery)
+- `confirm`: Required for confirmation replay
+- `admin`: Required for recovery because it reconstructs control-plane state after loss
+- `claim` / `execute`: Not directly invoked by the operator family; these remain the authority of scheduler and worker layers during normal execution of replay-derived work
+
+#### 2.8.6 Evolution Note
+
+This family is documented before all members are implemented. The first concrete implementation is replay derivation (`Fact` → `Work`). As implementation proceeds, the algebra may be refined — for example, if replay and recovery share a common derivation core, that will be reflected here rather than freezing divergent names prematurely.
+
+---
+
 <a name="prohibited-terms"></a>
 ## 3. Prohibited Terms
 
@@ -455,6 +526,7 @@ Words that should not be used in user-facing or generic system contexts:
 | [`docs/00-dharma-stewart.md`](packages/layers/control-plane/docs/00-dharma-stewart.md) | Steward handoff | **Contextualizes**: high-level ontology for human stewards. Concrete definitions are in `SEMANTICS.md`. |
 | [`docs/01-spec.md`](packages/layers/control-plane/docs/01-spec.md) | Dearbitrized specification | **Formalizes**: algebraic properties and minimal completeness. Uses terms defined here. |
 | [`docs/02-architecture.md`](packages/layers/control-plane/docs/02-architecture.md) | Component layers and data flow | **Illustrates**: how the ontology is implemented. Vocabulary notes must not redefine terms. |
+| [§2.8](SEMANTICS.md#re-derivation-and-recovery-operator-family) | Re-derivation / recovery operator family | **Defines**: the algebra, members, and authority mapping for bounded recomputation between durable boundaries |
 | [`docs/04-identity.md`](packages/layers/control-plane/docs/04-identity.md) | Identity and determinism | **Specializes**: identity schemes, serialization, and hashing. Assumes the ontology here. |
 | [`AGENTS.md`](AGENTS.md) | Agent navigation hub | **Indexes**: concept-to-file lookup table. Definitions point here. |
 
@@ -465,5 +537,6 @@ Words that should not be used in user-facing or generic system contexts:
 1. Propose the new term in an issue or task file
 2. Add it to this document with a clear definition and layer assignment
 3. Update `AGENTS.md` concept table with the primary location
-4. If user-facing, also update `TERMINOLOGY.md`
-5. Never redefine an existing term; deprecate and alias instead
+4. If the term is a new re-derivation/recovery operator, add it to §2.8 and ensure it is distinguished from existing family members
+5. If user-facing, also update `TERMINOLOGY.md`
+6. Never redefine an existing term; deprecate and alias instead
