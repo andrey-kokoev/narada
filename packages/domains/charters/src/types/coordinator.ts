@@ -82,6 +82,8 @@ export interface ToolDefinition {
   setup_requirements?: OperationalRequirement[];
 }
 
+export type AuthorityClass = "derive" | "propose" | "claim" | "execute" | "resolve" | "confirm" | "admin";
+
 /** Binding of a tool to a charter within a mailbox */
 export interface ToolBinding {
   tool_id: string;
@@ -92,6 +94,7 @@ export interface ToolBinding {
   allowed_env_vars?: string[];
   requires_approval: boolean;
   working_directory_override?: string;
+  authority_class?: AuthorityClass;
 }
 
 /** Canonical mailbox-to-coordinator binding */

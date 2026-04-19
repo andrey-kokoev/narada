@@ -47,6 +47,20 @@ These terms are also defined canonically in [`SEMANTICS.md`](SEMANTICS.md):
 | [`knowledge source`](SEMANTICS.md#knowledge-source) | Yes | Declared reference to external knowledge consumed by a charter |
 | [`operator action`](SEMANTICS.md#operator-action) | Yes | Durable request for a human operator to perform a safe mutation |
 
+## Authority Classes
+
+Authority classes distinguish derivation/proposal tools from operator-class actions. See [`SEMANTICS.md`](SEMANTICS.md) for the full policy.
+
+| Class | What it does | Who may use |
+|-------|--------------|-------------|
+| [`derive`](SEMANTICS.md#authority-derive) | Computes outputs from inputs; no side effects | Any component with inputs |
+| [`propose`](SEMANTICS.md#authority-propose) | Produces structured proposals awaiting governance | Charters, domain packs, compilers |
+| [`claim`](SEMANTICS.md#authority-claim) | Acquires exclusive rights to a unit | Narada runtime only |
+| [`execute`](SEMANTICS.md#authority-execute) | Mutates external state or consumes resources | Narada runtime executors only |
+| [`resolve`](SEMANTICS.md#authority-resolve) | Advances lifecycle state | Narada governance only |
+| [`confirm`](SEMANTICS.md#authority-confirm) | Acknowledges external effects | Narada confirmation workers only |
+| [`admin`](SEMANTICS.md#authority-admin) | Overrides policy or changes structure | Explicit admin posture only |
+
 ## What Not to Use
 
 > Canonical version of this table lives in [`SEMANTICS.md#prohibited-terms`](SEMANTICS.md#prohibited-terms).

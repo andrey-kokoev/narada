@@ -108,6 +108,7 @@ Narada is a generalized, deterministic kernel for turning remote source deltas i
 | **OutboundReconciler** | Submitted → confirmed binding | [`src/outbound/reconciler.ts`](packages/layers/control-plane/src/outbound/reconciler.ts) |
 | **CharterInvocationEnvelope** | Runtime envelope for charter evaluation | [`packages/domains/charters/src/runtime/envelope.ts`](packages/domains/charters/src/runtime/envelope.ts) |
 | **ToolRunner** | Subprocess/HTTP tool execution | [`packages/domains/charters/src/tools/runner.ts`](packages/domains/charters/src/tools/runner.ts) |
+| **authority class** | Policy-enforced capability classification (derive/propose/claim/execute/resolve/confirm/admin) | [`SEMANTICS.md`](SEMANTICS.md) |
 
 ---
 
@@ -256,6 +257,7 @@ narada/
 15. **Lease Uniqueness**: A work item has at most one unreleased, unexpired lease at any time
 16. **Bounded Evaluation**: Charters run inside frozen `CharterInvocationEnvelope`s with immutable capability envelopes
 17. **Decision Before Command**: `foreman_decision` is append-only; `outbound_command` is worker-mutable; one decision produces at most one command
+18. **Authority Class Enforcement**: Every tool binding and charter capability must declare an authority class. Preflight rejects configs that bind a charter or tool to an authority class it is not allowed to use. Domain packs may only declare `derive` and `propose`. Only Narada runtime-authorized components may declare `claim`, `execute`, `resolve`, or `confirm`. `admin` requires explicit operator/admin posture.
 
 ### Observation / UI
 18. **Observation is read-only projection**: `layers/control-plane/src/observability/` must never contain writes (`.run(`, `.exec(`, direct mutation calls). It derives its data exclusively from durable stores.

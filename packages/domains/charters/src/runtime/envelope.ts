@@ -71,6 +71,7 @@ export const ToolCatalogEntrySchema = z.object({
   read_only: z.boolean(),
   requires_approval: z.boolean(),
   timeout_ms: z.number().int().nonnegative(),
+  authority_class: z.enum(["derive", "propose", "claim", "execute", "resolve", "confirm", "admin"]).optional(),
 });
 export type ToolCatalogEntry = z.infer<typeof ToolCatalogEntrySchema>;
 

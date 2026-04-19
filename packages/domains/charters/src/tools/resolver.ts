@@ -80,6 +80,7 @@ export function resolveToolCatalog(
         description: `Environment variable ${name}`,
       })),
       timeout_ms: toolBinding.timeout_ms,
+      authority_class: toolBinding.authority_class,
     });
   }
 

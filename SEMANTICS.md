@@ -343,6 +343,83 @@ Verticals (mailbox, timer, webhook, filesystem, process) are **interchangeable p
 
 ---
 
+### 2.7 Authority Classes
+
+Authority classes classify what a component, tool, or command is allowed to do. They are a policy-enforced boundary, not a suggestion.
+
+<a name="authority-derive"></a>
+#### `derive`
+
+Computes declared outputs from declared inputs. No side effects, no lifecycle state changes, no claiming, no leases.
+
+- **Examples**: `refine`, `plan`, `validate`, `init` (artifact generation)
+- **Safe to re-run**: Yes, idempotent or explicitly `--force`
+- **Who may use**: Any component with access to the inputs
+
+<a name="authority-propose"></a>
+#### `propose`
+
+Produces a structured proposal that requires governance approval before it becomes an intent.
+
+- **Examples**: charter evaluation, task graph proposals, domain-pack refinements
+- **Safe to re-run**: Yes
+- **Who may use**: Charters, domain packs, compiler tools
+
+<a name="authority-claim"></a>
+#### `claim`
+
+Acquires exclusive rights to a schedulable unit or resource.
+
+- **Examples**: claiming a work item, acquiring a lease
+- **Safe to re-run**: No — requires concurrency control
+- **Who may use**: Narada runtime-authorized components only
+
+<a name="authority-execute"></a>
+#### `execute`
+
+Performs an effect that mutates external world state or consumes resources.
+
+- **Examples**: invoking a tool, running a subprocess, sending a message
+- **Safe to re-run**: Only if idempotent; generally requires crash/retry handling
+- **Who may use**: Narada runtime-authorized executors only
+
+<a name="authority-resolve"></a>
+#### `resolve`
+
+Advances lifecycle state (complete, reject, block, escalate, supersede).
+
+- **Examples**: marking work completed, rejecting a task, blocking a dependency
+- **Safe to re-run**: No — changes durable lifecycle state
+- **Who may use**: Narada runtime-authorized governance components only
+
+<a name="authority-confirm"></a>
+#### `confirm`
+
+Acknowledges that an external effect has been observed and binds it to durable state.
+
+- **Examples**: confirming a sent message, reconciling remote state
+- **Safe to re-run**: Idempotent by design
+- **Who may use**: Narada runtime-authorized confirmation workers only
+
+<a name="authority-admin"></a>
+#### `admin`
+
+Overrides policy or changes structural configuration.
+
+- **Examples**: posture escalation, charter binding changes, operator override
+- **Safe to re-run**: No — changes governance structure
+- **Who may use**: Explicit operator/admin posture only
+
+#### Policy Enforcement
+
+- Domain packs may define only `derive` and `propose` capabilities.
+- Only Narada runtime-authorized components may perform `claim`, `execute`, `resolve`, or `confirm`.
+- `admin` requires explicit operator/admin posture.
+- Charter runtime envelopes must expose the capability authority class.
+- Preflight must reject operation configs that bind a charter or tool to an authority class it is not allowed to use.
+
+---
+
 <a name="prohibited-terms"></a>
 ## 3. Prohibited Terms
 
