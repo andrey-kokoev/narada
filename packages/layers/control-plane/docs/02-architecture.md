@@ -513,8 +513,9 @@ These boundaries are enforced by code structure and must not be bypassed:
 
 The architecture supports a family of explicit operators for bounded recomputation between durable boundaries (defined canonically in [`SEMANTICS.md`](../../../../SEMANTICS.md) §2.8 and formalized in [`00-kernel.md`](00-kernel.md) §8). Key architectural commitments:
 
-- **Same-path replay**: Replay derivation (`Fact` → `Work`) routes through the same `ContextFormationStrategy` and `ForemanFacade.onFactsAdmitted()` as live dispatch. No parallel work-opening algorithm exists.
-- **Preview stops before mutation**: Preview derivation (`Fact` → `Evaluation`) runs context formation and charter evaluation but does not invoke `onFactsAdmitted()`, `acquireLease()`, or `IntentHandoff`.
+- **Same-path replay**: Replay derivation (`Fact` → `Work`) routes through the same `ContextFormationStrategy` and `ForemanFacade.onContextsAdmitted()` as live dispatch. No parallel work-opening algorithm exists.
+- **Live admission is compound**: Live dispatch performs a fact lifecycle transition (`unadmitted` → `admitted`) plus work opening. Replay is pure work opening with no fact lifecycle side effect.
+- **Preview stops before mutation**: Preview derivation (`Fact` → `Evaluation`) runs context formation and charter evaluation but does not invoke `onContextsAdmitted()`, `acquireLease()`, or `IntentHandoff`.
 - **Rebuild is non-authoritative**: Projection rebuild (`Durable state` → `Observation`) may write to derived stores (search index, read models) but must never write to canonical durable boundaries (`facts`, `work_items`, `intents`, `decisions`).
 - **Confirm does not re-execute**: Confirmation replay (`Execution` → `Confirmation`) queries external state through reconciliation logic; it does not resubmit commands or re-execute effects.
 - **No automatic replay on startup**: All non-live operators require explicit operator trigger. The daemon dispatch loop does not silently recover, rebuild, or replay on startup.

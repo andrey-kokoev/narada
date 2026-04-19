@@ -129,6 +129,25 @@ Example families:
 - Authority for recovery includes `admin` because reconstructing control-plane state after loss is structural, not merely derivational.
 - Task 201 is explicitly named as "the first concrete implementation" in the evolution note, positioning it as one member of the family.
 
+### Refinement Absorbed From Task 201 Implementation
+
+Task 201's implementation revealed a cleaner semantic split than initially documented:
+
+1. **Live Fact Admission is a compound operation**: It consists of (a) fact lifecycle transition (`unadmitted` → `admitted`) plus (b) work opening via `ContextFormationStrategy` → `onContextsAdmitted()`. The daemon orchestrates both: `getUnadmittedFacts` → `onFactsAdmitted` → `markAdmitted`.
+
+2. **Replay Derivation is pure work opening**: It reads stored facts via `getFactsByScope` (regardless of admission status) and routes through the same `onContextsAdmitted()` path, but **never marks facts as admitted**. The semantic boundary is at the fact selection and lifecycle layer, not at the foreman layer.
+
+3. **Both use the same core algorithm**: `onFactsAdmitted()` and `deriveWorkFromStoredFacts()` are thin wrappers around the same private `onContextsAdmitted()` method. The documentation now explicitly states this rather than implying divergent paths.
+
+This refinement is reflected in:
+- `SEMANTICS.md` §2.8.2: Live admission boundary changed from `Fact → Work` to `Fact (unadmitted) → Fact (admitted) + Work`; replay boundary changed to `Fact (stored) → Work`
+- `SEMANTICS.md` §2.8.3: Added "Admission vs Work Opening" distinction rule
+- `SEMANTICS.md` §2.8.4: Added "No Admission Side Effect in Replay" safety property
+- `00-kernel.md` §8.2: Updated durable boundary pairs to reflect fact-lifecycle vs pure-work-opening paths
+- `00-kernel.md` §8.3: Added "No Admission Side Effect in Replay" kernel invariant
+- `02-architecture.md`: Added "Live admission is compound" architectural commitment
+- `AGENTS.md`: Added invariant 6b: "No admission side effect in replay"
+
 ### Verification
 
 - Documentation-only change; no TypeScript or runtime code modified.

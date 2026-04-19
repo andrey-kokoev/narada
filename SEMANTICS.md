@@ -143,6 +143,8 @@ The foreman performs three authorities:
 
 Policy is the **sole gate to effects**. No effect may materialize without passing through foreman governance.
 
+**Explicit replay derivation**: `deriveWorkFromStoredFacts()` re-derives work from already-stored facts without requiring a fresh source delta. It uses the same context formation + work-opening path as live admission but does not mark facts as admitted. This is the canonical path for replay, policy testing, and recovery from control-plane loss.
+
 #### `intent`
 
 The **universal durable effect boundary**.
@@ -447,8 +449,8 @@ authority: <class from §2.7>
 
 | Operator | A → B | Mode | Effect | Authority | Description |
 |----------|-------|------|--------|-----------|-------------|
-| **Live Fact Admission** | `Fact` → `Work` | `live` | `control-plane-mutating` | `resolve` (foreman) | Normal daemon dispatch: facts form contexts, foreman opens work. Baseline path, coupled to source sync. |
-| **Replay Derivation** | `Fact` → `Work` | `replay` | `control-plane-mutating` | `derive` + `resolve` | Explicit operator-triggered re-derivation of work from already-stored facts using the same context-formation + foreman admission path as live dispatch. No fresh source delta required. |
+| **Live Fact Admission** | `Fact` (unadmitted) → `Fact` (admitted) + `Work` | `live` | `control-plane-mutating` + **fact-lifecycle-mutating** | `resolve` (foreman) | Normal daemon dispatch: selects unadmitted facts, routes through context formation + foreman work opening, then marks facts admitted. Compound operation: admission + work opening. |
+| **Replay Derivation** | `Fact` (stored) → `Work` | `replay` | `control-plane-mutating` | `derive` + `resolve` | Explicit operator-triggered re-derivation of work from already-stored facts using the same context-formation + foreman work-opening path as live dispatch. **Does not mark facts admitted** and does not require fresh source delta. |
 | **Preview Derivation** | `Fact` → `PolicyContext`/`Evaluation` | `preview` | `read-only` | `derive` | Read-only inspection of what a charter would propose for a stored fact set. Runs context formation and charter evaluation but stops before work opening, lease claiming, or intent creation. |
 | **Recovery Derivation** | `Fact` → `Context`/`Work` | `recovery` | `control-plane-mutating` | `derive` + `resolve` + `admin` | Rebuilds recoverable control-plane state after control-plane loss while facts remain intact. Conservative: does not restore active leases or in-flight execution attempts. |
 | **Projection Rebuild** | `Durable state` → `Observation` | `rebuild` | `read-only`* | `derive` | Recomputes non-authoritative derived views (search indexes, observation read models) from canonical durable stores. May write to derived stores, but must not mutate canonical truth. |
@@ -462,7 +464,8 @@ These six modes must never be treated as a single vague "replay" bucket:
 
 | Distinction | Rule |
 |-------------|------|
-| **Live vs Replay** | Live admission is coupled to source sync and marks facts `admitted`; replay reads stored facts independently of `admitted_at` |
+| **Live vs Replay** | Live admission is coupled to source sync and marks facts `admitted`; replay reads stored facts independently of `admitted_at` and never mutates fact lifecycle state |
+| **Admission vs Work Opening** | Live admission is a *compound* operation (fact lifecycle transition + work opening). Replay is *pure work opening* with no fact lifecycle side effect. Both use the same `ContextFormationStrategy` → `onContextsAdmitted()` path. |
 | **Replay vs Preview** | Replay advances control-plane state (opens work); preview is read-only |
 | **Replay vs Recovery** | Replay is bounded, operator-triggered, and scoped; recovery is loss-shaped and may re-derive broader control-plane state |
 | **Recovery vs Rebuild** | Recovery rebuilds authoritative control-plane state; rebuild only reconstructs non-authoritative projections |
@@ -474,8 +477,9 @@ These six modes must never be treated as a single vague "replay" bucket:
 1. **Boundedness**: Every operator accepts explicit selection bounds (scope, context, time range, fact set). No background component continuously re-derives.
 2. **Authority Preservation**: Replay and recovery preserve foreman authority over work opening, scheduler authority over leases, and outbound handoff authority over command creation.
 3. **No Fabrication**: Replay, preview, and recovery must not fabricate source events or fresh inbound deltas.
-4. **Conservative Recovery**: Recovery does not restore active leases, in-flight execution attempts, or already-submitted outbound effects blindly.
-5. **Projection Non-Authority**: Rebuild may discard and recompute derived stores without affecting correctness.
+4. **No Admission Side Effect in Replay**: Replay derivation must not mark facts as `admitted`. Fact lifecycle transitions are the exclusive concern of live dispatch.
+5. **Conservative Recovery**: Recovery does not restore active leases, in-flight execution attempts, or already-submitted outbound effects blindly.
+6. **Projection Non-Authority**: Rebuild may discard and recompute derived stores without affecting correctness.
 
 #### 2.8.5 Relationship to Authority Classes
 

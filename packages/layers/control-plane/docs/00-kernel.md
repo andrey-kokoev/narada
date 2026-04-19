@@ -106,6 +106,17 @@ The foreman performs three authorities:
 
 Policy is the **sole gate to effects**. No effect may materialize without passing through foreman governance.
 
+#### Explicit Replay Derivation
+
+In addition to live admission, the foreman exposes `deriveWorkFromStoredFacts()` for operator-triggered replay. This path:
+
+- Reads already-stored facts independently of `admitted_at`
+- Routes through the same `ContextFormationStrategy` → `onContextsAdmitted` pipeline as live dispatch
+- Does **not** mark facts as admitted
+- Is logged/audited as a replay-derived work opening
+
+This supports re-running an old conversation, testing a policy change against synced mail, or recovering work derivation after control-plane loss — all without fabricating a new inbound source event.
+
 ### 3.6 Intent
 
 ```typescript
@@ -295,8 +306,9 @@ effect: read-only | control-plane-mutating | external-confirmation-only
 
 | Upstream Boundary | Downstream Boundary | Canonical Path |
 |-------------------|---------------------|----------------|
-| `Fact` store | `Work` items | `ContextFormationStrategy` → `ForemanFacade.onFactsAdmitted()` |
-| `Fact` store | `PolicyContext`/`Evaluation` | Same path, stopping before `onFactsAdmitted()` |
+| `Fact` (unadmitted) | `Fact` (admitted) + `Work` | Live dispatch: `getUnadmittedFacts` → `onFactsAdmitted()` → `markAdmitted()` |
+| `Fact` (stored) | `Work` | Replay: `getFactsByScope` → `deriveWorkFromStoredFacts()` → (no admission marking) |
+| `Fact` (stored) | `PolicyContext`/`Evaluation` | Preview: same path as replay, stopping before `onContextsAdmitted()` |
 | `Durable state` (facts + decisions + intents) | `Observation` views | Rebuild functions in observability layer |
 | `Execution` / `OutboundCommand` | `Confirmation` | Reconciliation queries against external state |
 
@@ -305,7 +317,8 @@ effect: read-only | control-plane-mutating | external-confirmation-only
 1. **Same Path**: Replay and preview must use the same `ContextFormationStrategy` and `ForemanFacade` interfaces as live admission. No parallel work-opening algorithm.
 2. **No Fabrication**: Replay, preview, and recovery must not create synthetic `Source` records or `Fact` payloads that did not originate from a real source pull.
 3. **Bounded Trigger**: All non-live operators are explicitly operator-triggered. The daemon must not automatically replay, recover, or rebuild on startup.
-4. **Authority Preserved**: Replay-derived work items are opened by the foreman, leased by the scheduler, and executed by registered workers — the same authority chain as live-derived work.
+4. **No Admission Side Effect in Replay**: Replay derivation must not transition fact lifecycle state (`admitted_at`). Fact admission is the exclusive side effect of live dispatch.
+5. **Authority Preserved**: Replay-derived work items are opened by the foreman, leased by the scheduler, and executed by registered workers — the same authority chain as live-derived work.
 
 ---
 
