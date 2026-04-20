@@ -1427,6 +1427,183 @@ export function buildOverviewSnapshot(
   };
 }
 
+/**
+ * Deep-dive evaluation detail with safely parsed JSON fields.
+ * Returns undefined if the evaluation does not exist.
+ */
+export function getEvaluationDetail(
+  store: Pick<CoordinatorStoreView, "db">,
+  evaluationId: string,
+): import("./types.js").EvaluationDetail | undefined {
+  const row = store.db
+    .prepare(`select * from evaluations where evaluation_id = ?`)
+    .get(evaluationId) as Record<string, unknown> | undefined;
+
+  if (!row) return undefined;
+
+  function safeParse(json: string | null): unknown {
+    if (!json) return null;
+    try {
+      return JSON.parse(json);
+    } catch {
+      return json;
+    }
+  }
+
+  return {
+    evaluation_id: String(row.evaluation_id),
+    execution_id: String(row.execution_id),
+    work_item_id: String(row.work_item_id),
+    context_id: String(row.context_id),
+    scope_id: String(row.scope_id),
+    charter_id: String(row.charter_id),
+    role: String(row.role) as "primary" | "secondary",
+    output_version: String(row.output_version),
+    analyzed_at: String(row.analyzed_at),
+    outcome: String(row.outcome),
+    summary: String(row.summary),
+    recommended_action_class: row.recommended_action_class ? String(row.recommended_action_class) : null,
+    created_at: String(row.created_at),
+    confidence: safeParse(row.confidence_json as string | null),
+    classifications: safeParse(row.classifications_json as string | null),
+    facts: safeParse(row.facts_json as string | null),
+    escalations: safeParse(row.escalations_json as string | null),
+    proposed_actions: safeParse(row.proposed_actions_json as string | null),
+    tool_requests: safeParse(row.tool_requests_json as string | null),
+  };
+}
+
+/**
+ * Deep-dive decision detail with safely parsed JSON fields.
+ * Returns undefined if the decision does not exist.
+ */
+export function getDecisionDetail(
+  store: Pick<CoordinatorStoreView, "db">,
+  decisionId: string,
+): import("./types.js").DecisionDetail | undefined {
+  const row = store.db
+    .prepare(`select * from foreman_decisions where decision_id = ?`)
+    .get(decisionId) as Record<string, unknown> | undefined;
+
+  if (!row) return undefined;
+
+  function safeParse(json: string | null): unknown {
+    if (!json) return null;
+    try {
+      return JSON.parse(json);
+    } catch {
+      return json;
+    }
+  }
+
+  const sourceCharterIdsRaw = row.source_charter_ids_json as string | null;
+  let sourceCharterIds: string[] = [];
+  if (sourceCharterIdsRaw) {
+    try {
+      sourceCharterIds = JSON.parse(sourceCharterIdsRaw);
+      if (!Array.isArray(sourceCharterIds)) sourceCharterIds = [];
+    } catch {
+      sourceCharterIds = [];
+    }
+  }
+
+  return {
+    decision_id: String(row.decision_id),
+    context_id: String(row.context_id),
+    scope_id: String(row.scope_id),
+    approved_action: String(row.approved_action),
+    rationale: String(row.rationale),
+    decided_at: String(row.decided_at),
+    outbound_id: row.outbound_id ? String(row.outbound_id) : null,
+    created_by: String(row.created_by),
+    payload: safeParse(row.payload_json as string | null),
+    source_charter_ids: sourceCharterIds,
+  };
+}
+
+/**
+ * Deep-dive execution attempt detail with safely parsed JSON fields.
+ * Returns undefined if the execution does not exist.
+ */
+export function getExecutionDetail(
+  store: Pick<CoordinatorStoreView, "db">,
+  executionId: string,
+): import("./types.js").ExecutionDetail | undefined {
+  const row = store.db
+    .prepare(`select * from execution_attempts where execution_id = ?`)
+    .get(executionId) as Record<string, unknown> | undefined;
+
+  if (!row) return undefined;
+
+  function safeParse(json: string | null): unknown {
+    if (!json) return null;
+    try {
+      return JSON.parse(json);
+    } catch {
+      return json;
+    }
+  }
+
+  return {
+    execution_id: String(row.execution_id),
+    work_item_id: String(row.work_item_id),
+    revision_id: String(row.revision_id),
+    session_id: row.session_id ? String(row.session_id) : null,
+    status: String(row.status) as import("../coordinator/types.js").ExecutionAttemptStatus,
+    started_at: String(row.started_at),
+    completed_at: row.completed_at ? String(row.completed_at) : null,
+    error_message: row.error_message ? String(row.error_message) : null,
+    runtime_envelope: safeParse(row.runtime_envelope_json as string | null),
+    outcome: safeParse(row.outcome_json as string | null),
+  };
+}
+
+/**
+ * All evaluation details for a context, ordered by analyzed_at descending.
+ */
+export function getEvaluationsByContextDetail(
+  store: Pick<CoordinatorStoreView, "db">,
+  contextId: string,
+  scopeId: string,
+): import("./types.js").EvaluationDetail[] {
+  const rows = store.db
+    .prepare(
+      `select * from evaluations where context_id = ? and scope_id = ? order by analyzed_at desc`,
+    )
+    .all(contextId, scopeId) as Record<string, unknown>[];
+
+  function safeParse(json: string | null): unknown {
+    if (!json) return null;
+    try {
+      return JSON.parse(json);
+    } catch {
+      return json;
+    }
+  }
+
+  return rows.map((row) => ({
+    evaluation_id: String(row.evaluation_id),
+    execution_id: String(row.execution_id),
+    work_item_id: String(row.work_item_id),
+    context_id: String(row.context_id),
+    scope_id: String(row.scope_id),
+    charter_id: String(row.charter_id),
+    role: String(row.role) as "primary" | "secondary",
+    output_version: String(row.output_version),
+    analyzed_at: String(row.analyzed_at),
+    outcome: String(row.outcome),
+    summary: String(row.summary),
+    recommended_action_class: row.recommended_action_class ? String(row.recommended_action_class) : null,
+    created_at: String(row.created_at),
+    confidence: safeParse(row.confidence_json as string | null),
+    classifications: safeParse(row.classifications_json as string | null),
+    facts: safeParse(row.facts_json as string | null),
+    escalations: safeParse(row.escalations_json as string | null),
+    proposed_actions: safeParse(row.proposed_actions_json as string | null),
+    tool_requests: safeParse(row.tool_requests_json as string | null),
+  }));
+}
+
 export function buildObservationPlaneSnapshot(
   registry: WorkerRegistryView,
   coordinatorStore: CoordinatorStoreView,

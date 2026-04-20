@@ -19,6 +19,7 @@ import { previewWorkCommand } from './commands/preview-work.js';
 import { confirmReplayCommand } from './commands/confirm-replay.js';
 import { selectCommand } from './commands/select.js';
 import { recoverCommand } from './commands/recover.js';
+import { showCommand } from './commands/show.js';
 import { wrapCommand } from './lib/command-wrapper.js';
 import {
   wantMailbox,
@@ -154,6 +155,22 @@ program
   .option('-v, --verbose', 'Enable verbose output', false)
   .action(wrapCommand('status', (opts, ctx) =>
     statusCommand({ ...opts, format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto' }, ctx)));
+
+program
+  .command('show')
+  .description('Show deep-dive details for evaluation, decision, or execution')
+  .argument('<type>', 'Type of entity to show: evaluation, decision, or execution')
+  .argument('<id>', 'Entity ID')
+  .option('-c, --config <path>', 'Path to config file', './config.json')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .option('-s, --scope <id>', 'Scope ID (mailbox ID) to inspect')
+  .action(wrapCommand('show', (opts, ctx) =>
+    showCommand({
+      ...opts,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      type: opts.type as 'evaluation' | 'decision' | 'execution',
+      id: opts.id as string,
+    }, ctx)));
 
 // Backup commands
 program

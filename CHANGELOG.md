@@ -4,6 +4,36 @@ This changelog tracks semantic chapters in Narada's development: concepts that b
 
 It is not a package-level release log. Package publishing changes belong in Changesets.
 
+## Live Operation
+
+Narada gained its first fixture-backed live-operation path for a support mailbox:
+
+- A support operation can be configured around `support_steward`.
+- Charter invocation now supports support-specific prompt materialization and knowledge injection.
+- The draft-proposal pipeline is exercised through work opening, charter execution, evaluation, foreman decision, and outbound handoff.
+- Operators can inspect evaluations, decisions, and executions through CLI, API, and UI surfaces.
+- A smoke fixture captures the safe-mode distinction between draft proposal and governed execution.
+
+Concrete outcomes:
+
+- Added Live Operation task graph and acceptance artifacts (`227-232`).
+- Added support-charter prompt selection and mailbox materializer coverage.
+- Added deep inspection queries for evaluation, decision, execution, and context evaluations.
+- Added `narada show --type <evaluation|decision|execution> --id <id>` with focused CLI coverage.
+- Added UI deep links/detail views for evaluation, decision, and execution inspection.
+- Added fixture-backed live-operation smoke coverage and a runbook.
+
+Authority clarifications:
+
+- Safe posture can stop at human approval while full pipeline fixtures can prove downstream handoff.
+- Inspection remains read-only and does not become authority.
+- Unknown explicit `--scope` on inspection hard-fails instead of falling back to the first scope.
+
+Deferred:
+
+- Live Graph draft creation and fact persistence checks remain credential/service dependent.
+- Operational Trust work (`234-238`) follows this chapter and covers readiness, stuck detection, audit, lifecycle runbooks, and draft disposition.
+
 ## Operator Closure
 
 Narada's operator surface was reorganized into named families:

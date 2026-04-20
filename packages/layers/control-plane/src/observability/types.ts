@@ -417,6 +417,60 @@ export interface AffinityOutcome {
   actual_session_id: string | null;
 }
 
+/** @source derived — Deep-dive evaluation detail with parsed JSON fields */
+export interface EvaluationDetail {
+  evaluation_id: string;
+  execution_id: string;
+  work_item_id: string;
+  context_id: string;
+  scope_id: string;
+  charter_id: string;
+  role: "primary" | "secondary";
+  output_version: string;
+  analyzed_at: string;
+  outcome: string;
+  summary: string;
+  recommended_action_class: string | null;
+  created_at: string;
+  // Parsed JSON fields
+  confidence: unknown;
+  classifications: unknown;
+  facts: unknown;
+  escalations: unknown;
+  proposed_actions: unknown;
+  tool_requests: unknown;
+}
+
+/** @source derived — Deep-dive decision detail with parsed JSON fields */
+export interface DecisionDetail {
+  decision_id: string;
+  context_id: string;
+  scope_id: string;
+  approved_action: string;
+  rationale: string;
+  decided_at: string;
+  outbound_id: string | null;
+  created_by: string;
+  // Parsed JSON fields
+  payload: unknown;
+  source_charter_ids: string[];
+}
+
+/** @source derived — Deep-dive execution attempt detail with parsed JSON fields */
+export interface ExecutionDetail {
+  execution_id: string;
+  work_item_id: string;
+  revision_id: string;
+  session_id: string | null;
+  status: import("../coordinator/types.js").ExecutionAttemptStatus;
+  started_at: string;
+  completed_at: string | null;
+  error_message: string | null;
+  // Parsed JSON fields
+  runtime_envelope: unknown;
+  outcome: unknown;
+}
+
 export interface ObservationPlaneSnapshot {
   captured_at: string;
   workers: WorkerStatusObservation[];

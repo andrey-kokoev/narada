@@ -32,6 +32,10 @@ import {
   getUnifiedTimeline,
   getMailboxVerticalView,
   getMailExecutionDetails,
+  getEvaluationDetail,
+  getDecisionDetail,
+  getExecutionDetail,
+  getEvaluationsByContextDetail,
   type WorkItemLifecycleSummary,
 } from "@narada2/control-plane";
 import type { RouteHandler } from "./routes.js";
@@ -404,6 +408,74 @@ export function createObservationRoutes(
         }
         const indicator = getQuiescenceIndicator(scope.coordinatorStore);
         jsonResponse(res, 200, { scope_id: scope.scope_id, indicator });
+      },
+    },
+    {
+      method: "GET",
+      pattern: new RegExp(`^${prefix}/scopes/([^/]+)/evaluations/([^/]+)$`),
+      handler: async (_req, res, params) => {
+        const scope = getScope(params[1]!);
+        if (!scope) {
+          jsonResponse(res, 404, { error: "Scope not found" });
+          return;
+        }
+        const evaluationId = decodeURIComponent(params[2]!);
+        const detail = getEvaluationDetail(scope.coordinatorStore, evaluationId);
+        if (!detail) {
+          jsonResponse(res, 404, { error: "Evaluation not found" });
+          return;
+        }
+        jsonResponse(res, 200, { scope_id: scope.scope_id, evaluation: detail });
+      },
+    },
+    {
+      method: "GET",
+      pattern: new RegExp(`^${prefix}/scopes/([^/]+)/decisions/([^/]+)$`),
+      handler: async (_req, res, params) => {
+        const scope = getScope(params[1]!);
+        if (!scope) {
+          jsonResponse(res, 404, { error: "Scope not found" });
+          return;
+        }
+        const decisionId = decodeURIComponent(params[2]!);
+        const detail = getDecisionDetail(scope.coordinatorStore, decisionId);
+        if (!detail) {
+          jsonResponse(res, 404, { error: "Decision not found" });
+          return;
+        }
+        jsonResponse(res, 200, { scope_id: scope.scope_id, decision: detail });
+      },
+    },
+    {
+      method: "GET",
+      pattern: new RegExp(`^${prefix}/scopes/([^/]+)/executions/([^/]+)$`),
+      handler: async (_req, res, params) => {
+        const scope = getScope(params[1]!);
+        if (!scope) {
+          jsonResponse(res, 404, { error: "Scope not found" });
+          return;
+        }
+        const executionId = decodeURIComponent(params[2]!);
+        const detail = getExecutionDetail(scope.coordinatorStore, executionId);
+        if (!detail) {
+          jsonResponse(res, 404, { error: "Execution not found" });
+          return;
+        }
+        jsonResponse(res, 200, { scope_id: scope.scope_id, execution: detail });
+      },
+    },
+    {
+      method: "GET",
+      pattern: new RegExp(`^${prefix}/scopes/([^/]+)/contexts/([^/]+)/evaluations$`),
+      handler: async (_req, res, params) => {
+        const scope = getScope(params[1]!);
+        if (!scope) {
+          jsonResponse(res, 404, { error: "Scope not found" });
+          return;
+        }
+        const contextId = decodeURIComponent(params[2]!);
+        const evaluations = getEvaluationsByContextDetail(scope.coordinatorStore, contextId, scope.scope_id);
+        jsonResponse(res, 200, { scope_id: scope.scope_id, context_id: contextId, evaluations });
       },
     },
     {

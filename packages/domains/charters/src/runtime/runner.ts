@@ -15,6 +15,7 @@ import type {
 } from "./envelope.js";
 import { validateInvocationEnvelope, validateOutputEnvelope } from "./envelope.js";
 import { validateCharterOutput } from "./validation.js";
+import { resolveSystemPrompt } from "./prompts.js";
 
 export interface CodexCharterRunnerOptions {
   /** OpenAI API key (or compatible service) */
@@ -82,7 +83,7 @@ export class CodexCharterRunner implements CharterRunner {
           body: JSON.stringify({
             model: this.opts.model ?? "gpt-4o-mini",
             messages: [
-              { role: "system", content: this.buildSystemPrompt(envelope) },
+              { role: "system", content: resolveSystemPrompt(envelope) },
               { role: "user", content: this.buildUserPrompt(envelope) },
             ],
             response_format: { type: "json_object" },
@@ -137,31 +138,10 @@ export class CodexCharterRunner implements CharterRunner {
     }
   }
 
-  private buildSystemPrompt(envelope: CharterInvocationEnvelope): string {
-    const tools = envelope.available_tools
-      .map((t) => `- ${t.tool_id}: ${t.description} (read_only=${t.read_only}, timeout=${t.timeout_ms}ms)`)
-      .join("\n") || "(none)";
-
-    return `
-You are a charter agent. Your charter_id is "${envelope.charter_id}" and your role is "${envelope.role}".
-You MUST respond with a single JSON object matching the CharterOutputEnvelope schema.
-
-Rules:
-- output_version must be "2.0"
-- execution_id must be "${envelope.execution_id}"
-- charter_id must be "${envelope.charter_id}"
-- role must be "${envelope.role}"
-- outcome must be one of: complete, clarification_needed, escalation, no_op
-- proposed_actions may only use action types from: ${envelope.allowed_actions.join(", ") || "(none)"}
-- tool_requests may only use tool_ids from: ${envelope.available_tools.map((t) => t.tool_id).join(", ") || "(none)"}
-- summary must be 500 characters or fewer
-- Each rationale must be 1000 characters or fewer
-- Do not include markdown formatting outside the JSON object
-
-Available tools:
-${tools}
-`.trim();
-  }
+  // buildSystemPrompt removed — prompt resolution is now handled by
+  // resolveSystemPrompt() in ./prompts.ts, which supports charter-specific
+  // templates via the PROMPT_REGISTRY. Unknown charter IDs fall back to
+  // the generic template.
 
   private buildUserPrompt(envelope: CharterInvocationEnvelope): string {
     const mat = envelope.context_materialization as Record<string, unknown> | undefined;

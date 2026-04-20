@@ -1,0 +1,13 @@
+{
+  "conversation_id": "conv-support-login-001",
+  "message_id": "msg-login-001",
+  "subject": "Can't log in to my account",
+  "from": { "name": "Alice Customer", "address": "alice@external.com" },
+  "to": [{ "name": "Support", "address": "help@global-maxima.com" }],
+  "body": {
+    "body_kind": "text",
+    "text": "Hi, I've been trying to log in for the last hour but I keep getting an 'invalid credentials' error. I reset my password twice already. Can someone help?\n\n— Alice"
+  },
+  "folder_refs": ["inbox"],
+  "flags": { "is_read": false, "is_draft": false, "is_flagged": false, "has_attachments": false }
+}

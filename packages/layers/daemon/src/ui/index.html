@@ -643,6 +643,22 @@
         e.preventDefault();
         showIntentDetail(a.dataset.intentId);
       }));
+      $$('a[data-evaluation-id]').forEach(a => a.addEventListener('click', (e) => {
+        e.preventDefault();
+        showEvaluationDetail(a.dataset.evaluationId);
+      }));
+      $$('a[data-decision-id]').forEach(a => a.addEventListener('click', (e) => {
+        e.preventDefault();
+        showDecisionDetail(a.dataset.decisionId);
+      }));
+      $$('a[data-execution-id]').forEach(a => a.addEventListener('click', (e) => {
+        e.preventDefault();
+        showExecutionDetail(a.dataset.executionId);
+      }));
+    }
+
+    function renderJson(data) {
+      return `<pre style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:12px;font-size:12px;overflow:auto;max-height:400px;">${esc(JSON.stringify(data, null, 2))}</pre>`;
     }
 
     async function loadWork() {
@@ -1108,7 +1124,10 @@
       detailState = { type: 'context', id: contextId, returnPage: currentPage };
       setLoading();
       try {
-        const { timeline } = await api(`/scopes/${encodeURIComponent(currentScope)}/contexts/${encodeURIComponent(contextId)}/timeline`);
+        const [{ timeline }, { evaluations }] = await Promise.all([
+          api(`/scopes/${encodeURIComponent(currentScope)}/contexts/${encodeURIComponent(contextId)}/timeline`),
+          api(`/scopes/${encodeURIComponent(currentScope)}/contexts/${encodeURIComponent(contextId)}/evaluations`),
+        ]);
         const ctx = timeline.context;
         const revisions = timeline.revisions || [];
         const workItems = timeline.work_items || [];
@@ -1171,6 +1190,54 @@
                 </tbody>
               </table>
             ` : '<div class="empty">No outputs.</div>'}
+          </div>
+          <div class="card">
+            <h3>Evaluations (${esc(evaluations.length)})</h3>
+            ${evaluations.length ? evaluations.map(ev => `
+              <div style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;padding:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                  <span class="mono" style="font-size:13px;"><a class="link" data-evaluation-id="${esc(ev.evaluation_id)}">${esc(ev.evaluation_id)}</a></span>
+                  <span style="font-size:12px;color:var(--text-secondary);">${esc(ev.charter_id)} · ${esc(ev.role)}</span>
+                </div>
+                <div style="font-size:13px;margin-bottom:8px;">${esc(ev.summary)}</div>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--text-secondary);">
+                  <span>Outcome: ${badge(ev.outcome)}</span>
+                  <span>Recommended: ${esc(ev.recommended_action_class || '—')}</span>
+                  <span>Analyzed: ${fmtDate(ev.analyzed_at)}</span>
+                </div>
+                ${ev.proposed_actions && Array.isArray(ev.proposed_actions) && ev.proposed_actions.length ? `
+                  <div style="margin-top:10px;">
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-secondary);margin-bottom:4px;">Proposed Actions</div>
+                    ${ev.proposed_actions.map(pa => `
+                      <div style="background:var(--surface-2);border-radius:4px;padding:8px;margin-bottom:4px;font-size:12px;">
+                        <strong>${esc(pa.action_type || 'unknown')}</strong> · ${esc(pa.authority || 'unknown')}
+                        ${pa.rationale ? `<div style="margin-top:4px;color:var(--text-secondary);">${esc(pa.rationale)}</div>` : ''}
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : ''}
+                ${ev.escalations && Array.isArray(ev.escalations) && ev.escalations.length ? `
+                  <div style="margin-top:10px;">
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--danger);margin-bottom:4px;">Escalations</div>
+                    ${ev.escalations.map(es => `
+                      <div style="background:rgba(248,81,73,0.08);border:1px solid rgba(248,81,73,0.2);border-radius:4px;padding:8px;margin-bottom:4px;font-size:12px;color:var(--danger);">
+                        ${esc(JSON.stringify(es))}
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : ''}
+                ${ev.tool_requests && Array.isArray(ev.tool_requests) && ev.tool_requests.length ? `
+                  <div style="margin-top:10px;">
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--warning);margin-bottom:4px;">Tool Requests</div>
+                    ${ev.tool_requests.map(tr => `
+                      <div style="background:rgba(210,153,34,0.08);border:1px solid rgba(210,153,34,0.2);border-radius:4px;padding:8px;margin-bottom:4px;font-size:12px;">
+                        ${esc(JSON.stringify(tr))}
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : ''}
+              </div>
+            `).join('') : '<div class="empty">No evaluations.</div>'}
           </div>
         `;
         bindDetailLinks();
@@ -1237,12 +1304,11 @@
             <h3>Execution attempts (${esc(executions.length)})</h3>
             ${executions.length ? `
               <table>
-                <thead><tr><th>Attempt ID</th><th>Intent ID</th><th>Status</th><th>Started</th><th>Completed</th></tr></thead>
+                <thead><tr><th>Execution ID</th><th>Status</th><th>Started</th><th>Completed</th></tr></thead>
                 <tbody>
                   ${executions.map(e => `
                     <tr>
-                      <td class="mono truncate">${esc(e.attempt_id)}</td>
-                      <td class="mono truncate">${esc(e.intent_id)}</td>
+                      <td class="mono truncate"><a class="link" data-execution-id="${esc(e.execution_id)}">${esc(e.execution_id)}</a></td>
                       <td>${badge(e.status)}</td>
                       <td>${fmtDate(e.started_at)}</td>
                       <td>${fmtDate(e.completed_at)}</td>
@@ -1260,7 +1326,7 @@
                 <tbody>
                   ${decisions.map(d => `
                     <tr>
-                      <td class="mono truncate">${esc(d.decision_id)}</td>
+                      <td class="mono truncate"><a class="link" data-decision-id="${esc(d.decision_id)}">${esc(d.decision_id)}</a></td>
                       <td class="mono">${esc(d.approved_action)}</td>
                       <td>${fmtDate(d.decided_at)}</td>
                     </tr>
@@ -1272,6 +1338,167 @@
         `;
         bindDetailLinks();
         $("statusText").textContent = `Scope: ${esc(currentScope)} · work item · ${esc(workItemId)}`;
+      } catch (err) {
+        if (err.name !== "AbortError") setError(err);
+      }
+    }
+
+    async function showEvaluationDetail(evaluationId) {
+      detailState = { type: 'evaluation', id: evaluationId, returnPage: currentPage };
+      setLoading();
+      try {
+        const { evaluation } = await api(`/scopes/${encodeURIComponent(currentScope)}/evaluations/${encodeURIComponent(evaluationId)}`);
+        $("content").innerHTML = `
+          <div class="breadcrumb">
+            <button onclick="restoreDetailState()">← Back</button>
+            <span>Evaluation detail</span>
+          </div>
+          <div class="card">
+            <h3>Evaluation</h3>
+            <table>
+              <tbody>
+                <tr><th>ID</th><td class="mono">${esc(evaluation.evaluation_id)}</td></tr>
+                <tr><th>Execution ID</th><td class="mono">${esc(evaluation.execution_id)}</td></tr>
+                <tr><th>Work Item ID</th><td class="mono">${esc(evaluation.work_item_id)}</td></tr>
+                <tr><th>Context ID</th><td class="mono"><a class="link" data-context-id="${esc(evaluation.context_id)}">${esc(evaluation.context_id)}</a></td></tr>
+                <tr><th>Charter</th><td class="mono">${esc(evaluation.charter_id)}</td></tr>
+                <tr><th>Role</th><td>${esc(evaluation.role)}</td></tr>
+                <tr><th>Outcome</th><td>${badge(evaluation.outcome)}</td></tr>
+                <tr><th>Summary</th><td>${esc(evaluation.summary)}</td></tr>
+                <tr><th>Recommended Action</th><td>${esc(evaluation.recommended_action_class || '—')}</td></tr>
+                <tr><th>Analyzed At</th><td>${fmtDate(evaluation.analyzed_at)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card">
+            <h3>Proposed Actions</h3>
+            ${evaluation.proposed_actions && Array.isArray(evaluation.proposed_actions) && evaluation.proposed_actions.length
+              ? evaluation.proposed_actions.map(pa => `
+                <div style="background:var(--surface-2);border-radius:6px;padding:12px;margin-bottom:8px;">
+                  <div style="font-size:13px;font-weight:600;">${esc(pa.action_type || 'unknown')} · ${esc(pa.authority || 'unknown')}</div>
+                  ${pa.rationale ? `<div style="margin-top:6px;font-size:12px;color:var(--text-secondary);">${esc(pa.rationale)}</div>` : ''}
+                  ${pa.payload_json ? `<div style="margin-top:8px;">${renderJson(typeof pa.payload_json === 'string' ? JSON.parse(pa.payload_json) : pa.payload_json)}</div>` : ''}
+                </div>
+              `).join('')
+              : '<div class="empty">No proposed actions.</div>'}
+          </div>
+          <div class="card">
+            <h3>Confidence</h3>
+            ${evaluation.confidence ? renderJson(evaluation.confidence) : '<div class="empty">No confidence data.</div>'}
+          </div>
+          <div class="card">
+            <h3>Classifications</h3>
+            ${evaluation.classifications && Array.isArray(evaluation.classifications) && evaluation.classifications.length
+              ? renderJson(evaluation.classifications)
+              : '<div class="empty">No classifications.</div>'}
+          </div>
+          <div class="card">
+            <h3>Facts</h3>
+            ${evaluation.facts && Array.isArray(evaluation.facts) && evaluation.facts.length
+              ? renderJson(evaluation.facts)
+              : '<div class="empty">No facts.</div>'}
+          </div>
+          <div class="card">
+            <h3>Escalations</h3>
+            ${evaluation.escalations && Array.isArray(evaluation.escalations) && evaluation.escalations.length
+              ? evaluation.escalations.map(es => `
+                <div style="background:rgba(248,81,73,0.08);border:1px solid rgba(248,81,73,0.2);border-radius:6px;padding:12px;margin-bottom:8px;color:var(--danger);font-size:13px;">
+                  ${renderJson(es)}
+                </div>
+              `).join('')
+              : '<div class="empty">No escalations.</div>'}
+          </div>
+          <div class="card">
+            <h3>Tool Requests</h3>
+            ${evaluation.tool_requests && Array.isArray(evaluation.tool_requests) && evaluation.tool_requests.length
+              ? evaluation.tool_requests.map(tr => `
+                <div style="background:rgba(210,153,34,0.08);border:1px solid rgba(210,153,34,0.2);border-radius:6px;padding:12px;margin-bottom:8px;font-size:13px;">
+                  ${renderJson(tr)}
+                </div>
+              `).join('')
+              : '<div class="empty">No tool requests.</div>'}
+          </div>
+        `;
+        bindDetailLinks();
+        $("statusText").textContent = `Scope: ${esc(currentScope)} · evaluation · ${esc(evaluationId)}`;
+      } catch (err) {
+        if (err.name !== "AbortError") setError(err);
+      }
+    }
+
+    async function showDecisionDetail(decisionId) {
+      detailState = { type: 'decision', id: decisionId, returnPage: currentPage };
+      setLoading();
+      try {
+        const { decision } = await api(`/scopes/${encodeURIComponent(currentScope)}/decisions/${encodeURIComponent(decisionId)}`);
+        $("content").innerHTML = `
+          <div class="breadcrumb">
+            <button onclick="restoreDetailState()">← Back</button>
+            <span>Decision detail</span>
+          </div>
+          <div class="card">
+            <h3>Decision</h3>
+            <table>
+              <tbody>
+                <tr><th>ID</th><td class="mono">${esc(decision.decision_id)}</td></tr>
+                <tr><th>Context ID</th><td class="mono"><a class="link" data-context-id="${esc(decision.context_id)}">${esc(decision.context_id)}</a></td></tr>
+                <tr><th>Approved Action</th><td class="mono">${esc(decision.approved_action)}</td></tr>
+                <tr><th>Rationale</th><td>${esc(decision.rationale)}</td></tr>
+                <tr><th>Decided At</th><td>${fmtDate(decision.decided_at)}</td></tr>
+                <tr><th>Outbound ID</th><td class="mono">${esc(decision.outbound_id || '—')}</td></tr>
+                <tr><th>Created By</th><td class="mono">${esc(decision.created_by)}</td></tr>
+                <tr><th>Source Charters</th><td>${esc(decision.source_charter_ids.join(', ') || '—')}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card">
+            <h3>Payload</h3>
+            ${decision.payload ? renderJson(decision.payload) : '<div class="empty">No payload.</div>'}
+          </div>
+        `;
+        bindDetailLinks();
+        $("statusText").textContent = `Scope: ${esc(currentScope)} · decision · ${esc(decisionId)}`;
+      } catch (err) {
+        if (err.name !== "AbortError") setError(err);
+      }
+    }
+
+    async function showExecutionDetail(executionId) {
+      detailState = { type: 'execution', id: executionId, returnPage: currentPage };
+      setLoading();
+      try {
+        const { execution } = await api(`/scopes/${encodeURIComponent(currentScope)}/executions/${encodeURIComponent(executionId)}`);
+        $("content").innerHTML = `
+          <div class="breadcrumb">
+            <button onclick="restoreDetailState()">← Back</button>
+            <span>Execution detail</span>
+          </div>
+          <div class="card">
+            <h3>Execution</h3>
+            <table>
+              <tbody>
+                <tr><th>ID</th><td class="mono">${esc(execution.execution_id)}</td></tr>
+                <tr><th>Work Item ID</th><td class="mono">${esc(execution.work_item_id)}</td></tr>
+                <tr><th>Revision ID</th><td class="mono">${esc(execution.revision_id)}</td></tr>
+                <tr><th>Session ID</th><td class="mono">${esc(execution.session_id || '—')}</td></tr>
+                <tr><th>Status</th><td>${badge(execution.status)}</td></tr>
+                <tr><th>Started At</th><td>${fmtDate(execution.started_at)}</td></tr>
+                <tr><th>Completed At</th><td>${fmtDate(execution.completed_at)}</td></tr>
+                <tr><th>Error</th><td>${esc(execution.error_message || '—')}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card">
+            <h3>Runtime Envelope</h3>
+            ${execution.runtime_envelope ? renderJson(execution.runtime_envelope) : '<div class="empty">No envelope.</div>'}
+          </div>
+          <div class="card">
+            <h3>Outcome</h3>
+            ${execution.outcome ? renderJson(execution.outcome) : '<div class="empty">No outcome.</div>'}
+          </div>
+        `;
+        bindDetailLinks();
+        $("statusText").textContent = `Scope: ${esc(currentScope)} · execution · ${esc(executionId)}`;
       } catch (err) {
         if (err.name !== "AbortError") setError(err);
       }

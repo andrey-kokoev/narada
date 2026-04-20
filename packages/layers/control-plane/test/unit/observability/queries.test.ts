@@ -21,6 +21,10 @@ import {
   getProcessExecutionDetails,
   getIntentLifecycleTransitions,
   getWorkItemAffinityOutcomes,
+  getEvaluationDetail,
+  getDecisionDetail,
+  getExecutionDetail,
+  getEvaluationsByContextDetail,
 } from "../../../src/observability/queries.js";
 import { getMailExecutionDetails } from "../../../src/observability/mailbox.js";
 import type { WorkItem, ExecutionAttempt, ToolCallRecord } from "../../../src/coordinator/types.js";
@@ -1002,6 +1006,155 @@ describe("observability/queries", () => {
       for (let i = 1; i < transitions.length; i++) {
         expect(transitions[i]!.transition_at.localeCompare(transitions[i - 1]!.transition_at)).toBeGreaterThanOrEqual(0);
       }
+    });
+  });
+
+  describe("deep-dive detail queries", () => {
+    it("getEvaluationDetail returns parsed evaluation with JSON fields", () => {
+      const wi = insertWorkItem({ work_item_id: "wi-eval-1" });
+      coordinatorStore.insertExecutionAttempt({
+        execution_id: "exec-eval-1",
+        work_item_id: wi.work_item_id,
+        revision_id: "rev-eval-1",
+        session_id: null,
+        status: "succeeded",
+        started_at: "2024-01-01T00:00:00Z",
+        completed_at: "2024-01-01T00:01:00Z",
+        runtime_envelope_json: "{}",
+        outcome_json: "{}",
+        error_message: null,
+      });
+      coordinatorStore.insertEvaluation({
+        evaluation_id: "eval-1",
+        execution_id: "exec-eval-1",
+        work_item_id: wi.work_item_id,
+        context_id: "conv-1",
+        scope_id: "mb-1",
+        charter_id: "support_steward",
+        role: "primary",
+        output_version: "1",
+        analyzed_at: "2024-01-01T00:01:00Z",
+        outcome: "proposed_action",
+        confidence_json: JSON.stringify({ score: 0.95 }),
+        summary: "Draft reply proposed",
+        classifications_json: JSON.stringify({ spam: false }),
+        facts_json: JSON.stringify(["fact-1"]),
+        escalations_json: JSON.stringify([]),
+        proposed_actions_json: JSON.stringify([{ action: "draft_reply" }]),
+        tool_requests_json: JSON.stringify([]),
+        recommended_action_class: "draft_reply",
+        created_at: "2024-01-01T00:01:00Z",
+      });
+
+      const detail = getEvaluationDetail(coordinatorStore, "eval-1")!;
+      expect(detail.evaluation_id).toBe("eval-1");
+      expect(detail.charter_id).toBe("support_steward");
+      expect(detail.proposed_actions).toEqual([{ action: "draft_reply" }]);
+      expect(detail.confidence).toEqual({ score: 0.95 });
+      expect(detail.classifications).toEqual({ spam: false });
+      expect(detail.facts).toEqual(["fact-1"]);
+      expect(detail.escalations).toEqual([]);
+      expect(detail.tool_requests).toEqual([]);
+    });
+
+    it("getEvaluationDetail returns undefined for missing evaluation", () => {
+      expect(getEvaluationDetail(coordinatorStore, "nonexistent")).toBeUndefined();
+    });
+
+    it("getDecisionDetail returns parsed decision with JSON fields", () => {
+      coordinatorStore.insertDecision({
+        decision_id: "dec-1",
+        context_id: "conv-1",
+        scope_id: "mb-1",
+        source_charter_ids_json: JSON.stringify(["support_steward"]),
+        approved_action: "draft_reply",
+        payload_json: JSON.stringify({ to: "user@example.com", subject: "Re: Help" }),
+        rationale: "User asked for help",
+        decided_at: "2024-01-01T00:02:00Z",
+        outbound_id: null,
+        created_by: "foreman:test/charter:support_steward",
+      });
+
+      const detail = getDecisionDetail(coordinatorStore, "dec-1")!;
+      expect(detail.decision_id).toBe("dec-1");
+      expect(detail.approved_action).toBe("draft_reply");
+      expect(detail.source_charter_ids).toEqual(["support_steward"]);
+      expect(detail.payload).toEqual({ to: "user@example.com", subject: "Re: Help" });
+      expect(detail.rationale).toBe("User asked for help");
+      expect(detail.created_by).toBe("foreman:test/charter:support_steward");
+    });
+
+    it("getDecisionDetail returns undefined for missing decision", () => {
+      expect(getDecisionDetail(coordinatorStore, "nonexistent")).toBeUndefined();
+    });
+
+    it("getExecutionDetail returns parsed execution with JSON fields", () => {
+      const wi = insertWorkItem({ work_item_id: "wi-exec-1" });
+      coordinatorStore.insertExecutionAttempt({
+        execution_id: "exec-1",
+        work_item_id: wi.work_item_id,
+        revision_id: "rev-1",
+        session_id: "session-1",
+        status: "succeeded",
+        started_at: "2024-01-01T00:00:00Z",
+        completed_at: "2024-01-01T00:01:00Z",
+        runtime_envelope_json: JSON.stringify({ messages: [{ id: "msg-1" }] }),
+        outcome_json: JSON.stringify({ action: "draft_reply", payload: {} }),
+        error_message: null,
+      });
+
+      const detail = getExecutionDetail(coordinatorStore, "exec-1")!;
+      expect(detail.execution_id).toBe("exec-1");
+      expect(detail.session_id).toBe("session-1");
+      expect(detail.status).toBe("succeeded");
+      expect(detail.runtime_envelope).toEqual({ messages: [{ id: "msg-1" }] });
+      expect(detail.outcome).toEqual({ action: "draft_reply", payload: {} });
+    });
+
+    it("getExecutionDetail returns undefined for missing execution", () => {
+      expect(getExecutionDetail(coordinatorStore, "nonexistent")).toBeUndefined();
+    });
+
+    it("getEvaluationsByContextDetail returns all evaluations for a context", () => {
+      const wi = insertWorkItem({ work_item_id: "wi-ctx-1" });
+      coordinatorStore.insertExecutionAttempt({
+        execution_id: "exec-ctx-1",
+        work_item_id: wi.work_item_id,
+        revision_id: "rev-ctx-1",
+        session_id: null,
+        status: "succeeded",
+        started_at: "2024-01-01T00:00:00Z",
+        completed_at: "2024-01-01T00:01:00Z",
+        runtime_envelope_json: "{}",
+        outcome_json: "{}",
+        error_message: null,
+      });
+      coordinatorStore.insertEvaluation({
+        evaluation_id: "eval-ctx-1",
+        execution_id: "exec-ctx-1",
+        work_item_id: wi.work_item_id,
+        context_id: "conv-1",
+        scope_id: "mb-1",
+        charter_id: "support_steward",
+        role: "primary",
+        output_version: "1",
+        analyzed_at: "2024-01-01T00:01:00Z",
+        outcome: "proposed_action",
+        confidence_json: "{}",
+        summary: "First",
+        classifications_json: "[]",
+        facts_json: "[]",
+        escalations_json: "[]",
+        proposed_actions_json: "[]",
+        tool_requests_json: "[]",
+        recommended_action_class: null,
+        created_at: "2024-01-01T00:01:00Z",
+      });
+
+      const results = getEvaluationsByContextDetail(coordinatorStore, "conv-1", "mb-1");
+      expect(results.length).toBe(1);
+      expect(results[0]!.evaluation_id).toBe("eval-ctx-1");
+      expect(results[0]!.summary).toBe("First");
     });
   });
 });

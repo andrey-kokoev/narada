@@ -8,7 +8,7 @@
  * It should be injected as a ContextMaterializer where needed.
  */
 
-import { readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { PolicyContext } from "../../foreman/context.js";
 import type { NormalizedMessage } from "../../types/normalized.js";
@@ -17,6 +17,31 @@ import type { ContextMaterializer } from "../envelope.js";
 
 function safeSegment(value: string): string {
   return encodeURIComponent(value);
+}
+
+interface KnowledgeSource {
+  name: string;
+  content: string;
+}
+
+async function loadKnowledgeSources(rootDir: string): Promise<KnowledgeSource[]> {
+  const knowledgeDir = join(rootDir, "knowledge");
+  const sources: KnowledgeSource[] = [];
+  try {
+    const entries = await readdir(knowledgeDir);
+    for (const entry of entries) {
+      if (entry.endsWith(".md")) {
+        const content = await readFile(join(knowledgeDir, entry), "utf-8");
+        sources.push({ name: entry, content });
+      }
+    }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== "ENOENT") {
+      throw error;
+    }
+  }
+  return sources;
 }
 
 async function getThreadMessageIds(rootDir: string, conversationId: string): Promise<string[]> {
@@ -61,7 +86,9 @@ export class MailboxContextMaterializer implements ContextMaterializer {
       return ta.localeCompare(tb);
     });
 
-    return { messages };
+    const knowledgeSources = await loadKnowledgeSources(this.rootDir);
+
+    return { messages, knowledge_sources: knowledgeSources };
   }
 }
 

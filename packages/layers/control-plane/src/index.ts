@@ -413,6 +413,9 @@ export type {
   StaleLeaseRecoveryEvent,
   QuiescenceIndicator,
   AffinityOutcome,
+  EvaluationDetail,
+  DecisionDetail,
+  ExecutionDetail,
 } from "./observability/types.js";
 export type {
   MailExecutionDetail,
@@ -453,6 +456,10 @@ export {
   getActiveLeases,
   getRecentStaleLeaseRecoveries,
   getQuiescenceIndicator,
+  getEvaluationDetail,
+  getDecisionDetail,
+  getExecutionDetail,
+  getEvaluationsByContextDetail,
 } from "./observability/queries.js";
 export {
   getMailExecutionDetails,

@@ -50,3 +50,9 @@ export type {
   RuntimeHooks,
 } from "./runner.js";
 export { CodexCharterRunner } from "./runner.js";
+
+export type { SystemPromptTemplate } from "./prompts.js";
+export {
+  registerPromptTemplate,
+  resolveSystemPrompt,
+} from "./prompts.js";
