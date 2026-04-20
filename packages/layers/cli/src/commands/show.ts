@@ -90,7 +90,7 @@ export async function showCommand(
     if (!scope) {
       return {
         exitCode: ExitCode.INVALID_CONFIG,
-        result: { status: 'error', error: `Scope not found: ${options.scope}` },
+        result: { status: 'error', error: `Operation not found: ${options.scope}` },
       };
     }
   } else {
@@ -178,7 +178,7 @@ async function inspectEntity(
     // Human-readable output
     const lines: string[] = [];
     lines.push(`\n${type.toUpperCase()}: ${id}`);
-    lines.push(`Scope: ${scopeId}`);
+    lines.push(`Operation: ${scopeId}`);
     lines.push('');
 
     if (type === 'evaluation') {

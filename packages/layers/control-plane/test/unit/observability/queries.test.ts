@@ -25,6 +25,13 @@ import {
   getDecisionDetail,
   getExecutionDetail,
   getEvaluationsByContextDetail,
+  getStuckWorkItems,
+  getStuckWorkItemSummary,
+  getStuckOutboundCommands,
+  getStuckOutboundSummary,
+  getRecentOperatorActions,
+  getOperatorActionsForScope,
+  getOperatorActionsForContext,
 } from "../../../src/observability/queries.js";
 import { getMailExecutionDetails } from "../../../src/observability/mailbox.js";
 import type { WorkItem, ExecutionAttempt, ToolCallRecord } from "../../../src/coordinator/types.js";
@@ -1155,6 +1162,424 @@ describe("observability/queries", () => {
       expect(results.length).toBe(1);
       expect(results[0]!.evaluation_id).toBe("eval-ctx-1");
       expect(results[0]!.summary).toBe("First");
+    });
+  });
+
+  describe("stuck work item detection", () => {
+    it("detects stuck_opened when created_at exceeds threshold", () => {
+      const now = "2024-01-02T00:00:00Z";
+      const old = "2024-01-01T00:00:00Z"; // 24 hours ago
+      insertWorkItem({ work_item_id: "wi-old-opened", status: "opened", created_at: old, updated_at: old });
+      insertWorkItem({ work_item_id: "wi-fresh-opened", status: "opened", created_at: now, updated_at: now });
+
+      const result = getStuckWorkItems(coordinatorStore, { opened_max_age_minutes: 60 }, now);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.work_item_id).toBe("wi-old-opened");
+      expect(result[0]!.classification).toBe("stuck_opened");
+    });
+
+    it("detects stuck_leased when updated_at exceeds threshold", () => {
+      const now = "2024-01-02T00:00:00Z";
+      const old = "2024-01-01T00:00:00Z";
+      insertWorkItem({ work_item_id: "wi-old-leased", status: "leased", created_at: old, updated_at: old });
+      insertWorkItem({ work_item_id: "wi-fresh-leased", status: "leased", created_at: old, updated_at: now });
+
+      const result = getStuckWorkItems(coordinatorStore, { leased_max_age_minutes: 60 }, now);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.work_item_id).toBe("wi-old-leased");
+      expect(result[0]!.classification).toBe("stuck_leased");
+    });
+
+    it("detects stuck_executing when updated_at exceeds threshold", () => {
+      const now = "2024-01-02T00:00:00Z";
+      const old = "2024-01-01T00:00:00Z";
+      insertWorkItem({ work_item_id: "wi-old-exec", status: "executing", created_at: old, updated_at: old });
+      insertWorkItem({ work_item_id: "wi-fresh-exec", status: "executing", created_at: old, updated_at: now });
+
+      const result = getStuckWorkItems(coordinatorStore, { executing_max_age_minutes: 60 }, now);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.work_item_id).toBe("wi-old-exec");
+      expect(result[0]!.classification).toBe("stuck_executing");
+    });
+
+    it("detects stuck_retry_exhausted when retry_count >= max_retries and next_retry_at is past", () => {
+      const now = "2024-01-02T00:00:00Z";
+      const past = "2024-01-01T00:00:00Z";
+      const future = "2024-01-03T00:00:00Z";
+      insertWorkItem({
+        work_item_id: "wi-retry-exhausted",
+        status: "failed_retryable",
+        retry_count: 3,
+        next_retry_at: past,
+        created_at: past,
+        updated_at: past,
+      });
+      insertWorkItem({
+        work_item_id: "wi-retry-ok",
+        status: "failed_retryable",
+        retry_count: 1,
+        next_retry_at: past,
+        created_at: past,
+        updated_at: past,
+      });
+      insertWorkItem({
+        work_item_id: "wi-retry-future",
+        status: "failed_retryable",
+        retry_count: 3,
+        next_retry_at: future,
+        created_at: past,
+        updated_at: past,
+      });
+
+      const result = getStuckWorkItems(coordinatorStore, { max_retries: 3 }, now);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.work_item_id).toBe("wi-retry-exhausted");
+      expect(result[0]!.classification).toBe("stuck_retry_exhausted");
+    });
+
+    it("getStuckWorkItemSummary returns counts by classification", () => {
+      const now = "2024-01-02T00:00:00Z";
+      const old = "2024-01-01T00:00:00Z";
+      insertWorkItem({ work_item_id: "wi-a", status: "opened", created_at: old, updated_at: old });
+      insertWorkItem({ work_item_id: "wi-b", status: "opened", created_at: old, updated_at: old });
+      insertWorkItem({ work_item_id: "wi-c", status: "leased", created_at: old, updated_at: old });
+
+      const summary = getStuckWorkItemSummary(coordinatorStore, { opened_max_age_minutes: 60, leased_max_age_minutes: 60 }, now);
+      const opened = summary.find((s) => s.classification === "stuck_opened");
+      const leased = summary.find((s) => s.classification === "stuck_leased");
+      expect(opened?.count).toBe(2);
+      expect(leased?.count).toBe(1);
+    });
+  });
+
+  describe("stuck outbound detection", () => {
+    function insertOutboundWithStatus(
+      outboundId: string,
+      status: import("../../../src/outbound/types.js").OutboundStatus,
+      createdAt: string,
+      transitionAt?: string,
+    ) {
+      outboundStore.createCommand(
+        {
+          outbound_id: outboundId,
+          context_id: "conv-1",
+          scope_id: "mb-1",
+          action_type: "send_reply",
+          status,
+          latest_version: 1,
+          created_at: createdAt,
+          created_by: "foreman:test/charter:support_steward",
+          submitted_at: null,
+          confirmed_at: null,
+          blocked_reason: null,
+          terminal_reason: null,
+          idempotency_key: `key-${outboundId}`,
+        },
+        {
+          outbound_id: outboundId,
+          version: 1,
+          reply_to_message_id: null,
+          to: [],
+          cc: [],
+          bcc: [],
+          subject: "",
+          body_text: "",
+          body_html: "",
+          idempotency_key: `key-${outboundId}`,
+          policy_snapshot_json: "{}",
+          payload_json: "{}",
+          created_at: createdAt,
+          superseded_at: null,
+        },
+      );
+      if (transitionAt && status !== "pending") {
+        outboundStore.appendTransition({
+          outbound_id: outboundId,
+          version: 1,
+          from_status: "pending",
+          to_status: status,
+          reason: "test",
+          transition_at: transitionAt,
+        });
+      }
+    }
+
+    it("detects stuck_pending when created_at exceeds threshold", () => {
+      const now = "2024-01-02T00:00:00Z";
+      const old = "2024-01-01T00:00:00Z";
+      insertOutboundWithStatus("ob-old-pending", "pending", old);
+      insertOutboundWithStatus("ob-fresh-pending", "pending", now);
+
+      const result = getStuckOutboundCommands(outboundStore, { pending_max_age_minutes: 60 }, now);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.outbound_id).toBe("ob-old-pending");
+      expect(result[0]!.classification).toBe("stuck_pending");
+    });
+
+    it("detects stuck_draft_creating when transition exceeds threshold", () => {
+      const now = "2024-01-02T00:00:00Z";
+      const old = "2024-01-01T00:00:00Z";
+      const fresh = "2024-01-01T23:00:00Z";
+      insertOutboundWithStatus("ob-old-draft", "draft_creating", old, old);
+      insertOutboundWithStatus("ob-fresh-draft", "draft_creating", old, fresh);
+
+      const result = getStuckOutboundCommands(outboundStore, { draft_creating_max_age_minutes: 60 }, now);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.outbound_id).toBe("ob-old-draft");
+      expect(result[0]!.classification).toBe("stuck_draft_creating");
+    });
+
+    it("detects stuck_draft_ready when transition exceeds threshold in hours", () => {
+      const now = "2024-01-02T00:00:00Z";
+      const old = "2024-01-01T00:00:00Z";
+      const fresh = "2024-01-01T23:00:00Z";
+      insertOutboundWithStatus("ob-old-ready", "draft_ready", old, old);
+      insertOutboundWithStatus("ob-fresh-ready", "draft_ready", old, fresh);
+
+      const result = getStuckOutboundCommands(outboundStore, { draft_ready_max_age_hours: 2 }, now);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.outbound_id).toBe("ob-old-ready");
+      expect(result[0]!.classification).toBe("stuck_draft_ready");
+    });
+
+    it("detects stuck_sending when transition exceeds threshold", () => {
+      const now = "2024-01-02T00:00:00Z";
+      const old = "2024-01-01T00:00:00Z";
+      const fresh = "2024-01-01T23:00:00Z";
+      insertOutboundWithStatus("ob-old-sending", "sending", old, old);
+      insertOutboundWithStatus("ob-fresh-sending", "sending", old, fresh);
+
+      const result = getStuckOutboundCommands(outboundStore, { sending_max_age_minutes: 60 }, now);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.outbound_id).toBe("ob-old-sending");
+      expect(result[0]!.classification).toBe("stuck_sending");
+    });
+
+    it("getStuckOutboundSummary returns counts by classification", () => {
+      const now = "2024-01-02T00:00:00Z";
+      const old = "2024-01-01T00:00:00Z";
+      insertOutboundWithStatus("ob-a", "pending", old);
+      insertOutboundWithStatus("ob-b", "pending", old);
+      insertOutboundWithStatus("ob-c", "draft_creating", old, old);
+
+      const summary = getStuckOutboundSummary(outboundStore, { pending_max_age_minutes: 60, draft_creating_max_age_minutes: 60 }, now);
+      const pending = summary.find((s) => s.classification === "stuck_pending");
+      const draft = summary.find((s) => s.classification === "stuck_draft_creating");
+      expect(pending?.count).toBe(2);
+      expect(draft?.count).toBe(1);
+    });
+  });
+
+  describe("operator action audit queries", () => {
+    function insertAction(overrides: Partial<import("../../../src/coordinator/types.js").OperatorActionRequest> & { scope_id?: string }): void {
+      const now = new Date().toISOString();
+      const req: import("../../../src/coordinator/types.js").OperatorActionRequest = {
+        request_id: `req-${Math.random().toString(36).slice(2)}`,
+        scope_id: "mb-1",
+        action_type: "trigger_sync",
+        target_id: null,
+        payload_json: null,
+        status: "executed",
+        requested_by: "operator",
+        requested_at: now,
+        executed_at: now,
+        ...overrides,
+      };
+      coordinatorStore.insertOperatorActionRequest(req);
+    }
+
+    it("getRecentOperatorActions returns actions across all scopes ordered by requested_at desc", () => {
+      insertAction({ request_id: "req-a", action_type: "trigger_sync", requested_at: "2024-01-02T00:00:00Z" });
+      insertAction({ request_id: "req-b", action_type: "request_redispatch", requested_at: "2024-01-03T00:00:00Z" });
+      insertAction({ request_id: "req-c", action_type: "rebuild_projections", requested_at: "2024-01-01T00:00:00Z" });
+
+      const actions = getRecentOperatorActions({ db }, 10);
+      expect(actions).toHaveLength(3);
+      expect(actions[0]!.action_id).toBe("req-b");
+      expect(actions[1]!.action_id).toBe("req-a");
+      expect(actions[2]!.action_id).toBe("req-c");
+    });
+
+    it("getOperatorActionsForScope filters by scope_id", () => {
+      insertAction({ request_id: "req-a", scope_id: "mb-1", requested_at: "2024-01-01T00:00:00Z" });
+      insertAction({ request_id: "req-b", scope_id: "mb-2", requested_at: "2024-01-01T00:00:00Z" });
+
+      const actions = getOperatorActionsForScope({ db }, "mb-1", 10);
+      expect(actions).toHaveLength(1);
+      expect(actions[0]!.action_id).toBe("req-a");
+    });
+
+    it("getOperatorActionsForContext includes actions where target_id is the context", () => {
+      insertAction({ request_id: "req-a", action_type: "derive_work", target_id: "conv-1", requested_at: "2024-01-01T00:00:00Z" });
+      insertAction({ request_id: "req-b", action_type: "trigger_sync", requested_at: "2024-01-01T00:00:00Z" });
+
+      const actions = getOperatorActionsForContext({ db }, "conv-1", 10);
+      expect(actions).toHaveLength(1);
+      expect(actions[0]!.action_id).toBe("req-a");
+      expect(actions[0]!.context_id).toBe("conv-1");
+    });
+
+    it("getOperatorActionsForContext includes actions where target_id is a work_item for that context", () => {
+      coordinatorStore.db.prepare(`
+        insert into work_items (work_item_id, context_id, scope_id, opened_for_revision_id, status)
+        values (?, ?, ?, ?, ?)
+      `).run("wi-audit-1", "conv-1", "mb-1", "rev-1", "opened");
+
+      insertAction({ request_id: "req-a", action_type: "retry_work_item", target_id: "wi-audit-1", requested_at: "2024-01-01T00:00:00Z" });
+      insertAction({ request_id: "req-b", action_type: "trigger_sync", requested_at: "2024-01-01T00:00:00Z" });
+
+      const actions = getOperatorActionsForContext({ db }, "conv-1", 10);
+      expect(actions).toHaveLength(1);
+      const retry = actions.find((a) => a.action_id === "req-a");
+      expect(retry).toBeDefined();
+      expect(retry!.work_item_id).toBe("wi-audit-1");
+      expect(retry!.context_id).toBe("conv-1");
+    });
+
+    it("redacts preview_work payloads to summary-only", () => {
+      insertAction({
+        request_id: "req-preview",
+        action_type: "preview_work",
+        target_id: "conv-1",
+        payload_json: JSON.stringify({ contextId: "conv-1", fact_ids: ["f-1", "f-2"], preview_duration_ms: 120, error: "none" }),
+        requested_at: "2024-01-01T00:00:00Z",
+      });
+
+      const actions = getOperatorActionsForScope({ db }, "mb-1", 10);
+      const preview = actions.find((a) => a.action_id === "req-preview");
+      expect(preview).toBeDefined();
+      expect(preview!.payload_summary).not.toContain("f-1");
+      expect(preview!.payload_summary).not.toContain("f-2");
+      const summary = JSON.parse(preview!.payload_summary);
+      expect(summary.scope_id).toBe("mb-1");
+      expect(summary.context_id).toBe("conv-1");
+      expect(summary.fact_count).toBe(2);
+      expect(summary.preview_duration_ms).toBe(120);
+      expect(summary.error).toBe("none");
+    });
+
+    it("redacts snake_case context_id and raw facts content without leakage", () => {
+      insertAction({
+        request_id: "req-snake",
+        action_type: "preview_work",
+        target_id: "conv-2",
+        payload_json: JSON.stringify({
+          context_id: "conv-2",
+          facts: [
+            { fact_id: "f-3", content: "sensitive body text" },
+            { fact_id: "f-4", content: "more sensitive data" },
+          ],
+          preview_duration_ms: 250,
+          error: "timeout",
+        }),
+        requested_at: "2024-01-01T00:00:00Z",
+      });
+
+      const actions = getOperatorActionsForScope({ db }, "mb-1", 10);
+      const preview = actions.find((a) => a.action_id === "req-snake");
+      expect(preview).toBeDefined();
+
+      // Raw fact IDs must not leak
+      expect(preview!.payload_summary).not.toContain("f-3");
+      expect(preview!.payload_summary).not.toContain("f-4");
+      // Raw fact content must not leak
+      expect(preview!.payload_summary).not.toContain("sensitive body text");
+      expect(preview!.payload_summary).not.toContain("more sensitive data");
+
+      const summary = JSON.parse(preview!.payload_summary);
+      expect(summary.scope_id).toBe("mb-1");
+      expect(summary.context_id).toBe("conv-2");
+      expect(summary.fact_count).toBe(2);
+      expect(summary.preview_duration_ms).toBe(250);
+      expect(summary.error).toBe("timeout");
+    });
+
+    it("exposes safe target reference for non-preview actions", () => {
+      insertAction({ request_id: "req-retry", action_type: "retry_work_item", target_id: "wi-1", requested_at: "2024-01-01T00:00:00Z" });
+
+      const actions = getOperatorActionsForScope({ db }, "mb-1", 10);
+      const retry = actions.find((a) => a.action_id === "req-retry");
+      expect(retry).toBeDefined();
+      expect(retry!.payload_summary).toBe("target: wi-1");
+    });
+
+    it("reads requested_by from row", () => {
+      insertAction({ request_id: "req-by", requested_by: "admin", requested_at: "2024-01-01T00:00:00Z" });
+
+      const actions = getRecentOperatorActions({ db }, 10);
+      const action = actions.find((a) => a.action_id === "req-by");
+      expect(action).toBeDefined();
+      expect(action!.actor).toBe("admin");
+    });
+
+    it("defaults actor to operator when requested_by is missing", () => {
+      // Simulate a legacy row by bypassing the typed insert
+      db.prepare(`
+        insert into operator_action_requests (request_id, scope_id, action_type, target_id, payload_json, status, requested_at, executed_at)
+        values (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run("req-legacy", "mb-1", "trigger_sync", null, null, "executed", "2024-01-01T00:00:00Z", "2024-01-01T00:00:00Z");
+
+      const actions = getRecentOperatorActions({ db }, 10);
+      const legacy = actions.find((a) => a.action_id === "req-legacy");
+      expect(legacy).toBeDefined();
+      expect(legacy!.actor).toBe("operator");
+    });
+
+    it("since parameter filters by requested_at", () => {
+      insertAction({ request_id: "req-old", requested_at: "2024-01-01T00:00:00Z" });
+      insertAction({ request_id: "req-new", requested_at: "2024-01-03T00:00:00Z" });
+
+      const actions = getRecentOperatorActions({ db }, 10, "2024-01-02T00:00:00Z");
+      expect(actions).toHaveLength(1);
+      expect(actions[0]!.action_id).toBe("req-new");
+    });
+  });
+
+  describe("control plane snapshot stuck integration", () => {
+    it("buildControlPlaneSnapshot includes stuck work items and outbound commands", () => {
+      const now = "2024-01-02T00:00:00Z";
+      const old = "2024-01-01T00:00:00Z";
+      insertWorkItem({ work_item_id: "wi-stuck", status: "opened", created_at: old, updated_at: old });
+      outboundStore.createCommand(
+        {
+          outbound_id: "ob-stuck",
+          context_id: "conv-1",
+          scope_id: "mb-1",
+          action_type: "send_reply",
+          status: "pending",
+          latest_version: 1,
+          created_at: old,
+          created_by: "test",
+          submitted_at: null,
+          confirmed_at: null,
+          blocked_reason: null,
+          terminal_reason: null,
+          idempotency_key: "key-stuck",
+        },
+        {
+          outbound_id: "ob-stuck",
+          version: 1,
+          reply_to_message_id: null,
+          to: [],
+          cc: [],
+          bcc: [],
+          subject: "",
+          body_text: "",
+          body_html: "",
+          idempotency_key: "key-stuck",
+          policy_snapshot_json: "{}",
+          payload_json: "{}",
+          created_at: old,
+          superseded_at: null,
+        },
+      );
+
+      const snapshot = buildControlPlaneSnapshot(coordinatorStore, outboundStore, "mb-1");
+      expect(snapshot.stuck).toBeDefined();
+      expect(snapshot.stuck.work_items.length).toBeGreaterThan(0);
+      expect(snapshot.stuck.work_items[0]!.classification).toBe("stuck_opened");
+      expect(snapshot.stuck.outbound_handoffs.length).toBeGreaterThan(0);
+      expect(snapshot.stuck.outbound_handoffs[0]!.classification).toBe("stuck_pending");
     });
   });
 });

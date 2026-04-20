@@ -149,6 +149,33 @@ const ExecutorConfigSchema = z.object({
   options: z.record(z.unknown()).optional(),
 });
 
+// Stuck-detection threshold schemas
+const StuckWorkThresholdsSchema = z.object({
+  opened_max_age_minutes: z.number().int().min(1).default(60),
+  leased_max_age_minutes: z.number().int().min(1).default(120),
+  executing_max_age_minutes: z.number().int().min(1).default(30),
+  max_retries: z.number().int().min(0).default(3),
+});
+
+const StuckOutboundThresholdsSchema = z.object({
+  pending_max_age_minutes: z.number().int().min(1).default(15),
+  draft_creating_max_age_minutes: z.number().int().min(1).default(10),
+  draft_ready_max_age_hours: z.number().int().min(1).default(24),
+  sending_max_age_minutes: z.number().int().min(1).default(5),
+});
+
+const OperationalTrustConfigSchema = z.object({
+  stuck_work_thresholds: StuckWorkThresholdsSchema.optional(),
+  stuck_outbound_thresholds: StuckOutboundThresholdsSchema.optional(),
+});
+
+// Health threshold configuration schema (Task 234)
+const HealthConfigSchema = z.object({
+  max_staleness_ms: z.number().int().min(1000).optional(),
+  max_consecutive_errors: z.number().int().min(1).optional(),
+  max_drain_ms: z.number().int().min(1000).optional(),
+});
+
 // Scope configuration schema
 const ScopeConfigSchema = z.object({
   scope_id: z.string().min(1, 'Scope ID is required'),
@@ -164,6 +191,7 @@ const ScopeConfigSchema = z.object({
   graph: GraphConfigSchema.optional(),
   lifecycle: LifecycleConfigSchema.optional().default({}),
   webhook: WebhookConfigSchema.optional(),
+  operational_trust: OperationalTrustConfigSchema.optional(),
 });
 
 // Main configuration schema
@@ -182,6 +210,8 @@ export const ConfigSchema = z.object({
   runtime: RuntimeConfigSchema.optional().default({}),
   charter: CharterRuntimeConfigSchema.optional().default({}),
   policy: RuntimePolicySchema.optional().default({ allowed_actions: ['no_action'] }),
+  operational_trust: OperationalTrustConfigSchema.optional(),
+  health: HealthConfigSchema.optional(),
 }).refine((data) => {
   // Require either scopes array or legacy single-scope fields
   const hasScopes = Array.isArray(data.scopes) && data.scopes.length > 0;

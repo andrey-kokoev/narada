@@ -140,7 +140,7 @@ pnpm build
 # Type check (tsc --noEmit)
 pnpm typecheck
 
-# Fast local verification (typecheck + fast package tests, ~8 sec)
+# Fast local verification (typecheck + build + fast packages, ~15 sec)
 pnpm verify
 
 # Unit tests across all packages
@@ -148,6 +148,9 @@ pnpm test:unit
 
 # Integration tests only
 pnpm test:integration
+
+# Focused test with telemetry recording
+pnpm test:focused "pnpm --filter <pkg> exec vitest run <path>"
 
 # Package-scoped tests
 pnpm test:control-plane
@@ -199,27 +202,6 @@ Both commands rebuild control-plane state from stored facts, but they are distin
 - Agent traces (non-authoritative, rebuildable via projection rebuild)
 
 ---
-
-## Agent Verification Policy
-
-When verifying changes, follow the **escalation ladder** — never jump to the most expensive command first.
-
-### Verification Ladder
-
-| Step | Command | When to use | Approx. time |
-|------|---------|-------------|--------------|
-| 1 | `pnpm verify` | Default after any local change | ~8 sec |
-| 2 | `pnpm test:control-plane` | Change touches control-plane internals | ~5 sec |
-| 3 | `pnpm test:daemon` | Change touches daemon or integration surface | ~90 sec |
-| 4 | `ALLOW_FULL_TESTS=1 pnpm test:full` | Final CI-like check or user explicitly asks | ~2 min |
-
-### Rules
-
-1. **Do not run the full suite unless the user explicitly asks.** `pnpm test` at the root is intentionally blocked.
-2. **Start with `pnpm verify`.** It runs typecheck + fast package tests (kernel, charters, ops-kit, cli). This catches most issues.
-3. **Escalate only when needed.** If a change is in the daemon, run `pnpm test:daemon`. If it's in the control-plane, run `pnpm test:control-plane`.
-4. **Full suite requires `ALLOW_FULL_TESTS=1`.** This guard prevents accidental expensive runs.
-5. **Package-scoped is preferred.** Use `pnpm --filter <pkg> test` when the change is isolated to one package.
 
 **Package Management**: Uses [Changesets](https://github.com/changesets/changesets) for versioning.
 
@@ -301,7 +283,7 @@ narada/
 9. **Scheduler owns leases and mechanical lifecycle**: Only `SqliteScheduler` may insert/release `work_item_leases` and transition a work item into `leased` or `executing`. The scheduler may mark execution attempts as crashed/abandoned and release leases, but it does **not** semantically classify work-item failure status.
 10. **IntentHandoff owns intent creation**: Only `IntentHandoff.admitIntentFromDecision()` may create `intent` rows. It is called from within the foreman's atomic decision transaction.
 11. **OutboundHandoff owns command creation**: All `outbound_commands` + `outbound_versions` must be created inside `OutboundHandoff.createCommandFromDecision()` (atomic with decision insert).
-12. **Outbound workers own mutation**: Only the outbound worker layer may call Graph API to create drafts / send messages / move items.
+12. **Outbound workers own mutation**: Only the outbound worker layer may call the source adapter to create drafts / send messages / move items.
 13. **Charter runtime is read-only sandbox**: It may only read the `CharterInvocationEnvelope` and produce a `CharterOutputEnvelope`. It must NOT write to coordinator or outbound stores directly.
 14. **Work Object Authority**: A `work_item` is the terminal generalized schedulable unit (kernel fields: `context_id`, `scope_id`); at most one non-terminal work item per context may be `leased` or `executing`
 15. **Lease Uniqueness**: A work item has at most one unreleased, unexpired lease at any time
@@ -310,11 +292,11 @@ narada/
 18. **Authority Class Enforcement**: Every tool binding and charter capability must declare an authority class. Preflight rejects configs that bind a charter or tool to an authority class it is not allowed to use. Domain packs may only declare `derive` and `propose`. Only Narada runtime-authorized components may declare `claim`, `execute`, `resolve`, or `confirm`. `admin` requires explicit operator/admin posture.
 
 ### Observation / UI
-18. **Observation is read-only projection**: `layers/control-plane/src/observability/` must never contain writes (`.run(`, `.exec(`, direct mutation calls). It derives its data exclusively from durable stores. Inspection requires no authority class.
-19. **Control surface is explicitly separated**: Operator actions are mounted under `/control/scopes/:scope_id/actions`. The observation namespace (`/scopes/...`) is strictly GET-only.
-20. **UI cannot become hidden authority**: The operator console (`layers/daemon/src/ui/`) may only mutate through the audited, safelisted `executeOperatorAction()` path in `operator-actions.ts`. Every action is logged to `operator_action_requests`. Direct store mutations from the observation API are forbidden.
-21. **Observation API uses view types**: `ObservationApiScope` exposes only `*View` / `*OperatorView` store interfaces, removing named mutation methods at the type level.
-22. **All UI data sources are classified**: Every observation type is marked as `authoritative` (mirrors one durable row), `derived` (computed from multiple sources), or `decorative` (presentational only).
+19. **Observation is read-only projection**: `layers/control-plane/src/observability/` must never contain writes (`.run(`, `.exec(`, direct mutation calls). It derives its data exclusively from durable stores. Inspection requires no authority class.
+20. **Control surface is explicitly separated**: Operator actions are mounted under `/control/scopes/:scope_id/actions`. The observation namespace (`/scopes/...`) is strictly GET-only.
+21. **UI cannot become hidden authority**: The operator console (`layers/daemon/src/ui/`) may only mutate through the audited, safelisted `executeOperatorAction()` path in `operator-actions.ts`. Every action is logged to `operator_action_requests`. Direct store mutations from the observation API are forbidden.
+22. **Observation API uses view types**: `ObservationApiScope` exposes only `*View` / `*OperatorView` store interfaces, removing named mutation methods at the type level.
+23. **All UI data sources are classified**: Every observation type is marked as `authoritative` (mirrors one durable row), `derived` (computed from multiple sources), or `decorative` (presentational only).
 
 ### Do Not Regress These Boundaries (Task 085)
 23. **No mailbox leakage into generic observation**: `conversation_id` and `mailbox_id` must not appear in generic observability types/queries. They are allowed only inside mail-specific types (`MailExecutionDetail`, `MailboxVerticalView`) and mail-specific query functions (`getMailboxVerticalView`, `getMailExecutionDetails`).
@@ -339,7 +321,7 @@ narada/
 36. **Advisory signals are overrideable**: Any component that consumes an advisory signal must have a sensible fallback when the signal is absent, contradictory, or stale.
 37. **Advisory signals have no lifecycle side effect**: Emitting or consuming an advisory signal must not transition the lifecycle state of a durable object (fact, work item, intent, execution).
 38. **Continuation affinity is advisory**: `WorkItem` may carry `continuation_affinity` fields (`preferred_session_id`, `affinity_strength`, `affinity_expires_at`), but the scheduler must treat them as a reordering hint, not a mandatory assignment. Affinity must not bypass leasing, override governance, or block runnable work indefinitely.
-38. **Advisory signals make no truth claim**: An advisory signal must never be presented as evidence that something is true; it only expresses preference, probability, or attention-worthiness.
+39. **Advisory signals make no truth claim**: An advisory signal must never be presented as evidence that something is true; it only expresses preference, probability, or attention-worthiness.
 
 ---
 
@@ -487,26 +469,49 @@ When proposing changes that touch public types, docs, or package surfaces, verif
 
 **Do not run the full test suite unless the user explicitly asks for it.**
 
-When verifying changes, follow this escalation ladder:
+When verifying changes, follow this escalation ladder — never jump to the most expensive command first.
+
+### Verification Ladder
 
 | Step | Command | When to use | Approx. time |
 |------|---------|-------------|--------------|
-| 1 | `pnpm verify` | Default after any local change | ~8 sec |
-| 2 | `pnpm test:control-plane` | Change touches control-plane internals | ~5 sec |
-| 3 | `pnpm test:daemon` | Change touches daemon or integration surface | ~90 sec |
-| 4 | `ALLOW_FULL_TESTS=1 pnpm test:full` | Final CI-like check or user explicitly asks | ~2 min |
+| 1 | `pnpm verify` | Default after any local change | ~15 sec |
+| 2 | `pnpm --filter <pkg> typecheck` | Change is isolated to one package | 3–10 sec |
+| 3 | `pnpm test:focused "<cmd>"` | Run specific test file(s) with telemetry | varies |
+| 4 | `pnpm test:<pkg>` | Broader package tests when justified | 5–90 sec |
+| 5 | `ALLOW_FULL_TESTS=1 pnpm test:full` | Final CI-like check or user explicitly asks | ~2 min |
 
 ### Rules
 
 1. **Do not run the full suite unless the user explicitly asks.** `pnpm test` at the root is intentionally blocked.
-2. **Start with `pnpm verify`.** It runs typecheck + fast package tests (kernel, charters, ops-kit, cli). This catches most issues.
-3. **Escalate only when needed.** If a change is in the daemon, run `pnpm test:daemon`. If it's in the control-plane, run `pnpm test:control-plane`.
-4. **Full suite requires `ALLOW_FULL_TESTS=1`.** This guard prevents accidental expensive runs.
-5. **Package-scoped is preferred.** Use `pnpm --filter <pkg> test` when the change is isolated to one package.
+2. **Start with `pnpm verify`.** It runs task-file guard + typecheck + build + fast package tests (charters, ops-kit). This catches most cross-cutting issues and is reliable.
+3. **Prefer focused commands for package-local changes.** Use `pnpm --filter <pkg> typecheck` and `pnpm test:focused` for the behavior you changed. This is faster than broad suites and avoids known teardown noise.
+4. **Escalate only when needed.** Run package-scoped broader tests (`pnpm test:control-plane`, `pnpm test:daemon`) only when the change justifies it.
+5. **Full suite requires `ALLOW_FULL_TESTS=1`.** This guard prevents accidental expensive runs.
+
+### Focused Test Commands
+
+For control-plane and daemon work, broad unit-test suites are slow and can crash during teardown. Run individual test files instead:
+
+```bash
+# Example: run a single control-plane test file with telemetry
+pnpm test:focused "pnpm --filter @narada2/control-plane exec vitest run test/unit/ids/event-id.test.ts"
+
+# Example: run a specific daemon test file (preferred over broad suite)
+pnpm test:focused "pnpm --dir packages/layers/daemon exec vitest run test/unit/observation-server.test.ts"
+
+# Example: run all charters tests with telemetry
+pnpm test:focused "pnpm --filter @narada2/charters test"
+
+# Example: focused typecheck for one package
+pnpm --filter @narada2/control-plane typecheck
+```
+
+`pnpm test:focused` records duration, exit status, and classification to `.ai/metrics/test-runtimes.json` just like the broad wrapper commands.
 
 ### Test Runtime Observability
 
-All test entrypoints record timing and classification data to `.ai/metrics/test-runtimes.json`. Inspect this file to see:
+All test entrypoints (including `pnpm test:focused`) record timing and classification data to `.ai/metrics/test-runtimes.json`. Inspect this file to see:
 
 - Which commands are being run and how long they take
 - Per-step duration breakdowns
@@ -536,6 +541,7 @@ The full suite and control-plane unit tests can produce a **harmless V8 fatal er
 **This is not a product regression.** All tests have already passed when the crash occurs. The runner scripts classify this as `known-teardown-noise` **only when the captured output contains evidence that the test suite completed successfully** (the Vitest `Test Files  N passed (N)` summary line). Without that evidence, the crash is conservatively classified as `infrastructure-failure` so that genuine runner problems are not silently softened into harmless noise.
 
 **Mitigation in place:**
+- **Avoid broad suites**: Prefer focused single-file tests via `pnpm test:focused` for control-plane work.
 - **Classification (primary)**: Runner scripts detect exit code 133 and V8 fatal signatures. They classify as `known-teardown-noise` only when the captured output shows the Vitest all-passed summary. Otherwise the crash is reported as `infrastructure-failure`.
 - **Best-effort lifecycle helper**: `packages/layers/control-plane/test/db-lifecycle.ts` provides `createTestDb()` and `closeAllTestDatabases()`. `test/setup.ts` calls `closeAllTestDatabases()` in `afterAll`. However, most unit tests still use raw `new Database(":memory:")`; broad adoption of `createTestDb()` has not happened. The helper is available for new and refactored tests.
 
@@ -546,6 +552,18 @@ The full suite and control-plane unit tests can produce a **harmless V8 fatal er
 ## Task File Policy (Hard Rule)
 
 Files in `.ai/tasks/*.md` are **durable task artifacts**, not execution-log variants. The original task file is the single canonical source of truth for a task.
+
+Reusable task contracts live in `.ai/task-contracts/`:
+
+- `.ai/task-contracts/agent-task-execution.md` applies to task execution unless a task explicitly overrides it.
+- `.ai/task-contracts/chapter-planning.md` applies to chapter-planning tasks in addition to the execution contract.
+- `.ai/task-contracts/question-escalation.md` tells agents when to stop and ask the architect/user instead of making arbitrary semantic, authority, safety, private-data, or product decisions.
+
+### Governance Feedback
+
+Agent feedback about the task-governed development system itself (ambiguous contracts, verification friction, task-DAG blocking, or suggested rule improvements) belongs in `.ai/feedback/governance.md`. This is not escalation — governance feedback is appended after the task completes, while escalation blocks the task and is recorded in the task file. See the feedback file for format and rules.
+
+> **USC lift follow-up**: This governance-feedback pattern should later be generalized and lifted into `narada.usc` as a constructor protocol sibling to question escalation. See Task 239 for the escalation-protocol USC lift.
 
 ### Forbidden
 

@@ -70,7 +70,7 @@ export async function selectCommand(
   if (!scope) {
     return {
       exitCode: ExitCode.INVALID_CONFIG,
-      result: { status: 'error', error: 'No scopes configured' },
+      result: { status: 'error', error: 'No operations configured' },
     };
   }
 
@@ -131,7 +131,7 @@ async function selectForScope(
 
     fmt.message(`Selected ${facts.length} facts`, 'success');
     fmt.section('Selector');
-    fmt.kv('Scope', scopeId);
+    fmt.kv('Operation', scopeId);
     if (selector.contextIds) fmt.kv('Context IDs', selector.contextIds.join(', '));
     if (selector.since) fmt.kv('Since', selector.since);
     if (selector.until) fmt.kv('Until', selector.until);

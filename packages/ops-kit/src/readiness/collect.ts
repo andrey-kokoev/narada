@@ -230,17 +230,48 @@ export function preflight(options: PreflightOptions): ReadinessReport {
       remediation: undefined,
     });
   } else {
-    // Graph credentials check (global, not scope-specific)
-    const hasTenant = !!process.env.GRAPH_TENANT_ID?.trim();
-    const hasClient = !!process.env.GRAPH_CLIENT_ID?.trim();
-    const hasSecret = !!process.env.GRAPH_CLIENT_SECRET?.trim();
+    // Graph credentials check — env vars, then scope.graph, then graph source
+    const envTenant = process.env.GRAPH_TENANT_ID?.trim();
+    const envClient = process.env.GRAPH_CLIENT_ID?.trim();
+    const envSecret = process.env.GRAPH_CLIENT_SECRET?.trim();
+
+    const graphSource = options.scope?.sources.find((s) => s.type === "graph");
+    const legacyGraph = options.scope?.graph;
+
+    const sourceTenant = graphSource?.tenant_id?.trim();
+    const sourceClient = graphSource?.client_id?.trim();
+    const sourceSecret = graphSource?.client_secret?.trim();
+
+    const legacyTenant = legacyGraph?.tenant_id?.trim();
+    const legacyClient = legacyGraph?.client_id?.trim();
+    const legacySecret = legacyGraph?.client_secret?.trim();
+
+    const hasTenant = !!(envTenant || sourceTenant || legacyTenant);
+    const hasClient = !!(envClient || sourceClient || legacyClient);
+    const hasSecret = !!(envSecret || sourceSecret || legacySecret);
     const graphReady = hasTenant && hasClient && hasSecret;
+
+    const checkedSources: string[] = [];
+    if (envTenant || envClient || envSecret) checkedSources.push("env vars");
+    if (graphSource) checkedSources.push("sources[]");
+    if (legacyGraph) checkedSources.push("scope.graph (legacy)");
+    if (checkedSources.length === 0) checkedSources.push("env vars (default)");
+
+    const missing: string[] = [];
+    if (!hasTenant) missing.push("tenant_id");
+    if (!hasClient) missing.push("client_id");
+    if (!hasSecret) missing.push("client_secret");
+
     pushCheck(checks, {
       category: "env_var",
       name: "graph-credentials",
       status: graphReady ? "pass" : "fail",
-      detail: "Microsoft Graph API credentials (GRAPH_TENANT_ID, GRAPH_CLIENT_ID, GRAPH_CLIENT_SECRET)",
-      remediation: graphReady ? undefined : "Fill .env from .env.example with Graph API credentials",
+      detail: graphReady
+        ? `Microsoft Graph API credentials present (${checkedSources.join(", ")})`
+        : `Microsoft Graph API credentials missing: ${missing.join(", ")} (checked ${checkedSources.join(", ")})`,
+      remediation: graphReady
+        ? undefined
+        : "Set GRAPH_TENANT_ID, GRAPH_CLIENT_ID, GRAPH_CLIENT_SECRET env vars, or add them to the graph source in config",
     });
   }
 

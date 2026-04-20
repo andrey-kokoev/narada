@@ -41,7 +41,7 @@ export interface OutboundStore {
     status: OutboundStatus,
     updates?: Partial<Pick<
       OutboundCommand,
-      "latest_version" | "blocked_reason" | "terminal_reason" | "submitted_at" | "confirmed_at"
+      "latest_version" | "blocked_reason" | "terminal_reason" | "submitted_at" | "confirmed_at" | "reviewed_at" | "reviewer_notes" | "external_reference"
     >>,
   ): void;
   fetchNextEligible(scope_id?: string): Array<{ command: OutboundCommand; version: OutboundVersion }>;
@@ -92,6 +92,9 @@ function rowToCommand(row: Record<string, unknown>): OutboundCommand {
     blocked_reason: row.blocked_reason ? String(row.blocked_reason) : null,
     terminal_reason: row.terminal_reason ? String(row.terminal_reason) : null,
     idempotency_key: String(row.idempotency_key),
+    reviewed_at: row.reviewed_at ? String(row.reviewed_at) : null,
+    reviewer_notes: row.reviewer_notes ? String(row.reviewer_notes) : null,
+    external_reference: row.external_reference ? String(row.external_reference) : null,
   };
 }
 
@@ -160,6 +163,14 @@ export class SqliteOutboundStore implements OutboundStore {
       this.db.prepare(`drop view if exists outbound_handoffs`).run();
     }
 
+    // Early-return: if there's no legacy table to migrate from, initSchema() will
+    // create the neutral table with the full column set. This avoids a redundant
+    // create-table transaction on every fresh or already-migrated database.
+    const commandsType = this.db.prepare(`select type from sqlite_master where name = 'outbound_commands'`).get() as { type: string } | undefined;
+    if (commandsType?.type !== 'table') {
+      return;
+    }
+
     // Ensure the neutral table exists before attempting migration
     this.db.prepare(`
       create table if not exists outbound_handoffs (
@@ -179,31 +190,32 @@ export class SqliteOutboundStore implements OutboundStore {
       )
     `).run();
 
-    // Migrate data from old base table to new base table if old table still exists
-    const commandsType = this.db.prepare(`select type from sqlite_master where name = 'outbound_commands'`).get() as { type: string } | undefined;
-    if (commandsType?.type === 'table') {
-      this.db.prepare(`
-        insert or ignore into outbound_handoffs (
-          outbound_id, context_id, scope_id, action_type, status, latest_version,
-          created_at, created_by, submitted_at, confirmed_at, blocked_reason,
-          terminal_reason, idempotency_key
-        )
-        select
-          outbound_id, conversation_id as context_id, mailbox_id as scope_id,
-          action_type, status, latest_version, created_at, created_by,
-          submitted_at, confirmed_at, blocked_reason, terminal_reason,
-          idempotency_key
-        from outbound_commands
-      `).run();
+    // Migrate data from old base table to new base table
+    this.db.prepare(`
+      insert or ignore into outbound_handoffs (
+        outbound_id, context_id, scope_id, action_type, status, latest_version,
+        created_at, created_by, submitted_at, confirmed_at, blocked_reason,
+        terminal_reason, idempotency_key
+      )
+      select
+        outbound_id, conversation_id as context_id, mailbox_id as scope_id,
+        action_type, status, latest_version, created_at, created_by,
+        submitted_at, confirmed_at, blocked_reason, terminal_reason,
+        idempotency_key
+      from outbound_commands
+    `).run();
 
-      this.db.prepare(`drop table if exists outbound_commands`).run();
-    }
+    this.db.prepare(`drop table if exists outbound_commands`).run();
   }
 
   initSchema(): void {
     this.migrateOutboundCommandsToHandoffs();
 
+    // Wrap all unconditional schema creation in a single transaction to avoid
+    // fsync overhead from multiple implicit transactions.
     this.db.exec(`
+      begin;
+
       create table if not exists outbound_handoffs (
         outbound_id text primary key,
         context_id text not null,
@@ -217,7 +229,10 @@ export class SqliteOutboundStore implements OutboundStore {
         confirmed_at text,
         blocked_reason text,
         terminal_reason text,
-        idempotency_key text not null unique
+        idempotency_key text not null unique,
+        reviewed_at text,
+        reviewer_notes text,
+        external_reference text
       );
 
       create index if not exists idx_outbound_handoffs_status
@@ -306,7 +321,25 @@ export class SqliteOutboundStore implements OutboundStore {
 
       create index if not exists idx_outbound_transitions_transition_at
         on outbound_transitions(transition_at);
+
+      commit;
     `);
+
+    // Task 238: migrate existing tables that lack disposition columns.
+    // Kept outside the main transaction because ALTER TABLE is not allowed
+    // inside a transaction in some SQLite builds, and each add requires
+    // inspection of the current schema.
+    const columns = this.db.prepare(`pragma table_info(outbound_handoffs)`).all() as Array<{ name: string }>;
+    const columnNames = new Set(columns.map((c) => c.name));
+    if (!columnNames.has("reviewed_at")) {
+      this.db.exec(`alter table outbound_handoffs add column reviewed_at text`);
+    }
+    if (!columnNames.has("reviewer_notes")) {
+      this.db.exec(`alter table outbound_handoffs add column reviewer_notes text`);
+    }
+    if (!columnNames.has("external_reference")) {
+      this.db.exec(`alter table outbound_handoffs add column external_reference text`);
+    }
   }
 
   createCommand(command: OutboundCommand, version: OutboundVersion): void {
@@ -468,7 +501,7 @@ export class SqliteOutboundStore implements OutboundStore {
     status: OutboundStatus,
     updates?: Partial<Pick<
       OutboundCommand,
-      "latest_version" | "blocked_reason" | "terminal_reason" | "submitted_at" | "confirmed_at"
+      "latest_version" | "blocked_reason" | "terminal_reason" | "submitted_at" | "confirmed_at" | "reviewed_at" | "reviewer_notes" | "external_reference"
     >>,
   ): void {
     const fields: string[] = ["status = ?"];
@@ -493,6 +526,18 @@ export class SqliteOutboundStore implements OutboundStore {
     if (updates?.confirmed_at !== undefined) {
       fields.push("confirmed_at = ?");
       values.push(updates.confirmed_at);
+    }
+    if (updates?.reviewed_at !== undefined) {
+      fields.push("reviewed_at = ?");
+      values.push(updates.reviewed_at);
+    }
+    if (updates?.reviewer_notes !== undefined) {
+      fields.push("reviewer_notes = ?");
+      values.push(updates.reviewer_notes);
+    }
+    if (updates?.external_reference !== undefined) {
+      fields.push("external_reference = ?");
+      values.push(updates.external_reference);
     }
 
     values.push(outbound_id);

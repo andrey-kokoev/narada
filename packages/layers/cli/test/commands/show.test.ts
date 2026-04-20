@@ -334,7 +334,7 @@ describe('show command', () => {
     expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
     expect(result.result).toMatchObject({
       status: 'error',
-      error: 'Scope not found: nonexistent-scope',
+      error: 'Operation not found: nonexistent-scope',
     });
   });
 
@@ -375,7 +375,7 @@ describe('show command', () => {
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     const formatted = (result.result as { _formatted: string })._formatted;
     expect(formatted).toContain('EVALUATION: eval-1');
-    expect(formatted).toContain('Scope: test@example.com');
+    expect(formatted).toContain('Operation: test@example.com');
     expect(formatted).toContain('Charter:        support_steward');
     expect(formatted).toContain('Proposed Actions');
     expect(formatted).toContain('Confidence');

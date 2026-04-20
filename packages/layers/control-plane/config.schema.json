@@ -456,6 +456,64 @@
               "enabled"
             ],
             "additionalProperties": false
+          },
+          "operational_trust": {
+            "type": "object",
+            "properties": {
+              "stuck_work_thresholds": {
+                "type": "object",
+                "properties": {
+                  "opened_max_age_minutes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 60
+                  },
+                  "leased_max_age_minutes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 120
+                  },
+                  "executing_max_age_minutes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 30
+                  },
+                  "max_retries": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "default": 3
+                  }
+                },
+                "additionalProperties": false
+              },
+              "stuck_outbound_thresholds": {
+                "type": "object",
+                "properties": {
+                  "pending_max_age_minutes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 15
+                  },
+                  "draft_creating_max_age_minutes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 10
+                  },
+                  "draft_ready_max_age_hours": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 24
+                  },
+                  "sending_max_age_minutes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 5
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
           }
         },
         "required": [
@@ -842,6 +900,82 @@
           "no_action"
         ]
       }
+    },
+    "operational_trust": {
+      "type": "object",
+      "properties": {
+        "stuck_work_thresholds": {
+          "type": "object",
+          "properties": {
+            "opened_max_age_minutes": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 60
+            },
+            "leased_max_age_minutes": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 120
+            },
+            "executing_max_age_minutes": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 30
+            },
+            "max_retries": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 3
+            }
+          },
+          "additionalProperties": false
+        },
+        "stuck_outbound_thresholds": {
+          "type": "object",
+          "properties": {
+            "pending_max_age_minutes": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 15
+            },
+            "draft_creating_max_age_minutes": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 10
+            },
+            "draft_ready_max_age_hours": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 24
+            },
+            "sending_max_age_minutes": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 5
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "health": {
+      "type": "object",
+      "properties": {
+        "max_staleness_ms": {
+          "type": "integer",
+          "minimum": 1000
+        },
+        "max_consecutive_errors": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_drain_ms": {
+          "type": "integer",
+          "minimum": 1000
+        }
+      },
+      "additionalProperties": false
     }
   },
   "required": [

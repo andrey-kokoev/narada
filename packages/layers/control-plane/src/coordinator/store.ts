@@ -166,6 +166,7 @@ function rowToOperatorActionRequest(row: Record<string, unknown>): OperatorActio
     target_id: row.target_id ? String(row.target_id) : null,
     payload_json: row.payload_json ? String(row.payload_json) : null,
     status: String(row.status) as OperatorActionRequest["status"],
+    requested_by: row.requested_by ? String(row.requested_by) : "operator",
     requested_at: String(row.requested_at),
     executed_at: row.executed_at ? String(row.executed_at) : null,
   };
@@ -427,6 +428,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
         target_id text,
         payload_json text,
         status text not null default 'pending',
+        requested_by text not null default 'operator',
         requested_at text not null default (datetime('now')),
         executed_at text
       );
@@ -438,6 +440,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     this.migrateAgentSessionsSchema();
     this.migrateWorkItemsContextJson();
     this.migrateWorkItemsAffinity();
+    this.migrateOperatorActionRequestsSchema();
   }
 
   private migrateAgentSessionsSchema(): void {
@@ -484,6 +487,14 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     }
     if (!names.has('affinity_expires_at')) {
       this.db.prepare(`alter table work_items add column affinity_expires_at text`).run();
+    }
+  }
+
+  private migrateOperatorActionRequestsSchema(): void {
+    const columns = this.db.prepare(`pragma table_info(operator_action_requests)`).all() as Array<{ name: string }>;
+    const names = new Set(columns.map((c) => c.name));
+    if (!names.has('requested_by')) {
+      this.db.prepare(`alter table operator_action_requests add column requested_by text not null default 'operator'`).run();
     }
   }
 
@@ -1103,8 +1114,8 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     this.db.prepare(`
       insert into operator_action_requests (
         request_id, scope_id, action_type, target_id, payload_json,
-        status, requested_at, executed_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?)
+        status, requested_by, requested_at, executed_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       request.request_id,
       request.scope_id,
@@ -1112,6 +1123,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
       request.target_id,
       request.payload_json,
       request.status,
+      request.requested_by,
       request.requested_at,
       request.executed_at,
     );
@@ -1131,6 +1143,12 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     this.db.prepare(`
       update operator_action_requests set status = 'executed', executed_at = ? where request_id = ?
     `).run(executedAt ?? new Date().toISOString(), requestId);
+  }
+
+  markOperatorActionRequestRejected(requestId: string, rejectedAt?: string): void {
+    this.db.prepare(`
+      update operator_action_requests set status = 'rejected', executed_at = ? where request_id = ?
+    `).run(rejectedAt ?? new Date().toISOString(), requestId);
   }
 
   close(): void {

@@ -6,72 +6,86 @@
 
 ## Daily Operation
 
-### 1. Check Sync Health
+### Morning Check
+
+```bash
+systemctl status narada-daemon
+narada status -c ./ops/config.json
+```
+
+Look for:
+- Daemon is `active (running)`
+- `health: healthy` — last sync within health threshold (see Task 234)
+- `quiescence.is_quiescent: true` — no pending work (or `opened_count` > 0 if new mail arrived)
+- No `failed_retryable` or `failed_terminal` work items
+
+### Review Stuck Items
+
+After Task 235, check the stuck-work section:
+
+```bash
+narada status -c ./ops/config.json --verbose
+```
+
+Look for:
+- Work items stuck in `opened` or `leased` beyond expected durations
+- Outbound commands stuck in `draft_creating` or `submitted`
+
+### Review Audit Log
+
+After Task 236, inspect operator actions:
+
+```bash
+narada audit -c ./ops/config.json
+```
+
+Verify:
+- All recent operator actions are expected
+- No unauthorized `request_redispatch` or `reject_draft` actions
+
+### Review Health
+
+Check the health file or readiness endpoint (after Task 234):
+
+```bash
+cat ./ops/.health.json
+curl http://localhost:8080/ready
+```
+
+Look for:
+- `status: healthy`
+- `consecutiveErrors` below threshold
+- `syncFresh: true`
+
+### Evening Check
+
+Before planned maintenance, confirm quiescence:
 
 ```bash
 narada status -c ./ops/config.json
 ```
 
-Or via the daemon observation API:
+Ensure no active work items (`leased` or `executing`) before stopping the daemon. This minimizes drain time during the maintenance window.
+
+---
+
+## Restart-on-Failure Policy
+
+The systemd unit (`docs/systemd/narada-daemon.service`) specifies `Restart=on-failure`.
+
+| Condition | Auto-restart? | Notes |
+|-----------|---------------|-------|
+| Non-zero exit code | Yes | After `RestartSec=5` |
+| Uncaught exception | Yes | Process exits non-zero |
+| Clean shutdown (`SIGTERM`) | **No** | Operator explicitly stopped the service |
+| `kill -9` (`SIGKILL`) | Yes | Exit code non-zero |
+
+Check restart count:
 ```bash
-curl http://localhost:8080/scopes/help@global-maxima.com/overview
+systemctl status narada-daemon
 ```
 
-Look for:
-- `health: healthy` — last sync within 24 hours
-- `quiescence.is_quiescent: true` — no pending work (or `opened_count` > 0 if new mail arrived)
-- No `failed_retryable` or `failed_terminal` work items
-
-### 2. Review Active Work Items
-
-```bash
-curl http://localhost:8080/scopes/help@global-maxima.com/work-items
-```
-
-Or inspect via CLI:
-```bash
-narada status -c ./ops/config.json --verbose
-```
-
-### 3. Inspect Charter Proposals
-
-After a work item is resolved, inspect its evaluation:
-
-```bash
-curl http://localhost:8080/scopes/help@global-maxima.com/evaluations/<evaluation-id>
-```
-
-Or via CLI (after Task 231):
-```bash
-narada show evaluation <evaluation-id> -c ./ops/config.json -s help@global-maxima.com
-```
-
-This reveals:
-- `proposed_actions` — what the charter wanted to do
-- `confidence` — how certain the charter was
-- `classifications` — how the charter categorized the message
-- `escalations` — any escalations flagged
-
-### 4. Inspect Foreman Decisions
-
-```bash
-narada show decision <decision-id> -c ./ops/config.json -s help@global-maxima.com
-```
-
-Reveals:
-- `approved_action` — what the foreman approved
-- `rationale` — why the foreman made this decision
-- `payload` — the actual draft/content payload
-
-### 5. Inspect Execution Envelopes
-
-```bash
-narada show execution <execution-id> -c ./ops/config.json -s help@global-maxima.com
-```
-
-Reveals:
-- `runtime_envelope` — exactly what context the charter saw
-- `outcome` — exactly what the charter produced
+A high restart count indicates a persistent fault (corrupted DB, invalid config, auth failure). Investigate logs rather than letting systemd loop indefinitely.
 
 ---
 
@@ -183,9 +197,34 @@ narada status -c ./ops/config.json --verbose
 
 ---
 
+## Rehearsed Failure Scenarios
+
+> **Note**: These are manual rehearsals to be performed after Tasks 234–236 are complete.
+
+Perform these rehearsals in a non-production environment before relying on the system in production.
+
+- [ ] **Kill daemon mid-execution** (`kill -9 <pid>`), restart, verify stale lease recovery.
+  - Expected: Work items return to `opened` or `failed_retryable` on restart.
+- [ ] **Delete `coordinator.db`**, run `narada recover`, verify state is rebuilt.
+  - Expected: `narada status` shows recovered work items and contexts.
+- [ ] **Corrupt `cursor.json`** (insert invalid token), restart, verify full sync occurs.
+  - Expected: First sync after restart performs a full read.
+- [ ] **Stop daemon during active sync**, verify no data loss on restart.
+  - Expected: Facts already stored are not re-applied; sync resumes from cursor.
+- [ ] **Trigger `request_redispatch` action**, verify audit log records it.
+  - Expected: `narada audit` shows the operator action request.
+
+---
+
 ## First-Time Setup
 
-### 1. Declare the Operation
+### 1. Initialize the Repository
+
+```bash
+narada init-repo ./ops
+```
+
+### 2. Declare the Operation
 
 ```bash
 npx @narada2/ops-kit want-mailbox help@global-maxima.com \
@@ -209,7 +248,7 @@ Or manually edit `config.json`:
 }
 ```
 
-### 2. Add Graph Credentials
+### 3. Set Credentials
 
 Environment variables (recommended for first run):
 ```bash
@@ -219,46 +258,67 @@ export GRAPH_CLIENT_SECRET="your-client-secret"
 export GRAPH_ACCESS_TOKEN="your-access-token"
 ```
 
-### 3. Scaffold Directories
+Or use secure storage references in `config.json` (see `AGENTS.md` § Secret Resolution).
+
+### 4. Run Preflight
+
+```bash
+narada preflight help@global-maxima.com -c ./ops/config.json
+```
+
+Verifies Graph API connectivity, credential validity, and charter runtime configuration.
+
+### 5. Scaffold Directories
 
 ```bash
 npx @narada2/ops-kit setup -c ./ops/config.json
 ```
 
-### 4. Dry-Run Sync
+### 6. Dry-Run Sync
 
 ```bash
 narada sync -c ./ops/config.json --dry-run
 ```
 
-### 5. Initial Sync
+### 7. Initial Sync
 
 ```bash
 narada sync -c ./ops/config.json
 ```
 
-### 6. Start Daemon for Continuous Operation
+### 8. Install Systemd Unit
 
 ```bash
-narada daemon -c ./ops/config.json
+sudo useradd -r -s /bin/false narada
+sudo mkdir -p /var/lib/narada /run/narada /etc/narada
+sudo chown -R narada:narada /var/lib/narada /run/narada
+
+sudo cp /path/to/narada-daemon /usr/bin/narada-daemon
+sudo chmod +x /usr/bin/narada-daemon
+
+sudo cp docs/systemd/narada-daemon.service /etc/systemd/system/
+sudo systemctl daemon-reload
 ```
 
-Or run once for testing:
+### 9. Enable and Start the Daemon
+
 ```bash
-narada daemon -c ./ops/config.json --once
+sudo systemctl enable --now narada-daemon
 ```
 
-### 7. Verify First Work Item
+### 10. Verify
 
-After the first sync + dispatch cycle:
 ```bash
+systemctl status narada-daemon
 narada status -c ./ops/config.json --verbose
 ```
 
 Look for:
+- Daemon `active (running)`
 - Work items opened for new conversations
 - Evaluations created after charter runs
 - Decisions with `approved_action` or `pending_approval`
+- Daemon UI accessible at `http://localhost:8080`
 
 ---
 

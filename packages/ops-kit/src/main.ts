@@ -20,12 +20,18 @@ program.command("want-mailbox")
   .option("--primary-charter <charter>")
   .option("--secondary-charters <charters>")
   .option("--posture <preset>")
+  .option("--graph-user-id <id>", "Graph API user ID (defaults to mailbox ID)")
+  .option("--folders <list>", "Comma-separated folder list (defaults to inbox)", "inbox")
+  .option("--data-root-dir <path>", "Data root directory for this operation")
   .action((mailboxId, opts) => {
     const result = wantMailbox(mailboxId, {
       configPath: opts.config,
       primaryCharter: opts.primaryCharter,
       secondaryCharters: opts.secondaryCharters ? String(opts.secondaryCharters).split(",") : undefined,
       posture: opts.posture,
+      graphUserId: opts.graphUserId,
+      folders: opts.folders ? String(opts.folders).split(",") : undefined,
+      dataRootDir: opts.dataRootDir,
     });
     console.log(result.summary);
   });

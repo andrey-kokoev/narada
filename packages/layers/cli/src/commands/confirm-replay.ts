@@ -78,7 +78,7 @@ export async function confirmReplayCommand(
       exitCode: ExitCode.INVALID_CONFIG,
       result: {
         status: 'error',
-        error: options.scope ? `Scope not found: ${options.scope}` : 'No scopes configured',
+        error: options.scope ? `Operation not found: ${options.scope}` : 'No operations configured',
       },
     };
   }

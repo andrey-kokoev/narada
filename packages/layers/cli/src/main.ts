@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import { syncCommand } from './commands/sync.js';
 import { integrityCommand } from './commands/integrity.js';
 import { rebuildViewsCommand } from './commands/rebuild-views.js';
@@ -20,6 +20,17 @@ import { confirmReplayCommand } from './commands/confirm-replay.js';
 import { selectCommand } from './commands/select.js';
 import { recoverCommand } from './commands/recover.js';
 import { showCommand } from './commands/show.js';
+import { auditCommand } from './commands/audit.js';
+import { doctorCommand } from './commands/doctor.js';
+import { rejectDraftCommand } from './commands/reject-draft.js';
+import { markReviewedCommand } from './commands/mark-reviewed.js';
+import { handledExternallyCommand } from './commands/handled-externally.js';
+import { taskClaimCommand } from './commands/task-claim.js';
+import { taskReleaseCommand } from './commands/task-release.js';
+import { taskReviewCommand } from './commands/task-review.js';
+import { taskAllocateCommand } from './commands/task-allocate.js';
+import { taskDeriveFromFindingCommand } from './commands/task-derive-from-finding.js';
+import { taskLintCommand } from './commands/task-lint.js';
 import { wrapCommand } from './lib/command-wrapper.js';
 import {
   wantMailbox,
@@ -70,7 +81,7 @@ program
   .option('-c, --config <path>', 'Path to config file', './config.json')
   .option('-v, --verbose', 'Enable verbose output', false)
   .option('--dry-run', 'Show what would be done without making changes', false)
-  .option('-m, --mailbox <id>', 'Sync only a specific mailbox (multi-mailbox config)')
+  .option('-m, --mailbox <id>', 'Operation ID (mailbox ID for mail operations) to sync')
   .action(wrapCommand('sync', (opts, ctx) =>
     syncCommand({ ...opts, format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto' }, ctx)));
 
@@ -95,7 +106,7 @@ program
   .description('Rebuild all derived projections (views, search index, and other non-authoritative surfaces)')
   .option('-c, --config <path>', 'Path to config file', './config.json')
   .option('-v, --verbose', 'Enable verbose output', false)
-  .option('-m, --mailbox <id>', 'Rebuild only a specific mailbox (multi-mailbox config)')
+  .option('-m, --mailbox <id>', 'Operation ID (mailbox ID for mail operations) to rebuild')
   .action(wrapCommand('rebuild-projections', (opts, ctx) =>
     rebuildProjectionsCommand({ ...opts, format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto' }, ctx)));
 
@@ -163,7 +174,8 @@ program
   .argument('<id>', 'Entity ID')
   .option('-c, --config <path>', 'Path to config file', './config.json')
   .option('-v, --verbose', 'Enable verbose output', false)
-  .option('-s, --scope <id>', 'Scope ID (mailbox ID) to inspect')
+  .option('-o, --operation <id>', 'Operation ID')
+  .addOption(new Option('-s, --scope <id>', 'Deprecated alias').hideHelp())
   .action(wrapCommand('show', (opts, ctx) =>
     showCommand({
       ...opts,
@@ -171,6 +183,145 @@ program
       type: opts.type as 'evaluation' | 'decision' | 'execution',
       id: opts.id as string,
     }, ctx)));
+
+program
+  .command('audit [operation-id]')
+  .description('Show operator action audit log for an operation')
+  .option('-c, --config <path>', 'Path to config file', './config.json')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .option('--context-id <id>', 'Filter by context ID')
+  .option('--limit <n>', 'Maximum number of actions to return', '50')
+  .option('--since <timestamp>', 'Only include actions at or after this ISO timestamp')
+  .action(wrapCommand('audit', (opts, ctx) =>
+    auditCommand({
+      ...opts,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      scope: (opts.operationId || opts.scopeId) as string | undefined,
+      contextId: opts.contextId as string | undefined,
+      limit: opts.limit ? Number(opts.limit) : undefined,
+      since: opts.since as string | undefined,
+    }, ctx)));
+
+// Task governance commands
+const taskCmd = program
+  .command('task')
+  .description('Task governance operators (claim, release, list)');
+
+taskCmd
+  .command('claim <task-number>')
+  .description('Claim a task for an agent')
+  .requiredOption('--agent <id>', 'Agent ID from roster')
+  .option('--reason <text>', 'Claim justification')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (taskNumber: string, opts: Record<string, unknown>) => {
+    const result = await taskClaimCommand({
+      taskNumber,
+      agent: opts.agent as string,
+      reason: opts.reason as string | undefined,
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Claim failed');
+      process.exit(result.exitCode);
+    }
+    console.log(result.result);
+  });
+
+taskCmd
+  .command('release <task-number>')
+  .description('Release a claimed task')
+  .requiredOption('--reason <reason>', 'Release reason: completed, abandoned, superseded, transferred, budget_exhausted')
+  .option('--continuation <path>', 'Path to continuation packet JSON (required for budget_exhausted)')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (taskNumber: string, opts: Record<string, unknown>) => {
+    const result = await taskReleaseCommand({
+      taskNumber,
+      reason: opts.reason as 'completed' | 'abandoned' | 'superseded' | 'transferred' | 'budget_exhausted',
+      continuation: opts.continuation as string | undefined,
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Release failed');
+      process.exit(result.exitCode);
+    }
+    console.log(result.result);
+  });
+
+taskCmd
+  .command('review <task-number>')
+  .description('Review a completed task')
+  .requiredOption('--agent <id>', 'Reviewer agent ID from roster')
+  .requiredOption('--verdict <verdict>', 'Review verdict: accepted, accepted_with_notes, rejected')
+  .option('--findings <json>', 'JSON array of findings')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (taskNumber: string, opts: Record<string, unknown>) => {
+    const result = await taskReviewCommand({
+      taskNumber,
+      agent: opts.agent as string,
+      verdict: opts.verdict as 'accepted' | 'accepted_with_notes' | 'rejected',
+      findings: opts.findings as string | undefined,
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Review failed');
+      process.exit(result.exitCode);
+    }
+    console.log(result.result);
+  });
+
+taskCmd
+  .command('allocate')
+  .description('Allocate the next task number atomically')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await taskAllocateCommand({
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Allocate failed');
+      process.exit(result.exitCode);
+    }
+    console.log(result.result);
+  });
+
+taskCmd
+  .command('derive-from-finding <finding-id>')
+  .description('Derive a corrective task from a review finding')
+  .requiredOption('--review <review-id>', 'Review ID containing the finding')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (findingId: string, opts: Record<string, unknown>) => {
+    const result = await taskDeriveFromFindingCommand({
+      findingId,
+      review: opts.review as string,
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Derive failed');
+      process.exit(result.exitCode);
+    }
+    console.log(result.result);
+  });
+
+taskCmd
+  .command('lint')
+  .description('Lint task files for structural issues (pure tool)')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await taskLintCommand({
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Lint found issues');
+      process.exit(result.exitCode);
+    }
+    console.log(result.result);
+  });
 
 // Backup commands
 program
@@ -247,7 +398,8 @@ program
   .description('Derive work from stored facts without requiring a fresh inbound event')
   .option('-c, --config <path>', 'Path to config file', './config.json')
   .option('-v, --verbose', 'Enable verbose output', false)
-  .option('-s, --scope <id>', 'Scope ID (mailbox ID) to derive work for')
+  .option('-o, --operation <id>', 'Operation ID')
+  .addOption(new Option('-s, --scope <id>', 'Deprecated alias').hideHelp())
   .option('--context-id <id>', 'Derive work for a specific context (conversation/thread)')
   .option('--since <timestamp>', 'Only consider facts created at or after this ISO timestamp')
   .option('--fact-ids <ids>', 'Comma-separated list of specific fact IDs to replay')
@@ -265,7 +417,8 @@ program
   .description('Preview what a charter would propose for stored facts without opening work or creating intents')
   .option('-c, --config <path>', 'Path to config file', './config.json')
   .option('-v, --verbose', 'Enable verbose output', false)
-  .option('-s, --scope <id>', 'Scope ID (mailbox ID) to preview work for')
+  .option('-o, --operation <id>', 'Operation ID')
+  .addOption(new Option('-s, --scope <id>', 'Deprecated alias').hideHelp())
   .option('--context-id <id>', 'Preview work for a specific context (conversation/thread)')
   .option('--since <timestamp>', 'Only consider facts created at or after this ISO timestamp')
   .option('--fact-ids <ids>', 'Comma-separated list of specific fact IDs to preview')
@@ -285,7 +438,8 @@ program
   .description('Replay confirmation for unconfirmed or ambiguous executions without re-performing effects')
   .option('-c, --config <path>', 'Path to config file', './config.json')
   .option('-v, --verbose', 'Enable verbose output', false)
-  .option('-s, --scope <id>', 'Scope ID to bound replay (mail family only)')
+  .option('-o, --operation <id>', 'Operation ID')
+  .addOption(new Option('-s, --scope <id>', 'Deprecated alias').hideHelp())
   .option('--intent-ids <ids>', 'Comma-separated intent IDs to replay')
   .option('--outbound-ids <ids>', 'Comma-separated outbound IDs to replay (mail family)')
   .option('--limit <n>', 'Maximum items to process', '50')
@@ -303,7 +457,8 @@ program
   .description('Recover control-plane state from stored facts after coordinator loss')
   .option('-c, --config <path>', 'Path to config file', './config.json')
   .option('-v, --verbose', 'Enable verbose output', false)
-  .option('-s, --scope <id>', 'Scope ID to recover')
+  .option('-o, --operation <id>', 'Operation ID')
+  .addOption(new Option('-s, --scope <id>', 'Deprecated alias').hideHelp())
   .option('--context-id <id>', 'Recover a specific context')
   .option('--since <timestamp>', 'Only consider facts created at or after this ISO timestamp')
   .option('--fact-ids <ids>', 'Comma-separated list of specific fact IDs')
@@ -319,11 +474,57 @@ program
     }, ctx)));
 
 program
-  .command('select')
-  .description('Select facts from the fact store for a scope')
+  .command('reject-draft')
+  .description('Reject a draft-ready outbound command')
+  .argument('<outbound-id>', 'Outbound command ID to reject')
   .option('-c, --config <path>', 'Path to config file', './config.json')
   .option('-v, --verbose', 'Enable verbose output', false)
-  .option('-s, --scope <id>', 'Scope ID to select facts from')
+  .option('--rationale <text>', 'Operator rationale for rejection')
+  .action(wrapCommand('reject-draft', (opts, ctx) =>
+    rejectDraftCommand({
+      ...opts,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      outboundId: opts.outboundId as string,
+      rationale: opts.rationale as string | undefined,
+    }, ctx)));
+
+program
+  .command('mark-reviewed')
+  .description('Mark a draft-ready outbound command as reviewed')
+  .argument('<outbound-id>', 'Outbound command ID to mark reviewed')
+  .option('-c, --config <path>', 'Path to config file', './config.json')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .option('--notes <text>', 'Reviewer notes')
+  .action(wrapCommand('mark-reviewed', (opts, ctx) =>
+    markReviewedCommand({
+      ...opts,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      outboundId: opts.outboundId as string,
+      notes: opts.notes as string | undefined,
+    }, ctx)));
+
+program
+  .command('handled-externally')
+  .description('Record that a draft was handled outside Narada')
+  .argument('<outbound-id>', 'Outbound command ID')
+  .requiredOption('--ref <reference>', 'External reference (ticket ID, thread URL)')
+  .option('-c, --config <path>', 'Path to config file', './config.json')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .action(wrapCommand('handled-externally', (opts, ctx) =>
+    handledExternallyCommand({
+      ...opts,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      outboundId: opts.outboundId as string,
+      ref: opts.ref as string,
+    }, ctx)));
+
+program
+  .command('select')
+  .description('Select facts from the fact store for an operation')
+  .option('-c, --config <path>', 'Path to config file', './config.json')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .option('-o, --operation <id>', 'Operation ID')
+  .addOption(new Option('-s, --scope <id>', 'Deprecated alias').hideHelp())
   .option('--context-id <id>', 'Filter by a specific context (conversation/thread)')
   .option('--since <timestamp>', 'Only include facts created at or after this ISO timestamp')
   .option('--until <timestamp>', 'Only include facts created at or before this ISO timestamp')
@@ -334,7 +535,7 @@ program
     selectCommand({
       ...opts,
       format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-      scope: opts.scope as string | undefined,
+      scope: (opts.operation || opts.scope) as string | undefined,
       contextId: opts.contextId as string | undefined,
       since: opts.since as string | undefined,
       until: opts.until as string | undefined,
@@ -369,6 +570,9 @@ program
   .option('--primary-charter <charter>')
   .option('--secondary-charters <charters>')
   .option('--posture <preset>')
+  .option('--graph-user-id <id>', 'Graph API user ID (defaults to mailbox ID)')
+  .option('--folders <list>', 'Comma-separated folder list (defaults to inbox)', 'inbox')
+  .option('--data-root-dir <path>', 'Data root directory for this operation')
   .description('Declare a mailbox operation')
   .action((mailboxId, opts) => {
     const result = wantMailbox(mailboxId, {
@@ -376,6 +580,9 @@ program
       primaryCharter: opts.primaryCharter,
       secondaryCharters: opts.secondaryCharters ? String(opts.secondaryCharters).split(',') : undefined,
       posture: opts.posture,
+      graphUserId: opts.graphUserId,
+      folders: opts.folders ? String(opts.folders).split(',') : undefined,
+      dataRootDir: opts.dataRootDir,
     });
     console.log(result.summary);
   });

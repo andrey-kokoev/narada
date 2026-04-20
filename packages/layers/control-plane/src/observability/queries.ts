@@ -38,6 +38,12 @@ import type {
   ScopeOverview,
   OverviewFailureSummary,
   AffinityOutcome,
+  StuckWorkItem,
+  StuckWorkItemClassification,
+  StuckOutboundCommand,
+  StuckOutboundClassification,
+  StuckItemCounts,
+  OperatorActionSummary,
 } from "./types.js";
 import type { PolicyContext } from "../foreman/context.js";
 import {
@@ -122,6 +128,9 @@ function rowToOutboundSummary(row: Record<string, unknown>): OutboundHandoffSumm
     confirmed_at: row.confirmed_at ? String(row.confirmed_at) : null,
     terminal_reason: row.terminal_reason ? String(row.terminal_reason) : null,
     idempotency_key: String(row.idempotency_key),
+    reviewed_at: row.reviewed_at ? String(row.reviewed_at) : null,
+    reviewer_notes: row.reviewer_notes ? String(row.reviewer_notes) : null,
+    external_reference: row.external_reference ? String(row.external_reference) : null,
   };
 }
 
@@ -262,12 +271,65 @@ export function getRecentOutboundCommands(
          submitted_at,
          confirmed_at,
          terminal_reason,
-         idempotency_key
+         idempotency_key,
+         reviewed_at,
+         reviewer_notes,
+         external_reference
        from outbound_handoffs
        order by created_at desc
        limit ?`,
     )
     .all(limit) as Record<string, unknown>[];
+  return rows.map(rowToOutboundSummary);
+}
+
+export function getOutboundCommandsByStatus(
+  outboundStore: OutboundStoreView,
+  status: OutboundHandoffSummary["status"],
+  scopeId?: string,
+  limit = 50,
+): OutboundHandoffSummary[] {
+  const sql = scopeId
+    ? `select
+         outbound_id,
+         context_id,
+         scope_id,
+         action_type,
+         status,
+         latest_version,
+         created_at,
+         submitted_at,
+         confirmed_at,
+         terminal_reason,
+         idempotency_key,
+         reviewed_at,
+         reviewer_notes,
+         external_reference
+       from outbound_handoffs
+       where status = ? and scope_id = ?
+       order by created_at desc
+       limit ?`
+    : `select
+         outbound_id,
+         context_id,
+         scope_id,
+         action_type,
+         status,
+         latest_version,
+         created_at,
+         submitted_at,
+         confirmed_at,
+         terminal_reason,
+         idempotency_key,
+         reviewed_at,
+         reviewer_notes,
+         external_reference
+       from outbound_handoffs
+       where status = ?
+       order by created_at desc
+       limit ?`;
+  const params = scopeId ? [status, scopeId, limit] : [status, limit];
+  const rows = outboundStore.db.prepare(sql).all(...params) as Record<string, unknown>[];
   return rows.map(rowToOutboundSummary);
 }
 
@@ -322,6 +384,8 @@ export function buildScopeDispatchSummary(
   outboundStore: OutboundStoreView,
   scopeId: string,
 ): ScopeDispatchSummary {
+  const DB_ACTIVITY_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours — documented Task 234 default
+
   const active = store.db
     .prepare(`select count(*) as c from work_items where scope_id = ? and status = 'opened'`)
     .get(scopeId) as { c: number };
@@ -342,6 +406,11 @@ export function buildScopeDispatchSummary(
       `select count(*) as c from outbound_handoffs where scope_id = ? and status in ('pending', 'draft_creating', 'draft_ready')`,
     )
     .get(scopeId) as { c: number };
+  const failedOutbound = outboundStore.db
+    .prepare(
+      `select count(*) as c from outbound_handoffs where scope_id = ? and status in ('failed_terminal', 'blocked_policy')`,
+    )
+    .get(scopeId) as { c: number };
   const recentDecisions = store.db
     .prepare(
       `select count(*) as c from foreman_decisions where scope_id = ? and decided_at >= datetime('now', '-24 hours')`,
@@ -354,6 +423,10 @@ export function buildScopeDispatchSummary(
     )
     .get(scopeId) as { last_sync: string | null };
 
+  const dbActive = lastSync.last_sync
+    ? Date.now() - new Date(lastSync.last_sync).getTime() < DB_ACTIVITY_THRESHOLD_MS
+    : false;
+
   return {
     scope_id: scopeId,
     last_sync_at: lastSync.last_sync,
@@ -364,6 +437,12 @@ export function buildScopeDispatchSummary(
     failed_terminal_work_items: failedTerminal.c,
     pending_outbound_handoffs: pendingOutbound.c,
     recent_decisions_count: recentDecisions.c,
+    readiness: {
+      dispatch_ready: dbActive,
+      outbound_healthy: failedOutbound.c === 0,
+      workers_registered: true, // placeholder; daemon fills this in from registry
+      db_active: dbActive,
+    },
   };
 }
 
@@ -428,6 +507,245 @@ export function getRecentStaleLeaseRecoveries(
     runner_id: String(row.runner_id),
     recovered_at: String(row.recovered_at),
     reason: String(row.reason),
+  }));
+}
+
+/** Operational-trust stuck-detection thresholds.
+ *  All values are explicit — detection does not derive thresholds from
+ *  runtime lease duration or charter timeout, to avoid surprise on config change.
+ */
+export interface StuckWorkThresholds {
+  opened_max_age_minutes: number;
+  leased_max_age_minutes: number;
+  executing_max_age_minutes: number;
+  max_retries: number;
+}
+
+export interface StuckOutboundThresholds {
+  pending_max_age_minutes: number;
+  draft_creating_max_age_minutes: number;
+  draft_ready_max_age_hours: number;
+  sending_max_age_minutes: number;
+}
+
+export const DEFAULT_STUCK_WORK_THRESHOLDS: StuckWorkThresholds = {
+  opened_max_age_minutes: 60,
+  leased_max_age_minutes: 120,
+  executing_max_age_minutes: 30,
+  max_retries: 3,
+};
+
+export const DEFAULT_STUCK_OUTBOUND_THRESHOLDS: StuckOutboundThresholds = {
+  pending_max_age_minutes: 15,
+  draft_creating_max_age_minutes: 10,
+  draft_ready_max_age_hours: 24,
+  sending_max_age_minutes: 5,
+};
+
+function minutesAgo(minutes: number, now: string): string {
+  const d = new Date(now);
+  d.setMinutes(d.getMinutes() - minutes);
+  return d.toISOString();
+}
+
+function hoursAgo(hours: number, now: string): string {
+  const d = new Date(now);
+  d.setHours(d.getHours() - hours);
+  return d.toISOString();
+}
+
+/** Detect work items that have been stagnant beyond operational thresholds.
+ *  Computation is on-demand; no transient state is written.
+ */
+export function getStuckWorkItems(
+  store: CoordinatorStoreView,
+  thresholds: Partial<StuckWorkThresholds> = {},
+  now = new Date().toISOString(),
+): StuckWorkItem[] {
+  const t = { ...DEFAULT_STUCK_WORK_THRESHOLDS, ...thresholds };
+  const openedCutoff = minutesAgo(t.opened_max_age_minutes, now);
+  const leasedCutoff = minutesAgo(t.leased_max_age_minutes, now);
+  const executingCutoff = minutesAgo(t.executing_max_age_minutes, now);
+
+  const sql = `
+    select
+      wi.*,
+      case
+        when wi.status = 'opened' and wi.created_at < ? then 'stuck_opened'
+        when wi.status = 'leased' and wi.updated_at < ? then 'stuck_leased'
+        when wi.status = 'executing' and wi.updated_at < ? then 'stuck_executing'
+        when wi.status = 'failed_retryable' and wi.retry_count >= ? and (wi.next_retry_at is null or wi.next_retry_at < ?) then 'stuck_retry_exhausted'
+        else null
+      end as classification,
+      case
+        when wi.status = 'opened' then wi.created_at
+        when wi.status = 'leased' then wi.updated_at
+        when wi.status = 'executing' then wi.updated_at
+        when wi.status = 'failed_retryable' then wi.next_retry_at
+        else wi.updated_at
+      end as status_since
+    from work_items wi
+    where wi.status in ('opened', 'leased', 'executing', 'failed_retryable')
+      and (
+        (wi.status = 'opened' and wi.created_at < ?)
+        or (wi.status = 'leased' and wi.updated_at < ?)
+        or (wi.status = 'executing' and wi.updated_at < ?)
+        or (wi.status = 'failed_retryable' and wi.retry_count >= ? and (wi.next_retry_at is null or wi.next_retry_at < ?))
+      )
+    order by wi.priority desc, wi.created_at asc
+  `;
+
+  const rows = store.db
+    .prepare(sql)
+    .all(
+      openedCutoff,
+      leasedCutoff,
+      executingCutoff,
+      t.max_retries,
+      now,
+      openedCutoff,
+      leasedCutoff,
+      executingCutoff,
+      t.max_retries,
+      now,
+    ) as Array<Record<string, unknown>>;
+
+  return rows
+    .map((row): StuckWorkItem | null => {
+      const classification = String(row.classification) as StuckWorkItemClassification;
+      if (!classification) return null;
+      return {
+        ...rowToWorkItemSummary(row),
+        classification,
+        status_since: String(row.status_since ?? row.updated_at ?? row.created_at),
+      };
+    })
+    .filter((item): item is StuckWorkItem => item !== null);
+}
+
+/** Return stuck work-item counts grouped by classification. */
+export function getStuckWorkItemSummary(
+  store: CoordinatorStoreView,
+  thresholds: Partial<StuckWorkThresholds> = {},
+  now = new Date().toISOString(),
+): StuckItemCounts["work_items"] {
+  const items = getStuckWorkItems(store, thresholds, now);
+  const counts = new Map<StuckWorkItemClassification, number>();
+  for (const item of items) {
+    counts.set(item.classification, (counts.get(item.classification) ?? 0) + 1);
+  }
+  return Array.from(counts.entries()).map(([classification, count]) => ({
+    classification,
+    count,
+  }));
+}
+
+/** Detect outbound commands that have been stagnant beyond operational thresholds.
+ *  Uses the most recent transition time (or created_at for the initial state)
+ *  to determine how long the command has been in its current status.
+ */
+export function getStuckOutboundCommands(
+  outboundStore: OutboundStoreView,
+  thresholds: Partial<StuckOutboundThresholds> = {},
+  now = new Date().toISOString(),
+): StuckOutboundCommand[] {
+  const t = { ...DEFAULT_STUCK_OUTBOUND_THRESHOLDS, ...thresholds };
+  const pendingCutoff = minutesAgo(t.pending_max_age_minutes, now);
+  const draftCreatingCutoff = minutesAgo(t.draft_creating_max_age_minutes, now);
+  const draftReadyCutoff = hoursAgo(t.draft_ready_max_age_hours, now);
+  const sendingCutoff = minutesAgo(t.sending_max_age_minutes, now);
+
+  const sql = `
+    select
+      o.*,
+      coalesce(
+        (select max(t.transition_at)
+         from outbound_transitions t
+         where t.outbound_id = o.outbound_id and t.to_status = o.status),
+        o.created_at
+      ) as status_since,
+      case
+        when o.status = 'pending' and coalesce(
+          (select max(t.transition_at) from outbound_transitions t where t.outbound_id = o.outbound_id and t.to_status = o.status),
+          o.created_at
+        ) < ? then 'stuck_pending'
+        when o.status = 'draft_creating' and coalesce(
+          (select max(t.transition_at) from outbound_transitions t where t.outbound_id = o.outbound_id and t.to_status = o.status),
+          o.created_at
+        ) < ? then 'stuck_draft_creating'
+        when o.status = 'draft_ready' and coalesce(
+          (select max(t.transition_at) from outbound_transitions t where t.outbound_id = o.outbound_id and t.to_status = o.status),
+          o.created_at
+        ) < ? then 'stuck_draft_ready'
+        when o.status = 'sending' and coalesce(
+          (select max(t.transition_at) from outbound_transitions t where t.outbound_id = o.outbound_id and t.to_status = o.status),
+          o.created_at
+        ) < ? then 'stuck_sending'
+        else null
+      end as classification
+    from outbound_handoffs o
+    where o.status in ('pending', 'draft_creating', 'draft_ready', 'sending')
+      and (
+        (o.status = 'pending' and coalesce(
+          (select max(t.transition_at) from outbound_transitions t where t.outbound_id = o.outbound_id and t.to_status = o.status),
+          o.created_at
+        ) < ?)
+        or (o.status = 'draft_creating' and coalesce(
+          (select max(t.transition_at) from outbound_transitions t where t.outbound_id = o.outbound_id and t.to_status = o.status),
+          o.created_at
+        ) < ?)
+        or (o.status = 'draft_ready' and coalesce(
+          (select max(t.transition_at) from outbound_transitions t where t.outbound_id = o.outbound_id and t.to_status = o.status),
+          o.created_at
+        ) < ?)
+        or (o.status = 'sending' and coalesce(
+          (select max(t.transition_at) from outbound_transitions t where t.outbound_id = o.outbound_id and t.to_status = o.status),
+          o.created_at
+        ) < ?)
+      )
+    order by status_since asc
+  `;
+
+  const rows = outboundStore.db
+    .prepare(sql)
+    .all(
+      pendingCutoff,
+      draftCreatingCutoff,
+      draftReadyCutoff,
+      sendingCutoff,
+      pendingCutoff,
+      draftCreatingCutoff,
+      draftReadyCutoff,
+      sendingCutoff,
+    ) as Array<Record<string, unknown>>;
+
+  return rows
+    .map((row): StuckOutboundCommand | null => {
+      const classification = String(row.classification) as StuckOutboundClassification;
+      if (!classification) return null;
+      return {
+        ...rowToOutboundSummary(row),
+        classification,
+        status_since: String(row.status_since ?? row.created_at),
+      };
+    })
+    .filter((item): item is StuckOutboundCommand => item !== null);
+}
+
+/** Return stuck outbound command counts grouped by classification. */
+export function getStuckOutboundSummary(
+  outboundStore: OutboundStoreView,
+  thresholds: Partial<StuckOutboundThresholds> = {},
+  now = new Date().toISOString(),
+): StuckItemCounts["outbound_handoffs"] {
+  const items = getStuckOutboundCommands(outboundStore, thresholds, now);
+  const counts = new Map<StuckOutboundClassification, number>();
+  for (const item of items) {
+    counts.set(item.classification, (counts.get(item.classification) ?? 0) + 1);
+  }
+  return Array.from(counts.entries()).map(([classification, count]) => ({
+    classification,
+    count,
   }));
 }
 
@@ -522,6 +840,9 @@ export function buildControlPlaneSnapshot(
 
   const quiescence = getQuiescenceIndicator(coordinatorStore);
 
+  const stuckWork = getStuckWorkItemSummary(coordinatorStore, {}, capturedAt);
+  const stuckOutbound = getStuckOutboundSummary(outboundStore, {}, capturedAt);
+
   return {
     captured_at: capturedAt,
     work_items: {
@@ -554,6 +875,10 @@ export function buildControlPlaneSnapshot(
     },
     quiescence,
     scope_summary: scopeSummary,
+    stuck: {
+      work_items: stuckWork,
+      outbound_handoffs: stuckOutbound,
+    },
   };
 }
 
@@ -1602,6 +1927,157 @@ export function getEvaluationsByContextDetail(
     proposed_actions: safeParse(row.proposed_actions_json as string | null),
     tool_requests: safeParse(row.tool_requests_json as string | null),
   }));
+}
+
+/**
+ * Redact preview_work payloads to a safe summary before exposure.
+ * All other action types return a generic safe summary.
+ */
+function redactOperatorActionPayload(
+  actionType: string,
+  payloadJson: string | null,
+  targetId: string | null,
+  scopeId: string,
+): string {
+  if (actionType === "preview_work") {
+    let contextId: string | undefined;
+    let factCount: number | undefined;
+    let previewDurationMs: number | undefined;
+    let error: string | undefined;
+
+    if (payloadJson) {
+      try {
+        const parsed = JSON.parse(payloadJson) as Record<string, unknown>;
+        if (typeof parsed.contextId === "string") contextId = parsed.contextId;
+        if (typeof parsed.context_id === "string") contextId = parsed.context_id;
+        if (typeof parsed.fact_ids === "object" && Array.isArray(parsed.fact_ids)) {
+          factCount = parsed.fact_ids.length;
+        }
+        if (typeof parsed.facts === "object" && Array.isArray(parsed.facts)) {
+          factCount = parsed.facts.length;
+        }
+        if (typeof parsed.fact_count === "number") factCount = parsed.fact_count;
+        if (typeof parsed.preview_duration_ms === "number") previewDurationMs = parsed.preview_duration_ms;
+        if (typeof parsed.error === "string") error = parsed.error;
+      } catch {
+        // ignore invalid json
+      }
+    }
+
+    const summary: Record<string, unknown> = { scope_id: scopeId };
+    if (contextId) summary.context_id = contextId;
+    if (factCount !== undefined) summary.fact_count = factCount;
+    if (previewDurationMs !== undefined) summary.preview_duration_ms = previewDurationMs;
+    if (error) summary.error = error;
+    return JSON.stringify(summary);
+  }
+
+  // Safe actions: expose only target reference, never raw payload_json
+  return targetId ? `target: ${targetId}` : "—";
+}
+
+function rowToOperatorActionSummary(row: Record<string, unknown>): OperatorActionSummary {
+  const actionType = String(row.action_type);
+  let contextId: string | null = null;
+  let workItemId: string | null = null;
+
+  // Derive context_id / work_item_id from action type semantics.
+  // Gaps: actions that do not match the known types below will leave both
+  // context_id and work_item_id as null. New action types from future tasks
+  // (e.g. Task 238 draft dispositions) should extend this branch rather than
+  // adding one-off JOINs, keeping the audit surface generic.
+  if (actionType === "retry_work_item" || actionType === "acknowledge_alert") {
+    workItemId = row.target_id ? String(row.target_id) : null;
+    if (row.work_item_context_id) contextId = String(row.work_item_context_id);
+  } else if (actionType === "derive_work" || actionType === "preview_work") {
+    contextId = row.target_id ? String(row.target_id) : null;
+  } else if (
+    actionType === "reject_draft" ||
+    actionType === "mark_reviewed" ||
+    actionType === "handled_externally"
+  ) {
+    if (row.outbound_context_id) contextId = String(row.outbound_context_id);
+  }
+
+  return {
+    action_id: String(row.request_id),
+    action_type: actionType,
+    actor: typeof row.requested_by === "string" ? row.requested_by : "operator",
+    scope_id: String(row.scope_id),
+    context_id: contextId,
+    work_item_id: workItemId,
+    payload_summary: redactOperatorActionPayload(actionType, row.payload_json as string | null, row.target_id as string | null, String(row.scope_id)),
+    created_at: String(row.requested_at),
+  };
+}
+
+/**
+ * Recent operator actions across all scopes.
+ */
+export function getRecentOperatorActions(
+  store: Pick<CoordinatorStoreView, "db">,
+  limit = 50,
+  since?: string,
+): OperatorActionSummary[] {
+  const sql = since
+    ? `select * from operator_action_requests where requested_at >= ? order by requested_at desc limit ?`
+    : `select * from operator_action_requests order by requested_at desc limit ?`;
+  const stmt = store.db.prepare(sql);
+  const rows = since
+    ? (stmt.all(since, limit) as Record<string, unknown>[])
+    : (stmt.all(limit) as Record<string, unknown>[]);
+  return rows.map(rowToOperatorActionSummary);
+}
+
+/**
+ * Recent operator actions for a specific scope.
+ */
+export function getOperatorActionsForScope(
+  store: Pick<CoordinatorStoreView, "db">,
+  scopeId: string,
+  limit = 50,
+  since?: string,
+): OperatorActionSummary[] {
+  const sql = since
+    ? `select * from operator_action_requests where scope_id = ? and requested_at >= ? order by requested_at desc limit ?`
+    : `select * from operator_action_requests where scope_id = ? order by requested_at desc limit ?`;
+  const stmt = store.db.prepare(sql);
+  const rows = since
+    ? (stmt.all(scopeId, since, limit) as Record<string, unknown>[])
+    : (stmt.all(scopeId, limit) as Record<string, unknown>[]);
+  return rows.map(rowToOperatorActionSummary);
+}
+
+/**
+ * Recent operator actions related to a specific context.
+ * Includes actions where target_id is the context directly, or where
+ * the target is a work_item or outbound_handoff belonging to the context.
+ */
+export function getOperatorActionsForContext(
+  store: Pick<CoordinatorStoreView, "db">,
+  contextId: string,
+  limit = 50,
+  since?: string,
+): OperatorActionSummary[] {
+  const sql = since
+    ? `select o.*, w.context_id as work_item_context_id, h.context_id as outbound_context_id
+       from operator_action_requests o
+       left join work_items w on o.target_id = w.work_item_id
+       left join outbound_handoffs h on o.target_id = h.outbound_id
+       where (o.target_id = ? or w.context_id = ? or h.context_id = ?)
+         and o.requested_at >= ?
+       order by o.requested_at desc limit ?`
+    : `select o.*, w.context_id as work_item_context_id, h.context_id as outbound_context_id
+       from operator_action_requests o
+       left join work_items w on o.target_id = w.work_item_id
+       left join outbound_handoffs h on o.target_id = h.outbound_id
+       where (o.target_id = ? or w.context_id = ? or h.context_id = ?)
+       order by o.requested_at desc limit ?`;
+  const stmt = store.db.prepare(sql);
+  const rows = since
+    ? (stmt.all(contextId, contextId, contextId, since, limit) as Record<string, unknown>[])
+    : (stmt.all(contextId, contextId, contextId, limit) as Record<string, unknown>[]);
+  return rows.map(rowToOperatorActionSummary);
 }
 
 export function buildObservationPlaneSnapshot(

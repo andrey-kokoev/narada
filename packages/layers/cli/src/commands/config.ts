@@ -13,7 +13,6 @@ export interface ConfigOptions {
 
 const DEFAULT_CONFIG = {
   root_dir: './data',
-  mailbox_id: 'user@example.com',
   scopes: [
     {
       scope_id: 'user@example.com',
@@ -74,37 +73,41 @@ export async function configCommand(
   const outputPath = resolve(options.output || './config.json');
   const { logger } = context;
   const fmt = createFormatter({ format: options.format, verbose: false });
-  
-  logger.info('Initializing config', { outputPath });
-  
+
+  logger.info(' narada init is deprecated. Use narada init-repo <path> instead.', { outputPath });
+
+  fmt.message(' narada init (non-interactive) is deprecated.', 'warning');
+  fmt.message('Use narada init-repo <path> instead.', 'info');
+  console.log('');
+
   if (existsSync(outputPath) && !options.force) {
     const error = `File already exists: ${outputPath}. Use --force to overwrite.`;
     logger.error(error);
-    
+
     if (fmt.getFormat() === 'json') {
       return {
         exitCode: ExitCode.GENERAL_ERROR,
         result: { status: 'error', error },
       };
     }
-    
+
     fmt.message(error, 'error');
     console.log('');
     fmt.message('To overwrite the existing file:', 'info');
     console.log(`  narada init --output ${options.output || './config.json'} --force`);
-    
+
     return { exitCode: ExitCode.GENERAL_ERROR, result: { status: 'error', error } };
   }
-  
+
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(
     outputPath,
     JSON.stringify(DEFAULT_CONFIG, null, 2) + '\n',
     'utf8',
   );
-  
+
   logger.info('Config written', { outputPath });
-  
+
   const result = {
     status: 'success',
     message: `Configuration written to ${outputPath}`,
@@ -116,29 +119,29 @@ export async function configCommand(
       'Run "narada sync" to test the configuration',
     ],
   };
-  
+
   if (fmt.getFormat() === 'json') {
     return { exitCode: ExitCode.SUCCESS, result };
   }
-  
+
   // Human-readable output
   fmt.message(`Configuration created: ${outputPath}`, 'success');
-  
+
   fmt.section('Configuration Details');
   const defaultScope = DEFAULT_CONFIG.scopes[0]!;
   fmt.kv('Operation', defaultScope.scope_id);
   fmt.kv('Data directory', DEFAULT_CONFIG.root_dir);
   fmt.kv('Sync folders', defaultScope.scope.included_container_refs.join(', '));
   fmt.kv('Polling interval', `${defaultScope.runtime.polling_interval_ms / 1000}s`);
-  
+
   fmt.section('Next Steps');
   fmt.list(result.next_steps);
-  
+
   console.log('');
   fmt.message('Quick start:', 'info');
   console.log('  1. Edit config.json with your credentials');
   console.log('  2. Set environment variables for Graph API auth');
   console.log('  3. Run: narada sync');
-  
+
   return { exitCode: ExitCode.SUCCESS, result };
 }

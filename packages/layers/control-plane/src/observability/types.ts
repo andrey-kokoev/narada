@@ -27,6 +27,15 @@ export interface DaemonCycleSummary {
   errors: number;
 }
 
+/** @source derived — Per-scope readiness indicators */
+export interface ScopeReadiness {
+  dispatch_ready: boolean;
+  outbound_healthy: boolean;
+  workers_registered: boolean;
+  /** True if the scope has recent DB activity (approximation, not actual sync freshness) */
+  db_active: boolean;
+}
+
 /** @source derived — Per-scope dispatch summary */
 export interface ScopeDispatchSummary {
   scope_id: string;
@@ -38,6 +47,7 @@ export interface ScopeDispatchSummary {
   failed_terminal_work_items: number;
   pending_outbound_handoffs: number;
   recent_decisions_count: number;
+  readiness: ScopeReadiness;
 }
 
 /** @source authoritative — Work-item lifecycle summary for observability (mirrors durable work_items row) */
@@ -102,6 +112,9 @@ export interface OutboundHandoffSummary {
   confirmed_at: string | null;
   terminal_reason: string | null;
   idempotency_key: string;
+  reviewed_at: string | null;
+  reviewer_notes: string | null;
+  external_reference: string | null;
 }
 
 /** @source derived — Active lease summary for operability view (joins lease + work item) */
@@ -138,6 +151,52 @@ export interface QuiescenceIndicator {
   oldest_lease_acquired_at: string | null;
 }
 
+/** Stuck work-item classification for operational trust detection */
+export type StuckWorkItemClassification =
+  | "stuck_opened"
+  | "stuck_leased"
+  | "stuck_executing"
+  | "stuck_retry_exhausted";
+
+/** @source derived — Stuck work-item detail for operator visibility */
+export interface StuckWorkItem extends WorkItemLifecycleSummary {
+  classification: StuckWorkItemClassification;
+  status_since: string;
+}
+
+/** @source derived — Stuck work-item summary by classification */
+export interface StuckWorkItemSummary {
+  classification: StuckWorkItemClassification;
+  count: number;
+  items: StuckWorkItem[];
+}
+
+/** Stuck outbound classification for operational trust detection */
+export type StuckOutboundClassification =
+  | "stuck_pending"
+  | "stuck_draft_creating"
+  | "stuck_draft_ready"
+  | "stuck_sending";
+
+/** @source derived — Stuck outbound command detail for operator visibility */
+export interface StuckOutboundCommand extends OutboundHandoffSummary {
+  classification: StuckOutboundClassification;
+  status_since: string;
+}
+
+/** @source derived — Stuck outbound summary by classification */
+export interface StuckOutboundSummary {
+  classification: StuckOutboundClassification;
+  count: number;
+  items: StuckOutboundCommand[];
+}
+
+/** @source derived — Aggregated stuck-item counts for health and status surfaces */
+export interface StuckItemCounts {
+  work_items: { classification: StuckWorkItemClassification; count: number }[];
+  outbound_handoffs: { classification: StuckOutboundClassification; count: number }[];
+}
+
 /** @source derived — Aggregated control-plane status snapshot */
 export interface ControlPlaneStatusSnapshot {
   captured_at: string;
@@ -171,6 +230,7 @@ export interface ControlPlaneStatusSnapshot {
   };
   quiescence: QuiescenceIndicator;
   scope_summary: ScopeDispatchSummary | null;
+  stuck: StuckItemCounts;
 }
 
 /** @source derived — Process execution summary for observability (unifies intent + execution stores) */
@@ -469,6 +529,18 @@ export interface ExecutionDetail {
   // Parsed JSON fields
   runtime_envelope: unknown;
   outcome: unknown;
+}
+
+/** @source authoritative — Operator action audit summary (mirrors durable operator_action_requests row with redacted payload) */
+export interface OperatorActionSummary {
+  action_id: string;
+  action_type: string;
+  actor: string;
+  scope_id: string;
+  context_id: string | null;
+  work_item_id: string | null;
+  payload_summary: string;
+  created_at: string;
 }
 
 export interface ObservationPlaneSnapshot {

@@ -122,7 +122,7 @@ export interface WorkItemLease {
   acquired_at: string;
   expires_at: string;
   released_at: string | null;
-  release_reason: "success" | "crash" | "abandoned" | "superseded" | "cancelled" | null;
+  release_reason: "success" | "crash" | "abandoned" | "superseded" | "cancelled" | "shutdown" | null;
 }
 
 /** Execution attempt status values */
@@ -314,6 +314,7 @@ export interface CoordinatorStore {
   insertOperatorActionRequest(request: OperatorActionRequest): void;
   getPendingOperatorActionRequests(scopeId?: string): OperatorActionRequest[];
   markOperatorActionRequestExecuted(requestId: string, executedAt?: string): void;
+  markOperatorActionRequestRejected(requestId: string, rejectedAt?: string): void;
 
   close(): void;
 }
@@ -353,16 +354,18 @@ export type CoordinatorStoreOperatorView = CoordinatorStoreView &
     | "updateWorkItemStatus"
     | "insertOperatorActionRequest"
     | "markOperatorActionRequestExecuted"
+    | "markOperatorActionRequestRejected"
   >;
 
 /** Safe operator action request — UI may request, never mutate control truth directly */
 export interface OperatorActionRequest {
   request_id: string;
   scope_id: string;
-  action_type: "retry_work_item" | "retry_failed_work_items" | "acknowledge_alert" | "rebuild_views" | "rebuild_projections" | "request_redispatch" | "trigger_sync" | "derive_work" | "preview_work";
+  action_type: "retry_work_item" | "retry_failed_work_items" | "acknowledge_alert" | "rebuild_views" | "rebuild_projections" | "request_redispatch" | "trigger_sync" | "derive_work" | "preview_work" | "reject_draft" | "mark_reviewed" | "handled_externally";
   target_id: string | null;
   payload_json: string | null;
   status: "pending" | "executed" | "rejected";
+  requested_by: string;
   requested_at: string;
   executed_at: string | null;
 }

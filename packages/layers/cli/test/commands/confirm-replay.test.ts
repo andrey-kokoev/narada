@@ -178,14 +178,14 @@ describe('confirm-replay command', () => {
     });
   });
 
-  it('hard fails when requested scope is not configured', async () => {
+  it('hard fails when requested operation is not configured', async () => {
     const context = createMockContext({ configPath });
     const result = await confirmReplayCommand({ scope: 'missing-scope', limit: 10 }, context);
 
     expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
     expect(result.result).toEqual({
       status: 'error',
-      error: 'Scope not found: missing-scope',
+      error: 'Operation not found: missing-scope',
     });
   });
 

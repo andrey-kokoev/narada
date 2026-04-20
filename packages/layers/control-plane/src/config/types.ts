@@ -106,6 +106,9 @@ export interface ScopeConfig {
   /** Executor bindings */
   executors?: ExecutorConfig[];
 
+  /** Operational trust / stuck-detection thresholds (optional) */
+  operational_trust?: OperationalTrustConfig;
+
   /**
    * @deprecated Legacy Graph API field. Prefer sources[] instead.
    */
@@ -146,10 +149,39 @@ export interface ScopeConfig {
 }
 
 /** Root configuration supporting multiple concurrent verticals */
+export interface StuckWorkThresholds {
+  opened_max_age_minutes: number;
+  leased_max_age_minutes: number;
+  executing_max_age_minutes: number;
+  max_retries: number;
+}
+
+export interface StuckOutboundThresholds {
+  pending_max_age_minutes: number;
+  draft_creating_max_age_minutes: number;
+  draft_ready_max_age_hours: number;
+  sending_max_age_minutes: number;
+}
+
+export interface OperationalTrustConfig {
+  stuck_work_thresholds?: StuckWorkThresholds;
+  stuck_outbound_thresholds?: StuckOutboundThresholds;
+}
+
+/** Daemon health threshold configuration (Task 234) */
+export interface HealthConfig {
+  max_staleness_ms?: number;
+  max_consecutive_errors?: number;
+  max_drain_ms?: number;
+}
+
 export interface ExchangeFsSyncConfig {
   root_dir: string;
   scopes: ScopeConfig[];
   lifecycle?: LifecycleConfig;
+  operational_trust?: OperationalTrustConfig;
+  /** Daemon health thresholds (optional) */
+  health?: HealthConfig;
 
   /** Global webhook configuration (optional) */
   webhook?: {

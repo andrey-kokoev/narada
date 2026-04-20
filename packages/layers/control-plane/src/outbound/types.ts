@@ -43,6 +43,12 @@ export interface OutboundCommand {
   blocked_reason: string | null;
   terminal_reason: string | null;
   idempotency_key: string;
+  /** ISO timestamp when an operator last marked this command as reviewed */
+  reviewed_at: string | null;
+  /** Free-form notes left by the operator during review */
+  reviewer_notes: string | null;
+  /** External reference (ticket ID, thread URL) recorded by operator for externally handled drafts */
+  external_reference: string | null;
 }
 
 /** Version-specific payload for an outbound command */

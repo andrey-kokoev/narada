@@ -75,7 +75,7 @@ export async function previewWorkCommand(
   if (!scope) {
     return {
       exitCode: ExitCode.INVALID_CONFIG,
-      result: { status: 'error', error: 'No scopes configured' },
+      result: { status: 'error', error: 'No operations configured' },
     };
   }
 
@@ -266,7 +266,7 @@ async function previewForScope(
       'success',
     );
     fmt.section('Summary');
-    fmt.kv('Scope', scopeId);
+    fmt.kv('Operation', scopeId);
     fmt.kv('Facts matched', facts.length);
     fmt.kv('Contexts evaluated', previews.length);
 

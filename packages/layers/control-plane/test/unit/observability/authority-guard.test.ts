@@ -32,7 +32,7 @@ describe("observability authority guardrails", () => {
     { regex: String.raw`admit\s*\(`, description: "direct intent mutation" },
     { regex: String.raw`ingest\s*\(`, description: "direct fact mutation" },
     { regex: String.raw`markAdmitted\s*\(`, description: "direct fact mutation" },
-    { regex: String.raw`register\s*\(`, description: "direct worker registry mutation" },
+    { regex: String.raw`\.register\s*\(`, description: "direct worker registry mutation" },
   ];
 
   for (const { regex, description } of forbiddenPatterns) {

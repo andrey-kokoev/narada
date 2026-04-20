@@ -156,14 +156,15 @@ After making changes, verify using the appropriate level:
 
 | Command | What it does | When to use |
 |---------|--------------|-------------|
-| `pnpm verify` | Typecheck + fast package tests (~8 sec) | **Default** — routine local verification |
+| `pnpm verify` | Typecheck + build + fast packages (~15 sec) | **Default** — reliable baseline without heavy suites |
+| `pnpm test:focused "<cmd>"` | Run a specific test command with telemetry | When you know exactly which file(s) to test |
 | `pnpm test:unit` | Unit tests across all packages | When you want tests without integration overhead |
 | `pnpm test:integration` | Integration tests only | When you changed durable-state or I/O logic |
-| `pnpm test:control-plane` | Control-plane tests only (~5 sec) | When you changed control-plane internals |
+| `pnpm test:control-plane` | Control-plane tests only (~60+ sec) | When you changed control-plane internals |
 | `pnpm test:daemon` | Daemon tests only (~90 sec) | When you changed daemon or integration surface |
 | `ALLOW_FULL_TESTS=1 pnpm test:full` | Full recursive suite (~2 min) | Explicit full verification (CI, release prep) |
 
-Root `pnpm test` is disabled to prevent accidental full-suite runs. Use `pnpm verify` for the fast default.
+Root `pnpm test` is disabled to prevent accidental full-suite runs. Use `pnpm verify` for the fast default, or `pnpm test:focused` for targeted verification.
 
 ## Documentation
 

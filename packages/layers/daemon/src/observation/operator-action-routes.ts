@@ -65,6 +65,8 @@ export function createOperatorActionRoutes(
           {
             scope_id: scope.scope_id,
             coordinatorStore: scope.coordinatorStore,
+            outboundStore: scope.outboundStore,
+            intentStore: scope.intentStore,
             rebuildViews: scope.rebuildViews,
             rebuildProjections: scope.rebuildProjections,
             runDispatchPhase: scope.runDispatchPhase,

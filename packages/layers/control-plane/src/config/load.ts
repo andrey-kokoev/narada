@@ -2,7 +2,11 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ExchangeFsSyncConfig, ScopeConfig } from "./types.js";
 import type { ChangeType } from "../adapter/graph/subscription.js";
-import { DEFAULT_EXCHANGE_FS_SYNC_CONFIG } from "./defaults.js";
+import {
+  DEFAULT_EXCHANGE_FS_SYNC_CONFIG,
+  DEFAULT_STUCK_WORK_THRESHOLDS,
+  DEFAULT_STUCK_OUTBOUND_THRESHOLDS,
+} from "./defaults.js";
 import type { SecureStorage } from "../auth/secure-storage.js";
 import { resolveSecrets, isSecureRef } from "./secure-config.js";
 
@@ -322,6 +326,12 @@ function loadScopeConfig(rawScope: unknown, pathPrefix: string): ScopeConfig {
   const lifecycleRaw = isObject(scope.lifecycle) ? scope.lifecycle : null;
   const lifecycle = lifecycleRaw ? buildLifecycleConfig(lifecycleRaw, `${pathPrefix}.lifecycle`) : undefined;
 
+  // Operational trust thresholds (optional)
+  const operationalTrustRaw = isObject(scope.operational_trust) ? scope.operational_trust : null;
+  const operational_trust = operationalTrustRaw
+    ? buildOperationalTrustConfig(operationalTrustRaw, `${pathPrefix}.operational_trust`)
+    : undefined;
+
   // Legacy graph field for backward compat
   const graph = hasLegacyGraph
     ? {
@@ -358,6 +368,7 @@ function loadScopeConfig(rawScope: unknown, pathPrefix: string): ScopeConfig {
     ...(executors ? { executors } : {}),
     ...(webhook ? { webhook } : {}),
     ...(lifecycle ? { lifecycle } : {}),
+    ...(operational_trust ? { operational_trust } : {}),
     ...(graph ? { graph } : {}),
   };
 }
@@ -482,6 +493,55 @@ function buildLifecycleConfig(lifecycleRaw: Record<string, unknown>, path: strin
               end: scheduleRaw.time_window.end.trim(),
             }
           : undefined,
+    },
+  };
+}
+
+function buildOperationalTrustConfig(
+  raw: Record<string, unknown>,
+  path: string,
+): NonNullable<ScopeConfig["operational_trust"]> {
+  const workRaw = isObject(raw.stuck_work_thresholds) ? raw.stuck_work_thresholds : {};
+  const outboundRaw = isObject(raw.stuck_outbound_thresholds)
+    ? raw.stuck_outbound_thresholds
+    : {};
+
+  return {
+    stuck_work_thresholds: {
+      opened_max_age_minutes: expectNumber(
+        workRaw.opened_max_age_minutes ?? DEFAULT_STUCK_WORK_THRESHOLDS.opened_max_age_minutes,
+        `${path}.stuck_work_thresholds.opened_max_age_minutes`,
+      ),
+      leased_max_age_minutes: expectNumber(
+        workRaw.leased_max_age_minutes ?? DEFAULT_STUCK_WORK_THRESHOLDS.leased_max_age_minutes,
+        `${path}.stuck_work_thresholds.leased_max_age_minutes`,
+      ),
+      executing_max_age_minutes: expectNumber(
+        workRaw.executing_max_age_minutes ?? DEFAULT_STUCK_WORK_THRESHOLDS.executing_max_age_minutes,
+        `${path}.stuck_work_thresholds.executing_max_age_minutes`,
+      ),
+      max_retries: expectNumber(
+        workRaw.max_retries ?? DEFAULT_STUCK_WORK_THRESHOLDS.max_retries,
+        `${path}.stuck_work_thresholds.max_retries`,
+      ),
+    },
+    stuck_outbound_thresholds: {
+      pending_max_age_minutes: expectNumber(
+        outboundRaw.pending_max_age_minutes ?? DEFAULT_STUCK_OUTBOUND_THRESHOLDS.pending_max_age_minutes,
+        `${path}.stuck_outbound_thresholds.pending_max_age_minutes`,
+      ),
+      draft_creating_max_age_minutes: expectNumber(
+        outboundRaw.draft_creating_max_age_minutes ?? DEFAULT_STUCK_OUTBOUND_THRESHOLDS.draft_creating_max_age_minutes,
+        `${path}.stuck_outbound_thresholds.draft_creating_max_age_minutes`,
+      ),
+      draft_ready_max_age_hours: expectNumber(
+        outboundRaw.draft_ready_max_age_hours ?? DEFAULT_STUCK_OUTBOUND_THRESHOLDS.draft_ready_max_age_hours,
+        `${path}.stuck_outbound_thresholds.draft_ready_max_age_hours`,
+      ),
+      sending_max_age_minutes: expectNumber(
+        outboundRaw.sending_max_age_minutes ?? DEFAULT_STUCK_OUTBOUND_THRESHOLDS.sending_max_age_minutes,
+        `${path}.stuck_outbound_thresholds.sending_max_age_minutes`,
+      ),
     },
   };
 }

@@ -413,9 +413,17 @@ export type {
   StaleLeaseRecoveryEvent,
   QuiescenceIndicator,
   AffinityOutcome,
+  OperatorActionSummary,
   EvaluationDetail,
   DecisionDetail,
   ExecutionDetail,
+  StuckWorkItem,
+  StuckWorkItemClassification,
+  StuckWorkItemSummary,
+  StuckOutboundCommand,
+  StuckOutboundClassification,
+  StuckOutboundSummary,
+  StuckItemCounts,
 } from "./observability/types.js";
 export type {
   MailExecutionDetail,
@@ -460,6 +468,15 @@ export {
   getDecisionDetail,
   getExecutionDetail,
   getEvaluationsByContextDetail,
+  getRecentOperatorActions,
+  getOperatorActionsForScope,
+  getOperatorActionsForContext,
+  getStuckWorkItems,
+  getStuckWorkItemSummary,
+  getStuckOutboundCommands,
+  getStuckOutboundSummary,
+  DEFAULT_STUCK_WORK_THRESHOLDS,
+  DEFAULT_STUCK_OUTBOUND_THRESHOLDS,
 } from "./observability/queries.js";
 export {
   getMailExecutionDetails,
@@ -630,6 +647,9 @@ export type {
   ExchangeFsSyncConfig,
   ScopeConfig,
   RuntimePolicy,
+  StuckWorkThresholds,
+  StuckOutboundThresholds,
+  OperationalTrustConfig,
 } from "./config/types.js";
 export type {
   GraphAdapterConfig,
@@ -674,6 +694,8 @@ export type {
   HealthWriterOptions,
   HealthMetrics,
   HealthRecentError,
+  ScopeReadinessSnapshot,
+  HealthThresholds,
 } from "./health.js";
 
 export {
@@ -688,3 +710,15 @@ export {
   type Tracer,
   type SpanExporter,
 } from "./tracing.js";
+
+// Operator action executor (shared between CLI and daemon)
+export {
+  PERMITTED_OPERATOR_ACTIONS,
+  executeOperatorAction,
+} from "./operator-actions/executor.js";
+export type {
+  OperatorActionType,
+  OperatorActionPayload,
+  OperatorActionResult,
+  OperatorActionContext,
+} from "./operator-actions/executor.js";

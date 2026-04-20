@@ -70,7 +70,7 @@ async function rebuildSingleConfig(
   if (!scope) {
     return {
       exitCode: ExitCode.INVALID_CONFIG,
-      result: { status: 'error', error: 'No scopes configured' },
+      result: { status: 'error', error: 'No operations configured' },
     };
   }
 
@@ -230,11 +230,11 @@ function outputHumanReadable(
 
   fmt.section('Details');
   fmt.kv('Duration', fmt.duration(totalDuration));
-  fmt.kv('Scopes processed', String(mailboxResults.length));
+  fmt.kv('Operations processed', String(mailboxResults.length));
 
   for (const m of mailboxResults) {
     console.log('');
-    fmt.message(`Scope: ${m.scopeId} (${m.rootDir})`, 'info');
+    fmt.message(`Operation: ${m.scopeId} (${m.rootDir})`, 'info');
     for (const r of m.projections) {
       const status = r.success ? '✓' : '✗';
       const line = `  ${status} ${r.name} (${r.durationMs}ms)`;

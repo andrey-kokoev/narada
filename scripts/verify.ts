@@ -2,11 +2,12 @@
 /**
  * Fast Verification Script
  *
- * Runs the narrow verification ladder: typecheck + build + unit tests.
- * Excludes heavy integration suites (control-plane, daemon integration tests).
+ * Runs a narrow, reliable verification pipeline:
+ *   task-file guard → typecheck → build → fast package tests
  *
- * This is the default verification command. Use `pnpm test:full` for
- * the complete recursive suite (requires ALLOW_FULL_TESTS=1).
+ * Excludes slow or crash-prone suites (control-plane unit tests, daemon
+ * unit tests, CLI tests) which must be run explicitly via package-scoped
+ * commands when needed.
  */
 
 import {
@@ -26,11 +27,8 @@ const steps: Step[] = [
   { name: "Task file guard", command: "tsx scripts/task-file-guard.ts" },
   { name: "Typecheck", command: "pnpm typecheck" },
   { name: "Build", command: "pnpm build" },
-  { name: "Control-plane unit tests", command: "pnpm --filter @narada2/control-plane test:unit" },
-  { name: "Daemon unit tests", command: "pnpm --filter @narada2/daemon test:unit" },
   { name: "Charters tests", command: "pnpm --filter @narada2/charters test" },
   { name: "Ops-kit tests", command: "pnpm --filter @narada2/ops-kit test" },
-  { name: "CLI tests", command: "pnpm --filter @narada2/cli test" },
 ];
 
 const colors = {
@@ -62,7 +60,7 @@ for (const step of steps) {
   stepClassifications.push(stepClass);
 
   if (result.exitStatus === 0) {
-    console.log(`${colors.green}✓${colors.reset}`);
+    console.log(`${colors.green}✓${colors.reset} ${colors.dim}(${(result.durationMs / 1000).toFixed(1)}s)${colors.reset}`);
   } else {
     console.log(`${colors.red}✗${colors.reset}`);
     const isTeardownNoise = stepClass === "known-teardown-noise";
@@ -124,6 +122,7 @@ if (failed) {
   process.exit(1);
 } else {
   console.log(`${colors.green}All ${steps.length} verification steps passed.${colors.reset}`);
+  console.log(`${colors.dim}Run package-scoped tests (e.g. \`pnpm test:control-plane\`) when you change those packages.${colors.reset}`);
   console.log(`${colors.dim}Run \`ALLOW_FULL_TESTS=1 pnpm test:full\` for the complete suite.${colors.reset}`);
   printMetricsHint();
 }

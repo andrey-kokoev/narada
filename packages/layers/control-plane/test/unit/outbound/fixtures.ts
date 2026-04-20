@@ -24,6 +24,9 @@ export function createOutboundCommand(
     blocked_reason: null,
     terminal_reason: null,
     idempotency_key: overrides.idempotency_key ?? `key-${overrides.outbound_id ?? "outbound-001"}`,
+    reviewed_at: null,
+    reviewer_notes: null,
+    external_reference: null,
     ...overrides,
   };
 }

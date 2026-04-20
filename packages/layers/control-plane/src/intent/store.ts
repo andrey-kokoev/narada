@@ -14,6 +14,7 @@ export interface IntentStore {
   admit(intent: Omit<Intent, "created_at" | "updated_at">): { intent: Intent; isNew: boolean };
   getById(intentId: string): Intent | undefined;
   getByIdempotencyKey(idempotencyKey: string): Intent | undefined;
+  getByTargetId(targetId: string): Intent | undefined;
   getPendingIntents(executorFamily?: string): Intent[];
   updateStatus(
     intentId: string,
@@ -150,6 +151,13 @@ export class SqliteIntentStore implements IntentStore {
     const row = this.db
       .prepare("select * from intents where idempotency_key = ?")
       .get(idempotencyKey) as Record<string, unknown> | undefined;
+    return row ? rowToIntent(row) : undefined;
+  }
+
+  getByTargetId(targetId: string): Intent | undefined {
+    const row = this.db
+      .prepare("select * from intents where target_id = ?")
+      .get(targetId) as Record<string, unknown> | undefined;
     return row ? rowToIntent(row) : undefined;
   }
 

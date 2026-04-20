@@ -37,6 +37,30 @@ export interface StatusOptions {
   format?: string;
 }
 
+interface DaemonHealthSnapshot {
+  status: string;
+  readiness?: {
+    dispatchReady: boolean;
+    outboundHealthy: boolean;
+    workersRegistered: boolean;
+    syncFresh: boolean;
+  };
+  isStale?: boolean;
+  thresholds?: {
+    maxStalenessMs: number;
+    maxConsecutiveErrors: number;
+  };
+  scopes?: Array<{
+    scopeId: string;
+    readiness?: {
+      dispatchReady: boolean;
+      outboundHealthy: boolean;
+      workersRegistered: boolean;
+      syncFresh: boolean;
+    };
+  }>;
+}
+
 interface StatusReport {
   mailbox: {
     id: string;
@@ -61,6 +85,15 @@ interface StatusReport {
     staleRecoveries: StaleLeaseRecoveryEvent[];
     quiescence: QuiescenceIndicator;
   };
+  /** Stuck-item summary for operational trust */
+  stuck?: {
+    work_items: { classification: string; count: number }[];
+    outbound_handoffs: { classification: string; count: number }[];
+  };
+  /** Daemon readiness from .health.json (Task 234) */
+  readiness?: DaemonHealthSnapshot['readiness'];
+  isStale?: boolean;
+  thresholds?: DaemonHealthSnapshot['thresholds'];
 }
 
 export async function statusCommand(
@@ -144,7 +177,7 @@ export async function statusCommand(
   if (!scope) {
     return {
       exitCode: ExitCode.INVALID_CONFIG,
-      result: { status: 'error', error: 'No scopes configured', health: 'error' },
+      result: { status: 'error', error: 'No operations configured', health: 'error' },
     };
   }
 
@@ -191,6 +224,7 @@ async function buildStatusReport(scopeId: string, rootDir: string): Promise<Stat
           staleRecoveries: report.controlPlane.stale_recoveries.recent,
           quiescence: report.controlPlane.quiescence,
         };
+        report.stuck = report.controlPlane.stuck;
       }
     }
   } catch {
@@ -257,6 +291,24 @@ async function buildStatusReport(scopeId: string, rootDir: string): Promise<Stat
       report.storage.viewFolderCount = entries.filter((e) => e.isDirectory()).length;
     } catch {
       // No views yet
+    }
+
+    // Read daemon health file for readiness indicators (Task 234)
+    try {
+      const healthPath = join(rootDir, '.health.json');
+      const healthRaw = await readFile(healthPath, 'utf8');
+      const healthData = JSON.parse(healthRaw) as DaemonHealthSnapshot;
+      if (healthData.readiness) {
+        report.readiness = healthData.readiness;
+      }
+      if (typeof healthData.isStale === 'boolean') {
+        report.isStale = healthData.isStale;
+      }
+      if (healthData.thresholds) {
+        report.thresholds = healthData.thresholds;
+      }
+    } catch {
+      // No health file yet (daemon may not be running)
     }
 
     // Determine health

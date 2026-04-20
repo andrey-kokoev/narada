@@ -6,7 +6,6 @@
  */
 
 import type { ObservationApiScope } from "./observation-server.js";
-import type { WakeReason } from "./types.js";
 
 export interface ScopeServiceLike {
   scope: { scope_id: string };
@@ -16,7 +15,7 @@ export interface ScopeServiceLike {
 }
 
 export interface RegisterScopeApisOptions {
-  requestWake?: (reason: WakeReason) => void;
+  requestWake?: (reason: string) => void;
 }
 
 export async function registerScopeApis(

@@ -11,6 +11,8 @@ import {
   GraphHttpClient,
   DefaultGraphAdapter,
   ExchangeSource,
+  TimerSource,
+  WebhookSource,
   DefaultSyncRunner,
   FileCursorStore,
   FileApplyLogStore,
@@ -44,13 +46,15 @@ import {
   type NonSendGraphClient,
   type MessageFinder,
   DefaultForemanFacade,
-  MailboxContextStrategy,
+  resolveContextStrategy,
   SqliteScheduler,
   MockCharterRunner,
   buildInvocationEnvelope,
   buildEvaluationRecord,
   persistEvaluation,
   buildScopeDispatchSummary,
+  getStuckWorkItemSummary,
+  getStuckOutboundSummary,
   VerticalMaterializerRegistry,
   TimerContextMaterializer,
   WebhookContextMaterializer,
@@ -71,6 +75,7 @@ import {
   type LeaseAcquisitionResult,
   type SchedulerOptions,
   type ToolCatalogEntry,
+  type WorkItemLease,
 } from '@narada2/control-plane';
 import { SearchEngine } from '@narada2/search';
 import { CodexCharterRunner, ToolRunner } from '@narada2/charters';
@@ -102,6 +107,12 @@ export interface SyncServiceConfig {
   observationApiPort?: number;
   /** Host for the observation API server (default: 127.0.0.1) */
   observationApiHost?: string;
+  /** Max time since last sync before health is considered stale (default: 5 min) */
+  maxStalenessMs?: number;
+  /** Max consecutive errors before health transitions to error (default: 3) */
+  maxConsecutiveErrors?: number;
+  /** Maximum time in ms to wait for in-flight work during graceful shutdown (default: 30000) */
+  maxDrainMs?: number;
 }
 
 export interface DispatchHooks {
@@ -189,7 +200,7 @@ export interface SyncStats {
   lastSyncAt: Date | null;
   errors: number;
   consecutiveErrors: number;
-  perMailbox?: Record<string, {
+  perScope?: Record<string, {
     cyclesCompleted: number;
     eventsApplied: number;
     errors: number;
@@ -304,18 +315,25 @@ function createDefaultCharterRunner(
   throw new Error(`Invalid charter runtime: ${runtime}. Expected 'codex-api', 'kimi-api', or 'mock'.`);
 }
 
-async function createMailboxDispatchContext(
+export interface ShutdownSignal {
+  shuttingDown: boolean;
+}
+
+async function createDispatchContext(
   scope: ScopeConfig,
   _globalConfig: ExchangeFsSyncConfig,
   opts: SyncServiceConfig,
   logger: ReturnType<typeof createLogger>,
-  graphHttpClient: GraphHttpClient,
-  userId: string,
+  graphHttpClient?: GraphHttpClient,
+  userId?: string,
   callbacks?: {
     /** @deprecated Use rebuildProjections instead */
     rebuildViews?: () => Promise<void>;
     rebuildProjections?: () => Promise<void>;
   },
+  shutdownSignal?: ShutdownSignal,
+  getLastSyncAt?: () => Date | null,
+  syncFreshThresholdMs?: number,
 ) {
   const rootDir = scope.root_dir;
   const messageStore = new FileMessageStore({ rootDir });
@@ -383,7 +401,7 @@ async function createMailboxDispatchContext(
       db,
       foremanId: scope.scope_id,
       getRuntimePolicy,
-      contextFormationStrategy: new MailboxContextStrategy(),
+      contextFormationStrategy: resolveContextStrategy(scope.context_strategy ?? 'mail'),
     });
 
     const scheduler = new SqliteScheduler(coordinatorStore, {
@@ -685,6 +703,11 @@ async function createMailboxDispatchContext(
     }
 
     while (!deps.scheduler.isQuiescent(scope.scope_id)) {
+      if (shutdownSignal?.shuttingDown) {
+        logger.info('Dispatch phase interrupted by shutdown', { scope: scope.scope_id });
+        break;
+      }
+
       const runnable = deps.scheduler.scanForRunnableWork(scope.scope_id, 1);
       if (runnable.length === 0) {
         break;
@@ -882,6 +905,14 @@ async function createMailboxDispatchContext(
   async function getDispatchHealth() {
     const deps = await initDispatchDeps();
     const summary = buildScopeDispatchSummary(deps.coordinatorStore, deps.outboundStore, scope.scope_id);
+    const workersRegistered = OUTBOUND_WORKER_IDS.every((id) => deps.workerRegistry.getWorker(id) !== undefined);
+    const stuckWork = getStuckWorkItemSummary(deps.coordinatorStore);
+    const stuckOutbound = getStuckOutboundSummary(deps.outboundStore);
+
+    const lastSync = getLastSyncAt?.() ?? null;
+    const threshold = syncFreshThresholdMs ?? 24 * 60 * 60 * 1000;
+    const syncFresh = lastSync ? Date.now() - lastSync.getTime() < threshold : false;
+
     return {
       openWorkItems: summary.active_work_items,
       leasedWorkItems: summary.leased_work_items,
@@ -890,6 +921,16 @@ async function createMailboxDispatchContext(
       failedTerminalWorkItems: summary.failed_terminal_work_items,
       pendingOutboundHandoffs: summary.pending_outbound_handoffs,
       recentDecisionsCount: summary.recent_decisions_count,
+      stuck_items: {
+        work_items: stuckWork,
+        outbound_handoffs: stuckOutbound,
+      },
+      readiness: {
+        dispatchReady: syncFresh,
+        outboundHealthy: summary.readiness.outbound_healthy,
+        workersRegistered,
+        syncFresh,
+      },
     };
   }
 
@@ -929,10 +970,50 @@ async function createMailboxDispatchContext(
           { tools: deps.toolCatalog, rootDir },
         );
       },
+      getLastSyncAt,
+      syncFreshThresholdMs,
     };
   }
 
-  return { runDispatchPhase, close, getObservationApiScope, getNextRetryDeadline, getDispatchHealth };
+  async function releaseActiveLeases(reason: WorkItemLease['release_reason']): Promise<number> {
+    if (!dispatchDeps) {
+      throw new Error('Dispatch dependencies not initialized');
+    }
+    const deps = dispatchDeps;
+    const now = new Date().toISOString();
+    const tx = deps.db.transaction(() => {
+      const leases = deps.db.prepare(`
+        select l.lease_id, l.work_item_id from work_item_leases l
+        join work_items wi on wi.work_item_id = l.work_item_id
+        where l.released_at is null and wi.scope_id = ?
+      `).all(scope.scope_id) as Array<{ lease_id: string; work_item_id: string }>;
+
+      for (const row of leases) {
+        deps.coordinatorStore.releaseLease(row.lease_id, now, reason);
+        deps.coordinatorStore.updateWorkItemStatus(row.work_item_id, 'opened', { updated_at: now });
+        deps.db.prepare(`
+          update execution_attempts
+          set status = 'abandoned', completed_at = ?
+          where work_item_id = ? and status = 'active'
+        `).run(now, row.work_item_id);
+      }
+      return leases.length;
+    });
+    return tx();
+  }
+
+  return {
+    runDispatchPhase,
+    close,
+    getObservationApiScope,
+    getNextRetryDeadline,
+    getDispatchHealth,
+    releaseActiveLeases,
+  };
+}
+
+export interface ShutdownSignal {
+  shuttingDown: boolean;
 }
 
 export async function createScopeService(
@@ -940,6 +1021,9 @@ export async function createScopeService(
   globalConfig: ExchangeFsSyncConfig,
   opts: SyncServiceConfig,
   logger: ReturnType<typeof createLogger>,
+  _shutdownSignal?: ShutdownSignal,
+  getLastSyncAt?: () => Date | null,
+  syncFreshThresholdMs?: number,
 ) {
   const rootDir = scope.root_dir;
   const graphSource = scope.graph ?? (scope.sources.find(s => s.type === 'graph') as ScopeConfig['graph'] | undefined);
@@ -1037,10 +1121,21 @@ export async function createScopeService(
     rebuildProjectionsAfterSync: scope.runtime.rebuild_search_after_sync || scope.runtime.rebuild_views_after_sync,
   });
 
-  const dispatchContext = await createMailboxDispatchContext(scope, globalConfig, opts, logger, client, graphSource.user_id!, {
-    rebuildViews: () => viewStore.rebuildAll(),
-    rebuildProjections,
-  });
+  const dispatchContext = await createMailboxDispatchContext(
+    scope,
+    globalConfig,
+    opts,
+    logger,
+    client,
+    graphSource.user_id!,
+    {
+      rebuildViews: () => viewStore.rebuildAll(),
+      rebuildProjections,
+    },
+    undefined,
+    getLastSyncAt,
+    syncFreshThresholdMs,
+  );
 
   return { scope, runner, dispatchContext };
 }
@@ -1123,8 +1218,30 @@ export async function createSyncService(
 
   let lastDispatchAt: Date | null = null;
 
+  const shutdownSignal: ShutdownSignal = { shuttingDown: false };
+
+  const DEFAULT_MAX_STALENESS_MS = 24 * 60 * 60 * 1000; // 24 hours (Task 234 documented default)
+  const DEFAULT_MAX_CONSECUTIVE_ERRORS = 3;
+
+  const healthMaxStalenessMs = opts.maxStalenessMs ?? globalConfig.health?.max_staleness_ms ?? DEFAULT_MAX_STALENESS_MS;
+  const healthMaxConsecutiveErrors = opts.maxConsecutiveErrors ?? globalConfig.health?.max_consecutive_errors ?? DEFAULT_MAX_CONSECUTIVE_ERRORS;
+  const healthMaxDrainMs = opts.maxDrainMs ?? globalConfig.health?.max_drain_ms ?? 30_000;
+
+  function getScopeLastSyncAt(scopeId: string): Date | null {
+    const mb = stats.perMailbox?.[scopeId];
+    return mb?.lastSyncAt ?? stats.lastSyncAt ?? null;
+  }
+
   const scopeServices = await Promise.all(
-    scopes.map((scope) => createScopeService(scope, globalConfig, opts, logger)),
+    scopes.map((scope) => createScopeService(
+      scope,
+      globalConfig,
+      opts,
+      logger,
+      shutdownSignal,
+      () => getScopeLastSyncAt(scope.scope_id),
+      healthMaxStalenessMs,
+    )),
   );
 
   const scopeApis = new Map<string, ObservationApiScope>();
@@ -1137,6 +1254,9 @@ export async function createSyncService(
     : null;
 
   async function updateHealth(): Promise<void> {
+    const maxStalenessMs = healthMaxStalenessMs;
+    const maxConsecutiveErrors = healthMaxConsecutiveErrors;
+
     const scopeHealthEntries = await Promise.all(
       scopeServices.map(async (svc) => {
         try {
@@ -1168,8 +1288,48 @@ export async function createSyncService(
       },
     );
 
+    // Aggregate stuck items across all scopes
+    function mergeStuckEntries(
+      entries: Array<{ classification: string; count: number }>,
+    ): Array<{ classification: string; count: number }> {
+      const map = new Map<string, number>();
+      for (const e of entries) {
+        map.set(e.classification, (map.get(e.classification) ?? 0) + e.count);
+      }
+      return Array.from(map.entries()).map(([classification, count]) => ({ classification, count }));
+    }
+
+    const allStuckWork = scopes.flatMap((s) => s.stuck_items?.work_items ?? []);
+    const allStuckOutbound = scopes.flatMap((s) => s.stuck_items?.outbound_handoffs ?? []);
+    const stuck_items = {
+      work_items: mergeStuckEntries(allStuckWork),
+      outbound_handoffs: mergeStuckEntries(allStuckOutbound),
+    };
+
+    // Aggregate readiness across all scopes
+    const allReadiness = scopes.map((s) => s.readiness);
+    const aggregateReadiness = allReadiness.length > 0
+      ? {
+          dispatchReady: allReadiness.every((r) => r.dispatchReady),
+          outboundHealthy: allReadiness.every((r) => r.outboundHealthy),
+          workersRegistered: allReadiness.every((r) => r.workersRegistered),
+          syncFresh: allReadiness.every((r) => r.syncFresh),
+        }
+      : {
+          dispatchReady: false,
+          outboundHealthy: false,
+          workersRegistered: false,
+          syncFresh: false,
+        };
+
+    // Staleness: true if last sync is older than threshold or too many consecutive errors
+    const isStale = stats.lastSyncAt
+      ? Date.now() - stats.lastSyncAt.getTime() > maxStalenessMs
+      : true;
+    const isErrorState = stats.consecutiveErrors >= maxConsecutiveErrors;
+
     const health: Omit<HealthStatus, 'timestamp'> = {
-      status: running ? 'healthy' : 'stopped',
+      status: running ? (isErrorState ? 'error' : 'healthy') : 'stopped',
       lastSyncAt: stats.lastSyncAt?.toISOString(),
       lastDispatchAt: lastDispatchAt?.toISOString(),
       cyclesCompleted: stats.cyclesCompleted,
@@ -1178,6 +1338,13 @@ export async function createSyncService(
       consecutiveErrors: stats.consecutiveErrors,
       pid: process.pid,
       ...totals,
+      stuck_items,
+      readiness: aggregateReadiness,
+      isStale: isStale || isErrorState,
+      thresholds: {
+        maxStalenessMs,
+        maxConsecutiveErrors,
+      },
       scopes,
     };
 
@@ -1340,19 +1507,51 @@ export async function createSyncService(
 
     logger.info('Stopping service');
     stopRequested = true;
-    wakeController.stop();
+    shutdownSignal.shuttingDown = true;
 
+    // Stop accepting new external requests first so no new operator actions
+    // arrive while we are draining in-flight work.
     if (observationServer) {
       await observationServer.stop().catch((err) => {
         logger.warn('Observation server stop error', { error: err.message });
       });
     }
 
+    // Break any sleeping poll so runLoop checks stopRequested promptly.
+    wakeController.stop();
+
+    // Wait for the current sync/dispatch iteration to complete or timeout.
+    const maxDrainMs = healthMaxDrainMs;
     if (currentIteration) {
       try {
-        await currentIteration;
-      } catch {
-        // Ignore errors during shutdown
+        await Promise.race([
+          currentIteration,
+          new Promise<void>((_, reject) => {
+            const timer = setTimeout(() => {
+              reject(new Error('Drain timeout'));
+            }, maxDrainMs);
+            if (typeof timer.unref === 'function') {
+              timer.unref();
+            }
+          }),
+        ]);
+      } catch (drainError) {
+        const msg = drainError instanceof Error ? drainError.message : String(drainError);
+        logger.warn('Drain timed out, force-releasing remaining leases', { error: msg, maxDrainMs });
+      }
+    }
+
+    // Safety net: release any leases that are still active (either because
+    // drain timed out or because a lease was acquired just before shutdown).
+    for (const svc of scopeServices) {
+      try {
+        const count = await svc.dispatchContext.releaseActiveLeases('shutdown');
+        if (count > 0) {
+          logger.info('Released leases on shutdown', { scope: svc.scope.scope_id, count, reason: 'shutdown' });
+        }
+      } catch (releaseError) {
+        const rmsg = releaseError instanceof Error ? releaseError.message : String(releaseError);
+        logger.warn('Failed to release leases on shutdown', { scope: svc.scope.scope_id, error: rmsg });
       }
     }
 
@@ -1405,7 +1604,7 @@ export async function createSyncService(
 
       try {
         if (observationServer) {
-          await registerScopeApis(scopeServices, { requestWake }, scopeApis);
+          await registerScopeApis(scopeServices, { requestWake: requestWake as (reason: string) => void }, scopeApis);
           await observationServer.start();
         }
 
@@ -1436,7 +1635,7 @@ export async function createSyncService(
       });
 
       if (observationServer) {
-        await registerScopeApis(scopeServices, { requestWake }, scopeApis);
+        await registerScopeApis(scopeServices, { requestWake: requestWake as (reason: string) => void }, scopeApis);
         await observationServer.start();
       }
 

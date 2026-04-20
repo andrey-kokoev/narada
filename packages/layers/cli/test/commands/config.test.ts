@@ -24,19 +24,26 @@ function createMockContext(overrides?: Partial<CommandContext>): CommandContext 
 }
 
 describe('config command', () => {
-  it('creates default config file', async () => {
+  it('creates default config file and prints deprecation', async () => {
     vol.fromJSON({});
 
-    const context = createMockContext();
+    const logger = createMockLogger();
+    const context = createMockContext({ logger });
     const result = await configCommand({ output: '/test/output.json' }, context);
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
+
+    // Verify deprecation is logged
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.stringContaining('deprecated'),
+      expect.anything(),
+    );
 
     // Verify file was created
     const configContent = vol.readFileSync('/test/output.json', 'utf8');
     const config = JSON.parse(configContent);
 
-    expect(config.mailbox_id).toBe('user@example.com');
+    expect(config.mailbox_id).toBeUndefined();
     expect(config.root_dir).toBe('./data');
     expect(config.scopes[0].scope_id).toBe('user@example.com');
     expect(config.scopes[0].sources[0].user_id).toBe('user@example.com');
@@ -57,7 +64,8 @@ describe('config command', () => {
     const configContent = vol.readFileSync('/test/output.json', 'utf8');
     const config = JSON.parse(configContent);
     expect(config.existing).toBeUndefined();
-    expect(config.mailbox_id).toBeDefined();
+    expect(config.scopes).toBeDefined();
+    expect(config.mailbox_id).toBeUndefined();
   });
 
   it('fails when file exists without force flag', async () => {
@@ -84,7 +92,8 @@ describe('config command', () => {
 
     const configContent = vol.readFileSync('/test/nested/deep/config.json', 'utf8');
     const config = JSON.parse(configContent);
-    expect(config.mailbox_id).toBeDefined();
+    expect(config.scopes).toBeDefined();
+    expect(config.mailbox_id).toBeUndefined();
   });
 
   it('respects format option for human output', async () => {

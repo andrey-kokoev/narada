@@ -23,6 +23,7 @@ const daemonSrc = resolve(projectRoot, "packages", "layers", "daemon", "src");
 const coreSrc = resolve(projectRoot, "packages", "layers", "control-plane", "src");
 const uiHtmlPath = resolve(daemonSrc, "ui", "index.html");
 const operatorActionsPath = resolve(daemonSrc, "observation", "operator-actions.ts");
+const canonicalExecutorPath = resolve(coreSrc, "operator-actions", "executor.ts");
 const observationRoutesPath = resolve(daemonSrc, "observation", "observation-routes.ts");
 const operatorActionRoutesPath = resolve(daemonSrc, "observation", "operator-action-routes.ts");
 const observabilityTypesPath = resolve(coreSrc, "observability", "types.ts");
@@ -120,14 +121,14 @@ describe("daemon authority guardrails", () => {
   });
 
   it("operator action allowlist is exhaustive in executeOperatorAction switch", () => {
-    const source = readFileSync(operatorActionsPath, "utf8");
+    const source = readFileSync(canonicalExecutorPath, "utf8");
     for (const action of PERMITTED_OPERATOR_ACTIONS) {
       expect(source).toContain(`case "${action}":`);
     }
   });
 
-  it("operator-actions.ts contains no direct store mutations outside switch cases", () => {
-    const source = readFileSync(operatorActionsPath, "utf8");
+  it("canonical executor contains no direct store mutations outside switch cases", () => {
+    const source = readFileSync(canonicalExecutorPath, "utf8");
     // The only coordinatorStore mutations should be inside executeOperatorAction
     // and should be limited to the known audit + action patterns.
     const forbiddenPatterns = [

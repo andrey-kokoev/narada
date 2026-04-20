@@ -11,6 +11,7 @@ import type { ServerResponse } from "http";
 import {
   buildObservationPlaneSnapshot,
   buildOverviewSnapshot,
+  buildScopeDispatchSummary,
   getRecentFacts,
   getContextSummaries,
   getActiveWorkItems,
@@ -36,10 +37,18 @@ import {
   getDecisionDetail,
   getExecutionDetail,
   getEvaluationsByContextDetail,
+  getRecentOperatorActions,
+  getOperatorActionsForScope,
+  getOperatorActionsForContext,
+  getStuckWorkItems,
+  getStuckWorkItemSummary,
+  getStuckOutboundCommands,
+  getStuckOutboundSummary,
   type WorkItemLifecycleSummary,
 } from "@narada2/control-plane";
 import type { RouteHandler } from "./routes.js";
 import type { ObservationApiScope } from "./observation-server.js";
+import { OUTBOUND_WORKER_IDS } from "../lib/workers.js";
 
 export function createObservationRoutes(
   prefix: string,
@@ -68,8 +77,55 @@ export function createObservationRoutes(
       method: "GET",
       pattern: new RegExp(`^${prefix}/scopes$`),
       handler: async (_req, res) => {
-        const scopes = Array.from(scopeApis.values()).map((s) => ({ scope_id: s.scope_id }));
+        const scopes = Array.from(scopeApis.values()).map((s) => ({ scope_id: s.scope_id, operation_id: s.scope_id }));
         jsonResponse(res, 200, { scopes });
+      },
+    },
+    {
+      method: "GET",
+      pattern: new RegExp(`^${prefix}/operator-actions$`),
+      handler: async (_req, res, _params, searchParams) => {
+        const limit = parseLimit(searchParams, 50);
+        const since = searchParams.get("since") ?? undefined;
+        // Best-effort global aggregation: fetch limit rows per scope, then
+        // sort and slice globally. A single scope dominating the feed may
+        // crowd out others; this is acceptable for an observability surface.
+        const allActions = Array.from(scopeApis.values()).flatMap((scope) =>
+          getRecentOperatorActions(scope.coordinatorStore, limit, since),
+        );
+        allActions.sort((a, b) => b.created_at.localeCompare(a.created_at));
+        jsonResponse(res, 200, { actions: allActions.slice(0, limit) });
+      },
+    },
+    {
+      method: "GET",
+      pattern: new RegExp(`^${prefix}/scopes/([^/]+)/operator-actions$`),
+      handler: async (_req, res, params, searchParams) => {
+        const scope = getScope(params[1]!);
+        if (!scope) {
+          jsonResponse(res, 404, { error: "Scope not found" });
+          return;
+        }
+        const limit = parseLimit(searchParams, 50);
+        const since = searchParams.get("since") ?? undefined;
+        const actions = getOperatorActionsForScope(scope.coordinatorStore, scope.scope_id, limit, since);
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, actions });
+      },
+    },
+    {
+      method: "GET",
+      pattern: new RegExp(`^${prefix}/scopes/([^/]+)/contexts/([^/]+)/operator-actions$`),
+      handler: async (_req, res, params, searchParams) => {
+        const scope = getScope(params[1]!);
+        if (!scope) {
+          jsonResponse(res, 404, { error: "Scope not found" });
+          return;
+        }
+        const contextId = decodeURIComponent(params[2]!);
+        const limit = parseLimit(searchParams, 50);
+        const since = searchParams.get("since") ?? undefined;
+        const actions = getOperatorActionsForContext(scope.coordinatorStore, contextId, limit, since);
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, context_id: contextId, actions });
       },
     },
     {
@@ -89,7 +145,7 @@ export function createObservationRoutes(
           scope.executionStore,
           scope.scope_id,
         );
-        jsonResponse(res, 200, { scope_id: scope.scope_id, snapshot });
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, snapshot });
       },
     },
     {
@@ -107,7 +163,7 @@ export function createObservationRoutes(
           scope.executionStore,
           scope.factStore,
         );
-        jsonResponse(res, 200, { scope_id: scope.scope_id, overview });
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, overview });
       },
     },
     {
@@ -121,7 +177,7 @@ export function createObservationRoutes(
         }
         const limit = parseLimit(searchParams, 100);
         const facts = getRecentFacts(scope.factStore, limit);
-        jsonResponse(res, 200, { scope_id: scope.scope_id, facts });
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, facts });
       },
     },
     {
@@ -135,7 +191,7 @@ export function createObservationRoutes(
         }
         const limit = parseLimit(searchParams, 100);
         const contexts = getContextSummaries(scope.coordinatorStore, limit);
-        jsonResponse(res, 200, { scope_id: scope.scope_id, contexts });
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, contexts });
       },
     },
     {
@@ -148,7 +204,7 @@ export function createObservationRoutes(
           return;
         }
         const view = getMailboxVerticalView(scope.coordinatorStore, scope.outboundStore, scope.scope_id);
-        jsonResponse(res, 200, { scope_id: scope.scope_id, view });
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, view });
       },
     },
     {
@@ -169,7 +225,7 @@ export function createObservationRoutes(
         } else {
           items = getActiveWorkItems(scope.coordinatorStore, parseLimit(searchParams, 50));
         }
-        jsonResponse(res, 200, { scope_id: scope.scope_id, status_filter: statusFilter ?? "active", items });
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, status_filter: statusFilter ?? "active", items });
       },
     },
     {
@@ -183,7 +239,7 @@ export function createObservationRoutes(
         }
         const summaries = getIntentSummaries(scope.intentStore);
         jsonResponse(res, 200, {
-          scope_id: scope.scope_id,
+          scope_id: scope.scope_id, operation_id: scope.scope_id,
           pending: summaries.pending,
           executing: summaries.executing,
           failed_terminal: summaries.failed_terminal,
@@ -204,7 +260,7 @@ export function createObservationRoutes(
         const charterExecutions = getRecentSessionsAndExecutions(scope.coordinatorStore, limit);
         const processExecutions = getProcessExecutionSummaries(scope.executionStore, limit);
         jsonResponse(res, 200, {
-          scope_id: scope.scope_id,
+          scope_id: scope.scope_id, operation_id: scope.scope_id,
           charter_executions: charterExecutions,
           process_executions: {
             active: processExecutions.active,
@@ -228,7 +284,7 @@ export function createObservationRoutes(
         const workItems = getRecentFailedWorkItems(scope.coordinatorStore, limit);
         const processExecutions = getProcessExecutionSummaries(scope.executionStore, limit);
         jsonResponse(res, 200, {
-          scope_id: scope.scope_id,
+          scope_id: scope.scope_id, operation_id: scope.scope_id,
           work_items: workItems,
           process_executions: processExecutions.failed_recent,
         });
@@ -249,7 +305,7 @@ export function createObservationRoutes(
           scope.intentStore,
           scope.executionStore,
         );
-        jsonResponse(res, 200, { scope_id: scope.scope_id, workers });
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, workers });
       },
     },
     {
@@ -263,7 +319,7 @@ export function createObservationRoutes(
         }
         const limit = parseLimit(searchParams, 100);
         const events = getUnifiedTimeline(scope.coordinatorStore, scope.factStore, limit);
-        jsonResponse(res, 200, { scope_id: scope.scope_id, events });
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, events });
       },
     },
     {
@@ -277,7 +333,7 @@ export function createObservationRoutes(
         }
         const factId = decodeURIComponent(params[2]!);
         const timeline = getFactTimeline(scope.coordinatorStore, scope.factStore, factId);
-        jsonResponse(res, 200, { scope_id: scope.scope_id, fact_id: factId, timeline });
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, fact_id: factId, timeline });
       },
     },
     {
@@ -291,7 +347,7 @@ export function createObservationRoutes(
         }
         const contextId = decodeURIComponent(params[2]!);
         const timeline = getContextTimeline(scope.coordinatorStore, contextId);
-        jsonResponse(res, 200, { scope_id: scope.scope_id, context_id: contextId, timeline });
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, context_id: contextId, timeline });
       },
     },
     {
@@ -305,7 +361,7 @@ export function createObservationRoutes(
         }
         const workItemId = decodeURIComponent(params[2]!);
         const timeline = getWorkItemTimeline(scope.coordinatorStore, workItemId);
-        jsonResponse(res, 200, { scope_id: scope.scope_id, work_item_id: workItemId, timeline });
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, work_item_id: workItemId, timeline });
       },
     },
     {
@@ -320,7 +376,7 @@ export function createObservationRoutes(
         const limit = parseLimit(searchParams, 50);
         const summaries = getIntentExecutionSummaries(scope.intentStore, limit);
         jsonResponse(res, 200, {
-          scope_id: scope.scope_id,
+          scope_id: scope.scope_id, operation_id: scope.scope_id,
           recent: summaries.recent,
           failed_recent: summaries.failed_recent,
           total_count: summaries.total_count,
@@ -338,7 +394,7 @@ export function createObservationRoutes(
         }
         const intentId = decodeURIComponent(params[2]!);
         const transitions = getIntentLifecycleTransitions(scope.intentStore.db, intentId);
-        jsonResponse(res, 200, { scope_id: scope.scope_id, intent_id: intentId, transitions });
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, intent_id: intentId, transitions });
       },
     },
     {
@@ -352,7 +408,7 @@ export function createObservationRoutes(
         }
         const limit = parseLimit(searchParams, 50);
         const executions = getProcessExecutionDetails(scope.executionStore, limit);
-        jsonResponse(res, 200, { scope_id: scope.scope_id, executions });
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, executions });
       },
     },
     {
@@ -366,7 +422,7 @@ export function createObservationRoutes(
         }
         const limit = parseLimit(searchParams, 50);
         const executions = getMailExecutionDetails(scope.outboundStore, limit);
-        jsonResponse(res, 200, { scope_id: scope.scope_id, executions });
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, executions });
       },
     },
     {
@@ -380,7 +436,7 @@ export function createObservationRoutes(
         }
         const limit = parseLimit(searchParams, 50);
         const leases = getActiveLeases(scope.coordinatorStore, limit);
-        jsonResponse(res, 200, { scope_id: scope.scope_id, leases });
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, leases });
       },
     },
     {
@@ -394,7 +450,7 @@ export function createObservationRoutes(
         }
         const limit = parseLimit(searchParams, 50);
         const recoveries = getRecentStaleLeaseRecoveries(scope.coordinatorStore, limit);
-        jsonResponse(res, 200, { scope_id: scope.scope_id, recoveries });
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, recoveries });
       },
     },
     {
@@ -407,7 +463,7 @@ export function createObservationRoutes(
           return;
         }
         const indicator = getQuiescenceIndicator(scope.coordinatorStore);
-        jsonResponse(res, 200, { scope_id: scope.scope_id, indicator });
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, indicator });
       },
     },
     {
@@ -425,7 +481,7 @@ export function createObservationRoutes(
           jsonResponse(res, 404, { error: "Evaluation not found" });
           return;
         }
-        jsonResponse(res, 200, { scope_id: scope.scope_id, evaluation: detail });
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, evaluation: detail });
       },
     },
     {
@@ -443,7 +499,7 @@ export function createObservationRoutes(
           jsonResponse(res, 404, { error: "Decision not found" });
           return;
         }
-        jsonResponse(res, 200, { scope_id: scope.scope_id, decision: detail });
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, decision: detail });
       },
     },
     {
@@ -461,7 +517,7 @@ export function createObservationRoutes(
           jsonResponse(res, 404, { error: "Execution not found" });
           return;
         }
-        jsonResponse(res, 200, { scope_id: scope.scope_id, execution: detail });
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, execution: detail });
       },
     },
     {
@@ -475,14 +531,134 @@ export function createObservationRoutes(
         }
         const contextId = decodeURIComponent(params[2]!);
         const evaluations = getEvaluationsByContextDetail(scope.coordinatorStore, contextId, scope.scope_id);
-        jsonResponse(res, 200, { scope_id: scope.scope_id, context_id: contextId, evaluations });
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, context_id: contextId, evaluations });
       },
     },
     {
       method: "GET",
       pattern: new RegExp(`^${prefix}/health$`),
       handler: async (_req, res) => {
-        jsonResponse(res, 200, { status: "ok", observation_api: true });
+        // Liveness + sync health probe (Task 234 / Task 246)
+        // Contract: /health checks sync freshness + outbound health only.
+        // Worker registration is a /ready concern, not /health.
+        try {
+          const scopeStatuses = Array.from(scopeApis.entries()).map(([scopeId, scope]) => {
+            const summary = buildScopeDispatchSummary(scope.coordinatorStore, scope.outboundStore, scopeId);
+            const lastSync = scope.getLastSyncAt?.() ?? null;
+            const threshold = scope.syncFreshThresholdMs ?? 24 * 60 * 60 * 1000;
+            const syncFresh = lastSync ? Date.now() - lastSync.getTime() < threshold : false;
+            return {
+              scope_id: scopeId,
+              sync_fresh: syncFresh,
+              outbound_healthy: summary.readiness.outbound_healthy,
+            };
+          });
+
+          const allSyncFresh = scopeStatuses.every((s) => s.sync_fresh);
+          const allOutboundHealthy = scopeStatuses.every((s) => s.outbound_healthy);
+          const syncHealthy = allSyncFresh && allOutboundHealthy;
+          const status = syncHealthy ? 200 : 503;
+
+          jsonResponse(res, status, {
+            status: syncHealthy ? "ok" : "degraded",
+            observation_api: true,
+            sync_healthy: syncHealthy,
+            scopes: scopeStatuses,
+          });
+        } catch {
+          jsonResponse(res, 503, { status: "error", observation_api: true, sync_healthy: false });
+        }
+      },
+    },
+    {
+      method: "GET",
+      pattern: new RegExp(`^${prefix}/scopes/([^/]+)/stuck-work-items$`),
+      handler: async (_req, res, params) => {
+        const scope = getScope(params[1]!);
+        if (!scope) {
+          jsonResponse(res, 404, { error: "Scope not found" });
+          return;
+        }
+        const items = getStuckWorkItems(scope.coordinatorStore);
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, items });
+      },
+    },
+    {
+      method: "GET",
+      pattern: new RegExp(`^${prefix}/scopes/([^/]+)/stuck-outbound-commands$`),
+      handler: async (_req, res, params) => {
+        const scope = getScope(params[1]!);
+        if (!scope) {
+          jsonResponse(res, 404, { error: "Scope not found" });
+          return;
+        }
+        const items = getStuckOutboundCommands(scope.outboundStore);
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, items });
+      },
+    },
+    {
+      method: "GET",
+      pattern: new RegExp(`^${prefix}/scopes/([^/]+)/stuck-work-summary$`),
+      handler: async (_req, res, params) => {
+        const scope = getScope(params[1]!);
+        if (!scope) {
+          jsonResponse(res, 404, { error: "Scope not found" });
+          return;
+        }
+        const summary = getStuckWorkItemSummary(scope.coordinatorStore);
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, summary });
+      },
+    },
+    {
+      method: "GET",
+      pattern: new RegExp(`^${prefix}/scopes/([^/]+)/stuck-outbound-summary$`),
+      handler: async (_req, res, params) => {
+        const scope = getScope(params[1]!);
+        if (!scope) {
+          jsonResponse(res, 404, { error: "Scope not found" });
+          return;
+        }
+        const summary = getStuckOutboundSummary(scope.outboundStore);
+        jsonResponse(res, 200, { scope_id: scope.scope_id, operation_id: scope.scope_id, summary });
+      },
+    },
+    {
+      method: "GET",
+      pattern: new RegExp(`^${prefix}/ready$`),
+      handler: async (_req, res) => {
+        // Readiness probe: dispatch ready (Task 234 / Task 246)
+        // Contract: /ready checks dispatch readiness (sync fresh) + outbound health + worker registration.
+        try {
+          const scopeStatuses = Array.from(scopeApis.entries()).map(([scopeId, scope]) => {
+            const summary = buildScopeDispatchSummary(scope.coordinatorStore, scope.outboundStore, scopeId);
+            const lastSync = scope.getLastSyncAt?.() ?? null;
+            const threshold = scope.syncFreshThresholdMs ?? 24 * 60 * 60 * 1000;
+            const dispatchReady = lastSync ? Date.now() - lastSync.getTime() < threshold : false;
+            const workersRegistered = OUTBOUND_WORKER_IDS.every(
+              (id) => scope.workerRegistry.getWorker(id) !== undefined,
+            );
+            return {
+              scope_id: scopeId,
+              dispatch_ready: dispatchReady,
+              outbound_healthy: summary.readiness.outbound_healthy,
+              workers_registered: workersRegistered,
+            };
+          });
+
+          const allDispatchReady = scopeStatuses.every((s) => s.dispatch_ready);
+          const allOutboundHealthy = scopeStatuses.every((s) => s.outbound_healthy);
+          const allWorkersRegistered = scopeStatuses.every((s) => s.workers_registered);
+          const ready = allDispatchReady && allOutboundHealthy && allWorkersRegistered;
+          const status = ready ? 200 : 503;
+
+          jsonResponse(res, status, {
+            ready,
+            dispatch_ready: allDispatchReady,
+            scopes: scopeStatuses,
+          });
+        } catch {
+          jsonResponse(res, 503, { ready: false, dispatch_ready: false });
+        }
       },
     },
   ];

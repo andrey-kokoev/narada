@@ -27,9 +27,10 @@ if (!process.env.ALLOW_FULL_TESTS && !process.env.NARADA_FULL_VERIFY) {
   console.error("");
   console.error("The full recursive suite is expensive (~2 min) and should not be run casually.");
   console.error("");
-  console.error("  Fast verification:     pnpm verify              (~8 sec)");
-  console.error("  Unit tests only:       pnpm test:unit           (~8 sec)");
-  console.error("  Control-plane only:    pnpm test:control-plane  (~5 sec)");
+  console.error("  Fast verification:     pnpm verify              (~15 sec, no heavy suites)");
+  console.error("  Focused command:       pnpm test:focused \"<cmd>\"  (with telemetry)");
+  console.error("  Unit tests only:       pnpm test:unit           (includes heavy suites)");
+  console.error("  Control-plane only:    pnpm test:control-plane  (~60+ sec, may crash on teardown)");
   console.error("  Daemon only:           pnpm test:daemon         (~90 sec)");
   console.error("  Full suite:            ALLOW_FULL_TESTS=1 pnpm test:full");
   console.error("  Alternative guard:     NARADA_FULL_VERIFY=1 pnpm test:full");

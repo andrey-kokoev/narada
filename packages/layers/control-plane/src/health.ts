@@ -32,6 +32,25 @@ export interface HealthRecentError {
   message: string;
 }
 
+export interface StuckItemHealthEntry {
+  classification: string;
+  count: number;
+}
+
+/** Readiness snapshot for a single scope (mirrors daemon contract) */
+export interface ScopeReadinessSnapshot {
+  dispatchReady: boolean;
+  outboundHealthy: boolean;
+  workersRegistered: boolean;
+  syncFresh: boolean;
+}
+
+/** Configured health thresholds (mirrors daemon contract) */
+export interface HealthThresholds {
+  maxStalenessMs: number;
+  maxConsecutiveErrors: number;
+}
+
 export interface HealthFileData {
   /** ISO 8601 timestamp of when health was recorded */
   timestamp: string;
@@ -59,6 +78,22 @@ export interface HealthFileData {
   metrics: HealthMetrics;
   /** Recent errors for debugging (last 10) */
   recentErrors: HealthRecentError[];
+  /** Stuck-item counts for operational trust (detection only, no readiness semantics) */
+  stuck_items?: {
+    work_items: StuckItemHealthEntry[];
+    outbound_handoffs: StuckItemHealthEntry[];
+  };
+  /** Readiness contract (Task 234) — aggregate across scopes when written by daemon */
+  readiness?: {
+    dispatchReady: boolean;
+    outboundHealthy: boolean;
+    workersRegistered: boolean;
+    syncFresh: boolean;
+  };
+  /** Staleness indicator (Task 234) */
+  isStale?: boolean;
+  /** Configured thresholds (Task 234) */
+  thresholds?: HealthThresholds;
 }
 
 export interface HealthWriterOptions {
@@ -155,6 +190,7 @@ export function createHealthWriter(options: HealthWriterOptions): {
         totalErrors,
         pid: process.pid,
         error: errorMessage,
+        stuck_items: previousData?.stuck_items,
         metrics: {
           lastSyncDurationMs: previousData?.metrics?.lastSyncDurationMs ?? 0,
           messagesPerSecond: 0,
@@ -185,6 +221,7 @@ export function createHealthWriter(options: HealthWriterOptions): {
         consecutiveErrors: 0,
         totalErrors: previousData?.totalErrors ?? 0,
         pid: process.pid,
+        stuck_items: previousData?.stuck_items,
         metrics: {
           lastSyncDurationMs: durationMs,
           messagesPerSecond: Math.round(messagesPerSecond * 100) / 100,

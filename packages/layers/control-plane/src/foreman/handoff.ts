@@ -71,6 +71,9 @@ export class OutboundHandoff {
       blocked_reason: null,
       terminal_reason: null,
       idempotency_key: idempotencyKey,
+      reviewed_at: null,
+      reviewer_notes: null,
+      external_reference: null,
     };
 
     const version: OutboundVersion = {

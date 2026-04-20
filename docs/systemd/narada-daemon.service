@@ -1,0 +1,26 @@
+[Unit]
+Description=Narada Daemon — deterministic mailbox state compiler
+After=network.target
+
+[Service]
+Type=simple
+User=narada
+Group=narada
+WorkingDirectory=/var/lib/narada
+ExecStart=/usr/bin/narada-daemon -c /etc/narada/config.json --pid-file /run/narada/daemon.pid
+ExecReload=/bin/kill -HUP $MAINPID
+PIDFile=/run/narada/daemon.pid
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Resource limits
+LimitNOFILE=65536
+
+# Graceful shutdown: SIGTERM triggers drain; systemd waits up to 35s
+# (30s maxDrainMs + 5s buffer) before SIGKILL
+TimeoutStopSec=35
+
+[Install]
+WantedBy=multi-user.target

@@ -81,7 +81,13 @@ export {
 // Library exports
 export { createLogger, type Logger } from "./lib/logger.js";
 export { PidFile, type PidFileOptions } from "./lib/pid-file.js";
-export { HealthFile, type HealthStatus, type HealthFileOptions } from "./lib/health.js";
+export {
+  HealthFile,
+  type HealthStatus,
+  type HealthFileOptions,
+  type ScopeReadinessSnapshot,
+  type HealthThresholds,
+} from "./lib/health.js";
 
 // Default export for library consumers
 export { createSyncService as default } from "./service.js";
@@ -94,11 +100,21 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
   let configPath = "./config.json";
+  const fs = await import("node:fs");
+  if (!fs.existsSync(configPath)) {
+    const fallback = "./config/config.json";
+    if (fs.existsSync(fallback)) {
+      configPath = fallback;
+    }
+  }
   let verbose = false;
   let once = false;
   let pidFilePath: string | undefined;
   let observationApiPort: number | undefined;
   let observationApiHost: string | undefined;
+  let maxStalenessMs: number | undefined;
+  let maxConsecutiveErrors: number | undefined;
+  let maxDrainMs: number | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -115,14 +131,36 @@ async function main(): Promise<void> {
       observationApiPort = raw ? Number(raw) : undefined;
     } else if (arg === "--observation-host") {
       observationApiHost = args[++i] ?? observationApiHost;
+    } else if (arg === "--max-staleness-ms") {
+      const raw = args[++i];
+      maxStalenessMs = raw ? Number(raw) : undefined;
+    } else if (arg === "--max-consecutive-errors") {
+      const raw = args[++i];
+      maxConsecutiveErrors = raw ? Number(raw) : undefined;
+    } else if (arg === "--max-drain-ms") {
+      const raw = args[++i];
+      maxDrainMs = raw ? Number(raw) : undefined;
     } else if (arg === "-h" || arg === "--help") {
-      console.log("Usage: narada-daemon [-c config.json] [-v] [--once] [--pid-file path] [--observation-port port] [--observation-host host]");
+      console.log("Usage: narada-daemon [-c config.json] [-v] [--once] [--pid-file path] [--observation-port port] [--observation-host host] [--max-staleness-ms ms] [--max-consecutive-errors n] [--max-drain-ms ms]");
       process.exit(0);
     }
   }
 
   if (observationApiPort !== undefined && (!Number.isInteger(observationApiPort) || observationApiPort <= 0)) {
     throw new Error(`Invalid --observation-port: ${observationApiPort}`);
+  }
+  if (maxStalenessMs !== undefined && (Number.isNaN(maxStalenessMs) || maxStalenessMs <= 0)) {
+    throw new Error(`Invalid --max-staleness-ms: ${maxStalenessMs}`);
+  }
+  if (maxConsecutiveErrors !== undefined && (Number.isNaN(maxConsecutiveErrors) || maxConsecutiveErrors <= 0)) {
+    throw new Error(`Invalid --max-consecutive-errors: ${maxConsecutiveErrors}`);
+  }
+  if (maxDrainMs !== undefined && (Number.isNaN(maxDrainMs) || maxDrainMs <= 0)) {
+    throw new Error(`Invalid --max-drain-ms: ${maxDrainMs}`);
+  }
+
+  if (verbose) {
+    console.log(`Using config: ${configPath}`);
   }
 
   const service = await createSyncService({
@@ -131,6 +169,9 @@ async function main(): Promise<void> {
     pidFilePath,
     observationApiPort,
     observationApiHost,
+    maxStalenessMs,
+    maxConsecutiveErrors,
+    maxDrainMs,
   });
 
   let stopping = false;

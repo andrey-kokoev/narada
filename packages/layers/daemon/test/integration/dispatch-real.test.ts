@@ -120,8 +120,14 @@ describe("daemon dispatch phase with real charter runner (mocked api)", { timeou
     expect(executions.length).toBeGreaterThanOrEqual(1);
     expect(executions[0]!.status).toBe("succeeded");
 
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    const fetchCall = mockFetch.mock.calls[0] as [string, RequestInit];
+    // The service may make multiple fetch calls (charter runtime + outbound workers).
+    // We only care that the CodexCharterRunner call happened.
+    expect(mockFetch.mock.calls.length).toBeGreaterThanOrEqual(1);
+    const chatCompletionCall = mockFetch.mock.calls.find(
+      (call) => typeof call[0] === "string" && call[0].includes("/chat/completions")
+    );
+    expect(chatCompletionCall).toBeDefined();
+    const fetchCall = chatCompletionCall as [string, RequestInit];
     expect(fetchCall[0]).toContain("/chat/completions");
 
     db.close();

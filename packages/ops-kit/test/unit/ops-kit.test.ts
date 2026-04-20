@@ -34,6 +34,24 @@ describe("ops-kit", () => {
     expect(fs.existsSync(path.join(root, "mailboxes", "help@example.com", "README.md"))).toBe(true);
   });
 
+  it("want-mailbox accepts graph-user-id, folders, and data-root-dir", () => {
+    const { configPath } = makeOpsRepo();
+    const result = wantMailbox("help@example.com", {
+      configPath,
+      posture: "draft-only",
+      graphUserId: "alias@company.com",
+      folders: ["inbox", "archive"],
+      dataRootDir: "./custom-data",
+    });
+    const config = readConfig(configPath)!;
+    const scope = findScope(config, "help@example.com")!;
+    expect(result.scopeId).toBe("help@example.com");
+    const graphSource = scope.sources.find((s) => s.type === "graph");
+    expect(graphSource?.user_id).toBe("alias@company.com");
+    expect(scope.scope.included_container_refs).toEqual(["inbox", "archive"]);
+    expect(scope.root_dir).toBe("./custom-data");
+  });
+
   it("shapes a workflow and writes schedule declaration", () => {
     const { root, configPath } = makeOpsRepo();
     const result = wantWorkflow("sonar-postgres-watch", { configPath, schedule: "* * * * *", posture: "observe-only" });
@@ -111,6 +129,12 @@ describe("ops-kit", () => {
     const config = JSON.parse(fs.readFileSync(path.join(repoPath, "config", "config.json"), "utf-8"));
     expect(config.root_dir).toBe("./data");
     expect(config.scopes).toEqual([]);
+
+    const envExample = fs.readFileSync(path.join(repoPath, ".env.example"), "utf-8");
+    expect(envExample).toContain("GRAPH_ACCESS_TOKEN=");
+    expect(envExample).toContain("NARADA_OPENAI_API_KEY=");
+    expect(envExample).toContain("GRAPH_TENANT_ID=");
+    expect(envExample).toContain("GRAPH_CLIENT_SECRET=");
 
     // Verify the repo works with existing shaping commands
     const configPath = path.join(repoPath, "config", "config.json");

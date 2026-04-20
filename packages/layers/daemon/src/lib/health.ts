@@ -7,6 +7,13 @@
 import { writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
+export interface ScopeReadinessSnapshot {
+  dispatchReady: boolean;
+  outboundHealthy: boolean;
+  workersRegistered: boolean;
+  syncFresh: boolean;
+}
+
 export interface ScopeHealthSnapshot {
   scopeId: string;
   openWorkItems: number;
@@ -16,6 +23,17 @@ export interface ScopeHealthSnapshot {
   failedTerminalWorkItems: number;
   pendingOutboundHandoffs: number;
   recentDecisionsCount: number;
+  readiness: ScopeReadinessSnapshot;
+}
+
+export interface HealthThresholds {
+  maxStalenessMs: number;
+  maxConsecutiveErrors: number;
+}
+
+export interface StuckItemHealthEntry {
+  classification: string;
+  count: number;
 }
 
 export interface HealthStatus {
@@ -34,6 +52,22 @@ export interface HealthStatus {
   failedRetryableWorkItems?: number;
   failedTerminalWorkItems?: number;
   pendingOutboundHandoffs?: number;
+  /** Stuck-item detection (Task 235) */
+  stuck_items?: {
+    work_items: StuckItemHealthEntry[];
+    outbound_handoffs: StuckItemHealthEntry[];
+  };
+  /** Readiness contract (Task 234) */
+  readiness?: {
+    dispatchReady: boolean;
+    outboundHealthy: boolean;
+    workersRegistered: boolean;
+    syncFresh: boolean;
+  };
+  /** Staleness indicator */
+  isStale?: boolean;
+  /** Configured thresholds */
+  thresholds?: HealthThresholds;
   /** Per-scope breakdown */
   scopes?: ScopeHealthSnapshot[];
   timestamp: string;

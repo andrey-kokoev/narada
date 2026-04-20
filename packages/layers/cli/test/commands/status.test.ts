@@ -174,6 +174,46 @@ describe('status command', () => {
     });
   });
 
+  it('includes readiness from .health.json when daemon is running', async () => {
+    const config = createTestConfig();
+    vol.fromJSON({
+      '/test/config.json': JSON.stringify(config, null, 2),
+      '/test/data/.health.json': JSON.stringify({
+        status: 'healthy',
+        readiness: {
+          dispatchReady: true,
+          outboundHealthy: true,
+          workersRegistered: true,
+          syncFresh: true,
+        },
+        isStale: false,
+        thresholds: {
+          maxStalenessMs: 300000,
+          maxConsecutiveErrors: 3,
+        },
+      }),
+    });
+
+    const context = createMockContext();
+    const result = await statusCommand({}, context);
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      readiness: {
+        dispatchReady: true,
+        outboundHealthy: true,
+        workersRegistered: true,
+        syncFresh: true,
+      },
+      isStale: false,
+      thresholds: {
+        maxStalenessMs: 300000,
+        maxConsecutiveErrors: 3,
+      },
+    });
+  });
+
   it('handles verbose mode', async () => {
     const config = createTestConfig();
     vol.fromJSON({

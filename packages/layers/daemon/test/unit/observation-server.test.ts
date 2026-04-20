@@ -75,7 +75,7 @@ async function httpRequestJson(url: string, method: string, body?: unknown): Pro
   });
 }
 
-describe("observation server", () => {
+describe("observation server", { sequential: true }, () => {
   const db = new Database(":memory:");
   const factDb = new Database(":memory:");
 
@@ -412,6 +412,8 @@ describe("observation server", () => {
     executionStore,
     workerRegistry,
     factStore,
+    getLastSyncAt: () => new Date(),
+    syncFreshThresholdMs: 24 * 60 * 60 * 1000,
   };
 
   const scopeApiB: ObservationApiScope = {
@@ -422,6 +424,7 @@ describe("observation server", () => {
     executionStore,
     workerRegistry,
     factStore,
+    // getLastSyncAt intentionally omitted — used by stale-data probe tests
   };
 
   const server = createObservationServer(
@@ -577,10 +580,130 @@ describe("observation server", () => {
     expect(body.timeline.work_item?.work_item_id).toBe("wi-1");
   });
 
-  it("returns health", async () => {
+  it("returns health (degraded when data is stale)", async () => {
     const url = `${server.getUrl()}/health`;
-    const body = (await httpGetJson(url)) as { status: string };
+    const res = await httpRequestJson(url, "GET");
+    expect(res.status).toBe(503);
+    const body = res.data as { status: string; sync_healthy: boolean; scopes: Array<{ sync_fresh: boolean }> };
+    expect(body.status).toBe("degraded");
+    expect(body.sync_healthy).toBe(false);
+    expect(body.scopes.length).toBeGreaterThan(0);
+  });
+
+  it("returns ready (not ready when data is stale)", async () => {
+    const url = `${server.getUrl()}/ready`;
+    const res = await httpRequestJson(url, "GET");
+    expect(res.status).toBe(503);
+    const body = res.data as { ready: boolean; dispatch_ready: boolean; scopes: Array<{ dispatch_ready: boolean }> };
+    expect(body.ready).toBe(false);
+    expect(body.dispatch_ready).toBe(false);
+  });
+
+  it("returns health 200 when sync is fresh (ignores worker registration)", async () => {
+    // Ensure both scopes report fresh sync
+    scopeApiB.getLastSyncAt = () => new Date();
+    scopeApiB.syncFreshThresholdMs = 24 * 60 * 60 * 1000;
+
+    const now = new Date().toISOString();
+    for (const scopeId of ["scope-a", "scope-b"]) {
+      coordinatorStore.insertWorkItem({
+        work_item_id: `wi-fresh-${scopeId}`,
+        context_id: "ctx-1",
+        scope_id: scopeId,
+        status: "opened",
+        priority: 1,
+        opened_for_revision_id: "rev-fresh",
+        resolved_revision_id: null,
+        resolution_outcome: null,
+        error_message: null,
+        retry_count: 0,
+        next_retry_at: null,
+        context_json: null,
+        created_at: now,
+        updated_at: now,
+        preferred_session_id: null,
+        preferred_agent_id: null,
+        affinity_group_id: null,
+        affinity_strength: 0,
+        affinity_expires_at: null,
+      });
+    }
+
+    const url = `${server.getUrl()}/health`;
+    const res = await httpRequestJson(url, "GET");
+    expect(res.status).toBe(200);
+    const body = res.data as { status: string; sync_healthy: boolean };
     expect(body.status).toBe("ok");
+    expect(body.sync_healthy).toBe(true);
+  });
+
+  it("returns ready 503 when required outbound workers are missing", async () => {
+    // Separate server with only an unrelated worker registered
+    const minimalRegistry = new DefaultWorkerRegistry();
+    minimalRegistry.register({
+      identity: {
+        worker_id: "process_executor",
+        executor_family: "process",
+        concurrency_policy: "singleton",
+        description: "Unrelated test worker",
+      },
+      fn: async () => ({ processed: false }),
+    });
+
+    const freshScopeApi: ObservationApiScope = {
+      scope_id: "scope-worker-test",
+      coordinatorStore,
+      outboundStore,
+      intentStore,
+      executionStore,
+      workerRegistry: minimalRegistry,
+      factStore,
+      getLastSyncAt: () => new Date(),
+      syncFreshThresholdMs: 24 * 60 * 60 * 1000,
+    };
+
+    const workerTestServer = createObservationServer(
+      { port: 0, verbose: false },
+      new Map([["scope-worker-test", freshScopeApi]]),
+    );
+    await workerTestServer.start();
+
+    try {
+      const url = `${workerTestServer.getUrl()}/ready`;
+      const res = await httpRequestJson(url, "GET");
+      expect(res.status).toBe(503);
+      const body = res.data as { ready: boolean; scopes: Array<{ workers_registered: boolean }> };
+      expect(body.ready).toBe(false);
+      expect(body.scopes[0]?.workers_registered).toBe(false);
+    } finally {
+      await workerTestServer.stop();
+    }
+  });
+
+  it("returns ready 200 when dispatch is ready and required workers are registered", async () => {
+    // Ensure both scopes report fresh sync
+    scopeApiB.getLastSyncAt = () => new Date();
+    scopeApiB.syncFreshThresholdMs = 24 * 60 * 60 * 1000;
+
+    // Register required outbound workers
+    for (const workerId of ["send_reply", "non_send_actions", "outbound_reconciler"]) {
+      workerRegistry.register({
+        identity: {
+          worker_id: workerId,
+          executor_family: "mail",
+          concurrency_policy: "singleton",
+          description: `Test ${workerId}`,
+        },
+        fn: async () => ({ processed: false }),
+      });
+    }
+
+    const url = `${server.getUrl()}/ready`;
+    const res = await httpRequestJson(url, "GET");
+    expect(res.status).toBe(200);
+    const body = res.data as { ready: boolean; dispatch_ready: boolean };
+    expect(body.ready).toBe(true);
+    expect(body.dispatch_ready).toBe(true);
   });
 
   it("serves the UI shell at root", async () => {
@@ -696,7 +819,7 @@ describe("observation server", () => {
       };
     };
     expect(body.scope_id).toBe("scope-a");
-    expect(body.indicator.opened_count).toBe(4);
+    expect(body.indicator.opened_count).toBe(6);
     expect(body.indicator.leased_count).toBe(0);
     expect(body.indicator.stale_lease_count).toBe(0);
     expect(body.indicator.is_quiescent).toBe(false);
@@ -862,6 +985,71 @@ describe("observation server", () => {
     const body = (await httpGetJson(url)) as { scope_id: string; view: { conversations: unknown[] } };
     expect(body.scope_id).toBe("scope-b");
     expect(body.view.conversations).toHaveLength(0);
+  });
+
+  it("returns global operator actions aggregated across scopes", async () => {
+    // Seed operator actions
+    coordinatorStore.insertOperatorActionRequest({
+      request_id: "op-req-1",
+      scope_id: "scope-a",
+      action_type: "trigger_sync",
+      target_id: null,
+      payload_json: null,
+      status: "executed",
+      requested_by: "operator",
+      requested_at: "2026-04-13T12:00:00Z",
+      executed_at: "2026-04-13T12:00:01Z",
+    });
+
+    const url = `${server.getUrl()}/operator-actions`;
+    const body = (await httpGetJson(url)) as { actions: Array<{ action_id: string; scope_id: string }> };
+    expect(Array.isArray(body.actions)).toBe(true);
+    const action = body.actions.find((a) => a.action_id === "op-req-1");
+    expect(action).toBeDefined();
+    expect(action!.scope_id).toBe("scope-a");
+  });
+
+  it("returns scoped operator actions", async () => {
+    coordinatorStore.insertOperatorActionRequest({
+      request_id: "op-req-2",
+      scope_id: "scope-a",
+      action_type: "request_redispatch",
+      target_id: null,
+      payload_json: null,
+      status: "executed",
+      requested_by: "operator",
+      requested_at: "2026-04-13T12:00:00Z",
+      executed_at: "2026-04-13T12:00:01Z",
+    });
+
+    const url = `${server.getUrl()}/scopes/scope-a/operator-actions`;
+    const body = (await httpGetJson(url)) as { scope_id: string; actions: Array<{ action_id: string }> };
+    expect(body.scope_id).toBe("scope-a");
+    const action = body.actions.find((a) => a.action_id === "op-req-2");
+    expect(action).toBeDefined();
+    expect(action!.action_type).toBe("request_redispatch");
+  });
+
+  it("returns context-scoped operator actions", async () => {
+    coordinatorStore.insertOperatorActionRequest({
+      request_id: "op-req-3",
+      scope_id: "scope-a",
+      action_type: "derive_work",
+      target_id: "ctx-1",
+      payload_json: null,
+      status: "executed",
+      requested_by: "operator",
+      requested_at: "2026-04-13T12:00:00Z",
+      executed_at: "2026-04-13T12:00:01Z",
+    });
+
+    const url = `${server.getUrl()}/scopes/scope-a/contexts/ctx-1/operator-actions`;
+    const body = (await httpGetJson(url)) as { scope_id: string; context_id: string; actions: Array<{ action_id: string; context_id: string | null }> };
+    expect(body.scope_id).toBe("scope-a");
+    expect(body.context_id).toBe("ctx-1");
+    const action = body.actions.find((a) => a.action_id === "op-req-3");
+    expect(action).toBeDefined();
+    expect(action!.context_id).toBe("ctx-1");
   });
 
   it("rejects rebuild_views when callback unavailable", async () => {

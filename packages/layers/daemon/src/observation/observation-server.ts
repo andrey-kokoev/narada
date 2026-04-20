@@ -23,8 +23,8 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   type CoordinatorStoreOperatorView,
-  type OutboundStoreView,
-  type IntentStoreView,
+  type OutboundStore,
+  type IntentStore,
   type ProcessExecutionStoreView,
   type FactStoreView,
   type WorkerRegistryView,
@@ -36,7 +36,6 @@ import { createLogger } from "../lib/logger.js";
 import { createObservationRoutes } from "./observation-routes.js";
 import { createOperatorActionRoutes } from "./operator-action-routes.js";
 import type { RouteHandler } from "./routes.js";
-import type { WakeReason } from "./types.js";
 
 export interface ObservationServerConfig {
   port: number;
@@ -49,8 +48,8 @@ export interface ObservationServerConfig {
 export interface ObservationApiScope {
   scope_id: string;
   coordinatorStore: CoordinatorStoreOperatorView;
-  outboundStore: OutboundStoreView;
-  intentStore: IntentStoreView;
+  outboundStore: OutboundStore;
+  intentStore: IntentStore;
   executionStore: ProcessExecutionStoreView;
   workerRegistry: WorkerRegistryView;
   factStore: FactStoreView;
@@ -62,12 +61,16 @@ export interface ObservationApiScope {
   /** Optional callback to trigger a dispatch phase for this scope */
   runDispatchPhase?: () => Promise<{ signal: SyncCompletionSignal | null; openedCount: number }>;
   /** Optional callback to request an out-of-band wake for this scope's service */
-  requestWake?: (reason: WakeReason) => void;
+  requestWake?: (reason: string) => void;
   /**
    * Optional callback to preview what a charter would propose for stored facts.
    * This is a read-only inspection path that does not create work items or intents.
    */
   previewWork?: (options: { contextId?: string; since?: string; factIds?: string[] }) => Promise<PreviewDerivationResult[]>;
+  /** Returns the actual last sync timestamp for this scope (Task 246) */
+  getLastSyncAt?: () => Date | null;
+  /** Configured sync freshness threshold in ms (Task 246) */
+  syncFreshThresholdMs?: number;
 }
 
 export interface ObservationServer {

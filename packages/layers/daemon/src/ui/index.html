@@ -264,6 +264,7 @@
       <li><a href="#operability" data-page="operability">Operability</a></li>
       <li><a href="#failures" data-page="failures">Failures</a></li>
       <li><a href="#verticals" data-page="verticals">Verticals</a></li>
+      <li><a href="#audit" data-page="audit">Audit Log</a></li>
     </menu>
   </nav>
 
@@ -309,12 +310,11 @@
       return data;
     }
 
-    async function doAction(actionType, targetId) {
+    async function doAction(actionType, targetId, payloadJson) {
       try {
-        const result = await apiPost(`/control/scopes/${encodeURIComponent(currentScope)}/actions`, {
-          action_type: actionType,
-          target_id: targetId,
-        });
+        const body = { action_type: actionType, target_id: targetId };
+        if (payloadJson) body.payload_json = JSON.stringify(payloadJson);
+        const result = await apiPost(`/control/scopes/${encodeURIComponent(currentScope)}/actions`, body);
         $("statusText").textContent = `Action ${actionType} executed (${result.request_id})`;
         setTimeout(() => loadPage(), 300);
       } catch (err) {
@@ -460,6 +460,15 @@
           <td class="mono truncate"><a class="link" data-context-id="${esc(r.context_id)}">${esc(r.context_id)}</a></td>
           <td>${fmtDate(r.submitted_at)}</td>
           <td>${fmtDate(r.confirmed_at)}</td>
+          <td>${r.reviewed_at ? '✓ ' + fmtDate(r.reviewed_at) : '—'}</td>
+          <td class="mono truncate">${esc(r.external_reference || '—')}</td>
+          <td>
+            ${r.status === 'draft_ready' ? `
+              <button class="small" onclick="doAction('reject_draft', '${esc(r.outbound_id)}', {rationale: prompt('Rationale (optional)?') || undefined})" title="Reject draft">Reject</button>
+              <button class="small" onclick="doAction('mark_reviewed', '${esc(r.outbound_id)}', {reviewer_notes: prompt('Reviewer notes (optional)?') || undefined})" title="Mark reviewed">Review</button>
+              <button class="small" onclick="doAction('handled_externally', '${esc(r.outbound_id)}', {external_reference: prompt('External reference?') || ''})" title="Handled externally">External</button>
+            ` : ''}
+          </td>
         </tr>
       `).join("");
 
@@ -487,7 +496,7 @@
           <h3>Outbound commands (${esc(outbound.length)})</h3>
           ${outbound.length ? `
             <table>
-              <thead><tr><th>Outbound ID</th><th>Action</th><th>Status</th><th>Context</th><th>Submitted</th><th>Confirmed</th></tr></thead>
+              <thead><tr><th>Outbound ID</th><th>Action</th><th>Status</th><th>Context</th><th>Submitted</th><th>Confirmed</th><th>Reviewed</th><th>External Ref</th><th>Actions</th></tr></thead>
               <tbody>${outboundRows}</tbody>
             </table>
           ` : '<div class="empty">No outbound commands.</div>'}
@@ -502,6 +511,62 @@
           ` : '<div class="empty">No charter outputs.</div>'}
         </div>
       `;
+      bindDetailLinks();
+    }
+
+    async function loadAudit() {
+      const sinceVal = $("auditSinceInput")?.value;
+      const sinceParam = sinceVal ? `?since=${encodeURIComponent(new Date(sinceVal).toISOString())}` : "";
+      const { actions } = await api(`/scopes/${encodeURIComponent(currentScope)}/operator-actions${sinceParam}`);
+      const actionTypeFilter = $("auditActionType")?.value || "";
+      const searchKeys = ["action_id", "action_type", "actor", "context_id", "work_item_id", "payload_summary"];
+      let rows = filterRows(actions, searchKeys);
+      if (actionTypeFilter) {
+        rows = rows.filter((r) => r.action_type === actionTypeFilter);
+      }
+      $("content").innerHTML = `
+        <div class="card">
+          <h3>Audit log (${esc(rows.length)})</h3>
+          <p style="color:var(--text-secondary);font-size:12px;margin-top:0;">Operator actions recorded for this scope.</p>
+          <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
+            <label style="font-size:12px;color:var(--text-secondary);">Since</label>
+            <input id="auditSinceInput" type="datetime-local" style="background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px;" value="${esc(sinceVal || "")}" />
+            <label style="font-size:12px;color:var(--text-secondary);">Action</label>
+            <select id="auditActionType" style="background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px;">
+              <option value="">All</option>
+              <option value="trigger_sync" ${actionTypeFilter === "trigger_sync" ? "selected" : ""}>trigger_sync</option>
+              <option value="request_redispatch" ${actionTypeFilter === "request_redispatch" ? "selected" : ""}>request_redispatch</option>
+              <option value="retry_work_item" ${actionTypeFilter === "retry_work_item" ? "selected" : ""}>retry_work_item</option>
+              <option value="acknowledge_alert" ${actionTypeFilter === "acknowledge_alert" ? "selected" : ""}>acknowledge_alert</option>
+              <option value="derive_work" ${actionTypeFilter === "derive_work" ? "selected" : ""}>derive_work</option>
+              <option value="preview_work" ${actionTypeFilter === "preview_work" ? "selected" : ""}>preview_work</option>
+              <option value="rebuild_projections" ${actionTypeFilter === "rebuild_projections" ? "selected" : ""}>rebuild_projections</option>
+              <option value="reject_draft" ${actionTypeFilter === "reject_draft" ? "selected" : ""}>reject_draft</option>
+              <option value="mark_reviewed" ${actionTypeFilter === "mark_reviewed" ? "selected" : ""}>mark_reviewed</option>
+              <option value="handled_externally" ${actionTypeFilter === "handled_externally" ? "selected" : ""}>handled_externally</option>
+            </select>
+            <button id="auditApplyBtn" class="small primary">Apply</button>
+          </div>
+          ${rows.length ? `
+            <table>
+              <thead><tr><th>Timestamp</th><th>Action</th><th>Actor</th><th>Context</th><th>Work item</th><th>Summary</th></tr></thead>
+              <tbody>
+                ${rows.map(r => `
+                  <tr>
+                    <td>${fmtDate(r.created_at)}</td>
+                    <td class="mono">${esc(r.action_type)}</td>
+                    <td>${esc(r.actor)}</td>
+                    <td class="mono truncate">${r.context_id ? `<a class="link" data-context-id="${esc(r.context_id)}">${esc(r.context_id)}</a>` : '—'}</td>
+                    <td class="mono truncate">${r.work_item_id ? `<a class="link" data-work-item-id="${esc(r.work_item_id)}">${esc(r.work_item_id)}</a>` : '—'}</td>
+                    <td class="truncate" title="${esc(r.payload_summary)}">${esc(r.payload_summary)}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          ` : '<div class="empty">No operator actions recorded.</div>'}
+        </div>
+      `;
+      $("auditApplyBtn")?.addEventListener("click", () => loadAudit());
       bindDetailLinks();
     }
 
@@ -1542,6 +1607,7 @@
           failures: loadFailures,
           verticals: loadVerticals,
           mailbox: loadMailbox,
+          audit: loadAudit,
         };
         await map[currentPage]();
         $("statusText").textContent = `Scope: ${esc(currentScope)} · ${esc(currentPage)}`;

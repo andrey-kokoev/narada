@@ -111,6 +111,8 @@ export function initRepo(repoPath: string, options: InitRepoOptions = {}): InitR
       "GRAPH_TENANT_ID=your-tenant-id",
       "GRAPH_CLIENT_ID=your-client-id",
       "GRAPH_CLIENT_SECRET=your-client-secret",
+      "GRAPH_ACCESS_TOKEN=your-access-token",
+      "NARADA_OPENAI_API_KEY=your-openai-api-key",
       "NARADA_KIMI_API_KEY=your-kimi-api-key",
       "",
     ].join("\n"),

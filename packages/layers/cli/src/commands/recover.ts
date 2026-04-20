@@ -77,7 +77,7 @@ export async function recoverCommand(
   if (!scope) {
     return {
       exitCode: ExitCode.INVALID_CONFIG,
-      result: { status: 'error', error: 'No scopes configured' },
+      result: { status: 'error', error: 'No operations configured' },
     };
   }
 
@@ -235,7 +235,7 @@ async function recoverForScope(
 
       fmt.message(`Dry-run recovery complete — ${contexts.length} contexts would be admitted`, 'success');
       fmt.section('Summary');
-      fmt.kv('Scope', scopeId);
+      fmt.kv('Operation', scopeId);
       fmt.kv('Facts matched', facts.length);
       fmt.kv('Contexts', contexts.length);
 
@@ -288,7 +288,7 @@ async function recoverForScope(
       'success',
     );
     fmt.section('Summary');
-    fmt.kv('Scope', scopeId);
+    fmt.kv('Operation', scopeId);
     fmt.kv('Facts matched', facts.length);
     fmt.kv('Opened', result.opened.length);
     fmt.kv('Superseded', result.superseded.length);

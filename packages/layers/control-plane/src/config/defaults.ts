@@ -1,6 +1,20 @@
 
 import type { ExchangeFsSyncConfig, ScopeConfig } from "./types.js";
 
+export const DEFAULT_STUCK_WORK_THRESHOLDS = {
+  opened_max_age_minutes: 60,
+  leased_max_age_minutes: 120,
+  executing_max_age_minutes: 30,
+  max_retries: 3,
+};
+
+export const DEFAULT_STUCK_OUTBOUND_THRESHOLDS = {
+  pending_max_age_minutes: 15,
+  draft_creating_max_age_minutes: 10,
+  draft_ready_max_age_hours: 24,
+  sending_max_age_minutes: 5,
+};
+
 export const DEFAULT_EXCHANGE_FS_SYNC_CONFIG: Omit<
   ExchangeFsSyncConfig,
   "root_dir" | "scopes"
@@ -39,5 +53,9 @@ export const DEFAULT_EXCHANGE_FS_SYNC_CONFIG: Omit<
       frequency: "manual",
       max_run_time_minutes: 60,
     },
+  },
+  operational_trust: {
+    stuck_work_thresholds: DEFAULT_STUCK_WORK_THRESHOLDS,
+    stuck_outbound_thresholds: DEFAULT_STUCK_OUTBOUND_THRESHOLDS,
   },
 };

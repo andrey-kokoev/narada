@@ -191,7 +191,7 @@ export async function configInteractiveCommand(
   const fmt = createFormatter({ format: options.format, verbose: false });
 
   // Run interactive prompts
-  const values = await runPrompts(options.output || './config.json');
+  const values = await runPrompts(options.output || './config/config.json');
   if (!values) {
     return { exitCode: ExitCode.SUCCESS, result: { status: 'cancelled' } };
   }
