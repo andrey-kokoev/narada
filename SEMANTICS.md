@@ -452,9 +452,9 @@ authority: <class from §2.7>
 | **Live Fact Admission** | `Fact` (unadmitted) → `Fact` (admitted) + `Work` | `live` | `control-plane-mutating` + **fact-lifecycle-mutating** | `resolve` (foreman) | Normal daemon dispatch: selects unadmitted facts, routes through context formation + foreman work opening, then marks facts admitted. Compound operation: admission + work opening. |
 | **Replay Derivation** | `Fact` (stored) → `Work` | `replay` | `control-plane-mutating` | `derive` + `resolve` | Explicit operator-triggered re-derivation of work from already-stored facts using the same context-formation + foreman work-opening path as live dispatch. **Does not mark facts admitted** and does not require fresh source delta. |
 | **Preview Derivation** | `Fact` → `PolicyContext`/`Evaluation` | `preview` | `read-only` | `derive` | Read-only inspection of what a charter would propose for a stored fact set. Runs context formation and charter evaluation but stops before work opening, lease claiming, or intent creation. |
-| **Recovery Derivation** | `Fact` → `Context`/`Work` | `recovery` | `control-plane-mutating` | `derive` + `resolve` + `admin` | Rebuilds recoverable control-plane state after control-plane loss while facts remain intact. Conservative: does not restore active leases or in-flight execution attempts. |
-| **Projection Rebuild** | `Durable state` → `Observation` | `rebuild` | `read-only`* | `derive` | Recomputes non-authoritative derived views (search indexes, observation read models) from canonical durable stores. May write to derived stores, but must not mutate canonical truth. |
-| **Confirmation Replay** | `Execution`/`Outbound` → `Confirmation` | `confirm` | `external-confirmation-only` | `confirm` | Recomputes confirmation state from durable execution/outbound records plus current observation, without re-performing the effect. |
+| **Recovery Derivation** | `Fact` → `Context`/`Work` | `recovery` | `control-plane-mutating` | `derive` + `resolve` + `admin` | Rebuilds recoverable control-plane state after control-plane loss while facts remain intact. Shares the same derivation core as replay (`deriveWorkFromStoredFacts`), but surfaced as a distinct operator (`recoverFromStoredFacts`). Conservative: does not restore active leases or in-flight execution attempts. |
+| **Projection Rebuild** | `Durable state` → `Observation` | `rebuild` | `read-only`* | `derive` | Recomputes non-authoritative derived views (filesystem views, search indexes, observation read models) from canonical durable stores via `ProjectionRebuildRegistry`. May write to derived stores, but must not mutate canonical truth, create work, or produce external effects. |
+| **Confirmation Replay** | `Execution`/`Outbound` → `Confirmation` | `confirm` | `external-confirmation-only` | `confirm` | Recomputes confirmation state from durable execution/outbound records plus current observation, without re-performing the effect. Mail reconciliation (`OutboundReconciler`) is one vertical instance of this family; `ProcessConfirmationResolver` is another. |
 
 \* Projection rebuild writes to derived stores but not to canonical durable boundaries; its effect on system correctness is read-only.
 
@@ -467,7 +467,7 @@ These six modes must never be treated as a single vague "replay" bucket:
 | **Live vs Replay** | Live admission is coupled to source sync and marks facts `admitted`; replay reads stored facts independently of `admitted_at` and never mutates fact lifecycle state |
 | **Admission vs Work Opening** | Live admission is a *compound* operation (fact lifecycle transition + work opening). Replay is *pure work opening* with no fact lifecycle side effect. Both use the same `ContextFormationStrategy` → `onContextsAdmitted()` path. |
 | **Replay vs Preview** | Replay advances control-plane state (opens work); preview is read-only |
-| **Replay vs Recovery** | Replay is bounded, operator-triggered, and scoped; recovery is loss-shaped and may re-derive broader control-plane state |
+| **Replay vs Recovery** | Replay is bounded, operator-triggered, and scoped; recovery is loss-shaped and may re-derive broader control-plane state. They share the same derivation core (`onContextsAdmitted`) but are distinct surfaces (`deriveWorkFromStoredFacts` vs `recoverFromStoredFacts`) with different intended authority (`derive`+`resolve` vs `derive`+`resolve`+`admin`) |
 | **Recovery vs Rebuild** | Recovery rebuilds authoritative control-plane state; rebuild only reconstructs non-authoritative projections |
 | **Replay/Rebuild vs Confirm** | Replay and rebuild derive from upstream durable boundaries; confirm derives from execution/outbound state outward |
 | **All vs Live** | No family member may run automatically on normal daemon startup unless it is live admission |
@@ -491,7 +491,265 @@ These six modes must never be treated as a single vague "replay" bucket:
 
 #### 2.8.6 Evolution Note
 
-This family is documented before all members are implemented. The first concrete implementation is replay derivation (`Fact` → `Work`). As implementation proceeds, the algebra may be refined — for example, if replay and recovery share a common derivation core, that will be reflected here rather than freezing divergent names prematurely.
+**Implemented status**: Replay derivation and recovery derivation share a common core (`deriveWorkFromStoredFacts` / `recoverFromStoredFacts` both route through `onContextsAdmitted`). The distinction is preserved in naming and intended authority (`admin` for recovery) rather than divergent runtime behavior. Preview derivation and projection rebuild are implemented. Confirmation replay is partially implemented.
+
+---
+
+### 2.9 Selection Operator Family
+
+Selection is the lens through which every other operator family operates. It is the authority-agnostic grammar for bounding any operator's input set.
+
+#### 2.9.1 Selector Algebra
+
+A **Selector** is a read-only, composable bound composed of zero or more dimensions:
+
+| Dimension | Type | Description |
+|-----------|------|-------------|
+| `scopeId` | `string \| string[]` | Scope or scopes to include |
+| `since` | `ISO 8601 string` | Temporal lower bound (inclusive) |
+| `until` | `ISO 8601 string` | Temporal upper bound (inclusive) |
+| `factIds` | `string[]` | Exact fact identities |
+| `contextIds` | `string[]` | Exact context identities |
+| `workItemIds` | `string[]` | Exact work-item identities |
+| `status` | `string` | Family-specific status filter |
+| `vertical` | `string` | Vertical filter for multi-vertical scopes |
+| `limit` | `number` | Maximum result-set size |
+| `offset` | `number` | Pagination offset |
+
+A Selector with zero dimensions is the **universal selector** for its target entity type. Selectors compose by AND: all specified dimensions must match.
+
+#### 2.9.2 Selection Invariants
+
+1. **Read-Only**: A selector never mutates durable state. It is pure inspection until combined with an effectful operator.
+2. **Authority-Neutral**: Selection requires no authority class (`derive`, `resolve`, `admin`, etc.).
+3. **Closed Grammar**: The selector dimensions listed above are the complete grammar. No operator may introduce ad-hoc bounding vocabulary outside these dimensions.
+4. **Composable**: Multiple selectors may be merged into a single canonical selector. If dimensions conflict, the intersection (most restrictive) wins.
+
+#### 2.9.3 Relationship to Other Families
+
+- **Re-derivation** uses selectors to bound replay, preview, recovery, and confirmation replay.
+- **Inspection** uses selectors to bound observation queries.
+- **Promotion** uses selectors to bound bulk promotion targets.
+- **Authority execution** does not use selectors directly; execution is triggered by scheduler claims and worker leases, not by operator-bounded sets.
+
+#### 2.9.4 Evolution Note
+
+The first concrete implementation is `Fact` selection via `getFactsByScope(scopeId, selector)`. It consumes the following selector dimensions: `since`, `until`, `factIds`, `contextIds`, `limit`, and `offset`. Dimensions that target other entity families (`status`, `vertical`, `workItemIds`) are rejected with a clear error rather than silently ignored. As the family matures, selector consumption will spread to work-item queries, execution queries, and observation routes.
+
+---
+
+### 2.10 Promotion Operator Family
+
+Promotion is the bridge between inspection/preview and actual system mutation. It advances artifacts through explicit lifecycle transitions.
+
+#### 2.10.1 Promotable Objects and Transitions
+
+| Promotable Object | Valid Source State | Valid Target State | Trigger | Authority |
+|-------------------|-------------------|--------------------|---------|-----------|
+| `operation` | `inactive` | `active` | manual operator | `admin` |
+| `operation` | posture A | posture B | manual operator | `admin` |
+| `work_item` | `failed_retryable` | `failed_retryable` (retry readiness promoted) | manual operator | `resolve` |
+| `work_item` | `failed_retryable` | `failed_terminal` | manual operator | `admin` |
+| `evaluation` (preview artifact) | `preview` | `governed_work` | manual operator | `derive` + `resolve` |
+| `outbound_command` | `draft_ready` | `submitted` | manual operator | `execute` |
+| `outbound_command` | `pending` | `cancelled` | manual operator | `execute` |
+
+#### 2.10.2 Promotion Rules
+
+1. **Explicit Only**: Every promotion transition requires an explicit operator trigger. No automatic promotion.
+2. **No Fabrication**: Promotion never creates synthetic durable boundaries. A preview evaluation promoted to governed work must route through the same foreman admission path (`onContextsAdmitted` or equivalent) that live facts use.
+3. **Authority Respect**: Each transition declares its required authority class. The operator action layer enforces this.
+4. **Append-Only Audit**: Every promotion transition is logged to `operator_action_requests`.
+5. **Bulk is Cardinality**: Bulk promotion (e.g., retry all failed-retryable items) is a cardinality variation, not a new transition type.
+
+#### 2.10.3 Existing Actions Mapped to Promotion Algebra
+
+- `activate` → `operation: inactive → active`, manual, `admin`
+- `want-posture` → `operation: posture A → posture B`, manual, `admin`
+- `retry_work_item` → `work_item: failed_retryable` with `next_retry_at` cleared, manual, `resolve`. The item remains `failed_retryable`; the scheduler discovers it as runnable on its next scan.
+- `acknowledge_alert` → `work_item: failed_retryable → failed_terminal`, manual, `admin`
+- `trigger_sync` → `operation: idle → syncing`, manual, `resolve`
+- `request_redispatch` → automatic pipeline promotion, not manual operator promotion
+
+#### 2.10.4 Evolution Note
+
+The first concrete implementation is `retry_failed_work_items` (bulk promotion of retry readiness for `work_item: failed_retryable`). It clears `next_retry_at` without changing status; the scheduler later discovers and claims the item. As the family matures, surfaces for `evaluation → governed_work` and `outbound_command: draft_ready → submitted` will be added.
+
+---
+
+### 2.11 Inspection Operator Family
+
+Inspection is the read-only operator family. It observes durable and derived state without mutation.
+
+#### 2.11.1 Definition
+
+**Inspection** reads already-derived state without mutation.
+**Preview derivation** (§2.8) re-computes downstream state from a durable boundary without mutation; it is a *re-derivation* member because it starts from a boundary and recomputes, but its effect class is read-only.
+
+The distinction:
+- **Inspection** starts from **already-derived** state (observation views, stored evaluations, control-plane snapshots).
+- **Preview derivation** starts from a **durable boundary** (`Fact`) and re-derives downstream state (`PolicyContext`, `Evaluation`).
+
+#### 2.11.2 Members
+
+| Member | What It Reads | Surfaces |
+|--------|---------------|----------|
+| `status` | Sync health, control-plane snapshot, leases, quiescence | CLI `narada status` |
+| `integrity` | Cursor validity, apply-log counts, view existence | CLI `narada integrity` |
+| `explain` | Operational readiness, blockers, posture | CLI `ops-kit explain` |
+| `inspect` | Operation configuration scope | CLI `ops-kit inspect` |
+| `observation` | Full read-only derived views over durable state | Daemon `GET /scopes/...` routes (23 endpoints) |
+| `backup-verify` | Backup manifest and checksums | CLI `narada backup-verify` |
+| `backup-ls` | Backup contents and stats | CLI `narada backup-ls` |
+| `demo` | Zero-setup read-only preview | CLI `narada demo` |
+
+Mode modifiers such as `--dry-run` on `sync` or `cleanup` are not inspection operators. They suppress the final commit of an effectful command but may still perform network I/O or source pulls. Inspection never performs I/O beyond reading local durable stores.
+
+#### 2.11.3 Inspection Invariants
+
+1. **Read-Only**: Inspection never mutates durable state. No `.run()`, `.exec()`, or direct mutation calls.
+2. **Authority-Agnostic**: Inspection requires no authority class (`derive`, `resolve`, `admin`, etc.). Observation routes are gated by scope access only.
+3. **Projection Non-Authority**: Derived views read by inspection may be discarded and recomputed by rebuild operators (§2.8) without affecting correctness. Inspection reads already-derived state; it does not recompute.
+4. **Source-Trust Transparent**: Every observation type declares its trust level: `authoritative` (mirrors one durable row), `derived` (computed from multiple sources), or `decorative` (presentational only).
+
+#### 2.11.4 Relationship to Preview Derivation
+
+Preview derivation (§2.8, `Fact` → `Evaluation`) is read-only, so it resembles inspection. However, it belongs to the re-derivation family because:
+- It starts from a **durable boundary** (`Fact`), not derived state.
+- It re-computes charter output using the same `ContextFormationStrategy` as live admission.
+- It is bounded by the same selector grammar as replay and recovery.
+
+Inspection, by contrast, never re-computes from boundaries. It only reads what is already stored or derived.
+
+---
+
+<a name="advisory-signals-clan"></a>
+## 2.12 Advisory Signals Clan
+
+Narada maintains a sharp distinction between **authoritative structures** (what is true, durable, allowed, committed) and **advisory signals** (what is probable, preferable, or worth attention). This section defines the clan and its sibling families.
+
+### 2.12.1 Authoritative Structures
+
+Authoritative structures determine:
+
+- what is **true** — `fact`, `context_record`
+- what is **durable** — `work_item`, `intent`, `decision`, `execution`
+- what is **allowed** — `authority class`, `policy`, `governance`
+- what is **committed** — `cursor`, `apply_log`, `confirmation`
+- what has **happened** — `execution_attempt`, `outbound_transition`, `operator_action_request`
+
+These are the substrate of correctness. They are enforced by code structure, primary-key constraints, and invariant checks. No advisory signal may override them.
+
+### 2.12.2 Advisory Signals
+
+Advisory signals influence operational choices without determining truth, permission, or commitment. They are **non-authoritative** by design: removing every advisory signal from the system must leave all durable boundaries intact and all authority invariants satisfiable.
+
+Advisory signals answer questions like:
+
+- who *should probably* do the work?
+- when is it *probably best* to act?
+- who *should probably* review?
+- what *likely* deserves attention?
+- which lane / provider / tool is *preferable*?
+
+They do **not** answer:
+
+- who *must* do the work? (authority: scheduler lease)
+- when *must* we act? (authority: policy deadline or retry timer)
+- who *is allowed* to review? (authority: policy binding)
+- what *is* true? (authority: fact store)
+
+**Hard rule**: An advisory signal may be ignored, overridden, or absent without violating any kernel invariant. If a signal were treated as authoritative, it would be a bug in the consuming component.
+
+### 2.12.3 Sibling Families
+
+The advisory-signals clan contains multiple families. Each family is a coherent grouping of signals that influence a particular operational dimension.
+
+> **Implementation status**: Only `continuation_affinity` is concretely implemented in the runtime today. All other signals listed below are **prospective family members** — valid semantic concepts that the architecture accommodates but does not yet emit or consume. Their descriptions use present tense to express the intended meaning when implemented, not to claim they are active now.
+
+#### Routing Signals
+
+Influence where work is directed or which capability is selected.
+
+| Signal | Meaning |
+|--------|---------|
+| `continuation_affinity` | **Implemented (v1)** — Soft ordering hint for the scheduler. Active (non-expired) affinity boosts a work item's position in `scanForRunnableWork()` ordering. Does **not** enforce session-targeted lease acquisition or runner selection; that remains deferred to a future v2. Stored on `WorkItem` (`preferred_session_id`, `affinity_strength`, `affinity_expires_at`). Distinguished from `resume_hint`: affinity is the scheduler/runtime ordering signal; `resume_hint` is the operator-visible trace of continuity. |
+| `capability_affinity` | *(Prospective)* Prefer a worker or tool that has already demonstrated competence for this action class |
+| `tool_state_affinity` | *(Prospective)* Prefer a tool instance that holds relevant ephemeral state (e.g., cached auth, open connection) |
+| `cost_preference` | *(Prospective)* Prefer a cheaper lane when multiple lanes can satisfy the intent |
+| `trust_preference` | *(Prospective)* Prefer a lane with higher observed reliability; de-preference one with recent failures |
+
+#### Timing Signals
+
+Influence when work is scheduled or when a action is taken.
+
+| Signal | Meaning |
+|--------|---------|
+| `freshness_preference` | *(Prospective)* Prefer acting while context state is fresh; avoid stale re-evaluation |
+| `quiescence_preference` | *(Prospective)* Prefer waiting until context appears stable (no rapid fact arrivals) |
+| `coalescing_preference` | *(Prospective)* Prefer batching multiple changes into a single evaluation rather than reacting to each |
+| `urgency_preference` | *(Prospective)* Prefer immediate action for time-sensitive contexts; prefer delay for low-priority ones |
+
+#### Review Signals
+
+Influence who should review a proposal or outcome.
+
+| Signal | Meaning |
+|--------|---------|
+| `same_lane_review` | *(Prospective)* Prefer review by a charter or steward in the same vertical lane |
+| `cross_lane_review` | *(Prospective)* Prefer review by a charter or steward from a different lane for independence |
+| `independence_preferred` | *(Prospective)* Strong signal that review should not come from the same runtime that produced the proposal |
+| `heightened_scrutiny` | *(Prospective)* Signal that the proposal touches policy boundaries or unusual patterns |
+
+#### Escalation / Attention Signals
+
+Influence whether a human or higher-level process should be alerted.
+
+| Signal | Meaning |
+|--------|---------|
+| `likely_needs_human_attention` | *(Prospective)* Charter confidence or pattern matching suggests human judgment is preferable |
+| `unusually_risky` | *(Prospective)* The proposed action deviates from historical norms for this context |
+| `probably_time_sensitive` | *(Prospective)* Context metadata (e.g., sender urgency markers) suggests accelerated handling |
+| `likely_policy_sensitive` | *(Prospective)* The context matches patterns that have triggered policy overrides in the past |
+
+#### Confidence / Cost Signals
+
+Influence how certainty and resource expenditure shape handling.
+
+| Signal | Meaning |
+|--------|---------|
+| `low_confidence_proposal` | *(Prospective)* Charter output confidence is below a threshold; prefer conservative action or escalation |
+| `high_confidence_repetitive` | *(Prospective)* Charter is highly confident and the pattern is familiar; prefer automated handling |
+| `expensive_lane_avoidable` | *(Prospective)* The default execution path is costly; a cheaper path exists with acceptable quality |
+| `cheap_acceptable_preferred` | *(Prospective)* A low-cost lane satisfies the requirement; prefer it over a gold-plated path |
+
+### 2.12.4 Relationship to Authority Classes
+
+Advisory signals are **orthogonal** to authority classes (§2.4):
+
+- `derive`, `propose`, `claim`, `execute`, `resolve`, `confirm`, `admin` — these govern **who may mutate what**.
+- Advisory signals govern **what is preferable** within the constraints set by authority.
+
+A scheduler with `claim` authority may consult a `continuation_affinity` signal when assigning a lease, but the lease itself is the authoritative commitment. The signal may be ignored if the preferred session is unavailable.
+
+A foreman with `resolve` authority might in future consult a `low_confidence_proposal` signal when deciding between `accept` and `escalate`, but the decision record would remain the authoritative outcome. The signal would not override governance rules. *(Illustrative — not yet implemented.)*
+
+### 2.12.5 Storage and Durability
+
+Advisory signals may be:
+
+- **Ephemeral** — computed at runtime and discarded (e.g., scheduler scoring)
+- **Cached** — stored in derived views for performance, rebuildable without loss (e.g., preference indexes)
+- **Logged** — written to trace or audit tables for post-hoc analysis, but not referenced by control logic
+
+They must **never** be stored in canonical durable boundaries (fact, work_item, intent, decision, execution) in a way that makes the boundary depend on the signal for correctness.
+
+### 2.12.6 Advisory-Signal Invariants
+
+1. **Non-Authority**: Removing all advisory signals must not violate any kernel invariant or authority boundary.
+2. **Overrideable**: Any component that consumes an advisory signal must have a sensible fallback when the signal is absent, contradictory, or stale.
+3. **No Lifecycle Side Effect**: Emitting or consuming an advisory signal must not transition the lifecycle state of a durable object (fact, work item, intent, execution).
+4. **No Truth Claim**: An advisory signal must never be presented as evidence that something is true; it only expresses preference, probability, or attention-worthiness.
 
 ---
 
@@ -531,6 +789,10 @@ Words that should not be used in user-facing or generic system contexts:
 | [`docs/01-spec.md`](packages/layers/control-plane/docs/01-spec.md) | Dearbitrized specification | **Formalizes**: algebraic properties and minimal completeness. Uses terms defined here. |
 | [`docs/02-architecture.md`](packages/layers/control-plane/docs/02-architecture.md) | Component layers and data flow | **Illustrates**: how the ontology is implemented. Vocabulary notes must not redefine terms. |
 | [§2.8](SEMANTICS.md#re-derivation-and-recovery-operator-family) | Re-derivation / recovery operator family | **Defines**: the algebra, members, and authority mapping for bounded recomputation between durable boundaries |
+| [§2.9](SEMANTICS.md#selection-operator-family) | Selection operator family | **Defines**: the canonical selector algebra, dimensions, and invariants for bounding operator input sets |
+| [§2.10](SEMANTICS.md#promotion-operator-family) | Promotion operator family | **Defines**: the promotable objects, transition algebra, authority mapping, and audit rules for lifecycle advancement |
+| [§2.11](SEMANTICS.md#inspection-operator-family) | Inspection operator family | **Defines**: the read-only operator family, its members, and its distinction from preview derivation |
+| [§2.12](SEMANTICS.md#advisory-signals-clan) | Advisory signals clan | **Defines**: the split between authoritative structures and advisory signals, the sibling families, and their invariants |
 | [`docs/04-identity.md`](packages/layers/control-plane/docs/04-identity.md) | Identity and determinism | **Specializes**: identity schemes, serialization, and hashing. Assumes the ontology here. |
 | [`AGENTS.md`](AGENTS.md) | Agent navigation hub | **Indexes**: concept-to-file lookup table. Definitions point here. |
 
@@ -542,5 +804,8 @@ Words that should not be used in user-facing or generic system contexts:
 2. Add it to this document with a clear definition and layer assignment
 3. Update `AGENTS.md` concept table with the primary location
 4. If the term is a new re-derivation/recovery operator, add it to §2.8 and ensure it is distinguished from existing family members
-5. If user-facing, also update `TERMINOLOGY.md`
-6. Never redefine an existing term; deprecate and alias instead
+5. If the term is a new promotion operator, add it to §2.10 and ensure it declares its authority class
+6. If the term is a new inspection operator, add it to §2.11 and ensure it is read-only and authority-agnostic
+7. If the term is a new advisory-signal family, add it to §2.12 and ensure it is non-authoritative and overrideable
+8. If user-facing, also update `TERMINOLOGY.md`
+9. Never redefine an existing term; deprecate and alias instead

@@ -149,6 +149,10 @@
               "rebuild_views_after_sync": {
                 "type": "boolean",
                 "default": false
+              },
+              "rebuild_search_after_sync": {
+                "type": "boolean",
+                "default": false
               }
             },
             "additionalProperties": false,
@@ -745,6 +749,10 @@
           "default": true
         },
         "rebuild_views_after_sync": {
+          "type": "boolean",
+          "default": false
+        },
+        "rebuild_search_after_sync": {
           "type": "boolean",
           "default": false
         }

@@ -147,7 +147,7 @@ describe("ops-kit", () => {
           invocation_policies: [],
           knowledge_sources: { support_steward: [], obligation_keeper: [] },
           charter_tools: {
-            support_steward: [{ tool_id: "check_pg", enabled: true, purpose: "Check PG", read_only: true, timeout_ms: 1000, requires_approval: false }],
+            support_steward: [{ tool_id: "check_pg", enabled: true, purpose: "Check PG", read_only: true, timeout_ms: 1000, requires_approval: false, authority_class: "derive" }],
             obligation_keeper: [],
           },
         },
@@ -166,5 +166,145 @@ describe("ops-kit", () => {
     expect(report.status).toBe("fail");
     expect(report.nextActions.some((x) => x.includes("NARADA_KIMI_API_KEY"))).toBe(true);
     expect(report.nextActions.some((x) => x.includes("PGPASSWORD"))).toBe(true);
+  });
+
+  it("preflight fails on missing authority_class", () => {
+    const { configPath } = makeOpsRepo();
+    wantMailbox("help@example.com", { configPath, posture: "draft-only" });
+    const coordinator: CoordinatorConfig = {
+      foreman_id: "fm",
+      mailbox_bindings: {
+        "help@example.com": {
+          mailbox_id: "help@example.com",
+          available_charters: ["support_steward"],
+          default_primary_charter: "support_steward",
+          invocation_policies: [],
+          knowledge_sources: { support_steward: [] },
+          charter_tools: {
+            support_steward: [
+              { tool_id: "bad", enabled: true, purpose: "Bad", read_only: true, timeout_ms: 1000, requires_approval: false, authority_class: undefined as unknown as "derive" },
+            ],
+          },
+        },
+      },
+      global_escalation_precedence: [],
+      tool_definitions: {},
+    };
+    const report = preflight("help@example.com", { configPath, coordinatorConfig: coordinator, mailboxIdForTools: "help@example.com" } as any);
+    expect(report.checks.some((c) => c.category === "authority" && c.status === "fail" && c.detail.includes("missing authority_class"))).toBe(true);
+  });
+
+  it("preflight fails on runtime authority_class without runtime authorization", () => {
+    const { configPath } = makeOpsRepo();
+    wantMailbox("help@example.com", { configPath, posture: "draft-only" });
+    const coordinator: CoordinatorConfig = {
+      foreman_id: "fm",
+      mailbox_bindings: {
+        "help@example.com": {
+          mailbox_id: "help@example.com",
+          available_charters: ["support_steward"],
+          default_primary_charter: "support_steward",
+          invocation_policies: [],
+          knowledge_sources: { support_steward: [] },
+          charter_tools: {
+            support_steward: [
+              { tool_id: "exec", enabled: true, purpose: "Exec", read_only: false, timeout_ms: 1000, requires_approval: true, authority_class: "execute" },
+            ],
+          },
+        },
+      },
+      global_escalation_precedence: [],
+      tool_definitions: {},
+    };
+    const report = preflight("help@example.com", { configPath, coordinatorConfig: coordinator, mailboxIdForTools: "help@example.com" } as any);
+    expect(report.checks.some((c) => c.category === "authority" && c.status === "fail" && c.detail.includes("without runtime authorization"))).toBe(true);
+  });
+
+  it("preflight passes on runtime authority_class with runtime authorization", () => {
+    const { configPath } = makeOpsRepo();
+    wantMailbox("help@example.com", { configPath, posture: "autonomous" });
+    const config = readConfig(configPath)!;
+    const scope = findScope(config, "help@example.com")!;
+    scope.policy = { ...scope.policy, runtime_authorized: true };
+    writeConfig(config, configPath);
+
+    const coordinator: CoordinatorConfig = {
+      foreman_id: "fm",
+      mailbox_bindings: {
+        "help@example.com": {
+          mailbox_id: "help@example.com",
+          available_charters: ["support_steward"],
+          default_primary_charter: "support_steward",
+          invocation_policies: [],
+          knowledge_sources: { support_steward: [] },
+          charter_tools: {
+            support_steward: [
+              { tool_id: "exec", enabled: true, purpose: "Exec", read_only: false, timeout_ms: 1000, requires_approval: true, authority_class: "execute" },
+            ],
+          },
+        },
+      },
+      global_escalation_precedence: [],
+      tool_definitions: {},
+    };
+    const report = preflight("help@example.com", { configPath, coordinatorConfig: coordinator, mailboxIdForTools: "help@example.com" } as any);
+    expect(report.checks.some((c) => c.category === "authority" && c.status === "pass" && c.detail.includes("runtime authority_class: execute (authorized)"))).toBe(true);
+  });
+
+  it("preflight fails on admin authority_class without admin authorization", () => {
+    const { configPath } = makeOpsRepo();
+    wantMailbox("help@example.com", { configPath, posture: "draft-only" });
+    const coordinator: CoordinatorConfig = {
+      foreman_id: "fm",
+      mailbox_bindings: {
+        "help@example.com": {
+          mailbox_id: "help@example.com",
+          available_charters: ["support_steward"],
+          default_primary_charter: "support_steward",
+          invocation_policies: [],
+          knowledge_sources: { support_steward: [] },
+          charter_tools: {
+            support_steward: [
+              { tool_id: "admin_tool", enabled: true, purpose: "Admin", read_only: false, timeout_ms: 1000, requires_approval: true, authority_class: "admin" },
+            ],
+          },
+        },
+      },
+      global_escalation_precedence: [],
+      tool_definitions: {},
+    };
+    const report = preflight("help@example.com", { configPath, coordinatorConfig: coordinator, mailboxIdForTools: "help@example.com" } as any);
+    expect(report.checks.some((c) => c.category === "authority" && c.status === "fail" && c.detail.includes("without admin authorization"))).toBe(true);
+  });
+
+  it("preflight passes on admin authority_class with admin authorization", () => {
+    const { configPath } = makeOpsRepo();
+    wantMailbox("help@example.com", { configPath, posture: "autonomous" });
+    const config = readConfig(configPath)!;
+    const scope = findScope(config, "help@example.com")!;
+    scope.policy = { ...scope.policy, admin_authorized: true };
+    writeConfig(config, configPath);
+
+    const coordinator: CoordinatorConfig = {
+      foreman_id: "fm",
+      mailbox_bindings: {
+        "help@example.com": {
+          mailbox_id: "help@example.com",
+          available_charters: ["support_steward"],
+          default_primary_charter: "support_steward",
+          invocation_policies: [],
+          knowledge_sources: { support_steward: [] },
+          charter_tools: {
+            support_steward: [
+              { tool_id: "admin_tool", enabled: true, purpose: "Admin", read_only: false, timeout_ms: 1000, requires_approval: true, authority_class: "admin" },
+            ],
+          },
+        },
+      },
+      global_escalation_precedence: [],
+      tool_definitions: {},
+    };
+    const report = preflight("help@example.com", { configPath, coordinatorConfig: coordinator, mailboxIdForTools: "help@example.com" } as any);
+    expect(report.checks.some((c) => c.category === "authority" && c.status === "pass" && c.detail.includes("admin authority_class (authorized)"))).toBe(true);
   });
 });

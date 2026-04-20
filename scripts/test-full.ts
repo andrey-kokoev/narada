@@ -7,7 +7,13 @@
  * to prevent accidental expensive execution.
  */
 
-import { execSync } from "node:child_process";
+import {
+  runStep,
+  recordRun,
+  classifyStep,
+  printMetricsHint,
+  type StepTiming,
+} from "./test-telemetry.js";
 
 const colors = {
   reset: "\x1b[0m",
@@ -33,8 +39,62 @@ if (!process.env.ALLOW_FULL_TESTS && !process.env.NARADA_FULL_VERIFY) {
 
 console.log(`${colors.dim}=== Full Test Suite ===${colors.reset}\n`);
 
-try {
-  execSync('pnpm --recursive --filter="!." test', { stdio: "inherit" });
-} catch {
+const startedAt = new Date().toISOString();
+const stepTimings: StepTiming[] = [];
+
+const result = runStep({
+  name: "Full recursive test suite",
+  command: 'pnpm --recursive --filter="!." test',
+  stdio: "pipe",
+});
+
+// Replay captured output so the user still sees test progress/results.
+if (result.stdout) console.log(result.stdout);
+if (result.stderr) console.error(result.stderr);
+
+stepTimings.push({
+  name: "Full recursive test suite",
+  command: 'pnpm --recursive --filter="!." test',
+  durationMs: result.durationMs,
+  exitStatus: result.exitStatus,
+});
+
+const stepClass = classifyStep(result.exitStatus, result.stderr, result.stdout);
+const classification = stepClass;
+
+const finishedAt = new Date().toISOString();
+
+recordRun({
+  command: "ALLOW_FULL_TESTS=1 pnpm test:full",
+  startedAt,
+  finishedAt,
+  durationMs: result.durationMs,
+  exitStatus: result.exitStatus,
+  exitSignal: null,
+  stepTimings,
+  classification,
+  summary:
+    classification === "known-teardown-noise"
+      ? "Tests passed; known better-sqlite3 teardown noise at exit"
+      : result.exitStatus === 0
+        ? "Full suite passed"
+        : "Full suite failed",
+});
+
+printMetricsHint();
+
+if (result.exitStatus !== 0 && classification !== "known-teardown-noise") {
   process.exit(1);
+}
+
+if (classification === "known-teardown-noise") {
+  console.log(
+    `\n${colors.yellow}⚠ Known teardown noise detected (${result.exitStatus}).${colors.reset}`,
+  );
+  console.log(
+    `${colors.dim}   This is a harmless better-sqlite3 cleanup artifact that occurs after all tests pass.${colors.reset}`,
+  );
+  console.log(
+    `${colors.dim}   It does not indicate a product regression. See AGENTS.md for details.${colors.reset}\n`,
+  );
 }

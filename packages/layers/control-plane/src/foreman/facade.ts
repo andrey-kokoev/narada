@@ -17,11 +17,14 @@ import type {
   ResolutionResult,
   CharterOutputEnvelope,
   CharterInvocationEnvelope,
+  PreviewDerivationResult,
 } from "./types.js";
 import type { Fact } from "../facts/types.js";
 import { validateCharterOutput } from "./validation.js";
-import { governEvaluation } from "./governance.js";
+import { governEvaluation, type GovernEvaluationResult } from "./governance.js";
 import { IntentHandoff } from "../intent/handoff.js";
+import type { CharterRunner } from "../charter/runner.js";
+import { buildInvocationEnvelope, buildEvaluationRecord, VerticalMaterializerRegistry } from "../charter/envelope.js";
 import type { PolicyContext, ContextFormationStrategy } from "./context.js";
 
 import type {
@@ -96,6 +99,135 @@ export class DefaultForemanFacade implements ForemanFacade {
     return this.onContextsAdmitted(contexts);
   }
 
+  async deriveWorkFromStoredFacts(facts: Fact[], scopeId: string): Promise<WorkOpeningResult> {
+    if (facts.length === 0) {
+      return { opened: [], superseded: [], nooped: [] };
+    }
+
+    const contexts = this.contextFormationStrategy.formContexts(facts, scopeId, {
+      getLatestRevisionOrdinal: (id) => this.deps.coordinatorStore.getLatestRevisionOrdinal(id),
+    });
+
+    return this.onContextsAdmitted(contexts);
+  }
+
+  async recoverFromStoredFacts(facts: Fact[], scopeId: string): Promise<WorkOpeningResult> {
+    // Recovery and replay share the same derivation core: context formation +
+    // onContextsAdmitted(). The distinction is in triggering context
+    // (loss-shaped recovery vs operator-scoped replay) and intended authority
+    // level (admin), not in divergent runtime behavior. Both are conservative:
+    // neither creates leases, execution attempts, or outbound commands.
+    return this.deriveWorkFromStoredFacts(facts, scopeId);
+  }
+
+  async previewWorkFromStoredFacts(
+    facts: Fact[],
+    scopeId: string,
+    charterRunner: CharterRunner,
+    materializerRegistry: VerticalMaterializerRegistry,
+    options?: { tools?: import("./types.js").ToolCatalogEntry[]; executionIdPrefix?: string; rootDir?: string },
+  ): Promise<PreviewDerivationResult[]> {
+    if (facts.length === 0) {
+      return [];
+    }
+
+    const contexts = this.contextFormationStrategy.formContexts(facts, scopeId, {
+      getLatestRevisionOrdinal: (id) => this.deps.coordinatorStore.getLatestRevisionOrdinal(id),
+    });
+
+    const results: PreviewDerivationResult[] = [];
+    const prefix = options?.executionIdPrefix ?? "preview";
+    const policy = this.deps.getRuntimePolicy(scopeId);
+
+    for (const context of contexts) {
+      const existingRecord = this.deps.coordinatorStore.getContextRecord(context.context_id);
+      const fallbackContextRecord = existingRecord
+        ? undefined
+        : { primary_charter: policy.primary_charter };
+
+      const syntheticWorkItem: WorkItem = {
+        work_item_id: `wi_${prefix}_${randomUUID()}`,
+        context_id: context.context_id,
+        scope_id: scopeId,
+        status: "opened",
+        priority: 0,
+        opened_for_revision_id: context.revision_id,
+        resolved_revision_id: null,
+        resolution_outcome: null,
+        error_message: null,
+        retry_count: 0,
+        next_retry_at: null,
+        context_json: JSON.stringify(context),
+        created_at: context.synced_at,
+        updated_at: context.synced_at,
+        preferred_session_id: null,
+        preferred_agent_id: null,
+        affinity_group_id: null,
+        affinity_strength: 0,
+        affinity_expires_at: null,
+        affinity_reason: null,
+      };
+
+      const executionId = `exec_${prefix}_${randomUUID()}`;
+
+      const envelope = await buildInvocationEnvelope(
+        {
+          coordinatorStore: this.deps.coordinatorStore,
+          rootDir: options?.rootDir ?? "",
+          getRuntimePolicy: this.deps.getRuntimePolicy,
+          materializerRegistry,
+        },
+        {
+          executionId,
+          workItem: syntheticWorkItem,
+          tools: options?.tools,
+          fallbackContextRecord,
+        },
+      );
+
+      const output = await charterRunner.run(envelope);
+
+      const evaluation = buildEvaluationRecord(output, {
+        execution_id: executionId,
+        work_item_id: syntheticWorkItem.work_item_id,
+        context_id: context.context_id,
+      });
+
+      const validation = validateCharterOutput(output, envelope);
+      const effectiveOutcome = validation.corrected_outcome ?? output.outcome;
+      const validActions = validation.stripped_actions
+        ? evaluation.proposed_actions.filter(
+            (a: import("./types.js").ProposedAction) => !validation.stripped_actions!.some((s) => s === a),
+          )
+        : evaluation.proposed_actions;
+
+      const governance: GovernEvaluationResult = governEvaluation(
+        evaluation,
+        policy,
+        validActions,
+        effectiveOutcome,
+      );
+
+      results.push({
+        context_id: context.context_id,
+        scope_id: scopeId,
+        revision_id: context.revision_id,
+        charter_id: envelope.charter_id,
+        envelope,
+        output,
+        governance: {
+          outcome: governance.outcome,
+          governed_action: governance.governed_action,
+          reason: governance.reason,
+          approval_required: governance.approval_required,
+          governance_errors: governance.governance_errors,
+        },
+      });
+    }
+
+    return results;
+  }
+
   private onContextsAdmitted(contexts: PolicyContext[]): WorkOpeningResult {
     const result: WorkOpeningResult = {
       opened: [],
@@ -131,7 +263,7 @@ export class DefaultForemanFacade implements ForemanFacade {
           });
           this.closeSessionForWorkItem(activeWorkItem.work_item_id, "superseded", context.synced_at);
           this.handoff.cancelUnsentCommandsForContext(contextId, "superseded_by_new_revision");
-          const newWorkItem = this.openWorkItem(context);
+          const newWorkItem = this.openWorkItem(context, activeWorkItem);
           result.superseded.push({
             work_item_id: activeWorkItem.work_item_id,
             context_id: context.context_id,
@@ -474,9 +606,13 @@ export class DefaultForemanFacade implements ForemanFacade {
     };
   }
 
-  private openWorkItem(context: PolicyContext): WorkItem {
+  private openWorkItem(context: PolicyContext, carryForwardAffinity?: WorkItem): WorkItem {
     const workItemId = `wi_${randomUUID()}`;
     const now = context.synced_at;
+
+    // Derive continuation affinity from the most recent work item for this context
+    const affinity = this.deriveAffinity(context.context_id, carryForwardAffinity);
+
     const item: WorkItem = {
       work_item_id: workItemId,
       context_id: context.context_id,
@@ -492,6 +628,7 @@ export class DefaultForemanFacade implements ForemanFacade {
       context_json: JSON.stringify(context),
       created_at: now,
       updated_at: now,
+      ...affinity,
     };
     this.deps.coordinatorStore.insertWorkItem(item);
     this.deps.coordinatorStore.insertAgentSession({
@@ -505,6 +642,49 @@ export class DefaultForemanFacade implements ForemanFacade {
       resume_hint: null,
     });
     return item;
+  }
+
+  private deriveAffinity(
+    contextId: string,
+    carryForward?: WorkItem,
+  ): Pick<WorkItem, "preferred_session_id" | "preferred_agent_id" | "affinity_group_id" | "affinity_strength" | "affinity_expires_at" | "affinity_reason"> {
+    // If superseding, carry forward the previous item's affinity
+    if (carryForward) {
+      return {
+        preferred_session_id: carryForward.preferred_session_id,
+        preferred_agent_id: carryForward.preferred_agent_id,
+        affinity_group_id: carryForward.affinity_group_id,
+        affinity_strength: carryForward.affinity_strength,
+        affinity_expires_at: carryForward.affinity_expires_at,
+        affinity_reason: carryForward.affinity_reason,
+      };
+    }
+
+    // Otherwise, look for the latest completed/terminal work item on this context
+    const latest = this.deps.coordinatorStore.getLatestWorkItemForContext(contextId);
+    if (latest) {
+      const session = this.deps.coordinatorStore.getSessionForWorkItem(latest.work_item_id);
+      if (session) {
+        const expiresAt = new Date(Date.now() + 30 * 60_000).toISOString(); // 30 minute default
+        return {
+          preferred_session_id: session.session_id,
+          preferred_agent_id: null,
+          affinity_group_id: null,
+          affinity_strength: 1,
+          affinity_expires_at: expiresAt,
+          affinity_reason: "same_context",
+        };
+      }
+    }
+
+    return {
+      preferred_session_id: null,
+      preferred_agent_id: null,
+      affinity_group_id: null,
+      affinity_strength: 0,
+      affinity_expires_at: null,
+      affinity_reason: null,
+    };
   }
 
   failWorkItem(workItemId: string, errorMessage: string, retryable: boolean, retryPolicy: "immediate" | "backoff" = "backoff"): void {

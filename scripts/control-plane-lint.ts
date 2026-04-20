@@ -116,6 +116,17 @@ export const ALLOWLIST: Record<string, string[]> = {
   // Rationale: `observability/mailbox.ts` is the dedicated mail-vertical
   // observation query surface. Generic modules must not import this file.
   "observability/mailbox.ts": ["conversation_id", "mailbox_id"],
+
+  // Rationale: `facts/context-extractor.ts` is a cross-vertical utility that
+  // extracts context IDs from fact payloads for all supported verticals
+  // (mail, timer, webhook, filesystem). It is not mailbox-specific.
+  "facts/context-extractor.ts": ["conversation_id", "thread_id"],
+
+  // Rationale: `foreman/context.ts` exports `resolveContextStrategy`, a factory
+  // that dispatches strategy names to their implementations. It must reference
+  // all vertical strategies (including mailbox) to be useful. This is the
+  // canonical resolver used by recovery and replay operators.
+  "foreman/context.ts": ["mailbox_runtime_import"],
 };
 
 function walk(dir: string, files: string[] = []): string[] {

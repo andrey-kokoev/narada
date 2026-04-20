@@ -20,6 +20,7 @@ import {
   getIntentExecutionSummaries,
   getProcessExecutionDetails,
   getIntentLifecycleTransitions,
+  getWorkItemAffinityOutcomes,
 } from "../../../src/observability/queries.js";
 import { getMailExecutionDetails } from "../../../src/observability/mailbox.js";
 import type { WorkItem, ExecutionAttempt, ToolCallRecord } from "../../../src/coordinator/types.js";
@@ -74,8 +75,15 @@ describe("observability/queries", () => {
       error_message: null,
       retry_count: 0,
       next_retry_at: null,
+      context_json: null,
       created_at: now,
       updated_at: now,
+      preferred_session_id: null,
+      preferred_agent_id: null,
+      affinity_group_id: null,
+      affinity_strength: 0,
+      affinity_expires_at: null,
+      affinity_reason: null,
       ...overrides,
     };
     coordinatorStore.insertWorkItem(item);
@@ -155,6 +163,131 @@ describe("observability/queries", () => {
       const result = getWorkItemsAwaitingRetry(coordinatorStore);
       expect(result).toHaveLength(1);
       expect(result[0]!.work_item_id).toBe(ready.work_item_id);
+    });
+
+    it("getActiveWorkItems includes affinity fields", () => {
+      insertWorkItem({
+        work_item_id: "wi-affinity",
+        status: "opened",
+        preferred_session_id: "sess-1",
+        affinity_strength: 2,
+        affinity_expires_at: "2099-01-01T00:00:00Z",
+        affinity_reason: "same_context",
+      });
+
+      const result = getActiveWorkItems(coordinatorStore);
+      expect(result).toHaveLength(1);
+      const item = result[0]!;
+      expect(item.preferred_session_id).toBe("sess-1");
+      expect(item.affinity_strength).toBe(2);
+      expect(item.affinity_expires_at).toBe("2099-01-01T00:00:00Z");
+      expect(item.affinity_reason).toBe("same_context");
+    });
+  });
+
+  describe("affinity outcome queries", () => {
+    it("classifies no-affinity work items correctly", () => {
+      insertWorkItem({ work_item_id: "wi-no-affinity", status: "opened" });
+
+      const result = getWorkItemAffinityOutcomes(coordinatorStore);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.had_affinity).toBe(false);
+      expect(result[0]!.outcome).toBe("no_preference");
+      expect(result[0]!.preferred_session_available).toBeNull();
+    });
+
+    it("classifies active affinity as ordering_boost", () => {
+      insertWorkItem({
+        work_item_id: "wi-active-affinity",
+        status: "opened",
+        preferred_session_id: "sess-1",
+        affinity_strength: 1,
+        affinity_expires_at: "2099-01-01T00:00:00Z",
+        affinity_reason: "same_context",
+      });
+
+      const result = getWorkItemAffinityOutcomes(coordinatorStore);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.had_affinity).toBe(true);
+      expect(result[0]!.affinity_expired).toBe(false);
+      expect(result[0]!.outcome).toBe("ordering_boost");
+    });
+
+    it("classifies expired affinity as expired_before_scan", () => {
+      insertWorkItem({
+        work_item_id: "wi-expired",
+        status: "opened",
+        preferred_session_id: "sess-1",
+        affinity_strength: 1,
+        affinity_expires_at: "2020-01-01T00:00:00Z",
+        affinity_reason: "same_context",
+      });
+
+      const result = getWorkItemAffinityOutcomes(coordinatorStore);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.had_affinity).toBe(true);
+      expect(result[0]!.affinity_expired).toBe(true);
+      expect(result[0]!.outcome).toBe("expired_before_scan");
+    });
+
+    it("includes actual_session_id when execution exists", () => {
+      insertWorkItem({
+        work_item_id: "wi-executed",
+        status: "resolved",
+        preferred_session_id: "sess-pref",
+        affinity_strength: 1,
+        affinity_expires_at: "2099-01-01T00:00:00Z",
+      });
+      const attempt: ExecutionAttempt = {
+        execution_id: "ex-1",
+        work_item_id: "wi-executed",
+        revision_id: "rev-1",
+        session_id: "sess-actual",
+        status: "succeeded",
+        started_at: new Date().toISOString(),
+        completed_at: null,
+        runtime_envelope_json: "{}",
+        outcome_json: null,
+        error_message: null,
+      };
+      coordinatorStore.insertExecutionAttempt(attempt);
+
+      const result = getWorkItemAffinityOutcomes(coordinatorStore);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.actual_session_id).toBe("sess-actual");
+      // v2 deferred fields remain null
+      expect(result[0]!.executed_by_preferred_session).toBeNull();
+    });
+
+    it("deduplicates work items with multiple execution attempts", () => {
+      insertWorkItem({ work_item_id: "wi-multi-ex", status: "resolved" });
+      coordinatorStore.insertExecutionAttempt({
+        execution_id: "ex-a",
+        work_item_id: "wi-multi-ex",
+        revision_id: "rev-1",
+        session_id: "sess-a",
+        status: "succeeded",
+        started_at: new Date().toISOString(),
+        completed_at: null,
+        runtime_envelope_json: "{}",
+        outcome_json: null,
+        error_message: null,
+      });
+      coordinatorStore.insertExecutionAttempt({
+        execution_id: "ex-b",
+        work_item_id: "wi-multi-ex",
+        revision_id: "rev-1",
+        session_id: "sess-b",
+        status: "succeeded",
+        started_at: new Date().toISOString(),
+        completed_at: null,
+        runtime_envelope_json: "{}",
+        outcome_json: null,
+        error_message: null,
+      });
+
+      const result = getWorkItemAffinityOutcomes(coordinatorStore);
+      expect(result).toHaveLength(1);
     });
   });
 

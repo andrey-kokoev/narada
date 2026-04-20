@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { loadConfig, FileViewStore } from '@narada2/control-plane';
+import { loadConfig, FileViewStore, ProjectionRebuildRegistry } from '@narada2/control-plane';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
@@ -21,12 +21,14 @@ export async function rebuildViewsCommand(
   const config = await loadConfig({ path: configPath });
   const rootDir = resolve(config.root_dir);
   
+  const registry = new ProjectionRebuildRegistry();
   const viewStore = new FileViewStore({ rootDir });
-  
+  registry.register(viewStore.asProjectionRebuildSurface());
+
   logger.info('Rebuilding views', { rootDir });
-  
+
   const startTime = Date.now();
-  await viewStore.rebuildAll();
+  const [rebuildResult] = await registry.rebuildAll();
   const duration = Date.now() - startTime;
   
   logger.info('Views rebuilt', { duration_ms: duration });
@@ -43,6 +45,7 @@ export async function rebuildViewsCommand(
   
   // Human-readable output
   fmt.message('Views rebuilt successfully', 'success');
+  fmt.message('Note: `narada rebuild-views` is deprecated. Use `narada rebuild-projections` for the unified rebuild surface.', 'warning');
   
   fmt.section('Details');
   fmt.kv('Duration', fmt.duration(duration));

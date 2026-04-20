@@ -18,7 +18,7 @@ function makeInvocation(overrides?: Partial<CharterInvocationEnvelope>): Charter
     vertical_hints: { vertical: "mail" },
     allowed_actions: ["send_reply", "draft_reply", "mark_read", "no_action"],
     available_tools: [
-      { tool_id: "tool-a", tool_signature: "tool-a@1", description: "Tool A", read_only: true, requires_approval: false, timeout_ms: 5000 },
+      { tool_id: "tool-a", tool_signature: "tool-a@1", description: "Tool A", read_only: true, requires_approval: false, timeout_ms: 5000, authority_class: "derive" },
     ],
     coordinator_flags: [],
     prior_evaluations: [],

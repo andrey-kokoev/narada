@@ -28,6 +28,9 @@ export interface BuildInvocationEnvelopeOptions {
   maxPriorEvaluations?: number;
   tools?: ToolCatalogEntry[];
   materializer?: ContextMaterializer;
+  /** Preview-only: override the context record lookup. When provided, the
+   *  coordinator store is not queried for the context record. */
+  fallbackContextRecord?: { primary_charter: string };
 }
 
 export interface ContextMaterializer {
@@ -195,7 +198,7 @@ export async function buildInvocationEnvelope(
 ): Promise<CharterInvocationEnvelope> {
   const { workItem, maxPriorEvaluations = 3, tools } = opts;
 
-  const contextRecord = deps.coordinatorStore.getContextRecord(workItem.context_id);
+  const contextRecord = opts.fallbackContextRecord ?? deps.coordinatorStore.getContextRecord(workItem.context_id);
   if (!contextRecord) {
     throw new Error(
       `Cannot build invocation envelope: no context record found for ${workItem.context_id}`,

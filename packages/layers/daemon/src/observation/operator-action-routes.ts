@@ -66,8 +66,26 @@ export function createOperatorActionRoutes(
             scope_id: scope.scope_id,
             coordinatorStore: scope.coordinatorStore,
             rebuildViews: scope.rebuildViews,
+            rebuildProjections: scope.rebuildProjections,
             runDispatchPhase: scope.runDispatchPhase,
             requestWake: scope.requestWake,
+            deriveWork: async (options) => {
+              const facts = scope.factStore.getFactsByScope(scope.scope_id, {
+                contextIds: options.contextId ? [options.contextId] : undefined,
+                since: options.since,
+                factIds: options.factIds,
+                limit: 1000,
+              });
+              const result = await scope.foreman.deriveWorkFromStoredFacts(facts, scope.scope_id);
+              return {
+                opened: result.opened.length,
+                superseded: result.superseded.length,
+                nooped: result.nooped.length,
+              };
+            },
+            previewWork: scope.previewWork
+              ? async (options) => scope.previewWork!(options)
+              : undefined,
           },
           payload,
         );

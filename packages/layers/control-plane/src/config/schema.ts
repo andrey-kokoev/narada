@@ -42,6 +42,7 @@ const RuntimeConfigSchema = z.object({
   acquire_lock_timeout_ms: z.number().int().min(1000).default(30000),
   cleanup_tmp_on_startup: z.boolean().default(true),
   rebuild_views_after_sync: z.boolean().default(false),
+  rebuild_search_after_sync: z.boolean().default(false),
 });
 
 // Retention policy schema

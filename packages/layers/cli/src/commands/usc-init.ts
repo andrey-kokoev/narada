@@ -34,8 +34,8 @@ interface UscCompilerModule {
     taskGraphPath: string;
     summary: {
       task_count: number;
-      runnable_count: number;
-      blocked_count: number;
+      proposed_count: number;
+      admitted_count: number;
     };
   };
 }
@@ -237,7 +237,7 @@ export async function uscInitCommand(options: UscInitOptions): Promise<void> {
 
     console.log(`Task graph written to ${planResult.taskGraphPath}`);
     console.log(
-      `Tasks: ${planResult.summary.task_count}, Runnable: ${planResult.summary.runnable_count}, Blocked: ${planResult.summary.blocked_count}`,
+      `Tasks: ${planResult.summary.task_count}, Proposed: ${planResult.summary.proposed_count}, Admitted: ${planResult.summary.admitted_count}`,
     );
   }
 

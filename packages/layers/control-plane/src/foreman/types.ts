@@ -94,10 +94,61 @@ export interface ResolutionResult {
   error?: string;
 }
 
+export interface PreviewGovernanceResult {
+  outcome: "accept" | "reject" | "escalate" | "no_op" | "clarification_needed" | "conflict_unresolved";
+  governed_action?: ProposedAction;
+  reason: string;
+  approval_required: boolean;
+  governance_errors: string[];
+}
+
+export interface PreviewDerivationResult {
+  context_id: string;
+  scope_id: string;
+  revision_id: string;
+  charter_id: string;
+  envelope: CharterInvocationEnvelope;
+  output: CharterOutputEnvelope;
+  governance: PreviewGovernanceResult;
+}
+
 export interface ForemanFacade {
   onSyncCompleted(signal: SyncCompletionSignal): Promise<WorkOpeningResult>;
   /** Admit facts into the control plane and open/supersede work items as needed */
   onFactsAdmitted(facts: import("../facts/types.js").Fact[], scopeId: string): Promise<WorkOpeningResult>;
+  /**
+   * Derive work from already-stored facts without requiring a fresh source delta.
+   * This is the explicit replay path: it routes through the same context formation
+   * and work-opening logic as live dispatch, but does not mark facts as admitted.
+   */
+  deriveWorkFromStoredFacts(facts: import("../facts/types.js").Fact[], scopeId: string): Promise<WorkOpeningResult>;
+  /**
+   * Recovery derivation: rebuild recoverable control-plane state (contexts + work
+   * items) from stored facts after coordinator loss. This is a recovery-flavored
+   * surface over the same shared derivation core as `deriveWorkFromStoredFacts()`.
+   *
+   * Conservative guarantees:
+   * - Does NOT restore active leases
+   * - Does NOT resurrect in-flight execution attempts
+   * - Does NOT fabricate outbound confirmations
+   *
+   * The distinction from replay is in triggering context (loss-shaped vs
+   * operator-scoped) and intended authority level (`admin`), not in divergent
+   * runtime behavior.
+   */
+  recoverFromStoredFacts(facts: import("../facts/types.js").Fact[], scopeId: string): Promise<WorkOpeningResult>;
+  /**
+   * Preview-only derivation: run stored facts through context formation, charter
+   * evaluation, and governance without creating work items, intents, or outbound
+   * commands. This is a read-only inspection path.
+   */
+  previewWorkFromStoredFacts(
+    facts: import("../facts/types.js").Fact[],
+    scopeId: string,
+    charterRunner: import("../charter/runner.js").CharterRunner,
+    materializerRegistry: import("../charter/envelope.js").VerticalMaterializerRegistry,
+    options?: { tools?: ToolCatalogEntry[]; executionIdPrefix?: string },
+  ): Promise<PreviewDerivationResult[]>;
   resolveWorkItem(resolveReq: ResolveWorkItemRequest): Promise<ResolutionResult>;
   /**
    * Handle execution failure for a work item.

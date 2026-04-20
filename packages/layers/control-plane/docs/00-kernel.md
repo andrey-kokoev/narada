@@ -88,13 +88,35 @@ interface WorkItem {
   context_id: string;
   scope_id: string;
   status: "opened" | "leased" | "executing" | "resolved" | ...;
+  priority: number;
   opened_for_revision_id: string;
+  // Continuation affinity — advisory routing preference (Task 212)
+  preferred_session_id: string | null;
+  preferred_agent_id: string | null;
+  affinity_group_id: string | null;
+  affinity_strength: number;
+  affinity_expires_at: string | null;
+  affinity_reason: string | null;
 }
 ```
 
 - Work is the **terminal schedulable unit**.
 - At most one non-terminal work item per context may be `leased` or `executing`.
 - Supersession replaces stale work with new work when a higher revision arrives.
+- **Continuation affinity** is a soft routing preference derived from recent work on the same context. It is advisory — the scheduler may honor it when ordering runnable work, but must never block correctness waiting for a specific session. Affinity expires automatically to prevent stale sticky routing.
+- **v1 scope**: Affinity affects ordering only (`scanForRunnableWork` sort key). Session-targeted lease acquisition and runner selection are deferred to v2. The scheduler does not check whether `preferred_session_id` is available or alive before assigning a lease.
+
+#### Continuation Affinity vs. Resume Hint
+
+| Concept | Purpose | Stored On | Consumer |
+|---------|---------|-----------|----------|
+| `continuation_affinity` | Routing preference for scheduler | `WorkItem` | Scheduler (ordering), Foreman (derivation) |
+| `resume_hint` | Operator-visible trace of continuity | `AgentSession` | Observation API, operator console |
+
+- Affinity is set when a work item is opened, based on the most recent session for the same context.
+- On supersession, affinity is carried forward from the superseded work item to the new one.
+- Affinity has a bounded lifetime (`affinity_expires_at`). After expiry, the scheduler treats the item as having no affinity.
+- Affinity never overrides authority: governance, leasing, and scheduling invariants remain unchanged.
 
 ### 3.5 Policy / Foreman
 
@@ -106,16 +128,23 @@ The foreman performs three authorities:
 
 Policy is the **sole gate to effects**. No effect may materialize without passing through foreman governance.
 
-#### Explicit Replay Derivation
+#### Explicit Replay and Recovery Derivation
 
-In addition to live admission, the foreman exposes `deriveWorkFromStoredFacts()` for operator-triggered replay. This path:
+In addition to live admission, the foreman exposes two operator-triggered surfaces over the same derivation core:
 
+**Replay surface** — `deriveWorkFromStoredFacts()`:
 - Reads already-stored facts independently of `admitted_at`
 - Routes through the same `ContextFormationStrategy` → `onContextsAdmitted` pipeline as live dispatch
 - Does **not** mark facts as admitted
-- Is logged/audited as a replay-derived work opening
+- Intended for re-running an old conversation or testing a policy change against synced data
 
-This supports re-running an old conversation, testing a policy change against synced mail, or recovering work derivation after control-plane loss — all without fabricating a new inbound source event.
+**Recovery surface** — `recoverFromStoredFacts()`:
+- Uses the exact same derivation core as replay (context formation → `onContextsAdmitted`)
+- Distinct in naming and intended authority (`admin` vs `derive` + `resolve`)
+- Intended for loss-shaped recovery when coordinator state is lost but facts remain intact
+- Conservative: does not restore active leases, in-flight execution attempts, or submitted outbound effects
+
+Both support re-deriving work without fabricating a new inbound source event.
 
 ### 3.6 Intent
 
@@ -226,6 +255,16 @@ The cursor must never advance before all records ≤ cursor have been durably ap
 
 A work item has at most one unreleased, unexpired lease at any time.
 
+### 4.9 Advisory Signals Are Non-Authoritative
+
+Advisory signals may influence routing, timing, review, and attention decisions, but they must not override durable or authority invariants.
+
+- A scheduler may consult a `continuation_affinity` signal when assigning a lease, but the lease record is the authoritative commitment. *(This is the only advisory signal currently implemented.)*
+- A foreman may consult a `low_confidence_proposal` signal when resolving work, but the decision record is the authoritative outcome. *(Illustrative — not yet implemented.)*
+- An operator console may display `likely_needs_human_attention` signals, but an operator action still routes through `executeOperatorAction()` with safelisted mutations and audit logging. *(Illustrative — not yet implemented.)*
+
+**Kernel invariant**: Removing every advisory signal from the system must leave all durable boundaries intact and all authority invariants satisfiable. If a component requires an advisory signal to function correctly, that signal has been incorrectly promoted to authority.
+
 ---
 
 ## 5. Failure Model
@@ -267,7 +306,7 @@ These boundaries are enforced by code structure:
 6. **OutboundHandoff owns command creation** — All `outbound_command` + `outbound_version` rows for the mail family must be created inside `OutboundHandoff.createCommandFromDecision()`, called from `IntentHandoff`.
 7. **Executors own mutation** — Only registered workers may perform external side effects.
 8. **Charter runtime is read-only sandbox** — It may only read the invocation envelope and produce an output envelope. It must NOT write to coordinator or outbound stores, and it does NOT own evaluation persistence. The runtime (daemon dispatch) persists evaluations before handing them to the foreman.
-9. **Audited operator control** — The operator console may mutate work items only through `executeOperatorAction()` with safelisted actions (`retry_work_item`, `acknowledge_alert`). Every action is logged to `operator_action_requests`. This is the sole permitted write path from the observation UI.
+9. **Audited operator control** — The operator console may request actions only through `executeOperatorAction()` with safelisted actions. The current safelist is: `retry_work_item`, `retry_failed_work_items`, `acknowledge_alert`, `rebuild_views`, `rebuild_projections`, `request_redispatch`, `trigger_sync`, `derive_work`, `preview_work`. Every action is logged to `operator_action_requests`. This is the sole permitted operator path from the observation UI.
 
 ---
 
@@ -308,21 +347,103 @@ effect: read-only | control-plane-mutating | external-confirmation-only
 |-------------------|---------------------|----------------|
 | `Fact` (unadmitted) | `Fact` (admitted) + `Work` | Live dispatch: `getUnadmittedFacts` → `onFactsAdmitted()` → `markAdmitted()` |
 | `Fact` (stored) | `Work` | Replay: `getFactsByScope` → `deriveWorkFromStoredFacts()` → (no admission marking) |
-| `Fact` (stored) | `PolicyContext`/`Evaluation` | Preview: same path as replay, stopping before `onContextsAdmitted()` |
-| `Durable state` (facts + decisions + intents) | `Observation` views | Rebuild functions in observability layer |
+| `Fact` (stored) | `Context`/`Work` | Recovery: `getFactsByScope` → `recoverFromStoredFacts()` → (no admission marking; same core as replay) |
+| `Fact` (stored) | `PolicyContext`/`Evaluation` | Preview: `getFactsByScope` → `formContexts` → `buildInvocationEnvelope` → `charterRunner.run()` → `governEvaluation`. Stops before `onContextsAdmitted()` — no work items, leases, or intents created. |
+| `Durable state` (facts + decisions + intents) | `Observation` views | `ProjectionRebuildRegistry.rebuildAll()` — rebuilds registered projections (filesystem views from `messages/`, search index from `messages/`) |
 | `Execution` / `OutboundCommand` | `Confirmation` | Reconciliation queries against external state |
 
 ### 8.3 Kernel Invariants for Re-Derivation
 
-1. **Same Path**: Replay and preview must use the same `ContextFormationStrategy` and `ForemanFacade` interfaces as live admission. No parallel work-opening algorithm.
+1. **Same Path**: Replay, recovery, and preview must use the same `ContextFormationStrategy` and `ForemanFacade` interfaces as live admission. No parallel work-opening algorithm.
 2. **No Fabrication**: Replay, preview, and recovery must not create synthetic `Source` records or `Fact` payloads that did not originate from a real source pull.
 3. **Bounded Trigger**: All non-live operators are explicitly operator-triggered. The daemon must not automatically replay, recover, or rebuild on startup.
-4. **No Admission Side Effect in Replay**: Replay derivation must not transition fact lifecycle state (`admitted_at`). Fact admission is the exclusive side effect of live dispatch.
-5. **Authority Preserved**: Replay-derived work items are opened by the foreman, leased by the scheduler, and executed by registered workers — the same authority chain as live-derived work.
+4. **No Admission Side Effect in Replay or Recovery**: Replay and recovery derivation must not transition fact lifecycle state (`admitted_at`). Fact admission is the exclusive side effect of live dispatch.
+5. **Preview is Read-Only**: Preview derivation must not create work items, leases, execution attempts, durable evaluation records, decisions, intents, or outbound commands. It may produce transient evaluation output and may read from durable stores, but it must not write to canonical durable boundaries.
+6. **Authority Preserved**: Replay-derived and recovery-derived work items are opened by the foreman, leased by the scheduler, and executed by registered workers — the same authority chain as live-derived work.
+7. **Conservative Recovery**: Recovery does not restore active leases, in-flight execution attempts, or already-submitted outbound effects.
+8. **Projection Rebuild Non-Authority**: Projection rebuild may discard and recompute derived stores (views, search indexes) without affecting correctness. It must not mutate canonical durable truth, create work items, or produce external effects.
 
 ---
 
-## 9. Known Gaps (Honest)
+## 9. Selection Operators
+
+The kernel supports a canonical `Selector` type for bounding operator input sets. Selection is formalized in [`SEMANTICS.md`](../../../../SEMANTICS.md) §2.9. In kernel terms:
+
+### 9.1 Selector Dimensions
+
+| Dimension | Type | Target Layers |
+|-----------|------|---------------|
+| `scopeId` | `string \| string[]` | All |
+| `since` | `ISO 8601` | Fact, Context, Work |
+| `until` | `ISO 8601` | Fact, Context, Work |
+| `factIds` | `string[]` | Fact |
+| `contextIds` | `string[]` | Context, Work |
+| `workItemIds` | `string[]` | Work |
+| `status` | `string` | Work, Intent, Outbound |
+| `vertical` | `string` | Fact, Context |
+| `limit` | `number` | All |
+| `offset` | `number` | All |
+
+### 9.2 Kernel Invariants for Selection
+
+1. **Read-Only**: Selectors are evaluated without mutation. No `.run()`, `.exec()`, or store mutation may occur during selector evaluation.
+2. **Authority-Neutral**: Selector evaluation does not check authority classes.
+3. **Closed Grammar**: The dimensions above are the complete grammar. New dimensions require kernel spec revision, not ad-hoc addition.
+4. **Uniform Consumption**: All bounded operators must accept a canonical `Selector`. Ad-hoc option bags are deprecated.
+5. **Honest Applicability**: An operator must reject — not silently ignore — selector dimensions that do not apply to its target entity family. For example, `status` and `workItemIds` are not applicable to fact selection and must produce a clear error.
+
+---
+
+## 10. Promotion Operators
+
+The kernel supports explicit promotion of artifacts through lifecycle transitions. Promotion is formalized in [`SEMANTICS.md`](../../../../SEMANTICS.md) §2.10. In kernel terms:
+
+### 10.1 Promotable Objects
+
+| Object | Source State | Target State | Authority |
+|--------|--------------|--------------|-----------|
+| `operation` | `inactive` | `active` | `admin` |
+| `work_item` | `failed_retryable` | `failed_retryable` (retry readiness promoted) | `resolve` |
+| `work_item` | `failed_retryable` | `failed_terminal` | `admin` |
+| `evaluation` | `preview` | `governed_work` | `derive` + `resolve` |
+| `outbound_command` | `draft_ready` | `submitted` | `execute` |
+| `outbound_command` | `pending` | `cancelled` | `execute` |
+
+### 10.2 Kernel Invariants for Promotion
+
+1. **Explicit Trigger**: All promotion transitions require an explicit operator action. The daemon must not auto-promote.
+2. **No Boundary Fabrication**: Promotion must not create synthetic `Fact` or `Source` records. Preview → governed work routes through the same foreman admission path as live facts.
+3. **Authority Preserved**: Each transition declares its authority class. The operator action layer validates before executing.
+4. **Audit Trail**: Every promotion transition is logged to `operator_action_requests`.
+5. **Scheduler Neutrality**: Promotion does not manipulate leases directly. Retry-style promotion clears `next_retry_at` without changing work-item status; the scheduler discovers the newly runnable item on its next scan. Status-changing promotion (e.g., to `failed_terminal`) transitions the status directly.
+
+---
+
+## 11. Inspection Operators
+
+The kernel supports read-only inspection of durable and derived state. Inspection is formalized in [`SEMANTICS.md`](../../../../SEMANTICS.md) §2.11. In kernel terms:
+
+### 11.1 Inspection Targets
+
+| Target | Layer | Examples |
+|--------|-------|----------|
+| `Fact` | Durable | `FactStoreView.getById`, `getFactsByScope` |
+| `Context` | Durable | `CoordinatorStoreView.getContextRecord`, `getLatestRevisionOrdinal` |
+| `WorkItem` | Durable | `CoordinatorStoreView.getWorkItem`, `getActiveWorkItemForContext` |
+| `Execution` | Durable | `CoordinatorStoreView.getExecutionAttempt`, `getEvaluationsByWorkItem` |
+| `Observation` | Derived | `ObservationPlane` routes, `ControlPlaneStatusSnapshot` |
+| `Backup` | Derived | `backup-verify`, `backup-ls` |
+
+### 11.2 Kernel Invariants for Inspection
+
+1. **Read-Only**: Inspection methods use only `.all()`, `.get()`, `.pluck()`. No `.run()`, `.exec()`, or direct mutation calls.
+2. **Authority-Agnostic**: Inspection requires no authority class. Observation routes are gated by scope access only.
+3. **Projection Non-Authority**: Derived views may be discarded and recomputed without affecting system correctness.
+4. **Boundary Respect**: Inspection does not re-compute from durable boundaries. Preview derivation (§8) handles re-computation; inspection reads already-derived state.
+
+---
+
+## 12. Known Gaps (Honest)
 
 The following are acknowledged boundaries between the spec and the current implementation:
 
@@ -334,7 +455,7 @@ The following are acknowledged boundaries between the spec and the current imple
 
 ---
 
-## 10. See Also
+## 13. See Also
 
 - [`01-spec.md`](01-spec.md) — Mailbox-vertical dearbitrized specification
 - [`02-architecture.md`](02-architecture.md) — Component layers and data flow

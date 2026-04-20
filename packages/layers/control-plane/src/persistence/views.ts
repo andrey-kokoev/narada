@@ -1,6 +1,7 @@
 import { lstat, mkdir, readdir, readFile, rm, symlink, unlink, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import type { NormalizedPayload } from "../types/normalized.js";
+import type { ProjectionRebuildSurface } from "../observability/rebuild.js";
 
 function safeSegment(value: string): string {
   return encodeURIComponent(value);
@@ -139,6 +140,17 @@ export class FileViewStore {
       by_folder: [],
       unread_changed: true,
       flagged_changed: true,
+    };
+  }
+
+  /**
+   * Expose this view store as a canonical ProjectionRebuildSurface.
+   */
+  asProjectionRebuildSurface(): ProjectionRebuildSurface {
+    return {
+      name: "filesystem_views",
+      authoritativeInput: "messages/ directory (canonical message records)",
+      rebuild: () => this.rebuildAll(),
     };
   }
 

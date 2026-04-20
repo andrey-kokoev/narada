@@ -69,6 +69,7 @@ describe("loadConfig", () => {
         acquire_lock_timeout_ms: 30_000,
         cleanup_tmp_on_startup: true,
         rebuild_views_after_sync: false,
+        rebuild_search_after_sync: false,
       },
       charter: {
         runtime: "mock",
@@ -121,6 +122,7 @@ describe("loadConfig", () => {
         acquire_lock_timeout_ms: 10000,
         cleanup_tmp_on_startup: false,
         rebuild_views_after_sync: true,
+        rebuild_search_after_sync: false,
       },
     });
     createdPaths.push(path);
@@ -139,6 +141,7 @@ describe("loadConfig", () => {
     expect(config.runtime.acquire_lock_timeout_ms).toBe(10000);
     expect(config.runtime.cleanup_tmp_on_startup).toBe(false);
     expect(config.runtime.rebuild_views_after_sync).toBe(true);
+    expect(config.runtime.rebuild_search_after_sync).toBe(false);
   });
 
   it("trims string values", async () => {

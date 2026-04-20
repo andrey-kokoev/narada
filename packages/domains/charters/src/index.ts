@@ -38,12 +38,17 @@ export type {
   MailboxBinding,
   MailboxCharterBinding,
   CoordinatorConfig,
+  AuthorityClass,
 } from "./types/coordinator.js";
 
 export {
   validateMailboxBinding,
   validateMailboxCharterBinding,
   collectOperationalRequirements,
+  validateToolBindingAuthority,
+  AUTHORITY_CLASSES,
+  RUNTIME_AUTHORITY_CLASSES,
+  DERIVER_AUTHORITY_CLASSES,
 } from "./types/coordinator.js";
 
 // Runtime exports

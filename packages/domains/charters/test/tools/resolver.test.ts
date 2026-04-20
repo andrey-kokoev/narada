@@ -38,6 +38,7 @@ describe("resolveToolCatalog", () => {
                 read_only: true,
                 timeout_ms: 5000,
                 requires_approval: false,
+                authority_class: "derive",
               },
               {
                 tool_id: "send_notification",
@@ -46,6 +47,7 @@ describe("resolveToolCatalog", () => {
                 read_only: false,
                 timeout_ms: 10000,
                 requires_approval: true,
+                authority_class: "execute",
               },
             ],
           },
@@ -94,6 +96,7 @@ describe("resolveToolCatalog", () => {
                 read_only: true,
                 timeout_ms: 1000,
                 requires_approval: false,
+                authority_class: "derive",
               },
             ],
           },
@@ -123,6 +126,7 @@ describe("resolveToolCatalog", () => {
                 read_only: true,
                 timeout_ms: 1000,
                 requires_approval: false,
+                authority_class: "derive",
               },
               {
                 tool_id: "t2",
@@ -131,6 +135,7 @@ describe("resolveToolCatalog", () => {
                 read_only: true,
                 timeout_ms: 2000,
                 requires_approval: false,
+                authority_class: "derive",
               },
             ],
           },
@@ -145,6 +150,97 @@ describe("resolveToolCatalog", () => {
 
     expect(envelope.available_tools.map((t) => t.tool_id)).toEqual(["t2"]);
     expect(envelope.available_tools[0]!.requires_approval).toBe(true);
+  });
+
+  it("omits tools with missing authority_class", () => {
+    const config = makeConfig({
+      mailbox_bindings: {
+        "mb-1": {
+          mailbox_id: "mb-1",
+          available_charters: ["support_steward"],
+          default_primary_charter: "support_steward",
+          invocation_policies: [],
+          knowledge_sources: {},
+          charter_tools: {
+            support_steward: [
+              {
+                tool_id: "bad",
+                enabled: true,
+                purpose: "Missing authority",
+                read_only: true,
+                timeout_ms: 1000,
+                requires_approval: false,
+                authority_class: undefined as unknown as "derive",
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    const envelope = resolveToolCatalog("mb-1", "support_steward", config);
+    expect(envelope.available_tools).toHaveLength(0);
+  });
+
+  it("omits tools with invalid authority_class", () => {
+    const config = makeConfig({
+      mailbox_bindings: {
+        "mb-1": {
+          mailbox_id: "mb-1",
+          available_charters: ["support_steward"],
+          default_primary_charter: "support_steward",
+          invocation_policies: [],
+          knowledge_sources: {},
+          charter_tools: {
+            support_steward: [
+              {
+                tool_id: "bad",
+                enabled: true,
+                purpose: "Invalid authority",
+                read_only: true,
+                timeout_ms: 1000,
+                requires_approval: false,
+                authority_class: "invalid" as unknown as "derive",
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    const envelope = resolveToolCatalog("mb-1", "support_steward", config);
+    expect(envelope.available_tools).toHaveLength(0);
+  });
+
+  it("includes tools with valid runtime authority_class", () => {
+    const config = makeConfig({
+      mailbox_bindings: {
+        "mb-1": {
+          mailbox_id: "mb-1",
+          available_charters: ["support_steward"],
+          default_primary_charter: "support_steward",
+          invocation_policies: [],
+          knowledge_sources: {},
+          charter_tools: {
+            support_steward: [
+              {
+                tool_id: "exec_tool",
+                enabled: true,
+                purpose: "Execute something",
+                read_only: false,
+                timeout_ms: 1000,
+                requires_approval: true,
+                authority_class: "execute",
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    const envelope = resolveToolCatalog("mb-1", "support_steward", config);
+    expect(envelope.available_tools).toHaveLength(1);
+    expect(envelope.available_tools[0]!.authority_class).toBe("execute");
   });
 
   it("omits disabled knowledge sources", () => {

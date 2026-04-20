@@ -6,6 +6,7 @@
 
 import Database from "better-sqlite3";
 import type { Fact, FactStore, FactType, FactProvenance } from "./types.js";
+import { extractContextId } from "./context-extractor.js";
 
 function rowToFact(row: Record<string, unknown>): Fact {
   return {
@@ -133,6 +134,76 @@ export class SqliteFactStore implements FactStore {
       }
     });
     tx();
+  }
+
+  getFactsByScope(
+    scopeId: string,
+    selector?: import('../types/selector.js').Selector,
+  ): Fact[] {
+    // Validate: fact selection does not support dimensions that target other entity families
+    if (selector?.status !== undefined) {
+      throw new Error("Selector dimension 'status' is not supported for fact selection. Facts do not have a status field.");
+    }
+    if (selector?.vertical !== undefined) {
+      throw new Error("Selector dimension 'vertical' is not supported for fact selection. Filter by fact_type or use a work-item query instead.");
+    }
+    if (selector?.workItemIds !== undefined) {
+      throw new Error("Selector dimension 'workItemIds' is not supported for fact selection.");
+    }
+
+    const conditions: string[] = ["source_id = ?"];
+    const params: (string | number)[] = [scopeId];
+
+    if (selector?.since) {
+      conditions.push("created_at >= ?");
+      params.push(selector.since);
+    }
+
+    if (selector?.until) {
+      conditions.push("created_at <= ?");
+      params.push(selector.until);
+    }
+
+    if (selector?.factIds && selector.factIds.length > 0) {
+      const placeholders = selector.factIds.map(() => "?").join(",");
+      conditions.push(`fact_id in (${placeholders})`);
+      params.push(...selector.factIds);
+    }
+
+    const contextIds = selector?.contextIds;
+    const hasContextFilter = contextIds !== undefined && contextIds.length > 0;
+
+    let sql = `select * from facts where ${conditions.join(" and ")} order by created_at asc`;
+
+    // When contextIds filtering is needed, we must filter in JS because context_id
+    // is extracted from payload_json. Only apply SQL limit/offset when there is
+    // no context filter.
+    if (!hasContextFilter) {
+      const limit = selector?.limit ?? 1000;
+      sql += ` limit ?`;
+      params.push(limit);
+
+      if (selector?.offset !== undefined && selector.offset > 0) {
+        sql += ` offset ?`;
+        params.push(selector.offset);
+      }
+    }
+
+    const rows = this.db.prepare(sql).all(...params) as Record<string, unknown>[];
+    let facts = rows.map(rowToFact);
+
+    if (hasContextFilter) {
+      facts = facts.filter((fact) => {
+        const factContextId = extractContextId(fact);
+        return factContextId !== undefined && contextIds.includes(factContextId);
+      });
+
+      const limit = selector?.limit ?? 1000;
+      const offset = selector?.offset ?? 0;
+      facts = facts.slice(offset, offset + limit);
+    }
+
+    return facts;
   }
 
   close(): void {

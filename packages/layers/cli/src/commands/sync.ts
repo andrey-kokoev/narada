@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
@@ -16,6 +16,8 @@ import {
   DefaultProjector,
   cleanupTmp,
   FileLock,
+  FileViewStore,
+  ProjectionRebuildRegistry,
   normalizeFolderRef,
   normalizeFlagged,
   loadMultiMailboxConfig,
@@ -23,6 +25,7 @@ import {
   syncMultiple,
   formatMultiSyncResult,
 } from '@narada2/control-plane';
+import { SearchEngine } from '@narada2/search';
 
 export interface SyncOptions {
   config?: string;
@@ -139,6 +142,24 @@ export async function syncCommand(
 
   const source = new ExchangeSource({ adapter, sourceId: scope.scope_id });
 
+  let rebuildProjections: (() => Promise<void>) | undefined;
+  if (!options.dryRun) {
+    const registry = new ProjectionRebuildRegistry();
+    const viewStore = new FileViewStore({ rootDir });
+    registry.register(viewStore.asProjectionRebuildSurface());
+    const searchEngine = new SearchEngine({ rootDir });
+    registry.register({
+      name: 'search_index',
+      authoritativeInput: 'messages/ directory (canonical message records)',
+      rebuild: async () => {
+        searchEngine.initialize();
+        await searchEngine.build(join(rootDir, 'messages'));
+        searchEngine.close();
+      },
+    });
+    rebuildProjections = async () => { await registry.rebuildAll(); };
+  }
+
   const result = options.dryRun
     ? await previewSync({ adapter, cursorStore, applyLogStore, logger })
     : await new DefaultSyncRunner({
@@ -152,6 +173,8 @@ export async function syncCommand(
           : undefined,
         acquireLock: () => lock.acquire(),
         rebuildViewsAfterSync: scope.runtime.rebuild_views_after_sync,
+        rebuildProjectionsAfterSync: scope.runtime.rebuild_search_after_sync || scope.runtime.rebuild_views_after_sync,
+        rebuildProjections,
       }).syncOnce();
 
   logger.info('Sync complete', {

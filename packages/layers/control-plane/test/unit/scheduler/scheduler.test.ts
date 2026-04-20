@@ -53,8 +53,15 @@ describe("SqliteScheduler", () => {
       error_message: null,
       retry_count: 0,
       next_retry_at: null,
+      context_json: null,
       created_at: now,
       updated_at: now,
+      preferred_session_id: null,
+      preferred_agent_id: null,
+      affinity_group_id: null,
+      affinity_strength: 0,
+      affinity_expires_at: null,
+      affinity_reason: null,
       ...overrides,
     };
     store.insertWorkItem(item);
@@ -247,6 +254,97 @@ describe("SqliteScheduler", () => {
     const runnable = scheduler.scanForRunnableWork("mb-1", 10);
     expect(runnable[0]!.context_id).toBe("conv-2");
     expect(runnable[1]!.context_id).toBe("conv-1");
+  });
+
+  it("orders runnable with active affinity before items without affinity", () => {
+    createConversation("conv-1");
+    createConversation("conv-2");
+    const t1 = new Date(Date.now() - 2000).toISOString();
+    const t2 = new Date(Date.now() - 1000).toISOString();
+    const future = new Date(Date.now() + 60_000).toISOString();
+
+    // conv-1 is older but has active affinity — should come first
+    insertWorkItem({
+      context_id: "conv-1",
+      status: "opened",
+      priority: 0,
+      created_at: t1,
+      affinity_strength: 5,
+      affinity_expires_at: future,
+      affinity_reason: "same_context",
+    });
+    insertWorkItem({
+      context_id: "conv-2",
+      status: "opened",
+      priority: 0,
+      created_at: t2,
+      affinity_strength: 0,
+      affinity_expires_at: null,
+      affinity_reason: null,
+    });
+
+    const runnable = scheduler.scanForRunnableWork("mb-1", 10);
+    expect(runnable[0]!.context_id).toBe("conv-1");
+    expect(runnable[1]!.context_id).toBe("conv-2");
+  });
+
+  it("ignores expired affinity when ordering", () => {
+    createConversation("conv-1");
+    createConversation("conv-2");
+    const t1 = new Date(Date.now() - 2000).toISOString();
+    const t2 = new Date(Date.now() - 1000).toISOString();
+    const past = new Date(Date.now() - 60_000).toISOString();
+
+    // conv-1 has affinity but it's expired — falls back to created_at asc
+    insertWorkItem({
+      context_id: "conv-1",
+      status: "opened",
+      priority: 0,
+      created_at: t1,
+      affinity_strength: 5,
+      affinity_expires_at: past,
+      affinity_reason: "same_context",
+    });
+    insertWorkItem({
+      context_id: "conv-2",
+      status: "opened",
+      priority: 0,
+      created_at: t2,
+    });
+
+    const runnable = scheduler.scanForRunnableWork("mb-1", 10);
+    // Both have effective affinity 0 and priority 0; created_at asc => older first
+    expect(runnable[0]!.context_id).toBe("conv-1");
+    expect(runnable[1]!.context_id).toBe("conv-2");
+  });
+
+  it("falls back to created_at when affinity strength is equal", () => {
+    createConversation("conv-1");
+    createConversation("conv-2");
+    const t1 = new Date(Date.now() - 2000).toISOString();
+    const t2 = new Date(Date.now() - 1000).toISOString();
+    const future = new Date(Date.now() + 60_000).toISOString();
+
+    insertWorkItem({
+      context_id: "conv-1",
+      status: "opened",
+      priority: 0,
+      created_at: t1,
+      affinity_strength: 2,
+      affinity_expires_at: future,
+    });
+    insertWorkItem({
+      context_id: "conv-2",
+      status: "opened",
+      priority: 0,
+      created_at: t2,
+      affinity_strength: 2,
+      affinity_expires_at: future,
+    });
+
+    const runnable = scheduler.scanForRunnableWork("mb-1", 10);
+    expect(runnable[0]!.context_id).toBe("conv-1"); // older first when strength equal
+    expect(runnable[1]!.context_id).toBe("conv-2");
   });
 
   it("enforces conversation-level serialization (only one active work item per conversation)", () => {

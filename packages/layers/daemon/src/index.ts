@@ -95,7 +95,10 @@ async function main(): Promise<void> {
 
   let configPath = "./config.json";
   let verbose = false;
+  let once = false;
   let pidFilePath: string | undefined;
+  let observationApiPort: number | undefined;
+  let observationApiHost: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -103,15 +106,32 @@ async function main(): Promise<void> {
       configPath = args[++i] ?? configPath;
     } else if (arg === "-v" || arg === "--verbose") {
       verbose = true;
+    } else if (arg === "--once") {
+      once = true;
     } else if (arg === "--pid-file") {
       pidFilePath = args[++i] ?? pidFilePath;
+    } else if (arg === "--observation-port") {
+      const raw = args[++i];
+      observationApiPort = raw ? Number(raw) : undefined;
+    } else if (arg === "--observation-host") {
+      observationApiHost = args[++i] ?? observationApiHost;
     } else if (arg === "-h" || arg === "--help") {
-      console.log("Usage: narada-daemon [-c config.json] [-v] [--pid-file path]");
+      console.log("Usage: narada-daemon [-c config.json] [-v] [--once] [--pid-file path] [--observation-port port] [--observation-host host]");
       process.exit(0);
     }
   }
 
-  const service = await createSyncService({ configPath, verbose, pidFilePath });
+  if (observationApiPort !== undefined && (!Number.isInteger(observationApiPort) || observationApiPort <= 0)) {
+    throw new Error(`Invalid --observation-port: ${observationApiPort}`);
+  }
+
+  const service = await createSyncService({
+    configPath,
+    verbose,
+    pidFilePath,
+    observationApiPort,
+    observationApiHost,
+  });
 
   let stopping = false;
   async function shutdown(signal: string): Promise<void> {
@@ -129,6 +149,14 @@ async function main(): Promise<void> {
 
   process.on("SIGINT", () => void shutdown("SIGINT"));
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
+
+  if (once) {
+    const result = await service.runOnce();
+    if (result !== "success") {
+      process.exit(result === "retryable" ? 75 : 1);
+    }
+    return;
+  }
 
   await service.start();
 }

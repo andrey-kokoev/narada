@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { CoordinatorConfig, OperationalRequirement } from "@narada2/charters";
-import { collectOperationalRequirements } from "@narada2/charters";
-import type { ScopeConfig } from "@narada2/control-plane";
+import type { CoordinatorConfig, OperationalRequirement, AuthorityClass } from "@narada2/charters";
+import { collectOperationalRequirements, AUTHORITY_CLASSES, RUNTIME_AUTHORITY_CLASSES } from "@narada2/charters";
+import type { ScopeConfig, RuntimePolicy } from "@narada2/control-plane";
 import { resolveConfigPath } from "../lib/config-io.js";
 import type { ReadinessCheck, ReadinessReport, ReadinessStatus } from "./types.js";
 
@@ -22,6 +22,86 @@ function statusFromChecks(checks: ReadinessCheck[]): ReadinessStatus {
   if (checks.some((c) => c.status === "fail")) return "fail";
   if (checks.some((c) => c.status === "warn")) return "warn";
   return "pass";
+}
+
+function checkAuthorityClasses(
+  checks: ReadinessCheck[],
+  coordinatorConfig: CoordinatorConfig,
+  mailboxId: string,
+  policy?: RuntimePolicy,
+): void {
+  const binding = coordinatorConfig.mailbox_bindings[mailboxId];
+  if (!binding) return;
+
+  for (const [charterId, toolBindings] of Object.entries(binding.charter_tools)) {
+    for (const toolBinding of toolBindings) {
+      if (!toolBinding.enabled) continue;
+
+      if (!toolBinding.authority_class) {
+        pushCheck(checks, {
+          category: "authority",
+          name: `${charterId}/${toolBinding.tool_id}`,
+          status: "fail",
+          detail: `Tool binding is missing authority_class`,
+          remediation: `Add authority_class to tool binding ${toolBinding.tool_id} (one of: ${AUTHORITY_CLASSES.join(", ")})`,
+        });
+        continue;
+      }
+
+      if (!AUTHORITY_CLASSES.includes(toolBinding.authority_class as AuthorityClass)) {
+        pushCheck(checks, {
+          category: "authority",
+          name: `${charterId}/${toolBinding.tool_id}`,
+          status: "fail",
+          detail: `Tool binding has invalid authority_class: ${toolBinding.authority_class}`,
+          remediation: `Change authority_class to one of: ${AUTHORITY_CLASSES.join(", ")}`,
+        });
+        continue;
+      }
+
+      const ac = toolBinding.authority_class as AuthorityClass;
+
+      if (ac === "admin") {
+        const authorized = policy?.admin_authorized === true;
+        pushCheck(checks, {
+          category: "authority",
+          name: `${charterId}/${toolBinding.tool_id}`,
+          status: authorized ? "pass" : "fail",
+          detail: authorized
+            ? `Tool binding uses admin authority_class (authorized)`
+            : `Tool binding uses admin authority_class without admin authorization`,
+          remediation: authorized
+            ? undefined
+            : `Set policy.admin_authorized=true for this scope, or remove this binding.`,
+        });
+        continue;
+      }
+
+      if (RUNTIME_AUTHORITY_CLASSES.includes(ac)) {
+        const authorized = policy?.runtime_authorized === true;
+        pushCheck(checks, {
+          category: "authority",
+          name: `${charterId}/${toolBinding.tool_id}`,
+          status: authorized ? "pass" : "fail",
+          detail: authorized
+            ? `Tool binding uses runtime authority_class: ${ac} (authorized)`
+            : `Tool binding uses runtime authority_class: ${ac} without runtime authorization`,
+          remediation: authorized
+            ? undefined
+            : `Set policy.runtime_authorized=true for this scope, or change authority_class to derive/propose.`,
+        });
+        continue;
+      }
+
+      // derive / propose — always acceptable
+      pushCheck(checks, {
+        category: "authority",
+        name: `${charterId}/${toolBinding.tool_id}`,
+        status: "pass",
+        detail: `Tool binding authority_class: ${ac}`,
+      });
+    }
+  }
 }
 
 function checkRequirement(checks: ReadinessCheck[], requirement: OperationalRequirement): void {
@@ -179,6 +259,8 @@ export function preflight(options: PreflightOptions): ReadinessReport {
     for (const requirement of collectOperationalRequirements(options.coordinatorConfig, options.mailboxIdForTools)) {
       checkRequirement(checks, requirement);
     }
+
+    checkAuthorityClasses(checks, options.coordinatorConfig, options.mailboxIdForTools, options.scope?.policy);
   }
 
   const status = statusFromChecks(checks);

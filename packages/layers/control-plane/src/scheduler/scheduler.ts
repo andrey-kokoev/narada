@@ -51,6 +51,20 @@ export class SqliteScheduler implements Scheduler {
     // - OR status = 'failed_retryable' AND next_retry_at <= now
     // - conversation not blocked by active leased/executing work on same conversation
     // - no active blocked_policy outbound command for same conversation (skipped in v1 for simplicity)
+    //
+    // Ordering honors continuation affinity: active (non-expired) affinity gets a
+    // strength boost, then priority desc, then created_at asc. Affinity is advisory
+    // — it never blocks runnable work, only reorders within the same priority band.
+
+    const affinityOrder = `
+      case
+        when wi.affinity_expires_at is not null and wi.affinity_expires_at > ?
+        then wi.affinity_strength
+        else 0
+      end desc,
+      wi.priority desc,
+      wi.created_at asc
+    `;
 
     let sql: string;
     let params: (string | number)[];
@@ -72,10 +86,10 @@ export class SqliteScheduler implements Scheduler {
               and wi3.status = 'superseded'
               and wi3.work_item_id = wi.work_item_id
           )
-        order by wi.priority desc, wi.created_at asc
+        order by ${affinityOrder}
         limit ?
       `;
-      params = [scopeId, limit];
+      params = [scopeId, now, limit];
     } else {
       sql = `
         select wi.* from work_items wi
@@ -92,10 +106,10 @@ export class SqliteScheduler implements Scheduler {
               and wi3.status = 'superseded'
               and wi3.work_item_id = wi.work_item_id
           )
-        order by wi.priority desc, wi.created_at asc
+        order by ${affinityOrder}
         limit ?
       `;
-      params = [limit];
+      params = [now, limit];
     }
 
     const openedRows = this.store.db.prepare(sql).all(...params) as Record<string, unknown>[];
@@ -116,10 +130,10 @@ export class SqliteScheduler implements Scheduler {
               and wi2.status in ('leased', 'executing')
               and wi2.work_item_id != wi.work_item_id
           )
-        order by wi.priority desc, wi.created_at asc
+        order by ${affinityOrder}
         limit ?
       `;
-      retryParams = [scopeId, now, limit];
+      retryParams = [scopeId, now, now, limit];
     } else {
       retrySql = `
         select wi.* from work_items wi
@@ -131,10 +145,10 @@ export class SqliteScheduler implements Scheduler {
               and wi2.status in ('leased', 'executing')
               and wi2.work_item_id != wi.work_item_id
           )
-        order by wi.priority desc, wi.created_at asc
+        order by ${affinityOrder}
         limit ?
       `;
-      retryParams = [now, limit];
+      retryParams = [now, now, limit];
     }
 
     const retryRows = this.store.db.prepare(retrySql).all(...retryParams) as Record<string, unknown>[];
@@ -160,6 +174,12 @@ export class SqliteScheduler implements Scheduler {
       context_json: row.context_json ? String(row.context_json) : null,
       created_at: String(row.created_at),
       updated_at: String(row.updated_at),
+      preferred_session_id: row.preferred_session_id ? String(row.preferred_session_id) : null,
+      preferred_agent_id: row.preferred_agent_id ? String(row.preferred_agent_id) : null,
+      affinity_group_id: row.affinity_group_id ? String(row.affinity_group_id) : null,
+      affinity_strength: Number(row.affinity_strength ?? 0),
+      affinity_expires_at: row.affinity_expires_at ? String(row.affinity_expires_at) : null,
+      affinity_reason: row.affinity_reason ? String(row.affinity_reason) : null,
     });
 
     for (const row of [...openedRows, ...retryRows]) {

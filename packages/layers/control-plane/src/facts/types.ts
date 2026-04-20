@@ -53,6 +53,11 @@ export interface FactStore {
   getUnadmittedFacts(sourceId?: string, limit?: number): Fact[];
   /** Mark facts as admitted (idempotent) */
   markAdmitted(factIds: string[]): void;
+  /** Query stored facts for a scope with optional filters */
+  getFactsByScope(
+    scopeId: string,
+    selector?: import('../types/selector.js').Selector,
+  ): Fact[];
   close(): void;
 }
 

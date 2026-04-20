@@ -103,6 +103,61 @@ narada rebuild-views
 
 Rebuilds all views (by-thread, unread, flagged, etc.) from source data.
 
+### `derive-work` - Derive Work from Stored Facts
+
+Explicitly re-derive work items from already-stored facts without requiring a fresh inbound source event. Uses the same context-formation + foreman admission path as live dispatch.
+
+```bash
+# Derive work for all contexts in the default scope
+narada derive-work
+
+# Derive work for a specific scope
+narada derive-work -s mailbox@example.com
+
+# Derive work for a specific conversation/thread
+narada derive-work --context-id <conversation-id>
+
+# Derive work from facts since a specific time
+narada derive-work --since 2024-01-01T00:00:00Z
+
+# Derive work from specific fact IDs
+narada derive-work --fact-ids fact_001,fact_002
+```
+
+Options:
+- `-s, --scope <id>` - Scope ID (mailbox ID) to derive work for
+- `--context-id <id>` - Derive work for a specific context (conversation/thread)
+- `--since <timestamp>` - Only consider facts created at or after this ISO timestamp
+- `--fact-ids <ids>` - Comma-separated list of specific fact IDs to replay
+
+### `preview-work` - Preview Work from Stored Facts
+
+Read-only inspection of what a charter would propose for a stored fact set. Runs context formation, charter evaluation, and governance without creating work items, intents, or outbound commands.
+
+```bash
+# Preview work for all contexts in the default scope
+narada preview-work
+
+# Preview work for a specific scope
+narada preview-work -s mailbox@example.com
+
+# Preview work for a specific conversation/thread
+narada preview-work --context-id <conversation-id>
+
+# Preview work from facts since a specific time
+narada preview-work --since 2024-01-01T00:00:00Z
+
+# Use mock charter runner (no API key required)
+narada preview-work --mock
+```
+
+Options:
+- `-s, --scope <id>` - Scope ID (mailbox ID) to preview work for
+- `--context-id <id>` - Preview work for a specific context (conversation/thread)
+- `--since <timestamp>` - Only consider facts created at or after this ISO timestamp
+- `--fact-ids <ids>` - Comma-separated list of specific fact IDs to preview
+- `--mock` - Use a mock charter runner instead of a real one
+
 ### `backup` - Create Backup
 
 ```bash

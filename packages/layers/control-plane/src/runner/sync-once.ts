@@ -44,8 +44,14 @@ export interface SyncOnceDeps {
   factStore?: FactStore;
   cleanupTmp?: () => Promise<void>;
   acquireLock?: () => Promise<() => Promise<void>>;
+  /** @deprecated Use rebuildProjections instead */
   rebuildViews?: () => Promise<void>;
+  /** @deprecated Use rebuildProjectionsAfterSync instead */
   rebuildViewsAfterSync?: boolean;
+  /** Unified projection rebuild callback (canonical path) */
+  rebuildProjections?: () => Promise<void>;
+  /** Whether to rebuild all projections after a successful sync */
+  rebuildProjectionsAfterSync?: boolean;
   onProgress?: ProgressCallback;
   /** If true, continue processing events even if some fail */
   continueOnError?: boolean;
@@ -275,14 +281,16 @@ export class DefaultSyncRunner implements SyncRunner {
         }
       }
 
-      if (this.deps.rebuildViewsAfterSync && this.deps.rebuildViews) {
-        this.reportProgress("cleanup", 0, 1, "Rebuilding views...");
+      const shouldRebuildProjections = this.deps.rebuildProjectionsAfterSync ?? this.deps.rebuildViewsAfterSync;
+      const rebuildFn = this.deps.rebuildProjections ?? this.deps.rebuildViews;
+      if (shouldRebuildProjections && rebuildFn) {
+        this.reportProgress("cleanup", 0, 1, "Rebuilding projections...");
         try {
-          await this.deps.rebuildViews();
-          this.reportProgress("cleanup", 1, 1, "Views rebuilt");
-        } catch (viewError) {
-          addError("cleanup", viewError, { actionTaken: "logged_only" });
-          // Views can be rebuilt later, don't fail the sync
+          await rebuildFn();
+          this.reportProgress("cleanup", 1, 1, "Projections rebuilt");
+        } catch (projError) {
+          addError("cleanup", projError, { actionTaken: "logged_only" });
+          // Projections can be rebuilt later, don't fail the sync
         }
       }
 

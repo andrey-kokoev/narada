@@ -148,7 +148,7 @@ export async function statusCommand(
     };
   }
 
-  const report = await buildStatusReport(scope.scope_id, resolve(config.root_dir));
+  const report = await buildStatusReport(scope.scope_id, resolve(scope.root_dir));
 
   return {
     exitCode: ExitCode.SUCCESS,
@@ -201,8 +201,15 @@ async function buildStatusReport(scopeId: string, rootDir: string): Promise<Stat
     // Read cursor
     try {
       const cursorPath = join(rootDir, 'state', 'cursor.json');
-      const cursorData = JSON.parse(await readFile(cursorPath, 'utf8'));
-      report.sync.cursor = cursorData.cursor || null;
+      const cursorData = JSON.parse(await readFile(cursorPath, 'utf8')) as {
+        cursor?: string;
+        committed_cursor?: string;
+        committed_at?: string;
+      };
+      report.sync.cursor = cursorData.committed_cursor ?? cursorData.cursor ?? null;
+      if (!report.sync.lastSyncAt) {
+        report.sync.lastSyncAt = cursorData.committed_at ?? null;
+      }
     } catch {
       // No cursor yet
     }

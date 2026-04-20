@@ -127,6 +127,7 @@ export type {
   OperatorActionRequest,
   CoordinatorStoreView,
   CoordinatorStoreOperatorView,
+  ContinuationAffinity,
 } from "./coordinator/types.js";
 export type { SqliteCoordinatorStoreOptions } from "./coordinator/store.js";
 export { deriveThreadId } from "./coordinator/mailbox-thread-id.js";
@@ -142,6 +143,7 @@ export {
   TimerContextStrategy,
   WebhookContextStrategy,
   FilesystemContextStrategy,
+  resolveContextStrategy,
 } from "./foreman/context.js";
 export type {
   ForemanFacade,
@@ -165,6 +167,8 @@ export type {
   ToolInvocationRequest,
   PolicyContext,
   ContextFormationStrategy,
+  PreviewDerivationResult,
+  PreviewGovernanceResult,
 } from "./foreman/types.js";
 export { validateCharterOutput } from "@narada2/charters";
 export { arbitrateEvaluations } from "./foreman/validation.js";
@@ -245,6 +249,13 @@ export type {
   MailConfirmationResolverDeps,
   CompositeConfirmationResolverDeps,
 } from "./executors/confirmation.js";
+export { ConfirmationReplay } from "./executors/confirmation-replay.js";
+export type {
+  ConfirmationReplayDeps,
+  ConfirmationReplaySelection,
+  ConfirmationReplayResult,
+  ConfirmationReplayDetail,
+} from "./executors/confirmation-replay.js";
 export { DefaultWorkerRegistry, drainWorker } from "./workers/registry.js";
 export type { WorkerRegistry, WorkerRegistryView, RegisteredWorker, WorkerIdentity, WorkerFn, WorkerExecutionResult, ConcurrencyPolicy } from "./workers/index.js";
 export type { IntentStore, IntentStoreView, SqliteIntentStoreOptions, SqliteIntentStoreDbOptions } from "./intent/store.js";
@@ -401,6 +412,7 @@ export type {
   LeaseSummary,
   StaleLeaseRecoveryEvent,
   QuiescenceIndicator,
+  AffinityOutcome,
 } from "./observability/types.js";
 export type {
   MailExecutionDetail,
@@ -448,6 +460,13 @@ export {
 } from "./observability/mailbox.js";
 export { ObservationPlane } from "./observability/plane.js";
 export type { ObservationPlaneDeps } from "./observability/plane.js";
+export {
+  ProjectionRebuildRegistry,
+} from "./observability/rebuild.js";
+export type {
+  ProjectionRebuildSurface,
+  ProjectionRebuildResult,
+} from "./observability/rebuild.js";
 
 // Error handling exports
 export {
@@ -603,6 +622,7 @@ export type { SecureRef } from "./config/secure-config.js";
 export type {
   ExchangeFsSyncConfig,
   ScopeConfig,
+  RuntimePolicy,
 } from "./config/types.js";
 export type {
   GraphAdapterConfig,

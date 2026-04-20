@@ -207,6 +207,70 @@ describe("daemon dispatch phase integration", { timeout: 30000 }, () => {
     db.close();
   });
 
+  it("runs one complete sync and dispatch cycle without entering the polling loop", async () => {
+    const conversationId = "conv-run-once-001";
+    const mockAdapter = createMockAdapterForConversation(conversationId);
+
+    const charterRunner = new MockCharterRunner({
+      output: {
+        output_version: "2.0",
+        execution_id: "will-be-overridden",
+        charter_id: "support_steward",
+        role: "primary",
+        analyzed_at: new Date().toISOString(),
+        outcome: "complete",
+        confidence: { overall: "high", uncertainty_flags: [] },
+        summary: "Run-once test evaluation",
+        classifications: [],
+        facts: [],
+        recommended_action_class: "send_reply",
+        proposed_actions: [
+          {
+            action_type: "send_reply",
+            authority: "recommended",
+            payload_json: JSON.stringify({ body_text: "Hello once", to: ["test@example.com"] }),
+            rationale: "Test one-shot action",
+          },
+        ],
+        tool_requests: [],
+        escalations: [],
+      },
+    });
+
+    service = await createSyncService({
+      configPath,
+      verbose: false,
+      adapter: mockAdapter,
+      charterRunner,
+      pollingIntervalMs: 100000,
+    });
+
+    const result = await service.runOnce();
+    expect(result).toBe("success");
+
+    const stats = service.getStats();
+    expect(stats.cyclesCompleted).toBe(1);
+    expect(stats.errors).toBe(0);
+
+    const dbPath = join(rootDir, ".narada", "coordinator.db");
+    const db = new Database(dbPath);
+    const store = new SqliteCoordinatorStore({ db });
+
+    const resolvedItem = store.db
+      .prepare("select * from work_items where context_id = ? and status = 'resolved'")
+      .get(conversationId) as Record<string, unknown> | undefined;
+
+    expect(resolvedItem?.resolution_outcome).toBe("action_created");
+
+    const command = store.db
+      .prepare("select * from outbound_commands where conversation_id = ?")
+      .get(conversationId) as Record<string, unknown> | undefined;
+
+    expect(command?.status).toBeDefined();
+
+    db.close();
+  });
+
   it("reaches quiescence when no conversations changed", async () => {
     const mockAdapter: GraphAdapter = {
       async fetch_since(): Promise<NormalizedBatch> {

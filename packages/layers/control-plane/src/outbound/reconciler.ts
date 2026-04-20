@@ -8,7 +8,7 @@
 
 import type { Logger } from "../logging/types.js";
 import type { OutboundStore } from "./store.js";
-import type { OutboundCommand, OutboundVersion } from "./types.js";
+import type { OutboundCommand, OutboundVersion, OutboundStatus } from "./types.js";
 import { isValidTransition } from "./types.js";
 
 export interface FoundMessage {
@@ -87,6 +87,45 @@ export class OutboundReconciler {
     const { command, version } = candidates[0]!;
     await this.reconcile(command, version);
     return { processed: true, outboundId: command.outbound_id };
+  }
+
+  /**
+   * Reconcile a specific outbound command by ID.
+   *
+   * Returns the result of the reconciliation attempt without polling.
+   * This is the targeted path used by confirmation replay.
+   */
+  async reconcileOne(outboundId: string): Promise<{
+    previousStatus: OutboundStatus;
+    newStatus: OutboundStatus;
+    confirmed: boolean;
+    evidence?: string;
+  } | undefined> {
+    const command = this.deps.store.getCommand(outboundId);
+    if (!command) return undefined;
+    const version = this.deps.store.getLatestVersion(outboundId);
+    if (!version) return undefined;
+
+    const previousStatus = command.status;
+    if (previousStatus !== "submitted") {
+      return {
+        previousStatus,
+        newStatus: previousStatus,
+        confirmed: previousStatus === "confirmed",
+      };
+    }
+
+    await this.reconcile(command, version);
+
+    const updated = this.deps.store.getCommand(outboundId)!;
+    return {
+      previousStatus,
+      newStatus: updated.status,
+      confirmed: updated.status === "confirmed",
+      evidence: updated.confirmed_at
+        ? "Message found via observation/reconciliation"
+        : updated.terminal_reason ?? undefined,
+    };
   }
 
   private async reconcile(command: OutboundCommand, version: OutboundVersion): Promise<void> {

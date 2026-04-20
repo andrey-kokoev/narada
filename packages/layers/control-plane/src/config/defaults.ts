@@ -24,6 +24,7 @@ export const DEFAULT_EXCHANGE_FS_SYNC_CONFIG: Omit<
     acquire_lock_timeout_ms: 30_000,
     cleanup_tmp_on_startup: true,
     rebuild_views_after_sync: false,
+    rebuild_search_after_sync: false,
   },
   lifecycle: {
     tombstone_retention_days: 30,

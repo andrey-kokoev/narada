@@ -82,7 +82,17 @@ export interface ToolDefinition {
   setup_requirements?: OperationalRequirement[];
 }
 
-export type AuthorityClass = "derive" | "propose" | "claim" | "execute" | "resolve" | "confirm" | "admin";
+export const AUTHORITY_CLASSES = [
+  "derive",
+  "propose",
+  "claim",
+  "execute",
+  "resolve",
+  "confirm",
+  "admin",
+] as const;
+
+export type AuthorityClass = (typeof AUTHORITY_CLASSES)[number];
 
 /** Binding of a tool to a charter within a mailbox */
 export interface ToolBinding {
@@ -94,7 +104,34 @@ export interface ToolBinding {
   allowed_env_vars?: string[];
   requires_approval: boolean;
   working_directory_override?: string;
-  authority_class?: AuthorityClass;
+  authority_class: AuthorityClass;
+}
+
+/** Runtime-only authority classes that require Narada runtime authorization. */
+export const RUNTIME_AUTHORITY_CLASSES: AuthorityClass[] = [
+  "claim",
+  "execute",
+  "resolve",
+  "confirm",
+];
+
+/** Domain/compiler-safe authority classes. */
+export const DERIVER_AUTHORITY_CLASSES: AuthorityClass[] = ["derive", "propose"];
+
+/**
+ * Validate that a tool binding has a canonical authority class.
+ * Returns an error string if invalid, undefined if valid.
+ */
+export function validateToolBindingAuthority(
+  binding: ToolBinding,
+): string | undefined {
+  if (!binding.authority_class) {
+    return `Tool binding ${binding.tool_id} is missing authority_class`;
+  }
+  if (!AUTHORITY_CLASSES.includes(binding.authority_class)) {
+    return `Tool binding ${binding.tool_id} has invalid authority_class: ${binding.authority_class}`;
+  }
+  return undefined;
 }
 
 /** Canonical mailbox-to-coordinator binding */

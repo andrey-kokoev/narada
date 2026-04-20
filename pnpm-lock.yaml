@@ -48,12 +48,18 @@ importers:
       '@clack/prompts':
         specifier: ^0.7.0
         version: 0.7.0
+      '@narada2/charters':
+        specifier: workspace:*
+        version: link:../../domains/charters
       '@narada2/control-plane':
         specifier: workspace:*
         version: link:../control-plane
       '@narada2/ops-kit':
         specifier: workspace:*
         version: link:../../ops-kit
+      '@narada2/search':
+        specifier: workspace:*
+        version: link:../../verticals/search
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
@@ -128,6 +134,9 @@ importers:
       '@narada2/control-plane':
         specifier: workspace:*
         version: link:../control-plane
+      '@narada2/search':
+        specifier: workspace:*
+        version: link:../../verticals/search
     devDependencies:
       '@types/node':
         specifier: ^20.10.0

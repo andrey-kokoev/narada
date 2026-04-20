@@ -137,6 +137,12 @@ describe("observation server", () => {
     context_json: null,
     created_at: "2026-04-13T12:00:00Z",
     updated_at: "2026-04-13T12:00:00Z",
+    preferred_session_id: null,
+    preferred_agent_id: null,
+    affinity_group_id: null,
+    affinity_strength: 0,
+    affinity_expires_at: null,
+    affinity_reason: null,
   });
 
   coordinatorStore.insertWorkItem({
@@ -154,6 +160,35 @@ describe("observation server", () => {
     context_json: null,
     created_at: "2026-04-13T12:00:00Z",
     updated_at: "2026-04-13T12:00:00Z",
+    preferred_session_id: null,
+    preferred_agent_id: null,
+    affinity_group_id: null,
+    affinity_strength: 0,
+    affinity_expires_at: null,
+    affinity_reason: null,
+  });
+
+  coordinatorStore.insertWorkItem({
+    work_item_id: "wi-failed-2",
+    context_id: "ctx-1",
+    scope_id: "scope-a",
+    status: "failed_retryable",
+    priority: 1,
+    opened_for_revision_id: "rev-1",
+    resolved_revision_id: null,
+    resolution_outcome: null,
+    error_message: "Another test failure",
+    retry_count: 1,
+    next_retry_at: "2099-01-02T00:00:00Z",
+    context_json: null,
+    created_at: "2026-04-13T12:00:00Z",
+    updated_at: "2026-04-13T12:00:00Z",
+    preferred_session_id: null,
+    preferred_agent_id: null,
+    affinity_group_id: null,
+    affinity_strength: 0,
+    affinity_expires_at: null,
+    affinity_reason: null,
   });
 
   intentStore.admit({
@@ -236,6 +271,12 @@ describe("observation server", () => {
     context_json: null,
     created_at: "2026-04-13T12:00:00Z",
     updated_at: "2026-04-13T12:00:00Z",
+    preferred_session_id: null,
+    preferred_agent_id: null,
+    affinity_group_id: null,
+    affinity_strength: 0,
+    affinity_expires_at: null,
+    affinity_reason: null,
   });
 
   coordinatorStore.upsertContextRecord({
@@ -270,6 +311,12 @@ describe("observation server", () => {
     context_json: null,
     created_at: "2026-04-13T12:00:00Z",
     updated_at: "2026-04-13T12:00:00Z",
+    preferred_session_id: null,
+    preferred_agent_id: null,
+    affinity_group_id: null,
+    affinity_strength: 0,
+    affinity_expires_at: null,
+    affinity_reason: null,
   });
 
   coordinatorStore.upsertContextRecord({
@@ -304,6 +351,12 @@ describe("observation server", () => {
     context_json: null,
     created_at: "2026-04-13T12:00:00Z",
     updated_at: "2026-04-13T12:00:00Z",
+    preferred_session_id: null,
+    preferred_agent_id: null,
+    affinity_group_id: null,
+    affinity_strength: 0,
+    affinity_expires_at: null,
+    affinity_reason: null,
   });
 
   factStore.ingest({
@@ -574,7 +627,22 @@ describe("observation server", () => {
     expect((data as { success: boolean }).success).toBe(true);
 
     const item = coordinatorStore.getWorkItem("wi-failed");
+    expect(item?.status).toBe("failed_retryable");
     expect(item?.next_retry_at).toBeNull();
+  });
+
+  it("executes retry_failed_work_items action via control namespace", async () => {
+    const url = `${server.getUrl()}/control/scopes/scope-a/actions`;
+    const { status, data } = await httpPostJson(url, { action_type: "retry_failed_work_items" });
+    expect(status).toBe(200);
+    expect((data as { success: boolean }).success).toBe(true);
+
+    const item1 = coordinatorStore.getWorkItem("wi-failed");
+    const item2 = coordinatorStore.getWorkItem("wi-failed-2");
+    expect(item1?.status).toBe("failed_retryable");
+    expect(item2?.status).toBe("failed_retryable");
+    expect(item1?.next_retry_at).toBeNull();
+    expect(item2?.next_retry_at).toBeNull();
   });
 
   it("executes acknowledge_alert action", async () => {

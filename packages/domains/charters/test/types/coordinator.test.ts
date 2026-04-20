@@ -116,6 +116,7 @@ describe("collectOperationalRequirements", () => {
                 read_only: true,
                 timeout_ms: 5000,
                 requires_approval: false,
+                authority_class: "derive",
               },
             ],
             obligation_keeper: [
@@ -126,6 +127,7 @@ describe("collectOperationalRequirements", () => {
                 read_only: false,
                 timeout_ms: 5000,
                 requires_approval: true,
+                authority_class: "execute",
               },
             ],
           },
@@ -204,6 +206,7 @@ describe("collectOperationalRequirements", () => {
                 read_only: true,
                 timeout_ms: 5000,
                 requires_approval: false,
+                authority_class: "derive",
               },
             ],
             obligation_keeper: [
@@ -214,6 +217,7 @@ describe("collectOperationalRequirements", () => {
                 read_only: true,
                 timeout_ms: 5000,
                 requires_approval: false,
+                authority_class: "derive",
               },
               {
                 tool_id: "disabled",
@@ -222,6 +226,7 @@ describe("collectOperationalRequirements", () => {
                 read_only: true,
                 timeout_ms: 5000,
                 requires_approval: false,
+                authority_class: "derive",
               },
             ],
           },

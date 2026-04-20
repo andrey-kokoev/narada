@@ -42,6 +42,7 @@ export interface MailboxConfig {
     acquire_lock_timeout_ms?: number;
     cleanup_tmp_on_startup?: boolean;
     rebuild_views_after_sync?: boolean;
+    rebuild_search_after_sync?: boolean;
   };
   /** Scope configuration */
   scope?: {
@@ -139,6 +140,7 @@ export const DEFAULT_SYNC_OPTIONS: Required<NonNullable<MailboxConfig["sync"]>> 
   acquire_lock_timeout_ms: 30000,
   cleanup_tmp_on_startup: true,
   rebuild_views_after_sync: true,
+  rebuild_search_after_sync: false,
 };
 
 /** Options for loading multi-mailbox config */
@@ -473,6 +475,7 @@ export function validateMailboxConfig(
       acquire_lock_timeout_ms: expectNumber(syncObj.acquire_lock_timeout_ms, DEFAULT_SYNC_OPTIONS.acquire_lock_timeout_ms),
       cleanup_tmp_on_startup: expectBoolean(syncObj.cleanup_tmp_on_startup, DEFAULT_SYNC_OPTIONS.cleanup_tmp_on_startup),
       rebuild_views_after_sync: expectBoolean(syncObj.rebuild_views_after_sync, DEFAULT_SYNC_OPTIONS.rebuild_views_after_sync),
+      rebuild_search_after_sync: expectBoolean(syncObj.rebuild_search_after_sync, DEFAULT_SYNC_OPTIONS.rebuild_search_after_sync),
     },
     charter,
     ...(policy ? { policy } : {}),
@@ -653,6 +656,7 @@ export function toScopeConfig(mailbox: MailboxConfig): ScopeConfig {
       acquire_lock_timeout_ms: mailbox.sync?.acquire_lock_timeout_ms ?? 30000,
       cleanup_tmp_on_startup: mailbox.sync?.cleanup_tmp_on_startup ?? true,
       rebuild_views_after_sync: mailbox.sync?.rebuild_views_after_sync ?? true,
+      rebuild_search_after_sync: mailbox.sync?.rebuild_search_after_sync ?? false,
     },
     ...(mailbox.charter ? { charter: mailbox.charter } : {}),
     policy: mailbox.policy ?? {
@@ -676,13 +680,15 @@ export function getMailboxById(
 }
 
 /**
- * Check if a config is a multi-scope config (has mailboxes array or scopes array).
+ * Check if a config uses the legacy multi-mailbox shape.
+ *
+ * Modern operation configs use `scopes[]` and must be loaded through
+ * `loadConfig()`, not the legacy multi-mailbox adapter.
  */
-export function isMultiMailboxConfig(obj: unknown): obj is { mailboxes: unknown[] } | { scopes: unknown[] } {
-  return isObject(obj) && (Array.isArray(obj.mailboxes) || Array.isArray(obj.scopes));
+export function isMultiMailboxConfig(obj: unknown): obj is { mailboxes: unknown[] } {
+  return isObject(obj) && Array.isArray(obj.mailboxes);
 }
 
-/**
- * Alias for isMultiMailboxConfig using scope terminology.
- */
-export const isMultiScopeConfig = isMultiMailboxConfig;
+export function isMultiScopeConfig(obj: unknown): obj is { scopes: unknown[] } {
+  return isObject(obj) && Array.isArray(obj.scopes);
+}

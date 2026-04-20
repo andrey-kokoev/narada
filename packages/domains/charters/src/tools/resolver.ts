@@ -7,7 +7,8 @@
  * Spec: .ai/tasks/20260414-007-assignment-agent-c-tool-binding-runtime.md
  */
 
-import type { CoordinatorConfig, ToolBinding } from "../types/coordinator.js";
+import type { CoordinatorConfig, ToolBinding, AuthorityClass } from "../types/coordinator.js";
+import { validateToolBindingAuthority } from "../types/coordinator.js";
 import type { KnowledgeSourceRef } from "../types/knowledge.js";
 import type { AllowedAction, ToolCatalogEntry } from "../runtime/envelope.js";
 
@@ -65,6 +66,14 @@ export function resolveToolCatalog(
     if (removedSet.has(toolBinding.tool_id)) continue;
     if (!toolBinding.enabled) continue;
 
+    const authError = validateToolBindingAuthority(toolBinding);
+    if (authError) {
+      // Skip tools with invalid authority rather than silently including them.
+      // This makes the envelope conservative: broken bindings produce empty slots
+      // that are visible in the catalog length mismatch.
+      continue;
+    }
+
     const definition = config.tool_definitions[toolBinding.tool_id];
 
     availableTools.push({
@@ -80,7 +89,7 @@ export function resolveToolCatalog(
         description: `Environment variable ${name}`,
       })),
       timeout_ms: toolBinding.timeout_ms,
-      authority_class: toolBinding.authority_class,
+      authority_class: toolBinding.authority_class as AuthorityClass,
     });
   }
 

@@ -43,6 +43,7 @@ export function buildMailboxScope(opts: {
       acquire_lock_timeout_ms: 30_000,
       cleanup_tmp_on_startup: true,
       rebuild_views_after_sync: false,
+      rebuild_search_after_sync: false,
     },
     policy: {
       primary_charter: opts.primaryCharter ?? "support_steward",
@@ -86,6 +87,7 @@ export function buildWorkflowScope(opts: {
       acquire_lock_timeout_ms: 30_000,
       cleanup_tmp_on_startup: true,
       rebuild_views_after_sync: false,
+      rebuild_search_after_sync: false,
     },
     policy: {
       primary_charter: opts.primaryCharter ?? "support_steward",

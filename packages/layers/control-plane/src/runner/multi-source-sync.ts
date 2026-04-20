@@ -40,8 +40,14 @@ export interface MultiSyncOnceDeps {
   factStore?: FactStore;
   cleanupTmp?: () => Promise<void>;
   acquireLock?: () => Promise<() => Promise<void>>;
+  /** @deprecated Use rebuildProjections instead */
   rebuildViews?: () => Promise<void>;
+  /** @deprecated Use rebuildProjectionsAfterSync instead */
   rebuildViewsAfterSync?: boolean;
+  /** Unified projection rebuild callback (canonical path) */
+  rebuildProjections?: () => Promise<void>;
+  /** Whether to rebuild all projections after a successful sync */
+  rebuildProjectionsAfterSync?: boolean;
   onProgress?: ProgressCallback;
   /** If true, continue processing events even if some fail */
   continueOnError?: boolean;

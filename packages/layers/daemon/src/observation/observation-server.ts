@@ -29,6 +29,8 @@ import {
   type FactStoreView,
   type WorkerRegistryView,
   type SyncCompletionSignal,
+  type ForemanFacade,
+  type PreviewDerivationResult,
 } from "@narada2/control-plane";
 import { createLogger } from "../lib/logger.js";
 import { createObservationRoutes } from "./observation-routes.js";
@@ -52,12 +54,20 @@ export interface ObservationApiScope {
   executionStore: ProcessExecutionStoreView;
   workerRegistry: WorkerRegistryView;
   factStore: FactStoreView;
-  /** Optional callback to rebuild filesystem views (scope-specific) */
+  foreman: ForemanFacade;
+  /** Optional callback to rebuild filesystem views (scope-specific) — deprecated, use rebuildProjections */
   rebuildViews?: () => Promise<void>;
+  /** Optional callback to rebuild all projections for this scope */
+  rebuildProjections?: () => Promise<void>;
   /** Optional callback to trigger a dispatch phase for this scope */
   runDispatchPhase?: () => Promise<{ signal: SyncCompletionSignal | null; openedCount: number }>;
   /** Optional callback to request an out-of-band wake for this scope's service */
   requestWake?: (reason: WakeReason) => void;
+  /**
+   * Optional callback to preview what a charter would propose for stored facts.
+   * This is a read-only inspection path that does not create work items or intents.
+   */
+  previewWork?: (options: { contextId?: string; since?: string; factIds?: string[] }) => Promise<PreviewDerivationResult[]>;
 }
 
 export interface ObservationServer {

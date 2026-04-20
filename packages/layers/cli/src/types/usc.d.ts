@@ -11,8 +11,8 @@ declare module '@narada.usc/compiler' {
     taskGraphPath: string;
     summary: {
       task_count: number;
-      runnable_count: number;
-      blocked_count: number;
+      proposed_count: number;
+      admitted_count: number;
     };
   };
   export function createCycle(options: Record<string, unknown>): string;

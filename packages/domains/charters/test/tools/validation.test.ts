@@ -6,11 +6,13 @@ import type { ToolInvocationRequest } from "../../src/runtime/envelope.js";
 function makeCatalog(entries: Partial<ToolCatalogEntry>[]): ToolCatalogEntry[] {
   return entries.map((e) => ({
     tool_id: e.tool_id ?? "t1",
-    purpose: e.purpose ?? "test",
+    tool_signature: e.tool_signature ?? "t1@v1",
+    description: e.description ?? "test",
     read_only: e.read_only ?? true,
     requires_approval: e.requires_approval ?? false,
     schema_args: e.schema_args,
     timeout_ms: e.timeout_ms ?? 5000,
+    authority_class: e.authority_class ?? "derive",
   }));
 }
 

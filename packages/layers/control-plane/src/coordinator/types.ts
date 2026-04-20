@@ -66,8 +66,38 @@ export type WorkItemStatus =
   | "superseded"
   | "cancelled";
 
+/**
+ * Continuation affinity — soft routing preference for session/lane reuse.
+ *
+ * v1: Affinity is an ordering hint only. The scheduler reorders runnable work
+ * by active (non-expired) affinity strength before priority and FIFO order. It
+ * does NOT check whether the preferred session is available, nor does it target
+ * lease acquisition toward a specific session or runner.
+ *
+ * v2 (deferred): Session-targeted lease acquisition and runner selection.
+ *
+ * Safety rules:
+ * - Affinity does not override authority checks or governance.
+ * - Affinity does not bypass leasing or scheduling invariants.
+ * - Affinity expiration prevents stale "sticky" routing forever.
+ */
+export interface ContinuationAffinity {
+  /** Session ID preferred for continuity */
+  preferred_session_id: string | null;
+  /** Agent ID preferred for continuity (future: multi-agent routing) */
+  preferred_agent_id: string | null;
+  /** Group ID linking related work items across contexts */
+  affinity_group_id: string | null;
+  /** Numeric preference strength (0 = no preference; higher = stronger) */
+  affinity_strength: number;
+  /** ISO timestamp after which this affinity is ignored */
+  affinity_expires_at: string | null;
+  /** Human-readable reason this affinity was derived (e.g., "same_context") */
+  affinity_reason: string | null;
+}
+
 /** Terminal schedulable unit of control work */
-export interface WorkItem {
+export interface WorkItem extends ContinuationAffinity {
   work_item_id: string;
   context_id: string;
   scope_id: string;
@@ -224,6 +254,7 @@ export interface CoordinatorStore {
   getWorkItem(workItemId: string): WorkItem | undefined;
   getActiveWorkItemForContext(contextId: string): WorkItem | undefined;
   getLatestWorkItemForContext(contextId: string): WorkItem | undefined;
+  getFailedRetryableWorkItems(scopeId: string, limit?: number): WorkItem[];
 
   // Work item leases
   insertLease(lease: WorkItemLease): void;
@@ -328,7 +359,7 @@ export type CoordinatorStoreOperatorView = CoordinatorStoreView &
 export interface OperatorActionRequest {
   request_id: string;
   scope_id: string;
-  action_type: "retry_work_item" | "acknowledge_alert" | "rebuild_views" | "request_redispatch" | "trigger_sync";
+  action_type: "retry_work_item" | "retry_failed_work_items" | "acknowledge_alert" | "rebuild_views" | "rebuild_projections" | "request_redispatch" | "trigger_sync" | "derive_work" | "preview_work";
   target_id: string | null;
   payload_json: string | null;
   status: "pending" | "executed" | "rejected";

@@ -9,7 +9,13 @@
  * the complete recursive suite (requires ALLOW_FULL_TESTS=1).
  */
 
-import { execSync } from "node:child_process";
+import {
+  runStep,
+  recordRun,
+  classifyStep,
+  printMetricsHint,
+  type StepTiming,
+} from "./test-telemetry.js";
 
 interface Step {
   name: string;
@@ -35,31 +41,89 @@ const colors = {
   dim: "\x1b[2m",
 };
 
+const startedAt = new Date().toISOString();
+const stepTimings: StepTiming[] = [];
+const stepClassifications: Array<ReturnType<typeof classifyStep>> = [];
 let failed = false;
+let failedStep = "";
 
 console.log(`${colors.dim}=== Fast Verification (${steps.length} steps) ===${colors.reset}\n`);
 
 for (const step of steps) {
   process.stdout.write(`${step.name} ... `);
-  try {
-    execSync(step.command, { stdio: "pipe" });
+  const result = runStep({ name: step.name, command: step.command, stdio: "pipe" });
+  stepTimings.push({
+    name: step.name,
+    command: step.command,
+    durationMs: result.durationMs,
+    exitStatus: result.exitStatus,
+  });
+  const stepClass = classifyStep(result.exitStatus, result.stderr, result.stdout);
+  stepClassifications.push(stepClass);
+
+  if (result.exitStatus === 0) {
     console.log(`${colors.green}✓${colors.reset}`);
-  } catch (err: any) {
+  } else {
     console.log(`${colors.red}✗${colors.reset}`);
-    console.error(`\n${colors.red}--- ${step.name} failed ---${colors.reset}`);
-    console.error(err.stderr?.toString() || err.stdout?.toString() || err.message);
+    const isTeardownNoise = stepClass === "known-teardown-noise";
+    if (isTeardownNoise) {
+      console.error(`\n${colors.yellow}--- ${step.name}: known teardown noise ---${colors.reset}`);
+      console.error(`${colors.dim}Tests passed, but the process exited with a harmless better-sqlite3 cleanup artifact.${colors.reset}`);
+      console.error(`${colors.dim}This is not a product regression. See AGENTS.md for details.${colors.reset}`);
+    } else {
+      console.error(`\n${colors.red}--- ${step.name} failed ---${colors.reset}`);
+      console.error(result.stderr || result.stdout || "Unknown error");
+    }
     failed = true;
+    failedStep = step.name;
     break;
   }
 }
 
 console.log("");
 
+const finishedAt = new Date().toISOString();
+const totalDuration = stepTimings.reduce((sum, s) => sum + s.durationMs, 0);
+
+function severity(c: ReturnType<typeof classifyStep>): number {
+  switch (c) {
+    case "assertion-failure": return 3;
+    case "infrastructure-failure": return 2;
+    case "known-teardown-noise": return 1;
+    case "success": return 0;
+  }
+}
+const classification = stepClassifications.reduce((worst, current) =>
+  severity(current) > severity(worst) ? current : worst,
+);
+
+recordRun({
+  command: "pnpm verify",
+  startedAt,
+  finishedAt,
+  durationMs: totalDuration,
+  exitStatus: failed ? 1 : 0,
+  exitSignal: null,
+  stepTimings,
+  classification,
+  summary: classification === "known-teardown-noise"
+    ? `Known teardown noise at: ${failedStep}`
+    : failed ? `Failed at: ${failedStep}` : "All steps passed",
+});
+
 if (failed) {
-  console.log(`${colors.red}Verification failed.${colors.reset}`);
-  console.log(`${colors.dim}Fix the failing step above, then run \`pnpm verify\` again.${colors.reset}`);
+  if (classification === "known-teardown-noise") {
+    console.log(`${colors.yellow}⚠ Verification incomplete due to known teardown noise.${colors.reset}`);
+    console.log(`${colors.dim}The step that crashed (${failedStep}) passed its tests before the harmless cleanup artifact.${colors.reset}`);
+    console.log(`${colors.dim}You may re-run \`pnpm verify\` or escalate to package-scoped tests if needed.${colors.reset}`);
+  } else {
+    console.log(`${colors.red}Verification failed.${colors.reset}`);
+    console.log(`${colors.dim}Fix the failing step above, then run \`pnpm verify\` again.${colors.reset}`);
+  }
+  printMetricsHint();
   process.exit(1);
 } else {
   console.log(`${colors.green}All ${steps.length} verification steps passed.${colors.reset}`);
   console.log(`${colors.dim}Run \`ALLOW_FULL_TESTS=1 pnpm test:full\` for the complete suite.${colors.reset}`);
+  printMetricsHint();
 }

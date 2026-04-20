@@ -55,6 +55,13 @@ export interface WorkItemLifecycleSummary {
   error_message: string | null;
   created_at: string;
   updated_at: string;
+  // Continuation affinity fields (Task 212)
+  preferred_session_id: string | null;
+  preferred_agent_id: string | null;
+  affinity_group_id: string | null;
+  affinity_strength: number;
+  affinity_expires_at: string | null;
+  affinity_reason: string | null;
 }
 
 /** @source authoritative — Execution attempt summary (mirrors durable execution_attempts row) */
@@ -379,6 +386,35 @@ export interface ContextTimeline {
 export interface FactTimeline {
   fact: FactSummary | null;
   work_items: { work_item_id: string; context_id: string; status: string; created_at: string }[];
+}
+
+/**
+ * @source derived — Computed affinity outcome for a work item.
+ *
+ * v1 reality: affinity is an ordering hint only. The scheduler does not check
+ * whether the preferred session is available or route leases to it. This type
+ * captures the honest observable state so operators can evaluate whether the
+ * optimization is effective and whether v2 session-aware routing is warranted.
+ */
+export interface AffinityOutcome {
+  work_item_id: string;
+  context_id: string;
+
+  // What was requested
+  had_affinity: boolean;
+  preferred_session_id: string | null;
+  affinity_strength: number;
+  affinity_expired: boolean;
+  affinity_reason: string | null;
+
+  // What happened (v1)
+  outcome: "no_preference" | "ordering_boost" | "expired_before_scan" | "superseded_carried_forward";
+
+  // v2 deferred fields — populated when session-aware routing is implemented
+  preferred_session_available: boolean | null;
+  preferred_session_status: string | null;
+  executed_by_preferred_session: boolean | null;
+  actual_session_id: string | null;
 }
 
 export interface ObservationPlaneSnapshot {

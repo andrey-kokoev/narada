@@ -58,6 +58,12 @@ function rowToWorkItem(row: Record<string, unknown>): WorkItem {
     context_json: row.context_json ? String(row.context_json) : null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
+    preferred_session_id: row.preferred_session_id ? String(row.preferred_session_id) : null,
+    preferred_agent_id: row.preferred_agent_id ? String(row.preferred_agent_id) : null,
+    affinity_group_id: row.affinity_group_id ? String(row.affinity_group_id) : null,
+    affinity_reason: row.affinity_reason ? String(row.affinity_reason) : null,
+    affinity_strength: Number(row.affinity_strength ?? 0),
+    affinity_expires_at: row.affinity_expires_at ? String(row.affinity_expires_at) : null,
   };
 }
 
@@ -245,6 +251,12 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
         retry_count integer not null default 0,
         next_retry_at text,
         context_json text,
+        preferred_session_id text,
+        preferred_agent_id text,
+        affinity_group_id text,
+        affinity_reason text,
+        affinity_strength integer not null default 0,
+        affinity_expires_at text,
         created_at text not null default (datetime('now')),
         updated_at text not null default (datetime('now')),
         foreign key (context_id) references context_records(context_id)
@@ -252,7 +264,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
       );
 
       create index if not exists idx_work_items_runnable
-        on work_items(context_id, status, priority, created_at);
+        on work_items(context_id, status, affinity_strength desc, priority desc, created_at);
       create index if not exists idx_work_items_scope_status
         on work_items(scope_id, status, updated_at);
       create index if not exists idx_work_items_retry
@@ -425,6 +437,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
 
     this.migrateAgentSessionsSchema();
     this.migrateWorkItemsContextJson();
+    this.migrateWorkItemsAffinity();
   }
 
   private migrateAgentSessionsSchema(): void {
@@ -448,6 +461,29 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     const names = new Set(columns.map((c) => c.name));
     if (!names.has('context_json')) {
       this.db.prepare(`alter table work_items add column context_json text`).run();
+    }
+  }
+
+  private migrateWorkItemsAffinity(): void {
+    const columns = this.db.prepare(`pragma table_info(work_items)`).all() as Array<{ name: string }>;
+    const names = new Set(columns.map((c) => c.name));
+    if (!names.has('preferred_session_id')) {
+      this.db.prepare(`alter table work_items add column preferred_session_id text`).run();
+    }
+    if (!names.has('preferred_agent_id')) {
+      this.db.prepare(`alter table work_items add column preferred_agent_id text`).run();
+    }
+    if (!names.has('affinity_group_id')) {
+      this.db.prepare(`alter table work_items add column affinity_group_id text`).run();
+    }
+    if (!names.has('affinity_reason')) {
+      this.db.prepare(`alter table work_items add column affinity_reason text`).run();
+    }
+    if (!names.has('affinity_strength')) {
+      this.db.prepare(`alter table work_items add column affinity_strength integer not null default 0`).run();
+    }
+    if (!names.has('affinity_expires_at')) {
+      this.db.prepare(`alter table work_items add column affinity_expires_at text`).run();
     }
   }
 
@@ -548,8 +584,10 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
       insert into work_items (
         work_item_id, context_id, scope_id, status, priority,
         opened_for_revision_id, resolved_revision_id, resolution_outcome,
-        error_message, retry_count, next_retry_at, context_json, created_at, updated_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        error_message, retry_count, next_retry_at, context_json,
+        preferred_session_id, preferred_agent_id, affinity_group_id, affinity_reason,
+        affinity_strength, affinity_expires_at, created_at, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       item.work_item_id,
       item.context_id,
@@ -563,6 +601,12 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
       item.retry_count,
       item.next_retry_at,
       item.context_json,
+      item.preferred_session_id,
+      item.preferred_agent_id,
+      item.affinity_group_id,
+      item.affinity_reason,
+      item.affinity_strength,
+      item.affinity_expires_at,
       item.created_at,
       item.updated_at,
     );
@@ -632,6 +676,16 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
       limit 1
     `).get(contextId) as Record<string, unknown> | undefined;
     return row ? rowToWorkItem(row) : undefined;
+  }
+
+  getFailedRetryableWorkItems(scopeId: string, limit = 100): WorkItem[] {
+    const rows = this.db.prepare(`
+      select * from work_items
+      where scope_id = ? and status = 'failed_retryable'
+      order by next_retry_at asc, created_at desc
+      limit ?
+    `).all(scopeId, limit) as Record<string, unknown>[];
+    return rows.map(rowToWorkItem);
   }
 
   insertLease(lease: WorkItemLease): void {

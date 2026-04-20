@@ -46,7 +46,8 @@
   },
   "dependencies": {
     "@narada2/control-plane": "workspace:*",
-    "@narada2/charters": "workspace:*"
+    "@narada2/charters": "workspace:*",
+    "@narada2/search": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

@@ -62,13 +62,17 @@ Narada is a generalized, deterministic kernel for turning remote source deltas i
 | Add a CLI command | [`packages/layers/cli/src/commands/`](packages/layers/cli/src/commands/) |
 | Change Graph API handling | [`src/adapter/graph/`](packages/layers/control-plane/src/adapter/graph/) |
 | Change coordinator SQLite schema | [`src/coordinator/store.ts`](packages/layers/control-plane/src/coordinator/store.ts) |
+| Recover control plane from facts | [`src/commands/recover.ts`](packages/layers/cli/src/commands/recover.ts) + [`src/foreman/facade.ts`](packages/layers/control-plane/src/foreman/facade.ts) |
 | Modify work item lifecycle | [`src/scheduler/scheduler.ts`](packages/layers/control-plane/src/scheduler/scheduler.ts) |
+| Modify continuation affinity / routing preference | [`src/coordinator/types.ts`](packages/layers/control-plane/src/coordinator/types.ts) + [`src/foreman/facade.ts`](packages/layers/control-plane/src/foreman/facade.ts) + [`src/scheduler/scheduler.ts`](packages/layers/control-plane/src/scheduler/scheduler.ts) |
 | Modify foreman work opening | [`src/foreman/facade.ts`](packages/layers/control-plane/src/foreman/facade.ts) |
 | Modify outbound handoff | [`src/foreman/handoff.ts`](packages/layers/control-plane/src/foreman/handoff.ts) |
 | Change outbound command state machine | [`src/outbound/types.ts`](packages/layers/control-plane/src/outbound/types.ts) |
 | Add an outbound command | [`src/outbound/store.ts`](packages/layers/control-plane/src/outbound/store.ts) |
 | Modify send-reply worker | [`src/outbound/send-reply-worker.ts`](packages/layers/control-plane/src/outbound/send-reply-worker.ts) |
 | Modify reconciler | [`src/outbound/reconciler.ts`](packages/layers/control-plane/src/outbound/reconciler.ts) |
+| Run confirmation replay | [`src/executors/confirmation-replay.ts`](packages/layers/control-plane/src/executors/confirmation-replay.ts) |
+| Rebuild projections | [`src/observability/rebuild.ts`](packages/layers/control-plane/src/observability/rebuild.ts) + [`narada rebuild-projections`](packages/layers/cli/src/commands/rebuild-projections.ts) |
 | Modify non-send worker | [`src/outbound/non-send-worker.ts`](packages/layers/control-plane/src/outbound/non-send-worker.ts) |
 | Add a new vertical source | [`src/sources/{vertical}-source.ts`](packages/layers/control-plane/src/sources/) |
 | Add a context strategy | [`src/foreman/context.ts`](packages/layers/control-plane/src/foreman/context.ts) |
@@ -110,12 +114,17 @@ Narada is a generalized, deterministic kernel for turning remote source deltas i
 | **CharterInvocationEnvelope** | Runtime envelope for charter evaluation | [`packages/domains/charters/src/runtime/envelope.ts`](packages/domains/charters/src/runtime/envelope.ts) |
 | **ToolRunner** | Subprocess/HTTP tool execution | [`packages/domains/charters/src/tools/runner.ts`](packages/domains/charters/src/tools/runner.ts) |
 | **authority class** | Policy-enforced capability classification (derive/propose/claim/execute/resolve/confirm/admin) | [`SEMANTICS.md`](SEMANTICS.md) |
+| **selector** | Canonical read-only bound for operator input sets (scope, temporal, identity, status, vertical, limit, offset) | [`SEMANTICS.md §2.9`](SEMANTICS.md) |
+| **promotion operator** | Explicit operator that advances artifacts through lifecycle transitions | [`SEMANTICS.md §2.10`](SEMANTICS.md) |
+| **inspection operator** | Read-only operator that observes durable or derived state without mutation | [`SEMANTICS.md §2.11`](SEMANTICS.md) |
 | **re-derivation operator** | Explicit operator that recomputes downstream state from durable boundaries | [`SEMANTICS.md §2.8`](SEMANTICS.md) |
 | **replay derivation** | `Fact` → `Work` re-derivation using canonical context formation + foreman admission | [`SEMANTICS.md §2.8`](SEMANTICS.md) |
 | **preview derivation** | `Fact` → `Evaluation` read-only inspection without work opening | [`SEMANTICS.md §2.8`](SEMANTICS.md) |
 | **recovery derivation** | `Fact` → `Context`/`Work` control-plane reconstruction after loss | [`SEMANTICS.md §2.8`](SEMANTICS.md) |
-| **projection rebuild** | `Durable state` → `Observation` non-authoritative derived view recomputation | [`SEMANTICS.md §2.8`](SEMANTICS.md) |
+| **projection rebuild** | `Durable state` → `Observation` non-authoritative derived view recomputation via `ProjectionRebuildRegistry` | [`SEMANTICS.md §2.8`](SEMANTICS.md) + [`src/observability/rebuild.ts`](packages/layers/control-plane/src/observability/rebuild.ts) |
 | **confirmation replay** | `Execution` → `Confirmation` recomputation without re-performing effects | [`SEMANTICS.md §2.8`](SEMANTICS.md) |
+| **advisory signals** | Non-authoritative hints that influence routing, timing, review, and attention without determining truth or permission | [`SEMANTICS.md §2.12`](SEMANTICS.md) |
+| **authoritative structures** | Durable boundaries and authority classes that determine truth, permission, and commitment | [`SEMANTICS.md §2.12`](SEMANTICS.md) |
 
 ---
 
@@ -155,7 +164,39 @@ pnpm benchmark:compare
 
 # Pre-publish checks
 pnpm prepublish-check
+
+# Recover control-plane state from facts after coordinator loss
+narada recover --scope <scope-id>
+
+# Preview what recovery would do without mutating
+narada recover --scope <scope-id> --dry-run
+
+# Replay derivation (re-derive work from stored facts)
+narada derive-work --scope <scope-id>
 ```
+
+### `recover` vs `derive-work`
+
+Both commands rebuild control-plane state from stored facts, but they are distinct surfaces:
+
+| Command | Surface | Intent | Authority |
+|---------|---------|--------|-----------|
+| `narada recover` | `recoverFromStoredFacts()` | Loss-shaped recovery after coordinator loss | `admin` |
+| `narada derive-work` | `deriveWorkFromStoredFacts()` | Operator-scoped replay for testing/policy | `derive` + `resolve` |
+
+**Shared core**: Both route through the same `onContextsAdmitted()` derivation core. The distinction is in naming, triggering context, and intended authority — not in divergent runtime behavior.
+
+**Conservative guarantees** (both commands):
+- No active leases are created
+- No in-flight execution attempts are resurrected
+- No outbound confirmations are fabricated
+
+**What is NOT recoverable from facts alone**:
+- Active leases — must be re-acquired by scheduler
+- In-flight execution attempts — must be restarted by runner
+- Submitted outbound effects — confirmation requires inbound reconciliation
+- Operator action request history
+- Agent traces (non-authoritative, rebuildable via projection rebuild)
 
 ---
 
@@ -269,7 +310,7 @@ narada/
 18. **Authority Class Enforcement**: Every tool binding and charter capability must declare an authority class. Preflight rejects configs that bind a charter or tool to an authority class it is not allowed to use. Domain packs may only declare `derive` and `propose`. Only Narada runtime-authorized components may declare `claim`, `execute`, `resolve`, or `confirm`. `admin` requires explicit operator/admin posture.
 
 ### Observation / UI
-18. **Observation is read-only projection**: `layers/control-plane/src/observability/` must never contain writes (`.run(`, `.exec(`, direct mutation calls). It derives its data exclusively from durable stores.
+18. **Observation is read-only projection**: `layers/control-plane/src/observability/` must never contain writes (`.run(`, `.exec(`, direct mutation calls). It derives its data exclusively from durable stores. Inspection requires no authority class.
 19. **Control surface is explicitly separated**: Operator actions are mounted under `/control/scopes/:scope_id/actions`. The observation namespace (`/scopes/...`) is strictly GET-only.
 20. **UI cannot become hidden authority**: The operator console (`layers/daemon/src/ui/`) may only mutate through the audited, safelisted `executeOperatorAction()` path in `operator-actions.ts`. Every action is logged to `operator_action_requests`. Direct store mutations from the observation API are forbidden.
 21. **Observation API uses view types**: `ObservationApiScope` exposes only `*View` / `*OperatorView` store interfaces, removing named mutation methods at the type level.
@@ -292,6 +333,13 @@ narada/
 32. **Two-Stage Completion**: A command reaches `submitted` when Graph accepts it, and `confirmed` only after inbound reconciliation observes the result
 33. **No External Draft Mutation**: Modification of a managed draft by anything other than the outbound worker is a hard failure
 34. **Worker Exclusivity**: Only the outbound worker may create or mutate managed drafts
+
+### Advisory Signals (Task 214)
+35. **Advisory signals are non-authoritative**: Removing every advisory signal from the system must leave all durable boundaries intact and all authority invariants satisfiable.
+36. **Advisory signals are overrideable**: Any component that consumes an advisory signal must have a sensible fallback when the signal is absent, contradictory, or stale.
+37. **Advisory signals have no lifecycle side effect**: Emitting or consuming an advisory signal must not transition the lifecycle state of a durable object (fact, work item, intent, execution).
+38. **Continuation affinity is advisory**: `WorkItem` may carry `continuation_affinity` fields (`preferred_session_id`, `affinity_strength`, `affinity_expires_at`), but the scheduler must treat them as a reordering hint, not a mandatory assignment. Affinity must not bypass leasing, override governance, or block runnable work indefinitely.
+38. **Advisory signals make no truth claim**: An advisory signal must never be presented as evidence that something is true; it only expresses preference, probability, or attention-worthiness.
 
 ---
 
@@ -402,6 +450,24 @@ Runtime policy determines charter routing, allowed actions, and tool catalog for
 4. Update [`config.example.json`](packages/layers/control-plane/config.example.json)
 5. Add tests in [`test/unit/config/load.test.ts`](packages/layers/control-plane/test/unit/config/load.test.ts) and [`test/integration/policy-routing.test.ts`](packages/layers/daemon/test/integration/policy-routing.test.ts)
 
+### 7. Add or Modify a Projection Rebuild Surface
+
+Projection rebuild is an explicit operator family member (SEMANTICS.md §2.8). All non-authoritative derived stores must rebuild through the unified surface:
+
+1. Define or update the projection's `ProjectionRebuildSurface` implementation
+2. Register it in the scope's `ProjectionRebuildRegistry` (daemon [`service.ts`](packages/layers/daemon/src/service.ts) and CLI [`rebuild-projections.ts`](packages/layers/cli/src/commands/rebuild-projections.ts))
+3. Ensure the projection's `authoritativeInput` is documented
+4. Add `rebuild_*_after_sync` config option if the projection should rebuild after sync
+5. Update [`src/config/types.ts`](packages/layers/control-plane/src/config/types.ts), [`src/config/load.ts`](packages/layers/control-plane/src/config/load.ts), and [`src/config/defaults.ts`](packages/layers/control-plane/src/config/defaults.ts)
+
+**Current rebuildable projections:**
+
+| Projection | Authoritative Input | Implementation |
+|-----------|---------------------|----------------|
+| Filesystem views (`by-thread/`, `by-folder/`, `unread/`, `flagged/`) | `messages/` directory (canonical message records) | [`FileViewStore`](packages/layers/control-plane/src/persistence/views.ts) |
+| Search index (FTS5) | `messages/` directory (canonical message records) | [`SearchEngine`](packages/verticals/search/src/search-engine.ts) |
+| Observation read models | Durable SQLite state (coordinator, outbound, intent, fact stores) | On-demand SQL queries — no stored projection to rebuild |
+
 ---
 
 ## Review Checklist for Future Architecture Changes
@@ -423,12 +489,55 @@ When proposing changes that touch public types, docs, or package surfaces, verif
 
 When verifying changes, follow this escalation ladder:
 
-1. **Fast default**: `pnpm verify` — typecheck + build + unit tests. This is the routine command after local changes.
-2. **Package-scoped**: `pnpm --filter=<pkg> test` — when you know exactly which package you touched.
-3. **Unit-only**: `pnpm test:unit` — when you want tests without the heavier integration suite.
-4. **Full suite**: `ALLOW_FULL_TESTS=1 pnpm test:full` — only when the user explicitly requests complete verification or when preparing a release.
+| Step | Command | When to use | Approx. time |
+|------|---------|-------------|--------------|
+| 1 | `pnpm verify` | Default after any local change | ~8 sec |
+| 2 | `pnpm test:control-plane` | Change touches control-plane internals | ~5 sec |
+| 3 | `pnpm test:daemon` | Change touches daemon or integration surface | ~90 sec |
+| 4 | `ALLOW_FULL_TESTS=1 pnpm test:full` | Final CI-like check or user explicitly asks | ~2 min |
 
-**Why**: The full suite includes integration tests that exercise SQLite, file I/O, and subprocesses. It is materially slower and can produce `better-sqlite3` segfaults on cleanup that are harmless but noisy. The fast commands catch type errors, build breaks, and unit-test regressions in seconds.
+### Rules
+
+1. **Do not run the full suite unless the user explicitly asks.** `pnpm test` at the root is intentionally blocked.
+2. **Start with `pnpm verify`.** It runs typecheck + fast package tests (kernel, charters, ops-kit, cli). This catches most issues.
+3. **Escalate only when needed.** If a change is in the daemon, run `pnpm test:daemon`. If it's in the control-plane, run `pnpm test:control-plane`.
+4. **Full suite requires `ALLOW_FULL_TESTS=1`.** This guard prevents accidental expensive runs.
+5. **Package-scoped is preferred.** Use `pnpm --filter <pkg> test` when the change is isolated to one package.
+
+### Test Runtime Observability
+
+All test entrypoints record timing and classification data to `.ai/metrics/test-runtimes.json`. Inspect this file to see:
+
+- Which commands are being run and how long they take
+- Per-step duration breakdowns
+- Exit status and classification
+
+This makes expensive verification choices visible for manual inspection. Automatic violation detection is not implemented; review the artifact if you suspect an agent is repeatedly choosing slower paths than necessary.
+
+### Failure Classification
+
+Test runs are classified into one of four categories:
+
+| Classification | Meaning | When to act |
+|----------------|---------|-------------|
+| `success` | All tests passed | Nothing to do |
+| `assertion-failure` | A test assertion failed | Fix the failing test or code |
+| `infrastructure-failure` | Runner, build, or environment failure | Investigate tooling, not product code |
+| `known-teardown-noise` | Harmless `better-sqlite3` cleanup crash **after the test suite completed with all tests passing** | No action needed — see below |
+
+### Known `better-sqlite3` Teardown Issue
+
+The full suite and control-plane unit tests can produce a **harmless V8 fatal error / segfault / SIGTRAP (exit code 133)** during process teardown. This occurs when:
+
+- Many in-memory SQLite databases are created and garbage-collected
+- V8 begins tearing down before better-sqlite3 native destructors finish
+- The native module attempts to access JS ArrayBuffer backing stores after V8 has released them
+
+**This is not a product regression.** All tests have already passed when the crash occurs. The runner scripts classify this as `known-teardown-noise` **only when the captured output contains evidence that the test suite completed successfully** (the Vitest `Test Files  N passed (N)` summary line). Without that evidence, the crash is conservatively classified as `infrastructure-failure` so that genuine runner problems are not silently softened into harmless noise.
+
+**Mitigation in place:**
+- **Classification (primary)**: Runner scripts detect exit code 133 and V8 fatal signatures. They classify as `known-teardown-noise` only when the captured output shows the Vitest all-passed summary. Otherwise the crash is reported as `infrastructure-failure`.
+- **Best-effort lifecycle helper**: `packages/layers/control-plane/test/db-lifecycle.ts` provides `createTestDb()` and `closeAllTestDatabases()`. `test/setup.ts` calls `closeAllTestDatabases()` in `afterAll`. However, most unit tests still use raw `new Database(":memory:")`; broad adoption of `createTestDb()` has not happened. The helper is available for new and refactored tests.
 
 **Root `pnpm test` is disabled** to prevent accidental full-suite execution. Use the commands above instead.
 

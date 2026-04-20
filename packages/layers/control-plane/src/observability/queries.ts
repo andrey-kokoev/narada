@@ -37,6 +37,7 @@ import type {
   OverviewSnapshot,
   ScopeOverview,
   OverviewFailureSummary,
+  AffinityOutcome,
 } from "./types.js";
 import type { PolicyContext } from "../foreman/context.js";
 import {
@@ -59,6 +60,12 @@ function rowToWorkItemSummary(row: Record<string, unknown>): WorkItemLifecycleSu
     error_message: row.error_message ? String(row.error_message) : null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
+    preferred_session_id: row.preferred_session_id ? String(row.preferred_session_id) : null,
+    preferred_agent_id: row.preferred_agent_id ? String(row.preferred_agent_id) : null,
+    affinity_group_id: row.affinity_group_id ? String(row.affinity_group_id) : null,
+    affinity_strength: Number(row.affinity_strength ?? 0),
+    affinity_expires_at: row.affinity_expires_at ? String(row.affinity_expires_at) : null,
+    affinity_reason: row.affinity_reason ? String(row.affinity_reason) : null,
   };
 }
 
@@ -161,6 +168,81 @@ export function getWorkItemsAwaitingRetry(
     )
     .all(now) as Record<string, unknown>[];
   return rows.map(rowToWorkItemSummary);
+}
+
+/**
+ * Compute affinity outcomes for work items.
+ *
+ * v1 scope: affinity is an ordering hint only. This function reports what
+ * affinity was present and whether it had expired, but it cannot report
+ * whether a specific session was chosen because v1 does not implement
+ * session-targeted lease acquisition.
+ */
+export function getWorkItemAffinityOutcomes(
+  store: CoordinatorStoreView,
+  now = new Date().toISOString(),
+): AffinityOutcome[] {
+  const rows = store.db
+    .prepare(
+      `select
+         wi.work_item_id,
+         wi.context_id,
+         wi.preferred_session_id,
+         wi.affinity_strength,
+         wi.affinity_expires_at,
+         wi.affinity_reason,
+         ea.session_id as actual_session_id
+       from work_items wi
+       left join execution_attempts ea on ea.work_item_id = wi.work_item_id
+       order by wi.created_at desc`,
+    )
+    .all() as Array<{
+      work_item_id: string;
+      context_id: string;
+      preferred_session_id: string | null;
+      affinity_strength: number;
+      affinity_expires_at: string | null;
+      affinity_reason: string | null;
+      actual_session_id: string | null;
+    }>;
+
+  const seen = new Set<string>();
+  const outcomes: AffinityOutcome[] = [];
+
+  for (const row of rows) {
+    if (seen.has(row.work_item_id)) continue;
+    seen.add(row.work_item_id);
+
+    const hadAffinity = (row.affinity_strength ?? 0) > 0;
+    const expired = hadAffinity && row.affinity_expires_at !== null && row.affinity_expires_at < now;
+
+    let outcome: AffinityOutcome["outcome"];
+    if (!hadAffinity) {
+      outcome = "no_preference";
+    } else if (expired) {
+      outcome = "expired_before_scan";
+    } else {
+      outcome = "ordering_boost";
+    }
+
+    outcomes.push({
+      work_item_id: row.work_item_id,
+      context_id: row.context_id,
+      had_affinity: hadAffinity,
+      preferred_session_id: row.preferred_session_id ?? null,
+      affinity_strength: row.affinity_strength ?? 0,
+      affinity_expired: expired,
+      affinity_reason: row.affinity_reason ?? null,
+      outcome,
+      // v2 deferred — always null until session-aware routing is implemented
+      preferred_session_available: null,
+      preferred_session_status: null,
+      executed_by_preferred_session: null,
+      actual_session_id: row.actual_session_id ?? null,
+    });
+  }
+
+  return outcomes;
 }
 
 export function getRecentOutboundCommands(

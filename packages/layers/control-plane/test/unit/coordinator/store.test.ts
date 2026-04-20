@@ -206,4 +206,167 @@ describe("SqliteCoordinatorStore", () => {
       expect(fetched[0]!.created_by).toBe("foreman:fm-001/charter:support_steward,obligation_keeper");
     });
   });
+
+  describe("getFailedRetryableWorkItems", () => {
+    it("returns failed_retryable work items for a scope ordered by next_retry_at", () => {
+      const ctx1 = createContextRecord({ context_id: "ctx-1", scope_id: "scope-a" });
+      const ctx2 = createContextRecord({ context_id: "ctx-2", scope_id: "scope-a" });
+      store.upsertContextRecord(ctx1);
+      store.upsertContextRecord(ctx2);
+
+      store.insertWorkItem({
+        work_item_id: "wi-1",
+        context_id: "ctx-1",
+        scope_id: "scope-a",
+        status: "failed_retryable",
+        priority: 0,
+        opened_for_revision_id: "rev-1",
+        resolved_revision_id: null,
+        resolution_outcome: null,
+        next_retry_at: "2024-06-01T00:00:00Z",
+        retry_count: 1,
+        error_message: null,
+        context_json: null,
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-01T00:00:00Z",
+        preferred_session_id: null,
+        preferred_agent_id: null,
+        affinity_group_id: null,
+        affinity_strength: 0,
+        affinity_expires_at: null,
+        affinity_reason: null,
+      });
+      store.insertWorkItem({
+        work_item_id: "wi-2",
+        context_id: "ctx-2",
+        scope_id: "scope-a",
+        status: "failed_retryable",
+        priority: 0,
+        opened_for_revision_id: "rev-2",
+        resolved_revision_id: null,
+        resolution_outcome: null,
+        next_retry_at: "2024-05-01T00:00:00Z",
+        retry_count: 2,
+        error_message: null,
+        context_json: null,
+        created_at: "2024-01-02T00:00:00Z",
+        updated_at: "2024-01-02T00:00:00Z",
+        preferred_session_id: null,
+        preferred_agent_id: null,
+        affinity_group_id: null,
+        affinity_strength: 0,
+        affinity_expires_at: null,
+        affinity_reason: null,
+      });
+      store.insertWorkItem({
+        work_item_id: "wi-3",
+        context_id: "ctx-1",
+        scope_id: "scope-a",
+        status: "opened",
+        priority: 0,
+        opened_for_revision_id: "rev-3",
+        resolved_revision_id: null,
+        resolution_outcome: null,
+        next_retry_at: null,
+        retry_count: 0,
+        error_message: null,
+        context_json: null,
+        created_at: "2024-01-03T00:00:00Z",
+        updated_at: "2024-01-03T00:00:00Z",
+        preferred_session_id: null,
+        preferred_agent_id: null,
+        affinity_group_id: null,
+        affinity_strength: 0,
+        affinity_expires_at: null,
+        affinity_reason: null,
+      });
+
+      const items = store.getFailedRetryableWorkItems("scope-a");
+      expect(items).toHaveLength(2);
+      expect(items[0]!.work_item_id).toBe("wi-2"); // earlier next_retry_at first
+      expect(items[1]!.work_item_id).toBe("wi-1");
+    });
+
+    it("respects limit", () => {
+      const ctx = createContextRecord({ context_id: "ctx-1", scope_id: "scope-a" });
+      store.upsertContextRecord(ctx);
+
+      for (let i = 0; i < 5; i++) {
+        store.insertWorkItem({
+          work_item_id: `wi-${i}`,
+          context_id: "ctx-1",
+          scope_id: "scope-a",
+          status: "failed_retryable",
+          priority: 0,
+          opened_for_revision_id: `rev-${i}`,
+          resolved_revision_id: null,
+          resolution_outcome: null,
+          next_retry_at: null,
+          retry_count: 1,
+          error_message: null,
+          context_json: null,
+          created_at: `2024-01-0${i + 1}T00:00:00Z`,
+          updated_at: `2024-01-0${i + 1}T00:00:00Z`,
+          preferred_session_id: null,
+          preferred_agent_id: null,
+          affinity_group_id: null,
+          affinity_strength: 0,
+          affinity_expires_at: null,
+          affinity_reason: null,
+        });
+      }
+
+      const items = store.getFailedRetryableWorkItems("scope-a", 2);
+      expect(items).toHaveLength(2);
+    });
+
+    it("returns empty array when no failed_retryable items exist", () => {
+      const items = store.getFailedRetryableWorkItems("scope-a");
+      expect(items).toHaveLength(0);
+    });
+  });
+
+  describe("retry promotion semantics", () => {
+    it("clears next_retry_at without changing status from failed_retryable", () => {
+      const ctx = createContextRecord({ context_id: "ctx-retry", scope_id: "scope-a" });
+      store.upsertContextRecord(ctx);
+
+      store.insertWorkItem({
+        work_item_id: "wi-retry",
+        context_id: "ctx-retry",
+        scope_id: "scope-a",
+        status: "failed_retryable",
+        priority: 0,
+        opened_for_revision_id: "rev-retry",
+        resolved_revision_id: null,
+        resolution_outcome: null,
+        next_retry_at: "2099-01-01T00:00:00Z",
+        retry_count: 2,
+        error_message: "transient error",
+        context_json: null,
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-01T00:00:00Z",
+        preferred_session_id: null,
+        preferred_agent_id: null,
+        affinity_group_id: null,
+        affinity_strength: 0,
+        affinity_expires_at: null,
+        affinity_reason: null,
+      });
+
+      const before = store.getWorkItem("wi-retry");
+      expect(before?.status).toBe("failed_retryable");
+      expect(before?.next_retry_at).toBe("2099-01-01T00:00:00Z");
+
+      store.updateWorkItemStatus("wi-retry", "failed_retryable", {
+        next_retry_at: null,
+        updated_at: "2024-01-02T00:00:00Z",
+      });
+
+      const after = store.getWorkItem("wi-retry");
+      expect(after?.status).toBe("failed_retryable");
+      expect(after?.next_retry_at).toBeNull();
+      expect(after?.retry_count).toBe(2); // unchanged
+    });
+  });
 });

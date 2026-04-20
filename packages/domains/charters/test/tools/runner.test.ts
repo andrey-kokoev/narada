@@ -56,6 +56,7 @@ describe("ToolRunner", () => {
         read_only: true,
         requires_approval: false,
         timeout_ms: 5000,
+        authority_class: "derive",
       };
 
       const request = makeRequest("echo", { email: "a@b.com" });
@@ -87,6 +88,7 @@ describe("ToolRunner", () => {
         read_only: true,
         requires_approval: false,
         timeout_ms: 5000,
+        authority_class: "derive",
       };
 
       const result = await runner.executeToolCall(makeRequest("bad", {}), tool, context);
@@ -110,6 +112,7 @@ describe("ToolRunner", () => {
         read_only: true,
         requires_approval: false,
         timeout_ms: 5000,
+        authority_class: "derive",
       };
 
       const result = await runner.executeToolCall(makeRequest("false_cmd", {}), tool, context);
@@ -142,6 +145,7 @@ describe("ToolRunner", () => {
         read_only: true,
         requires_approval: false,
         timeout_ms: 5000,
+        authority_class: "derive",
       };
 
       const result = await runner.executeToolCall(makeRequest("api", {}), tool, context);
@@ -172,6 +176,7 @@ describe("ToolRunner", () => {
         read_only: true,
         requires_approval: false,
         timeout_ms: 5000,
+        authority_class: "derive",
       };
 
       const result = await runner.executeToolCall(makeRequest("api", {}), tool, context);
@@ -209,6 +214,7 @@ describe("ToolRunner", () => {
         read_only: true,
         requires_approval: false,
         timeout_ms: 10,
+        authority_class: "derive",
       };
 
       const result = await runner.executeToolCall(makeRequest("api", {}), tool, context);
@@ -220,10 +226,12 @@ describe("ToolRunner", () => {
     const runner = makeRunner({});
     const tool: ToolCatalogEntry = {
       tool_id: "missing",
-      purpose: "Missing",
+      tool_signature: "missing@v1",
+      description: "Missing",
       read_only: true,
       requires_approval: false,
       timeout_ms: 5000,
+      authority_class: "derive",
     };
 
     const result = await runner.executeToolCall(makeRequest("missing", {}), tool, context);
@@ -242,10 +250,12 @@ describe("ToolRunner", () => {
 
     const tool: ToolCatalogEntry = {
       tool_id: "docker",
-      purpose: "Docker",
+      tool_signature: "docker@v1",
+      description: "Docker",
       read_only: true,
       requires_approval: false,
       timeout_ms: 5000,
+      authority_class: "derive",
     };
 
     const result = await runner.executeToolCall(makeRequest("docker", {}), tool, context);

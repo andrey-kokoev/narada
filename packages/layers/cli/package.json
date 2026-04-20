@@ -48,7 +48,9 @@
     "cli-progress": "^3.12.0",
     "commander": "^11.1.0",
     "@narada2/control-plane": "workspace:*",
-    "@narada2/ops-kit": "workspace:*"
+    "@narada2/charters": "workspace:*",
+    "@narada2/ops-kit": "workspace:*",
+    "@narada2/search": "workspace:*"
   },
   "devDependencies": {
     "@types/cli-progress": "^3.11.6",

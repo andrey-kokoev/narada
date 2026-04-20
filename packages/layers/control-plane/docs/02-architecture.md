@@ -522,6 +522,52 @@ The architecture supports a family of explicit operators for bounded recomputati
 
 ---
 
+## Advisory Signals in Runtime Architecture
+
+Advisory signals (defined canonically in [`SEMANTICS.md`](../../../../SEMANTICS.md) §2.12) flow through the architecture as **non-authoritative hints**. They influence operational choices without mutating durable state or overriding authority invariants.
+
+### Implemented vs. Prospective
+
+Only **`continuation_affinity`** is concretely implemented in the runtime today. The scheduler computes it from recent lease history and context revision timestamps, and the foreman carries it forward on work-item supersession. All other signals listed below are **design slots** — prospective family members that the architecture accommodates but does not yet emit or consume.
+
+### Producers (Implemented + Prospective)
+
+| Component | Signal | Status | Mechanism |
+|-----------|--------|--------|-----------|
+| **Scheduler** | `continuation_affinity` | **Implemented (v1)** | Stored on `WorkItem` at open time by the foreman. Affects `scanForRunnableWork()` ordering only. Session-targeted lease acquisition and runner selection are deferred to v2. |
+| **Charter Runtime** | `low_confidence_proposal`, `high_confidence_repetitive`, `likely_needs_human_attention`, `unusually_risky` | Prospective | Would be emitted as fields in `CharterOutputEnvelope` (e.g., `confidence`, `escalations`) |
+| **Tool Runner** | `tool_state_affinity`, `expensive_lane_avoidable` | Prospective | Would be computed from tool catalog metadata and recent execution latency/cost |
+| **Observation Plane** | `likely_policy_sensitive`, `heightened_scrutiny` | Prospective | Would be derived from pattern matching over historical decisions and overrides |
+| **Operator Console** | `same_lane_review`, `cross_lane_review`, `independence_preferred` | Prospective | Would be configured by operator posture or inferred from escalation history |
+
+### Consumers (Implemented + Prospective)
+
+| Component | Signal | Status | Effect |
+|-----------|--------|--------|--------|
+| **Scheduler** | `continuation_affinity` | **Implemented (v1)** | May affect runnable-work ordering. The lease record remains the authoritative commitment. Session-targeted assignment is deferred to v2. |
+| **Scheduler** | `tool_state_affinity`, `urgency_preference` | Prospective | Would affect lease assignment ordering or runner selection. The lease record would remain authoritative. |
+| **Foreman** | `low_confidence_proposal`, `heightened_scrutiny` | Prospective | Would influence governance outcome (e.g., bias toward `escalate` when confidence is low). The `foreman_decision` row would remain authoritative. |
+| **Worker Registry** | `cost_preference`, `trust_preference` | Prospective | Would affect worker prioritization or lane selection. The intent claim and execution record would remain authoritative. |
+| **Operator Console** | `likely_needs_human_attention`, `unusually_risky` | Prospective | Would sort, filter, or highlight work items. Operator actions would still route through `executeOperatorAction()` with safelisted mutations. |
+
+### Interaction with Scheduler / Foreman / Operator Surfaces
+
+Advisory signals cross layer boundaries **as read-only data**, never as commands:
+
+- **Scheduler → Foreman**: The scheduler does not send signals to the foreman. It sends leases and execution attempts. Any signal the foreman needs is recomputed from the evaluation envelope or durable state.
+- **Foreman → Scheduler**: The foreman does not send signals to the scheduler. It resolves work items to terminal status. The scheduler discovers status changes on its next scan.
+- **Charter → Foreman**: The charter produces an output envelope that *may contain* advisory signals (confidence, escalations). The foreman consumes them during governance but is not bound by them.
+- **Observation → Operator**: The observation plane may render advisory signals as UI annotations (badges, sort keys, filters). These are decorative or derived, never authoritative.
+
+### Architectural Invariants
+
+1. **Signal Storage Is Optional**: Advisory signals may be ephemeral, cached, or logged. No canonical durable boundary depends on them.
+2. **Signal Absence Is Safe**: Every consumer must have a sensible default when a signal is absent, contradictory, or stale.
+3. **No Lifecycle Side Effect**: Consuming an advisory signal must not transition a durable object (fact, work item, intent, execution) into a new lifecycle state.
+4. **No Authority Bypass**: An advisory signal must never be used to justify bypassing an authority boundary (e.g., a "trust" signal cannot allow a worker to skip intent claiming).
+
+---
+
 ## See Also
 
 - [00-kernel.md](00-kernel.md) — The irreducible, vertical-agnostic kernel lawbook

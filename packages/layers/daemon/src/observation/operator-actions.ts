@@ -19,10 +19,14 @@ import type {
 
 export const PERMITTED_OPERATOR_ACTIONS = [
   "retry_work_item",
+  "retry_failed_work_items",
   "acknowledge_alert",
   "rebuild_views",
+  "rebuild_projections",
   "request_redispatch",
   "trigger_sync",
+  "derive_work",
+  "preview_work",
 ] as const;
 
 export type OperatorActionType = (typeof PERMITTED_OPERATOR_ACTIONS)[number];
@@ -45,9 +49,19 @@ import type { WakeReason } from "./types.js";
 export interface OperatorActionContext {
   scope_id: string;
   coordinatorStore: CoordinatorStoreOperatorView;
+  /** @deprecated Use rebuildProjections instead */
   rebuildViews?: () => Promise<void>;
+  rebuildProjections?: () => Promise<void>;
   runDispatchPhase?: () => Promise<{ signal: unknown; openedCount: number }>;
   requestWake?: (reason: WakeReason) => void;
+  deriveWork?: (options: { contextId?: string; since?: string; factIds?: string[] }) => Promise<{
+    opened: number;
+    superseded: number;
+    nooped: number;
+  }>;
+  previewWork?: (options: { contextId?: string; since?: string; factIds?: string[] }) => Promise<
+    import("@narada2/control-plane").PreviewDerivationResult[]
+  >;
 }
 
 export async function executeOperatorAction(
@@ -90,6 +104,23 @@ export async function executeOperatorAction(
         break;
       }
 
+      case "retry_failed_work_items": {
+        const limit = payload.payload_json
+          ? (JSON.parse(payload.payload_json) as Record<string, unknown>).limit ?? 100
+          : 100;
+        const items = ctx.coordinatorStore.getFailedRetryableWorkItems(ctx.scope_id, Number(limit));
+        if (items.length === 0) {
+          break;
+        }
+        for (const item of items) {
+          ctx.coordinatorStore.updateWorkItemStatus(item.work_item_id, "failed_retryable", {
+            next_retry_at: null,
+            updated_at: now,
+          });
+        }
+        break;
+      }
+
       case "acknowledge_alert": {
         if (!payload.target_id) {
           throw new Error("target_id (work_item_id) is required for acknowledge_alert");
@@ -118,6 +149,15 @@ export async function executeOperatorAction(
         break;
       }
 
+      case "rebuild_projections": {
+        const rebuildFn = ctx.rebuildProjections ?? ctx.rebuildViews;
+        if (!rebuildFn) {
+          throw new Error("rebuild_projections is not available in this configuration");
+        }
+        await rebuildFn();
+        break;
+      }
+
       case "request_redispatch": {
         if (!ctx.runDispatchPhase) {
           throw new Error("request_redispatch is not available in this configuration");
@@ -131,6 +171,48 @@ export async function executeOperatorAction(
           throw new Error("trigger_sync is not available in this configuration");
         }
         ctx.requestWake("manual");
+        break;
+      }
+
+      case "derive_work": {
+        if (!ctx.deriveWork) {
+          throw new Error("derive_work is not available in this configuration");
+        }
+        const deriveOptions: { contextId?: string; since?: string; factIds?: string[] } = {};
+        if (payload.target_id) {
+          deriveOptions.contextId = payload.target_id;
+        }
+        if (payload.payload_json) {
+          try {
+            const parsed = JSON.parse(payload.payload_json) as Record<string, unknown>;
+            if (typeof parsed.since === "string") deriveOptions.since = parsed.since;
+            if (Array.isArray(parsed.fact_ids)) deriveOptions.factIds = parsed.fact_ids as string[];
+          } catch {
+            // ignore invalid payload_json
+          }
+        }
+        await ctx.deriveWork(deriveOptions);
+        break;
+      }
+
+      case "preview_work": {
+        if (!ctx.previewWork) {
+          throw new Error("preview_work is not available in this configuration");
+        }
+        const previewOptions: { contextId?: string; since?: string; factIds?: string[] } = {};
+        if (payload.target_id) {
+          previewOptions.contextId = payload.target_id;
+        }
+        if (payload.payload_json) {
+          try {
+            const parsed = JSON.parse(payload.payload_json) as Record<string, unknown>;
+            if (typeof parsed.since === "string") previewOptions.since = parsed.since;
+            if (Array.isArray(parsed.fact_ids)) previewOptions.factIds = parsed.fact_ids as string[];
+          } catch {
+            // ignore invalid payload_json
+          }
+        }
+        await ctx.previewWork(previewOptions);
         break;
       }
 

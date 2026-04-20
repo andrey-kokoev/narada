@@ -18,6 +18,7 @@ import {
   FileTombstoneStore,
   FileViewStore,
   FileBlobStore,
+  ProjectionRebuildRegistry,
   FileLock,
   applyEvent,
   cleanupTmp,
@@ -71,6 +72,7 @@ import {
   type SchedulerOptions,
   type ToolCatalogEntry,
 } from '@narada2/control-plane';
+import { SearchEngine } from '@narada2/search';
 import { CodexCharterRunner, ToolRunner } from '@narada2/charters';
 import type { ToolDefinition, ToolInvocationRequest } from '@narada2/charters';
 import { createLogger } from './lib/logger.js';
@@ -174,6 +176,7 @@ export class WakeController {
 
 export interface SyncService {
   start(): Promise<void>;
+  runOnce(): Promise<'success' | 'retryable' | 'fatal'>;
   stop(): Promise<void>;
   getStats(): SyncStats;
   /** Request an out-of-band wake with the given priority reason */
@@ -232,6 +235,7 @@ const phaseAToolCatalog: ToolCatalogEntry[] = [
     read_only: true,
     requires_approval: false,
     timeout_ms: 5000,
+    authority_class: "derive",
   },
 ];
 
@@ -308,7 +312,9 @@ async function createMailboxDispatchContext(
   graphHttpClient: GraphHttpClient,
   userId: string,
   callbacks?: {
+    /** @deprecated Use rebuildProjections instead */
     rebuildViews?: () => Promise<void>;
+    rebuildProjections?: () => Promise<void>;
   },
 ) {
   const rootDir = scope.root_dir;
@@ -329,6 +335,7 @@ async function createMailboxDispatchContext(
     foreman: InstanceType<typeof DefaultForemanFacade>;
     scheduler: InstanceType<typeof SqliteScheduler>;
     charterRunner: CharterRunner;
+    materializerRegistry: InstanceType<typeof VerticalMaterializerRegistry>;
     toolCatalog: ToolCatalogEntry[];
     toolDefinitions: Record<string, ToolDefinition>;
     workerRegistry: InstanceType<typeof DefaultWorkerRegistry>;
@@ -543,7 +550,7 @@ async function createMailboxDispatchContext(
       },
     });
 
-    dispatchDeps = { db, coordinatorStore, outboundStore, intentStore, traceStore, foreman, scheduler, charterRunner, toolCatalog, toolDefinitions, processExecutionStore, workerRegistry, processExecutor, factStore };
+    dispatchDeps = { db, coordinatorStore, outboundStore, intentStore, traceStore, foreman, scheduler, charterRunner, materializerRegistry, toolCatalog, toolDefinitions, processExecutionStore, workerRegistry, processExecutor, factStore };
     return dispatchDeps;
   }
 
@@ -903,8 +910,25 @@ async function createMailboxDispatchContext(
       executionStore: deps.processExecutionStore,
       workerRegistry: deps.workerRegistry,
       factStore: deps.factStore,
+      foreman: deps.foreman,
       rebuildViews: callbacks?.rebuildViews,
+      rebuildProjections: callbacks?.rebuildProjections,
       runDispatchPhase,
+      previewWork: async (options) => {
+        const facts = deps.factStore.getFactsByScope(scope.scope_id, {
+          contextIds: options.contextId ? [options.contextId] : undefined,
+          since: options.since,
+          factIds: options.factIds,
+          limit: 1000,
+        });
+        return deps.foreman.previewWorkFromStoredFacts(
+          facts,
+          scope.scope_id,
+          deps.charterRunner,
+          deps.materializerRegistry,
+          { tools: deps.toolCatalog, rootDir },
+        );
+      },
     };
   }
 
@@ -964,6 +988,23 @@ export async function createScopeService(
     acquireTimeoutMs: scope.runtime.acquire_lock_timeout_ms,
   });
 
+  // Build unified projection rebuild registry
+  const projectionRegistry = new ProjectionRebuildRegistry();
+  projectionRegistry.register(viewStore.asProjectionRebuildSurface());
+
+  const searchEngine = new SearchEngine({ rootDir });
+  projectionRegistry.register({
+    name: 'search_index',
+    authoritativeInput: 'messages/ directory (canonical message records)',
+    rebuild: async () => {
+      searchEngine.initialize();
+      await searchEngine.build(join(rootDir, 'messages'));
+      searchEngine.close();
+    },
+  });
+
+  const rebuildProjections = async () => { await projectionRegistry.rebuildAll(); };
+
   const source = new ExchangeSource({ adapter, sourceId: scope.scope_id });
 
   const runner = new DefaultSyncRunner({
@@ -992,10 +1033,13 @@ export async function createScopeService(
     acquireLock: () => lock.acquire(),
     rebuildViews: () => viewStore.rebuildAll(),
     rebuildViewsAfterSync: scope.runtime.rebuild_views_after_sync,
+    rebuildProjections,
+    rebuildProjectionsAfterSync: scope.runtime.rebuild_search_after_sync || scope.runtime.rebuild_views_after_sync,
   });
 
   const dispatchContext = await createMailboxDispatchContext(scope, globalConfig, opts, logger, client, graphSource.user_id!, {
     rebuildViews: () => viewStore.rebuildAll(),
+    rebuildProjections,
   });
 
   return { scope, runner, dispatchContext };
@@ -1346,6 +1390,33 @@ export async function createSyncService(
   }
 
   return {
+    async runOnce(): Promise<'success' | 'retryable' | 'fatal'> {
+      if (running) {
+        throw new Error('Service already running');
+      }
+
+      if (pidFile) {
+        logger.debug('Writing PID file');
+        await pidFile.write();
+      }
+
+      running = true;
+      stopRequested = false;
+
+      try {
+        if (observationServer) {
+          await registerScopeApis(scopeServices, { requestWake }, scopeApis);
+          await observationServer.start();
+        }
+
+        const oncePromise = runSingleSync();
+        currentIteration = oncePromise;
+        return await oncePromise;
+      } finally {
+        await stop();
+      }
+    },
+
     async start(): Promise<void> {
       if (running) {
         throw new Error('Service already running');

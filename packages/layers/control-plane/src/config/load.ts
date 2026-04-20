@@ -248,6 +248,10 @@ function loadScopeConfig(rawScope: unknown, pathPrefix: string): ScopeConfig {
       runtimeRaw.rebuild_views_after_sync ?? DEFAULTS.runtime.rebuild_views_after_sync,
       `${pathPrefix}.runtime.rebuild_views_after_sync`,
     ),
+    rebuild_search_after_sync: expectBoolean(
+      runtimeRaw.rebuild_search_after_sync ?? DEFAULTS.runtime.rebuild_search_after_sync,
+      `${pathPrefix}.runtime.rebuild_search_after_sync`,
+    ),
   };
 
   // Charter
@@ -289,6 +293,12 @@ function loadScopeConfig(rawScope: unknown, pathPrefix: string): ScopeConfig {
       : {}),
     ...(isBoolean(policyRaw.require_human_approval)
       ? { require_human_approval: policyRaw.require_human_approval }
+      : {}),
+    ...(isBoolean(policyRaw.runtime_authorized)
+      ? { runtime_authorized: policyRaw.runtime_authorized }
+      : {}),
+    ...(isBoolean(policyRaw.admin_authorized)
+      ? { admin_authorized: policyRaw.admin_authorized }
       : {}),
   };
 

@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import { syncCommand } from './commands/sync.js';
 import { integrityCommand } from './commands/integrity.js';
 import { rebuildViewsCommand } from './commands/rebuild-views.js';
+import { rebuildProjectionsCommand } from './commands/rebuild-projections.js';
 import { configCommand } from './commands/config.js';
 import { configInteractiveCommand } from './commands/config-interactive.js';
 import { statusCommand } from './commands/status.js';
@@ -13,6 +14,11 @@ import { listBackupCommand } from './commands/backup-ls.js';
 import { cleanupCommand } from './commands/cleanup.js';
 import { demoCommand } from './commands/demo.js';
 import { uscInitCommand } from './commands/usc-init.js';
+import { deriveWorkCommand } from './commands/derive-work.js';
+import { previewWorkCommand } from './commands/preview-work.js';
+import { confirmReplayCommand } from './commands/confirm-replay.js';
+import { selectCommand } from './commands/select.js';
+import { recoverCommand } from './commands/recover.js';
 import { wrapCommand } from './lib/command-wrapper.js';
 import {
   wantMailbox,
@@ -77,11 +83,20 @@ program
 
 program
   .command('rebuild-views')
-  .description('Rebuild all derived views')
+  .description('Rebuild all derived views (deprecated: use rebuild-projections)')
   .option('-c, --config <path>', 'Path to config file', './config.json')
   .option('-v, --verbose', 'Enable verbose output', false)
   .action(wrapCommand('rebuild-views', (opts, ctx) =>
     rebuildViewsCommand({ ...opts, format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto' }, ctx)));
+
+program
+  .command('rebuild-projections')
+  .description('Rebuild all derived projections (views, search index, and other non-authoritative surfaces)')
+  .option('-c, --config <path>', 'Path to config file', './config.json')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .option('-m, --mailbox <id>', 'Rebuild only a specific mailbox (multi-mailbox config)')
+  .action(wrapCommand('rebuild-projections', (opts, ctx) =>
+    rebuildProjectionsCommand({ ...opts, format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto' }, ctx)));
 
 const initCmd = program
   .command('init')
@@ -209,6 +224,107 @@ program
   .option('--all', 'Run all cleanup operations', false)
   .action(wrapCommand('cleanup', (opts, ctx) =>
     cleanupCommand({ ...opts, format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto' }, ctx)));
+
+program
+  .command('derive-work')
+  .description('Derive work from stored facts without requiring a fresh inbound event')
+  .option('-c, --config <path>', 'Path to config file', './config.json')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .option('-s, --scope <id>', 'Scope ID (mailbox ID) to derive work for')
+  .option('--context-id <id>', 'Derive work for a specific context (conversation/thread)')
+  .option('--since <timestamp>', 'Only consider facts created at or after this ISO timestamp')
+  .option('--fact-ids <ids>', 'Comma-separated list of specific fact IDs to replay')
+  .action(wrapCommand('derive-work', (opts, ctx) =>
+    deriveWorkCommand({
+      ...opts,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      contextId: opts.contextId as string | undefined,
+      since: opts.since as string | undefined,
+      factIds: opts.factIds ? String(opts.factIds).split(',') : undefined,
+    }, ctx)));
+
+program
+  .command('preview-work')
+  .description('Preview what a charter would propose for stored facts without opening work or creating intents')
+  .option('-c, --config <path>', 'Path to config file', './config.json')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .option('-s, --scope <id>', 'Scope ID (mailbox ID) to preview work for')
+  .option('--context-id <id>', 'Preview work for a specific context (conversation/thread)')
+  .option('--since <timestamp>', 'Only consider facts created at or after this ISO timestamp')
+  .option('--fact-ids <ids>', 'Comma-separated list of specific fact IDs to preview')
+  .option('--mock', 'Use a mock charter runner instead of a real one', false)
+  .action(wrapCommand('preview-work', (opts, ctx) =>
+    previewWorkCommand({
+      ...opts,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      contextId: opts.contextId as string | undefined,
+      since: opts.since as string | undefined,
+      factIds: opts.factIds ? String(opts.factIds).split(',') : undefined,
+      mock: opts.mock as boolean | undefined,
+    }, ctx)));
+
+program
+  .command('confirm-replay')
+  .description('Replay confirmation for unconfirmed or ambiguous executions without re-performing effects')
+  .option('-c, --config <path>', 'Path to config file', './config.json')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .option('-s, --scope <id>', 'Scope ID to bound replay (mail family only)')
+  .option('--intent-ids <ids>', 'Comma-separated intent IDs to replay')
+  .option('--outbound-ids <ids>', 'Comma-separated outbound IDs to replay (mail family)')
+  .option('--limit <n>', 'Maximum items to process', '50')
+  .action(wrapCommand('confirm-replay', (opts, ctx) =>
+    confirmReplayCommand({
+      ...opts,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      intentIds: opts.intentIds ? String(opts.intentIds).split(',') : undefined,
+      outboundIds: opts.outboundIds ? String(opts.outboundIds).split(',') : undefined,
+      limit: opts.limit ? Number(opts.limit) : undefined,
+    }, ctx)));
+
+program
+  .command('recover')
+  .description('Recover control-plane state from stored facts after coordinator loss')
+  .option('-c, --config <path>', 'Path to config file', './config.json')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .option('-s, --scope <id>', 'Scope ID to recover')
+  .option('--context-id <id>', 'Recover a specific context')
+  .option('--since <timestamp>', 'Only consider facts created at or after this ISO timestamp')
+  .option('--fact-ids <ids>', 'Comma-separated list of specific fact IDs')
+  .option('--dry-run', 'Preview what would be recovered without making changes', false)
+  .action(wrapCommand('recover', (opts, ctx) =>
+    recoverCommand({
+      ...opts,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      contextId: opts.contextId as string | undefined,
+      since: opts.since as string | undefined,
+      factIds: opts.factIds ? String(opts.factIds).split(',') : undefined,
+      dryRun: opts.dryRun as boolean | undefined,
+    }, ctx)));
+
+program
+  .command('select')
+  .description('Select facts from the fact store for a scope')
+  .option('-c, --config <path>', 'Path to config file', './config.json')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .option('-s, --scope <id>', 'Scope ID to select facts from')
+  .option('--context-id <id>', 'Filter by a specific context (conversation/thread)')
+  .option('--since <timestamp>', 'Only include facts created at or after this ISO timestamp')
+  .option('--until <timestamp>', 'Only include facts created at or before this ISO timestamp')
+  .option('--fact-ids <ids>', 'Comma-separated list of specific fact IDs')
+  .option('--limit <n>', 'Maximum number of facts to return', '100')
+  .option('--offset <n>', 'Pagination offset', '0')
+  .action(wrapCommand('select', (opts, ctx) =>
+    selectCommand({
+      ...opts,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      scope: opts.scope as string | undefined,
+      contextId: opts.contextId as string | undefined,
+      since: opts.since as string | undefined,
+      until: opts.until as string | undefined,
+      factIds: opts.factIds ? String(opts.factIds).split(',') : undefined,
+      limit: opts.limit ? Number(opts.limit) : undefined,
+      offset: opts.offset ? Number(opts.offset) : undefined,
+    }, ctx)));
 
 // ── Operation shaping commands (from ops-kit) ──
 

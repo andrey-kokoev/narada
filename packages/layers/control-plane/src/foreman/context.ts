@@ -7,6 +7,7 @@
  */
 
 import type { Fact } from "../facts/types.js";
+import { MailboxContextStrategy } from "./mailbox/context-strategy.js";
 
 export interface PolicyContext {
   /** Domain-neutral context identifier (legacy mail-era name removed) */
@@ -158,6 +159,24 @@ export class WebhookContextStrategy implements ContextFormationStrategy {
     }
 
     return contexts;
+  }
+}
+
+/**
+ * Resolve a context strategy name to its implementation.
+ */
+export function resolveContextStrategy(strategy: string): ContextFormationStrategy {
+  switch (strategy) {
+    case "mail":
+      return new MailboxContextStrategy();
+    case "timer":
+      return new TimerContextStrategy();
+    case "webhook":
+      return new WebhookContextStrategy();
+    case "filesystem":
+      return new FilesystemContextStrategy();
+    default:
+      throw new Error(`Unknown context strategy: ${strategy}`);
   }
 }
 

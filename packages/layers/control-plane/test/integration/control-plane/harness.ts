@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { createTestDb } from "../../db-lifecycle.js";
 import { SqliteCoordinatorStore } from "../../../src/coordinator/store.js";
 import { SqliteOutboundStore } from "../../../src/outbound/store.js";
 import { SqliteAgentTraceStore } from "../../../src/agent/traces/store.js";
@@ -29,7 +30,7 @@ export interface Harness {
 }
 
 export function createHarness(runnerId = "runner-test"): Harness {
-  const db = new Database(":memory:");
+  const db = createTestDb();
   const coordinatorStore = new SqliteCoordinatorStore({ db });
   const outboundStore = new SqliteOutboundStore({ db });
   const intentStore = new SqliteIntentStore({ db });
@@ -84,8 +85,15 @@ export function insertWorkItem(h: Harness, overrides?: Partial<WorkItem>): WorkI
     error_message: null,
     retry_count: 0,
     next_retry_at: null,
+    context_json: null,
     created_at: now,
     updated_at: now,
+    preferred_session_id: null,
+    preferred_agent_id: null,
+    affinity_group_id: null,
+    affinity_strength: 0,
+    affinity_expires_at: null,
+    affinity_reason: null,
     ...overrides,
   };
   h.coordinatorStore.insertWorkItem(item);

@@ -232,6 +232,7 @@ async function syncSingleMailbox(
         : undefined,
       acquireLock: () => lock.acquire(),
       rebuildViewsAfterSync: mailbox.sync?.rebuild_views_after_sync ?? true,
+      rebuildProjectionsAfterSync: mailbox.sync?.rebuild_views_after_sync ?? true,
       onProgress: (_progress) => {
         // Could forward to global progress handler
       },

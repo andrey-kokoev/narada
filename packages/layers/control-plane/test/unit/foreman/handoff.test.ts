@@ -56,8 +56,15 @@ describe("OutboundHandoff", () => {
       error_message: null,
       retry_count: 0,
       next_retry_at: null,
+      context_json: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      preferred_session_id: null,
+      preferred_agent_id: null,
+      affinity_group_id: null,
+      affinity_strength: 0,
+      affinity_expires_at: null,
+      affinity_reason: null,
       ...overrides,
     };
     coordinatorStore.insertWorkItem(item);

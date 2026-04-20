@@ -39,6 +39,10 @@ export interface RuntimePolicy {
   allowed_actions: AllowedAction[];
   allowed_tools?: string[];
   require_human_approval?: boolean;
+  /** Explicitly grants authorization for runtime authority classes (claim, execute, resolve, confirm). */
+  runtime_authorized?: boolean;
+  /** Explicitly grants authorization for admin authority class. */
+  admin_authorized?: boolean;
 }
 
 /** Source configuration for a scope (e.g. Graph API, timer, webhook) */
@@ -93,6 +97,7 @@ export interface ScopeConfig {
     acquire_lock_timeout_ms: number;
     cleanup_tmp_on_startup: boolean;
     rebuild_views_after_sync: boolean;
+    rebuild_search_after_sync: boolean;
   };
   /** Charter runtime configuration */
   charter?: CharterRuntimeConfig;
@@ -194,6 +199,7 @@ export interface ExchangeFsSyncConfig {
     acquire_lock_timeout_ms: number;
     cleanup_tmp_on_startup: boolean;
     rebuild_views_after_sync: boolean;
+    rebuild_search_after_sync: boolean;
   };
   charter?: CharterRuntimeConfig;
   policy?: RuntimePolicy;

@@ -20,6 +20,14 @@ beforeEach(() => {
   vol.mkdirSync('/tmp', { recursive: true });
 });
 
+// Database lifecycle: close all tracked databases after each test file
+// to prevent better-sqlite3 V8 fatal crashes during process teardown.
+import { closeAllTestDatabases } from "./db-lifecycle.js";
+
+afterAll(() => {
+  closeAllTestDatabases();
+});
+
 // Global test utilities
 declare global {
   var createMockGraphResponse: typeof import('./factories').createMockGraphResponse;

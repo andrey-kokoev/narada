@@ -147,6 +147,7 @@ const testToolCatalog: ToolCatalogEntry[] = [
     read_only: true,
     requires_approval: false,
     timeout_ms: 5000,
+    authority_class: "derive",
   },
 ];
 
