@@ -13,8 +13,10 @@
  */
 
 import { resolve, dirname, basename, join } from 'node:path';
-import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { populateSchemaCache } from '../lib/usc-schema-cache.js';
 
 export interface UscInitOptions {
   path: string;
@@ -24,6 +26,119 @@ export interface UscInitOptions {
   cis?: boolean;
   principal?: string;
   force?: boolean;
+}
+
+/* ── Version compatibility checking ─────────────────────────────────────── */
+
+export interface UscVersionCheck {
+  expected: string;
+  installed: string | null;
+  compatible: boolean;
+}
+
+function getNaradaRoot(): string {
+  // Start from this file's directory and search upward for the monorepo root
+  const startDir = dirname(fileURLToPath(import.meta.url));
+  let dir = startDir;
+  for (let i = 0; i < 10; i++) {
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    if (existsSync(join(parent, 'pnpm-workspace.yaml')) || existsSync(join(parent, '.pnpm-workspace.yaml'))) {
+      return parent;
+    }
+    // Also accept a package.json with config.uscVersion as a fallback marker
+    const pkgPath = join(parent, 'package.json');
+    if (existsSync(pkgPath)) {
+      try {
+        const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+        if (pkg.config?.uscVersion !== undefined || pkg.private === true) {
+          return parent;
+        }
+      } catch {
+        // ignore parse errors, keep searching
+      }
+    }
+    dir = parent;
+  }
+  // Fallback: go up 5 levels from packages/layers/cli/src/commands/
+  return resolve(startDir, '../../../../../');
+}
+
+export function getExpectedUscVersion(): string | undefined {
+  try {
+    const root = getNaradaRoot();
+    const pkgPath = join(root, 'package.json');
+    if (!existsSync(pkgPath)) return undefined;
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+    return pkg.config?.uscVersion;
+  } catch {
+    return undefined;
+  }
+}
+
+export function getInstalledUscVersion(): string | null {
+  try {
+    const req = createRequire(import.meta.url);
+    const compilerPkgPath = req.resolve('@narada.usc/compiler/package.json');
+    const pkg = JSON.parse(readFileSync(compilerPkgPath, 'utf8'));
+    return pkg.version || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Minimal semver range satisfaction.
+ * Supports exact versions and caret (^) ranges.
+ */
+export function satisfiesVersionRange(range: string, version: string): boolean {
+  const r = range.trim();
+  const v = version.trim();
+
+  if (r === v) return true;
+
+  if (r.startsWith('^')) {
+    const expectedParts = r.slice(1).split('.').map(Number);
+    const installedParts = v.split('.').map(Number);
+    if (expectedParts.length < 2 || installedParts.length < 2) return false;
+
+    // Major must match
+    if (installedParts[0] !== expectedParts[0]) return false;
+
+    // For 0.x.y, caret behaves like ~0.x.y (only patch changes allowed)
+    if (expectedParts[0] === 0) {
+      if (installedParts[1] !== expectedParts[1]) return false;
+      if (installedParts[2] < (expectedParts[2] || 0)) return false;
+      return true;
+    }
+
+    // For >=1.x.y, minor must be >= expected, or same minor with >= patch
+    if (installedParts[1] > expectedParts[1]) return true;
+    if (installedParts[1] === expectedParts[1]) {
+      return installedParts[2] >= (expectedParts[2] || 0);
+    }
+    return false;
+  }
+
+  // Fallback: exact match only
+  return r === v;
+}
+
+export function checkUscVersion(): UscVersionCheck {
+  const expected = getExpectedUscVersion();
+  const installed = getInstalledUscVersion();
+
+  if (!expected) {
+    // No version constraint configured; allow anything
+    return { expected: 'any', installed, compatible: true };
+  }
+
+  if (!installed) {
+    return { expected, installed, compatible: false };
+  }
+
+  const compatible = satisfiesVersionRange(expected, installed);
+  return { expected, installed, compatible };
 }
 
 /* ── Dynamic USC module loading ─────────────────────────────────────────── */
@@ -187,6 +302,18 @@ export async function uscInitCommand(options: UscInitOptions): Promise<void> {
   const force = options.force || false;
   const domainHint = options.domain || undefined;
 
+  // Check USC version compatibility before loading modules
+  const versionCheck = checkUscVersion();
+  if (!versionCheck.compatible) {
+    if (!versionCheck.installed) {
+      throw new Error(USC_INSTALL_HINT);
+    }
+    throw new Error(
+      `USC compiler version ${versionCheck.installed} is installed; Narada requires ${versionCheck.expected}. ` +
+      `Run \`pnpm add @narada.usc/compiler@${versionCheck.expected}\``,
+    );
+  }
+
   const rootDir = resolveUscRoot();
 
   // Load USC compiler dynamically
@@ -258,6 +385,12 @@ export async function uscInitCommand(options: UscInitOptions): Promise<void> {
       }
     }
     throw new Error('Generated USC repo failed validation. See errors above.');
+  }
+
+  // 6. Populate schema cache for offline resilience
+  const schemaCache = populateSchemaCache(rootDir, targetDir);
+  if (schemaCache.cached > 0) {
+    console.log(`Cached ${schemaCache.cached} schema(s) to ${schemaCache.cacheDir}`);
   }
 
   console.log(`USC repo '${name}' initialized at ${targetDir}`);

@@ -8,7 +8,8 @@
  *
  * Usage:
  *   pnpm test:focused "pnpm --filter @narada2/control-plane exec vitest run test/unit/ids/event-id.test.ts"
- *   pnpm test:focused "pnpm --filter @narada2/charters test"
+ *   ALLOW_MULTI_FILE_FOCUSED=1 pnpm test:focused "pnpm --filter @narada2/cli exec vitest run test/commands/a.test.ts test/commands/b.test.ts"
+ *   ALLOW_PACKAGE_FOCUSED=1 pnpm test:focused "pnpm --filter @narada2/charters test"
  */
 
 import {
@@ -28,15 +29,87 @@ const colors = {
 
 const rawCommand = process.argv.slice(2).join(" ");
 
+function rejectPreflight(reason: string): never {
+  const now = new Date().toISOString();
+  console.error(`${colors.red}Focused test rejected.${colors.reset}`);
+  console.error(reason);
+  console.error("");
+  console.error("Default focused verification must target exactly one test file.");
+  console.error("Overrides:");
+  console.error("  ALLOW_MULTI_FILE_FOCUSED=1  allow multiple test files in one command");
+  console.error("  ALLOW_PACKAGE_FOCUSED=1     allow package-level test commands");
+
+  recordRun({
+    command: rawCommand,
+    startedAt: now,
+    finishedAt: now,
+    durationMs: 0,
+    exitStatus: 1,
+    exitSignal: null,
+    stepTimings: [
+      {
+        name: "Focused test preflight",
+        command: rawCommand,
+        durationMs: 0,
+        exitStatus: 1,
+      },
+    ],
+    classification: "assertion-failure",
+    summary: `Focused test preflight rejected: ${reason}`,
+  });
+
+  printMetricsHint();
+  process.exit(1);
+}
+
+function validateFocusedCommand(command: string): void {
+  const testFileMatches = command.match(/\S+\.(?:test|spec)\.[cm]?[tj]sx?/g) ?? [];
+  const testFileCount = testFileMatches.length;
+  const allowMultiFile = process.env.ALLOW_MULTI_FILE_FOCUSED === "1";
+  const allowPackage = process.env.ALLOW_PACKAGE_FOCUSED === "1";
+  const looksLikeFullSuite =
+    /\btest:full\b/.test(command) ||
+    /\bALLOW_FULL_TESTS=1\b/.test(command) ||
+    /\bpnpm\s+test\b/.test(command);
+  const looksLikePackageTest =
+    /\bpnpm\b/.test(command) &&
+    (
+      /\btest(?::[A-Za-z0-9_-]+)?\b/.test(command) ||
+      /\bvitest\s+run\b/.test(command)
+    );
+
+  if (looksLikeFullSuite) {
+    rejectPreflight("Full-suite commands must not be wrapped in pnpm test:focused.");
+  }
+
+  if (testFileCount === 1) return;
+
+  if (testFileCount > 1) {
+    if (allowMultiFile) return;
+    rejectPreflight(
+      `Command includes ${testFileCount} test files: ${testFileMatches.join(", ")}`,
+    );
+  }
+
+  if (looksLikePackageTest) {
+    if (allowPackage) return;
+    rejectPreflight(
+      "Package-level test command has no explicit test file. Use one test file or set ALLOW_PACKAGE_FOCUSED=1.",
+    );
+  }
+}
+
 if (!rawCommand) {
   console.error(`${colors.red}Usage: pnpm test:focused "<command>"${colors.reset}`);
   console.error("");
   console.error("Examples:");
   console.error('  pnpm test:focused "pnpm --filter @narada2/control-plane exec vitest run test/unit/ids/event-id.test.ts"');
-  console.error('  pnpm test:focused "pnpm --filter @narada2/charters test"');
-  console.error('  pnpm test:focused "pnpm --filter @narada2/control-plane test:unit"');
+  console.error('  ALLOW_MULTI_FILE_FOCUSED=1 pnpm test:focused "pnpm --filter @narada2/cli exec vitest run test/commands/a.test.ts test/commands/b.test.ts"');
+  console.error('  ALLOW_PACKAGE_FOCUSED=1 pnpm test:focused "pnpm --filter @narada2/charters test"');
   process.exit(1);
 }
+
+validateFocusedCommand(rawCommand);
 
 console.log(`${colors.dim}=== Focused Test ===${colors.reset}`);
 console.log(`${colors.dim}Command:${colors.reset} ${rawCommand}\n`);

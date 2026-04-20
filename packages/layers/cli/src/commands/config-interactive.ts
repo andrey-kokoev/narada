@@ -2,8 +2,8 @@
  * Interactive configuration command using @clack/prompts
  */
 
-import { writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { resolve, dirname } from 'node:path';
 import { existsSync } from 'node:fs';
 import * as p from '@clack/prompts';
 import type { CommandContext } from '../lib/command-wrapper.js';
@@ -270,6 +270,7 @@ export async function configInteractiveCommand(
 
   // Write config file
   try {
+    await mkdir(dirname(outputPath), { recursive: true });
     await writeFile(outputPath, JSON.stringify(config, null, 2) + '\n', 'utf8');
     logger.info('Config written', { outputPath });
   } catch (error) {

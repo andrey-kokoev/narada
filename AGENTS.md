@@ -47,6 +47,7 @@ Narada is a generalized, deterministic kernel for turning remote source deltas i
 | [08-quickstart.md](packages/layers/control-plane/docs/08-quickstart.md) | Setup and first sync | Are setting up for the first time |
 | [09-troubleshooting.md](packages/layers/control-plane/docs/09-troubleshooting.md) | Common issues and solutions | Are debugging a problem |
 | [10-ui-read-model-audit.md](packages/layers/control-plane/docs/10-ui-read-model-audit.md) | UI read surfaces, gaps, and authority rules | Are building operator UI |
+| [runtime-usc-boundary.md](docs/runtime-usc-boundary.md) | Runtime / USC / operator ownership boundary | Need to understand which layer owns what |
 
 ---
 
@@ -299,29 +300,29 @@ narada/
 23. **All UI data sources are classified**: Every observation type is marked as `authoritative` (mirrors one durable row), `derived` (computed from multiple sources), or `decorative` (presentational only).
 
 ### Do Not Regress These Boundaries (Task 085)
-23. **No mailbox leakage into generic observation**: `conversation_id` and `mailbox_id` must not appear in generic observability types/queries. They are allowed only inside mail-specific types (`MailExecutionDetail`, `MailboxVerticalView`) and mail-specific query functions (`getMailboxVerticalView`, `getMailExecutionDetails`).
-24. **Observation queries are SELECT-only**: Files in `layers/control-plane/src/observability/` must not contain `.run(` or `.exec(`. Only `.all(`, `.get(`, and `.pluck(` are permitted.
-25. **Control endpoints stay in `/control/`**: No POST route may be registered under `/scopes/...` in the observation namespace. The action route must remain under `/control/scopes/:scope_id/actions`.
-26. **UI shell stays vertical-neutral**: The top-level nav menu must not contain mail-specific labels (e.g., "Mailbox"). Mail-specific views must live under the "Verticals" page, not as primary navigation.
+24. **No mailbox leakage into generic observation**: `conversation_id` and `mailbox_id` must not appear in generic observability types/queries. They are allowed only inside mail-specific types (`MailExecutionDetail`, `MailboxVerticalView`) and mail-specific query functions (`getMailboxVerticalView`, `getMailExecutionDetails`).
+25. **Observation queries are SELECT-only**: Files in `layers/control-plane/src/observability/` must not contain `.run(` or `.exec(`. Only `.all(`, `.get(`, and `.pluck(` are permitted.
+26. **Control endpoints stay in `/control/`**: No POST route may be registered under `/scopes/...` in the observation namespace. The action route must remain under `/control/scopes/:scope_id/actions`.
+27. **UI shell stays vertical-neutral**: The top-level nav menu must not contain mail-specific labels (e.g., "Mailbox"). Mail-specific views must live under the "Verticals" page, not as primary navigation.
 
 ### Kernel Substrate vs Mailbox Vertical Boundary (Task 087)
-27. **Neutral tables are the kernel substrate**: `context_records`, `context_revisions`, and `outbound_handoffs` are the canonical durable base tables. All generic writes and generic reads must target them directly.
-28. **Mailbox-era schema is vertical-local compatibility only**: `conversation_records`, `conversation_revisions`, and `outbound_commands` are compatibility views projecting mailbox-era column names (`conversation_id`, `mailbox_id`) from the neutral tables. They may only be referenced inside mailbox-vertical modules (`adapter/graph/`, `normalize/`, `projector/`, `foreman/`, `outbound/` worker code) or explicit migration/compatibility adapters.
-29. **Generic modules must not query mailbox-era views**: Control-plane modules (`scheduler/`, `facts/`, `intent/`, `sources/`, `executors/`, `charter/`, `observability/`) must not contain SQL references to `conversation_records`, `conversation_revisions`, or `outbound_commands`. CI enforces this via `scripts/control-plane-lint.ts`.
-30. **Mailbox compatibility is additive, not foundational**: New verticals must build against `context_id`/`scope_id` and `outbound_handoffs`. They must never depend on mailbox-era naming or views.
+28. **Neutral tables are the kernel substrate**: `context_records`, `context_revisions`, and `outbound_handoffs` are the canonical durable base tables. All generic writes and generic reads must target them directly.
+29. **Mailbox-era schema is vertical-local compatibility only**: `conversation_records`, `conversation_revisions`, and `outbound_commands` are compatibility views projecting mailbox-era column names (`conversation_id`, `mailbox_id`) from the neutral tables. They may only be referenced inside mailbox-vertical modules (`adapter/graph/`, `normalize/`, `projector/`, `foreman/`, `outbound/` worker code) or explicit migration/compatibility adapters.
+30. **Generic modules must not query mailbox-era views**: Control-plane modules (`scheduler/`, `facts/`, `intent/`, `sources/`, `executors/`, `charter/`, `observability/`) must not contain SQL references to `conversation_records`, `conversation_revisions`, or `outbound_commands`. CI enforces this via `scripts/control-plane-lint.ts`.
+31. **Mailbox compatibility is additive, not foundational**: New verticals must build against `context_id`/`scope_id` and `outbound_handoffs`. They must never depend on mailbox-era naming or views.
 
 ### Outbound
-31. **Draft-First Delivery**: Agents and workers never send directly; they always create a draft first
-32. **Two-Stage Completion**: A command reaches `submitted` when Graph accepts it, and `confirmed` only after inbound reconciliation observes the result
-33. **No External Draft Mutation**: Modification of a managed draft by anything other than the outbound worker is a hard failure
-34. **Worker Exclusivity**: Only the outbound worker may create or mutate managed drafts
+32. **Draft-First Delivery**: Agents and workers never send directly; they always create a draft first
+33. **Two-Stage Completion**: A command reaches `submitted` when Graph accepts it, and `confirmed` only after inbound reconciliation observes the result
+34. **No External Draft Mutation**: Modification of a managed draft by anything other than the outbound worker is a hard failure
+35. **Worker Exclusivity**: Only the outbound worker may create or mutate managed drafts
 
 ### Advisory Signals (Task 214)
-35. **Advisory signals are non-authoritative**: Removing every advisory signal from the system must leave all durable boundaries intact and all authority invariants satisfiable.
-36. **Advisory signals are overrideable**: Any component that consumes an advisory signal must have a sensible fallback when the signal is absent, contradictory, or stale.
-37. **Advisory signals have no lifecycle side effect**: Emitting or consuming an advisory signal must not transition the lifecycle state of a durable object (fact, work item, intent, execution).
-38. **Continuation affinity is advisory**: `WorkItem` may carry `continuation_affinity` fields (`preferred_session_id`, `affinity_strength`, `affinity_expires_at`), but the scheduler must treat them as a reordering hint, not a mandatory assignment. Affinity must not bypass leasing, override governance, or block runnable work indefinitely.
-39. **Advisory signals make no truth claim**: An advisory signal must never be presented as evidence that something is true; it only expresses preference, probability, or attention-worthiness.
+36. **Advisory signals are non-authoritative**: Removing every advisory signal from the system must leave all durable boundaries intact and all authority invariants satisfiable.
+37. **Advisory signals are overrideable**: Any component that consumes an advisory signal must have a sensible fallback when the signal is absent, contradictory, or stale.
+38. **Advisory signals have no lifecycle side effect**: Emitting or consuming an advisory signal must not transition the lifecycle state of a durable object (fact, work item, intent, execution).
+39. **Continuation affinity is advisory**: `WorkItem` may carry `continuation_affinity` fields (`preferred_session_id`, `affinity_strength`, `affinity_expires_at`), but the scheduler must treat them as a reordering hint, not a mandatory assignment. Affinity must not bypass leasing, override governance, or block runnable work indefinitely.
+40. **Advisory signals make no truth claim**: An advisory signal must never be presented as evidence that something is true; it only expresses preference, probability, or attention-worthiness.
 
 ---
 
@@ -432,7 +433,41 @@ Runtime policy determines charter routing, allowed actions, and tool catalog for
 4. Update [`config.example.json`](packages/layers/control-plane/config.example.json)
 5. Add tests in [`test/unit/config/load.test.ts`](packages/layers/control-plane/test/unit/config/load.test.ts) and [`test/integration/policy-routing.test.ts`](packages/layers/daemon/test/integration/policy-routing.test.ts)
 
-### 7. Add or Modify a Projection Rebuild Surface
+### 7. Work with the USC Schema Cache
+
+The USC schema cache provides offline resilience for validation and read-only operations when `@narada.usc/*` packages are not installed.
+
+**Location:** [`packages/layers/cli/src/lib/usc-schema-cache.ts`](packages/layers/cli/src/lib/usc-schema-cache.ts)
+
+**How it works:**
+- `narada init usc` populates `.ai/usc-schema-cache/` with JSON schemas discovered in the USC installation
+- If USC packages are missing at runtime, tools can fall back to cached schemas via `getCachedSchemaPath()`, `readCachedSchema()`, or `listCachedSchemas()`
+
+**When to update:**
+- When adding new USC schema consumers that need offline fallback
+- When the USC package schema directory structure changes
+
+**Functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `populateSchemaCache(uscRoot, targetDir)` | Copy schemas from USC packages into `.ai/usc-schema-cache/` |
+| `hasSchemaCache(targetDir)` | Check whether the cache exists and contains `.json` files |
+| `getCachedSchemaPath(targetDir, name)` | Get absolute path to a cached schema by file name |
+| `listCachedSchemas(targetDir)` | List all cached schema file names |
+| `readCachedSchema(targetDir, name)` | Read and parse a cached schema |
+| `validateUscRepo(targetDir)` | Validate a USC repo; uses full USC validator if available, falls back to cached schemas |
+
+**CLI commands:**
+
+| Command | Purpose |
+|---------|---------|
+| `narada init usc <path>` | Initialize a USC repo and populate the schema cache |
+| `narada init usc-validate <path>` | Validate a USC repo using USC packages or cached schemas as fallback |
+
+**Version pinning:** The supported USC version range is declared in root `package.json` under `config.uscVersion`. `uscInitCommand` checks the installed `@narada.usc/compiler` version against this range and fails with a clear, actionable error if incompatible.
+
+### 8. Add or Modify a Projection Rebuild Surface
 
 Projection rebuild is an explicit operator family member (SEMANTICS.md §2.8). All non-authoritative derived stores must rebuild through the unified surface:
 
@@ -471,27 +506,50 @@ When proposing changes that touch public types, docs, or package surfaces, verif
 
 When verifying changes, follow this escalation ladder — never jump to the most expensive command first.
 
+### Verification Suggestion Surface (Preferred)
+
+Before deciding verification scope manually, ask the suggestion operator:
+
+```bash
+# For changed source files
+narada verify suggest --files packages/layers/cli/src/commands/foo.ts
+
+# Check what verification is fresh/stale
+narada verify status
+
+# Run the suggested command through policy-guarded scripts
+narada verify run --cmd "pnpm --filter @narada2/cli exec vitest run test/commands/foo.test.ts"
+```
+
+The suggestion surface:
+- Maps changed files to the smallest likely test file using package conventions
+- Checks policy before running (same rules as `pnpm test:focused`)
+- Records telemetry automatically via the existing guarded scripts
+- Never runs tests automatically; suggest first, run only when asked
+
 ### Verification Ladder
 
 | Step | Command | When to use | Approx. time |
 |------|---------|-------------|--------------|
-| 1 | `pnpm verify` | Default after any local change | ~15 sec |
-| 2 | `pnpm --filter <pkg> typecheck` | Change is isolated to one package | 3–10 sec |
-| 3 | `pnpm test:focused "<cmd>"` | Run specific test file(s) with telemetry | varies |
-| 4 | `pnpm test:<pkg>` | Broader package tests when justified | 5–90 sec |
-| 5 | `ALLOW_FULL_TESTS=1 pnpm test:full` | Final CI-like check or user explicitly asks | ~2 min |
+| 1 | `narada verify suggest --files ...` | Before any manual verification decision | <1 sec |
+| 2 | `pnpm verify` | Default after any local change | ~15 sec |
+| 3 | `pnpm --filter <pkg> typecheck` | Change is isolated to one package | 3–10 sec |
+| 4 | `pnpm test:focused "<cmd>"` | Run one specific test file with telemetry | varies |
+| 5 | `pnpm test:<pkg>` | Broader package tests when justified | 5–90 sec |
+| 6 | `ALLOW_FULL_TESTS=1 pnpm test:full` | Final CI-like check or user explicitly asks | ~2 min |
 
 ### Rules
 
-1. **Do not run the full suite unless the user explicitly asks.** `pnpm test` at the root is intentionally blocked.
-2. **Start with `pnpm verify`.** It runs task-file guard + typecheck + build + fast package tests (charters, ops-kit). This catches most cross-cutting issues and is reliable.
-3. **Prefer focused commands for package-local changes.** Use `pnpm --filter <pkg> typecheck` and `pnpm test:focused` for the behavior you changed. This is faster than broad suites and avoids known teardown noise.
-4. **Escalate only when needed.** Run package-scoped broader tests (`pnpm test:control-plane`, `pnpm test:daemon`) only when the change justifies it.
-5. **Full suite requires `ALLOW_FULL_TESTS=1`.** This guard prevents accidental expensive runs.
+1. **Prefer the suggestion surface first.** Run `narada verify suggest --files ...` before inventing verification commands manually.
+2. **Do not run the full suite unless the user explicitly asks.** `pnpm test` at the root is intentionally blocked.
+3. **Start with `pnpm verify`.** It runs task-file guard + typecheck + build + fast package tests (charters, ops-kit). This catches most cross-cutting issues and is reliable.
+4. **Prefer focused commands for package-local changes.** Use `pnpm --filter <pkg> typecheck` and `pnpm test:focused` for the specific file covering the behavior you changed. This is faster than broad suites and avoids known teardown noise.
+5. **Escalate only when needed.** Run package-scoped broader tests (`pnpm test:control-plane`, `pnpm test:daemon`) only when the change justifies it.
+6. **Full suite requires `ALLOW_FULL_TESTS=1`.** This guard prevents accidental expensive runs.
 
 ### Focused Test Commands
 
-For control-plane and daemon work, broad unit-test suites are slow and can crash during teardown. Run individual test files instead:
+For control-plane and daemon work, broad unit-test suites are slow and can crash during teardown. Run one individual test file first:
 
 ```bash
 # Example: run a single control-plane test file with telemetry
@@ -500,14 +558,19 @@ pnpm test:focused "pnpm --filter @narada2/control-plane exec vitest run test/uni
 # Example: run a specific daemon test file (preferred over broad suite)
 pnpm test:focused "pnpm --dir packages/layers/daemon exec vitest run test/unit/observation-server.test.ts"
 
-# Example: run all charters tests with telemetry
-pnpm test:focused "pnpm --filter @narada2/charters test"
+# Example: package-level focused run, only when explicitly justified
+ALLOW_PACKAGE_FOCUSED=1 pnpm test:focused "pnpm --filter @narada2/charters test"
+
+# Example: multi-file focused run, only when explicitly justified
+ALLOW_MULTI_FILE_FOCUSED=1 pnpm test:focused "pnpm --filter @narada2/cli exec vitest run test/commands/audit.test.ts test/commands/show.test.ts"
 
 # Example: focused typecheck for one package
 pnpm --filter @narada2/control-plane typecheck
 ```
 
 `pnpm test:focused` records duration, exit status, and classification to `.ai/metrics/test-runtimes.json` just like the broad wrapper commands.
+
+By default, `pnpm test:focused` rejects commands with multiple test files or package-level test commands. Use `ALLOW_MULTI_FILE_FOCUSED=1` or `ALLOW_PACKAGE_FOCUSED=1` only when the task notes justify the broader check.
 
 ### Test Runtime Observability
 

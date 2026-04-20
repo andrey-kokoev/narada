@@ -84,3 +84,34 @@ Authority clarifications:
 Deferred:
 
 - Broader routing-signal runtime beyond `continuation_affinity`.
+
+## Multi-Agent Task Governance
+
+Narada gained explicit agent task governance: roster, assignment, lifecycle automation, review loops, and chapter closure.
+
+- **Roster and assignment** (Task 260): `.ai/agents/roster.json`, atomic claim/release operators, dependency-checked assignment with execution budgets.
+- **Lifecycle automation** (Task 261): Canonical status machine (`draft → opened → claimed → in_review → closed → confirmed`), `depends_on` enforcement, continuation protocol for budget exhaustion.
+- **Review loop and allocator** (Task 262): Structured findings, `narada task review`, `derive-from-finding` corrective task generation, atomic task number allocation.
+- **Chapter closure** (Task 263): `narada chapter close` with dry-run, terminal-status verification, closure artifact generation, and confirmation transition.
+- **Continuation affinity** (Task 263): Advisory warm-agent routing via task front-matter (`preferred_agent_id`, `affinity_strength`). Claim operator may sort by affinity; affinity never blocks runnable work.
+- **USC boundary hardening** (Tasks 257/279): Version-pinned USC bridge (`config.uscVersion`), schema cache fallback, `narada init usc-validate <path>`.
+
+Corrective follow-ups applied:
+- Task 268: Assignment claim/release hardened against partial mutation and missing continuation packets.
+- Task 271: Lifecycle release operator fixed to validate continuation before mutating assignment.
+- Task 274: Review allocator integrity tightened; derive-from-finding uses correct dependency linking.
+- Task 280: Chapter close stops mutation when non-terminal tasks exist; closure artifact uses explicit `.ai/decisions/` path.
+
+Authority clarifications:
+
+- Static schema defines shapes; operators perform transitions.
+- Runtime owns durable state and leases; it does not own task file mutations.
+- USC packages are read by tooling/runtime but must not assume runtime state or operator behavior.
+- Advisory signals are non-authoritative; removing them must leave all durable boundaries intact.
+
+Deferred:
+
+- Race-safe task number allocator (file-lock or SQLite-backed).
+- Broader routing signals beyond continuation affinity (priority, deadline, skill matching).
+- Automatic task dependency DAG visualization.
+- Commit-boundary tracking for this chapter.

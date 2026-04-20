@@ -14,6 +14,7 @@ import { listBackupCommand } from './commands/backup-ls.js';
 import { cleanupCommand } from './commands/cleanup.js';
 import { demoCommand } from './commands/demo.js';
 import { uscInitCommand } from './commands/usc-init.js';
+import { uscValidateCommand } from './commands/usc-validate.js';
 import { deriveWorkCommand } from './commands/derive-work.js';
 import { previewWorkCommand } from './commands/preview-work.js';
 import { confirmReplayCommand } from './commands/confirm-replay.js';
@@ -31,6 +32,12 @@ import { taskReviewCommand } from './commands/task-review.js';
 import { taskAllocateCommand } from './commands/task-allocate.js';
 import { taskDeriveFromFindingCommand } from './commands/task-derive-from-finding.js';
 import { taskLintCommand } from './commands/task-lint.js';
+import { chapterCloseCommand } from './commands/chapter-close.js';
+import { taskListCommand } from './commands/task-list.js';
+import { verifyStatusCommand } from './commands/verify-status.js';
+import { verifySuggestCommand } from './commands/verify-suggest.js';
+import { verifyExplainCommand } from './commands/verify-explain.js';
+import { verifyRunCommand } from './commands/verify-run.js';
 import { wrapCommand } from './lib/command-wrapper.js';
 import {
   wantMailbox,
@@ -144,6 +151,18 @@ initCmd
     }
   });
 
+initCmd
+  .command('usc-validate <path>')
+  .description('Validate a USC repo using USC packages or cached schemas as fallback')
+  .action(async (targetPath: string) => {
+    const result = await uscValidateCommand({ path: targetPath });
+    if (result.exitCode !== 0) {
+      console.error(JSON.stringify(result.result, null, 2));
+      process.exit(result.exitCode);
+    }
+    console.log(JSON.stringify(result.result, null, 2));
+  });
+
 initCmd.action(wrapCommand('init', (opts, ctx) => {
   const format = process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto';
   if (opts.interactive) {
@@ -182,6 +201,19 @@ program
       format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
       type: opts.type as 'evaluation' | 'decision' | 'execution',
       id: opts.id as string,
+    }, ctx)));
+
+program
+  .command('doctor')
+  .description('Check daemon health, sync freshness, and work queue state')
+  .option('-c, --config <path>', 'Path to config file', './config.json')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .option('--stale-threshold-minutes <n>', 'Sync staleness threshold in minutes', '60')
+  .action(wrapCommand('doctor', (opts, ctx) =>
+    doctorCommand({
+      ...opts,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      staleThresholdMinutes: opts.staleThresholdMinutes ? Number(opts.staleThresholdMinutes) : undefined,
     }, ctx)));
 
 program
@@ -321,6 +353,133 @@ taskCmd
       process.exit(result.exitCode);
     }
     console.log(result.result);
+  });
+
+taskCmd
+  .command('list')
+  .description('List runnable tasks sorted by continuation affinity')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await taskListCommand({
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'List failed');
+      process.exit(result.exitCode);
+    }
+    console.log(result.result);
+  });
+
+// Chapter governance commands
+const chapterCmd = program
+  .command('chapter')
+  .description('Chapter governance operators');
+
+chapterCmd
+  .command('close <chapter-name>')
+  .description('Close a chapter: verify tasks, generate closure artifact')
+  .option('--dry-run', 'Preview closure without mutating state', false)
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (chapterName: string, opts: Record<string, unknown>) => {
+    const result = await chapterCloseCommand({
+      chapterName,
+      dryRun: opts.dryRun as boolean | undefined,
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Chapter close failed');
+      process.exit(result.exitCode);
+    }
+    console.log(result.result);
+  });
+
+// Verification commands
+const verifyCmd = program
+  .command('verify')
+  .description('Verification state, suggestion, and run operators');
+
+verifyCmd
+  .command('status')
+  .description('Summarize recent verification runs and outliers')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await verifyStatusCommand(
+      { cwd: opts.cwd as string | undefined, format: process.env.OUTPUT_FORMAT },
+      { configPath: './config.json', verbose: false, logger: { info: () => {}, error: () => {}, debug: () => {}, result: () => {} } as any },
+    );
+    console.log(JSON.stringify(result.result, null, 2));
+  });
+
+verifyCmd
+  .command('suggest')
+  .description('Suggest the smallest verification command for changed files')
+  .requiredOption('--files <paths>', 'Comma-separated changed source files')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const files = (opts.files as string | undefined)?.split(',').map((f) => f.trim()).filter(Boolean) ?? [];
+    const result = await verifySuggestCommand(
+      {
+        files,
+        cwd: opts.cwd as string | undefined,
+        format: process.env.OUTPUT_FORMAT,
+      },
+      { configPath: './config.json', verbose: false, logger: { info: () => {}, error: () => {}, debug: () => {}, result: () => {} } as any },
+    );
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Suggestion failed');
+      process.exit(result.exitCode);
+    }
+    console.log(JSON.stringify(result.result, null, 2));
+  });
+
+verifyCmd
+  .command('explain')
+  .description('Explain verification relevant to a task')
+  .requiredOption('--task <number>', 'Task number')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await verifyExplainCommand(
+      {
+        taskNumber: opts.task as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: process.env.OUTPUT_FORMAT,
+      },
+      { configPath: './config.json', verbose: false, logger: { info: () => {}, error: () => {}, debug: () => {}, result: () => {} } as any },
+    );
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Explain failed');
+      process.exit(result.exitCode);
+    }
+    console.log(JSON.stringify(result.result, null, 2));
+  });
+
+verifyCmd
+  .command('run')
+  .description('Run a verification command through guarded scripts')
+  .requiredOption('--cmd <command>', 'Verification command to run')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .option('--allow-multi-file', 'Allow multi-file focused tests', false)
+  .option('--allow-package', 'Allow package-level test commands', false)
+  .option('--allow-full-suite', 'Allow full-suite commands', false)
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await verifyRunCommand(
+      {
+        cmd: opts.cmd as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        allowMultiFile: opts.allowMultiFile as boolean | undefined,
+        allowPackage: opts.allowPackage as boolean | undefined,
+        allowFullSuite: opts.allowFullSuite as boolean | undefined,
+        format: process.env.OUTPUT_FORMAT,
+      },
+      { configPath: './config.json', verbose: false, logger: { info: () => {}, debug: () => {}, result: () => {} } as any },
+    );
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Run failed');
+      process.exit(result.exitCode);
+    }
+    console.log(JSON.stringify(result.result, null, 2));
   });
 
 // Backup commands

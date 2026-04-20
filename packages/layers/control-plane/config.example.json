@@ -5,6 +5,7 @@
       "scope_id": "user@example.com",
       "root_dir": "./data/mail",
       "sources": [{ "type": "graph" }],
+      "context_strategy": "mail",
       "graph": {
         "tenant_id": "contoso.onmicrosoft.com",
         "client_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
@@ -45,5 +46,106 @@
         "require_human_approval": false
       }
     }
+    // Non-mail scope examples (uncomment to use):
+    // ,
+    // {
+    //   "scope_id": "timer-reminders",
+    //   "root_dir": "./data/timer",
+    //   "sources": [{ "type": "timer" }],
+    //   "context_strategy": "timer",
+    //   "scope": {
+    //     "included_container_refs": [],
+    //     "included_item_kinds": ["tick"]
+    //   },
+    //   "normalize": {
+    //     "attachment_policy": "none",
+    //     "body_policy": "text_only",
+    //     "include_headers": false,
+    //     "tombstones_enabled": false
+    //   },
+    //   "runtime": {
+    //     "polling_interval_ms": 60000,
+    //     "acquire_lock_timeout_ms": 30000,
+    //     "cleanup_tmp_on_startup": true,
+    //     "rebuild_views_after_sync": false,
+    //     "rebuild_search_after_sync": false
+    //   },
+    //   "charter": {
+    //     "runtime": "mock"
+    //   },
+    //   "policy": {
+    //     "primary_charter": "timer_steward",
+    //     "secondary_charters": [],
+    //     "allowed_actions": ["no_action"],
+    //     "allowed_tools": [],
+    //     "require_human_approval": false
+    //   }
+    // },
+    // {
+    //   "scope_id": "webhook-ingest",
+    //   "root_dir": "./data/webhook",
+    //   "sources": [{ "type": "webhook" }],
+    //   "context_strategy": "webhook",
+    //   "scope": {
+    //     "included_container_refs": [],
+    //     "included_item_kinds": ["event"]
+    //   },
+    //   "normalize": {
+    //     "attachment_policy": "none",
+    //     "body_policy": "text_only",
+    //     "include_headers": false,
+    //     "tombstones_enabled": false
+    //   },
+    //   "runtime": {
+    //     "polling_interval_ms": 60000,
+    //     "acquire_lock_timeout_ms": 30000,
+    //     "cleanup_tmp_on_startup": true,
+    //     "rebuild_views_after_sync": false,
+    //     "rebuild_search_after_sync": false
+    //   },
+    //   "charter": {
+    //     "runtime": "mock"
+    //   },
+    //   "policy": {
+    //     "primary_charter": "webhook_steward",
+    //     "secondary_charters": [],
+    //     "allowed_actions": ["no_action"],
+    //     "allowed_tools": [],
+    //     "require_human_approval": false
+    //   }
+    // },
+    // {
+    //   "scope_id": "filesystem-watch",
+    //   "root_dir": "./data/filesystem",
+    //   "sources": [{ "type": "filesystem" }],
+    //   "context_strategy": "filesystem",
+    //   "scope": {
+    //     "included_container_refs": [],
+    //     "included_item_kinds": ["filesystem.change"]
+    //   },
+    //   "normalize": {
+    //     "attachment_policy": "none",
+    //     "body_policy": "text_only",
+    //     "include_headers": false,
+    //     "tombstones_enabled": false
+    //   },
+    //   "runtime": {
+    //     "polling_interval_ms": 60000,
+    //     "acquire_lock_timeout_ms": 30000,
+    //     "cleanup_tmp_on_startup": true,
+    //     "rebuild_views_after_sync": false,
+    //     "rebuild_search_after_sync": false
+    //   },
+    //   "charter": {
+    //     "runtime": "mock"
+    //   },
+    //   "policy": {
+    //     "primary_charter": "filesystem_steward",
+    //     "secondary_charters": [],
+    //     "allowed_actions": ["no_action"],
+    //     "allowed_tools": [],
+    //     "require_human_approval": false
+    //   }
+    // }
   ]
 }

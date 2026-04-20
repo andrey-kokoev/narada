@@ -12,7 +12,7 @@ import {
   DefaultGraphAdapter,
   ExchangeSource,
   TimerSource,
-  WebhookSource,
+
   DefaultSyncRunner,
   FileCursorStore,
   FileApplyLogStore,
@@ -70,6 +70,7 @@ import {
   type Fact,
   type CharterRunner,
   type GraphAdapter,
+  type Source,
   type WorkItem,
   type ExecutionAttempt,
   type LeaseAcquisitionResult,
@@ -430,143 +431,145 @@ async function createDispatchContext(
       fn: () => processExecutor.processNext(),
     });
 
-    // Mail outbound workers — registered through the common registry for unified dispatch
-    const draftClient = new DefaultGraphDraftClient({ httpClient: graphHttpClient });
+    // Mail outbound workers — only registered when graph source is present
+    if (graphHttpClient && userId) {
+      const draftClient = new DefaultGraphDraftClient({ httpClient: graphHttpClient });
 
-    const nonSendGraphClient: NonSendGraphClient = {
-      patchMessage: async (uid, messageId, body) => {
-        await graphHttpClient.patchJson(`/users/${encodeURIComponent(uid)}/messages/${encodeURIComponent(messageId)}`, body);
-      },
-      moveMessage: async (uid, messageId, destinationId) => {
-        await graphHttpClient.postJson(`/users/${encodeURIComponent(uid)}/messages/${encodeURIComponent(messageId)}/move`, { destinationId });
-      },
-    };
+      const nonSendGraphClient: NonSendGraphClient = {
+        patchMessage: async (uid, messageId, body) => {
+          await graphHttpClient.patchJson(`/users/${encodeURIComponent(uid)}/messages/${encodeURIComponent(messageId)}`, body);
+        },
+        moveMessage: async (uid, messageId, destinationId) => {
+          await graphHttpClient.postJson(`/users/${encodeURIComponent(uid)}/messages/${encodeURIComponent(messageId)}/move`, { destinationId });
+        },
+      };
 
-    const messageFinder: MessageFinder = {
-      findByOutboundId: async (_mailboxId, outboundId) => {
-        try {
-          const result = await graphHttpClient.getJson<{ value: Array<{ id: string; isRead?: boolean; parentFolderId?: string; categories?: string[] }> }>(
-            `/users/${encodeURIComponent(userId)}/messages?$filter=internetMessageHeaders/any(h:h/name%20eq%20'X-Outbound-Id'%20and%20h/value%20eq%20'${encodeURIComponent(outboundId)}')&$select=id,isRead,parentFolderId,categories`,
-          );
-          const msg = result.value?.[0];
-          if (!msg) return undefined;
-          return {
-            messageId: msg.id,
-            isRead: msg.isRead,
-            folderRefs: msg.parentFolderId ? [msg.parentFolderId] : undefined,
-            categoryRefs: msg.categories,
-          };
-        } catch {
-          return undefined;
-        }
-      },
-      findByMessageId: async (_mailboxId, messageId) => {
-        try {
-          const msg = await graphHttpClient.getJson<{ id: string; isRead?: boolean; parentFolderId?: string; categories?: string[] }>(
-            `/users/${encodeURIComponent(userId)}/messages/${encodeURIComponent(messageId)}?$select=id,isRead,parentFolderId,categories`,
-          );
-          return {
-            messageId: msg.id,
-            isRead: msg.isRead,
-            folderRefs: msg.parentFolderId ? [msg.parentFolderId] : undefined,
-            categoryRefs: msg.categories,
-          };
-        } catch {
-          return undefined;
-        }
-      },
-    };
+      const messageFinder: MessageFinder = {
+        findByOutboundId: async (_mailboxId, outboundId) => {
+          try {
+            const result = await graphHttpClient.getJson<{ value: Array<{ id: string; isRead?: boolean; parentFolderId?: string; categories?: string[] }> }>(
+              `/users/${encodeURIComponent(userId)}/messages?$filter=internetMessageHeaders/any(h:h/name%20eq%20'X-Outbound-Id'%20and%20h/value%20eq%20'${encodeURIComponent(outboundId)}')&$select=id,isRead,parentFolderId,categories`,
+            );
+            const msg = result.value?.[0];
+            if (!msg) return undefined;
+            return {
+              messageId: msg.id,
+              isRead: msg.isRead,
+              folderRefs: msg.parentFolderId ? [msg.parentFolderId] : undefined,
+              categoryRefs: msg.categories,
+            };
+          } catch {
+            return undefined;
+          }
+        },
+        findByMessageId: async (_mailboxId, messageId) => {
+          try {
+            const msg = await graphHttpClient.getJson<{ id: string; isRead?: boolean; parentFolderId?: string; categories?: string[] }>(
+              `/users/${encodeURIComponent(userId)}/messages/${encodeURIComponent(messageId)}?$select=id,isRead,parentFolderId,categories`,
+            );
+            return {
+              messageId: msg.id,
+              isRead: msg.isRead,
+              folderRefs: msg.parentFolderId ? [msg.parentFolderId] : undefined,
+              categoryRefs: msg.categories,
+            };
+          } catch {
+            return undefined;
+          }
+        },
+      };
 
-    const participantResolver: ParticipantResolver = {
-      getParticipants: async (_mailboxId, threadId) => {
-        try {
-          const result = await graphHttpClient.getJson<{ value: Array<{ toRecipients?: Array<{ emailAddress?: { address?: string } }>; ccRecipients?: Array<{ emailAddress?: { address?: string } }>; bccRecipients?: Array<{ emailAddress?: { address?: string } }>; from?: { emailAddress?: { address?: string } } }> }>(
-            `/users/${encodeURIComponent(userId)}/messages?$filter=conversationId%20eq%20'${encodeURIComponent(threadId)}'&$select=toRecipients,ccRecipients,bccRecipients,from`,
-          );
-          const participants = new Set<string>();
-          for (const msg of result.value ?? []) {
-            for (const r of msg.toRecipients ?? []) {
-              if (r.emailAddress?.address) participants.add(r.emailAddress.address.toLowerCase());
+      const participantResolver: ParticipantResolver = {
+        getParticipants: async (_mailboxId, threadId) => {
+          try {
+            const result = await graphHttpClient.getJson<{ value: Array<{ toRecipients?: Array<{ emailAddress?: { address?: string } }>; ccRecipients?: Array<{ emailAddress?: { address?: string } }>; bccRecipients?: Array<{ emailAddress?: { address?: string } }>; from?: { emailAddress?: { address?: string } } }> }>(
+              `/users/${encodeURIComponent(userId)}/messages?$filter=conversationId%20eq%20'${encodeURIComponent(threadId)}'&$select=toRecipients,ccRecipients,bccRecipients,from`,
+            );
+            const participants = new Set<string>();
+            for (const msg of result.value ?? []) {
+              for (const r of msg.toRecipients ?? []) {
+                if (r.emailAddress?.address) participants.add(r.emailAddress.address.toLowerCase());
+              }
+              for (const r of msg.ccRecipients ?? []) {
+                if (r.emailAddress?.address) participants.add(r.emailAddress.address.toLowerCase());
+              }
+              for (const r of msg.bccRecipients ?? []) {
+                if (r.emailAddress?.address) participants.add(r.emailAddress.address.toLowerCase());
+              }
+              if (msg.from?.emailAddress?.address) {
+                participants.add(msg.from.emailAddress.address.toLowerCase());
+              }
             }
-            for (const r of msg.ccRecipients ?? []) {
-              if (r.emailAddress?.address) participants.add(r.emailAddress.address.toLowerCase());
-            }
-            for (const r of msg.bccRecipients ?? []) {
-              if (r.emailAddress?.address) participants.add(r.emailAddress.address.toLowerCase());
-            }
-            if (msg.from?.emailAddress?.address) {
-              participants.add(msg.from.emailAddress.address.toLowerCase());
+            return participants;
+          } catch {
+            return new Set<string>();
+          }
+        },
+      };
+
+      const sendReplyWorker = new SendReplyWorker({
+        store: outboundStore,
+        draftClient,
+        participantResolver,
+        resolveUserId: () => userId,
+      });
+
+      const nonSendWorker = new NonSendWorker({
+        store: outboundStore,
+        graphClient: nonSendGraphClient,
+        resolveUserId: () => userId,
+      });
+
+      const reconciler = new OutboundReconciler({
+        store: outboundStore,
+        messageFinder,
+      });
+
+      workerRegistry.register({
+        identity: {
+          worker_id: SEND_REPLY,
+          executor_family: 'outbound',
+          concurrency_policy: 'singleton',
+          description: 'Creates drafts and sends reply messages via Graph API',
+        },
+        fn: async () => {
+          const result = await sendReplyWorker.processNext(scope.scope_id);
+          return { processed: result.processed, execution_id: result.outboundId };
+        },
+      });
+
+      workerRegistry.register({
+        identity: {
+          worker_id: NON_SEND_ACTIONS,
+          executor_family: 'outbound',
+          concurrency_policy: 'singleton',
+          description: 'Executes mark_read, move_message, and set_categories actions',
+        },
+        fn: async () => {
+          const actionTypes = ['mark_read', 'move_message', 'set_categories'] as const;
+          for (const actionType of actionTypes) {
+            const result = await nonSendWorker.processNext(actionType, scope.scope_id);
+            if (result.processed) {
+              return { processed: true, execution_id: result.outboundId };
             }
           }
-          return participants;
-        } catch {
-          return new Set<string>();
-        }
-      },
-    };
+          return { processed: false };
+        },
+      });
 
-    const sendReplyWorker = new SendReplyWorker({
-      store: outboundStore,
-      draftClient,
-      participantResolver,
-      resolveUserId: () => userId,
-    });
-
-    const nonSendWorker = new NonSendWorker({
-      store: outboundStore,
-      graphClient: nonSendGraphClient,
-      resolveUserId: () => userId,
-    });
-
-    const reconciler = new OutboundReconciler({
-      store: outboundStore,
-      messageFinder,
-    });
-
-    workerRegistry.register({
-      identity: {
-        worker_id: SEND_REPLY,
-        executor_family: 'outbound',
-        concurrency_policy: 'singleton',
-        description: 'Creates drafts and sends reply messages via Graph API',
-      },
-      fn: async () => {
-        const result = await sendReplyWorker.processNext(scope.scope_id);
-        return { processed: result.processed, execution_id: result.outboundId };
-      },
-    });
-
-    workerRegistry.register({
-      identity: {
-        worker_id: NON_SEND_ACTIONS,
-        executor_family: 'outbound',
-        concurrency_policy: 'singleton',
-        description: 'Executes mark_read, move_message, and set_categories actions',
-      },
-      fn: async () => {
-        const actionTypes = ['mark_read', 'move_message', 'set_categories'] as const;
-        for (const actionType of actionTypes) {
-          const result = await nonSendWorker.processNext(actionType, scope.scope_id);
-          if (result.processed) {
-            return { processed: true, execution_id: result.outboundId };
-          }
-        }
-        return { processed: false };
-      },
-    });
-
-    workerRegistry.register({
-      identity: {
-        worker_id: OUTBOUND_RECONCILER,
-        executor_family: 'outbound',
-        concurrency_policy: 'singleton',
-        description: 'Reconciles submitted outbound commands with remote mailbox state',
-      },
-      fn: async () => {
-        const result = await reconciler.processNext(scope.scope_id);
-        return { processed: result.processed, execution_id: result.outboundId };
-      },
-    });
+      workerRegistry.register({
+        identity: {
+          worker_id: OUTBOUND_RECONCILER,
+          executor_family: 'outbound',
+          concurrency_policy: 'singleton',
+          description: 'Reconciles submitted outbound commands with remote mailbox state',
+        },
+        fn: async () => {
+          const result = await reconciler.processNext(scope.scope_id);
+          return { processed: result.processed, execution_id: result.outboundId };
+        },
+      });
+    }
 
     dispatchDeps = { db, coordinatorStore, outboundStore, intentStore, traceStore, foreman, scheduler, charterRunner, materializerRegistry, toolCatalog, toolDefinitions, processExecutionStore, workerRegistry, processExecutor, factStore };
     return dispatchDeps;
@@ -1027,33 +1030,36 @@ export async function createScopeService(
 ) {
   const rootDir = scope.root_dir;
   const graphSource = scope.graph ?? (scope.sources.find(s => s.type === 'graph') as ScopeConfig['graph'] | undefined);
-  if (!graphSource) {
-    throw new Error(`No graph source found for scope ${scope.scope_id}`);
-  }
+  const hasGraph = !!graphSource;
 
-  const tokenProvider = buildGraphTokenProvider({ graph: graphSource });
-  const client = new GraphHttpClient({
-    tokenProvider,
-    preferImmutableIds: graphSource.prefer_immutable_ids ?? true,
-  });
+  // Build graph infrastructure only when a graph source is present
+  let client: GraphHttpClient | undefined;
+  let adapter: GraphAdapter | undefined;
+  if (hasGraph) {
+    const tokenProvider = buildGraphTokenProvider({ graph: graphSource });
+    client = new GraphHttpClient({
+      tokenProvider,
+      preferImmutableIds: graphSource.prefer_immutable_ids ?? true,
+    });
 
-  const adapter = opts.adapter ?? new DefaultGraphAdapter({
-    mailbox_id: scope.scope_id,
-    user_id: graphSource.user_id!,
-    client,
-    adapter_scope: {
+    adapter = opts.adapter ?? new DefaultGraphAdapter({
       mailbox_id: scope.scope_id,
-      included_container_refs: scope.scope.included_container_refs,
-      included_item_kinds: scope.scope.included_item_kinds,
-      attachment_policy: scope.normalize.attachment_policy,
+      user_id: graphSource.user_id!,
+      client,
+      adapter_scope: {
+        mailbox_id: scope.scope_id,
+        included_container_refs: scope.scope.included_container_refs,
+        included_item_kinds: scope.scope.included_item_kinds,
+        attachment_policy: scope.normalize.attachment_policy,
+        body_policy: scope.normalize.body_policy,
+      },
       body_policy: scope.normalize.body_policy,
-    },
-    body_policy: scope.normalize.body_policy,
-    attachment_policy: scope.normalize.attachment_policy,
-    include_headers: scope.normalize.include_headers,
-    normalize_folder_ref: normalizeFolderRef,
-    normalize_flagged: normalizeFlagged,
-  });
+      attachment_policy: scope.normalize.attachment_policy,
+      include_headers: scope.normalize.include_headers,
+      normalize_folder_ref: normalizeFolderRef,
+      normalize_flagged: normalizeFlagged,
+    });
+  }
 
   const cursorStore = new FileCursorStore({ rootDir, scopeId: scope.scope_id });
   const applyLogStore = new FileApplyLogStore({ rootDir });
@@ -1089,7 +1095,23 @@ export async function createScopeService(
 
   const rebuildProjections = async () => { await projectionRegistry.rebuildAll(); };
 
-  const source = new ExchangeSource({ adapter, sourceId: scope.scope_id });
+  // Create source based on scope configuration
+  const primarySource = scope.sources[0];
+  let source: Source;
+
+  if (adapter) {
+    source = new ExchangeSource({ adapter, sourceId: scope.scope_id });
+  } else if (primarySource?.type === 'timer') {
+    source = new TimerSource({ sourceId: scope.scope_id, scheduleId: scope.scope_id, intervalMs: scope.runtime.polling_interval_ms });
+  } else {
+    // No-op source for scopes without a recognized ingress source
+    source = {
+      sourceId: scope.scope_id,
+      async pull() {
+        return { records: [], priorCheckpoint: null, hasMore: false, fetchedAt: new Date().toISOString() };
+      },
+    };
+  }
 
   const runner = new DefaultSyncRunner({
     rootDir,
@@ -1121,13 +1143,13 @@ export async function createScopeService(
     rebuildProjectionsAfterSync: scope.runtime.rebuild_search_after_sync || scope.runtime.rebuild_views_after_sync,
   });
 
-  const dispatchContext = await createMailboxDispatchContext(
+  const dispatchContext = await createDispatchContext(
     scope,
     globalConfig,
     opts,
     logger,
     client,
-    graphSource.user_id!,
+    graphSource?.user_id,
     {
       rebuildViews: () => viewStore.rebuildAll(),
       rebuildProjections,
@@ -1195,7 +1217,7 @@ export async function createSyncService(
     lastSyncAt: null,
     errors: 0,
     consecutiveErrors: 0,
-    perMailbox: Object.fromEntries(
+    perScope: Object.fromEntries(
       scopes.map((s) => [
         s.scope_id,
         {
@@ -1228,7 +1250,7 @@ export async function createSyncService(
   const healthMaxDrainMs = opts.maxDrainMs ?? globalConfig.health?.max_drain_ms ?? 30_000;
 
   function getScopeLastSyncAt(scopeId: string): Date | null {
-    const mb = stats.perMailbox?.[scopeId];
+    const mb = stats.perScope?.[scopeId];
     return mb?.lastSyncAt ?? stats.lastSyncAt ?? null;
   }
 
@@ -1366,7 +1388,7 @@ export async function createSyncService(
           const result = await runner.syncOnce();
 
           if (result.status === 'success') {
-            const mb = stats.perMailbox?.[scope.scope_id];
+            const mb = stats.perScope?.[scope.scope_id];
             if (mb) {
               mb.cyclesCompleted++;
               mb.eventsApplied += result.applied_count;
@@ -1394,20 +1416,20 @@ export async function createSyncService(
               anyRetryable = true;
             }
           } else if (result.status === 'retryable_failure') {
-            const mb = stats.perMailbox?.[scope.scope_id];
+            const mb = stats.perScope?.[scope.scope_id];
             if (mb) mb.errors++;
             stats.errors++;
             anyRetryable = true;
             logger.warn('Sync failed (retryable)', { scope: scope.scope_id, error: result.error });
           } else {
-            const mb = stats.perMailbox?.[scope.scope_id];
+            const mb = stats.perScope?.[scope.scope_id];
             if (mb) mb.errors++;
             stats.errors++;
             anyFatal = true;
             logger.error('Sync failed (fatal)', new Error(result.error || 'Unknown error'), { scope: scope.scope_id });
           }
         } catch (error) {
-          const mb = stats.perMailbox?.[scope.scope_id];
+          const mb = stats.perScope?.[scope.scope_id];
           if (mb) mb.errors++;
           stats.errors++;
           anyFatal = true;

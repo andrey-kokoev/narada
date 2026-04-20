@@ -159,9 +159,7 @@ async function main(): Promise<void> {
     throw new Error(`Invalid --max-drain-ms: ${maxDrainMs}`);
   }
 
-  if (verbose) {
-    console.log(`Using config: ${configPath}`);
-  }
+  console.log(`Using config: ${configPath}`);
 
   const service = await createSyncService({
     configPath,

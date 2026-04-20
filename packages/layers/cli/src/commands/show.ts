@@ -100,7 +100,7 @@ export async function showCommand(
   if (!scope) {
     return {
       exitCode: ExitCode.INVALID_CONFIG,
-      result: { status: 'error', error: 'No scopes configured' },
+      result: { status: 'error', error: 'No operations configured' },
     };
   }
 

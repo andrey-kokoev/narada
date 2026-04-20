@@ -797,16 +797,18 @@
       const [
         { recent: intentRecent, failed_recent: intentFailed, total_count: intentTotal },
         { executions: processExecs },
-        { executions: mailExecs },
+        mailResult,
       ] = await Promise.all([
         api(`/scopes/${encodeURIComponent(currentScope)}/intent-executions`),
         api(`/scopes/${encodeURIComponent(currentScope)}/process-executions`),
-        api(`/scopes/${encodeURIComponent(currentScope)}/mail-executions`),
+        api(`/scopes/${encodeURIComponent(currentScope)}/mail-executions`).catch(() => null),
       ]);
 
       const intentRows = filterRows(intentRecent.concat(intentFailed), ["intent_id", "intent_type", "executor_family", "status"]);
       const procRows = filterRows(processExecs, ["execution_id", "command", "status"]);
+      const mailExecs = mailResult ? mailResult.executions : [];
       const mailRows = filterRows(mailExecs, ["outbound_id", "action_type", "status"]);
+      const hasMail = mailResult !== null;
 
       const intentTable = intentRows.length ? `
         <table>
@@ -864,11 +866,20 @@
         </table>
       ` : '<div class="empty">None</div>';
 
+      const mailCard = hasMail ? `
+        <div class="metric"><div class="value">${esc(mailRows.length)}</div><div class="label">Mail handoffs</div></div>
+        <div class="card">
+          <h3>Mail executions (${esc(mailRows.length)})</h3>
+          <p style="color:var(--text-secondary);font-size:12px;margin-top:0;">Mail family executions (outbound commands) with status transitions.</p>
+          ${mailTable}
+        </div>
+      ` : '';
+
       $("content").innerHTML = `
         <div class="metrics">
           <div class="metric"><div class="value">${esc(intentTotal)}</div><div class="label">Intent executions</div></div>
           <div class="metric"><div class="value">${esc(procRows.length)}</div><div class="label">Process runs</div></div>
-          <div class="metric"><div class="value">${esc(mailRows.length)}</div><div class="label">Mail handoffs</div></div>
+          ${hasMail ? `<div class="metric"><div class="value">${esc(mailRows.length)}</div><div class="label">Mail handoffs</div></div>` : ''}
         </div>
         <div class="card">
           <h3>Intent executions (${esc(intentRows.length)})</h3>
@@ -880,11 +891,7 @@
           <p style="color:var(--text-secondary);font-size:12px;margin-top:0;">Process family executions with phase and confirmation state.</p>
           ${procTable}
         </div>
-        <div class="card">
-          <h3>Mail executions (${esc(mailRows.length)})</h3>
-          <p style="color:var(--text-secondary);font-size:12px;margin-top:0;">Mail family executions (outbound commands) with status transitions.</p>
-          ${mailTable}
-        </div>
+        ${mailCard}
       `;
       bindDetailLinks();
     }

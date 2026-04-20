@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "schema": "https://narada.dev/schemas/agent-roster/v1",
+  "updated_at": "2026-04-20T00:00:00Z",
+  "agents": [
+    {
+      "agent_id": "kimicli",
+      "role": "implementer",
+      "capabilities": ["derive", "propose", "claim", "execute", "resolve", "confirm"],
+      "first_seen_at": "2026-04-20T00:00:00Z",
+      "last_active_at": "2026-04-20T00:00:00Z"
+    },
+    {
+      "agent_id": "human-operator",
+      "role": "admin",
+      "capabilities": ["derive", "propose", "claim", "execute", "resolve", "confirm", "admin"],
+      "first_seen_at": "2026-04-20T00:00:00Z",
+      "last_active_at": "2026-04-20T00:00:00Z"
+    }
+  ]
+}
