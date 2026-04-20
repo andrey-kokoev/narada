@@ -8,6 +8,7 @@ import type { CharterInvocationEnvelope, CharterOutputEnvelope } from "../forema
 
 export interface CharterRunner {
   run(envelope: CharterInvocationEnvelope): Promise<CharterOutputEnvelope>;
+  probeHealth(): Promise<import("@narada2/charters").CharterRuntimeHealth>;
 }
 
 export interface MockCharterRunnerOptions {
@@ -21,6 +22,15 @@ export interface MockCharterRunnerOptions {
 
 export class MockCharterRunner implements CharterRunner {
   constructor(private readonly opts: MockCharterRunnerOptions = {}) {}
+
+  async probeHealth(): Promise<import("@narada2/charters").CharterRuntimeHealth> {
+    return {
+      class: "unconfigured",
+      checked_at: new Date().toISOString(),
+      details:
+        "Mock runtime is active. No real executor is attached. Configure `charter.runtime` to 'codex-api' or 'kimi-api' with a valid API key to enable real charter execution.",
+    };
+  }
 
   async run(envelope: CharterInvocationEnvelope): Promise<CharterOutputEnvelope> {
     this.opts.onRun?.(envelope);

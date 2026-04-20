@@ -48,6 +48,9 @@ export interface ShapedMailbox {
   /** Summary of the resulting configuration. */
   summary: string;
 
+  /** Suggested next steps in the bootstrap contract. */
+  nextSteps: string[];
+
   /** Whether the target already existed. */
   existed: boolean;
 }

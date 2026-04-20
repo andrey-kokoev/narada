@@ -322,6 +322,16 @@ Look for:
 
 ---
 
+## Operator Daily Loop
+
+The minimal operator rhythm is documented in [`docs/operator-loop.md`](operator-loop.md). The core command:
+
+```bash
+narada ops
+```
+
+This composes health, recent activity, attention queue, and drafts pending review into one view. For the full five-step loop (healthy → happened → attention → drafts → next), see the operator loop document.
+
 ## Smoke Test (Fixture-Based)
 
 Run the fixture-based smoke test to verify the pipeline without live credentials:
@@ -335,6 +345,8 @@ This test:
 2. Runs the full pipeline: facts → context → work item → charter → foreman → send-reply worker
 3. Verifies the final `draft_reply` state is `confirmed` (draft created, not sent)
 4. Verifies a second path with `require_human_approval: true` stops at `pending_approval`
+
+For the canonical product proof definition, fixture/live separation, and inspection checkpoints, see [`docs/first-operation-proof.md`](first-operation-proof.md).
 
 ---
 

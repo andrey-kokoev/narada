@@ -84,6 +84,7 @@ import type { ToolDefinition, ToolInvocationRequest } from '@narada2/charters';
 import { createLogger } from './lib/logger.js';
 import { PidFile } from './lib/pid-file.js';
 import { HealthFile, type HealthStatus } from './lib/health.js';
+import { getRecoveryGuidance, healthClassPermitsExecution } from '@narada2/charters';
 import { createObservationServer, type ObservationApiScope } from './observation/observation-server.js';
 import { registerScopeApis } from './observation/scope-registry.js';
 import type { WakeReason } from './observation/types.js';
@@ -274,6 +275,7 @@ function createDefaultCharterRunner(
         model: cfg.charter?.model,
         baseUrl: cfg.charter?.base_url,
         timeoutMs: cfg.charter?.timeout_ms,
+        degradedMode: cfg.charter?.degraded_mode,
       },
       {
         persistTrace: (trace) => {
@@ -393,7 +395,13 @@ async function createDispatchContext(
     const factStore = new SqliteFactStore({ db: factDb });
     factStore.initSchema();
 
-    const getRuntimePolicy = (_scopeId: string) => scope.policy;
+    const getRuntimePolicy = (_scopeId: string) => {
+      const policy = scope.policy;
+      if (scope.charter?.degraded_mode === "draft_only") {
+        return { ...policy, require_human_approval: true };
+      }
+      return policy;
+    };
 
     const foreman = new DefaultForemanFacade({
       coordinatorStore,
@@ -705,7 +713,45 @@ async function createDispatchContext(
       deps.foreman.failWorkItem(workItemId, "Lease abandoned due to stale recovery", true, "immediate");
     }
 
-    while (!deps.scheduler.isQuiescent(scope.scope_id)) {
+    // Probe charter runtime health for observability and execution gating (Task 284).
+    // In production (no explicit charterRunner override), broken/unconfigured runtimes
+    // skip execution so work items remain opened until health recovers. Tests that
+    // explicitly provide a charterRunner bypass this gate.
+    let charterHealth: import('@narada2/charters').CharterRuntimeHealth | undefined;
+    try {
+      charterHealth = await deps.charterRunner.probeHealth();
+    } catch (probeError) {
+      const msg = probeError instanceof Error ? probeError.message : String(probeError);
+      logger.warn('Charter runtime health probe failed', { scope: scope.scope_id, error: msg });
+      charterHealth = {
+        class: 'broken',
+        checked_at: new Date().toISOString(),
+        details: `Health probe threw: ${msg}`,
+      };
+    }
+
+    const isProductionRunner = !opts.charterRunner;
+    const executionBlocked = isProductionRunner && charterHealth && !healthClassPermitsExecution(charterHealth.class);
+
+    if (executionBlocked) {
+      const guidance = getRecoveryGuidance(charterHealth.class);
+      logger.warn('Charter runtime degraded — skipping execution', {
+        scope: scope.scope_id,
+        health_class: charterHealth.class,
+        details: charterHealth.details,
+        operator_action: guidance.operator_action,
+      });
+    } else if (charterHealth && charterHealth.class !== 'healthy') {
+      const guidance = getRecoveryGuidance(charterHealth.class);
+      logger.info('Charter runtime degraded — continuing with restrictions', {
+        scope: scope.scope_id,
+        health_class: charterHealth.class,
+        details: charterHealth.details,
+        safe_behavior: guidance.safe_behavior,
+      });
+    }
+
+    while (!executionBlocked && !deps.scheduler.isQuiescent(scope.scope_id)) {
       if (shutdownSignal?.shuttingDown) {
         logger.info('Dispatch phase interrupted by shutdown', { scope: scope.scope_id });
         break;
@@ -916,6 +962,19 @@ async function createDispatchContext(
     const threshold = syncFreshThresholdMs ?? 24 * 60 * 60 * 1000;
     const syncFresh = lastSync ? Date.now() - lastSync.getTime() < threshold : false;
 
+    let charterRuntimeHealth: import('@narada2/charters').CharterRuntimeHealth | undefined;
+    try {
+      charterRuntimeHealth = await deps.charterRunner.probeHealth();
+    } catch (probeError) {
+      const msg = probeError instanceof Error ? probeError.message : String(probeError);
+      logger.warn('Charter runtime health probe failed during dispatch health check', { scope: scope.scope_id, error: msg });
+      charterRuntimeHealth = {
+        class: 'broken',
+        checked_at: new Date().toISOString(),
+        details: `Health probe threw: ${msg}`,
+      };
+    }
+
     return {
       openWorkItems: summary.active_work_items,
       leasedWorkItems: summary.leased_work_items,
@@ -933,7 +992,10 @@ async function createDispatchContext(
         outboundHealthy: summary.readiness.outbound_healthy,
         workersRegistered,
         syncFresh,
+        charterRuntimeHealthy: healthClassPermitsExecution(charterRuntimeHealth.class),
+        charterRuntimeHealthClass: charterRuntimeHealth.class,
       },
+      charterRuntimeHealth,
     };
   }
 
@@ -1350,6 +1412,23 @@ export async function createSyncService(
       : true;
     const isErrorState = stats.consecutiveErrors >= maxConsecutiveErrors;
 
+    // Aggregate charter runtime health: pick the most severe class across scopes.
+    const severityRank: Record<string, number> = {
+      broken: 0,
+      unconfigured: 1,
+      partially_degraded: 2,
+      degraded_draft_only: 3,
+      healthy: 4,
+    };
+    const allCharterHealth = scopes
+      .map((s) => s.charterRuntimeHealth)
+      .filter((h): h is NonNullable<typeof h> => h !== undefined);
+    const worstCharterHealth = allCharterHealth.length > 0
+      ? allCharterHealth.reduce((worst, current) =>
+          (severityRank[current.class] ?? 5) < (severityRank[worst.class] ?? 5) ? current : worst
+        )
+      : undefined;
+
     const health: Omit<HealthStatus, 'timestamp'> = {
       status: running ? (isErrorState ? 'error' : 'healthy') : 'stopped',
       lastSyncAt: stats.lastSyncAt?.toISOString(),
@@ -1368,6 +1447,7 @@ export async function createSyncService(
         maxConsecutiveErrors,
       },
       scopes,
+      charterRuntimeHealth: worstCharterHealth,
     };
 
     await healthFile.update(health).catch((err) => {

@@ -16,6 +16,7 @@ import type {
 import { validateInvocationEnvelope, validateOutputEnvelope } from "./envelope.js";
 import { validateCharterOutput } from "./validation.js";
 import { resolveSystemPrompt } from "./prompts.js";
+import type { CharterRuntimeHealth } from "./health.js";
 
 export interface CodexCharterRunnerOptions {
   /** OpenAI API key (or compatible service) */
@@ -26,6 +27,8 @@ export interface CodexCharterRunnerOptions {
   baseUrl?: string;
   /** Request timeout in ms (default: 30000) */
   timeoutMs?: number;
+  /** When 'draft_only', probeHealth returns degraded_draft_only */
+  degradedMode?: "draft_only" | "normal";
 }
 
 export interface TraceRecord {
@@ -54,6 +57,7 @@ export interface RuntimeHooks {
 
 export interface CharterRunner {
   run(envelope: CharterInvocationEnvelope): Promise<CharterOutputEnvelope>;
+  probeHealth(): Promise<CharterRuntimeHealth>;
 }
 
 export class CodexCharterRunner implements CharterRunner {
@@ -61,6 +65,84 @@ export class CodexCharterRunner implements CharterRunner {
     private readonly opts: CodexCharterRunnerOptions,
     private readonly hooks?: RuntimeHooks,
   ) {}
+
+  async probeHealth(): Promise<CharterRuntimeHealth> {
+    if (this.opts.degradedMode === "draft_only") {
+      return {
+        class: "degraded_draft_only",
+        checked_at: new Date().toISOString(),
+        details: "Runtime is in degraded draft-only mode. All proposed actions require operator approval.",
+      };
+    }
+
+    const baseUrl = (this.opts.baseUrl ?? "https://api.openai.com/v1").replace(/\/$/, "");
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    try {
+      const response = await fetch(`${baseUrl}/models`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${this.opts.apiKey}`,
+        },
+        signal: controller.signal,
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        return {
+          class: "broken",
+          checked_at: new Date().toISOString(),
+          details: `Authentication failed (${response.status}). API key is invalid or expired.`,
+        };
+      }
+
+      if (response.status === 429) {
+        return {
+          class: "partially_degraded",
+          checked_at: new Date().toISOString(),
+          details: "Rate-limited by API provider. Execution will retry with normal backoff.",
+        };
+      }
+
+      if (response.status >= 500) {
+        return {
+          class: "partially_degraded",
+          checked_at: new Date().toISOString(),
+          details: `API server error (${response.status}). Provider may be experiencing issues.`,
+        };
+      }
+
+      if (!response.ok) {
+        return {
+          class: "broken",
+          checked_at: new Date().toISOString(),
+          details: `API health probe failed with status ${response.status}.`,
+        };
+      }
+
+      return {
+        class: "healthy",
+        checked_at: new Date().toISOString(),
+        details: `API reachable. Model: ${this.opts.model ?? "gpt-4o-mini"}.`,
+      };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (error instanceof Error && error.name === "AbortError") {
+        return {
+          class: "partially_degraded",
+          checked_at: new Date().toISOString(),
+          details: `API health probe timed out after 5s. ${msg}`,
+        };
+      }
+      return {
+        class: "broken",
+        checked_at: new Date().toISOString(),
+        details: `API health probe failed: ${msg}`,
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
 
   async run(envelope: CharterInvocationEnvelope): Promise<CharterOutputEnvelope> {
     validateInvocationEnvelope(envelope);

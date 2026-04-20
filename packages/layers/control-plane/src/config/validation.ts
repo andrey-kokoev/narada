@@ -15,6 +15,13 @@ import { loadCharterEnv } from "./env.js";
 export function validateCharterRuntimeConfig(cfg: ExchangeFsSyncConfig): void {
   const runtime = cfg.charter?.runtime ?? "mock";
 
+  const degradedMode = cfg.charter?.degraded_mode;
+  if (degradedMode !== undefined && degradedMode !== "draft_only" && degradedMode !== "normal") {
+    throw new Error(
+      `Invalid charter.degraded_mode: ${degradedMode}. Expected 'draft_only' or 'normal'.`,
+    );
+  }
+
   if (runtime === "codex-api" || runtime === "kimi-api") {
     const env = loadCharterEnv();
     const apiKey =

@@ -442,6 +442,8 @@ export function buildScopeDispatchSummary(
       outbound_healthy: failedOutbound.c === 0,
       workers_registered: true, // placeholder; daemon fills this in from registry
       db_active: dbActive,
+      charter_runtime_healthy: true, // placeholder; daemon fills this in from runtime probe
+      charter_runtime_health_class: null, // placeholder; daemon fills this in from runtime probe
     },
   };
 }

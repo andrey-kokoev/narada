@@ -48,6 +48,9 @@ Narada is a generalized, deterministic kernel for turning remote source deltas i
 | [09-troubleshooting.md](packages/layers/control-plane/docs/09-troubleshooting.md) | Common issues and solutions | Are debugging a problem |
 | [10-ui-read-model-audit.md](packages/layers/control-plane/docs/10-ui-read-model-audit.md) | UI read surfaces, gaps, and authority rules | Are building operator UI |
 | [runtime-usc-boundary.md](docs/runtime-usc-boundary.md) | Runtime / USC / operator ownership boundary | Need to understand which layer owns what |
+| [bootstrap-contract.md](docs/bootstrap-contract.md) | Canonical intent-to-operation bootstrap path | Setting up or onboarding a first-time user |
+| [first-operation-proof.md](docs/first-operation-proof.md) | Canonical mailbox operation product proof | Understanding what is proven and how to verify it |
+| [operator-loop.md](docs/operator-loop.md) | Minimal operator rhythm for live operations | Running day-to-day operations |
 
 ---
 
@@ -75,6 +78,9 @@ Narada is a generalized, deterministic kernel for turning remote source deltas i
 | Run confirmation replay | [`src/executors/confirmation-replay.ts`](packages/layers/control-plane/src/executors/confirmation-replay.ts) |
 | Rebuild projections | [`src/observability/rebuild.ts`](packages/layers/control-plane/src/observability/rebuild.ts) + [`narada rebuild-projections`](packages/layers/cli/src/commands/rebuild-projections.ts) |
 | Modify non-send worker | [`src/outbound/non-send-worker.ts`](packages/layers/control-plane/src/outbound/non-send-worker.ts) |
+| Bootstrap a new operation | [`docs/bootstrap-contract.md`](docs/bootstrap-contract.md) + [`packages/ops-kit/src/commands/init-repo.ts`](packages/ops-kit/src/commands/init-repo.ts) |
+| Run the canonical product proof | [`docs/first-operation-proof.md`](docs/first-operation-proof.md) + [`test/integration/live-operation/smoke-test.test.ts`](packages/layers/control-plane/test/integration/live-operation/smoke-test.test.ts) |
+| Run the operator daily loop | [`docs/operator-loop.md`](docs/operator-loop.md) + [`narada ops`](packages/layers/cli/src/commands/ops.ts) |
 | Add a new vertical source | [`src/sources/{vertical}-source.ts`](packages/layers/control-plane/src/sources/) |
 | Add a context strategy | [`src/foreman/context.ts`](packages/layers/control-plane/src/foreman/context.ts) |
 | Add a generic webhook HTTP server | [`packages/layers/daemon/src/generic-webhook-server.ts`](packages/layers/daemon/src/generic-webhook-server.ts) |

@@ -277,6 +277,9 @@ function loadScopeConfig(rawScope: unknown, pathPrefix: string): ScopeConfig {
     ...(charterRaw.timeout_ms !== undefined
       ? { timeout_ms: expectNumber(charterRaw.timeout_ms, `${pathPrefix}.charter.timeout_ms`) }
       : {}),
+    ...((charterRaw.degraded_mode === "draft_only" || charterRaw.degraded_mode === "normal")
+      ? { degraded_mode: charterRaw.degraded_mode as "draft_only" | "normal" }
+      : {}),
   };
 
   // Policy

@@ -51,6 +51,16 @@ export type {
 } from "./runner.js";
 export { CodexCharterRunner } from "./runner.js";
 
+export type {
+  CharterRuntimeHealthClass,
+  CharterRuntimeHealth,
+  RecoveryGuidance,
+} from "./health.js";
+export {
+  getRecoveryGuidance,
+  healthClassPermitsExecution,
+} from "./health.js";
+
 export type { SystemPromptTemplate } from "./prompts.js";
 export {
   registerPromptTemplate,

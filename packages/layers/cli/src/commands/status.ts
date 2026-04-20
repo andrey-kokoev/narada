@@ -44,6 +44,8 @@ interface DaemonHealthSnapshot {
     outboundHealthy: boolean;
     workersRegistered: boolean;
     syncFresh: boolean;
+    charterRuntimeHealthy?: boolean;
+    charterRuntimeHealthClass?: string;
   };
   isStale?: boolean;
   thresholds?: {
@@ -57,8 +59,15 @@ interface DaemonHealthSnapshot {
       outboundHealthy: boolean;
       workersRegistered: boolean;
       syncFresh: boolean;
+      charterRuntimeHealthy?: boolean;
+      charterRuntimeHealthClass?: string;
     };
   }>;
+  charterRuntimeHealth?: {
+    class: string;
+    checked_at: string;
+    details: string;
+  };
 }
 
 interface StatusReport {
@@ -94,6 +103,8 @@ interface StatusReport {
   readiness?: DaemonHealthSnapshot['readiness'];
   isStale?: boolean;
   thresholds?: DaemonHealthSnapshot['thresholds'];
+  /** Charter runtime health from .health.json (Task 284) */
+  charterRuntimeHealth?: DaemonHealthSnapshot['charterRuntimeHealth'];
 }
 
 export async function statusCommand(
@@ -306,6 +317,9 @@ async function buildStatusReport(scopeId: string, rootDir: string): Promise<Stat
       }
       if (healthData.thresholds) {
         report.thresholds = healthData.thresholds;
+      }
+      if (healthData.charterRuntimeHealth) {
+        report.charterRuntimeHealth = healthData.charterRuntimeHealth;
       }
     } catch {
       // No health file yet (daemon may not be running)

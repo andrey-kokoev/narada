@@ -70,6 +70,12 @@ export interface HealthStatus {
   thresholds?: HealthThresholds;
   /** Per-scope breakdown */
   scopes?: ScopeHealthSnapshot[];
+  /** Charter runtime health (Task 284) */
+  charterRuntimeHealth?: {
+    class: string;
+    checked_at: string;
+    details: string;
+  };
   timestamp: string;
 }
 

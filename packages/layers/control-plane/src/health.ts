@@ -94,6 +94,12 @@ export interface HealthFileData {
   isStale?: boolean;
   /** Configured thresholds (Task 234) */
   thresholds?: HealthThresholds;
+  /** Charter runtime health (Task 284) */
+  charterRuntimeHealth?: {
+    class: string;
+    checked_at: string;
+    details: string;
+  };
 }
 
 export interface HealthWriterOptions {

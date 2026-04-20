@@ -53,9 +53,31 @@ Create or update a concise walkthrough for the first-time user path.
 - Do not prove the full mailbox vertical here; that belongs in Task 285.
 - Do not add fleet/multi-operation orchestration.
 
+## Execution Notes
+
+Task executed in a single pass with planning mode approval.
+
+1. Created `docs/bootstrap-contract.md` — the canonical five-step contract with artifact expectations per step, validation gates (blocking vs non-blocking), path diagrams for demo and live paths, artifact inspection commands, and explicit separation from USC construction.
+2. Updated `QUICKSTART.md` — restructured as the concise walkthrough aligned with the contract. Each of the three entry paths (show me / try safely / go live) now maps to contract steps. Artifact lists and validation gates are explicit.
+3. Updated `init-repo.ts` — added `InitRepoArtifact` type with categories, `artifacts` array to `InitRepoResult`, and included `narada setup` in the demo path next steps.
+4. Updated `want-mailbox.ts` — added `nextSteps` to `ShapedMailbox` return type, populated with the live bootstrap sequence.
+5. Updated `main.ts` — `init-repo` handler prints categorized artifacts and references the bootstrap contract; `want-mailbox` handler prints next steps.
+6. Updated `AGENTS.md` — added bootstrap contract to Documentation Index and "Where to Find Things".
+
+## Verification Evidence
+
+- `pnpm verify` — 5/5 steps pass
+- `pnpm --filter @narada2/cli test` — 175/175 passes
+- `pnpm --filter @narada2/ops-kit build` — rebuilt to propagate type changes
+
+## Bounded Deferrals
+
+- The bootstrap contract is not copied into generated ops repos. Users in an ops repo should refer to the Narada source docs or the generated README.md. CLI output corrected to not claim the contract is local repo documentation.
+- Fleet/multi-operation orchestration remains deferred (listed in non-goals).
+
 ## Acceptance Criteria
 
-- [ ] One canonical intent-to-operation bootstrap path is documented.
-- [ ] Resulting operation artifacts are explicit and inspectable.
-- [ ] First-run validation is part of the bootstrap contract.
-- [ ] The path minimizes manual config interpretation.
+- [x] One canonical intent-to-operation bootstrap path is documented.
+- [x] Resulting operation artifacts are explicit and inspectable.
+- [x] First-run validation is part of the bootstrap contract.
+- [x] The path minimizes manual config interpretation.

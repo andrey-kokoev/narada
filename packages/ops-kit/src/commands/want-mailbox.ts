@@ -104,5 +104,13 @@ export function wantMailbox(
       `Primary charter: ${scope.policy.primary_charter}. ` +
       `Posture: ${posture} (${allowed.length} allowed actions). ` +
       `Folders: ${scope.scope.included_container_refs.join(", ")}.`,
+    nextSteps: [
+      "narada setup",
+      "cp .env.example .env  # then edit with your credentials",
+      `narada preflight ${scopeId}`,
+      `narada explain ${scopeId}`,
+      `narada activate ${scopeId}`,
+      "pnpm daemon",
+    ],
   };
 }

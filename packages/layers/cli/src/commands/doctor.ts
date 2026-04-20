@@ -3,7 +3,8 @@ import { readFile, stat } from 'node:fs/promises';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
-import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig } from '@narada2/control-plane';
+import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig, loadCharterEnv } from '@narada2/control-plane';
+import { CodexCharterRunner, MockCharterRunner, getRecoveryGuidance } from '@narada2/charters';
 
 export interface DoctorOptions {
   config?: string;
@@ -87,6 +88,7 @@ async function checkScope(
   scopeId: string,
   rootDir: string,
   staleThresholdMinutes: number,
+  scopeConfig?: { charter?: { runtime?: string; api_key?: string; model?: string; base_url?: string; timeout_ms?: number } },
 ): Promise<ScopeDoctorResult> {
   const checks: DoctorCheck[] = [];
 
@@ -154,7 +156,69 @@ async function checkScope(
     });
   }
 
-  // 4. Failed work items (coordinator DB)
+  // 4. Charter runtime health
+  if (scopeConfig?.charter) {
+    const runtime = scopeConfig.charter.runtime ?? 'mock';
+    try {
+      let runner;
+      if (runtime === 'codex-api' || runtime === 'kimi-api') {
+        const env = loadCharterEnv();
+        const apiKey = scopeConfig.charter.api_key ?? (runtime === 'kimi-api' ? env.kimi_api_key : env.openai_api_key);
+        if (!apiKey) {
+          checks.push({
+            name: 'charter-runtime',
+            status: 'fail',
+            detail: `Runtime '${runtime}' configured but no API key resolved`,
+            remediation: getRecoveryGuidance('unconfigured').operator_action,
+          });
+        } else {
+          runner = new CodexCharterRunner({ apiKey, model: scopeConfig.charter.model, baseUrl: scopeConfig.charter.base_url, timeoutMs: scopeConfig.charter.timeout_ms });
+          const health = await runner.probeHealth();
+          const guidance = getRecoveryGuidance(health.class);
+          const checkStatus = health.class === 'healthy' ? 'pass' : health.class === 'partially_degraded' || health.class === 'degraded_draft_only' ? 'warn' : 'fail';
+          checks.push({
+            name: 'charter-runtime',
+            status: checkStatus,
+            detail: `${health.class}: ${health.details}`,
+            remediation: health.class === 'healthy' ? undefined : guidance.operator_action,
+          });
+        }
+      } else if (runtime === 'mock') {
+        runner = new MockCharterRunner();
+        const health = await runner.probeHealth();
+        checks.push({
+          name: 'charter-runtime',
+          status: 'warn',
+          detail: health.details,
+          remediation: getRecoveryGuidance('unconfigured').operator_action,
+        });
+      } else {
+        checks.push({
+          name: 'charter-runtime',
+          status: 'fail',
+          detail: `Invalid charter runtime: ${runtime}`,
+          remediation: "Set `charter.runtime` to 'codex-api', 'kimi-api', or 'mock'.",
+        });
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      checks.push({
+        name: 'charter-runtime',
+        status: 'fail',
+        detail: `Failed to probe charter runtime: ${msg}`,
+        remediation: 'Check config and network connectivity.',
+      });
+    }
+  } else {
+    checks.push({
+      name: 'charter-runtime',
+      status: 'warn',
+      detail: 'No charter runtime configured',
+      remediation: getRecoveryGuidance('unconfigured').operator_action,
+    });
+  }
+
+  // 5. Failed work items (coordinator DB)
   const dbPath = join(rootDir, '.narada', 'coordinator.db');
   try {
     const dbStat = await stat(dbPath);
@@ -255,7 +319,7 @@ export async function doctorCommand(
   const scopes: ScopeDoctorResult[] = [];
 
   if (isMultiMailboxConfig(parsed)) {
-    const { config, valid } = await loadMultiMailboxConfig({ path: configPath });
+    const { config, valid, scopes: loadedScopes } = await loadMultiMailboxConfig({ path: configPath });
     if (!valid) {
       return {
         exitCode: ExitCode.INVALID_CONFIG,
@@ -263,7 +327,8 @@ export async function doctorCommand(
       };
     }
     for (const mailbox of config.mailboxes) {
-      scopes.push(await checkScope(mailbox.mailbox_id, resolve(mailbox.root_dir), staleThresholdMinutes));
+      const scopeCfg = loadedScopes.find((s) => s.scope_id === mailbox.mailbox_id);
+      scopes.push(await checkScope(mailbox.mailbox_id, resolve(mailbox.root_dir), staleThresholdMinutes, scopeCfg));
     }
   } else {
     let config;
@@ -285,7 +350,7 @@ export async function doctorCommand(
         result: { status: 'error', error: 'No operations configured' },
       };
     }
-    scopes.push(await checkScope(scope.scope_id, resolve(scope.root_dir), staleThresholdMinutes));
+    scopes.push(await checkScope(scope.scope_id, resolve(scope.root_dir), staleThresholdMinutes, scope));
   }
 
   const pass = scopes.reduce((sum, s) => sum + s.checks.filter((c) => c.status === 'pass').length, 0);

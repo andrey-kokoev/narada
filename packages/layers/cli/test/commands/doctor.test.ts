@@ -70,6 +70,27 @@ vi.mock('@narada2/control-plane', async (importOriginal) => {
   };
 });
 
+vi.mock('@narada2/charters', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('@narada2/charters')>();
+  return {
+    ...mod,
+    CodexCharterRunner: vi.fn().mockImplementation(() => ({
+      probeHealth: vi.fn().mockResolvedValue({
+        class: 'healthy',
+        checked_at: new Date().toISOString(),
+        details: 'API reachable.',
+      }),
+    })),
+    MockCharterRunner: vi.fn().mockImplementation(() => ({
+      probeHealth: vi.fn().mockResolvedValue({
+        class: 'unconfigured',
+        checked_at: new Date().toISOString(),
+        details: 'Mock runtime.',
+      }),
+    })),
+  };
+});
+
 describe('doctor command', () => {
   beforeEach(() => {
     vol.reset();
@@ -98,7 +119,15 @@ describe('doctor command', () => {
 
   it('reports healthy when daemon running, health ok, and no failures', async () => {
     vol.fromJSON({
-      '/test/config.json': JSON.stringify(createConfig('test@example.com', '/test/data')),
+      '/test/config.json': JSON.stringify({
+        ...createConfig('test@example.com', '/test/data'),
+        scopes: [
+          {
+            ...createConfig('test@example.com', '/test/data').scopes[0],
+            charter: { runtime: 'codex-api', api_key: 'test-key' },
+          },
+        ],
+      }),
       '/test/data/daemon.pid': String(process.pid),
       '/test/data/.health.json': JSON.stringify({
         status: 'healthy',
@@ -128,6 +157,7 @@ describe('doctor command', () => {
     expect(scope.checks.find((c) => c.name === 'health-file')?.status).toBe('pass');
     expect(scope.checks.find((c) => c.name === 'sync-freshness')?.status).toBe('pass');
     expect(scope.checks.find((c) => c.name === 'work-queue')?.status).toBe('pass');
+    expect(scope.checks.find((c) => c.name === 'charter-runtime')?.status).toBe('pass');
   });
 
   it('reports degraded when failed work items exist', async () => {

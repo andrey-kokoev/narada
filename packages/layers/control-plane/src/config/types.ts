@@ -31,6 +31,8 @@ export interface CharterRuntimeConfig {
   model?: string;
   base_url?: string;
   timeout_ms?: number;
+  /** When 'draft_only', the runtime reports degraded_draft_only health and restricts effects to draft-only */
+  degraded_mode?: "draft_only" | "normal";
 }
 
 export interface RuntimePolicy {

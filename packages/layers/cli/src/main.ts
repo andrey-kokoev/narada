@@ -7,6 +7,7 @@ import { rebuildProjectionsCommand } from './commands/rebuild-projections.js';
 import { configCommand } from './commands/config.js';
 import { configInteractiveCommand } from './commands/config-interactive.js';
 import { statusCommand } from './commands/status.js';
+import { opsCommand } from './commands/ops.js';
 import { backupCommand } from './commands/backup.js';
 import { restoreCommand } from './commands/restore.js';
 import { verifyBackupCommand } from './commands/verify-backup.js';
@@ -177,6 +178,15 @@ program
   .option('-n, --count <n>', 'Number of messages to generate', '5')
   .action(wrapCommand('demo', (opts, ctx) =>
     demoCommand({ count: Number(opts.count), format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto' }, ctx)));
+
+program
+  .command('ops')
+  .description('Operator daily dashboard — health, activity, attention queue, drafts pending review')
+  .option('-c, --config <path>', 'Path to config file', './config.json')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .option('-l, --limit <n>', 'Number of recent items per category', '5')
+  .action(wrapCommand('ops', (opts, ctx) =>
+    opsCommand({ ...opts, limit: Number(opts.limit), format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto' }, ctx)));
 
 program
   .command('status')
@@ -715,9 +725,11 @@ program
   .action((repoPath, opts) => {
     const result = initRepo(repoPath, { name: opts.name, localSource: opts.localSource, demo: opts.demo });
     console.log(result.summary);
-    console.log('\nCreated:');
-    for (const f of result.createdFiles) console.log(`  ${f}`);
-    console.log('\nGold path — run these next:');
+    console.log('\nArtifacts:');
+    for (const a of result.artifacts) {
+      console.log(`  [${a.category}] ${a.path} — ${a.description}`);
+    }
+    console.log('\nBootstrap contract — run these next:');
     for (const step of result.nextSteps) console.log(`  ${step}`);
     console.log('\nSee README.md in the repo for the full first-run guide.');
   });
@@ -744,6 +756,8 @@ program
       dataRootDir: opts.dataRootDir,
     });
     console.log(result.summary);
+    console.log('\nBootstrap contract — run these next:');
+    for (const step of result.nextSteps) console.log(`  ${step}`);
   });
 
 program

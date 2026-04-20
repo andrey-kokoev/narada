@@ -115,3 +115,36 @@ Deferred:
 - Broader routing signals beyond continuation affinity (priority, deadline, skill matching).
 - Automatic task dependency DAG visualization.
 - Commit-boundary tracking for this chapter.
+
+## Operation Realization
+
+Narada gained the canonical bootstrap path and the first mailbox operation product proof.
+
+- **Bootstrap contract** (Task 283): `docs/bootstrap-contract.md` defines the canonical five-step path from intent to runnable operation. `QUICKSTART.md` is restructured as the walkthrough. CLI commands (`init-repo`, `want-mailbox`) emit artifact manifests and next-step guidance aligned with the contract.
+- **Real executor attachment and degraded-state contract** (Task 284): `probeHealth()` is first-class on `CharterRunner`. Five health classes (`healthy`, `degraded_draft_only`, `partially_degraded`, `broken`, `unconfigured`) define explicit production behavior. Execution gating in the daemon skips dispatch when health does not permit execution. `getRecoveryGuidance()` provides structured operator advice for every degraded state.
+- **First operation product proof** (Task 285): `docs/first-operation-proof.md` defines the support mailbox as the canonical proof case, documents fixture-backed vs live-backed responsibilities, and provides inspection checkpoints for every pipeline stage.
+- **Operator live-loop ergonomics** (Task 286): `docs/operator-loop.md` defines the five-step operator rhythm. `narada ops` composes health, recent activity, attention queue, and drafts pending review into one read-only CLI dashboard.
+
+Concrete outcomes:
+
+- Fixture-backed smoke test (`smoke-test.test.ts`) is packaged as the canonical offline proof.
+- Live-backed verification commands (`preflight`, `explain`, `show`, `status`, `ops`) are documented as the runtime proof path.
+- Explicit separation table states what is proven offline and what requires live exercise.
+- Public repo vs private ops repo boundaries are documented.
+- Degraded-state handling is visible in CLI (`doctor`, `ops`), API (`/health`, `/ready`), and health file (`.health.json`).
+- Operator loop is discoverable from `docs/operator-loop.md`, `docs/runbook.md`, and the `narada ops` command.
+
+Authority clarifications:
+
+- Fixture-backed proof demonstrates mechanical correctness; live-backed proof demonstrates real data/API compatibility.
+- Neither substitutes for the other.
+- Default posture remains `draft-only` with human approval required.
+- Foreman governance enforces draft-first independently of runtime health.
+
+Deferred:
+
+- Live Graph API draft creation proof (requires credentials).
+- Autonomous send remains deferred for safety.
+- Multi-vertical operations (timer, webhook, filesystem) need separate acceptance.
+- Fleet/multi-operation dashboard remains a future milestone.
+- Commit-boundary tracking for this chapter is deferred.

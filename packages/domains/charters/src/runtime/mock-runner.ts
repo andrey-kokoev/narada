@@ -9,9 +9,11 @@
 
 import type { CharterInvocationEnvelope, CharterOutputEnvelope } from "./envelope.js";
 import { validateInvocationEnvelope } from "./envelope.js";
+import type { CharterRuntimeHealth } from "./health.js";
 
 export interface CharterRunner {
   run(envelope: CharterInvocationEnvelope): Promise<CharterOutputEnvelope>;
+  probeHealth(): Promise<import("./health.js").CharterRuntimeHealth>;
 }
 
 export interface MockCharterRunnerOptions {
@@ -25,6 +27,15 @@ export interface MockCharterRunnerOptions {
 
 export class MockCharterRunner implements CharterRunner {
   constructor(private readonly opts: MockCharterRunnerOptions = {}) {}
+
+  async probeHealth(): Promise<CharterRuntimeHealth> {
+    return {
+      class: "unconfigured",
+      checked_at: new Date().toISOString(),
+      details:
+        "Mock runtime is active. No real executor is attached. Configure `charter.runtime` to 'codex-api' or 'kimi-api' with a valid API key to enable real charter execution.",
+    };
+  }
 
   async run(envelope: CharterInvocationEnvelope): Promise<CharterOutputEnvelope> {
     validateInvocationEnvelope(envelope);

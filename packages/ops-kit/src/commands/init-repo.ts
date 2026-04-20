@@ -14,9 +14,16 @@ export interface InitRepoOptions {
   localSource?: boolean;
 }
 
+export interface InitRepoArtifact {
+  path: string;
+  category: "config" | "directory" | "credential-template" | "documentation" | "package";
+  description: string;
+}
+
 export interface InitRepoResult {
   repoPath: string;
   createdFiles: string[];
+  artifacts: InitRepoArtifact[];
   summary: string;
   nextSteps: string[];
 }
@@ -219,6 +226,19 @@ export function initRepo(repoPath: string, options: InitRepoOptions = {}): InitR
     createdFiles.push(`${dir}/`);
   }
 
+  const artifacts: InitRepoArtifact[] = [
+    { path: "package.json", category: "package", description: "Dependencies and npm scripts" },
+    { path: "config/config.json", category: "config", description: "Live operation config" },
+    { path: "config/config.example.json", category: "config", description: "Documented config template" },
+    { path: ".env.example", category: "credential-template", description: "Credential template" },
+    { path: ".gitignore", category: "documentation", description: "Git ignore rules" },
+    { path: "mailboxes/", category: "directory", description: "Mailbox operational material" },
+    { path: "workflows/", category: "directory", description: "Workflow operational material" },
+    { path: "logs/", category: "directory", description: "Local runner output" },
+    { path: "knowledge/", category: "directory", description: "Global operational knowledge" },
+    { path: "README.md", category: "documentation", description: "First-run guide" },
+  ];
+
   // README.md
   const readmeLines = options.demo
     ? [
@@ -345,11 +365,13 @@ export function initRepo(repoPath: string, options: InitRepoOptions = {}): InitR
   return {
     repoPath: absPath,
     createdFiles,
+    artifacts,
     summary: `Initialized Narada ops repo at ${absPath} (${createdFiles.length} files/directories).`,
     nextSteps: options.demo
       ? [
           `cd ${absPath}`,
           "pnpm install",
+          "narada setup",
           "narada preflight demo",
           "narada explain demo",
           "narada activate demo",
