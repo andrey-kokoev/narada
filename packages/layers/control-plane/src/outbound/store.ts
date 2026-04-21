@@ -18,6 +18,7 @@ const ACTIVE_UNSENT_STATUSES: readonly OutboundStatus[] = [
   "pending",
   "draft_creating",
   "draft_ready",
+  "approved_for_send",
   "sending",
   "submitted",
   "retry_wait",
@@ -34,14 +35,17 @@ export interface OutboundStore {
   getLatestVersion(outbound_id: string): OutboundVersion | undefined;
   getVersions(outbound_id: string): OutboundVersion[];
   getActiveCommandsForContext(context_id: string): OutboundCommand[];
+  getCommandsByScope(scope_id: string, limit?: number): OutboundCommand[];
   supersedePriorVersions(outbound_id: string, newVersion: number): void;
   appendTransition(transition: Omit<OutboundTransition, "id">): void;
+  getLatestTransition(outbound_id: string, to_status?: OutboundStatus): OutboundTransition | undefined;
+  getLatestNonCreationTransition(outbound_id: string, to_status: OutboundStatus): OutboundTransition | undefined;
   updateCommandStatus(
     outbound_id: string,
     status: OutboundStatus,
     updates?: Partial<Pick<
       OutboundCommand,
-      "latest_version" | "blocked_reason" | "terminal_reason" | "submitted_at" | "confirmed_at" | "reviewed_at" | "reviewer_notes" | "external_reference"
+      "latest_version" | "blocked_reason" | "terminal_reason" | "submitted_at" | "confirmed_at" | "reviewed_at" | "reviewer_notes" | "external_reference" | "approved_at"
     >>,
   ): void;
   fetchNextEligible(scope_id?: string): Array<{ command: OutboundCommand; version: OutboundVersion }>;
@@ -95,6 +99,7 @@ function rowToCommand(row: Record<string, unknown>): OutboundCommand {
     reviewed_at: row.reviewed_at ? String(row.reviewed_at) : null,
     reviewer_notes: row.reviewer_notes ? String(row.reviewer_notes) : null,
     external_reference: row.external_reference ? String(row.external_reference) : null,
+    approved_at: row.approved_at ? String(row.approved_at) : null,
   };
 }
 
@@ -232,7 +237,8 @@ export class SqliteOutboundStore implements OutboundStore {
         idempotency_key text not null unique,
         reviewed_at text,
         reviewer_notes text,
-        external_reference text
+        external_reference text,
+        approved_at text
       );
 
       create index if not exists idx_outbound_handoffs_status
@@ -340,6 +346,9 @@ export class SqliteOutboundStore implements OutboundStore {
     if (!columnNames.has("external_reference")) {
       this.db.exec(`alter table outbound_handoffs add column external_reference text`);
     }
+    if (!columnNames.has("approved_at")) {
+      this.db.exec(`alter table outbound_handoffs add column approved_at text`);
+    }
   }
 
   createCommand(command: OutboundCommand, version: OutboundVersion): void {
@@ -393,6 +402,13 @@ export class SqliteOutboundStore implements OutboundStore {
         command.terminal_reason,
         command.idempotency_key,
       );
+
+      // approved_at is not set on initial creation; it is set by the approval operator action.
+      // The insert above does not include it because createCommand inserts a fixed column list.
+      // We update it separately if present (for tests / recovery scenarios).
+      if (command.approved_at) {
+        this.db.prepare(`update outbound_handoffs set approved_at = ? where outbound_id = ?`).run(command.approved_at, command.outbound_id);
+      }
 
       insertVer.run(
         version.outbound_id,
@@ -472,6 +488,16 @@ export class SqliteOutboundStore implements OutboundStore {
     return rows.map(rowToCommand);
   }
 
+  getCommandsByScope(scope_id: string, limit = 1000): OutboundCommand[] {
+    const rows = this.db.prepare(`
+      select * from outbound_handoffs
+      where scope_id = ?
+      order by created_at desc
+      limit ?
+    `).all(scope_id, limit) as Record<string, unknown>[];
+    return rows.map(rowToCommand);
+  }
+
   supersedePriorVersions(outbound_id: string, newVersion: number): void {
     const now = new Date().toISOString();
     this.db.prepare(`
@@ -496,12 +522,63 @@ export class SqliteOutboundStore implements OutboundStore {
     );
   }
 
+  getLatestTransition(outbound_id: string, to_status?: OutboundStatus): OutboundTransition | undefined {
+    const sql = to_status
+      ? `select id, outbound_id, version, from_status, to_status, reason, transition_at
+         from outbound_transitions
+         where outbound_id = ? and to_status = ?
+         order by transition_at desc
+         limit 1`
+      : `select id, outbound_id, version, from_status, to_status, reason, transition_at
+         from outbound_transitions
+         where outbound_id = ?
+         order by transition_at desc
+         limit 1`;
+    const row = this.db.prepare(sql).get(
+      to_status ? [outbound_id, to_status] : outbound_id
+    ) as Record<string, unknown> | undefined;
+    if (!row) return undefined;
+    return {
+      id: Number(row.id),
+      outbound_id: String(row.outbound_id),
+      version: row.version == null ? null : Number(row.version),
+      from_status: row.from_status == null ? null : String(row.from_status) as OutboundStatus,
+      to_status: String(row.to_status) as OutboundStatus,
+      reason: row.reason == null ? null : String(row.reason),
+      transition_at: String(row.transition_at),
+    };
+  }
+
+  /**
+   * Get the most recent transition to the given status that was NOT the initial
+   * creation transition (i.e., from_status is not null). Useful for cooldown checks.
+   */
+  getLatestNonCreationTransition(outbound_id: string, to_status: OutboundStatus): OutboundTransition | undefined {
+    const row = this.db.prepare(`
+      select id, outbound_id, version, from_status, to_status, reason, transition_at
+      from outbound_transitions
+      where outbound_id = ? and to_status = ? and from_status is not null
+      order by transition_at desc
+      limit 1
+    `).get(outbound_id, to_status) as Record<string, unknown> | undefined;
+    if (!row) return undefined;
+    return {
+      id: Number(row.id),
+      outbound_id: String(row.outbound_id),
+      version: row.version == null ? null : Number(row.version),
+      from_status: row.from_status == null ? null : String(row.from_status) as OutboundStatus,
+      to_status: String(row.to_status) as OutboundStatus,
+      reason: row.reason == null ? null : String(row.reason),
+      transition_at: String(row.transition_at),
+    };
+  }
+
   updateCommandStatus(
     outbound_id: string,
     status: OutboundStatus,
     updates?: Partial<Pick<
       OutboundCommand,
-      "latest_version" | "blocked_reason" | "terminal_reason" | "submitted_at" | "confirmed_at" | "reviewed_at" | "reviewer_notes" | "external_reference"
+      "latest_version" | "blocked_reason" | "terminal_reason" | "submitted_at" | "confirmed_at" | "reviewed_at" | "reviewer_notes" | "external_reference" | "approved_at"
     >>,
   ): void {
     const fields: string[] = ["status = ?"];
@@ -538,6 +615,10 @@ export class SqliteOutboundStore implements OutboundStore {
     if (updates?.external_reference !== undefined) {
       fields.push("external_reference = ?");
       values.push(updates.external_reference);
+    }
+    if (updates?.approved_at !== undefined) {
+      fields.push("approved_at = ?");
+      values.push(updates.approved_at);
     }
 
     values.push(outbound_id);

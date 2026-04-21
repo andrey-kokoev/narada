@@ -1,6 +1,7 @@
 // Main exports
 export { default as Database } from "better-sqlite3";
 export { loadConfig } from "./config/load.js";
+export { loadEnvFile } from "./config/dotenv.js";
 export { validateCharterRuntimeConfig } from "./config/validation.js";
 export { DEFAULT_EXCHANGE_FS_SYNC_CONFIG } from "./config/defaults.js";
 export {
@@ -100,7 +101,9 @@ export type {
 export { SqliteOutboundStore } from "./outbound/store.js";
 export type { OutboundStore, OutboundStoreView, SqliteOutboundStoreOptions, SqliteOutboundStoreDbOptions } from "./outbound/store.js";
 export { SendReplyWorker } from "./outbound/send-reply-worker.js";
-export type { SendReplyWorkerDeps, ParticipantResolver } from "./outbound/send-reply-worker.js";
+export type { SendReplyWorkerDeps } from "./outbound/send-reply-worker.js";
+export { SendExecutionWorker } from "./outbound/send-execution-worker.js";
+export type { SendExecutionWorkerDeps, ParticipantResolver } from "./outbound/send-execution-worker.js";
 export { NonSendWorker } from "./outbound/non-send-worker.js";
 export type { NonSendWorkerDeps, NonSendGraphClient } from "./outbound/non-send-worker.js";
 export { OutboundReconciler } from "./outbound/reconciler.js";
@@ -414,6 +417,8 @@ export type {
   QuiescenceIndicator,
   AffinityOutcome,
   OperatorActionSummary,
+  DraftReviewDetail,
+  DraftReviewStatus,
   EvaluationDetail,
   DecisionDetail,
   ExecutionDetail,
@@ -471,6 +476,8 @@ export {
   getRecentOperatorActions,
   getOperatorActionsForScope,
   getOperatorActionsForContext,
+  getDraftReviewDetail,
+  getDraftReviewDetails,
   getStuckWorkItems,
   getStuckWorkItemSummary,
   getStuckOutboundCommands,

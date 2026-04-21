@@ -51,6 +51,10 @@ interface DraftPendingReview {
   context_id: string;
   created_at: string;
   payload_summary?: string;
+  review_status: string;
+  decision_rationale?: string;
+  charter_summary?: string;
+  available_actions: string[];
 }
 
 interface OpsReport {
@@ -268,7 +272,7 @@ async function loadOpsReport(
     // Stuck outbound
     const stuckOutboundRows = outboundStore.db
       .prepare(
-        `select oh.command_id, oh.status, oh.created_at, oh.action_type, oh.context_id
+        `select oh.outbound_id, oh.status, oh.created_at, oh.action_type, oh.context_id
          from outbound_handoffs oh
          where oh.scope_id = ?
            and oh.status in ('pending', 'draft_creating', 'draft_ready', 'sending')
@@ -281,7 +285,7 @@ async function loadOpsReport(
          order by oh.created_at asc`
       )
       .all(scopeId) as Array<{
-        command_id: string;
+        outbound_id: string;
         status: string;
         created_at: string;
         action_type: string;
@@ -290,7 +294,7 @@ async function loadOpsReport(
     for (const row of stuckOutboundRows) {
       attentionQueue.push({
         type: 'stuck_outbound',
-        id: row.command_id,
+        id: row.outbound_id,
         description: `${row.status} — ${row.action_type} — ${row.context_id}`,
         since: row.created_at,
       });
@@ -299,18 +303,37 @@ async function loadOpsReport(
     // ── Drafts Pending Review ──
     const draftRows = outboundStore.db
       .prepare(
-        `select oh.command_id, oh.action_type, oh.context_id, oh.created_at, ov.payload_json
+        `select
+           oh.outbound_id,
+           oh.action_type,
+           oh.context_id,
+           oh.created_at,
+           oh.status,
+           oh.reviewed_at,
+           oh.approved_at,
+           ov.payload_json,
+           ov.subject,
+           fd.rationale as decision_rationale,
+           ev.summary as charter_summary
          from outbound_handoffs oh
-         join outbound_versions ov on oh.command_id = ov.command_id and oh.current_version = ov.version_number
-         where oh.scope_id = ? and oh.status = 'draft_ready'
+         join outbound_versions ov on oh.outbound_id = ov.outbound_id and oh.latest_version = ov.version
+         left join foreman_decisions fd on fd.outbound_id = oh.outbound_id
+         left join evaluations ev on ev.context_id = oh.context_id and ev.scope_id = oh.scope_id
+         where oh.scope_id = ? and oh.status in ('draft_ready', 'approved_for_send', 'blocked_policy')
          order by oh.created_at desc`
       )
       .all(scopeId) as Array<{
-        command_id: string;
+        outbound_id: string;
         action_type: string;
         context_id: string;
         created_at: string;
+        status: string;
+        reviewed_at: string | null;
+        approved_at: string | null;
         payload_json: string;
+        subject: string | null;
+        decision_rationale: string | null;
+        charter_summary: string | null;
       }>;
     const draftsPendingReview: DraftPendingReview[] = draftRows.map((r) => {
       let payloadSummary: string | undefined;
@@ -320,12 +343,33 @@ async function loadOpsReport(
       } catch {
         // ignore parse errors
       }
+
+      const actions: string[] = [];
+      if (r.status === 'draft_ready') {
+        actions.push('mark-reviewed', 'reject-draft', 'handled-externally');
+        if (r.action_type === 'send_reply' || r.action_type === 'send_new_message') {
+          actions.push('approve-draft-for-send');
+        }
+      }
+      if (r.status === 'blocked_policy') {
+        actions.push('reject-draft');
+      }
+
+      let reviewStatus: string;
+      if (r.approved_at) reviewStatus = 'approved_for_send';
+      else if (r.reviewed_at) reviewStatus = 'reviewed';
+      else reviewStatus = 'awaiting_review';
+
       return {
-        outbound_id: r.command_id,
+        outbound_id: r.outbound_id,
         action_type: r.action_type,
         context_id: r.context_id,
         created_at: r.created_at,
-        payload_summary: payloadSummary,
+        payload_summary: r.subject ?? payloadSummary,
+        review_status: reviewStatus,
+        decision_rationale: r.decision_rationale ?? undefined,
+        charter_summary: r.charter_summary ?? undefined,
+        available_actions: actions,
       };
     });
 
@@ -339,7 +383,13 @@ async function loadOpsReport(
     }
     if (draftsPendingReview.length > 0) {
       suggestedActions.push(
-        `${draftsPendingReview.length} draft(s) pending review. Inspect with: narada show decision <id> --operation ${scopeId}`
+        `${draftsPendingReview.length} draft(s) pending review. Inspect with: narada show-draft <outbound-id>`,
+      );
+    }
+    const totalDrafts = draftRows.length;
+    if (totalDrafts > 0) {
+      suggestedActions.push(
+        `Full draft overview: narada drafts`,
       );
     }
     if (failedRows.length > 0) {
@@ -525,16 +575,18 @@ export async function opsCommand(
       if (report.draftsPendingReview.length > 0) {
         fmt.table(
           [
-            { key: 'outbound_id', label: 'Outbound ID', width: 20 },
+            { key: 'outbound_id', label: 'Outbound ID', width: 18 },
             { key: 'action', label: 'Action', width: 12 },
-            { key: 'context', label: 'Context', width: 24 },
-            { key: 'summary', label: 'Summary', width: 30 },
+            { key: 'status', label: 'Review Status', width: 14 },
+            { key: 'summary', label: 'Summary', width: 24 },
+            { key: 'actions', label: 'Available Actions', width: 24 },
           ],
           report.draftsPendingReview.map((d) => ({
-            outbound_id: d.outbound_id.slice(0, 18),
+            outbound_id: d.outbound_id.slice(0, 16),
             action: d.action_type,
-            context: d.context_id.slice(0, 23),
-            summary: (d.payload_summary ?? '-').slice(0, 27),
+            status: d.review_status,
+            summary: (d.payload_summary ?? d.charter_summary ?? '-').slice(0, 22),
+            actions: d.available_actions.join(', ').slice(0, 22),
           })),
         );
       } else {

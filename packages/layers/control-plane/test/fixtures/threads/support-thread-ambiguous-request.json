@@ -1,0 +1,13 @@
+{
+  "conversation_id": "conv-support-ambiguous-001",
+  "message_id": "msg-ambiguous-001",
+  "subject": "Help!!!",
+  "from": { "name": "Evan Customer", "address": "evan@external.com" },
+  "to": [{ "name": "Support", "address": "help@global-maxima.com" }],
+  "body": {
+    "body_kind": "text",
+    "text": "something is broken please fix it asap"
+  },
+  "folder_refs": ["inbox"],
+  "flags": { "is_read": false, "is_draft": false, "is_flagged": false, "has_attachments": false }
+}

@@ -463,6 +463,9 @@
           <td>${r.reviewed_at ? '✓ ' + fmtDate(r.reviewed_at) : '—'}</td>
           <td class="mono truncate">${esc(r.external_reference || '—')}</td>
           <td>
+            ${r.status === 'draft_ready' && (r.action_type === 'send_reply' || r.action_type === 'send_new_message') ? `
+              <button class="small primary" onclick="doAction('approve_draft_for_send', '${esc(r.outbound_id)}')" title="Approve for send">Approve</button>
+            ` : ''}
             ${r.status === 'draft_ready' ? `
               <button class="small" onclick="doAction('reject_draft', '${esc(r.outbound_id)}', {rationale: prompt('Rationale (optional)?') || undefined})" title="Reject draft">Reject</button>
               <button class="small" onclick="doAction('mark_reviewed', '${esc(r.outbound_id)}', {reviewer_notes: prompt('Reviewer notes (optional)?') || undefined})" title="Mark reviewed">Review</button>
@@ -544,6 +547,7 @@
               <option value="reject_draft" ${actionTypeFilter === "reject_draft" ? "selected" : ""}>reject_draft</option>
               <option value="mark_reviewed" ${actionTypeFilter === "mark_reviewed" ? "selected" : ""}>mark_reviewed</option>
               <option value="handled_externally" ${actionTypeFilter === "handled_externally" ? "selected" : ""}>handled_externally</option>
+              <option value="approve_draft_for_send" ${actionTypeFilter === "approve_draft_for_send" ? "selected" : ""}>approve_draft_for_send</option>
             </select>
             <button id="auditApplyBtn" class="small primary">Apply</button>
           </div>

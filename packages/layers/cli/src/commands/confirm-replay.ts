@@ -191,6 +191,23 @@ async function replayForScope(
               return undefined;
             }
           },
+          findByInternetMessageId: async (_mailboxId: string, internetMessageId: string) => {
+            try {
+              const result = await graphHttpClient.getJson<{ value: Array<{ id: string; isRead?: boolean; parentFolderId?: string; categories?: string[] }> }>(
+                `/users/${encodeURIComponent(userId)}/messages?$filter=internetMessageId%20eq%20'${encodeURIComponent(internetMessageId)}'&$select=id,isRead,parentFolderId,categories`,
+              );
+              const msg = result.value?.[0];
+              if (!msg) return undefined;
+              return {
+                messageId: msg.id,
+                isRead: msg.isRead,
+                folderRefs: msg.parentFolderId ? [msg.parentFolderId] : undefined,
+                categoryRefs: msg.categories,
+              };
+            } catch {
+              return undefined;
+            }
+          },
         };
       } catch (err) {
         logger.warn('Failed to build Graph message finder; mail confirmation replay will be skipped', {

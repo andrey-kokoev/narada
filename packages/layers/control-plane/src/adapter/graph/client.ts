@@ -64,6 +64,9 @@ export class GraphHttpClient {
 
       if (!response.ok) {
         const text = await response.text().catch(() => "");
+        if (response.status === 401 || response.status === 403) {
+          this.tokenProvider.invalidateAccessToken?.();
+        }
         handleGraphError(response.status, text, {
           phase: "fetch",
           operation: "requestJson",

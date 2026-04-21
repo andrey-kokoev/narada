@@ -269,6 +269,9 @@ ${priors}
       return raw;
     }
     const obj = raw as Record<string, unknown>;
+
+    const patchedActions = this.patchProposedActions(obj.proposed_actions);
+
     return {
       ...obj,
       output_version: obj.output_version ?? "2.0",
@@ -276,7 +279,99 @@ ${priors}
       charter_id: obj.charter_id ?? envelope.charter_id,
       role: obj.role ?? envelope.role,
       analyzed_at: obj.analyzed_at ?? new Date().toISOString(),
+      confidence: obj.confidence ?? { overall: "low", uncertainty_flags: ["missing_confidence"] },
+      summary: obj.summary ?? "",
+      classifications: obj.classifications ?? [],
+      facts: this.patchFacts(obj.facts),
+      proposed_actions: patchedActions,
+      tool_requests: obj.tool_requests ?? [],
+      escalations: obj.escalations ?? [],
     };
+  }
+
+  private patchProposedActions(raw: unknown): unknown {
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+    return raw
+      .filter((action: unknown) => {
+        if (typeof action !== "object" || action === null) {
+          return false;
+        }
+        const a = action as Record<string, unknown>;
+        // Drop incomplete actions rather than fabricating required semantics.
+        return (
+          typeof a.action_type === "string" &&
+          typeof a.authority === "string" &&
+          typeof a.payload_json === "string" &&
+          typeof a.rationale === "string"
+        );
+      })
+      .map((action: unknown) => {
+        const a = action as Record<string, unknown>;
+        return {
+          ...a,
+          payload_json: this.sanitizePayloadJson(a.payload_json as string),
+        };
+      });
+  }
+
+  /**
+   * Attempt to repair common JSON serialization issues in payload_json.
+   * Models sometimes emit literal newlines/tabs inside JSON strings,
+   * which breaks downstream JSON.parse. We sanitize before validation.
+   */
+  private patchFacts(raw: unknown): unknown {
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+    return raw.map((fact: unknown) => {
+      if (typeof fact !== "object" || fact === null) {
+        return fact;
+      }
+      const f = fact as Record<string, unknown>;
+      // Models sometimes return value_json as an object/array instead of a string.
+      const valueJson = f.value_json;
+      if (typeof valueJson !== "string") {
+        return { ...f, value_json: JSON.stringify(valueJson) };
+      }
+      return f;
+    });
+  }
+
+  private sanitizePayloadJson(raw: string): string {
+    let parsed: unknown;
+    let source = raw;
+
+    // Fast path: already valid JSON
+    try {
+      parsed = JSON.parse(source);
+    } catch {
+      // Attempt repair: replace literal control characters with escapes
+      const repaired = source
+        .replace(/\n/g, "\\n")
+        .replace(/\r/g, "\\r")
+        .replace(/\t/g, "\\t");
+      try {
+        parsed = JSON.parse(repaired);
+        source = repaired;
+      } catch {
+        // If repair fails, return the original and let Rule 6 strip it
+        return raw;
+      }
+    }
+
+    // Normalize common model output conventions to the expected schema
+    if (typeof parsed === "object" && parsed !== null) {
+      const obj = parsed as Record<string, unknown>;
+      if ("body" in obj && !("body_text" in obj) && !("body_html" in obj)) {
+        obj.body_text = obj.body;
+        delete obj.body;
+        return JSON.stringify(obj);
+      }
+    }
+
+    return source;
   }
 
   private async persistArtifacts(

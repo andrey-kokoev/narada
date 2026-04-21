@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 import { Command, Option } from 'commander';
+import { loadEnvFile } from '@narada2/control-plane';
+
+loadEnvFile('./.env');
 import { syncCommand } from './commands/sync.js';
 import { integrityCommand } from './commands/integrity.js';
 import { rebuildViewsCommand } from './commands/rebuild-views.js';
@@ -27,6 +30,10 @@ import { doctorCommand } from './commands/doctor.js';
 import { rejectDraftCommand } from './commands/reject-draft.js';
 import { markReviewedCommand } from './commands/mark-reviewed.js';
 import { handledExternallyCommand } from './commands/handled-externally.js';
+import { showDraftCommand } from './commands/show-draft.js';
+import { draftsCommand } from './commands/drafts.js';
+import { approveDraftForSendCommand } from './commands/approve-draft-for-send.js';
+import { retryAuthFailedCommand } from './commands/retry-auth-failed.js';
 import { taskClaimCommand } from './commands/task-claim.js';
 import { taskReleaseCommand } from './commands/task-release.js';
 import { taskReviewCommand } from './commands/task-review.js';
@@ -685,6 +692,60 @@ program
       format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
       outboundId: opts.outboundId as string,
       ref: opts.ref as string,
+    }, ctx)));
+
+program
+  .command('drafts')
+  .description('Mailbox-specific draft overview — grouped by status with counts and available actions')
+  .option('-c, --config <path>', 'Path to config file', './config.json')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .option('-l, --limit <n>', 'Maximum drafts per group', '20')
+  .action(wrapCommand('drafts', (opts, ctx) =>
+    draftsCommand({
+      ...opts,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      limit: opts.limit ? Number(opts.limit) : undefined,
+    }, ctx)));
+
+program
+  .command('show-draft')
+  .description('Show deep-dive draft review detail including lineage and available actions')
+  .argument('<outbound-id>', 'Outbound command ID to inspect')
+  .option('-c, --config <path>', 'Path to config file', './config.json')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .action(wrapCommand('show-draft', (opts, ctx) =>
+    showDraftCommand({
+      ...opts,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      outboundId: opts.outboundId as string,
+    }, ctx)));
+
+program
+  .command('approve-draft-for-send')
+  .description('Approve a draft-ready outbound command for send execution')
+  .argument('<outbound-id>', 'Outbound command ID to approve for send')
+  .option('-c, --config <path>', 'Path to config file', './config.json')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .action(wrapCommand('approve-draft-for-send', (opts, ctx) =>
+    approveDraftForSendCommand({
+      ...opts,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      outboundId: opts.outboundId as string,
+    }, ctx)));
+
+program
+  .command('retry-auth-failed')
+  .description('Retry outbound commands that failed due to auth errors after credentials are restored')
+  .argument('[outbound-id]', 'Specific outbound command ID to retry (optional; scans all scopes if omitted)')
+  .option('-c, --config <path>', 'Path to config file', './config.json')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .option('-l, --limit <n>', 'Maximum commands to retry per scope when scanning', '50')
+  .action(wrapCommand('retry-auth-failed', (opts, ctx) =>
+    retryAuthFailedCommand({
+      ...opts,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      outboundId: opts.outboundId as string | undefined,
+      limit: opts.limit ? Number(opts.limit) : undefined,
     }, ctx)));
 
 program

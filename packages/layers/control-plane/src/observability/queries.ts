@@ -6,6 +6,7 @@
  */
 
 import type { CoordinatorStoreView, ExecutionAttempt } from "../coordinator/types.js";
+import type { OutboundStatus } from "../outbound/types.js";
 import type { OutboundStoreView } from "../outbound/store.js";
 import type { ProcessExecutionStoreView } from "../executors/store.js";
 import type { IntentStoreView } from "../intent/store.js";
@@ -131,6 +132,7 @@ function rowToOutboundSummary(row: Record<string, unknown>): OutboundHandoffSumm
     reviewed_at: row.reviewed_at ? String(row.reviewed_at) : null,
     reviewer_notes: row.reviewer_notes ? String(row.reviewer_notes) : null,
     external_reference: row.external_reference ? String(row.external_reference) : null,
+    approved_at: row.approved_at ? String(row.approved_at) : null,
   };
 }
 
@@ -274,7 +276,8 @@ export function getRecentOutboundCommands(
          idempotency_key,
          reviewed_at,
          reviewer_notes,
-         external_reference
+         external_reference,
+         approved_at
        from outbound_handoffs
        order by created_at desc
        limit ?`,
@@ -304,7 +307,8 @@ export function getOutboundCommandsByStatus(
          idempotency_key,
          reviewed_at,
          reviewer_notes,
-         external_reference
+         external_reference,
+         approved_at
        from outbound_handoffs
        where status = ? and scope_id = ?
        order by created_at desc
@@ -323,7 +327,8 @@ export function getOutboundCommandsByStatus(
          idempotency_key,
          reviewed_at,
          reviewer_notes,
-         external_reference
+         external_reference,
+         approved_at
        from outbound_handoffs
        where status = ?
        order by created_at desc
@@ -2080,6 +2085,174 @@ export function getOperatorActionsForContext(
     ? (stmt.all(contextId, contextId, contextId, since, limit) as Record<string, unknown>[])
     : (stmt.all(contextId, contextId, contextId, limit) as Record<string, unknown>[]);
   return rows.map(rowToOperatorActionSummary);
+}
+
+function deriveReviewStatus(status: OutboundStatus): import("./types.js").DraftReviewStatus {
+  switch (status) {
+    case "draft_ready":
+      return "awaiting_review";
+    case "approved_for_send":
+      return "approved_for_send";
+    case "sending":
+      return "sending";
+    case "submitted":
+      return "submitted";
+    case "confirmed":
+      return "confirmed";
+    case "blocked_policy":
+      return "blocked";
+    case "cancelled":
+      return "cancelled";
+    case "failed_terminal":
+      return "failed";
+    case "retry_wait":
+      return "failed";
+    default:
+      return "awaiting_review";
+  }
+}
+
+function deriveAvailableActions(
+  status: OutboundStatus,
+  actionType: string,
+): string[] {
+  const actions: string[] = [];
+  if (status === "draft_ready") {
+    actions.push("mark_reviewed", "reject_draft", "handled_externally");
+    if (actionType === "send_reply" || actionType === "send_new_message") {
+      actions.push("approve_draft_for_send");
+    }
+  }
+  if (status === "blocked_policy") {
+    actions.push("reject_draft");
+  }
+  return actions;
+}
+
+/**
+ * Deep-dive draft review detail that unifies outbound command, decision,
+ * evaluation, and available next actions. Returns undefined if the outbound
+ * command does not exist.
+ */
+export function getDraftReviewDetail(
+  outboundStore: OutboundStoreView,
+  coordinatorStore: CoordinatorStoreView,
+  outboundId: string,
+): import("./types.js").DraftReviewDetail | undefined {
+  const outboundRow = outboundStore.db
+    .prepare(
+      `select
+         oh.*,
+         ov.subject, ov.body_text, ov.to_json
+       from outbound_handoffs oh
+       left join outbound_versions ov
+         on oh.outbound_id = ov.outbound_id
+         and oh.latest_version = ov.version
+       where oh.outbound_id = ?`,
+    )
+    .get(outboundId) as Record<string, unknown> | undefined;
+
+  if (!outboundRow) return undefined;
+
+  const decisionRow = coordinatorStore.db
+    .prepare(
+      `select decision_id, approved_action, rationale, decided_at, outbound_id
+       from foreman_decisions
+       where outbound_id = ?`,
+    )
+    .get(outboundId) as Record<string, unknown> | undefined;
+
+  const contextId = String(outboundRow.context_id);
+  const scopeId = String(outboundRow.scope_id);
+
+  const evaluationRow = coordinatorStore.db
+    .prepare(
+      `select evaluation_id, charter_id, summary, outcome, analyzed_at
+       from evaluations
+       where context_id = ? and scope_id = ?
+       order by analyzed_at desc
+       limit 1`,
+    )
+    .get(contextId, scopeId) as Record<string, unknown> | undefined;
+
+  const status = String(outboundRow.status) as OutboundStatus;
+  const actionType = String(outboundRow.action_type);
+
+  let to: string[] | null = null;
+  try {
+    to = JSON.parse(String(outboundRow.to_json ?? "[]")) as string[];
+  } catch {
+    // ignore
+  }
+
+  return {
+    outbound_id: outboundId,
+    context_id: contextId,
+    scope_id: scopeId,
+    action_type: actionType,
+    status,
+    review_status: deriveReviewStatus(status),
+    created_at: String(outboundRow.created_at),
+    submitted_at: outboundRow.submitted_at ? String(outboundRow.submitted_at) : null,
+    confirmed_at: outboundRow.confirmed_at ? String(outboundRow.confirmed_at) : null,
+    subject: outboundRow.subject ? String(outboundRow.subject) : null,
+    body_preview: outboundRow.body_text
+      ? String(outboundRow.body_text).slice(0, 500)
+      : null,
+    to,
+    decision_id: decisionRow ? String(decisionRow.decision_id) : null,
+    decision_rationale: decisionRow ? String(decisionRow.rationale) : null,
+    decided_at: decisionRow ? String(decisionRow.decided_at) : null,
+    approved_action: decisionRow ? String(decisionRow.approved_action) : null,
+    evaluation_id: evaluationRow ? String(evaluationRow.evaluation_id) : null,
+    charter_id: evaluationRow ? String(evaluationRow.charter_id) : null,
+    evaluation_summary: evaluationRow ? String(evaluationRow.summary) : null,
+    evaluation_outcome: evaluationRow ? String(evaluationRow.outcome) : null,
+    analyzed_at: evaluationRow ? String(evaluationRow.analyzed_at) : null,
+    reviewed_at: outboundRow.reviewed_at ? String(outboundRow.reviewed_at) : null,
+    reviewer_notes: outboundRow.reviewer_notes ? String(outboundRow.reviewer_notes) : null,
+    approved_at: outboundRow.approved_at ? String(outboundRow.approved_at) : null,
+    terminal_reason: outboundRow.terminal_reason ? String(outboundRow.terminal_reason) : null,
+    external_reference: outboundRow.external_reference
+      ? String(outboundRow.external_reference)
+      : null,
+    available_actions: deriveAvailableActions(status, actionType),
+  };
+}
+
+/**
+ * List draft review details for outbound commands matching the given status
+ * filter. Defaults to all non-terminal statuses that involve operator review.
+ */
+export function getDraftReviewDetails(
+  outboundStore: OutboundStoreView,
+  coordinatorStore: CoordinatorStoreView,
+  scopeId?: string,
+  statuses?: OutboundStatus[],
+): import("./types.js").DraftReviewDetail[] {
+  const targetStatuses = statuses ?? [
+    "pending",
+    "draft_creating",
+    "draft_ready",
+    "approved_for_send",
+    "sending",
+    "submitted",
+    "blocked_policy",
+    "retry_wait",
+  ];
+
+  const sql = scopeId
+    ? `select outbound_id from outbound_handoffs where scope_id = ? and status in (${targetStatuses.map(() => "?").join(",")}) order by created_at desc`
+    : `select outbound_id from outbound_handoffs where status in (${targetStatuses.map(() => "?").join(",")}) order by created_at desc`;
+
+  const params = scopeId ? [scopeId, ...targetStatuses] : targetStatuses;
+  const rows = outboundStore.db.prepare(sql).all(...params) as Array<{
+    outbound_id: string;
+  }>;
+
+  return rows
+    .map((row) => getDraftReviewDetail(outboundStore, coordinatorStore, row.outbound_id))
+    .filter((d): d is import("./types.js").DraftReviewDetail => d !== undefined);
 }
 
 export function buildObservationPlaneSnapshot(

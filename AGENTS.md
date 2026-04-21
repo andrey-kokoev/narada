@@ -35,6 +35,7 @@ Narada is a generalized, deterministic kernel for turning remote source deltas i
 | Doc | Topic | Read If You... |
 |-----|-------|----------------|
 | [SEMANTICS.md](SEMANTICS.md) | **Canonical ontology** — single source of truth for all terms | Need a definition, identity format, or invariant |
+| [SEMANTICS.md §2.13](SEMANTICS.md) | Intelligence-Authority Separation — canonical internal formulation | Need to understand why evaluation ≠ decision and why the control plane owns authority |
 | [SEMANTICS.md §2.8](SEMANTICS.md) | Re-derivation / recovery operator family | Need to understand replay, preview, recovery, rebuild, or confirm operators |
 | [00-kernel.md](packages/layers/control-plane/docs/00-kernel.md) | **Irreducible kernel spec** — the canonical lawbook | Need the vertical-agnostic normative core |
 | [01-spec.md](packages/layers/control-plane/docs/01-spec.md) | Dearbitrized formal specification (mailbox vertical) | Need to understand the mailbox-specific theoretical model |

@@ -18,6 +18,33 @@ export function writeIfAbsent(filePath: string, content: string): boolean {
   return true;
 }
 
+const SAMPLE_PLAYBOOK = `# Sample Support Playbook
+
+Replace this file with your actual operational knowledge.
+
+## Example: Login Issues
+
+When a customer reports they cannot log in:
+
+1. Acknowledge the frustration.
+2. Ask which email address they are using.
+3. Suggest password reset as the first step.
+4. If reset fails, check for account lockout (escalate to engineering).
+5. Escalate to security if account appears compromised.
+
+## Escalation Criteria
+
+- Multiple users report the same issue → possible outage.
+- Legal or regulatory mention → immediate escalation.
+- VIP customer → fast-track to engineering.
+
+## Tone Guidance
+
+- Be empathetic but concise.
+- Never promise specific resolution times.
+- Always offer clear next steps.
+`;
+
 export function scaffoldMailbox(opsRoot: string, mailboxId: string): string[] {
   const base = path.join(opsRoot, "mailboxes", mailboxId);
   const created: string[] = [];
@@ -30,6 +57,10 @@ export function scaffoldMailbox(opsRoot: string, mailboxId: string): string[] {
   }
   const readme = path.join(base, "README.md");
   if (writeIfAbsent(readme, `# ${mailboxId}\n\nMailbox-owned operational material.\n`)) created.push(readme);
+
+  const samplePlaybook = path.join(base, "knowledge", "sample-playbook.md");
+  if (writeIfAbsent(samplePlaybook, SAMPLE_PLAYBOOK)) created.push(samplePlaybook);
+
   return created;
 }
 

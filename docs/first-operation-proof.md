@@ -236,6 +236,19 @@ sqlite3 <rootDir>/.narada/coordinator.db \
 
 ---
 
+## Proof vs Knowledge
+
+This document is a **pipeline proof**, not a **knowledge specification**.
+
+- **Pipeline proof** demonstrates that Narada can receive a message, evaluate it through a charter, and produce a durable outbound draft. It verifies wiring, not wisdom.
+- **Knowledge** is the domain-specific content that makes support replies accurate, helpful, and safe. It lives in the private ops repo (`mailboxes/<id>/knowledge/`), not here.
+
+The fixture-backed proof uses a minimal mock knowledge source (`"Login issues: ask for email."`) because the proof only needs to show that knowledge flows through the materializer into the charter envelope. It does not need real playbooks.
+
+When you run a **live** mailbox operation, you populate `knowledge/` with actual playbooks, escalation criteria, and tone guidance. The quality of replies depends on that content, but the correctness of the pipeline does not.
+
+For the full knowledge placement model, see [`docs/mailbox-knowledge-model.md`](mailbox-knowledge-model.md).
+
 ## Public Repo vs Private Ops Repo
 
 | Concern | Public Repo (`narada`) | Private Ops Repo |
@@ -257,4 +270,14 @@ The fixture-backed proof lives in the public repo and can be run by anyone. The 
 - This proof does not claim autonomous send is safe. Default posture is `draft-only` with human approval required.
 - This proof does not cover multi-vertical operations (timer, webhook, filesystem). Mailbox is the first proven vertical.
 - This proof does not cover production UI polish, real-time updates, or analytics.
-- This proof does not cover generalized knowledge-base RAG. Knowledge source injection exists; full RAG is deferred.
+- This proof does not cover generalized knowledge-base RAG. Knowledge source injection exists; the knowledge model is documented in [`docs/mailbox-knowledge-model.md`](mailbox-knowledge-model.md).
+
+---
+
+## Related Documents
+
+- [`docs/live-graph-proof.md`](live-graph-proof.md) — Live Graph API proof (draft creation, approval, send, reconciliation)
+- [`docs/operator-loop.md`](operator-loop.md) — Daily operator rhythm
+- [`docs/runbook.md`](runbook.md) — Troubleshooting and setup
+- [`docs/mailbox-knowledge-model.md`](mailbox-knowledge-model.md) — Knowledge placement, proof vs knowledge, and playbook examples
+- [`docs/bootstrap-contract.md`](bootstrap-contract.md) — First-time setup path

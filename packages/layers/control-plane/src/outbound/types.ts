@@ -19,6 +19,7 @@ export type OutboundStatus =
   | "pending"
   | "draft_creating"
   | "draft_ready"
+  | "approved_for_send"
   | "sending"
   | "submitted"
   | "confirmed"
@@ -49,6 +50,8 @@ export interface OutboundCommand {
   reviewer_notes: string | null;
   /** External reference (ticket ID, thread URL) recorded by operator for externally handled drafts */
   external_reference: string | null;
+  /** ISO timestamp when this command was explicitly approved for send */
+  approved_at: string | null;
 }
 
 /** Version-specific payload for an outbound command */
@@ -102,25 +105,44 @@ export const VALID_TRANSITIONS: Readonly<
 > = {
   pending: ["draft_creating", "draft_ready", "blocked_policy", "failed_terminal", "cancelled", "superseded"],
   draft_creating: ["draft_ready", "retry_wait", "failed_terminal"],
-  draft_ready: ["sending", "confirmed", "blocked_policy", "superseded", "cancelled"],
+  // send_reply / send_new_message MUST go through approved_for_send before sending.
+  // Non-send actions (mark_read, move_message, set_categories) have an action-specific
+  // override in isValidTransitionForAction.
+  draft_ready: ["approved_for_send", "confirmed", "blocked_policy", "retry_wait", "failed_terminal", "superseded", "cancelled"],
+  approved_for_send: ["sending", "retry_wait", "failed_terminal", "blocked_policy", "cancelled", "superseded"],
   sending: ["submitted", "retry_wait", "failed_terminal"],
   submitted: ["confirmed", "retry_wait"],
-  retry_wait: ["draft_ready", "draft_creating", "failed_terminal"],
-  blocked_policy: ["superseded", "cancelled", "pending"],
+  retry_wait: ["draft_ready", "draft_creating", "approved_for_send", "failed_terminal"],
+  blocked_policy: ["superseded", "cancelled", "pending", "approved_for_send"],
   confirmed: [],
-  failed_terminal: [],
+  failed_terminal: ["approved_for_send", "draft_ready"],
   cancelled: [],
   superseded: [],
 };
 
 /**
  * Check whether a transition is valid according to the canonical state machine.
+ * The optional actionType enforces action-specific rules:
+ * - send_reply / send_new_message MUST NOT bypass approved_for_send
+ *   (draft_ready -> sending is blocked for these actions).
+ * - Non-send actions (mark_read, move_message, set_categories) ARE allowed
+ *   to transition draft_ready -> sending.
  */
 export function isValidTransition(
   from: OutboundStatus,
   to: OutboundStatus,
+  actionType?: OutboundCommand["action_type"],
 ): boolean {
-  return VALID_TRANSITIONS[from]?.includes(to) ?? false;
+  const baseValid = VALID_TRANSITIONS[from]?.includes(to) ?? false;
+  if (!baseValid) {
+    // Action-specific override: non-send actions may go draft_ready -> sending
+    if (actionType && from === "draft_ready" && to === "sending") {
+      const nonSendActions: OutboundCommand["action_type"][] = ["mark_read", "move_message", "set_categories"];
+      return nonSendActions.includes(actionType);
+    }
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -151,8 +173,13 @@ export function isVersionEligible(
   if (version.outbound_id !== command.outbound_id) return false;
   if (command.latest_version !== version.version) return false;
   if (version.superseded_at !== null) return false;
-  // Eligibility requires draft_ready status for any draft-based action
-  if (command.status !== "draft_ready") return false;
+  // Eligibility rules:
+  // - draft_reply requires draft_ready (confirmation only, no send)
+  // - send_reply and send_new_message require approved_for_send (or retry_wait for retries)
+  // - non-send actions (mark_read, move_message, set_categories) require draft_ready
+  const needsApproval = command.action_type === "send_reply" || command.action_type === "send_new_message";
+  if (needsApproval && command.status !== "approved_for_send" && command.status !== "retry_wait") return false;
+  if (!needsApproval && command.status !== "draft_ready") return false;
   return true;
 }
 

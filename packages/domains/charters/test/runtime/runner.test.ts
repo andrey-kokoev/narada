@@ -189,6 +189,195 @@ describe("CodexCharterRunner", () => {
     expect(output.analyzed_at).toBeDefined();
   });
 
+  it("patches missing schema fields with sensible defaults", async () => {
+    globalThis.fetch = async () =>
+      ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  output_version: "2.0",
+                  execution_id: "ex-1",
+                  charter_id: "support_steward",
+                  role: "primary",
+                  outcome: "no_op",
+                  summary: "Minimal response",
+                  // Missing confidence, classifications, facts, proposed_actions, tool_requests, escalations
+                }),
+              },
+            },
+          ],
+        }),
+      }) as Response;
+
+    const runner = new CodexCharterRunner({ apiKey: "test-key" });
+    const output = await runner.run(makeInvocation());
+    expect(output.confidence).toEqual({ overall: "low", uncertainty_flags: ["missing_confidence"] });
+    expect(output.classifications).toEqual([]);
+    expect(output.facts).toEqual([]);
+    expect(output.proposed_actions).toEqual([]);
+    expect(output.tool_requests).toEqual([]);
+    expect(output.escalations).toEqual([]);
+  });
+
+  it("drops incomplete proposed_actions rather than fabricating fields", async () => {
+    globalThis.fetch = async () =>
+      ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  output_version: "2.0",
+                  execution_id: "ex-1",
+                  charter_id: "support_steward",
+                  role: "primary",
+                  outcome: "complete",
+                  summary: "Action with missing fields",
+                  proposed_actions: [
+                    {
+                      action_type: "mark_read",
+                      // Missing authority, payload_json, rationale
+                    },
+                  ],
+                }),
+              },
+            },
+          ],
+        }),
+      }) as Response;
+
+    const runner = new CodexCharterRunner({ apiKey: "test-key" });
+    const output = await runner.run(makeInvocation());
+    // Incomplete actions are stripped; the runner does not fabricate authority,
+    // payload_json, or rationale, because that would make an ungoverned action
+    // appear executable.
+    expect(output.proposed_actions).toHaveLength(0);
+  });
+
+  it("sanitizes payload_json with literal newlines so Rule 6 does not strip", async () => {
+    globalThis.fetch = async () =>
+      ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  output_version: "2.0",
+                  execution_id: "ex-1",
+                  charter_id: "support_steward",
+                  role: "primary",
+                  outcome: "complete",
+                  summary: "Reply with literal newline",
+                  proposed_actions: [
+                    {
+                      action_type: "send_reply",
+                      authority: "recommended",
+                      payload_json: '{"body_text":"Line 1\nLine 2"}',
+                      rationale: "reply",
+                    },
+                  ],
+                }),
+              },
+            },
+          ],
+        }),
+      }) as Response;
+
+    const runner = new CodexCharterRunner({ apiKey: "test-key" });
+    const output = await runner.run(makeInvocation());
+    expect(output.proposed_actions).toHaveLength(1);
+    expect(output.proposed_actions[0]!.action_type).toBe("send_reply");
+    // The literal newline was escaped so JSON.parse succeeds
+    expect(() => JSON.parse(output.proposed_actions[0]!.payload_json)).not.toThrow();
+    const parsed = JSON.parse(output.proposed_actions[0]!.payload_json);
+    expect(parsed.body_text).toBe("Line 1\nLine 2");
+  });
+
+  it("normalizes payload_json body to body_text for draft_reply", async () => {
+    globalThis.fetch = async () =>
+      ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  output_version: "2.0",
+                  execution_id: "ex-1",
+                  charter_id: "support_steward",
+                  role: "primary",
+                  outcome: "complete",
+                  summary: "Reply using body key",
+                  proposed_actions: [
+                    {
+                      action_type: "draft_reply",
+                      authority: "proposed",
+                      payload_json: '{"body":"Hello there"}',
+                      rationale: "reply",
+                    },
+                  ],
+                }),
+              },
+            },
+          ],
+        }),
+      }) as Response;
+
+    const runner = new CodexCharterRunner({ apiKey: "test-key" });
+    const output = await runner.run(makeInvocation());
+    expect(output.proposed_actions).toHaveLength(1);
+    const parsed = JSON.parse(output.proposed_actions[0]!.payload_json);
+    expect(parsed.body_text).toBe("Hello there");
+    expect(parsed.body).toBeUndefined();
+  });
+
+  it("normalizes facts value_json from object to string", async () => {
+    globalThis.fetch = async () =>
+      ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  output_version: "2.0",
+                  execution_id: "ex-1",
+                  charter_id: "support_steward",
+                  role: "primary",
+                  outcome: "complete",
+                  summary: "Fact with object value_json",
+                  facts: [
+                    {
+                      kind: "customer_email",
+                      value_json: { email: "test@example.com" },
+                      source_record_ids: ["msg-1"],
+                      confidence: "high",
+                    },
+                  ],
+                }),
+              },
+            },
+          ],
+        }),
+      }) as Response;
+
+    const runner = new CodexCharterRunner({ apiKey: "test-key" });
+    const output = await runner.run(makeInvocation());
+    expect(output.facts).toHaveLength(1);
+    expect(typeof output.facts[0]!.value_json).toBe("string");
+    expect(JSON.parse(output.facts[0]!.value_json)).toEqual({ email: "test@example.com" });
+  });
+
   it("enforces validation rules from 006 (action bounding)", async () => {
     globalThis.fetch = async () =>
       ({

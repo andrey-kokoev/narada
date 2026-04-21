@@ -143,8 +143,81 @@ Authority clarifications:
 
 Deferred:
 
-- Live Graph API draft creation proof (requires credentials).
+- Live Graph API draft creation proof (requires credentials) — addressed by Mailbox Saturation.
 - Autonomous send remains deferred for safety.
 - Multi-vertical operations (timer, webhook, filesystem) need separate acceptance.
 - Fleet/multi-operation dashboard remains a future milestone.
 - Commit-boundary tracking for this chapter is deferred.
+
+## Mailbox Saturation
+
+Narada gained the canonical live-mailbox proof contract and the operator runbook for exercising real Graph API end-to-end.
+
+- **Live Graph proof saturation** (Task 291): `docs/live-graph-proof.md` defines the canonical six-stage proof for the full draft-to-confirmed path: inbound thread selected → evaluation produced → outbound draft created → draft approved for send → send submitted → reconciliation confirms sent result. Each stage specifies durable evidence, canonical inspection commands, and pass criteria. The public/private evidence split is explicit: the public repo contains the contract and method; the private ops repo contains live transcripts and evidence.
+
+Concrete outcomes:
+
+- Six-stage proof contract with exact state machine progression (`pending → draft_creating → draft_ready → approved_for_send → sending → submitted → confirmed`).
+- Canonical inspection commands for every stage (`narada ops`, `narada show`, `narada approve-draft-for-send`, `sqlite3` direct queries).
+- Operator runbook for executing the proof from pre-flight through confirmation logging.
+- Cross-references from `first-operation-proof.md`, `operator-loop.md`, and `runbook.md`.
+
+Authority clarifications:
+
+- Live proof does not replace fixture-backed proof. They are complementary: fixtures prove mechanical correctness; live proof proves real API/data compatibility.
+- Default posture remains `draft-only` with `require_human_approval: true`.
+- No private mailbox content or credentials may enter the public repository.
+
+Concrete outcomes:
+
+- `narada drafts` command provides focused mailbox-specific draft overview grouped by status with counts and available actions (Task 296).
+- Draft review and promotion ergonomics coherent via `narada show-draft` and `narada drafts` with decision lineage, evaluation lineage, review status, and available actions (Task 292).
+- Day-2 mailbox failure modes enumerated and classified (auth expiry, Graph drift, attachment edge cases, recovery drills) (Task 293).
+- Compact canonical scenario basis defined for five conversational shapes: login/access, billing, refund, escalation, clarification (Task 294).
+- Knowledge placement model explicit across public repo, private ops repo, and charter consumption points (Task 295).
+
+Deferred:
+
+- Autonomous send by default — safety-first posture keeps `draft-only` with `require_human_approval: true` as the production default.
+- Real-time UI updates for draft state — CLI is the primary operator surface; daemon observation API provides polling-based UI.
+- Fleet/multi-operation dashboards — `narada ops` and `narada drafts` are scoped to one config at a time.
+
+## Mailbox Operational Trial
+
+Narada's operational repo (`narada.sonar`) was exercised against the live Graph API for `help@global-maxima.com`, proving the full draft-to-confirmed path end-to-end.
+
+- **Setup contract** (Task 297): `docs/operational-trial-setup-contract.md` names exact paths, config shape, data root, prerequisite checklist, command reference, and public/private boundary table. Private evidence directory convention established in `narada.sonar`.
+- **Live runbook and evidence format** (Task 298): `docs/live-trial-runbook.md` provides the canonical 10-step operator sequence. Redaction policy is explicit. Private `TRIAL-RUNBOOK.md` and `evidence-template.md` live in the ops repo.
+- **Controlled-thread draft generation** (Task 299): Live Graph API connectivity confirmed. Controlled test email synced, fact created, work item opened, charter evaluation produced `draft_reply` action, foreman decision created, outbound handoff created, managed draft created in Graph API. Initially blocked by empty inbox (Task 303) and Kimi API schema validation (Task 305); both resolved.
+- **Approval, send, and reconciliation** (Task 300): Draft reviewed and explicitly approved via operator action surface. `SendExecutionWorker` verified draft integrity, enforced participant policy gate, and submitted the send. Reconciler bound submitted command to inbound message using `internetMessageId` filter, transitioning to `confirmed` within ~1 second. Reconciler bug (`internetMessageHeaders` filtering unsupported) fixed. Retry semantics hardened with explicit re-approval (`retry_wait → approved_for_send`) and honest audit transitions.
+- **Gap capture and public/private split** (Task 301): Eight findings classified. Public corrective tasks: 303 (test thread), 304 (`.env` auto-loading), 305 (Kimi API schema validation). Five findings deferred or classified as positive observations.
+- **Supporting work**: Task 303 created controlled test thread; Task 304 added `.env` auto-loading to CLI and daemon; Task 305 hardened `kimi-api` prompt schema description and runner safety net.
+
+Concrete outcomes:
+
+- Operational repo structure is coherent and reproducible.
+- Live Graph API sync pipeline is functional against real credentials.
+- Charter runtime is healthy with live `kimi-api` after schema binding fixes.
+- Full state machine path verified:
+  ```
+  pending → draft_creating → draft_ready → approved_for_send → sending → submitted → confirmed
+  ```
+- Reconciler uses `internetMessageId` capture at draft creation instead of broken `internetMessageHeaders` filter.
+- Send execution enforces review invariant: missing or deleted managed drafts fail terminal instead of being recreated.
+- Retry cooldown and explicit re-approval prevent API hammering and produce honest audit trails.
+- `.env` auto-loading removes operator friction while preserving secret precedence.
+
+Authority clarifications:
+
+- Structural readiness (config, sync, runtime health) is proven separately from end-to-end operational correctness, and both are now satisfied.
+- Fixture-backed proof and live-backed proof are complementary, not substitutable. The live trial does not replace fixture-backed smoke tests.
+- Public/private boundary held: no message bodies, credentials, Graph IDs, or raw payloads entered the public repo.
+- Default posture remains `draft-only` with `require_human_approval: true`. Autonomous send is intentionally deferred.
+
+Deferred:
+
+- Autonomous send by default — safety-first posture keeps human approval required.
+- CLI materialization gap: `approve-draft-for-send` does not auto-materialize from `pending_approval`.
+- Long-term credential rotation and token expiry handling untested live.
+- Draft quality with real knowledge sources untested (knowledge directory is empty).
+- One pre-existing integration test failure (`dispatch-real.test.ts`) is a test-environment issue, not a product blocker.

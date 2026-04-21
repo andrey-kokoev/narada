@@ -27,6 +27,7 @@ export function createOutboundCommand(
     reviewed_at: null,
     reviewer_notes: null,
     external_reference: null,
+    approved_at: null,
     ...overrides,
   };
 }

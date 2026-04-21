@@ -80,6 +80,9 @@ export class SharedTokenProvider implements GraphTokenProvider {
         const token = await this.getToken(credentials);
         return token.accessToken;
       },
+      invalidateAccessToken: () => {
+        this.invalidateCredentials(credentials);
+      },
     };
   }
 

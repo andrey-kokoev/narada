@@ -164,7 +164,7 @@ describe('ops command', () => {
         return {
           all: vi.fn(() => [
             {
-              command_id: 'out-1',
+              outbound_id: 'out-1',
               action_type: 'draft_reply',
               context_id: 'mail:test',
               created_at: '2026-04-20T10:00:00Z',

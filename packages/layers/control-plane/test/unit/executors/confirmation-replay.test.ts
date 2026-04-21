@@ -9,6 +9,7 @@ import type { FoundMessage, MessageFinder } from "../../../src/outbound/reconcil
 class MockMessageFinder implements MessageFinder {
   byOutboundId = new Map<string, FoundMessage>();
   byMessageId = new Map<string, FoundMessage>();
+  byInternetMessageId = new Map<string, FoundMessage>();
 
   async findByOutboundId(_mailboxId: string, outboundId: string): Promise<FoundMessage | undefined> {
     return this.byOutboundId.get(outboundId);
@@ -16,6 +17,10 @@ class MockMessageFinder implements MessageFinder {
 
   async findByMessageId(_mailboxId: string, messageId: string): Promise<FoundMessage | undefined> {
     return this.byMessageId.get(messageId);
+  }
+
+  async findByInternetMessageId(_mailboxId: string, internetMessageId: string): Promise<FoundMessage | undefined> {
+    return this.byInternetMessageId.get(internetMessageId);
   }
 }
 

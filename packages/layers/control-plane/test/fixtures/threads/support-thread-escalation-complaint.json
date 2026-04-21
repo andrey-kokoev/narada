@@ -1,0 +1,13 @@
+{
+  "conversation_id": "conv-support-escalation-001",
+  "message_id": "msg-escalation-001",
+  "subject": "Serious complaint about service outage — need executive response",
+  "from": { "name": "Dana Enterprise", "address": "dana@enterprise-client.com" },
+  "to": [{ "name": "Support", "address": "help@global-maxima.com" }],
+  "body": {
+    "body_kind": "text",
+    "text": "To whom it may concern,\n\nOur team lost six hours of productive work yesterday due to an unannounced service outage. This is the third incident this quarter. We are an enterprise customer and this level of reliability is unacceptable.\n\nI am escalating this to executive leadership. We need a root-cause analysis, a credit on our account, and a call with your head of customer success by end of week.\n\nDana\nDirector of Operations, Enterprise Client"
+  },
+  "folder_refs": ["inbox"],
+  "flags": { "is_read": false, "is_draft": false, "is_flagged": true, "has_attachments": false }
+}

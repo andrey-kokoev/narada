@@ -39,6 +39,7 @@ import {
   DefaultWorkerRegistry,
   drainWorker,
   SendReplyWorker,
+  SendExecutionWorker,
   NonSendWorker,
   OutboundReconciler,
   DefaultGraphDraftClient,
@@ -428,7 +429,7 @@ async function createDispatchContext(
     const processExecutor = new ProcessExecutor({ intentStore, executionStore: processExecutionStore });
 
     const workerRegistry = new DefaultWorkerRegistry();
-    const [SEND_REPLY, NON_SEND_ACTIONS, OUTBOUND_RECONCILER] = OUTBOUND_WORKER_IDS;
+    const [SEND_REPLY, SEND_EXECUTION, NON_SEND_ACTIONS, OUTBOUND_RECONCILER] = OUTBOUND_WORKER_IDS;
     workerRegistry.register({
       identity: {
         worker_id: 'process_executor',
@@ -485,6 +486,23 @@ async function createDispatchContext(
             return undefined;
           }
         },
+        findByInternetMessageId: async (_mailboxId, internetMessageId) => {
+          try {
+            const result = await graphHttpClient.getJson<{ value: Array<{ id: string; isRead?: boolean; parentFolderId?: string; categories?: string[] }> }>(
+              `/users/${encodeURIComponent(userId)}/messages?$filter=internetMessageId%20eq%20'${encodeURIComponent(internetMessageId)}'&$select=id,isRead,parentFolderId,categories`,
+            );
+            const msg = result.value?.[0];
+            if (!msg) return undefined;
+            return {
+              messageId: msg.id,
+              isRead: msg.isRead,
+              folderRefs: msg.parentFolderId ? [msg.parentFolderId] : undefined,
+              categoryRefs: msg.categories,
+            };
+          } catch {
+            return undefined;
+          }
+        },
       };
 
       const participantResolver: ParticipantResolver = {
@@ -518,6 +536,12 @@ async function createDispatchContext(
       const sendReplyWorker = new SendReplyWorker({
         store: outboundStore,
         draftClient,
+        resolveUserId: () => userId,
+      });
+
+      const sendExecutionWorker = new SendExecutionWorker({
+        store: outboundStore,
+        draftClient,
         participantResolver,
         resolveUserId: () => userId,
       });
@@ -538,10 +562,23 @@ async function createDispatchContext(
           worker_id: SEND_REPLY,
           executor_family: 'outbound',
           concurrency_policy: 'singleton',
-          description: 'Creates drafts and sends reply messages via Graph API',
+          description: 'Creates drafts for reply messages via Graph API',
         },
         fn: async () => {
           const result = await sendReplyWorker.processNext(scope.scope_id);
+          return { processed: result.processed, execution_id: result.outboundId };
+        },
+      });
+
+      workerRegistry.register({
+        identity: {
+          worker_id: SEND_EXECUTION,
+          executor_family: 'outbound',
+          concurrency_policy: 'singleton',
+          description: 'Executes approved send commands via Graph API',
+        },
+        fn: async () => {
+          const result = await sendExecutionWorker.processNext(scope.scope_id);
           return { processed: result.processed, execution_id: result.outboundId };
         },
       });

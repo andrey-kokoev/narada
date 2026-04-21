@@ -406,7 +406,8 @@ The kernel supports explicit promotion of artifacts through lifecycle transition
 | `work_item` | `failed_retryable` | `failed_retryable` (retry readiness promoted) | `resolve` |
 | `work_item` | `failed_retryable` | `failed_terminal` | `admin` |
 | `evaluation` | `preview` | `governed_work` | `derive` + `resolve` |
-| `outbound_command` | `draft_ready` | `submitted` | `execute` |
+| `outbound_command` | `draft_ready` | `approved_for_send` | `execute` (operator approval) |
+| `outbound_command` | `approved_for_send` | `submitted` | `execute` (worker send) |
 | `outbound_command` | `pending` | `cancelled` | `execute` |
 
 ### 10.2 Kernel Invariants for Promotion

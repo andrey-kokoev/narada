@@ -32,6 +32,8 @@ import {
   getRecentOperatorActions,
   getOperatorActionsForScope,
   getOperatorActionsForContext,
+  getDraftReviewDetail,
+  getDraftReviewDetails,
 } from "../../../src/observability/queries.js";
 import { getMailExecutionDetails } from "../../../src/observability/mailbox.js";
 import type { WorkItem, ExecutionAttempt, ToolCallRecord } from "../../../src/coordinator/types.js";
@@ -1580,6 +1582,199 @@ describe("observability/queries", () => {
       expect(snapshot.stuck.work_items[0]!.classification).toBe("stuck_opened");
       expect(snapshot.stuck.outbound_handoffs.length).toBeGreaterThan(0);
       expect(snapshot.stuck.outbound_handoffs[0]!.classification).toBe("stuck_pending");
+    });
+  });
+
+  describe("draft review detail queries", () => {
+    function seedOutbound(overrides?: {
+      outbound_id?: string;
+      status?: import("../../../src/outbound/types.js").OutboundStatus;
+      action_type?: string;
+      reviewed_at?: string | null;
+      approved_at?: string | null;
+    }) {
+      const id = overrides?.outbound_id ?? "ob-draft-1";
+      const now = new Date().toISOString();
+      outboundStore.createCommand(
+        {
+          outbound_id: id,
+          context_id: "conv-1",
+          scope_id: "mb-1",
+          action_type: overrides?.action_type ?? "send_reply",
+          status: overrides?.status ?? "draft_ready",
+          latest_version: 1,
+          created_at: now,
+          created_by: "test",
+          submitted_at: null,
+          confirmed_at: null,
+          blocked_reason: null,
+          terminal_reason: null,
+          idempotency_key: `key-${id}`,
+          reviewed_at: null,
+          reviewer_notes: null,
+          external_reference: null,
+          approved_at: null,
+        },
+        {
+          outbound_id: id,
+          version: 1,
+          reply_to_message_id: null,
+          to: ["to@example.com"],
+          cc: [],
+          bcc: [],
+          subject: "Test Subject",
+          body_text: "Hello world",
+          body_html: "",
+          idempotency_key: `key-${id}`,
+          policy_snapshot_json: "{}",
+          payload_json: "{}",
+          created_at: now,
+          superseded_at: null,
+        },
+      );
+      if (overrides?.reviewed_at) {
+        outboundStore.updateCommandStatus(id, overrides.status ?? "draft_ready", { reviewed_at: overrides.reviewed_at });
+      }
+      if (overrides?.approved_at) {
+        outboundStore.updateCommandStatus(id, overrides.status ?? "draft_ready", { approved_at: overrides.approved_at });
+      }
+      return id;
+    }
+
+    function seedDecision(outboundId: string, rationale: string) {
+      coordinatorStore.insertDecision({
+        decision_id: `fd-${outboundId}`,
+        context_id: "conv-1",
+        scope_id: "mb-1",
+        source_charter_ids_json: '["support_steward"]',
+        approved_action: "send_reply",
+        payload_json: "{}",
+        rationale,
+        decided_at: new Date().toISOString(),
+        outbound_id: outboundId,
+        created_by: "foreman:test/charter:support_steward",
+      });
+    }
+
+    function seedEvaluation(summary: string) {
+      const now = new Date().toISOString();
+      // Seed required FK rows
+      coordinatorStore.insertWorkItem({
+        work_item_id: "wi-1",
+        context_id: "conv-1",
+        scope_id: "mb-1",
+        status: "resolved",
+        priority: 0,
+        opened_for_revision_id: "rev-1",
+        resolved_revision_id: null,
+        resolution_outcome: "action_created",
+        error_message: null,
+        retry_count: 0,
+        next_retry_at: null,
+        context_json: null,
+        created_at: now,
+        updated_at: now,
+        preferred_session_id: null,
+        preferred_agent_id: null,
+        affinity_group_id: null,
+        affinity_strength: 0,
+        affinity_expires_at: null,
+        affinity_reason: null,
+      });
+      coordinatorStore.insertExecutionAttempt({
+        execution_id: "ex-1",
+        work_item_id: "wi-1",
+        revision_id: "rev-1",
+        session_id: null,
+        status: "succeeded",
+        started_at: now,
+        completed_at: now,
+        runtime_envelope_json: "{}",
+        outcome_json: null,
+        error_message: null,
+      });
+      coordinatorStore.insertEvaluation({
+        evaluation_id: "eval-1",
+        execution_id: "ex-1",
+        work_item_id: "wi-1",
+        context_id: "conv-1",
+        scope_id: "mb-1",
+        charter_id: "support_steward",
+        role: "primary",
+        output_version: "1",
+        analyzed_at: now,
+        outcome: "accepted",
+        confidence_json: "{}",
+        summary,
+        classifications_json: "[]",
+        facts_json: "[]",
+        escalations_json: "[]",
+        proposed_actions_json: "[]",
+        tool_requests_json: "[]",
+        recommended_action_class: null,
+        created_at: now,
+      });
+    }
+
+    it("getDraftReviewDetail returns undefined for missing outbound", () => {
+      const detail = getDraftReviewDetail(outboundStore, coordinatorStore, "ob-missing");
+      expect(detail).toBeUndefined();
+    });
+
+    it("getDraftReviewDetail surfaces outbound, decision, and evaluation lineage", () => {
+      const id = seedOutbound();
+      seedDecision(id, "Reply needed for refund");
+      seedEvaluation("Customer asks for refund");
+
+      const detail = getDraftReviewDetail(outboundStore, coordinatorStore, id);
+      expect(detail).toBeDefined();
+      expect(detail!.outbound_id).toBe(id);
+      expect(detail!.status).toBe("draft_ready");
+      expect(detail!.review_status).toBe("awaiting_review");
+      expect(detail!.subject).toBe("Test Subject");
+      expect(detail!.body_preview).toBe("Hello world");
+      expect(detail!.to).toEqual(["to@example.com"]);
+      expect(detail!.decision_id).toBe(`fd-${id}`);
+      expect(detail!.decision_rationale).toBe("Reply needed for refund");
+      expect(detail!.evaluation_id).toBe("eval-1");
+      expect(detail!.charter_id).toBe("support_steward");
+      expect(detail!.evaluation_summary).toBe("Customer asks for refund");
+      expect(detail!.available_actions).toContain("approve_draft_for_send");
+      expect(detail!.available_actions).toContain("mark_reviewed");
+      expect(detail!.available_actions).toContain("reject_draft");
+      expect(detail!.available_actions).toContain("handled_externally");
+    });
+
+    it("getDraftReviewDetail returns correct review_status for reviewed and approved drafts", () => {
+      const idReviewed = seedOutbound({ outbound_id: "ob-reviewed", reviewed_at: new Date().toISOString() });
+      const idApproved = seedOutbound({ outbound_id: "ob-approved", approved_at: new Date().toISOString(), status: "approved_for_send" });
+
+      const reviewed = getDraftReviewDetail(outboundStore, coordinatorStore, idReviewed);
+      expect(reviewed!.review_status).toBe("awaiting_review");
+      expect(reviewed!.reviewed_at).not.toBeNull();
+
+      const approved = getDraftReviewDetail(outboundStore, coordinatorStore, idApproved);
+      expect(approved!.review_status).toBe("approved_for_send");
+    });
+
+    it("getDraftReviewDetail omits approve action for non-send action types", () => {
+      const id = seedOutbound({ outbound_id: "ob-draft", action_type: "draft_reply" });
+      const detail = getDraftReviewDetail(outboundStore, coordinatorStore, id);
+      expect(detail!.available_actions).not.toContain("approve_draft_for_send");
+      expect(detail!.available_actions).toContain("mark_reviewed");
+    });
+
+    it("getDraftReviewDetails filters by scope and status", () => {
+      seedOutbound({ outbound_id: "ob-a", status: "draft_ready" });
+      seedOutbound({ outbound_id: "ob-b", status: "confirmed" });
+      seedOutbound({ outbound_id: "ob-c", status: "draft_ready" });
+
+      const all = getDraftReviewDetails(outboundStore, coordinatorStore, "mb-1");
+      expect(all.length).toBeGreaterThanOrEqual(2);
+      expect(all.some((d) => d.outbound_id === "ob-b")).toBe(false);
+
+      const limited = getDraftReviewDetails(outboundStore, coordinatorStore, "mb-1", ["draft_ready"]);
+      expect(limited.every((d) => d.status === "draft_ready")).toBe(true);
     });
   });
 });

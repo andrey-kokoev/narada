@@ -22,6 +22,7 @@ export interface FoundMessage {
 export interface MessageFinder {
   findByOutboundId(mailboxId: string, outboundId: string): Promise<FoundMessage | undefined>;
   findByMessageId(mailboxId: string, messageId: string): Promise<FoundMessage | undefined>;
+  findByInternetMessageId(mailboxId: string, internetMessageId: string): Promise<FoundMessage | undefined>;
 }
 
 export interface ReconcilerDeps {
@@ -142,13 +143,27 @@ export class OutboundReconciler {
 
     try {
       if (command.action_type === "send_reply") {
-        const message = await messageFinder.findByOutboundId(
-          command.scope_id,
-          command.outbound_id,
-        );
-        if (message) {
-          confirmed = true;
-          evidence = `Found message ${message.messageId} with outbound_id header`;
+        const managed = this.deps.store.getManagedDraft(command.outbound_id, version.version);
+        if (managed?.internet_message_id) {
+          const message = await messageFinder.findByInternetMessageId(
+            command.scope_id,
+            managed.internet_message_id,
+          );
+          if (message) {
+            confirmed = true;
+            evidence = `Found message ${message.messageId} matching internetMessageId`;
+          }
+        }
+        // Fallback to header-based lookup for legacy drafts without internetMessageId
+        if (!confirmed) {
+          const message = await messageFinder.findByOutboundId(
+            command.scope_id,
+            command.outbound_id,
+          );
+          if (message) {
+            confirmed = true;
+            evidence = `Found message ${message.messageId} with outbound_id header`;
+          }
         }
       } else {
         const payload = parsePayload(version);

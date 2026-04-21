@@ -53,6 +53,7 @@ function createVersion(
 class MockMessageFinder implements MessageFinder {
   byOutboundId = new Map<string, FoundMessage>();
   byMessageId = new Map<string, FoundMessage>();
+  byInternetMessageId = new Map<string, FoundMessage>();
 
   async findByOutboundId(_mailboxId: string, outboundId: string): Promise<FoundMessage | undefined> {
     return this.byOutboundId.get(outboundId);
@@ -60,6 +61,10 @@ class MockMessageFinder implements MessageFinder {
 
   async findByMessageId(_mailboxId: string, messageId: string): Promise<FoundMessage | undefined> {
     return this.byMessageId.get(messageId);
+  }
+
+  async findByInternetMessageId(_mailboxId: string, internetMessageId: string): Promise<FoundMessage | undefined> {
+    return this.byInternetMessageId.get(internetMessageId);
   }
 }
 
@@ -107,6 +112,36 @@ describe("OutboundReconciler", () => {
     store.createCommand(cmd, ver);
 
     finder.byOutboundId.set(cmd.outbound_id, { messageId: "msg-123" });
+
+    const result = await reconciler.processNext();
+    expect(result.processed).toBe(true);
+
+    const updated = store.getCommand(cmd.outbound_id);
+    expect(updated?.status).toBe("confirmed");
+    expect(updated?.confirmed_at).not.toBeNull();
+  });
+
+  it("transitions send_reply submitted -> confirmed via internetMessageId when managed draft has it", async () => {
+    const cmd = createCommand({ action_type: "send_reply", status: "submitted", submitted_at: new Date().toISOString() });
+    const ver = createVersion(cmd.outbound_id);
+    store.createCommand(cmd, ver);
+
+    store.setManagedDraft({
+      outbound_id: cmd.outbound_id,
+      version: ver.version,
+      draft_id: "draft-123",
+      etag: null,
+      internet_message_id: "<test-message-id-123@example.com>",
+      header_outbound_id_present: true,
+      body_hash: "abc",
+      recipients_hash: "def",
+      subject_hash: "ghi",
+      created_at: new Date().toISOString(),
+      last_verified_at: null,
+      invalidated_reason: null,
+    });
+
+    finder.byInternetMessageId.set("<test-message-id-123@example.com>", { messageId: "msg-456" });
 
     const result = await reconciler.processNext();
     expect(result.processed).toBe(true);

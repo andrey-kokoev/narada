@@ -1,0 +1,13 @@
+{
+  "conversation_id": "conv-support-billing-001",
+  "message_id": "msg-billing-001",
+  "subject": "Question about my latest invoice",
+  "from": { "name": "Bob Customer", "address": "bob@external.com" },
+  "to": [{ "name": "Support", "address": "help@global-maxima.com" }],
+  "body": {
+    "body_kind": "text",
+    "text": "Hi there,\n\nI noticed I was charged twice for my subscription on April 15. I only have one account, so this looks like a duplicate charge. Can you help me understand what happened and refund the extra charge?\n\nMy card ending in 4242 was used for both transactions.\n\nThanks,\nBob"
+  },
+  "folder_refs": ["inbox"],
+  "flags": { "is_read": false, "is_draft": false, "is_flagged": false, "has_attachments": false }
+}

@@ -27,7 +27,7 @@ The system is organized into **eleven layers**: five control-plane layers above 
 │  (catalog resolution, request validation, subprocess/HTTP exec) │
 ├─────────────────────────────────────────────────────────────────┤
 │                   Outbound Worker Layer                          │
-│  (command claim, draft creation, send, reconcile to confirmed)  │
+│  (draft creation, approval, send execution, reconcile)         │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -197,7 +197,7 @@ REMOTE SOURCE
           ▼
 ┌───────────────────┐
 │  Worker Layer     │  ← Claims intent, executes effect
-│  (mail / process) │     (draft+send for mail, subprocess for process)
+│  (mail / process) │     (draft creation, approval, send execution for mail; subprocess for process)
 └─────────┬─────────┘
           │
           ▼
@@ -216,7 +216,12 @@ Daemon sleeps until next wake (poll, retry timer, manual)
 5. **Evaluation** — The scheduler inserts an `execution_attempt` and transitions the item to `executing`. The charter runtime receives a frozen `CharterInvocationEnvelope` and produces a `CharterOutputEnvelope`.
 6. **Tool Execution** — Approved *read-only* tool requests are executed by the tool runner, with results logged to `tool_call_records`. Non-read-only requests are rejected with `rejected_policy` records (Phase A guardrail).
 7. **Proposal / Intent Creation** — The foreman validates output (`validation.ts`), applies governance (`governance.ts`), writes a `foreman_decisions` row, and creates an `intent` in the same SQLite transaction. The work item transitions to `resolved`.
-8. **Worker Execution** — The appropriate worker claims the intent and executes the effect: outbound worker creates drafts/sends for `mail.*` intents; `ProcessExecutor` spawns a subprocess for `process.run` intents.
+8. **Worker Execution** — The appropriate worker claims the intent and executes the effect:
+   - `SendReplyWorker` creates Graph drafts for `mail.send_reply` and `mail.draft_reply` intents
+   - `SendExecutionWorker` performs the actual Graph send only for commands explicitly approved via `approved_for_send`
+   - `NonSendWorker` executes `mark_read`, `move_message`, and `set_categories`
+   - `OutboundReconciler` transitions `submitted` → `confirmed` based on observed remote state
+   - `ProcessExecutor` spawns a subprocess for `process.run` intents
 9. **Terminal Quiescence** — The scheduler finds no runnable work, valid leases, or expired retry timers. The daemon sleeps until the next wake.
 
 ### Vertical Parity

@@ -18,14 +18,9 @@ import { isVersionEligible, isValidTransition } from "./types.js";
 import type { GraphDraftClient, CreateDraftPayload } from "./graph-draft-client.js";
 import { ExchangeFSSyncError, ErrorCode } from "../errors.js";
 
-export interface ParticipantResolver {
-  getParticipants(mailboxId: string, threadId: string): Promise<Set<string>>;
-}
-
 export interface SendReplyWorkerDeps {
   store: OutboundStore;
   draftClient: GraphDraftClient;
-  participantResolver: ParticipantResolver;
   resolveUserId: (mailboxId: string) => string;
   logger?: Logger;
 }
@@ -135,23 +130,19 @@ export class SendReplyWorker {
         case "pending":
         case "draft_creating": {
           await this.ensureDraftCreated(command, version);
-          // If draft creation succeeded, continue to send/confirm in the same invocation
+          // If draft creation succeeded, confirm draft_reply in the same invocation.
+          // send_reply stops at draft_ready and awaits explicit approval.
           const updated = this.deps.store.getCommand(command.outbound_id);
-          if (updated && updated.status === "draft_ready") {
-            if (updated.action_type === "draft_reply") {
-              await this.confirmDraft(updated, version);
-            } else {
-              await this.sendDraft(updated, version);
-            }
+          if (updated && updated.status === "draft_ready" && updated.action_type === "draft_reply") {
+            await this.confirmDraft(updated, version);
           }
           break;
         }
         case "draft_ready": {
           if (command.action_type === "draft_reply") {
             await this.confirmDraft(command, version);
-          } else {
-            await this.sendDraft(command, version);
           }
+          // send_reply stops at draft_ready; approval is a separate operator action.
           break;
         }
         default: {
@@ -185,13 +176,28 @@ export class SendReplyWorker {
       const payload = buildDraftPayload(command.outbound_id, version);
       const created = await this.deps.draftClient.createDraft(userId, payload);
 
+      // Exchange assigns internetMessageId immediately upon draft creation.
+      // Capture it now so the reconciler can locate the sent message later
+      // (Graph API does not support filtering on internetMessageHeaders).
+      let internetMessageId: string | null = null;
+      try {
+        const readBack = await this.deps.draftClient.getDraft(userId, created.id);
+        internetMessageId = readBack.internetMessageId ?? null;
+      } catch (readError) {
+        logger?.warn("Failed to read back draft internetMessageId", {
+          outboundId: command.outbound_id,
+          draftId: created.id,
+          error: (readError as Error).message,
+        });
+      }
+
       const now = new Date().toISOString();
       const managed: ManagedDraft = {
         outbound_id: command.outbound_id,
         version: version.version,
         draft_id: created.id,
         etag: null,
-        internet_message_id: null,
+        internet_message_id: internetMessageId,
         header_outbound_id_present: true,
         body_hash: computeBodyHash(version),
         recipients_hash: computeRecipientsHash(version),
@@ -266,145 +272,6 @@ export class SendReplyWorker {
           terminal_reason: `Draft creation failed: ${(error as Error).message}`,
         });
       }
-    }
-  }
-
-  private async sendDraft(
-    command: OutboundCommand,
-    version: OutboundVersion,
-  ): Promise<void> {
-    const { store, participantResolver, logger } = this.deps;
-
-    // Re-verify managed draft before send
-    let managed = store.getManagedDraft(command.outbound_id, version.version);
-    if (!managed) {
-      // Draft was lost locally but command is draft_ready. Recreate without state change.
-      logger?.info("Managed draft missing, recreating", {
-        outboundId: command.outbound_id,
-        version: version.version,
-      });
-      try {
-        await this.createAndPersistDraft(command, version);
-      } catch (error) {
-        logger?.warn("Failed to recreate missing managed draft", {
-          outboundId: command.outbound_id,
-          error: (error as Error).message,
-        });
-        if (isAuthError(error)) {
-          this.transition(command.outbound_id, "draft_ready", "failed_terminal", {
-            terminal_reason: `Auth error recreating draft: ${(error as Error).message}`,
-          });
-        } else if (isRetryableError(error)) {
-          this.transition(command.outbound_id, "draft_ready", "retry_wait", {
-            terminal_reason: `Draft recreation failed: ${(error as Error).message}`,
-          });
-        } else {
-          this.transition(command.outbound_id, "draft_ready", "failed_terminal", {
-            terminal_reason: `Draft recreation failed: ${(error as Error).message}`,
-          });
-        }
-        return;
-      }
-      managed = store.getManagedDraft(command.outbound_id, version.version);
-      if (!managed) {
-        this.transition(command.outbound_id, "draft_ready", "failed_terminal", {
-          terminal_reason: "Managed draft still missing after recreation attempt",
-        });
-        return;
-      }
-    }
-
-    try {
-      const verified = await this.verifyManagedDraft(managed, version, command.scope_id);
-      if (!verified) {
-        // verifyManagedDraft handles its own transitions on failure
-        return;
-      }
-    } catch (error) {
-      if (isAuthError(error)) {
-        this.transition(command.outbound_id, "draft_ready", "failed_terminal", {
-          terminal_reason: `Auth error verifying draft before send: ${(error as Error).message}`,
-        });
-      } else if (isRetryableError(error)) {
-        this.transition(command.outbound_id, "draft_ready", "retry_wait", {
-          terminal_reason: `Pre-send verification failed: ${(error as Error).message}`,
-        });
-      } else {
-        this.transition(command.outbound_id, "draft_ready", "failed_terminal", {
-          terminal_reason: `Pre-send verification failed: ${(error as Error).message}`,
-        });
-      }
-      return;
-    }
-
-    // Policy gate
-    try {
-      const participants = await participantResolver.getParticipants(
-        command.scope_id,
-        command.context_id,
-      );
-      const allRecipients = new Set([...version.to, ...version.cc, ...version.bcc]);
-      for (const recipient of allRecipients) {
-        if (!participants.has(recipient.toLowerCase())) {
-          this.transition(command.outbound_id, "draft_ready", "blocked_policy", {
-            blocked_reason: `Recipient ${recipient} is not a thread participant`,
-          });
-          return;
-        }
-      }
-    } catch (error) {
-      logger?.warn("Policy check failed", {
-        outboundId: command.outbound_id,
-        error: (error as Error).message,
-      });
-      this.transition(command.outbound_id, "draft_ready", "retry_wait", {
-        terminal_reason: `Policy resolution error: ${(error as Error).message}`,
-      });
-      return;
-    }
-
-    // Transition to sending
-    this.transition(command.outbound_id, "draft_ready", "sending");
-
-    // Send the draft
-    try {
-      const userId = this.deps.resolveUserId(command.scope_id);
-      await this.deps.draftClient.sendDraft(userId, managed.draft_id);
-    } catch (error) {
-      logger?.warn("Send draft failed", {
-        outboundId: command.outbound_id,
-        error: (error as Error).message,
-      });
-      if (isAuthError(error)) {
-        this.transition(command.outbound_id, "sending", "failed_terminal", {
-          terminal_reason: `Auth error sending draft: ${(error as Error).message}`,
-        });
-      } else if (isRetryableError(error)) {
-        // After a send failure, we can go back to draft_ready to retry later
-        this.transition(command.outbound_id, "sending", "retry_wait", {
-          terminal_reason: `Send failed: ${(error as Error).message}`,
-        });
-      } else {
-        this.transition(command.outbound_id, "sending", "failed_terminal", {
-          terminal_reason: `Send failed: ${(error as Error).message}`,
-        });
-      }
-      return;
-    }
-
-    // Send succeeded. Record submitted.
-    // This must be done immediately; if it fails, the command stays in sending
-    // and will be handled by reconciliation on the next pass.
-    try {
-      this.transition(command.outbound_id, "sending", "submitted", {
-        submitted_at: new Date().toISOString(),
-      });
-    } catch (error) {
-      logger?.error("Failed to record submitted state after successful send", error as Error, {
-        outboundId: command.outbound_id,
-      });
-      // Intentionally leave in sending so reconciler can pick it up
-      return;
     }
   }
 
@@ -570,7 +437,7 @@ export class SendReplyWorker {
     updates?: Partial<
       Pick<
         OutboundCommand,
-        "latest_version" | "blocked_reason" | "terminal_reason" | "submitted_at" | "confirmed_at"
+        "latest_version" | "blocked_reason" | "terminal_reason" | "submitted_at" | "confirmed_at" | "approved_at"
       >
     >,
   ): void {

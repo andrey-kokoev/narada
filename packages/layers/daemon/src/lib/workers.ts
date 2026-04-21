@@ -7,6 +7,7 @@
  */
 export const OUTBOUND_WORKER_IDS = [
   "send_reply",
+  "send_execution",
   "non_send_actions",
   "outbound_reconciler",
 ] as const;

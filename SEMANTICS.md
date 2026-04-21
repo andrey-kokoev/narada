@@ -753,6 +753,71 @@ They must **never** be stored in canonical durable boundaries (fact, work_item, 
 
 ---
 
+<a name="intelligence-authority-separation"></a>
+## 2.13 Intelligence-Authority Separation
+
+Narada instantiates **Intelligence-Authority Separation**: the architectural boundary that allows fallible, non-deterministic intelligence to participate in consequential operations without owning truth, permission, lifecycle, or consequence.
+
+### 2.13.1 Core Invariant
+
+> **Intelligence may contribute judgment. Authority must remain in governed structure.**
+
+In Narada terms:
+
+- **`evaluation`** is intelligence output. It is evidence, not authority.
+- **`decision`** is authority output. It is governed admission, rejection, or review requirement.
+- No evaluation may directly mutate durable state, grant permission, execute effects, or confirm its own success.
+
+### 2.13.2 Boundary Ownership
+
+| Boundary | Owner | What it prevents |
+|----------|-------|------------------|
+| observation → fact | Source adapter + normalizer | world state becoming prompt memory |
+| fact → context | Context formation strategy | unbounded reality becoming arbitrary model context |
+| context → work | Foreman (`onFactsAdmitted`) | attention becoming informal task selection |
+| work → evaluation | Charter runtime (read-only envelope) | inference becoming mutation |
+| evaluation → decision | Foreman (`resolveWorkItem`) | model judgment becoming permission |
+| decision → intent | Intent handoff (`OutboundHandoff`) | approval becoming direct effect |
+| intent → execution | Worker (scheduler-claimed) | execution inventing reasons |
+| execution → reconciliation | Reconciler / inbound observation | API success becoming assumed truth |
+| reconciliation → observation | Observation API (read-only) | hidden state becoming uninspectable consequence |
+
+### 2.13.3 Authority Classes and Separation
+
+The existing authority class taxonomy enforces separation:
+
+- `derive` / `propose` — intelligence may form context and propose evaluation
+- `claim` / `execute` — scheduler and workers perform mechanical execution
+- `resolve` / `confirm` — foreman and reconciler own admission and confirmation
+- `admin` — operator owns recovery, replay, and structural changes
+
+No single component holds all authority classes. The charter runtime is explicitly restricted to `derive`/`propose`.
+
+### 2.13.4 Evaluation Authority
+
+Evaluation authority is the bounded right to produce judgment under a frozen context:
+
+- The charter runtime receives an immutable `CharterInvocationEnvelope`
+- It produces a `CharterOutputEnvelope` containing proposals, reasoning, and evidence
+- The foreman decides whether to accept, reject, or escalate that output
+- The evaluation is persisted as inspectable evidence, not applied as hidden state
+
+Removing the intelligent evaluator degrades capability (no new evaluations), but does not destroy truth, permission, lifecycle, or audit structure.
+
+### 2.13.5 Failure Modes
+
+Separation fails when judgment and authority collapse:
+
+| Failure mode | Description | Narada defense |
+|--------------|-------------|----------------|
+| Prompt sovereignty | Model output directly mutates durable state | Foreman decision gate; evaluation is read-only evidence |
+| Hidden authority | Evaluator silently determines permission or lifecycle | Policy is external to evaluation; foreman owns resolution |
+| Direct effect | Model or runner performs side effects without durable intent | `Intent` is the universal durable effect boundary |
+| Self-confirmation | Same component proposes and declares success | Reconciler observes external state independently |
+| Evidence loss | Judgment is used but not persisted | Evaluations are durably stored with execution attempts |
+
+---
+
 <a name="prohibited-terms"></a>
 ## 3. Prohibited Terms
 

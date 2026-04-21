@@ -113,6 +113,24 @@ flowchart LR
   Observation -. no writes .-> Handoff
 ```
 
+### Intelligence-Authority Separation
+
+Narada prevents collapse between judgment and consequence by separating what intelligence proposes from what authority admits. The charter runtime produces **evaluation** (evidence, judgment, proposals). The control plane produces **decision** (admission, rejection, review requirement, escalation).
+
+| Transition | Owner | Authority |
+|------------|-------|-----------|
+| Source → Fact | Source adapter + normalizer | Truth authority: durable, replay-stable fact identity |
+| Fact → Context | Context formation strategy | Work authority: bounded, policy-relevant grouping |
+| Context → Work | Foreman (`onFactsAdmitted`) | Work authority: explicit lifecycle-managed unit |
+| Work → Evaluation | Charter runtime (read-only envelope) | Evaluation authority: bounded judgment under frozen context |
+| Evaluation → Decision | Foreman (`resolveWorkItem`) | Policy authority: governed admission/rejection |
+| Decision → Intent | Intent handoff / `OutboundHandoff` | Intent authority: durable effect boundary before execution |
+| Intent → Execution | Worker (scheduler-claimed lease) | Execution authority: mechanical effect without invented purpose |
+| Execution → Confirmation | Reconciler / inbound observation | Confirmation authority: external observation of effect result |
+| Confirmation → Observation | Observation API | Read-only authority: inspectable views, no mutation |
+
+The charter runtime is explicitly restricted to read-only evaluation. It cannot mutate stores, create intents, or confirm effects. This is the structural guarantee of Intelligence-Authority Separation in Narada.
+
 ## Runtime Interaction
 
 ```mermaid
@@ -236,15 +254,17 @@ stateDiagram-v2
   [*] --> pending
   pending --> draft_creating: worker claims send intent
   draft_creating --> draft_ready: Graph draft created
-  draft_ready --> sending: policy allows send
+  draft_ready --> approved_for_send: operator approves send
+  approved_for_send --> sending: send worker executes
   sending --> submitted: Graph accepts send
   submitted --> confirmed: reconciler observes result
 
   pending --> failed_terminal: invalid command / policy hard fail
   draft_creating --> failed_terminal: managed draft conflict
   draft_ready --> failed_terminal: external draft mutation
+  approved_for_send --> failed_terminal: missing draft / auth error
   sending --> retry_wait: ambiguous or retryable failure
-  retry_wait --> pending: retry due
+  retry_wait --> draft_ready: retry due
 
   confirmed --> [*]
   failed_terminal --> [*]

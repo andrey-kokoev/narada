@@ -1,0 +1,13 @@
+{
+  "conversation_id": "conv-support-refund-001",
+  "message_id": "msg-refund-001",
+  "subject": "Refund request for order #GM-98234",
+  "from": { "name": "Carol Customer", "address": "carol@external.com" },
+  "to": [{ "name": "Support", "address": "help@global-maxima.com" }],
+  "body": {
+    "body_kind": "text",
+    "text": "Hello,\n\nI would like to request a refund for order #GM-98234 placed on April 10. The item arrived damaged and does not match the description on your site. I have photos if needed.\n\nPlease let me know the next steps.\n\nBest,\nCarol"
+  },
+  "folder_refs": ["inbox"],
+  "flags": { "is_read": false, "is_draft": false, "is_flagged": true, "has_attachments": false }
+}

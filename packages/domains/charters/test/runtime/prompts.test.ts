@@ -45,4 +45,25 @@ describe("resolveSystemPrompt", () => {
     const prompt = resolveSystemPrompt(makeEnvelope("custom_test_charter"));
     expect(prompt).toBe("Custom prompt for custom_test_charter");
   });
+
+  it("includes the CharterOutputEnvelope schema description in generic prompts", () => {
+    const prompt = resolveSystemPrompt(makeEnvelope("unknown_charter"));
+    expect(prompt).toContain("confidence");
+    expect(prompt).toContain("payload_json");
+    expect(prompt).toContain("tool_requests");
+    expect(prompt).toContain("escalations");
+    expect(prompt).toContain("classifications");
+    expect(prompt).toContain("facts");
+    expect(prompt).toContain("proposed_actions");
+    expect(prompt).toContain("analyzed_at");
+    expect(prompt).toContain('output_version: "2.0"');
+  });
+
+  it("includes the CharterOutputEnvelope schema description in support_steward prompts", () => {
+    const prompt = resolveSystemPrompt(makeEnvelope("support_steward"));
+    expect(prompt).toContain("confidence");
+    expect(prompt).toContain("payload_json");
+    expect(prompt).toContain("tool_requests");
+    expect(prompt).toContain("escalations");
+  });
 });

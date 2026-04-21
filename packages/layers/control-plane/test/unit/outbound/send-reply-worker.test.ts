@@ -28,6 +28,10 @@ function createCommand(overrides?: Partial<OutboundCommand>): OutboundCommand {
     blocked_reason: null,
     terminal_reason: null,
     idempotency_key: "key-001",
+    reviewed_at: null,
+    reviewer_notes: null,
+    external_reference: null,
+    approved_at: null,
     ...overrides,
   };
 }
@@ -111,13 +115,6 @@ class MockGraphDraftClient implements GraphDraftClient {
   }
 }
 
-function createParticipantResolver(participants: string[] = ["alice@example.com"]) {
-  return {
-    getParticipants: async (_mailboxId: string, _threadId: string) =>
-      new Set(participants.map((p) => p.toLowerCase())),
-  };
-}
-
 describe("SendReplyWorker", () => {
   let store: SqliteOutboundStore;
   let draftClient: MockGraphDraftClient;
@@ -130,7 +127,6 @@ describe("SendReplyWorker", () => {
     worker = new SendReplyWorker({
       store,
       draftClient,
-      participantResolver: createParticipantResolver(),
       resolveUserId: (scopeId) => `user-${scopeId}`,
       logger: undefined,
     });
@@ -140,7 +136,7 @@ describe("SendReplyWorker", () => {
     store.close();
   });
 
-  it("happy path: pending -> submitted", async () => {
+  it("happy path: send_reply pending -> draft_ready (stops before send)", async () => {
     const cmd = createCommand({ status: "pending" });
     const ver = createVersion(cmd.outbound_id);
     store.createCommand(cmd, ver);
@@ -149,8 +145,8 @@ describe("SendReplyWorker", () => {
     expect(result.processed).toBe(true);
 
     const updated = store.getCommand(cmd.outbound_id);
-    expect(updated?.status).toBe("submitted");
-    expect(updated?.submitted_at).not.toBeNull();
+    expect(updated?.status).toBe("draft_ready");
+    expect(updated?.submitted_at).toBeNull();
 
     const transitions = store.db
       .prepare("select * from outbound_transitions where outbound_id = ? order by id")
@@ -160,17 +156,15 @@ describe("SendReplyWorker", () => {
       [null, "pending"],
       ["pending", "draft_creating"],
       ["draft_creating", "draft_ready"],
-      ["draft_ready", "sending"],
-      ["sending", "submitted"],
     ]);
 
     const draft = store.getManagedDraft(cmd.outbound_id, ver.version);
     expect(draft).not.toBeUndefined();
     expect(draft?.draft_id).toBeDefined();
-    expect(draftClient.sent.has(draft!.draft_id)).toBe(true);
+    expect(draftClient.sent.has(draft!.draft_id)).toBe(false);
   });
 
-  it("reuses existing managed draft on retry", async () => {
+  it("send_reply in draft_ready is skipped (awaits approval)", async () => {
     const cmd = createCommand({ status: "draft_ready" });
     const ver = createVersion(cmd.outbound_id);
     store.createCommand(cmd, ver);
@@ -185,7 +179,6 @@ describe("SendReplyWorker", () => {
       internetMessageHeaders: [{ name: "X-Outbound-Id", value: cmd.outbound_id }],
     });
 
-    const now = new Date().toISOString();
     store.setManagedDraft({
       outbound_id: cmd.outbound_id,
       version: ver.version,
@@ -196,49 +189,34 @@ describe("SendReplyWorker", () => {
       body_hash: "",
       recipients_hash: "",
       subject_hash: "",
-      created_at: now,
+      created_at: new Date().toISOString(),
       last_verified_at: null,
       invalidated_reason: null,
     });
 
-    // Update the draft in the mock to have the exact content the worker expects
-    // The worker recomputes hashes from the version and compares to remote.
-    // Our mock createDraft already set the payload correctly.
-    // However, the worker computes hashes using sha256 of body_text + body_html and recipients.
-    // We need to ensure the mock draft payload matches exactly.
-    const draftPayload = draftClient.drafts.get(draftId)!.payload;
-    draftPayload.body = { contentType: "HTML", content: ver.body_html };
-    draftPayload.toRecipients = ver.to.map((email) => ({ emailAddress: { address: email } }));
-    draftPayload.ccRecipients = [];
-    draftPayload.bccRecipients = [];
-    draftPayload.subject = ver.subject;
-
     const result = await worker.processNext();
-    expect(result.processed).toBe(true);
+    expect(result.processed).toBe(false);
 
     const updated = store.getCommand(cmd.outbound_id);
-    expect(updated?.status).toBe("submitted");
-    expect(draftClient.sent.has(draftId)).toBe(true);
+    expect(updated?.status).toBe("draft_ready");
+    expect(draftClient.sent.has(draftId)).toBe(false);
   });
 
-  it("recreates missing managed draft", async () => {
+  it("send_reply in draft_ready with missing draft is skipped (SendExecutionWorker will recreate)", async () => {
     const cmd = createCommand({ status: "draft_ready" });
     const ver = createVersion(cmd.outbound_id);
     store.createCommand(cmd, ver);
 
     // No managed draft exists locally
     const result = await worker.processNext();
-    expect(result.processed).toBe(true);
+    expect(result.processed).toBe(false);
 
     const updated = store.getCommand(cmd.outbound_id);
-    expect(updated?.status).toBe("submitted"); // recreates draft then sends
-
-    const draft = store.getManagedDraft(cmd.outbound_id, ver.version);
-    expect(draft).not.toBeUndefined();
+    expect(updated?.status).toBe("draft_ready");
   });
 
-  it("hard-fails on external modification of draft", async () => {
-    const cmd = createCommand({ status: "draft_ready" });
+  it("hard-fails on external modification of draft for draft_reply", async () => {
+    const cmd = createCommand({ action_type: "draft_reply", status: "draft_ready" });
     const ver = createVersion(cmd.outbound_id);
     store.createCommand(cmd, ver);
 
@@ -291,102 +269,6 @@ describe("SendReplyWorker", () => {
     expect(result.processed).toBe(false);
   });
 
-  it("retryable send failure transitions to retry_wait", async () => {
-    const cmd = createCommand({ status: "pending" });
-    const ver = createVersion(cmd.outbound_id);
-    store.createCommand(cmd, ver);
-
-    draftClient.sendDraft = async () => {
-      throw new ExchangeFSSyncError("Rate limited", {
-        code: ErrorCode.GRAPH_RATE_LIMIT,
-        recoverable: true,
-        phase: "test",
-      });
-    };
-
-    const result = await worker.processNext();
-    expect(result.processed).toBe(true);
-
-    const updated = store.getCommand(cmd.outbound_id);
-    expect(updated?.status).toBe("retry_wait");
-    expect(updated?.terminal_reason).toContain("Send failed");
-  });
-
-  it("ambiguous post-send crash leaves command in sending for reconciler", async () => {
-    const cmd = createCommand({ status: "draft_ready" });
-    const ver = createVersion(cmd.outbound_id);
-    store.createCommand(cmd, ver);
-
-    // Create managed draft
-    const { id: draftId } = await draftClient.createDraft("user-mailbox-1", {
-      subject: ver.subject,
-      body: { contentType: "HTML", content: ver.body_html },
-      toRecipients: ver.to.map((email) => ({ emailAddress: { address: email } })),
-      ccRecipients: [],
-      bccRecipients: [],
-      internetMessageHeaders: [{ name: "X-Outbound-Id", value: cmd.outbound_id }],
-    });
-    store.setManagedDraft({
-      outbound_id: cmd.outbound_id,
-      version: ver.version,
-      draft_id: draftId,
-      etag: null,
-      internet_message_id: null,
-      header_outbound_id_present: true,
-      body_hash: "",
-      recipients_hash: "",
-      subject_hash: "",
-      created_at: new Date().toISOString(),
-      last_verified_at: null,
-      invalidated_reason: null,
-    });
-
-    // Ensure the draft payload matches exactly
-    const draftPayload = draftClient.drafts.get(draftId)!.payload;
-    draftPayload.body = { contentType: "HTML", content: ver.body_html };
-    draftPayload.toRecipients = ver.to.map((email) => ({ emailAddress: { address: email } }));
-    draftPayload.ccRecipients = [];
-    draftPayload.bccRecipients = [];
-    draftPayload.subject = ver.subject;
-
-    // Simulate send success but SQLite write failure for submitted transition
-    const originalUpdateCommandStatus = store.updateCommandStatus.bind(store);
-    store.updateCommandStatus = (outboundId, status, updates) => {
-      if (status === "submitted") {
-        throw new Error("Simulated SQLite crash after send");
-      }
-      return originalUpdateCommandStatus(outboundId, status, updates);
-    };
-
-    const result = await worker.processNext();
-    expect(result.processed).toBe(true);
-
-    const updated = store.getCommand(cmd.outbound_id);
-    expect(updated?.status).toBe("sending");
-    expect(draftClient.sent.has(draftId)).toBe(true);
-  });
-
-  it("policy failure transitions to blocked_policy for non-participant", async () => {
-    const cmd = createCommand({ status: "pending" });
-    const ver = createVersion(cmd.outbound_id, 1, { to: ["stranger@example.com"] });
-    store.createCommand(cmd, ver);
-
-    worker = new SendReplyWorker({
-      store,
-      draftClient,
-      participantResolver: createParticipantResolver(["alice@example.com"]),
-      resolveUserId: (scopeId) => `user-${scopeId}`,
-      logger: undefined,
-    });
-
-    const result = await worker.processNext();
-    expect(result.processed).toBe(true);
-
-    const updated = store.getCommand(cmd.outbound_id);
-    expect(updated?.status).toBe("blocked_policy");
-    expect(updated?.blocked_reason).toContain("not a thread participant");
-  });
-
   it("draft_reply: pending -> confirmed without sending", async () => {
     const cmd = createCommand({ action_type: "draft_reply", status: "pending" });
     const ver = createVersion(cmd.outbound_id);
@@ -418,6 +300,15 @@ describe("SendReplyWorker", () => {
 
   it("does not process commands in sending status", async () => {
     const cmd = createCommand({ status: "sending" });
+    const ver = createVersion(cmd.outbound_id);
+    store.createCommand(cmd, ver);
+
+    const result = await worker.processNext();
+    expect(result.processed).toBe(false);
+  });
+
+  it("does not process send_reply commands already in approved_for_send", async () => {
+    const cmd = createCommand({ status: "approved_for_send" });
     const ver = createVersion(cmd.outbound_id);
     store.createCommand(cmd, ver);
 

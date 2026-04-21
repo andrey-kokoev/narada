@@ -119,6 +119,7 @@ export interface OutboundHandoffSummary {
   reviewed_at: string | null;
   reviewer_notes: string | null;
   external_reference: string | null;
+  approved_at: string | null;
 }
 
 /** @source derived — Active lease summary for operability view (joins lease + work item) */
@@ -479,6 +480,62 @@ export interface AffinityOutcome {
   preferred_session_status: string | null;
   executed_by_preferred_session: boolean | null;
   actual_session_id: string | null;
+}
+
+/** Mailbox-clear review status for operator visibility */
+export type DraftReviewStatus =
+  | "awaiting_review"
+  | "reviewed"
+  | "approved_for_send"
+  | "sending"
+  | "submitted"
+  | "confirmed"
+  | "blocked"
+  | "cancelled"
+  | "failed";
+
+/**
+ * @source derived — Unified draft review detail that explains why a draft exists,
+ * what produced it, and what actions are available next.
+ */
+export interface DraftReviewDetail {
+  outbound_id: string;
+  context_id: string;
+  scope_id: string;
+  action_type: string;
+  status: OutboundStatus;
+  review_status: DraftReviewStatus;
+  created_at: string;
+  submitted_at: string | null;
+  confirmed_at: string | null;
+
+  // Version preview
+  subject: string | null;
+  body_preview: string | null;
+  to: string[] | null;
+
+  // Decision lineage
+  decision_id: string | null;
+  decision_rationale: string | null;
+  decided_at: string | null;
+  approved_action: string | null;
+
+  // Evaluation lineage
+  evaluation_id: string | null;
+  charter_id: string | null;
+  evaluation_summary: string | null;
+  evaluation_outcome: string | null;
+  analyzed_at: string | null;
+
+  // Review state
+  reviewed_at: string | null;
+  reviewer_notes: string | null;
+  approved_at: string | null;
+  terminal_reason: string | null;
+  external_reference: string | null;
+
+  // Available next actions for the operator
+  available_actions: string[];
 }
 
 /** @source derived — Deep-dive evaluation detail with parsed JSON fields */

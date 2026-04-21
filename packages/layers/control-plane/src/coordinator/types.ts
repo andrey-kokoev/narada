@@ -361,7 +361,7 @@ export type CoordinatorStoreOperatorView = CoordinatorStoreView &
 export interface OperatorActionRequest {
   request_id: string;
   scope_id: string;
-  action_type: "retry_work_item" | "retry_failed_work_items" | "acknowledge_alert" | "rebuild_views" | "rebuild_projections" | "request_redispatch" | "trigger_sync" | "derive_work" | "preview_work" | "reject_draft" | "mark_reviewed" | "handled_externally";
+  action_type: "retry_work_item" | "retry_failed_work_items" | "acknowledge_alert" | "rebuild_views" | "rebuild_projections" | "request_redispatch" | "trigger_sync" | "derive_work" | "preview_work" | "reject_draft" | "mark_reviewed" | "handled_externally" | "approve_draft_for_send" | "retry_auth_failed";
   target_id: string | null;
   payload_json: string | null;
   status: "pending" | "executed" | "rejected";

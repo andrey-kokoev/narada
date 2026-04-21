@@ -108,11 +108,22 @@ narada ops
 
 The "Drafts Pending Review" section lists `draft_ready` outbound commands with context ID and payload summary.
 
+**Inspect a draft in detail:**
+
+```bash
+narada show-draft <outbound-id>
+```
+
+Shows the draft content, the decision and evaluation that produced it, and the exact CLI commands available for the next step.
+
 **Actions on drafts:**
 
 ```bash
-# Review and approve (triggers send or draft creation)
+# Mark as reviewed (status stays draft_ready; records reviewer notes)
 narada mark-reviewed <outbound-id> --notes "Looks good"
+
+# Approve for send (only for send_reply / send_new_message)
+narada approve-draft-for-send <outbound-id>
 
 # Reject the draft
 narada reject-draft <outbound-id> --rationale "Incorrect response"
@@ -120,6 +131,11 @@ narada reject-draft <outbound-id> --rationale "Incorrect response"
 # Record external handling
 narada handled-externally <outbound-id> --ref ticket-123
 ```
+
+**Promotion flow:**
+- `draft_ready` → review (`mark-reviewed`) → approve (`approve-draft-for-send`) → worker sends → `submitted` → inbound reconciliation → `confirmed`
+- `draft_ready` → review (`mark-reviewed`) → reject (`reject-draft`) → `cancelled`
+- `draft_ready` → handled externally (`handled-externally`) → `cancelled`
 
 **Satisfied exit condition:** No drafts pending review, or all drafts have been dispositioned.
 
@@ -196,6 +212,8 @@ If the loop surfaces a problem, follow this order:
 6. **If coordinator DB is suspect:** `narada recover --scope <scope-id> --dry-run`
 
 For rehearsed failure scenarios (kill daemon mid-sync, corrupt cursor, etc.), see [`docs/runbook.md`](runbook.md).
+
+For the **live Graph proof** (exercising real draft creation, approval, send, and reconciliation), see [`docs/live-graph-proof.md`](live-graph-proof.md).
 
 ---
 

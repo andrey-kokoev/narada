@@ -115,6 +115,7 @@ describe("daemon worker registry wiring", () => {
     // that both sites now import from the same source of truth.
     expect(OUTBOUND_WORKER_IDS).toEqual([
       "send_reply",
+      "send_execution",
       "non_send_actions",
       "outbound_reconciler",
     ]);

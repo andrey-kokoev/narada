@@ -348,6 +348,8 @@ This test:
 
 For the canonical product proof definition, fixture/live separation, and inspection checkpoints, see [`docs/first-operation-proof.md`](first-operation-proof.md).
 
+For the **live Graph proof** (real Graph API, draft-to-confirmed), see [`docs/live-graph-proof.md`](live-graph-proof.md).
+
 ---
 
 ## Deferred Capabilities

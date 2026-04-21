@@ -686,7 +686,7 @@ describe("observation server", { sequential: true }, () => {
     scopeApiB.syncFreshThresholdMs = 24 * 60 * 60 * 1000;
 
     // Register required outbound workers
-    for (const workerId of ["send_reply", "non_send_actions", "outbound_reconciler"]) {
+    for (const workerId of ["send_reply", "send_execution", "non_send_actions", "outbound_reconciler"]) {
       workerRegistry.register({
         identity: {
           worker_id: workerId,

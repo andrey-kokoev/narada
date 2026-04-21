@@ -38,8 +38,12 @@ describe("outbound state machine", () => {
       expect(isValidTransition("draft_creating", "draft_ready")).toBe(true);
     });
 
-    it("allows draft_ready -> sending", () => {
-      expect(isValidTransition("draft_ready", "sending")).toBe(true);
+    it("allows draft_ready -> approved_for_send", () => {
+      expect(isValidTransition("draft_ready", "approved_for_send")).toBe(true);
+    });
+
+    it("allows approved_for_send -> sending", () => {
+      expect(isValidTransition("approved_for_send", "sending")).toBe(true);
     });
 
     it("allows draft_ready -> confirmed (for draft_reply)", () => {
@@ -100,6 +104,7 @@ describe("outbound state machine", () => {
         "pending",
         "draft_creating",
         "draft_ready",
+        "approved_for_send",
         "sending",
         "submitted",
         "retry_wait",
@@ -110,18 +115,34 @@ describe("outbound state machine", () => {
       }
     });
 
-    it("has no transitions out of any terminal state", () => {
+    it("has no transitions out of any terminal state except operator-recovery from failed_terminal", () => {
       for (const status of TERMINAL_STATUSES) {
+        if (status === "failed_terminal") {
+          expect(VALID_TRANSITIONS[status]).toEqual(["approved_for_send", "draft_ready"]);
+          continue;
+        }
         expect(VALID_TRANSITIONS[status]).toHaveLength(0);
       }
     });
   });
 
   describe("isVersionEligible", () => {
-    it("returns true for latest unsent non-terminal version", () => {
-      const cmd = createOutboundCommand({ status: "draft_ready", latest_version: 2 });
+    it("returns true for draft_reply in draft_ready", () => {
+      const cmd = createOutboundCommand({ action_type: "draft_reply", status: "draft_ready", latest_version: 2 });
       const v = createOutboundVersion({ version: 2, superseded_at: null });
       expect(isVersionEligible(v, cmd)).toBe(true);
+    });
+
+    it("returns true for send_reply in approved_for_send", () => {
+      const cmd = createOutboundCommand({ action_type: "send_reply", status: "approved_for_send", latest_version: 2 });
+      const v = createOutboundVersion({ version: 2, superseded_at: null });
+      expect(isVersionEligible(v, cmd)).toBe(true);
+    });
+
+    it("returns false for send_reply in draft_ready (needs approval)", () => {
+      const cmd = createOutboundCommand({ action_type: "send_reply", status: "draft_ready", latest_version: 2 });
+      const v = createOutboundVersion({ version: 2, superseded_at: null });
+      expect(isVersionEligible(v, cmd)).toBe(false);
     });
 
     it("returns false if version is not latest", () => {
@@ -189,8 +210,17 @@ describe("outbound state machine", () => {
   });
 
   describe("assertSingleLatestEligible", () => {
-    it("passes when exactly one version is eligible", () => {
-      const cmd = createOutboundCommand({ status: "draft_ready", latest_version: 2 });
+    it("passes when exactly one version is eligible (draft_reply)", () => {
+      const cmd = createOutboundCommand({ action_type: "draft_reply", status: "draft_ready", latest_version: 2 });
+      const v1 = createOutboundVersion({ version: 1, superseded_at: new Date().toISOString() });
+      const v2 = createOutboundVersion({ version: 2, superseded_at: null });
+      expect(() =>
+        assertSingleLatestEligible("outbound-001", [v1, v2], cmd),
+      ).not.toThrow();
+    });
+
+    it("passes when exactly one version is eligible (send_reply)", () => {
+      const cmd = createOutboundCommand({ action_type: "send_reply", status: "approved_for_send", latest_version: 2 });
       const v1 = createOutboundVersion({ version: 1, superseded_at: new Date().toISOString() });
       const v2 = createOutboundVersion({ version: 2, superseded_at: null });
       expect(() =>
@@ -199,7 +229,7 @@ describe("outbound state machine", () => {
     });
 
     it("throws when multiple versions are eligible", () => {
-      const cmd = createOutboundCommand({ status: "draft_ready", latest_version: 2 });
+      const cmd = createOutboundCommand({ action_type: "draft_reply", status: "draft_ready", latest_version: 2 });
       const v1 = createOutboundVersion({ version: 2, superseded_at: null });
       const v2 = createOutboundVersion({ version: 2, superseded_at: null });
       expect(() =>

@@ -36,6 +36,7 @@ export interface DraftReadResult {
   ccRecipients?: GraphDraftRecipient[];
   bccRecipients?: GraphDraftRecipient[];
   internetMessageHeaders?: Array<{ name: string; value: string }>;
+  internetMessageId?: string;
 }
 
 export interface GraphDraftClient {
@@ -64,7 +65,7 @@ export class DefaultGraphDraftClient implements GraphDraftClient {
 
   async getDraft(userId: string, draftId: string): Promise<DraftReadResult> {
     return this.httpClient.getJson<DraftReadResult>(
-      `/users/${encodeURIComponent(userId)}/messages/${encodeURIComponent(draftId)}?$select=id,subject,body,toRecipients,ccRecipients,bccRecipients,internetMessageHeaders`,
+      `/users/${encodeURIComponent(userId)}/messages/${encodeURIComponent(draftId)}?$select=id,subject,body,toRecipients,ccRecipients,bccRecipients,internetMessageHeaders,internetMessageId`,
     );
   }
 

@@ -10,7 +10,29 @@ For a compact system diagram, see [docs/system.md](docs/system.md).
 
 Narada is **not** a sync client, cache, or email tool. It is a deterministic state compiler from remote deltas into local canonical state, with a durable control plane for governed side-effects.
 
-- **Generalized kernel** — The core pipeline (`Source → Fact → Context → Work → Policy → Intent → Execution → Confirmation → Observation`) is vertical-agnostic.
+Narada instantiates **Intelligence-Authority Separation**: AI charter runners may contribute judgment, but they do not own truth, lifecycle, permission, effects, or confirmation. Intelligence supplies candidate meaning; Narada's control plane determines what counts, what may change, what may be done, and how consequence is confirmed.
+
+The end-to-end boundary sequence is:
+
+```
+observe → normalize → fact → context → work → evaluation → decision → intent → execution → reconciliation → observation
+```
+
+Each boundary prevents a different collapse:
+
+| Boundary | Prevented collapse |
+|----------|--------------------|
+| observation → fact | world state becoming prompt memory |
+| fact → context | unbounded reality becoming arbitrary model context |
+| context → work | attention becoming informal task selection |
+| work → evaluation | inference becoming mutation |
+| evaluation → decision | model judgment becoming permission |
+| decision → intent | approval becoming direct effect |
+| intent → execution | execution inventing reasons |
+| execution → reconciliation | API success becoming assumed truth |
+| reconciliation → observation | hidden state becoming uninspectable consequence |
+
+- **Generalized kernel** — The core pipeline is vertical-agnostic.
 - **Mailbox as one vertical** — The Exchange/Graph integration is the first `Source` implementation and the first set of charter policies. It is not privileged in the kernel.
 - **Peer verticals** — `TimerSource`, `WebhookSource`, `FilesystemSource`, and `process.run` execute through the exact same control plane.
 

@@ -97,7 +97,7 @@ export class NonSendWorker {
       logger?.error("Missing target_message_id in non-send payload", undefined, {
         outboundId: command.outbound_id,
       });
-      this.transition(command.outbound_id, command.status, "failed_terminal", {
+      this.transition(command.outbound_id, command.status, "failed_terminal", command.action_type, {
         terminal_reason: "Missing target_message_id in payload",
       });
       return;
@@ -106,11 +106,11 @@ export class NonSendWorker {
     // Non-send actions transition pending -> draft_ready -> sending -> submitted
     // in a single invocation for simplicity.
     if (command.status === "pending") {
-      this.transition(command.outbound_id, "pending", "draft_ready");
+      this.transition(command.outbound_id, "pending", "draft_ready", command.action_type);
       command = { ...command, status: "draft_ready" };
     }
 
-    this.transition(command.outbound_id, "draft_ready", "sending");
+    this.transition(command.outbound_id, "draft_ready", "sending", command.action_type);
 
     try {
       const userId = this.deps.resolveUserId(command.scope_id);
@@ -122,15 +122,15 @@ export class NonSendWorker {
         error: (error as Error).message,
       });
       if (isAuthError(error)) {
-        this.transition(command.outbound_id, "sending", "failed_terminal", {
+        this.transition(command.outbound_id, "sending", "failed_terminal", command.action_type, {
           terminal_reason: `Auth error executing ${command.action_type}: ${(error as Error).message}`,
         });
       } else if (isRetryableError(error)) {
-        this.transition(command.outbound_id, "sending", "retry_wait", {
+        this.transition(command.outbound_id, "sending", "retry_wait", command.action_type, {
           terminal_reason: `${command.action_type} failed: ${(error as Error).message}`,
         });
       } else {
-        this.transition(command.outbound_id, "sending", "failed_terminal", {
+        this.transition(command.outbound_id, "sending", "failed_terminal", command.action_type, {
           terminal_reason: `${command.action_type} failed: ${(error as Error).message}`,
         });
       }
@@ -139,7 +139,7 @@ export class NonSendWorker {
 
     // Record submitted
     try {
-      this.transition(command.outbound_id, "sending", "submitted", {
+      this.transition(command.outbound_id, "sending", "submitted", command.action_type, {
         submitted_at: new Date().toISOString(),
       });
     } catch (error) {
@@ -183,6 +183,7 @@ export class NonSendWorker {
     outboundId: string,
     from: import("./types.js").OutboundStatus,
     to: import("./types.js").OutboundStatus,
+    actionType: import("./types.js").OutboundCommand["action_type"],
     updates?: Partial<
       Pick<
         OutboundCommand,
@@ -190,7 +191,7 @@ export class NonSendWorker {
       >
     >,
   ): void {
-    if (!isValidTransition(from, to)) {
+    if (!isValidTransition(from, to, actionType)) {
       throw new Error(`Invalid transition: ${from} -> ${to} for ${outboundId}`);
     }
     this.deps.store.updateCommandStatus(outboundId, to, updates);

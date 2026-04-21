@@ -9,6 +9,39 @@ import type { CharterInvocationEnvelope } from "./envelope.js";
 
 export type SystemPromptTemplate = (envelope: CharterInvocationEnvelope) => string;
 
+function buildSchemaDescription(_envelope: CharterInvocationEnvelope): string {
+  return `
+You MUST respond with a single JSON object matching this exact schema. Do not include markdown formatting outside the JSON object.
+
+Required fields:
+- output_version: "2.0"
+- execution_id: string (use the value provided in the rules above)
+- charter_id: string (use the value provided in the rules above)
+- role: "primary" | "secondary" (use the value provided in the rules above)
+- analyzed_at: ISO 8601 datetime string (e.g., "2026-04-20T12:00:00.000Z")
+- outcome: one of "complete", "clarification_needed", "escalation", "no_op"
+- confidence: object with { overall: "low" | "medium" | "high", uncertainty_flags: string[] }
+- summary: string (500 characters or fewer)
+- classifications: array of { kind: string, confidence: "low" | "medium" | "high", rationale: string }
+- facts: array of { kind: string, value_json: string, source_record_ids: string[], confidence: "low" | "medium" | "high" }
+- proposed_actions: array of { action_type: string, authority: "proposed" | "recommended", payload_json: string, rationale: string }
+  - payload_json must be a valid JSON string
+    - For mark_read: '{}'
+    - For draft_reply: '{"body_text":"Your reply text here..."}' (use body_text, not body)
+    - For send_reply or send_new_message: '{"to":["recipient@example.com"],"subject":"...","body_text":"..."}'
+  - Inside payload_json, newlines must be escaped as \\n, not literal line breaks
+  - rationale explains why this action is appropriate
+- tool_requests: array of { tool_id: string, arguments_json: string, purpose: string }
+- escalations: array of { kind: string, reason: string, urgency: "low" | "medium" | "high", suggested_recipient?: string }
+
+Optional fields:
+- recommended_action_class: one of the allowed action types
+- reasoning_log: string explaining your reasoning
+
+If there are no classifications, facts, proposed_actions, tool_requests, or escalations, use empty arrays [] — do not omit the fields.
+`.trim();
+}
+
 const GENERIC_TEMPLATE: SystemPromptTemplate = (envelope) => {
   const tools = envelope.available_tools
     .map((t) => `- ${t.tool_id}: ${t.description} (read_only=${t.read_only}, timeout=${t.timeout_ms}ms)`)
@@ -16,7 +49,6 @@ const GENERIC_TEMPLATE: SystemPromptTemplate = (envelope) => {
 
   return `
 You are a charter agent. Your charter_id is "${envelope.charter_id}" and your role is "${envelope.role}".
-You MUST respond with a single JSON object matching the CharterOutputEnvelope schema.
 
 Rules:
 - output_version must be "2.0"
@@ -32,6 +64,8 @@ Rules:
 
 Available tools:
 ${tools}
+
+${buildSchemaDescription(envelope)}
 `.trim();
 };
 
@@ -66,8 +100,6 @@ When drafting a reply:
 
 Knowledge sources (if any were provided in the context) are operational playbooks. Use them when relevant, but do not quote them verbatim unless they contain exact procedures the customer must follow.
 
-You MUST respond with a single JSON object matching the CharterOutputEnvelope schema.
-
 Rules:
 - output_version must be "2.0"
 - execution_id must be "${envelope.execution_id}"
@@ -82,6 +114,8 @@ Rules:
 
 Available tools:
 ${tools}
+
+${buildSchemaDescription(envelope)}
 `.trim();
 };
 

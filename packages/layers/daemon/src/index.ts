@@ -96,7 +96,11 @@ export { createSyncService as default } from "./service.js";
 // CLI entrypoint (when invoked as the bin target)
 // ---------------------------------------------------------------------------
 
+import { loadEnvFile } from "@narada2/control-plane";
+
 async function main(): Promise<void> {
+  loadEnvFile("./.env");
+
   const args = process.argv.slice(2);
 
   let configPath = "./config.json";

@@ -74,6 +74,7 @@ export class OutboundHandoff {
       reviewed_at: null,
       reviewer_notes: null,
       external_reference: null,
+      approved_at: null,
     };
 
     const version: OutboundVersion = {

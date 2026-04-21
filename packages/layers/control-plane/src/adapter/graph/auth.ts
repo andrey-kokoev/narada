@@ -1,5 +1,7 @@
 export interface GraphTokenProvider {
   getAccessToken(): Promise<string>;
+  /** Invalidate any cached token so the next call fetches a fresh one. */
+  invalidateAccessToken?(): void;
 }
 
 export interface StaticBearerTokenProviderOptions {
@@ -26,6 +28,10 @@ export class StaticBearerTokenProvider implements GraphTokenProvider {
     }
 
     return trimmed;
+  }
+
+  invalidateAccessToken(): void {
+    // No cache to invalidate
   }
 }
 
@@ -125,5 +131,9 @@ export class ClientCredentialsTokenProvider implements GraphTokenProvider {
     };
 
     return accessToken;
+  }
+
+  invalidateAccessToken(): void {
+    this.cached = undefined;
   }
 }

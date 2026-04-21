@@ -32,6 +32,8 @@ export const PERMITTED_OPERATOR_ACTIONS = [
   "reject_draft",
   "mark_reviewed",
   "handled_externally",
+  "approve_draft_for_send",
+  "retry_auth_failed",
 ] as const;
 
 export type OperatorActionType = (typeof PERMITTED_OPERATOR_ACTIONS)[number];
@@ -317,6 +319,86 @@ export async function executeOperatorAction(
         const intent = ctx.intentStore.getByTargetId(payload.target_id);
         if (intent) {
           ctx.intentStore.updateStatus(intent.intent_id, "cancelled", { terminal_reason: "handled_externally" });
+        }
+        break;
+      }
+
+      case "approve_draft_for_send": {
+        if (!payload.target_id) {
+          throw new Error("target_id (outbound_id) is required for approve_draft_for_send");
+        }
+        const command = ctx.outboundStore.getCommand(payload.target_id);
+        if (!command) {
+          throw new Error(`Outbound command ${payload.target_id} not found`);
+        }
+        if (command.status !== "draft_ready") {
+          throw new Error(`Outbound command ${payload.target_id} is not in draft_ready status (current: ${command.status})`);
+        }
+        const sendableActionTypes = ["send_reply", "send_new_message"];
+        if (!sendableActionTypes.includes(command.action_type)) {
+          throw new Error(`Outbound command ${payload.target_id} action_type ${command.action_type} is not eligible for send approval`);
+        }
+        ctx.outboundStore.updateCommandStatus(payload.target_id, "approved_for_send", {
+          approved_at: now,
+        });
+        ctx.outboundStore.appendTransition({
+          outbound_id: payload.target_id,
+          version: command.latest_version,
+          from_status: command.status,
+          to_status: "approved_for_send",
+          reason: "operator_approved_for_send",
+          transition_at: now,
+        });
+        break;
+      }
+
+      case "retry_auth_failed": {
+        const limit = payload.payload_json
+          ? (JSON.parse(payload.payload_json) as Record<string, unknown>).limit ?? 50
+          : 50;
+        const targetId = payload.target_id;
+        const candidates: Array<{ outbound_id: string; action_type: string; status: string; terminal_reason: string | null }> = [];
+
+        if (targetId) {
+          const command = ctx.outboundStore.getCommand(targetId);
+          if (!command) {
+            throw new Error(`Outbound command ${targetId} not found`);
+          }
+          if (command.status !== "failed_terminal") {
+            throw new Error(`Outbound command ${targetId} is not in failed_terminal status (current: ${command.status})`);
+          }
+          if (!command.terminal_reason?.toLowerCase().includes("auth")) {
+            throw new Error(`Outbound command ${targetId} terminal_reason does not indicate an auth failure`);
+          }
+          candidates.push(command);
+        } else {
+          // Scan all commands in this scope for auth-failed terminals
+          const all = ctx.outboundStore.getCommandsByScope(ctx.scope_id, Number(limit));
+          for (const cmd of all) {
+            if (cmd.status === "failed_terminal" && cmd.terminal_reason?.toLowerCase().includes("auth")) {
+              candidates.push(cmd);
+            }
+          }
+        }
+
+        if (candidates.length === 0) {
+          break;
+        }
+
+        for (const cmd of candidates) {
+          const sendableActions = ["send_reply", "send_new_message"];
+          const toStatus = sendableActions.includes(cmd.action_type) ? "approved_for_send" : "draft_ready";
+          ctx.outboundStore.updateCommandStatus(cmd.outbound_id, toStatus, {
+            terminal_reason: null,
+          });
+          ctx.outboundStore.appendTransition({
+            outbound_id: cmd.outbound_id,
+            version: null,
+            from_status: "failed_terminal",
+            to_status: toStatus,
+            reason: "operator_retry_after_auth_restored",
+            transition_at: now,
+          });
         }
         break;
       }
