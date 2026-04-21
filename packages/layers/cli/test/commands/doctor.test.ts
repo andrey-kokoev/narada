@@ -99,7 +99,7 @@ describe('doctor command', () => {
     vi.clearAllMocks();
   });
 
-  it('reports degraded when no daemon is running', async () => {
+  it('reports healthy with warnings when no daemon is running yet', async () => {
     vol.fromJSON({
       '/test/config.json': JSON.stringify(createConfig('test@example.com', '/test/data')),
     });
@@ -108,10 +108,11 @@ describe('doctor command', () => {
     const context = createMockContext();
     const result = await doctorCommand({ format: 'json' }, context);
 
-    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
     const report = result.result as { overall: string; scopes: Array<{ status: string; checks: Array<{ name: string; status: string }> }> };
-    expect(report.overall).toBe('degraded');
+    expect(report.overall).toBe('healthy');
     const scope = report.scopes[0];
+    expect(scope.status).toBe('healthy');
     expect(scope.checks.find((c) => c.name === 'daemon-process')?.status).toBe('warn');
     expect(scope.checks.find((c) => c.name === 'health-file')?.status).toBe('warn');
     expect(scope.checks.find((c) => c.name === 'work-queue')?.status).toBe('warn');
@@ -160,7 +161,7 @@ describe('doctor command', () => {
     expect(scope.checks.find((c) => c.name === 'charter-runtime')?.status).toBe('pass');
   });
 
-  it('reports degraded when failed work items exist', async () => {
+  it('warns when terminal work item history exists', async () => {
     vol.fromJSON({
       '/test/config.json': JSON.stringify(createConfig('test@example.com', '/test/data')),
       '/test/data/daemon.pid': String(process.pid),
@@ -184,12 +185,42 @@ describe('doctor command', () => {
     const context = createMockContext();
     const result = await doctorCommand({ format: 'json' }, context);
 
+    const report = result.result as { overall: string; scopes: Array<{ status: string; checks: Array<{ name: string; status: string }> }> };
+    const workQueue = report.scopes[0].checks.find((c) => c.name === 'work-queue');
+    expect(workQueue?.status).toBe('warn');
+    expect(workQueue?.detail).toContain('failed_terminal');
+  });
+
+  it('fails when retryable work items exist', async () => {
+    vol.fromJSON({
+      '/test/config.json': JSON.stringify(createConfig('test@example.com', '/test/data')),
+      '/test/data/daemon.pid': String(process.pid),
+      '/test/data/.health.json': JSON.stringify({
+        status: 'healthy',
+        lastSyncAt: new Date().toISOString(),
+        cyclesCompleted: 5,
+        errors: 0,
+        consecutiveErrors: 0,
+        pid: process.pid,
+        timestamp: new Date().toISOString(),
+      }),
+    });
+    vol.mkdirSync('/test/data/.narada', { recursive: true });
+    vol.writeFileSync('/test/data/.narada/coordinator.db', '');
+
+    mockDb.prepare.mockReturnValue({
+      get: vi.fn(() => ({ retryable: 1, terminal: 0 })),
+    });
+
+    const context = createMockContext();
+    const result = await doctorCommand({ format: 'json' }, context);
+
     expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
     const report = result.result as { overall: string; scopes: Array<{ status: string; checks: Array<{ name: string; status: string }> }> };
     expect(report.overall).toBe('degraded');
     const workQueue = report.scopes[0].checks.find((c) => c.name === 'work-queue');
     expect(workQueue?.status).toBe('fail');
-    expect(workQueue?.detail).toContain('failed_terminal');
+    expect(workQueue?.detail).toContain('failed_retryable');
   });
 
   it('fails with invalid config', async () => {

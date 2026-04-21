@@ -7,6 +7,7 @@
  */
 
 import { fileURLToPath } from "node:url";
+import { realpathSync } from "node:fs";
 import { createSyncService } from "./service.js";
 
 // Service exports
@@ -206,7 +207,11 @@ async function main(): Promise<void> {
 
 if (import.meta.url.startsWith("file:")) {
   const modulePath = fileURLToPath(import.meta.url);
-  if (process.argv[1] === modulePath) {
+  const invokedPath = process.argv[1];
+  const isEntrypoint =
+    invokedPath !== undefined &&
+    realpathSync.native(invokedPath) === realpathSync.native(modulePath);
+  if (isEntrypoint) {
     main().catch((error) => {
       console.error("Daemon failed:", error);
       process.exit(1);

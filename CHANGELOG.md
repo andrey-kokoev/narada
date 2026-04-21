@@ -78,146 +78,128 @@ Authority clarifications:
 
 - Selection and inspection are read-only and authority-agnostic.
 - Promotion is explicit, audited, and authority-classed.
-- Recovery and replay share a derivation core but have distinct operator intent and authority framing.
-- Advisory signals cannot override facts, leases, policy, decisions, intents, executions, confirmations, or governance.
 
-Deferred:
+## Unattended Operation
 
-- Broader routing-signal runtime beyond `continuation_affinity`.
+Narada's unattended layer moved from design to executable behavior. A Cloudflare Site can now degrade health, recover from stuck cycles, and alert the operator without human babysitting.
 
-## Multi-Agent Task Governance
-
-Narada gained explicit agent task governance: roster, assignment, lifecycle automation, review loops, and chapter closure.
-
-- **Roster and assignment** (Task 260): `.ai/agents/roster.json`, atomic claim/release operators, dependency-checked assignment with execution budgets.
-- **Lifecycle automation** (Task 261): Canonical status machine (`draft → opened → claimed → in_review → closed → confirmed`), `depends_on` enforcement, continuation protocol for budget exhaustion.
-- **Review loop and allocator** (Task 262): Structured findings, `narada task review`, `derive-from-finding` corrective task generation, atomic task number allocation.
-- **Chapter closure** (Task 263): `narada chapter close` with dry-run, terminal-status verification, closure artifact generation, and confirmation transition.
-- **Continuation affinity** (Task 263): Advisory warm-agent routing via task front-matter (`preferred_agent_id`, `affinity_strength`). Claim operator may sort by affinity; affinity never blocks runnable work.
-- **USC boundary hardening** (Tasks 257/279): Version-pinned USC bridge (`config.uscVersion`), schema cache fallback, `narada init usc-validate <path>`.
-
-Corrective follow-ups applied:
-- Task 268: Assignment claim/release hardened against partial mutation and missing continuation packets.
-- Task 271: Lifecycle release operator fixed to validate continuation before mutating assignment.
-- Task 274: Review allocator integrity tightened; derive-from-finding uses correct dependency linking.
-- Task 280: Chapter close stops mutation when non-terminal tasks exist; closure artifact uses explicit `.ai/decisions/` path.
-
-Authority clarifications:
-
-- Static schema defines shapes; operators perform transitions.
-- Runtime owns durable state and leases; it does not own task file mutations.
-- USC packages are read by tooling/runtime but must not assume runtime state or operator behavior.
-- Advisory signals are non-authoritative; removing them must leave all durable boundaries intact.
-
-Deferred:
-
-- Race-safe task number allocator (file-lock or SQLite-backed).
-- Broader routing signals beyond continuation affinity (priority, deadline, skill matching).
-- Automatic task dependency DAG visualization.
-- Commit-boundary tracking for this chapter.
-
-## Operation Realization
-
-Narada gained the canonical bootstrap path and the first mailbox operation product proof.
-
-- **Bootstrap contract** (Task 283): `docs/bootstrap-contract.md` defines the canonical five-step path from intent to runnable operation. `QUICKSTART.md` is restructured as the walkthrough. CLI commands (`init-repo`, `want-mailbox`) emit artifact manifests and next-step guidance aligned with the contract.
-- **Real executor attachment and degraded-state contract** (Task 284): `probeHealth()` is first-class on `CharterRunner`. Five health classes (`healthy`, `degraded_draft_only`, `partially_degraded`, `broken`, `unconfigured`) define explicit production behavior. Execution gating in the daemon skips dispatch when health does not permit execution. `getRecoveryGuidance()` provides structured operator advice for every degraded state.
-- **First operation product proof** (Task 285): `docs/first-operation-proof.md` defines the support mailbox as the canonical proof case, documents fixture-backed vs live-backed responsibilities, and provides inspection checkpoints for every pipeline stage.
-- **Operator live-loop ergonomics** (Task 286): `docs/operator-loop.md` defines the five-step operator rhythm. `narada ops` composes health, recent activity, attention queue, and drafts pending review into one read-only CLI dashboard.
+- **Health decay wiring** (Task 340): Pure `computeHealthTransition` helper encodes the state machine (`healthy` → `degraded` → `critical` / `auth_failed`). Local daemon and Cloudflare runner both use it. Success resets to `healthy` with `consecutiveFailures = 0`.
+- **Stuck-cycle recovery** (Task 341): Cloudflare DO `site_locks` table detects expired locks via TTL comparison. A new cycle atomically steals the stale lock, records a recovery trace (`previousCycleId`, `stuckDurationMs`, `lockTtlMs`), and proceeds. Health transitions to `critical` on recovery.
+- **Operator notification emission** (Task 342): `OperatorNotification` envelope with severity, health status, summary, detail, suggested action, and cooldown. `LogNotificationAdapter` is the zero-config default. `DefaultNotificationEmitter` coordinates adapters with per-channel rate limiting. Notifications are emitted on transition to `critical`, transition to `auth_failed`, and stuck-cycle recovery.
+- **Recovery fixture** (Task 343): Narrative fixture proves the full loop: repeated failures decay health to `critical` and emit a notification; a successful cycle resets health to `healthy`. Second fixture proves stuck-lock recovery → trace + notification → successful completion.
 
 Concrete outcomes:
 
-- Fixture-backed smoke test (`smoke-test.test.ts`) is packaged as the canonical offline proof.
-- Live-backed verification commands (`preflight`, `explain`, `show`, `status`, `ops`) are documented as the runtime proof path.
-- Explicit separation table states what is proven offline and what requires live exercise.
-- Public repo vs private ops repo boundaries are documented.
-- Degraded-state handling is visible in CLI (`doctor`, `ops`), API (`/health`, `/ready`), and health file (`.health.json`).
-- Operator loop is discoverable from `docs/operator-loop.md`, `docs/runbook.md`, and the `narada ops` command.
+- `packages/layers/control-plane/src/health.ts` — canonical `computeHealthTransition` with 17 tests.
+- `packages/sites/cloudflare/src/health-transition.ts` — Cloudflare-local mirror with 8 tests.
+- `packages/sites/cloudflare/src/notification.ts` — emission surface with 6 tests.
+- `packages/sites/cloudflare/test/unit/unattended-recovery.test.ts` — 2 narrative fixtures proving end-to-end unattended loop.
+- 96 tests pass across the Cloudflare package (12 test files).
 
 Authority clarifications:
 
-- Fixture-backed proof demonstrates mechanical correctness; live-backed proof demonstrates real data/API compatibility.
-- Neither substitutes for the other.
-- Default posture remains `draft-only` with human approval required.
-- Foreman governance enforces draft-first independently of runtime health.
+- Health, notifications, and recovery traces are advisory signals. Removing the entire unattended layer leaves all durable boundaries intact.
+- Stuck-cycle recovery is mechanical lock steal only. It does not classify work-item failures or mutate Foreman/Scheduler/Outbound state.
+- Notification failure is swallowed with `try/catch`. No control decision depends on delivery.
 
 Deferred:
 
-- Live Graph API draft creation proof (requires credentials) — addressed by Mailbox Saturation.
-- Autonomous send remains deferred for safety.
-- Multi-vertical operations (timer, webhook, filesystem) need separate acceptance.
-- Fleet/multi-operation dashboard remains a future milestone.
-- Commit-boundary tracking for this chapter is deferred.
+- Local daemon does not emit operator notifications (health transitions exist, notification wiring does not).
+- Local daemon does not implement cycle-level stuck-lock recovery (sync-level `FileLock` and scheduler lease recovery already exist).
+- Webhook/email/SMS notification adapters — future work.
+- Real Narada kernel steps (sync, evaluate, govern, handoff, reconcile) in Cloudflare runner — Cloudflare v1 chapter.
 
-## Mailbox Saturation
+## Cloudflare Kernel Spine Port
 
-Narada gained the canonical live-mailbox proof contract and the operator runbook for exercising real Graph API end-to-end.
+Narada's Cloudflare Cycle runner gained a fixture-backed kernel spine. Steps 2–6 are no longer placeholder no-ops; they perform typed, bounded, fixture-safe kernel work over DO SQLite durable state.
 
-- **Live Graph proof saturation** (Task 291): `docs/live-graph-proof.md` defines the canonical six-stage proof for the full draft-to-confirmed path: inbound thread selected → evaluation produced → outbound draft created → draft approved for send → send submitted → reconciliation confirms sent result. Each stage specifies durable evidence, canonical inspection commands, and pass criteria. The public/private evidence split is explicit: the public repo contains the contract and method; the private ops repo contains live transcripts and evidence.
+- **Cycle Step Contract** (Task 345): `CycleStepHandler` contract with `stepId`, `stepName`, `status`, `recordsWritten`, `residuals`, `startedAt`/`finishedAt`. `runCycle` invokes steps 2–6 through handlers. Failed steps throw, caught by outer catch block, triggering health decay + lock release. `stepResults` included in `CycleResult` and `CycleTraceRecord`.
+- **Delta/Facts Persistence** (Task 346): `createSyncStepHandler(deltas)` admits fixture source deltas into durable facts. Deduplicates by `event_id` via `apply_log`. Updates `source_cursors`. Returns admitted/skipped counts.
+- **Governance Spine** (Task 347): `createDeriveWorkStepHandler` creates contexts and work items from unadmitted facts. `createEvaluateStepHandler` runs pure `fixtureEvaluate` over open work items and persists evaluation records. `createHandoffStepHandler` creates decisions and outbound commands. IAS boundaries preserved: facts ≠ context/work, evaluation ≠ decision, decision ≠ intent/handoff.
+- **Confirmation/Reconciliation** (Task 348): `createReconcileStepHandler(observations)` confirms outbound commands only against externally-provided `FixtureObservation[]`. Self-confirmation is structurally impossible. Unconfirmed outbounds remain `pending`.
+- **Kernel Spine Fixture** (Task 349): End-to-end fixture through `runCycle()` with real SQLite-backed coordinator proves the full spine: delta → fact → context/work → evaluation → decision → outbound → observation → confirmation → trace/health.
 
 Concrete outcomes:
 
-- Six-stage proof contract with exact state machine progression (`pending → draft_creating → draft_ready → approved_for_send → sending → submitted → confirmed`).
-- Canonical inspection commands for every stage (`narada ops`, `narada show`, `narada approve-draft-for-send`, `sqlite3` direct queries).
-- Operator runbook for executing the proof from pre-flight through confirmation logging.
-- Cross-references from `first-operation-proof.md`, `operator-loop.md`, and `runbook.md`.
+- `packages/sites/cloudflare/src/cycle-step.ts` — step contract + 5 step handler factories + pure fixture evaluator.
+- `packages/sites/cloudflare/src/coordinator.ts` — DO schema extended with `facts`, `source_cursors`, `apply_log`, `context_records`, `work_items`, `evaluations`, `decisions`, `outbound_commands`, `fixture_observations`.
+- `packages/sites/cloudflare/src/types.ts` — `FactRecord`, `FixtureSourceDelta`, `CycleStepResult`, `FixtureObservation`.
+- 133 tests pass across the Cloudflare package (17 test files).
 
 Authority clarifications:
 
-- Live proof does not replace fixture-backed proof. They are complementary: fixtures prove mechanical correctness; live proof proves real API/data compatibility.
-- Default posture remains `draft-only` with `require_human_approval: true`.
-- No private mailbox content or credentials may enter the public repository.
-
-Concrete outcomes:
-
-- `narada drafts` command provides focused mailbox-specific draft overview grouped by status with counts and available actions (Task 296).
-- Draft review and promotion ergonomics coherent via `narada show-draft` and `narada drafts` with decision lineage, evaluation lineage, review status, and available actions (Task 292).
-- Day-2 mailbox failure modes enumerated and classified (auth expiry, Graph drift, attachment edge cases, recovery drills) (Task 293).
-- Compact canonical scenario basis defined for five conversational shapes: login/access, billing, refund, escalation, clarification (Task 294).
-- Knowledge placement model explicit across public repo, private ops repo, and charter consumption points (Task 295).
+- All IAS boundaries are separately persisted and queryable in DO SQLite.
+- `fixtureEvaluate` is pure with zero side effects.
+- Confirmation requires external observation input.
+- Trace/health are advisory; removing them leaves durable boundaries intact.
 
 Deferred:
 
-- Autonomous send by default — safety-first posture keeps `draft-only` with `require_human_approval: true` as the production default.
-- Real-time UI updates for draft state — CLI is the primary operator surface; daemon observation API provides polling-based UI.
-- Fleet/multi-operation dashboards — `narada ops` and `narada drafts` are scoped to one config at a time.
+- Live Microsoft Graph sync — v1.
+- Real charter runtime in Cloudflare Sandbox — v1.
+- Real email draft/send — v1.
+- Live reconciliation against Graph API — v1.
+- Cron Trigger wiring for scheduled cycles — v1.
+- DO RPC via `fetch()` instead of direct method calls — v1.
+- Generic Runtime Locus abstraction — deferred until second substrate proven.
 
-## Mailbox Operational Trial
+## Cloudflare Live Adapter Spine
 
-Narada's operational repo (`narada.sonar`) was exercised against the live Graph API for `help@global-maxima.com`, proving the full draft-to-confirmed path end-to-end.
+Narada's Cloudflare Site gained four bounded live adapter seams around the fixture-backed kernel spine, plus a boundary contract that governs what may become live and what must remain fixture-backed or blocked.
 
-- **Setup contract** (Task 297): `docs/operational-trial-setup-contract.md` names exact paths, config shape, data root, prerequisite checklist, command reference, and public/private boundary table. Private evidence directory convention established in `narada.sonar`.
-- **Live runbook and evidence format** (Task 298): `docs/live-trial-runbook.md` provides the canonical 10-step operator sequence. Redaction policy is explicit. Private `TRIAL-RUNBOOK.md` and `evidence-template.md` live in the ops repo.
-- **Controlled-thread draft generation** (Task 299): Live Graph API connectivity confirmed. Controlled test email synced, fact created, work item opened, charter evaluation produced `draft_reply` action, foreman decision created, outbound handoff created, managed draft created in Graph API. Initially blocked by empty inbox (Task 303) and Kimi API schema validation (Task 305); both resolved.
-- **Approval, send, and reconciliation** (Task 300): Draft reviewed and explicitly approved via operator action surface. `SendExecutionWorker` verified draft integrity, enforced participant policy gate, and submitted the send. Reconciler bound submitted command to inbound message using `internetMessageId` filter, transitioning to `confirmed` within ~1 second. Reconciler bug (`internetMessageHeaders` filtering unsupported) fixed. Retry semantics hardened with explicit re-approval (`retry_wait → approved_for_send`) and honest audit transitions.
-- **Gap capture and public/private split** (Task 301): Eight findings classified. Public corrective tasks: 303 (test thread), 304 (`.env` auto-loading), 305 (Kimi API schema validation). Five findings deferred or classified as positive observations.
-- **Supporting work**: Task 303 created controlled test thread; Task 304 added `.env` auto-loading to CLI and daemon; Task 305 hardened `kimi-api` prompt schema description and runner safety net.
+- **Live Adapter Boundary Contract** (Task 351): `docs/deployment/cloudflare-live-adapter-boundary-contract.md` defines the adapter taxonomy (source-read, charter-runtime, reconciliation-read, operator-control in scope; effect-execution out of scope), authority boundaries adapters cannot cross, and no-overclaim language. Cross-referenced by all implementation tasks.
+- **Live Source Adapter** (Task 352): `HttpSourceAdapter` reads from an HTTP endpoint and produces deltas for fact admission. `createLiveSyncStepHandler` wires it into step 2. Adapter failure is caught before state mutation. Cursor advances only to the last processed delta.
+- **Sandbox Charter Runtime Attachment** (Task 353): `MockCharterRunner` runs inside `runSandbox` with timeout/memory guards. `createSandboxEvaluateStepHandler` builds a `CharterInvocationEnvelope` from open work items, runs evaluation in the sandbox, and persists evaluation records. No blockers found for Cloudflare Workers.
+- **Live Reconciliation Adapter** (Task 354): `GraphLiveObservationAdapter` fetches observations from a mocked Graph client boundary. `createLiveReconcileStepHandler` confirms outbounds only against external observations. Adapter failure returns empty observations — no fabricated confirmation.
+- **Operator Mutation Surface** (Task 355): `executeSiteOperatorAction` with audit-first pattern (`pending` → `executed`/`rejected`). Four actions: `approve`, `reject` (outbounds), `retry`, `cancel` (work items). Invalid transitions return 422 without hidden mutation. DO schema extended with `operator_action_requests`.
+- **Live-Safe Spine Proof** (Task 356): End-to-end fixture through `runCycle()` using live adapters for sync, evaluate, and reconcile, plus operator mutation audit assertion. Proves IAS boundaries hold under live adapter execution.
 
 Concrete outcomes:
 
-- Operational repo structure is coherent and reproducible.
-- Live Graph API sync pipeline is functional against real credentials.
-- Charter runtime is healthy with live `kimi-api` after schema binding fixes.
-- Full state machine path verified:
-  ```
-  pending → draft_creating → draft_ready → approved_for_send → sending → submitted → confirmed
-  ```
-- Reconciler uses `internetMessageId` capture at draft creation instead of broken `internetMessageHeaders` filter.
-- Send execution enforces review invariant: missing or deleted managed drafts fail terminal instead of being recreated.
-- Retry cooldown and explicit re-approval prevent API hammering and produce honest audit trails.
-- `.env` auto-loading removes operator friction while preserving secret precedence.
+- `packages/sites/cloudflare/src/source-adapter.ts` — `SourceAdapter` interface + `HttpSourceAdapter`.
+- `packages/sites/cloudflare/src/sandbox/charter-runtime.ts` — sandbox payload builder + `runCharterInSandbox`.
+- `packages/sites/cloudflare/src/reconciliation/live-observation-adapter.ts` — `LiveObservationAdapter` + `GraphLiveObservationAdapter`.
+- `packages/sites/cloudflare/src/operator-actions.ts` — audited action executor.
+- `packages/sites/cloudflare/src/cycle-step.ts` — `createLiveSyncStepHandler`, `createSandboxEvaluateStepHandler`, `createLiveReconcileStepHandler`.
+- 197 tests pass across the Cloudflare package (23 test files).
 
 Authority clarifications:
 
-- Structural readiness (config, sync, runtime health) is proven separately from end-to-end operational correctness, and both are now satisfied.
-- Fixture-backed proof and live-backed proof are complementary, not substitutable. The live trial does not replace fixture-backed smoke tests.
-- Public/private boundary held: no message bodies, credentials, Graph IDs, or raw payloads entered the public repo.
-- Default posture remains `draft-only` with `require_human_approval: true`. Autonomous send is intentionally deferred.
+- Live adapters are mechanical seams, not authority sources.
+- All four live adapters route through existing durable boundaries (facts, evaluations, decisions, outbounds, observations, audits).
+- Effect execution remains blocked; no adapter may call a mutating external API.
 
 Deferred:
 
-- Autonomous send by default — safety-first posture keeps human approval required.
-- CLI materialization gap: `approve-draft-for-send` does not auto-materialize from `pending_approval`.
-- Long-term credential rotation and token expiry handling untested live.
-- Draft quality with real knowledge sources untested (knowledge directory is empty).
-- One pre-existing integration test failure (`dispatch-real.test.ts`) is a test-environment issue, not a product blocker.
+- Real Microsoft Graph sync with delta pagination and token refresh.
+- Real OpenAI/Kimi charter runtime with live API calls.
+- Real effect execution (Graph draft creation, email send).
+- Real Graph reconciliation polling against live API.
+- Cron Trigger wiring for scheduled production cycles.
+- DO RPC via `fetch()` for production Worker → DO boundary.
+
+## Post-Cloudflare Coherence
+
+Narada's governed-control grammar was strengthened after the Cloudflare prototype: fixture discipline made the grammar substrate-testable, unattended operation semantics made it autonomous, and mailbox daily-use closure proved it in real supervised use.
+
+- **Control Cycle Fixture Discipline** (Task 334): Fixture factories in `packages/sites/cloudflare/test/fixtures/` define canonical shapes for `Site`, `Cycle`, `Act`, and `Trace`. Integration boundary backfill tests exercise actual Worker handlers through real `Request` objects. 70 tests pass across 9 test files. Fixture discipline rule added to AGENTS.md Review Checklist.
+- **Unattended Operation Layer** (Task 336): `docs/product/unattended-operation-layer.md` defines stuck-cycle recovery protocol, health status transitions (`healthy` → `degraded` → `critical` / `auth_failed`), pluggable rate-limited notification surface, and restart safety for both local and Cloudflare substrates.
+- **Mailbox Daily-Use Closure** (Task 337): Four documents close the support mailbox as a supervised product:
+  - `docs/concepts/mailbox-knowledge-model.md` — placement, lifecycle, durability, scoping, charter integration
+  - `docs/product/mailbox-draft-send-posture.md` — draft-first principle, three posture levels, batch review rhythm, authority boundary enforcement
+  - `docs/product/mailbox-terminal-failures.md` — terminal vs. retryable vs. advisory failure catalog, 7-step operator recovery procedure
+  - `docs/product/day-2-mailbox-hardening.md` expanded — morning/midday/afternoon/weekly/monthly/emergency operational rhythm
+
+Concrete outcomes:
+
+- The grammar is now substrate-testable via fixture contracts.
+- The grammar defines autonomous health decay, stuck-cycle recovery, and operator notification boundaries.
+- The mailbox vertical has documented knowledge model, review queue UX, terminal failure catalog, and draft/send posture.
+
+Deferred:
+
+- **Canonical Vocabulary Hardening** (Task 333) — Task 330 already performed this function; vocabulary is coherent.
+- **Runtime Locus Abstraction** (Task 335) — Deferred until a second substrate is proven.
+- Fixture runner for local daemon (not just Cloudflare) — future chapter.
+- Unattended operation implementation (health decay wiring, stuck-cycle recovery in scheduler, notification channel) — future implementation chapter.
+- Mailbox knowledge directory population with live playbooks — operator task.

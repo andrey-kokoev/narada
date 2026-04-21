@@ -59,6 +59,6 @@ Multi-Agent Task Governance
 
 ## Closure Statement
 
-The Multi-Agent Task Governance chapter is closed. The four ownership classes (static schema, pure tools, operators, runtime) are documented in `docs/runtime-usc-boundary.md`. The chapter's required operators (claim, release, review, allocate, derive-from-finding, chapter-close) are implemented, tested, and corrected. Advisory signals (continuation affinity) are in place with v1 ordering-only semantics.
+The Multi-Agent Task Governance chapter is closed. The four ownership classes (static schema, pure tools, operators, runtime) are documented in `docs/concepts/runtime-usc-boundary.md`. The chapter's required operators (claim, release, review, allocate, derive-from-finding, chapter-close) are implemented, tested, and corrected. Advisory signals (continuation affinity) are in place with v1 ordering-only semantics.
 
 This closure is honest about its deferrals and residuals. The chapter does not claim to solve distributed concurrency, cryptographic agent identity, or full routing-signal runtime.

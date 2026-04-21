@@ -1,6 +1,8 @@
 # AGENTS.md — narada-root
 
 > **Navigation Hub**: This file provides orientation. For the canonical kernel lawbook, see [`packages/layers/control-plane/docs/00-kernel.md`](packages/layers/control-plane/docs/00-kernel.md). For detailed documentation, see the numbered guides in [`packages/layers/control-plane/docs/`](packages/layers/control-plane/docs/).
+>
+> **Agent execution contract**: Task execution is governed by [`.ai/task-contracts/agent-task-execution.md`](.ai/task-contracts/agent-task-execution.md), including the coherence-control rules: tasks are pressure intent, fixtures prove usefulness through invariants, and posture changes require evidence.
 
 ---
 
@@ -28,6 +30,13 @@ Narada is a generalized, deterministic kernel for turning remote source deltas i
 
 **Terminology**: See [`TERMINOLOGY.md`](TERMINOLOGY.md) for the user-facing vocabulary guide, and [`SEMANTICS.md`](SEMANTICS.md) for the complete system ontology (identity lattice, core abstractions, invariant derivations). In short: users set up and run **operations**; Narada compiles each **operation** into exactly one internal **scope**.
 
+### Semantic Crystallization Guidance
+
+When describing higher-order architecture, deployment, or design:
+- Prefer **`Aim / Site / Cycle / Act / Trace`** (see [`SEMANTICS.md §2.14`](SEMANTICS.md)) over overloaded generic terms like `operation`.
+- **`operation`** remains current user-facing CLI language. Do not invent new meanings for it.
+- Do not rename CLI flags, database columns, or package APIs as part of this vocabulary shift.
+
 ---
 
 ## Documentation Index
@@ -48,10 +57,11 @@ Narada is a generalized, deterministic kernel for turning remote source deltas i
 | [08-quickstart.md](packages/layers/control-plane/docs/08-quickstart.md) | Setup and first sync | Are setting up for the first time |
 | [09-troubleshooting.md](packages/layers/control-plane/docs/09-troubleshooting.md) | Common issues and solutions | Are debugging a problem |
 | [10-ui-read-model-audit.md](packages/layers/control-plane/docs/10-ui-read-model-audit.md) | UI read surfaces, gaps, and authority rules | Are building operator UI |
-| [runtime-usc-boundary.md](docs/runtime-usc-boundary.md) | Runtime / USC / operator ownership boundary | Need to understand which layer owns what |
-| [bootstrap-contract.md](docs/bootstrap-contract.md) | Canonical intent-to-operation bootstrap path | Setting up or onboarding a first-time user |
-| [first-operation-proof.md](docs/first-operation-proof.md) | Canonical mailbox operation product proof | Understanding what is proven and how to verify it |
-| [operator-loop.md](docs/operator-loop.md) | Minimal operator rhythm for live operations | Running day-to-day operations |
+| [runtime-usc-boundary.md](docs/concepts/runtime-usc-boundary.md) | Runtime / USC / operator ownership boundary | Need to understand which layer owns what |
+| [cloudflare-site-materialization.md](docs/deployment/cloudflare-site-materialization.md) | Cloudflare Site materialization design | Designing or deploying a Cloudflare-backed Narada Site |
+| [bootstrap-contract.md](docs/product/bootstrap-contract.md) | Canonical intent-to-operation bootstrap path | Setting up or onboarding a first-time user |
+| [first-operation-proof.md](docs/product/first-operation-proof.md) | Canonical mailbox operation product proof | Understanding what is proven and how to verify it |
+| [operator-loop.md](docs/product/operator-loop.md) | Minimal operator rhythm for live operations | Running day-to-day operations |
 
 ---
 
@@ -79,9 +89,9 @@ Narada is a generalized, deterministic kernel for turning remote source deltas i
 | Run confirmation replay | [`src/executors/confirmation-replay.ts`](packages/layers/control-plane/src/executors/confirmation-replay.ts) |
 | Rebuild projections | [`src/observability/rebuild.ts`](packages/layers/control-plane/src/observability/rebuild.ts) + [`narada rebuild-projections`](packages/layers/cli/src/commands/rebuild-projections.ts) |
 | Modify non-send worker | [`src/outbound/non-send-worker.ts`](packages/layers/control-plane/src/outbound/non-send-worker.ts) |
-| Bootstrap a new operation | [`docs/bootstrap-contract.md`](docs/bootstrap-contract.md) + [`packages/ops-kit/src/commands/init-repo.ts`](packages/ops-kit/src/commands/init-repo.ts) |
-| Run the canonical product proof | [`docs/first-operation-proof.md`](docs/first-operation-proof.md) + [`test/integration/live-operation/smoke-test.test.ts`](packages/layers/control-plane/test/integration/live-operation/smoke-test.test.ts) |
-| Run the operator daily loop | [`docs/operator-loop.md`](docs/operator-loop.md) + [`narada ops`](packages/layers/cli/src/commands/ops.ts) |
+| Bootstrap a new operation | [`docs/product/bootstrap-contract.md`](docs/product/bootstrap-contract.md) + [`packages/ops-kit/src/commands/init-repo.ts`](packages/ops-kit/src/commands/init-repo.ts) |
+| Run the canonical product proof | [`docs/product/first-operation-proof.md`](docs/product/first-operation-proof.md) + [`test/integration/live-operation/smoke-test.test.ts`](packages/layers/control-plane/test/integration/live-operation/smoke-test.test.ts) |
+| Run the operator daily loop | [`docs/product/operator-loop.md`](docs/product/operator-loop.md) + [`narada ops`](packages/layers/cli/src/commands/ops.ts) |
 | Add a new vertical source | [`src/sources/{vertical}-source.ts`](packages/layers/control-plane/src/sources/) |
 | Add a context strategy | [`src/foreman/context.ts`](packages/layers/control-plane/src/foreman/context.ts) |
 | Add a generic webhook HTTP server | [`packages/layers/daemon/src/generic-webhook-server.ts`](packages/layers/daemon/src/generic-webhook-server.ts) |
@@ -504,6 +514,7 @@ When proposing changes that touch public types, docs, or package surfaces, verif
 - [ ] **Authority boundaries preserved**: No new write paths bypass `ForemanFacade`, `Scheduler`, `IntentHandoff`, or `OutboundHandoff`.
 - [ ] **Observation remains read-only**: No UI-facing code mutates durable state directly.
 - [ ] **Control-plane lint passes**: `pnpm control-plane-lint` reports zero violations.
+- [ ] **Fixture discipline defined**: Before implementing a component that crosses an integration boundary, define the fixture shape that will prove the boundary works. The fixture is part of the design, not an afterthought.
 
 ---
 
@@ -628,6 +639,8 @@ Reusable task contracts live in `.ai/task-contracts/`:
 - `.ai/task-contracts/agent-task-execution.md` applies to task execution unless a task explicitly overrides it.
 - `.ai/task-contracts/chapter-planning.md` applies to chapter-planning tasks in addition to the execution contract.
 - `.ai/task-contracts/question-escalation.md` tells agents when to stop and ask the architect/user instead of making arbitrary semantic, authority, safety, private-data, or product decisions.
+
+Tasks must be self-standing. An external agent should be able to execute or review a task from `execute <task-number>` or `review <task-number>` alone. If assignment requires extra pasted constraints, patch the task file first; assignment text is routing, not hidden specification.
 
 ### Governance Feedback
 

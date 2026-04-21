@@ -12,6 +12,26 @@ It is paired with `.ai/task-contracts/question-escalation.md`. If a task becomes
 - Put completion evidence in the original task under `Execution Notes`, `Verification`, or `Outcome`.
 - If a task is obsolete, blocked, or superseded, mark that in the original task file.
 
+## Self-Standing Task Requirement
+
+A task file must contain enough execution context for an agent to act from `execute <task-number>` alone.
+
+Assignment messages are routing signals, not hidden specification carriers. If a task requires extra pasted instructions to be safely executed, the task file is incomplete and must be patched before or during assignment.
+
+Each executable task should include, where applicable:
+
+- **Read-first references**: governing docs, contracts, prior task artifacts, or chapter files the agent must inspect.
+- **Scope**: what the task is responsible for and what it must not expand into.
+- **Authority boundaries**: lifecycle, state-machine, side-effect, observation/control, or review boundaries at risk.
+- **Non-goals**: especially live mutation, production-readiness, send/email, broad abstraction, or external-system access prohibitions.
+- **Acceptance criteria**: concrete completion checks in the task file itself.
+- **Focused verification**: the smallest useful test/check commands or a clear blocker-evidence standard.
+- **Artifact discipline**: reminder not to create derivative task-status files when the task is likely to be executed by an external agent.
+
+For dependency-heavy tasks, include explicit dependency assumptions and the "read first" contract links. For high-risk tasks, include the required execution mode in the task file itself.
+
+Architect/operator assignment text should usually be only `execute N` or `review N`. If more is needed, first ask whether that content belongs in the task file.
+
 ## Safety
 
 - Do not send email unless the task explicitly authorizes sending.
@@ -51,6 +71,16 @@ Governance feedback is **not** escalation. Escalation means the task is blocked 
 
 - If the issue blocks the task, use `## Escalation Needed` in the task file (see `.ai/task-contracts/question-escalation.md`).
 - If the issue does not block the task, finish the task and add governance feedback separately.
+
+## Coherence Control Rules
+
+These rules prevent task execution from becoming performative process.
+
+- **Tasks are pressure intent, not pressure effect.** Creating, renumbering, or assigning a task does not satisfy the task. A task changes project posture only when executable artifacts, reviewed evidence, or explicit residuals are recorded.
+- **Counterweight the deformation, not the surface activity.** If review feels overweighted, do not remove review by default; produce evidence that makes review load-bearing. If implementation feels too fast, do not stop coding by default; restore the missing invariant boundary.
+- **Fixtures prove usefulness through invariants.** A fixture is not just a happy-path test. It must show that useful behavior passes through the claimed structure and does not bypass authority boundaries.
+- **Residuals preserve coherence.** If a correction is not admissible, record a bounded residual instead of narrating around the blocker or patching locally.
+- **Do not claim posture change without evidence.** A diagnosis, plan, or task graph may justify work, but completion requires verification or an explicit residual.
 
 ## Planning Mode
 

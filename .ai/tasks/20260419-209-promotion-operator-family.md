@@ -10,7 +10,7 @@ Promotion is the bridge between inspection/preview and actual system mutation. I
 
 Without explicit promotion surfaces, operators lack disciplined lifecycle advancement. The existing control surface actions (`retry_work_item`, `acknowledge_alert`, `trigger_sync`, `request_redispatch`) are implementation-shaped reactions to specific incidents, not a unified family of lifecycle transitions. There is no surfaced path to:
 - promote a preview evaluation into a governed work item
-- manually advance a draft-ready outbound command to submitted
+- manually advance a draft-ready outbound command to approved_for_send
 - bulk-promote a set of failed-retryable items back to runnable
 
 ## Specific Gap
@@ -18,7 +18,7 @@ Without explicit promotion surfaces, operators lack disciplined lifecycle advanc
 1. **No canonical family definition**: `SEMANTICS.md` and `00-kernel.md` do not define `promotion` as an operator family.
 2. **No canonical promotable objects**: The system does not explicitly name which artifacts can be promoted (`evaluation`, `outbound_command`, `work_item`, `operation`) and what their valid source/target states are.
 3. **No explicit preview → governed-work path**: Preview derivation (Task 203) produces a `CharterOutputEnvelope` / `Evaluation`, but there is no operator action to promote that output into a real `work_item`. The foreman can open work from facts (`onContextsAdmitted`, `deriveWorkFromStoredFacts`), but there is no surfaced path to open work from a preview evaluation.
-4. **No explicit manual draft → send path**: Operators can observe outbound commands in `draft_ready`, but there is no promoted action to manually advance them to `submitted`.
+4. **No explicit manual draft → send path**: Operators can observe outbound commands in `draft_ready`, but there is no promoted action to manually advance them to `approved_for_send`. The `approved_for_send → sending → submitted` path is worker-owned effect execution, not manual promotion.
 5. **No unified promotion algebra**: Existing actions are one-off handlers, not composable lifecycle transitions.
 
 ## Why Not Already Covered
@@ -47,7 +47,7 @@ Before prescribing any implementation, nail down the object model:
 | `work_item` | `failed_retryable` | `opened` | manual operator | `resolve` |
 | `work_item` | `failed_retryable` | `failed_terminal` | manual operator | `admin` |
 | `evaluation` (preview artifact) | `preview` | `governed_work` | manual operator | `derive` + `resolve` |
-| `outbound_command` | `draft_ready` | `submitted` | manual operator | `execute` |
+| `outbound_command` | `draft_ready` | `approved_for_send` | manual operator | `execute` |
 | `outbound_command` | `pending` | `cancelled` | manual operator | `execute` |
 
 Rules:
@@ -73,9 +73,9 @@ For each missing transition, design the surface without baking in a specific met
 - Design question: Should the foreman grow a `promotePreviewToWork(evaluationId, scopeId)` method that builds a synthetic `PolicyContext` and routes it through `onContextsAdmitted()`? Or should the operator action call `deriveWorkFromStoredFacts()` with a seed context? Document the chosen design before implementing.
 - Requirements: atomic, logs to `operator_action_requests`, requires `derive` + `resolve`, reuses existing admission invariants.
 
-**Manual draft → send**
-- Design question: Should this be an operator action that inserts a scheduler signal, or a direct outbound worker bypass? Document the chosen design.
-- Requirements: validate draft integrity, require `execute`, log to `operator_action_requests`.
+**Manual draft → approve for send**
+- Design question: Should this be an operator action that transitions `draft_ready → approved_for_send`, or a direct outbound worker bypass? Document the chosen design.
+- Requirements: validate draft integrity, require `execute`, log to `operator_action_requests`. The actual send (`approved_for_send → sending → submitted`) is performed by the outbound worker, not the operator.
 
 **Bulk retry**
 - Design question: Should this accept a `Selector` from Task 208, or a simple `status=failed_retryable` filter?
@@ -123,7 +123,8 @@ After the design is documented, implement **one** of the missing transitions abo
 **Implementation**:
 - `packages/layers/control-plane/src/coordinator/types.ts` — Added `getFailedRetryableWorkItems(scopeId, limit?)` to `CoordinatorStore` interface; updated `OperatorActionRequest.action_type` to include `"retry_failed_work_items"`
 - `packages/layers/control-plane/src/coordinator/store.ts` — Implemented `getFailedRetryableWorkItems()` in `SqliteCoordinatorStore`
-- `packages/layers/daemon/src/observation/operator-actions.ts` — Added `retry_failed_work_items` to `PERMITTED_OPERATOR_ACTIONS` and implemented the action
+- `packages/layers/control-plane/src/operator-actions/executor.ts` — Added `retry_failed_work_items` to `PERMITTED_OPERATOR_ACTIONS` and implemented the action in the canonical executor
+- `packages/layers/daemon/src/observation/operator-actions.ts` — Re-exports `PERMITTED_OPERATOR_ACTIONS` and `executeOperatorAction` from `@narada2/control-plane`; no daemon-local implementation
 - `packages/layers/daemon/src/observation/operator-action-routes.ts` — No changes needed (routes delegate generically to `executeOperatorAction`)
 
 ### Tests

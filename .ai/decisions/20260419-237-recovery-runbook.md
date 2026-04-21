@@ -150,7 +150,7 @@ sudo cp /path/to/narada-daemon /usr/bin/narada-daemon
 sudo chmod +x /usr/bin/narada-daemon
 
 # 3. Install unit file
-sudo cp docs/systemd/narada-daemon.service /etc/systemd/system/
+sudo cp docs/deployment/systemd/narada-daemon.service /etc/systemd/system/
 sudo systemctl daemon-reload
 
 # 4. Enable and start

@@ -37,7 +37,7 @@ export interface StuckItemHealthEntry {
 }
 
 export interface HealthStatus {
-  status: 'healthy' | 'stopped' | 'error';
+  status: 'healthy' | 'degraded' | 'critical' | 'auth_failed' | 'stale' | 'stopped' | 'error';
   lastSyncAt?: string;
   lastDispatchAt?: string;
   cyclesCompleted: number;

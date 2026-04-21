@@ -11,7 +11,7 @@ Operation Realization
 ## Capabilities Delivered
 
 ### Task 283 — Intent-to-Operation Bootstrap Contract
-- `docs/bootstrap-contract.md` defines the canonical five-step path: express intent → initialize repo → select vertical/posture → validate prerequisites → reach runnable state.
+- `docs/product/bootstrap-contract.md` defines the canonical five-step path: express intent → initialize repo → select vertical/posture → validate prerequisites → reach runnable state.
 - `QUICKSTART.md` restructured as the walkthrough, mapping three entry paths (show me / try safely / go live) to the contract steps.
 - `init-repo.ts` emits a categorized artifact manifest (`[package]`, `[config]`, `[directory]`, etc.) and next-step guidance.
 - `want-mailbox.ts` emits the live bootstrap sequence after successful creation.
@@ -30,7 +30,7 @@ Operation Realization
 - Health surfaced in `.health.json`, `/health`, `/ready`, `narada doctor`, `narada status`, and `narada ops`.
 
 ### Task 285 — First Mailbox Operation End-to-End Product Proof
-- `docs/first-operation-proof.md` defines the support mailbox (`help@global-maxima.com`) as the canonical proof case.
+- `docs/product/first-operation-proof.md` defines the support mailbox (`help@global-maxima.com`) as the canonical proof case.
 - Fixture-backed proof documented: `smoke-test.test.ts` proves the full pipeline through draft creation with mock Graph client.
 - Live-backed proof documented: what requires real Graph API credentials and charter runtime.
 - Explicit separation table states what is proven offline vs what requires live exercise.
@@ -38,7 +38,7 @@ Operation Realization
 - Public repo vs private ops repo boundaries documented.
 
 ### Task 286 — Operator Live-Loop Ergonomics
-- `docs/operator-loop.md` defines the five-step operator loop: healthy → happened → attention → drafts → next.
+- `docs/product/operator-loop.md` defines the five-step operator loop: healthy → happened → attention → drafts → next.
 - `narada ops` CLI command composes health, recent activity, attention queue, drafts pending review, and suggested next actions into one read-only dashboard.
 - Normal operating rhythm documented: morning check (5 min), mid-day triage (2 min), evening check (3 min).
 - First troubleshooting steps documented: doctor → status --verbose → show → logs → health file → recover --dry-run.
@@ -48,10 +48,10 @@ Operation Realization
 
 | Criterion | Status | Evidence |
 |-----------|--------|----------|
-| Bootstrap path is canonical | ✅ Satisfied | `docs/bootstrap-contract.md` is the single source of truth. `narada init-repo` and `narada want-mailbox` emit aligned next steps. |
+| Bootstrap path is canonical | ✅ Satisfied | `docs/product/bootstrap-contract.md` is the single source of truth. `narada init-repo` and `narada want-mailbox` emit aligned next steps. |
 | Executor attachment is real and safe | ✅ Satisfied | `probeHealth()` is first-class on `CharterRunner`. Execution gating skips dispatch when health is `broken`/`unconfigured`. Degraded modes are explicit and enforced. |
-| First mailbox operation is a convincing proof | ✅ Satisfied | `docs/first-operation-proof.md` packages existing tests into a canonical narrative. Fixture/live separation is explicit. Inspection checkpoints exist for every stage. |
-| Operator live loop is coherent | ✅ Satisfied | `docs/operator-loop.md` defines the loop. `narada ops` presents it in one command. Runbook integrates it. Disposition commands have a documented discovery path. |
+| First mailbox operation is a convincing proof | ✅ Satisfied | `docs/product/first-operation-proof.md` packages existing tests into a canonical narrative. Fixture/live separation is explicit. Inspection checkpoints exist for every stage. |
+| Operator live loop is coherent | ✅ Satisfied | `docs/product/operator-loop.md` defines the loop. `narada ops` presents it in one command. Runbook integrates it. Disposition commands have a documented discovery path. |
 | Degraded-state handling is explicit | ✅ Satisfied | Five health classes with documented production behavior. `getRecoveryGuidance()` provides concrete operator advice. Health is visible in CLI, API, and health file. |
 
 ## Deferred Gaps

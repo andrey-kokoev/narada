@@ -1,0 +1,52 @@
+{
+  "name": "@narada2/cloudflare-site",
+  "version": "0.1.0",
+  "description": "Cloudflare Worker entrypoint for Narada Site materialization and bounded Cycle execution",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/sites/cloudflare"
+  },
+  "keywords": [
+    "narada",
+    "cloudflare",
+    "worker",
+    "site",
+    "cycle"
+  ],
+  "author": "Narada <team@narada.dev>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@narada2/charters": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260421.1",
+    "better-sqlite3": "^12.9.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  },
+  "homepage": "https://github.com/andrey-kokoev/narada",
+  "bugs": {
+    "url": "https://github.com/andrey-kokoev/narada/issues"
+  }
+}

@@ -5,7 +5,7 @@
  * attention queue, and drafts pending review into one loop-shaped view.
  */
 
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CommandContext } from '../lib/command-wrapper.js';
@@ -29,6 +29,7 @@ interface HealthSummary {
   syncFresh?: boolean;
   outboundHealthy?: boolean;
   charterRuntimeHealthy?: boolean;
+  status?: string;
   overall: 'healthy' | 'degraded' | 'failing' | 'unknown';
 }
 
@@ -87,9 +88,19 @@ async function loadOpsReport(
     // ── Health summary from .health.json ──
     const health: HealthSummary = { overall: 'unknown' };
     try {
-      const healthPath = join(rootDir, '.health.json');
+      const healthPath = join(dirname(rootDir), '.health.json');
       const healthRaw = await readFile(healthPath, 'utf8');
       const healthData = JSON.parse(healthRaw) as {
+        status?: string;
+        scopes?: Array<{
+          scopeId?: string;
+          readiness?: {
+            dispatchReady?: boolean;
+            outboundHealthy?: boolean;
+            syncFresh?: boolean;
+            charterRuntimeHealthy?: boolean;
+          };
+        }>;
         readiness?: {
           dispatchReady?: boolean;
           outboundHealthy?: boolean;
@@ -97,13 +108,35 @@ async function loadOpsReport(
           charterRuntimeHealthy?: boolean;
         };
       };
-      if (healthData.readiness) {
-        health.syncFresh = healthData.readiness.syncFresh;
-        health.outboundHealthy = healthData.readiness.outboundHealthy;
-        health.charterRuntimeHealthy = healthData.readiness.charterRuntimeHealthy;
+      const readiness = healthData.scopes?.find((scope) => scope.scopeId === scopeId)?.readiness ?? healthData.readiness;
+      health.status = healthData.status;
+      if (readiness) {
+        health.syncFresh = readiness.syncFresh;
+        health.outboundHealthy = readiness.outboundHealthy;
+        health.charterRuntimeHealthy = readiness.charterRuntimeHealthy;
       }
     } catch {
-      // No health file yet
+      try {
+        const healthPath = join(rootDir, '.health.json');
+        const healthRaw = await readFile(healthPath, 'utf8');
+        const healthData = JSON.parse(healthRaw) as {
+          status?: string;
+          readiness?: {
+            dispatchReady?: boolean;
+            outboundHealthy?: boolean;
+            syncFresh?: boolean;
+            charterRuntimeHealthy?: boolean;
+          };
+        };
+        health.status = healthData.status;
+        if (healthData.readiness) {
+          health.syncFresh = healthData.readiness.syncFresh;
+          health.outboundHealthy = healthData.readiness.outboundHealthy;
+          health.charterRuntimeHealthy = healthData.readiness.charterRuntimeHealthy;
+        }
+      } catch {
+        // No health file yet
+      }
     }
 
     // Daemon running? Check PID file (same candidates as doctor.ts)
@@ -138,12 +171,12 @@ async function loadOpsReport(
     }
 
     // Overall health classification
-    const checks = [
-      health.daemonRunning,
+    const readinessChecks = [
       health.syncFresh,
       health.outboundHealthy,
       health.charterRuntimeHealthy,
     ].filter((v) => v !== undefined);
+    const checks = readinessChecks.length > 0 ? readinessChecks : [health.daemonRunning].filter((v) => v !== undefined);
     const passes = checks.filter((v) => v === true).length;
     if (checks.length === 0) {
       health.overall = 'unknown';
@@ -200,7 +233,12 @@ async function loadOpsReport(
 
     const execRows = coordinatorStore.db
       .prepare(
-        `select execution_id, status, started_at, completed_at from execution_attempts where scope_id = ? order by started_at desc limit ?`
+        `select ea.execution_id, ea.status, ea.started_at, ea.completed_at
+         from execution_attempts ea
+         join work_items wi on wi.work_item_id = ea.work_item_id
+         where wi.scope_id = ?
+         order by ea.started_at desc
+         limit ?`
       )
       .all(scopeId, limit) as Array<{
         execution_id: string;
@@ -252,7 +290,13 @@ async function loadOpsReport(
     // Failed terminal work items
     const failedRows = coordinatorStore.db
       .prepare(
-        `select work_item_id, status, updated_at, context_id from work_items where scope_id = ? and status = 'failed_terminal' order by updated_at desc limit ?`
+        `select work_item_id, status, updated_at, context_id
+         from work_items
+         where scope_id = ?
+           and status = 'failed_terminal'
+           and coalesce(error_message, '') not like '%[acknowledged by operator]%'
+         order by updated_at desc
+         limit ?`
       )
       .all(scopeId, limit) as Array<{
         work_item_id: string;
@@ -314,11 +358,16 @@ async function loadOpsReport(
            ov.payload_json,
            ov.subject,
            fd.rationale as decision_rationale,
-           ev.summary as charter_summary
+           (
+             select ev.summary
+             from evaluations ev
+             where ev.context_id = oh.context_id and ev.scope_id = oh.scope_id
+             order by ev.analyzed_at desc
+             limit 1
+           ) as charter_summary
          from outbound_handoffs oh
          join outbound_versions ov on oh.outbound_id = ov.outbound_id and oh.latest_version = ov.version
          left join foreman_decisions fd on fd.outbound_id = oh.outbound_id
-         left join evaluations ev on ev.context_id = oh.context_id and ev.scope_id = oh.scope_id
          where oh.scope_id = ? and oh.status in ('draft_ready', 'approved_for_send', 'blocked_policy')
          order by oh.created_at desc`
       )
@@ -394,7 +443,7 @@ async function loadOpsReport(
     }
     if (failedRows.length > 0) {
       suggestedActions.push(
-        `${failedRows.length} failed work item(s). Review with: narada status --verbose`
+        `${failedRows.length} failed work item(s). Inspect with: narada ops; quiet known history with: narada acknowledge-alert <work-item-id>`
       );
     }
     if (stuckWorkRows.length > 0) {

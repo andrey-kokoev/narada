@@ -11,6 +11,20 @@ export {
   isValidConfig,
   type ConfigSchemaType,
 } from "./config/schema.js";
+export {
+  SiteManifestSchema,
+  AimSchema,
+  CloudflareBindingsSchema,
+  SitePolicySchema,
+  validateSiteManifest,
+  validateSiteManifestOrThrow,
+  isValidSiteManifest,
+  type SiteManifest,
+  type Aim,
+  type CloudflareBindings,
+  type SitePolicy,
+  type SiteValidationResult,
+} from "./config/site-manifest.js";
 export type {
   Checkpoint,
   Source,
@@ -703,7 +717,10 @@ export type {
   HealthRecentError,
   ScopeReadinessSnapshot,
   HealthThresholds,
+  CycleOutcome,
+  HealthTransitionResult,
 } from "./health.js";
+export { computeHealthTransition } from "./health.js";
 
 export {
   createTracer,

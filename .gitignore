@@ -12,3 +12,4 @@ coverage/
 *.temp
 config.json
 .history
+.ai/metrics/

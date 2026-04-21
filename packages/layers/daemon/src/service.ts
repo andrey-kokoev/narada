@@ -84,7 +84,9 @@ import { CodexCharterRunner, ToolRunner } from '@narada2/charters';
 import type { ToolDefinition, ToolInvocationRequest } from '@narada2/charters';
 import { createLogger } from './lib/logger.js';
 import { PidFile } from './lib/pid-file.js';
-import { HealthFile, type HealthStatus } from './lib/health.js';
+import { HealthFile, type HealthStatus as DaemonHealthStatus } from './lib/health.js';
+import { computeHealthTransition, type CycleOutcome, type HealthStatus } from '@narada2/control-plane';
+// TODO(Task 342): Wire computeHealthTransition into updateHealth when notification emission is implemented.
 import { getRecoveryGuidance, healthClassPermitsExecution } from '@narada2/charters';
 import { createObservationServer, type ObservationApiScope } from './observation/observation-server.js';
 import { registerScopeApis } from './observation/scope-registry.js';
@@ -1309,6 +1311,7 @@ export async function createSyncService(
   let running = false;
   let stopRequested = false;
   let currentIteration: Promise<unknown> | null = null;
+  let currentHealthStatus: HealthStatus = 'healthy';
 
   const stats: SyncStats = {
     cyclesCompleted: 0,
@@ -1466,8 +1469,8 @@ export async function createSyncService(
         )
       : undefined;
 
-    const health: Omit<HealthStatus, 'timestamp'> = {
-      status: running ? (isErrorState ? 'error' : 'healthy') : 'stopped',
+    const health: Omit<DaemonHealthStatus, 'timestamp'> = {
+      status: running ? currentHealthStatus : 'stopped',
       lastSyncAt: stats.lastSyncAt?.toISOString(),
       lastDispatchAt: lastDispatchAt?.toISOString(),
       cyclesCompleted: stats.cyclesCompleted,
@@ -1492,11 +1495,20 @@ export async function createSyncService(
     });
   }
 
+  function isAuthFailure(error: unknown): boolean {
+    return (
+      error instanceof Error &&
+      'code' in error &&
+      (error as Record<string, unknown>).code === 'GRAPH_AUTH_FAILED'
+    );
+  }
+
   async function runSingleSync(): Promise<'success' | 'retryable' | 'fatal'> {
     logger.info('Starting sync cycle');
 
     let anyFatal = false;
     let anyRetryable = false;
+    let anyAuthFailure = false;
 
     await Promise.all(
       scopeServices.map(async (svc) => {
@@ -1549,30 +1561,53 @@ export async function createSyncService(
           const mb = stats.perScope?.[scope.scope_id];
           if (mb) mb.errors++;
           stats.errors++;
-          anyFatal = true;
+          if (isAuthFailure(error)) {
+            anyAuthFailure = true;
+          } else {
+            anyFatal = true;
+          }
           logger.error('Sync error', error instanceof Error ? error : new Error(String(error)), { scope: scope.scope_id });
         }
       }),
     );
 
-    if (anyFatal) {
-      stats.consecutiveErrors++;
-      await updateHealth();
-      return 'fatal';
+    // Determine cycle outcome for health transition
+    let cycleOutcome: CycleOutcome;
+    if (anyAuthFailure) {
+      cycleOutcome = 'auth_failure';
+    } else if (anyFatal || anyRetryable) {
+      cycleOutcome = 'failure';
+    } else {
+      cycleOutcome = 'success';
     }
 
-    if (anyRetryable) {
-      stats.consecutiveErrors++;
-      await updateHealth();
-      return 'retryable';
+    // Compute health transition using PREVIOUS state
+    const previousConsecutiveErrors = stats.consecutiveErrors;
+    const transition = computeHealthTransition(
+      currentHealthStatus,
+      previousConsecutiveErrors,
+      cycleOutcome,
+    );
+    currentHealthStatus = transition.status;
+
+    // Update stats based on transition result
+    if (cycleOutcome === 'success') {
+      stats.cyclesCompleted++;
+      stats.lastSyncAt = new Date();
+    }
+    stats.consecutiveErrors = transition.consecutiveFailures;
+    if (anyFatal || anyRetryable || anyAuthFailure) {
+      // errors already incremented per-scope above
     }
 
-    stats.cyclesCompleted++;
-    stats.lastSyncAt = new Date();
-    stats.consecutiveErrors = 0;
-    logger.info('Sync cycle complete', { scopes: scopeServices.length });
+    logger.info('Sync cycle complete', {
+      scopes: scopeServices.length,
+      outcome: cycleOutcome,
+      health_status: currentHealthStatus,
+      consecutive_failures: stats.consecutiveErrors,
+    });
     await updateHealth();
-    return 'success';
+    return anyFatal ? 'fatal' : anyRetryable ? 'retryable' : 'success';
   }
 
   async function runLoop(): Promise<void> {

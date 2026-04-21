@@ -1,4 +1,4 @@
-import { resolve, join } from 'node:path';
+import { dirname, resolve, join } from 'node:path';
 import { readFile, stat } from 'node:fs/promises';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
@@ -65,18 +65,46 @@ async function readPidFile(rootDir: string): Promise<number | null> {
   return null;
 }
 
-async function readHealthFile(rootDir: string): Promise<{
+async function readHealthFile(rootDir: string, scopeId: string): Promise<{
   status: string;
   lastSyncAt?: string;
   timestamp?: string;
+  readiness?: { syncFresh?: boolean };
   thresholds?: { maxStalenessMs?: number };
 } | null> {
+  try {
+    const raw = await readFile(join(dirname(rootDir), '.health.json'), 'utf8');
+    const aggregate = JSON.parse(raw) as {
+      status?: string;
+      timestamp?: string;
+      thresholds?: { maxStalenessMs?: number };
+      scopes?: Array<{
+        scopeId?: string;
+        readiness?: { syncFresh?: boolean };
+        charterRuntimeHealth?: unknown;
+      }>;
+    };
+    const scoped = aggregate.scopes?.find((scope) => scope.scopeId === scopeId);
+    if (aggregate.timestamp || scoped?.readiness) {
+      return {
+        status: aggregate.status ?? 'unknown',
+        lastSyncAt: aggregate.timestamp,
+        timestamp: aggregate.timestamp,
+        readiness: scoped?.readiness,
+        thresholds: aggregate.thresholds,
+      };
+    }
+  } catch {
+    // fall back to local operation health below
+  }
+
   try {
     const raw = await readFile(join(rootDir, '.health.json'), 'utf8');
     return JSON.parse(raw) as {
       status: string;
       lastSyncAt?: string;
       timestamp?: string;
+      readiness?: { syncFresh?: boolean };
       thresholds?: { maxStalenessMs?: number };
     };
   } catch {
@@ -112,17 +140,24 @@ async function checkScope(
   }
 
   // 2. Health file
-  const health = await readHealthFile(rootDir);
+  const health = await readHealthFile(rootDir, scopeId);
   if (health) {
+    const healthOk = health.status === 'healthy' || health.status === 'stopped';
     checks.push({
       name: 'health-file',
-      status: health.status === 'healthy' ? 'pass' : 'fail',
+      status: healthOk ? 'pass' : 'fail',
       detail: `Health status: ${health.status}`,
-      remediation: health.status === 'healthy' ? undefined : 'Check daemon logs for errors',
+      remediation: healthOk ? undefined : 'Check daemon logs for errors',
     });
 
     // 3. Sync freshness
-    if (health.lastSyncAt) {
+    if (health.readiness?.syncFresh === true) {
+      checks.push({
+        name: 'sync-freshness',
+        status: 'pass',
+        detail: `Latest aggregate health reports sync fresh${health.timestamp ? ` (${health.timestamp})` : ''}`,
+      });
+    } else if (health.lastSyncAt) {
       const lastSync = new Date(health.lastSyncAt);
       const minsSince = (Date.now() - lastSync.getTime()) / (1000 * 60);
       const threshold =
@@ -230,7 +265,7 @@ async function checkScope(
           .prepare(
             `select
               sum(case when status = 'failed_retryable' then 1 else 0 end) as retryable,
-              sum(case when status = 'failed_terminal' then 1 else 0 end) as terminal
+              sum(case when status = 'failed_terminal' and coalesce(error_message, '') not like '%[acknowledged by operator]%' then 1 else 0 end) as terminal
             from work_items`,
           )
           .get() as { retryable: number; terminal: number } | undefined;
@@ -245,12 +280,12 @@ async function checkScope(
         } else {
           checks.push({
             name: 'work-queue',
-            status: terminal > 0 ? 'fail' : 'warn',
+            status: retryable > 0 ? 'fail' : 'warn',
             detail: `${retryable} failed_retryable, ${terminal} failed_terminal work items`,
             remediation:
-              terminal > 0
-                ? 'Review terminal failures with `narada show execution <id>`'
-                : 'Retryable failures may resolve automatically; monitor with `narada status`',
+              retryable > 0
+                ? 'Retryable failures may resolve automatically; monitor with `narada status`'
+                : 'Review historical terminal failures with `narada ops`',
           });
         }
       } finally {
@@ -273,7 +308,7 @@ async function checkScope(
     });
   }
 
-  const status: ScopeDoctorResult['status'] = checks.some((c) => c.status !== 'pass')
+  const status: ScopeDoctorResult['status'] = checks.some((c) => c.status === 'fail')
     ? 'degraded'
     : 'healthy';
 
@@ -357,7 +392,7 @@ export async function doctorCommand(
   const fail = scopes.reduce((sum, s) => sum + s.checks.filter((c) => c.status === 'fail').length, 0);
   const warn = scopes.reduce((sum, s) => sum + s.checks.filter((c) => c.status === 'warn').length, 0);
 
-  const overall: DoctorReport['overall'] = fail > 0 || warn > 0 ? 'degraded' : 'healthy';
+  const overall: DoctorReport['overall'] = fail > 0 ? 'degraded' : 'healthy';
 
   const report: DoctorReport = {
     overall,

@@ -34,6 +34,7 @@ import { showDraftCommand } from './commands/show-draft.js';
 import { draftsCommand } from './commands/drafts.js';
 import { approveDraftForSendCommand } from './commands/approve-draft-for-send.js';
 import { retryAuthFailedCommand } from './commands/retry-auth-failed.js';
+import { acknowledgeAlertCommand } from './commands/acknowledge-alert.js';
 import { taskClaimCommand } from './commands/task-claim.js';
 import { taskReleaseCommand } from './commands/task-release.js';
 import { taskReviewCommand } from './commands/task-review.js';
@@ -746,6 +747,19 @@ program
       format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
       outboundId: opts.outboundId as string | undefined,
       limit: opts.limit ? Number(opts.limit) : undefined,
+    }, ctx)));
+
+program
+  .command('acknowledge-alert')
+  .description('Acknowledge a failed work item so it no longer appears as active operator attention')
+  .argument('<work-item-id>', 'Failed work item ID to acknowledge')
+  .option('-c, --config <path>', 'Path to config file', './config.json')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .action(wrapCommand('acknowledge-alert', (opts, ctx) =>
+    acknowledgeAlertCommand({
+      ...opts,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      workItemId: opts.workItemId as string,
     }, ctx)));
 
 program

@@ -551,7 +551,7 @@ Promotion is the bridge between inspection/preview and actual system mutation. I
 | `work_item` | `failed_retryable` | `failed_retryable` (retry readiness promoted) | manual operator | `resolve` |
 | `work_item` | `failed_retryable` | `failed_terminal` | manual operator | `admin` |
 | `evaluation` (preview artifact) | `preview` | `governed_work` | manual operator | `derive` + `resolve` |
-| `outbound_command` | `draft_ready` | `submitted` | manual operator | `execute` |
+| `outbound_command` | `draft_ready` | `approved_for_send` | manual operator | `execute` |
 | `outbound_command` | `pending` | `cancelled` | manual operator | `execute` |
 
 #### 2.10.2 Promotion Rules
@@ -569,11 +569,12 @@ Promotion is the bridge between inspection/preview and actual system mutation. I
 - `retry_work_item` → `work_item: failed_retryable` with `next_retry_at` cleared, manual, `resolve`. The item remains `failed_retryable`; the scheduler discovers it as runnable on its next scan.
 - `acknowledge_alert` → `work_item: failed_retryable → failed_terminal`, manual, `admin`
 - `trigger_sync` → `operation: idle → syncing`, manual, `resolve`
+- `approve_draft_for_send` → `outbound_command: draft_ready → approved_for_send`, manual, `execute`. The actual send and `approved_for_send → sending → submitted` transition are performed by the outbound worker, not the operator.
 - `request_redispatch` → automatic pipeline promotion, not manual operator promotion
 
 #### 2.10.4 Evolution Note
 
-The first concrete implementation is `retry_failed_work_items` (bulk promotion of retry readiness for `work_item: failed_retryable`). It clears `next_retry_at` without changing status; the scheduler later discovers and claims the item. As the family matures, surfaces for `evaluation → governed_work` and `outbound_command: draft_ready → submitted` will be added.
+The first concrete implementation is `retry_failed_work_items` (bulk promotion of retry readiness for `work_item: failed_retryable`). It clears `next_retry_at` without changing status; the scheduler later discovers and claims the item. As the family matures, surfaces for `evaluation → governed_work` and `outbound_command: draft_ready → approved_for_send` will be added. The `approved_for_send → sending → submitted` path is worker-owned effect execution, not manual promotion.
 
 ---
 
@@ -762,6 +763,8 @@ Narada instantiates **Intelligence-Authority Separation**: the architectural bou
 
 > **Intelligence may contribute judgment. Authority must remain in governed structure.**
 
+The opposite of separation is **collapse**: judgment, permission, intent, execution, and confirmation are compressed until model output becomes unmediated consequence.
+
 In Narada terms:
 
 - **`evaluation`** is intelligence output. It is evidence, not authority.
@@ -781,6 +784,14 @@ In Narada terms:
 | intent → execution | Worker (scheduler-claimed) | execution inventing reasons |
 | execution → reconciliation | Reconciler / inbound observation | API success becoming assumed truth |
 | reconciliation → observation | Observation API (read-only) | hidden state becoming uninspectable consequence |
+
+The anti-collapse chain is:
+
+```text
+evaluation -> decision -> intent -> execution -> reconciliation -> observation
+```
+
+Each transition preserves a different authority boundary. Direct `evaluation -> execution`, `decision -> execution`, or `execution -> confirmation` shortcuts are authority collapse.
 
 ### 2.13.3 Authority Classes and Separation
 
@@ -811,10 +822,114 @@ Separation fails when judgment and authority collapse:
 | Failure mode | Description | Narada defense |
 |--------------|-------------|----------------|
 | Prompt sovereignty | Model output directly mutates durable state | Foreman decision gate; evaluation is read-only evidence |
+| Sovereign inference | Model judgment is treated as sufficient authority | Evaluation must pass through policy/foreman decision |
 | Hidden authority | Evaluator silently determines permission or lifecycle | Policy is external to evaluation; foreman owns resolution |
 | Direct effect | Model or runner performs side effects without durable intent | `Intent` is the universal durable effect boundary |
 | Self-confirmation | Same component proposes and declares success | Reconciler observes external state independently |
 | Evidence loss | Judgment is used but not persisted | Evaluations are durably stored with execution attempts |
+
+---
+
+<a name="semantic-crystallization"></a>
+## 2.14 Semantic Crystallization: Aim / Site / Cycle / Act / Trace
+
+To prevent the word `operation` from accumulating contradictory meanings, Narada introduces a higher-order semantic lens:
+
+> **Narada advances Aims at Sites through bounded Cycles that produce governed Acts and durable Traces.**
+
+These five terms are **architectural**, not immediate replacements for every implementation label. They provide a consistent vocabulary for describing what Narada does across deployment contexts, verticals, and abstraction levels without overloading `operation`.
+
+### 2.14.1 Definitions
+
+#### `Aim`
+
+The **pursued telos** or user-level objective.
+
+- "Reduce support response time" is an Aim.
+- "Build an ERP system" is an Aim.
+- An Aim is independent of any particular runtime, substrate, or deployment target.
+
+#### `Site`
+
+The **anchored place** where state, substrate bindings, and runtime context live.
+
+- A local filesystem root with a SQLite coordinator is a Site.
+- A Cloudflare-backed runtime with Durable Objects and R2 is a Site.
+- A Site materializes an Aim into a concrete execution context.
+
+#### `Cycle`
+
+One **bounded attempt** to advance an Aim at a Site.
+
+- A single sync-and-dispatch pass is a Cycle.
+- A daemon heartbeat that scans, leases, executes, and confirms is a Cycle.
+- A `run once` invocation is a Cycle.
+- Cycles are bounded: they start, they advance, they end, and they leave Traces.
+
+#### `Act`
+
+A **governed side effect candidate** or **committed side effect**.
+
+- A `draft_reply` proposed by a charter is an Act candidate.
+- An `outbound_command` confirmed after worker execution is a committed Act.
+- Acts may not bypass governance. Every Act originates from a decision and is recorded as an intent.
+
+#### `Trace`
+
+**Durable explanation and history** of what happened and why.
+
+- `evaluation` records are Traces of charter judgment.
+- `foreman_decision` records are Traces of authority.
+- `execution_attempt` records are Traces of mechanical effort.
+- Logs, transitions, and operator actions are all Traces.
+- Trace is a projection and lens over durable records. A traced record may also be an authoritative structure (e.g., a `foreman_decision` is both a control-authority record and a Trace of how that authority was exercised). Trace does not strip authority from the records it explains.
+
+### 2.14.2 Current-Term Mapping
+
+These five crystallized terms do not immediately replace existing code labels. Use this table when translating between implementation vocabulary and higher-order description.
+
+| Existing Term | Crystallized Reading |
+| --- | --- |
+| `operation` | Aim-at-Site binding / current user-facing convenience word |
+| `scope` | Internal partition for an Aim-at-Site binding |
+| `daemon` | One possible Cycle scheduler |
+| `run once` / sync cycle / dispatch cycle | Cycle |
+| `work_item` | Schedulable unit inside Cycle advancement |
+| `intent` / `outbound_command` | Act candidate |
+| `execution_attempt` | Bounded attempt to perform charter work or execute an Act |
+| `evaluation` / `foreman_decision` / logs | Trace |
+| deployment target | Site materialization |
+| Cloudflare Worker / Cron / Sandbox | Site substrate and Cycle machinery |
+| Durable Object / R2 / SQLite | Site state and Trace storage |
+
+### 2.14.3 Forbidden Smears
+
+Agents and documentation should avoid these overloaded phrases and use the preferred replacements.
+
+| Avoid | Prefer |
+|-------|--------|
+| `Cloudflare operation` | `Cloudflare Site substrate` or `Cloudflare-backed Site` |
+| `operation deploys operation` | `an Aim creates or materializes another Aim-at-Site binding` |
+| `daemon operation` | `Cycle scheduler` or `continuous Cycle runner` |
+| `deployment operation` | `Site materialization` |
+| `running an operation` (when you mean the process) | `running a Cycle` or `advancing an Aim at a Site` |
+
+### 2.14.4 Relationship Diagram
+
+```mermaid
+flowchart LR
+  Aim --> Cycle
+  Site --> Cycle
+  Cycle --> Act
+  Cycle --> Trace
+  Act --> Trace
+  Trace --> Cycle
+```
+
+- **Aim** and **Site** together define why and where work happens.
+- **Cycle** is the bounded engine that advances the Aim using Site resources.
+- **Act** is the governed effect produced by a Cycle.
+- **Trace** records what happened, feeding back into future Cycles.
 
 ---
 
