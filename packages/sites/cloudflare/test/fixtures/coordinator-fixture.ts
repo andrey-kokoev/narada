@@ -121,9 +121,17 @@ export function createMockCycleCoordinator(
 
     // Task 348: reconciliation mocks
     getPendingOutboundCommands: vi.fn(() => [] as { outboundId: string; contextId: string; scopeId: string; actionType: string; status: string; payloadJson: string | null; internetMessageId: string | null }[]),
+    getSubmittedOutboundCommands: vi.fn(() => [] as { outboundId: string; contextId: string; scopeId: string; actionType: string; status: string; payloadJson: string | null; internetMessageId: string | null }[]),
     updateOutboundCommandStatus: vi.fn(() => {}),
     insertFixtureObservation: vi.fn(() => {}),
     getFixtureObservations: vi.fn(() => []),
+
+    // Task 359: effect worker mocks
+    getApprovedOutboundCommands: vi.fn(() => [] as { outboundId: string; contextId: string; scopeId: string; actionType: string; status: string; payloadJson: string | null; internetMessageId: string | null }[]),
+    getExecutionAttemptsForOutbound: vi.fn(() => []),
+    getLatestExecutionAttempt: vi.fn(() => null),
+    insertExecutionAttempt: vi.fn(() => {}),
+    updateExecutionAttemptStatus: vi.fn(() => {}),
   };
 }
 

@@ -1,6 +1,7 @@
 ---
-status: opened
+status: closed
 depends_on: [362]
+closed: 2026-04-21
 ---
 
 # Task 363 — Effect Execution Proof
@@ -65,9 +66,39 @@ Use focused tests only.
 
 ## Acceptance Criteria
 
-- [ ] Proof exists for approved command through reconciliation.
-- [ ] IAS boundaries are asserted.
-- [ ] Audit and attempt records are inspectable.
-- [ ] External boundary is honestly classified as mocked/live/blocked.
-- [ ] Focused verification passes.
-- [ ] No derivative task-status files are created.
+## Execution Notes
+
+Implemented in `packages/sites/cloudflare/test/unit/effect-execution-proof.test.ts`.
+
+The proof covers:
+
+- operator approval transitions `draft_ready` to `approved_for_send`;
+- `executeApprovedCommands()` creates an execution attempt and transitions to `submitted`;
+- reconciliation requires an external observation before transitioning to `confirmed`;
+- non-approved commands are skipped by the worker;
+- the adapter is mechanical and does not decide authority;
+- evaluator output alone does not create approved commands or execute effects;
+- operator action requests and execution attempts remain inspectable.
+
+No-overclaim scope:
+
+- The external Graph boundary is mocked.
+- No real email is sent.
+- This is a bounded authority-separation proof, not production readiness.
+
+Focused evidence:
+
+```bash
+pnpm --filter @narada2/cloudflare-site exec vitest run test/unit/effect-execution-proof.test.ts
+```
+
+Result: `6/6` tests passed.
+
+## Acceptance Criteria
+
+- [x] Proof exists for approved command through reconciliation.
+- [x] IAS boundaries are asserted.
+- [x] Audit and attempt records are inspectable.
+- [x] External boundary is honestly classified as mocked/live/blocked.
+- [x] Focused verification passes.
+- [x] No derivative task-status files are created.

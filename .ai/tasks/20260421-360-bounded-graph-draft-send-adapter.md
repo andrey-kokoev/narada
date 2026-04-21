@@ -1,5 +1,6 @@
 ---
-status: completed
+status: closed
+closed: 2026-04-21
 depends_on: [358]
 ---
 
@@ -86,9 +87,29 @@ pnpm verify
 
 ## Acceptance Criteria
 
-- [ ] Bounded effect adapter exists or blocker proof exists.
-- [ ] Adapter receives authorization; it does not decide authorization.
-- [ ] External identities needed for reconciliation are returned if available.
-- [ ] Failure classes are represented.
-- [ ] Focused tests or blocker evidence exist.
-- [ ] No derivative task-status files are created.
+- [x] Bounded effect adapter exists or blocker proof exists.
+- [x] Adapter receives authorization; it does not decide authorization.
+- [x] External identities needed for reconciliation are returned if available.
+- [x] Failure classes are represented.
+- [x] Focused tests or blocker evidence exist.
+- [x] No derivative task-status files are created.
+
+## Execution Notes
+
+Implemented the bounded Graph draft/send adapter for the first effect path:
+
+- Added `packages/sites/cloudflare/src/effects/graph-draft-send-adapter.ts`.
+- Added `GraphDraftClient` as a mockable boundary for `createDraftReply()` and `sendDraft()`.
+- Added `GraphDraftSendAdapter.executeSendReply()` for authorized `send_reply` attempts.
+- Adapter returns `submitted`, `failed_retryable`, or `failed_terminal`; it never returns `confirmed`.
+- Adapter returns external identities when available: `draftId`, `sentMessageId`, `internetMessageId`, and `submittedAt`.
+- Adapter classifies terminal failures such as 400/401/403/404/413 and retryable failures such as 429/503/504/network timeout.
+- Adapter has no eligibility, approval, lifecycle-transition, or confirmation authority.
+
+Focused verification:
+
+```bash
+pnpm --filter @narada2/cloudflare-site exec vitest run test/unit/graph-draft-send-adapter.test.ts
+```
+
+Result: 17/17 tests passed.

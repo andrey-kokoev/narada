@@ -173,16 +173,29 @@ describe("Live-Safe Spine Proof (Task 356)", () => {
     // For mock runner (outcome: "complete"), handoff does not create outbound.
     // This is correct: not every evaluation results in an outbound command.
 
-    // Seed an outbound manually to simulate what an effect worker would
-    // create after operator approval. Effect execution itself is out of scope.
+    // Seed an outbound manually to simulate post-execution state.
+    // The live reconcile handler only processes submitted commands.
     const outboundId = "ob_live_proof_001";
     coordinator.insertOutboundCommand(
       outboundId,
       "ctx-live-proof",
       siteId,
       "send_reply",
-      "pending",
+      "submitted",
     );
+    coordinator.insertExecutionAttempt({
+      executionAttemptId: "att-live-proof-001",
+      outboundId,
+      actionType: "send_reply",
+      attemptedAt: "2024-01-01T00:00:00Z",
+      status: "submitted",
+      errorCode: null,
+      errorMessage: null,
+      responseJson: JSON.stringify({ internetMessageId: "im-live-proof-001" }),
+      externalRef: null,
+      workerId: "w-1",
+      leaseExpiresAt: null,
+    });
 
     // Cycle 2: reconcile with live observation adapter
     const result2 = await runCycle(
@@ -202,8 +215,7 @@ describe("Live-Safe Spine Proof (Task 356)", () => {
     expect(result2.status).toBe("complete");
 
     // --- Authority boundary: confirmation requires external observation ---
-    const pendingAfter = coordinator.getPendingOutboundCommands();
-    expect(pendingAfter.length).toBe(0);
+    expect(coordinator.getSubmittedOutboundCommands().length).toBe(0);
 
     const outbound = coordinator.getOutboundCommand(outboundId);
     expect(outbound).not.toBeNull();

@@ -12,6 +12,8 @@ Narada offers two bootstrap paths: **demo/trial** (no credentials, mock data) an
 
 Decide what you want Narada to do and choose a path.
 
+When the intent is more than a simple built-in vertical, write an **operation specification**: the sources, charters, posture, knowledge, review rules, and allowed effects for the operation. Do not describe this as creating a "Narada instance"; the operation is the configured work objective, while the daemon or Site is the runtime machinery.
+
 | Path | When to use | Credentials |
 |------|-------------|-------------|
 | **Demo** | First contact, evaluate Narada | None |
@@ -19,6 +21,8 @@ Decide what you want Narada to do and choose a path.
 | **Live** | Production or persistent operation | Graph API + charter runtime |
 
 **Artifact:** A decision. No files yet.
+
+**Optional artifact:** An operation specification for richer operations, such as "mail-backed Klaviyo campaign production from designated colleague requests."
 
 ---
 

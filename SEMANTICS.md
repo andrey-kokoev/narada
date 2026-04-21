@@ -24,6 +24,34 @@ Users create, configure, preflight, activate, and run **operations**.
 
 Each operation maps to exactly one `scope`. An operation is the atomic unit of user intent; a scope is its internal representation. If Narada later needs to group or coordinate multiple operations, that will be introduced as a distinct composite concept (e.g. `suite` or `campaign`), not by redefining `operation`.
 
+Do **not** call a user's configured work setup a "Narada instance." Use **operation** for the user-owned configured unit of work. Use **runtime**, **daemon**, or **Site** for the deployed machinery that runs operations.
+
+#### `operation specification`
+
+An **operation specification** is the written or configured definition of an operation.
+
+It may include:
+
+- sources and admission rules
+- primary and secondary charters
+- posture and policy
+- knowledge sources
+- allowed intents/effects
+- review and escalation rules
+- scenario fixtures or examples
+
+Example:
+
+```text
+A mail-backed Klaviyo campaign operation admits inbound email facts from designated colleagues, interprets them as campaign-production requests, derives governed work, and routes that work through campaign-management charters. Klaviyo effects remain governed by Narada intents and operator approval.
+```
+
+#### `operation charter set`
+
+An **operation charter set** is the collection of charter instructions bound to an operation specification.
+
+It describes how judgment is organized inside the operation. It is not the operation itself, and it is not the runtime that executes it.
+
 <a name="ops-repo"></a>
 ### 1.2 `ops repo`
 
@@ -941,7 +969,7 @@ Words that should not be used in user-facing or generic system contexts:
 | Word | Why | Use Instead |
 |------|-----|-------------|
 | `agent` | Too generic; implies autonomy without governance | `charter` for the policy role, `operation` for the live arrangement |
-| `instance` | Implies a running process, not the configured intent | `operation` |
+| `instance` | Implies a running process, not the configured intent | `operation` for user work setup; `runtime`, `daemon`, or `Site` for deployed machinery |
 | `deployment` | Implies infrastructure/Ops overhead | `operation` or `ops repo` |
 | `workspace` | Too vague; conflicts with editor workspaces | `ops repo` |
 | `setup` | A verb, not a noun for the live thing | `operation` |

@@ -147,11 +147,13 @@ export interface SiteOperatorActionResult {
 export interface ExecutionAttemptRecord {
   executionAttemptId: string;
   outboundId: string;
+  actionType: string;
   attemptedAt: string;
   status: "attempting" | "submitted" | "failed_retryable" | "failed_terminal";
   errorCode: string | null;
   errorMessage: string | null;
   responseJson: string | null;
+  externalRef: string | null;
   workerId: string | null;
   leaseExpiresAt: string | null;
   finishedAt: string | null;

@@ -35,6 +35,7 @@ Narada is a generalized, deterministic kernel for turning remote source deltas i
 When describing higher-order architecture, deployment, or design:
 - Prefer **`Aim / Site / Cycle / Act / Trace`** (see [`SEMANTICS.md §2.14`](SEMANTICS.md)) over overloaded generic terms like `operation`.
 - **`operation`** remains current user-facing CLI language. Do not invent new meanings for it.
+- Do not call a user's configured work setup a **Narada instance**. Use **operation** for the configured unit of work, **operation specification** for its written/configured definition, and **runtime / daemon / Site** for deployed machinery.
 - Do not rename CLI flags, database columns, or package APIs as part of this vocabulary shift.
 
 ---

@@ -69,6 +69,7 @@ export interface CycleCoordinator extends NotificationRateLimiter {
 
   // Confirmation / reconciliation surfaces (Task 348)
   getPendingOutboundCommands(): { outboundId: string; contextId: string; scopeId: string; actionType: string; status: string; payloadJson: string | null; internetMessageId: string | null }[];
+  getSubmittedOutboundCommands(): { outboundId: string; contextId: string; scopeId: string; actionType: string; status: string; payloadJson: string | null; internetMessageId: string | null }[];
   updateOutboundCommandStatus(outboundId: string, status: string): void;
   insertFixtureObservation(observationId: string, outboundId: string, scopeId: string, observedStatus: string, observedAt: string): void;
   getFixtureObservations(): { observationId: string; outboundId: string; scopeId: string; observedStatus: string; observedAt: string }[];
@@ -76,6 +77,7 @@ export interface CycleCoordinator extends NotificationRateLimiter {
   // Effect worker surfaces (Task 359)
   getApprovedOutboundCommands(): { outboundId: string; contextId: string; scopeId: string; actionType: string; status: string; payloadJson: string | null; internetMessageId: string | null }[];
   getExecutionAttemptsForOutbound(outboundId: string): ExecutionAttemptRecord[];
+  getLatestExecutionAttempt(outboundId: string): ExecutionAttemptRecord | null;
   insertExecutionAttempt(attempt: Omit<ExecutionAttemptRecord, "finishedAt">): void;
   updateExecutionAttemptStatus(executionAttemptId: string, status: string, updates?: { errorCode?: string | null; errorMessage?: string | null; responseJson?: string | null; finishedAt?: string }): void;
 }
@@ -114,7 +116,7 @@ export class NaradaSiteCoordinator {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS fixture_observations (observation_id TEXT PRIMARY KEY, outbound_id TEXT NOT NULL, scope_id TEXT NOT NULL, observed_status TEXT NOT NULL, observed_at TEXT NOT NULL)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS notification_cooldowns (site_id TEXT NOT NULL, scope_id TEXT NOT NULL, channel TEXT NOT NULL, health_status TEXT NOT NULL, sent_at TEXT NOT NULL, PRIMARY KEY (site_id, scope_id, channel, health_status))`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS operator_action_requests (request_id TEXT PRIMARY KEY, scope_id TEXT NOT NULL, action_type TEXT NOT NULL, target_id TEXT NOT NULL, target_kind TEXT NOT NULL, payload_json TEXT, status TEXT NOT NULL DEFAULT 'pending', requested_by TEXT NOT NULL DEFAULT 'operator', requested_at TEXT NOT NULL DEFAULT (datetime('now')), executed_at TEXT, rejected_at TEXT, rejection_reason TEXT)`);
-    this.sql.exec(`CREATE TABLE IF NOT EXISTS execution_attempts (execution_attempt_id TEXT PRIMARY KEY, outbound_id TEXT NOT NULL, attempted_at TEXT NOT NULL, status TEXT NOT NULL, error_code TEXT, error_message TEXT, response_json TEXT, worker_id TEXT, lease_expires_at TEXT, finished_at TEXT)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS execution_attempts (execution_attempt_id TEXT PRIMARY KEY, outbound_id TEXT NOT NULL, action_type TEXT NOT NULL, attempted_at TEXT NOT NULL, status TEXT NOT NULL, error_code TEXT, error_message TEXT, response_json TEXT, external_ref TEXT, worker_id TEXT, lease_expires_at TEXT, finished_at TEXT)`);
 
     // Task 346: source cursor, apply-log, facts
     this.sql.exec(`CREATE TABLE IF NOT EXISTS source_cursors (source_id TEXT PRIMARY KEY, cursor_value TEXT NOT NULL, updated_at TEXT NOT NULL)`);
@@ -420,6 +422,17 @@ export class NaradaSiteCoordinator {
     return results;
   }
 
+  getSubmittedOutboundCommands(): { outboundId: string; contextId: string; scopeId: string; actionType: string; status: string; payloadJson: string | null; internetMessageId: string | null }[] {
+    const cursor = this.sql.exec<{ outbound_id: string; context_id: string; scope_id: string; action_type: string; status: string; payload_json: string | null; internet_message_id: string | null }>(
+      `SELECT outbound_id, context_id, scope_id, action_type, status, payload_json, internet_message_id FROM outbound_commands WHERE status = 'submitted' ORDER BY created_at ASC`
+    );
+    const results: { outboundId: string; contextId: string; scopeId: string; actionType: string; status: string; payloadJson: string | null; internetMessageId: string | null }[] = [];
+    for (const row of cursor) {
+      results.push({ outboundId: row.outbound_id, contextId: row.context_id, scopeId: row.scope_id, actionType: row.action_type, status: row.status, payloadJson: row.payload_json, internetMessageId: row.internet_message_id });
+    }
+    return results;
+  }
+
   updateOutboundCommandStatus(outboundId: string, status: string): void {
     this.sql.exec(`UPDATE outbound_commands SET status = ? WHERE outbound_id = ?`, status, outboundId);
   }
@@ -562,8 +575,8 @@ export class NaradaSiteCoordinator {
   }
 
   getExecutionAttemptsForOutbound(outboundId: string): ExecutionAttemptRecord[] {
-    const cursor = this.sql.exec<{ execution_attempt_id: string; outbound_id: string; attempted_at: string; status: string; error_code: string | null; error_message: string | null; response_json: string | null; worker_id: string | null; lease_expires_at: string | null; finished_at: string | null }>(
-      `SELECT execution_attempt_id, outbound_id, attempted_at, status, error_code, error_message, response_json, worker_id, lease_expires_at, finished_at FROM execution_attempts WHERE outbound_id = ? ORDER BY attempted_at ASC`,
+    const cursor = this.sql.exec<{ execution_attempt_id: string; outbound_id: string; action_type: string; attempted_at: string; status: string; error_code: string | null; error_message: string | null; response_json: string | null; external_ref: string | null; worker_id: string | null; lease_expires_at: string | null; finished_at: string | null }>(
+      `SELECT execution_attempt_id, outbound_id, action_type, attempted_at, status, error_code, error_message, response_json, external_ref, worker_id, lease_expires_at, finished_at FROM execution_attempts WHERE outbound_id = ? ORDER BY attempted_at ASC`,
       outboundId
     );
     const results: ExecutionAttemptRecord[] = [];
@@ -571,11 +584,13 @@ export class NaradaSiteCoordinator {
       results.push({
         executionAttemptId: row.execution_attempt_id,
         outboundId: row.outbound_id,
+        actionType: row.action_type,
         attemptedAt: row.attempted_at,
         status: row.status as ExecutionAttemptRecord["status"],
         errorCode: row.error_code,
         errorMessage: row.error_message,
         responseJson: row.response_json,
+        externalRef: row.external_ref,
         workerId: row.worker_id,
         leaseExpiresAt: row.lease_expires_at,
         finishedAt: row.finished_at,
@@ -584,14 +599,37 @@ export class NaradaSiteCoordinator {
     return results;
   }
 
+  getLatestExecutionAttempt(outboundId: string): ExecutionAttemptRecord | null {
+    const cursor = this.sql.exec<{ execution_attempt_id: string; outbound_id: string; action_type: string; attempted_at: string; status: string; error_code: string | null; error_message: string | null; response_json: string | null; external_ref: string | null; worker_id: string | null; lease_expires_at: string | null; finished_at: string | null }>(
+      `SELECT execution_attempt_id, outbound_id, action_type, attempted_at, status, error_code, error_message, response_json, external_ref, worker_id, lease_expires_at, finished_at FROM execution_attempts WHERE outbound_id = ? ORDER BY attempted_at DESC LIMIT 1`,
+      outboundId
+    );
+    const row = cursor.one();
+    if (!row) return null;
+    return {
+      executionAttemptId: row.execution_attempt_id,
+      outboundId: row.outbound_id,
+      actionType: row.action_type,
+      attemptedAt: row.attempted_at,
+      status: row.status as ExecutionAttemptRecord["status"],
+      errorCode: row.error_code,
+      errorMessage: row.error_message,
+      responseJson: row.response_json,
+      externalRef: row.external_ref,
+      workerId: row.worker_id,
+      leaseExpiresAt: row.lease_expires_at,
+      finishedAt: row.finished_at,
+    };
+  }
+
   insertExecutionAttempt(attempt: Omit<ExecutionAttemptRecord, "finishedAt">): void {
     this.sql.exec(
-      `INSERT INTO execution_attempts (execution_attempt_id, outbound_id, attempted_at, status, error_code, error_message, response_json, worker_id, lease_expires_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      attempt.executionAttemptId, attempt.outboundId, attempt.attemptedAt, attempt.status, attempt.errorCode, attempt.errorMessage, attempt.responseJson, attempt.workerId, attempt.leaseExpiresAt, null
+      `INSERT INTO execution_attempts (execution_attempt_id, outbound_id, action_type, attempted_at, status, error_code, error_message, response_json, external_ref, worker_id, lease_expires_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      attempt.executionAttemptId, attempt.outboundId, attempt.actionType, attempt.attemptedAt, attempt.status, attempt.errorCode, attempt.errorMessage, attempt.responseJson, attempt.externalRef, attempt.workerId, attempt.leaseExpiresAt, null
     );
   }
 
-  updateExecutionAttemptStatus(executionAttemptId: string, status: string, updates?: { errorCode?: string | null; errorMessage?: string | null; responseJson?: string | null; finishedAt?: string }): void {
+  updateExecutionAttemptStatus(executionAttemptId: string, status: string, updates?: { errorCode?: string | null; errorMessage?: string | null; responseJson?: string | null; externalRef?: string | null; finishedAt?: string }): void {
     const fields: string[] = ["status = ?"];
     const params: (string | null)[] = [status];
     if (updates?.errorCode !== undefined) {
@@ -605,6 +643,10 @@ export class NaradaSiteCoordinator {
     if (updates?.responseJson !== undefined) {
       fields.push("response_json = ?");
       params.push(updates.responseJson);
+    }
+    if (updates?.externalRef !== undefined) {
+      fields.push("external_ref = ?");
+      params.push(updates.externalRef);
     }
     if (updates?.finishedAt !== undefined) {
       fields.push("finished_at = ?");

@@ -1,5 +1,6 @@
 ---
-status: completed
+status: closed
+closed: 2026-04-21
 depends_on: [358]
 ---
 
@@ -95,9 +96,30 @@ pnpm verify
 
 ## Acceptance Criteria
 
-- [ ] Worker considers only approved commands.
-- [ ] Execution attempts are durable.
-- [ ] Submitted and confirmed remain distinct.
-- [ ] Failure states are explicit.
-- [ ] Focused tests cover eligible and ineligible commands.
-- [ ] No derivative task-status files are created.
+- [x] Worker considers only approved commands.
+- [x] Execution attempts are durable.
+- [x] Submitted and confirmed remain distinct.
+- [x] Failure states are explicit.
+- [x] Focused tests cover eligible and ineligible commands.
+- [x] No derivative task-status files are created.
+
+## Execution Notes
+
+Implemented an approved-only effect worker state machine for Cloudflare Site:
+
+- Added `packages/sites/cloudflare/src/effect-worker.ts`.
+- Added execution-attempt storage surfaces in the Cloudflare coordinator/types.
+- Worker only scans `approved_for_send` outbound commands.
+- Worker skips unallowed action types and active leases.
+- Worker creates an execution attempt before adapter invocation.
+- Worker transitions attempted commands to `submitted`, `failed_retryable`, or `failed_terminal`.
+- Worker never transitions to `confirmed`; confirmation remains owned by Task 362.
+- Worker has a health gate for `auth_failed`.
+
+Focused verification:
+
+```bash
+pnpm --filter @narada2/cloudflare-site exec vitest run test/unit/effect-worker-state-machine.test.ts
+```
+
+Result: 16/16 tests passed.

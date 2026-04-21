@@ -295,7 +295,28 @@ describe("GraphLiveObservationAdapter", () => {
 });
 
 describe("createLiveReconcileStepHandler", () => {
-  it("matching live observation confirms pending handoff", async () => {
+  function transitionToSubmitted(
+    coordinator: ReturnType<typeof createCoordinator>["coordinator"],
+    outboundId: string,
+    internetMessageId?: string,
+  ) {
+    coordinator.updateOutboundCommandStatus(outboundId, "submitted");
+    coordinator.insertExecutionAttempt({
+      executionAttemptId: `att-${outboundId}`,
+      outboundId,
+      actionType: "send_reply",
+      attemptedAt: "2024-01-01T00:00:00Z",
+      status: "submitted",
+      errorCode: null,
+      errorMessage: null,
+      responseJson: internetMessageId ? JSON.stringify({ internetMessageId }) : null,
+      externalRef: null,
+      workerId: "w-1",
+      leaseExpiresAt: null,
+    });
+  }
+
+  it("matching live observation confirms submitted command", async () => {
     const { coordinator } = createCoordinator();
     const env = createEnv(coordinator);
 
@@ -306,6 +327,9 @@ describe("createLiveReconcileStepHandler", () => {
     await createHandoffStepHandler()(env, () => true);
 
     expect(coordinator.getOutboundCommandCount()).toBe(1);
+
+    const outboundId = coordinator.getPendingOutboundCommands()[0]!.outboundId;
+    transitionToSubmitted(coordinator, outboundId);
 
     const client = buildMockClient({
       findMessageByOutboundHeader: vi.fn(async () => ({ id: "graph-msg-1" })),
@@ -319,11 +343,10 @@ describe("createLiveReconcileStepHandler", () => {
     expect(result.recordsWritten).toBe(1);
     expect(result.residuals).toContain("confirmed_1_outbound_commands");
 
-    const pending = coordinator.getPendingOutboundCommands();
-    expect(pending.length).toBe(0);
+    expect(coordinator.getSubmittedOutboundCommands().length).toBe(0);
   });
 
-  it("missing observation leaves handoff pending", async () => {
+  it("missing observation leaves submitted command unconfirmed", async () => {
     const { coordinator } = createCoordinator();
     const env = createEnv(coordinator);
 
@@ -331,6 +354,9 @@ describe("createLiveReconcileStepHandler", () => {
     await createDeriveWorkStepHandler()(env, () => true);
     await createEvaluateStepHandler()(env, () => true);
     await createHandoffStepHandler()(env, () => true);
+
+    const outboundId = coordinator.getPendingOutboundCommands()[0]!.outboundId;
+    transitionToSubmitted(coordinator, outboundId);
 
     const client = buildMockClient(); // all lookups return null
     const adapter = new GraphLiveObservationAdapter(client);
@@ -340,10 +366,9 @@ describe("createLiveReconcileStepHandler", () => {
 
     expect(result.status).toBe("completed");
     expect(result.recordsWritten).toBe(0);
-    expect(result.residuals).toContain("left_1_pending");
+    expect(result.residuals).toContain("left_1_unconfirmed");
 
-    const pending = coordinator.getPendingOutboundCommands();
-    expect(pending.length).toBe(1);
+    expect(coordinator.getSubmittedOutboundCommands().length).toBe(1);
   });
 
   it("adapter failure does not fabricate confirmation", async () => {
@@ -354,6 +379,9 @@ describe("createLiveReconcileStepHandler", () => {
     await createDeriveWorkStepHandler()(env, () => true);
     await createEvaluateStepHandler()(env, () => true);
     await createHandoffStepHandler()(env, () => true);
+
+    const outboundId = coordinator.getPendingOutboundCommands()[0]!.outboundId;
+    transitionToSubmitted(coordinator, outboundId);
 
     const client = buildMockClient({
       findMessageByOutboundHeader: vi.fn(async () => {
@@ -367,10 +395,9 @@ describe("createLiveReconcileStepHandler", () => {
 
     expect(result.status).toBe("completed");
     expect(result.recordsWritten).toBe(0);
-    expect(result.residuals).toContain("left_1_pending");
+    expect(result.residuals).toContain("left_1_unconfirmed");
 
-    const pending = coordinator.getPendingOutboundCommands();
-    expect(pending.length).toBe(1);
+    expect(coordinator.getSubmittedOutboundCommands().length).toBe(1);
   });
 
   it("partial confirmation when only some observations match", async () => {
@@ -403,6 +430,9 @@ describe("createLiveReconcileStepHandler", () => {
     const pending = coordinator.getPendingOutboundCommands();
     expect(pending.length).toBe(2);
 
+    transitionToSubmitted(coordinator, pending[0]!.outboundId);
+    transitionToSubmitted(coordinator, pending[1]!.outboundId);
+
     // Only confirm the first one
     const client = buildMockClient({
       findMessageByOutboundHeader: vi.fn(async (_scopeId, outboundId) => {
@@ -417,9 +447,9 @@ describe("createLiveReconcileStepHandler", () => {
 
     expect(result.recordsWritten).toBe(1);
     expect(result.residuals).toContain("confirmed_1_outbound_commands");
-    expect(result.residuals).toContain("left_1_pending");
+    expect(result.residuals).toContain("left_1_unconfirmed");
 
-    expect(coordinator.getPendingOutboundCommands().length).toBe(1);
+    expect(coordinator.getSubmittedOutboundCommands().length).toBe(1);
   });
 
   it("self-confirmation is impossible without external observation", async () => {
@@ -431,6 +461,9 @@ describe("createLiveReconcileStepHandler", () => {
     await createEvaluateStepHandler()(env, () => true);
     await createHandoffStepHandler()(env, () => true);
 
+    const outboundId = coordinator.getPendingOutboundCommands()[0]!.outboundId;
+    transitionToSubmitted(coordinator, outboundId);
+
     // The live handler delegates to the adapter. If the adapter returns
     // no observations, nothing gets confirmed. The handler cannot
     // generate observations from its own state.
@@ -441,6 +474,6 @@ describe("createLiveReconcileStepHandler", () => {
     const result = await handler(env, () => true);
 
     expect(result.recordsWritten).toBe(0);
-    expect(coordinator.getPendingOutboundCommands().length).toBe(1);
+    expect(coordinator.getSubmittedOutboundCommands().length).toBe(1);
   });
 });

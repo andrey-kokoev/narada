@@ -143,6 +143,42 @@ Deferred:
 - DO RPC via `fetch()` instead of direct method calls — v1.
 - Generic Runtime Locus abstraction — deferred until second substrate proven.
 
+## Cloudflare Effect Execution Boundary
+
+Narada's Cloudflare Site crossed from live-safe read/control adapters into one bounded effect-execution path without collapsing intelligence, authority, execution, and confirmation.
+
+- **Effect Execution Authority Contract** (Task 358): `docs/deployment/cloudflare-effect-execution-authority-contract.md` defines the fifth adapter class (effect-execution), the first allowed effect path (`send_reply` via Graph draft/send), approved-command eligibility, full state transition grammar, execution attempt evidence schema, retry/terminal failure semantics, confirmation separation, forbidden shortcuts, and no-overclaim language.
+- **Effect Worker State Machine** (Task 359): `executeApprovedCommands` implements approved-only execution with action-type gating (`send_reply` only), lease-based concurrency, health gate (`auth_failed` blocks), and execution attempt record creation before adapter call. Transitions: `attempting` → `submitted` | `failed_retryable` | `failed_terminal`. Never transitions to `confirmed`.
+- **Bounded Graph Draft/Send Adapter** (Task 360): `GraphDraftSendAdapter` performs two-stage draft creation + send with retry loop and terminal/retryable error classification. `GraphDraftClient` interface is mockable. Purely mechanical — no eligibility, approval, or confirmation authority.
+- **Execution Audit And Failure Semantics** (Task 361): Integration bridge `createSendReplyEffectAdapter` wires the worker to the Graph adapter, parses payload, serializes full external identity (draftId, sentMessageId, internetMessageId, submittedAt) into `responseJson` for audit. Malformed payload → terminal failure. Duplicate prevention via active lease.
+- **Reconciliation After Execution** (Task 362): `createLiveReconcileStepHandler` updated to query `submitted` outbounds and enrich them with `internetMessageId` from execution attempt `responseJson`. Confirmation remains the exclusive concern of reconciliation. Worker and adapter never set `confirmed`.
+- **Effect Execution Proof** (Task 363): Focused tests prove the full path: operator approval → `approved_for_send` → execution attempt → external adapter submit → `submitted` → separate reconciliation observation → `confirmed`. Boundary assertions: evaluator does not execute, approval precedes execution, adapter does not decide authority, submitted ≠ confirmed, confirmation requires observation, audit records are inspectable.
+
+Concrete outcomes:
+
+- `packages/sites/cloudflare/src/effect-worker.ts` — approved-only effect worker.
+- `packages/sites/cloudflare/src/effects/graph-draft-send-adapter.ts` — bounded Graph draft/send adapter.
+- `packages/sites/cloudflare/src/effects/send-reply-adapter.ts` — worker-to-adapter integration bridge.
+- `packages/sites/cloudflare/src/coordinator.ts` — extended with `getSubmittedOutboundCommands`, `getLatestExecutionAttempt`, `execution_attempts` schema.
+- `packages/sites/cloudflare/src/cycle-step.ts` — `createLiveReconcileStepHandler` enriched with execution-attempt lookup.
+- 253 tests pass across the Cloudflare package (28 test files).
+
+Authority clarifications:
+
+- `approved_for_send` is the only execution entry gate.
+- Execution success (`submitted`) does not equal confirmation (`confirmed`).
+- Reconciliation exclusively owns confirmation.
+- Operator approval and execution attempts are both audited and inspectable.
+- External Graph API boundary is mocked; no real email is sent.
+
+Deferred:
+
+- Real Microsoft Graph API calls with credential binding and token refresh.
+- Effect worker wired into `runCycle()` as a cycle step.
+- Per-command retry limit enforcement (max 5 `failed_retryable` before auto-promotion).
+- Additional effect types: `move_message`, `mark_read`, `set_categories`.
+- Production deployment, egress policy, and operational monitoring.
+
 ## Cloudflare Live Adapter Spine
 
 Narada's Cloudflare Site gained four bounded live adapter seams around the fixture-backed kernel spine, plus a boundary contract that governs what may become live and what must remain fixture-backed or blocked.

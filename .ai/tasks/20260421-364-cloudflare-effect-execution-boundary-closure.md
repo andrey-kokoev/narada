@@ -1,6 +1,8 @@
 ---
-status: opened
+status: closed
 depends_on: [363]
+closed: 2026-04-21
+closure_artifact: .ai/decisions/20260421-364-cloudflare-effect-execution-boundary-closure.md
 ---
 
 # Task 364 — Cloudflare Effect Execution Boundary Closure
@@ -77,9 +79,32 @@ It must include:
 
 ## Acceptance Criteria
 
-- [ ] Closure decision exists.
-- [ ] Tasks 358–363 are assessed.
-- [ ] No-overclaim review is explicit.
-- [ ] Submitted vs confirmed boundary is reviewed.
-- [ ] CCC posture movement is scoped and evidenced.
-- [ ] No derivative task-status files are created.
+## Execution Notes
+
+Closure decision produced at `.ai/decisions/20260421-364-cloudflare-effect-execution-boundary-closure.md`.
+
+The closure review:
+
+- assesses Tasks 358–363 task by task;
+- records the effect boundary table;
+- explicitly rejects production-readiness, autonomous-send, full-Graph-parity, real-external-mutation, API-success-as-confirmation, and generic-execution-substrate overclaims;
+- reviews the submitted-vs-confirmed boundary;
+- scopes CCC movement to `constructive_executability` widening for the Cloudflare Site only;
+- records residuals for real Graph API, cycle wiring, retry limits, additional effect types, production Cron/DO RPC, and production deployment.
+
+Focused verification used during review:
+
+```bash
+pnpm --filter @narada2/cloudflare-site exec vitest run test/unit/reconciliation-after-execution.test.ts test/unit/effect-execution-proof.test.ts
+```
+
+Result: `15/15` tests passed.
+
+## Acceptance Criteria
+
+- [x] Closure decision exists.
+- [x] Tasks 358–363 are assessed.
+- [x] No-overclaim review is explicit.
+- [x] Submitted vs confirmed boundary is reviewed.
+- [x] CCC posture movement is scoped and evidenced.
+- [x] No derivative task-status files are created.

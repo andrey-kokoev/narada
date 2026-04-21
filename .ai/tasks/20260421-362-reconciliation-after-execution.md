@@ -1,6 +1,7 @@
 ---
-status: opened
+status: closed
 depends_on: [361]
+closed: 2026-04-21
 ---
 
 # Task 362 — Reconciliation After Execution
@@ -48,8 +49,28 @@ Add focused tests proving:
 
 ## Acceptance Criteria
 
-- [ ] Submitted and confirmed remain separate.
-- [ ] Reconciliation uses external references where available.
-- [ ] Execution attempt success cannot confirm.
-- [ ] Focused tests cover matched and missing observations.
-- [ ] No derivative task-status files are created.
+## Execution Notes
+
+Implemented in `packages/sites/cloudflare/src/cycle-step.ts` and `packages/sites/cloudflare/src/coordinator.ts`.
+
+- `createLiveReconcileStepHandler()` now reads `submitted` outbound commands, not `pending` commands.
+- Submitted commands are enriched with `internetMessageId` from the latest execution attempt `responseJson` when available.
+- Matching live-style observations transition submitted commands to `confirmed`.
+- Execution attempt records alone do not confirm commands.
+- Missing observations leave commands submitted and emit residuals.
+
+Focused evidence:
+
+```bash
+pnpm --filter @narada2/cloudflare-site exec vitest run test/unit/reconciliation-after-execution.test.ts
+```
+
+Result: `9/9` tests passed.
+
+## Acceptance Criteria
+
+- [x] Submitted and confirmed remain separate.
+- [x] Reconciliation uses external references where available.
+- [x] Execution attempt success cannot confirm.
+- [x] Focused tests cover matched and missing observations.
+- [x] No derivative task-status files are created.

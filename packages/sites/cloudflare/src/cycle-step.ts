@@ -620,13 +620,15 @@ export function createReconcileStepHandler(
 // Task 354: Live reconciliation-read adapter (step 6 variant)
 // ---------------------------------------------------------------------------
 
-import type { LiveObservationAdapter, LiveObservation } from "./reconciliation/live-observation-adapter.js";
+import type { LiveObservationAdapter, LiveObservation, PendingOutbound } from "./reconciliation/live-observation-adapter.js";
 
 /**
- * Create a step-6 handler that reconciles pending outbound commands
+ * Create a step-6 handler that reconciles submitted outbound commands
  * using a live observation adapter.
  *
- * - Queries pending outbound commands
+ * - Queries submitted outbound commands (execution has produced external identities)
+ * - Enriches each command with `internetMessageId` from the latest execution
+ *   attempt's `responseJson` when not already present on the outbound record
  * - Fetches observations from the live adapter (Graph API, webhook, etc.)
  * - Updates outbound status to `confirmed` only on matching observation
  * - Adapter failure does not fabricate confirmation
@@ -652,18 +654,36 @@ export function createLiveReconcileStepHandler(
       };
     }
 
-    const pending = ctx.coordinator.getPendingOutboundCommands();
-    if (pending.length === 0) {
+    const submitted = ctx.coordinator.getSubmittedOutboundCommands();
+    if (submitted.length === 0) {
       return {
         stepId: 6,
         stepName: "reconcile",
         status: "skipped",
         recordsWritten: 0,
-        residuals: ["no_pending_outbound_commands"],
+        residuals: ["no_submitted_outbound_commands"],
         startedAt,
         finishedAt: new Date().toISOString(),
       };
     }
+
+    // Enrich submitted commands with external identities from execution attempts.
+    const enriched: PendingOutbound[] = submitted.map((cmd) => {
+      if (cmd.internetMessageId) return cmd;
+      const attempt = ctx.coordinator.getLatestExecutionAttempt(cmd.outboundId);
+      if (attempt?.responseJson) {
+        try {
+          const parsed = JSON.parse(attempt.responseJson) as Record<string, unknown>;
+          const imid = parsed.internetMessageId;
+          if (typeof imid === "string" && imid.length > 0) {
+            return { ...cmd, internetMessageId: imid };
+          }
+        } catch {
+          // Malformed responseJson — ignore enrichment
+        }
+      }
+      return cmd;
+    });
 
     let confirmed = 0;
     let unconfirmed = 0;
@@ -673,7 +693,7 @@ export function createLiveReconcileStepHandler(
     // Adapter failure returns empty array — no fabrication.
     let observations: LiveObservation[];
     try {
-      observations = await adapter.fetchObservations(pending);
+      observations = await adapter.fetchObservations(enriched);
     } catch {
       observations = [];
       residuals.push("adapter_fetch_failed");
@@ -684,7 +704,7 @@ export function createLiveReconcileStepHandler(
       observationByOutbound.set(obs.outboundId, obs);
     }
 
-    for (const cmd of pending) {
+    for (const cmd of submitted) {
       if (!canContinue()) {
         residuals.push("deadline_exceeded_mid_reconcile");
         break;
@@ -700,7 +720,7 @@ export function createLiveReconcileStepHandler(
     }
 
     residuals.push(`confirmed_${confirmed}_outbound_commands`);
-    if (unconfirmed > 0) residuals.push(`left_${unconfirmed}_pending`);
+    if (unconfirmed > 0) residuals.push(`left_${unconfirmed}_unconfirmed`);
 
     return {
       stepId: 6,

@@ -1,5 +1,5 @@
 ---
-status: opened
+status: closed
 depends_on: [357]
 ---
 
@@ -88,9 +88,9 @@ flowchart TD
 ## Closure Criteria
 
 - [x] Effect execution authority contract exists.
-- [ ] Worker state machine rejects unapproved commands.
-- [ ] One bounded effect-execution adapter exists or blocker proof exists.
-- [ ] Execution attempts are audited with honest failure semantics.
-- [ ] Confirmation remains separate from execution.
-- [ ] Proof covers approved effect attempt through reconciliation.
-- [ ] Closure records CCC posture honestly.
+- [x] Worker state machine rejects unapproved commands.
+- [x] One bounded effect-execution adapter exists or blocker proof exists.
+- [x] Execution attempts are audited with honest failure semantics.
+- [x] Confirmation remains separate from execution.
+- [x] Proof covers approved effect attempt through reconciliation.
+- [x] Closure records CCC posture honestly.

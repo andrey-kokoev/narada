@@ -1,5 +1,6 @@
 ---
-status: opened
+status: closed
+closed: 2026-04-21
 depends_on: [307]
 ---
 
