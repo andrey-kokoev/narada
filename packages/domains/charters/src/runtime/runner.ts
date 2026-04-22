@@ -278,7 +278,7 @@ ${priors}
       execution_id: obj.execution_id ?? envelope.execution_id,
       charter_id: obj.charter_id ?? envelope.charter_id,
       role: obj.role ?? envelope.role,
-      analyzed_at: obj.analyzed_at ?? new Date().toISOString(),
+      analyzed_at: this.normalizeDatetime(obj.analyzed_at) ?? new Date().toISOString(),
       confidence: obj.confidence ?? { overall: "low", uncertainty_flags: ["missing_confidence"] },
       summary: obj.summary ?? "",
       classifications: obj.classifications ?? [],
@@ -337,6 +337,17 @@ ${priors}
       }
       return f;
     });
+  }
+
+  private normalizeDatetime(raw: unknown): string | undefined {
+    if (typeof raw !== "string") return undefined;
+    try {
+      const d = new Date(raw.trim());
+      if (Number.isNaN(d.getTime())) return undefined;
+      return d.toISOString();
+    } catch {
+      return undefined;
+    }
   }
 
   private sanitizePayloadJson(raw: string): string {
