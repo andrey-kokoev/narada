@@ -163,12 +163,97 @@ export class WebhookContextStrategy implements ContextFormationStrategy {
 }
 
 /**
+ * Campaign Request Context Formation Strategy
+ *
+ * Groups campaign.request.discovered facts by conversation_id into
+ * campaign-request contexts. Only processes facts that classify as
+ * campaign requests (is_campaign_request === true).
+ */
+export class CampaignRequestContextFormation implements ContextFormationStrategy {
+  formContexts(
+    facts: Fact[],
+    scopeId: string,
+    options?: {
+      getLatestRevisionOrdinal?: (contextId: string) => number | null;
+    },
+  ): PolicyContext[] {
+    const groups = new Map<string, { kinds: Set<string>; facts: Fact[] }>();
+
+    for (const fact of facts) {
+      if (fact.fact_type !== "campaign.request.discovered") {
+        continue;
+      }
+
+      let contextId: string | undefined;
+      let kind = "new_request";
+
+      try {
+        const payload = JSON.parse(fact.payload_json) as Record<string, unknown>;
+        const event = payload.event as Record<string, unknown> | undefined;
+
+        if (event && typeof event === "object") {
+          const isCampaignRequest = event.is_campaign_request;
+          if (isCampaignRequest !== true) {
+            continue;
+          }
+
+          const convId = event.conversation_id;
+          if (typeof convId === "string") {
+            contextId = convId;
+          }
+
+          const priorOrdinal = options?.getLatestRevisionOrdinal?.(contextId ?? "");
+          if (priorOrdinal !== null && priorOrdinal !== undefined) {
+            kind = "follow_up";
+          }
+        }
+      } catch {
+        // Unparseable payload — skip
+        continue;
+      }
+
+      if (!contextId) {
+        continue;
+      }
+
+      const group = groups.get(contextId) ?? { kinds: new Set<string>(), facts: [] };
+      group.kinds.add(kind);
+      group.facts.push(fact);
+      groups.set(contextId, group);
+    }
+
+    const now = new Date().toISOString();
+    const contexts: PolicyContext[] = [];
+
+    for (const [contextId, group] of groups) {
+      const previousOrdinal = options?.getLatestRevisionOrdinal?.(contextId) ?? null;
+      const currentOrdinal = (previousOrdinal ?? 0) + 1;
+
+      contexts.push({
+        context_id: contextId,
+        scope_id: scopeId,
+        revision_id: makeRevisionId(contextId, currentOrdinal),
+        previous_revision_ordinal: previousOrdinal,
+        current_revision_ordinal: currentOrdinal,
+        change_kinds: Array.from(group.kinds),
+        facts: group.facts,
+        synced_at: now,
+      });
+    }
+
+    return contexts;
+  }
+}
+
+/**
  * Resolve a context strategy name to its implementation.
  */
 export function resolveContextStrategy(strategy: string): ContextFormationStrategy {
   switch (strategy) {
     case "mail":
       return new MailboxContextStrategy();
+    case "campaign":
+      return new CampaignRequestContextFormation();
     case "timer":
       return new TimerContextStrategy();
     case "webhook":

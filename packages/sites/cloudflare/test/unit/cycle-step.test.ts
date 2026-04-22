@@ -10,7 +10,7 @@ function createMockEnv(coordinator: ReturnType<typeof createMockCycleCoordinator
 }
 
 describe("Cycle Step Contract", () => {
-  it("calls step handlers in order 2→3→4→5→6", async () => {
+  it("calls step handlers in order 2→3→4→5→6→7", async () => {
     const coordinator = createMockCycleCoordinator();
     const callOrder: number[] = [];
 
@@ -50,7 +50,15 @@ describe("Cycle Step Contract", () => {
       6: async () => {
         callOrder.push(6);
         return {
-          stepId: 6, stepName: "reconcile", status: "completed",
+          stepId: 6, stepName: "effect_execute", status: "completed",
+          recordsWritten: 1, residuals: [],
+          startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(),
+        };
+      },
+      7: async () => {
+        callOrder.push(7);
+        return {
+          stepId: 7, stepName: "reconcile", status: "completed",
           recordsWritten: 1, residuals: [],
           startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(),
         };
@@ -60,12 +68,13 @@ describe("Cycle Step Contract", () => {
     const result = await runCycle("test-site", createMockEnv(coordinator), {}, undefined, handlers);
 
     expect(result.status).toBe("complete");
-    expect(callOrder).toEqual([2, 3, 4, 5, 6]);
+    expect(callOrder).toEqual([2, 3, 4, 5, 6, 7]);
     expect(result.steps_completed).toContain(2);
     expect(result.steps_completed).toContain(3);
     expect(result.steps_completed).toContain(4);
     expect(result.steps_completed).toContain(5);
     expect(result.steps_completed).toContain(6);
+    expect(result.steps_completed).toContain(7);
   });
 
   it("skipped steps record explicit residuals", async () => {
@@ -75,7 +84,7 @@ describe("Cycle Step Contract", () => {
 
     expect(result.status).toBe("complete");
     expect(result.step_results).toBeDefined();
-    expect(result.step_results!.length).toBe(5);
+    expect(result.step_results!.length).toBe(6);
 
     for (const sr of result.step_results!) {
       expect(sr.status).toBe("skipped");
@@ -109,7 +118,12 @@ describe("Cycle Step Contract", () => {
         startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(),
       }),
       6: async () => ({
-        stepId: 6, stepName: "reconcile", status: "skipped",
+        stepId: 6, stepName: "effect_execute", status: "skipped",
+        recordsWritten: 0, residuals: [],
+        startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(),
+      }),
+      7: async () => ({
+        stepId: 7, stepName: "reconcile", status: "skipped",
         recordsWritten: 0, residuals: [],
         startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(),
       }),
@@ -148,7 +162,12 @@ describe("Cycle Step Contract", () => {
         startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(),
       }),
       6: async () => ({
-        stepId: 6, stepName: "reconcile", status: "skipped",
+        stepId: 6, stepName: "effect_execute", status: "skipped",
+        recordsWritten: 0, residuals: [],
+        startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(),
+      }),
+      7: async () => ({
+        stepId: 7, stepName: "reconcile", status: "skipped",
         recordsWritten: 0, residuals: [],
         startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(),
       }),
@@ -158,7 +177,7 @@ describe("Cycle Step Contract", () => {
 
     expect(result.status).toBe("complete");
     expect(result.step_results).toBeDefined();
-    expect(result.step_results!.length).toBe(5);
+    expect(result.step_results!.length).toBe(6);
 
     const syncResult = result.step_results!.find((r) => r.stepId === 2);
     expect(syncResult).toBeDefined();
@@ -170,7 +189,7 @@ describe("Cycle Step Contract", () => {
     expect(coordinator.setLastCycleTrace).toHaveBeenCalledTimes(1);
     const traceArg = vi.mocked(coordinator.setLastCycleTrace).mock.calls[0]![0];
     expect(traceArg.stepResults).toBeDefined();
-    expect(traceArg.stepResults!.length).toBe(5);
+    expect(traceArg.stepResults!.length).toBe(6);
   });
 
   it("stops executing steps when deadline is exceeded", async () => {
@@ -213,7 +232,15 @@ describe("Cycle Step Contract", () => {
       6: async () => {
         callOrder.push(6);
         return {
-          stepId: 6, stepName: "reconcile", status: "completed",
+          stepId: 6, stepName: "effect_execute", status: "completed",
+          recordsWritten: 0, residuals: [],
+          startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(),
+        };
+      },
+      7: async () => {
+        callOrder.push(7);
+        return {
+          stepId: 7, stepName: "reconcile", status: "completed",
           recordsWritten: 0, residuals: [],
           startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(),
         };

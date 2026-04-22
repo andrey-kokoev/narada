@@ -4,6 +4,29 @@ This changelog tracks semantic chapters in Narada's development: concepts that b
 
 It is not a package-level release log. Package publishing changes belong in Changesets.
 
+## Operator Console / Site Registry
+
+Narada gained a cross-Site operator console backed by a Site Registry that discovers, inspects, and routes control requests without becoming hidden authority:
+
+- **Boundary contract** (Task 379): `docs/deployment/operator-console-site-registry-boundary-contract.md` defines explicit authority boundaries — registry is inventory + routing only; no direct Site-state mutation; observation/control separation with endpoint namespace rules.
+- **Site Registry** (Task 380): SQLite-backed registry discovers Windows native and WSL Sites by filesystem scan (`%LOCALAPPDATA%\Narada\*`, `/var/lib/narada/*`, `~/narada/*`). Stores metadata (`site_id`, `variant`, `site_root`, `substrate`, `aim_json`, `last_seen_at`). Safe to delete — Sites remain intact.
+- **Cross-Site health aggregation** (Task 381): `aggregateHealth()` queries each Site's observation API and produces a unified summary. `deriveAttentionQueue()` computes a derived, read-only attention queue across all Sites. Notification router respects per-channel cooldown (15 minutes default).
+- **Audited control request router** (Task 382): `ControlRequestRouter` forwards operator actions to Site-owned control APIs and logs every routing event to an append-only `registry_audit_log`. Unknown Sites rejected. No automatic retry. No caching.
+- **CLI surface** (Task 383): `narada sites list/discover/show/remove` for Site management. `narada console status/attention/approve/reject/retry` for cross-Site health and control.
+
+Authority clarifications:
+- Console is an operator surface, not an Aim, Site, Vertical, Cycle, or control plane.
+- All observation paths are GET-only. All mutation routes through Site-owned APIs with audit.
+- Registry audit is separate from Site `operator_action_requests` audit.
+
+Deferred:
+- Cloudflare Site console integration (remote discovery requires endpoint URLs and auth tokens).
+- Live Windows Site control client binding in CLI console commands (returns `No control client available` until wired).
+- GUI / web UI surface (CLI is the v0 operator surface).
+- Fleet-wide orchestration (console observes and routes; does not trigger Cycles across Sites).
+
+---
+
 ## Operational Trust
 
 Narada gained the operator-facing surfaces needed to run a live operation safely, inspect it, audit it, and recover from failure:
@@ -213,6 +236,47 @@ Deferred:
 - Real Graph reconciliation polling against live API.
 - Cron Trigger wiring for scheduled production cycles.
 - DO RPC via `fetch()` for production Worker → DO boundary.
+
+## Cloudflare Site v1 Productionization
+
+Narada's Cloudflare Site moved from bounded mocked effect-execution proof to production-shaped mechanics: the effect worker participates in the Cycle as a first-class step, real Graph credential and client binding seams exist without requiring live credentials in tests, retry limits and backoff are enforced, and production substrate boundaries (Worker→DO RPC and Cron-triggered Cycle entry) are fixture-proven.
+
+- **v1 Productionization Boundary Contract** (Task 365): `docs/deployment/cloudflare-v1-productionization-boundary-contract.md` defines production-shaped vs production-ready distinction, no-overclaim constraints, canonical 9-step cycle ordering, credential/client binding seam, retry limit semantics, and production substrate boundaries.
+- **Effect Worker in Cycle** (Task 366): `createEffectExecuteStepHandler` is step 6 in the 9-step cycle. Effect execution happens after handoff and before reconciliation. Fixture reconcile is made submitted-only. Unapproved commands are skipped. Adapter failures do not abort unrelated cycle bookkeeping.
+- **Real Graph Credential/Client Binding** (Task 367): `GraphTokenProvider` interface with `StaticBearerTokenProvider` and `ClientCredentialsTokenProvider`. `FetchGraphDraftClient` implements real Graph semantics with `fetch()`. `createGraphDraftClient(env)` factory resolves credentials from env bindings and fails closed before mutation. All tests mock `global.fetch`; no live email sent.
+- **Retry Limit and Backoff** (Task 368): Per-command max 5 `failed_retryable` attempts before auto-promotion to `failed_terminal` with audited `RETRY_LIMIT_EXHAUSTED` record. Exponential backoff gate skips too-early retries. Retry-After header support is honestly residualized as not implemented.
+- **Production RPC and Cron Wiring** (Task 369): DO `fetch()` HTTP routing for `/status`, `/control/actions`, and `/cycle`. Worker `scheduled` handler uses `env.SITE_ID` for site identity. Worker→DO stub `fetch()` and Cron entry are fixture-proven with real `Request` objects.
+
+Concrete outcomes:
+
+- `packages/sites/cloudflare/src/effect-worker.ts` — approved-only effect worker with retry/backoff gates.
+- `packages/sites/cloudflare/src/cycle-step.ts` — 9-step cycle with `createEffectExecuteStepHandler` and submitted-only reconcile.
+- `packages/sites/cloudflare/src/effects/graph-token-provider.ts` — token provider interface + implementations.
+- `packages/sites/cloudflare/src/effects/fetch-graph-draft-client.ts` — real Graph semantics with `fetch()`.
+- `packages/sites/cloudflare/src/effects/graph-client-factory.ts` — credential resolution factory with fail-closed validation.
+- `packages/sites/cloudflare/src/runner.ts` — `runCycleOnCoordinator` extraction for DO/Cron reuse.
+- `packages/sites/cloudflare/src/coordinator.ts` — DO `fetch()` routing, retry counting, execution attempt schema.
+- `packages/sites/cloudflare/src/index.ts` — Worker `scheduled` handler.
+- 297 tests pass across the Cloudflare package (33 test files).
+
+Authority clarifications:
+
+- `approved_for_send` is the only execution entry gate.
+- Execution success (`submitted`) does not equal confirmation (`confirmed`).
+- Reconciliation exclusively owns confirmation.
+- Operator approval and execution attempts are both audited and inspectable.
+- Credential seam fails closed: missing bindings throw `GraphCredentialError` before any mutation.
+- Worker→DO RPC and Cron are mechanical substrate boundaries; they do not change authority boundaries.
+
+Deferred:
+
+- Live Microsoft Graph API calls with credential rotation and egress policy validation.
+- Retry-After header support at the adapter boundary.
+- Production deployment, operational monitoring, and rate-limit tuning.
+- Multi-site scheduling (`site_id`/`scope_id` separation beyond `env.SITE_ID`).
+- Real charter runtime with live OpenAI/Kimi API calls.
+- Real Graph reconciliation polling against live API.
+- Additional effect types: `move_message`, `mark_read`, `set_categories`.
 
 ## Post-Cloudflare Coherence
 

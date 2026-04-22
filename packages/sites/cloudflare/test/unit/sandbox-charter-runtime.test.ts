@@ -55,12 +55,12 @@ describe("Sandbox Charter Runtime Attachment (Task 353)", () => {
         3: createDeriveWorkStepHandler(),
         4: createSandboxEvaluateStepHandler(runner),
         5: createHandoffStepHandler(),
-        6: createReconcileStepHandler([]),
+        7: createReconcileStepHandler([]),
       },
     );
 
     expect(result.status).toBe("complete");
-    expect(result.steps_completed).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(result.steps_completed).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
     // Evaluation was persisted
     expect(coordinator.getEvaluationCount()).toBe(1);
@@ -87,7 +87,7 @@ describe("Sandbox Charter Runtime Attachment (Task 353)", () => {
         3: createDeriveWorkStepHandler(),
         4: createSandboxEvaluateStepHandler(runner),
         5: createHandoffStepHandler(),
-        6: createReconcileStepHandler([]),
+        7: createReconcileStepHandler([]),
       },
     );
 
@@ -119,7 +119,7 @@ describe("Sandbox Charter Runtime Attachment (Task 353)", () => {
         3: createDeriveWorkStepHandler(),
         4: createSandboxEvaluateStepHandler(slowRunner),
         5: createHandoffStepHandler(),
-        6: createReconcileStepHandler([]),
+        7: createReconcileStepHandler([]),
       },
     );
 
@@ -160,7 +160,7 @@ describe("Sandbox Charter Runtime Attachment (Task 353)", () => {
         3: createDeriveWorkStepHandler(),
         4: createSandboxEvaluateStepHandler(throwingRunner),
         5: createHandoffStepHandler(),
-        6: createReconcileStepHandler([]),
+        7: createReconcileStepHandler([]),
       },
     );
 
@@ -216,7 +216,7 @@ describe("Sandbox Charter Runtime Attachment (Task 353)", () => {
         3: createDeriveWorkStepHandler(),
         4: createEvaluateStepHandler(), // fixture evaluator, not sandbox
         5: createHandoffStepHandler(),
-        6: createReconcileStepHandler([]),
+        7: createReconcileStepHandler([]),
       },
     );
 

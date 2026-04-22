@@ -112,6 +112,33 @@ describe("GraphDraftSendAdapter", () => {
     expect(result.internetMessageId).toBe("<only-from-draft@example.com>");
   });
 
+  it("submits successfully when Graph send returns 202 with no sentMessageId", async () => {
+    const client = buildMockClient({
+      createDraftReply: vi.fn(async () => ({
+        draftId: "draft-001",
+        internetMessageId: "<draft-imid@example.com>",
+      })),
+      sendDraft: vi.fn(async () => {
+        // Real Graph semantics: 202 Accepted, empty body, no IDs returned.
+        return {};
+      }),
+    });
+    const adapter = new GraphDraftSendAdapter(client, fastRetry);
+
+    const result = await adapter.executeSendReply(
+      "scope-1",
+      "ob-1",
+      samplePayload,
+    );
+
+    expect(result.status).toBe("submitted");
+    expect(result.draftId).toBe("draft-001");
+    // sentMessageId is absent because Graph 202 does not provide it.
+    expect(result.sentMessageId).toBeUndefined();
+    // internetMessageId falls back to draft's value if present.
+    expect(result.internetMessageId).toBe("<draft-imid@example.com>");
+  });
+
   it("classifies 401 as terminal with no retry", async () => {
     const client = buildMockClient({
       createDraftReply: vi.fn(async () => {

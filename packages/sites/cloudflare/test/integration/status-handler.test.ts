@@ -63,7 +63,7 @@ describe("Status handler integration", () => {
     expect(body.health.locked).toBe(false);
     expect(body.health.locked_by_cycle_id).toBeNull();
     expect(body.last_cycle.cycle_id).toBe("cycle-001");
-    expect(body.last_cycle.steps_completed).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(body.last_cycle.steps_completed).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
   });
 
   it("maps critical health to unhealthy in response", async () => {

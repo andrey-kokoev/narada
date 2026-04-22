@@ -50,7 +50,8 @@
     "@narada2/control-plane": "workspace:*",
     "@narada2/charters": "workspace:*",
     "@narada2/ops-kit": "workspace:*",
-    "@narada2/search": "workspace:*"
+    "@narada2/search": "workspace:*",
+    "@narada2/windows-site": "workspace:*"
   },
   "devDependencies": {
     "@types/cli-progress": "^3.11.6",

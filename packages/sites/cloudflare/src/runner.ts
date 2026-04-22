@@ -1,7 +1,7 @@
 /**
  * Bounded Cycle Runner
  *
- * Executes one bounded 8-step Cycle for a Narada Site.
+ * Executes one bounded 9-step Cycle for a Narada Site.
  */
 
 import type { CloudflareEnv, CycleCoordinator } from "./coordinator.js";
@@ -40,12 +40,41 @@ const DEFAULT_CONFIG: CycleConfig = {
   lockTtlMs: 35_000,
 };
 
+/**
+ * Run a cycle by resolving the coordinator from `env`.
+ *
+ * **Fixture-only note:** In tests, `env.NARADA_SITE_COORDINATOR.get()` returns
+ * the concrete `NaradaSiteCoordinator` instance, making method calls local and
+ * synchronous. In production, the DO stub may return Promises or require RPC.
+ * This function is the test/operator entry point. Production Cron entry uses
+ * `runCycleOnCoordinator` directly after resolving the DO.
+ */
 export async function runCycle(
   siteId: string,
   env: CloudflareEnv,
   config: Partial<CycleConfig> = {},
   emitter?: NotificationEmitter,
-  stepHandlers?: Record<CycleStepId, CycleStepHandler>,
+  stepHandlers?: Partial<Record<CycleStepId, CycleStepHandler>>,
+): Promise<CycleResult> {
+  const id = env.NARADA_SITE_COORDINATOR.idFromName(siteId);
+  const stub = env.NARADA_SITE_COORDINATOR.get(id);
+  const coordinator = stub as unknown as CycleCoordinator;
+  return runCycleOnCoordinator(siteId, coordinator, env, config, emitter, stepHandlers);
+}
+
+/**
+ * Run a cycle directly against a resolved coordinator.
+ *
+ * This is the production-shaped entry point used by the Durable Object's
+ * `fetch()` handler and by the Worker's `scheduled` handler after DO resolution.
+ */
+export async function runCycleOnCoordinator(
+  siteId: string,
+  coordinator: CycleCoordinator,
+  env: CloudflareEnv,
+  config: Partial<CycleConfig> = {},
+  emitter?: NotificationEmitter,
+  stepHandlers?: Partial<Record<CycleStepId, CycleStepHandler>>,
 ): Promise<CycleResult> {
   const cfg = { ...DEFAULT_CONFIG, ...config };
   const cycleId = `cycle_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -55,7 +84,6 @@ export async function runCycle(
   const scopeId = cfg.scopeId ?? siteId;
   const notify = emitter ?? new NullNotificationEmitter();
 
-  let coordinator: CycleCoordinator | null = null;
   let lockAcquired = false;
   let status: CycleResult["status"] = "complete";
   let error: string | undefined;
@@ -66,10 +94,6 @@ export async function runCycle(
   const canContinue = (): boolean => Date.now() + cfg.abortBufferMs < deadline;
 
   try {
-    const id = env.NARADA_SITE_COORDINATOR.idFromName(siteId);
-    const stub = env.NARADA_SITE_COORDINATOR.get(id);
-    coordinator = stub as unknown as CycleCoordinator;
-
     const lockResult = coordinator.acquireLock(cycleId, cfg.lockTtlMs);
     if (!lockResult.acquired) {
       // Lock contention is a cycle failure — update health
@@ -158,7 +182,8 @@ export async function runCycle(
       }
     }
 
-    const handlers = stepHandlers ?? createDefaultStepHandlers();
+    const defaultHandlers = createDefaultStepHandlers();
+    const handlers: Record<CycleStepId, CycleStepHandler> = { ...defaultHandlers, ...stepHandlers };
     const stepCtx = { cycleId, siteId, scopeId, coordinator, env };
 
     for (const stepId of CYCLE_STEP_ORDER) {
@@ -190,13 +215,13 @@ export async function runCycle(
         message: `Cycle ${cycleId} completed steps [${stepsCompleted.join(", ")}]`,
         updatedAt: new Date().toISOString(),
       });
-      stepsCompleted.push(7);
+      stepsCompleted.push(8);
     }
 
     if (coordinator) {
       coordinator.releaseLock(cycleId);
       lockAcquired = false;
-      stepsCompleted.push(8);
+      stepsCompleted.push(9);
       // Update health snapshot to reflect released lock and final step list
       const currentHealth = coordinator.getHealth();
       coordinator.setHealth({
@@ -275,7 +300,7 @@ export async function runCycle(
 
   const finishedAt = new Date().toISOString();
   if (status !== "failed") {
-    status = stepsCompleted.length < 8 ? "partial" : "complete";
+    status = stepsCompleted.length < 9 ? "partial" : "complete";
   }
 
   if (coordinator) {

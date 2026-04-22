@@ -103,7 +103,7 @@ function createMockCoordinator(overrides?: {
     startedAt: "2026-04-20T12:00:00Z",
     finishedAt: "2026-04-20T12:00:15Z",
     status: "complete",
-    stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8],
+    stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8, 9],
     error: null,
     traceKey: "help/traces/cycle-123",
   };
@@ -293,7 +293,7 @@ describe("Operator Status Endpoint", () => {
         startedAt: "2026-04-20T12:00:00Z",
         finishedAt: "2026-04-20T12:00:15Z",
         status: "complete",
-        stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8],
+        stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8, 9],
         error: null,
         traceKey: "help/traces/cycle-789",
       };
@@ -303,7 +303,7 @@ describe("Operator Status Endpoint", () => {
 
       expect(response.last_cycle.cycle_id).toBe("cycle-789");
       expect(response.last_cycle.status).toBe("complete");
-      expect(response.last_cycle.steps_completed).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+      expect(response.last_cycle.steps_completed).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     });
 
     it("returns null last_cycle when no trace exists", () => {

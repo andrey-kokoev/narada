@@ -10,6 +10,8 @@ export type FactType =
   | "mail.message.discovered"
   | "mail.message.changed"
   | "mail.message.removed"
+  // Email marketing Operation:
+  | "campaign.request.discovered"
   // Future expansion points:
   | "timer.tick"
   | "filesystem.change"

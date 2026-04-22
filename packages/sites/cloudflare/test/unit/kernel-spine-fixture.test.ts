@@ -64,7 +64,7 @@ describe("Kernel Spine Fixture (Task 349)", () => {
       3: createDeriveWorkStepHandler(),
       4: createEvaluateStepHandler(),
       5: createHandoffStepHandler(),
-      6: createReconcileStepHandler([
+      7: createReconcileStepHandler([
         {
           observationId: "obs-001",
           outboundId: "ob_dec_eval_wi_ctx_graph-mail_c-1_c-1", // will be matched dynamically below
@@ -89,14 +89,14 @@ describe("Kernel Spine Fixture (Task 349)", () => {
         3: createDeriveWorkStepHandler(),
         4: createEvaluateStepHandler(),
         5: createHandoffStepHandler(),
-        6: createReconcileStepHandler([]),
+        7: createReconcileStepHandler([]),
       },
     );
 
     expect(result1.status).toBe("complete");
-    expect(result1.steps_completed).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(result1.steps_completed).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     expect(result1.step_results).toBeDefined();
-    expect(result1.step_results!.length).toBe(5);
+    expect(result1.step_results!.length).toBe(6);
 
     // Verify step results are recorded
     const syncResult = result1.step_results!.find((r) => r.stepId === 2);
@@ -115,10 +115,10 @@ describe("Kernel Spine Fixture (Task 349)", () => {
     expect(handoffResult!.status).toBe("completed");
     expect(handoffResult!.recordsWritten).toBeGreaterThanOrEqual(2);
 
-    const reconcileResult = result1.step_results!.find((r) => r.stepId === 6);
-    expect(reconcileResult!.status).toBe("completed");
-    expect(reconcileResult!.recordsWritten).toBe(0); // no observations yet
-    expect(reconcileResult!.residuals).toContain("left_1_pending");
+    const reconcileResult = result1.step_results!.find((r) => r.stepId === 7);
+    expect(reconcileResult!.status).toBe("skipped");
+    expect(reconcileResult!.recordsWritten).toBe(0); // no submitted outbounds yet
+    expect(reconcileResult!.residuals).toContain("no_submitted_outbound_commands");
 
     // Durable state assertions
     expect(coordinator.getFactCount()).toBe(2);
@@ -128,11 +128,14 @@ describe("Kernel Spine Fixture (Task 349)", () => {
     expect(coordinator.getDecisionCount()).toBe(1);
     expect(coordinator.getOutboundCommandCount()).toBe(1);
 
+    // Transition outbound to submitted (as effect execution would)
     const pending = coordinator.getPendingOutboundCommands();
     expect(pending.length).toBe(1);
+    const outboundId = pending[0]!.outboundId;
+    coordinator.updateOutboundCommandStatus(outboundId, "submitted");
 
     // Second cycle: reconcile with the actual observation
-    const outboundId = pending[0]!.outboundId;
+
     const result2 = await runCycle(
       "test-site",
       createMockEnvForRunner(coordinator),
@@ -143,7 +146,7 @@ describe("Kernel Spine Fixture (Task 349)", () => {
         3: createDeriveWorkStepHandler(),
         4: createEvaluateStepHandler(),
         5: createHandoffStepHandler(),
-        6: createReconcileStepHandler([
+        7: createReconcileStepHandler([
           {
             observationId: "obs-001",
             outboundId,
@@ -156,10 +159,10 @@ describe("Kernel Spine Fixture (Task 349)", () => {
     );
 
     expect(result2.status).toBe("complete");
-    const reconcileResult2 = result2.step_results!.find((r) => r.stepId === 6);
+    const reconcileResult2 = result2.step_results!.find((r) => r.stepId === 7);
     expect(reconcileResult2!.recordsWritten).toBe(1);
     expect(reconcileResult2!.residuals).toContain("confirmed_1_outbound_commands");
-    expect(coordinator.getPendingOutboundCommands().length).toBe(0);
+    expect(coordinator.getSubmittedOutboundCommands().length).toBe(0);
   });
 
   it("preserves IAS boundaries: facts distinct from context/work", async () => {
@@ -175,7 +178,7 @@ describe("Kernel Spine Fixture (Task 349)", () => {
         3: createDeriveWorkStepHandler(),
         4: createEvaluateStepHandler(),
         5: createHandoffStepHandler(),
-        6: createReconcileStepHandler([]),
+        7: createReconcileStepHandler([]),
       },
     );
 
@@ -201,7 +204,7 @@ describe("Kernel Spine Fixture (Task 349)", () => {
         3: createDeriveWorkStepHandler(),
         4: createEvaluateStepHandler(),
         5: createHandoffStepHandler(),
-        6: createReconcileStepHandler([]),
+        7: createReconcileStepHandler([]),
       },
     );
 
@@ -227,7 +230,7 @@ describe("Kernel Spine Fixture (Task 349)", () => {
         3: createDeriveWorkStepHandler(),
         4: createEvaluateStepHandler(),
         5: createHandoffStepHandler(),
-        6: createReconcileStepHandler([]),
+        7: createReconcileStepHandler([]),
       },
     );
 
@@ -250,15 +253,16 @@ describe("Kernel Spine Fixture (Task 349)", () => {
         3: createDeriveWorkStepHandler(),
         4: createEvaluateStepHandler(),
         5: createHandoffStepHandler(),
-        6: createReconcileStepHandler([]),
+        7: createReconcileStepHandler([]),
       },
     );
 
     // Outbound remains pending without observation
     expect(coordinator.getPendingOutboundCommands().length).toBe(1);
 
-    // Only an external observation can confirm
+    // Only an external observation can confirm a submitted outbound
     const outboundId = coordinator.getPendingOutboundCommands()[0]!.outboundId;
+    coordinator.updateOutboundCommandStatus(outboundId, "submitted");
     await runCycle(
       "test-site",
       createMockEnvForRunner(coordinator),
@@ -269,7 +273,7 @@ describe("Kernel Spine Fixture (Task 349)", () => {
         3: createDeriveWorkStepHandler(),
         4: createEvaluateStepHandler(),
         5: createHandoffStepHandler(),
-        6: createReconcileStepHandler([
+        7: createReconcileStepHandler([
           {
             observationId: "obs-confirm",
             outboundId,
@@ -281,7 +285,7 @@ describe("Kernel Spine Fixture (Task 349)", () => {
       },
     );
 
-    expect(coordinator.getPendingOutboundCommands().length).toBe(0);
+    expect(coordinator.getSubmittedOutboundCommands().length).toBe(0);
   });
 
   it("trace and health are observation/evidence, not authority", async () => {
@@ -297,7 +301,7 @@ describe("Kernel Spine Fixture (Task 349)", () => {
         3: createDeriveWorkStepHandler(),
         4: createEvaluateStepHandler(),
         5: createHandoffStepHandler(),
-        6: createReconcileStepHandler([]),
+        7: createReconcileStepHandler([]),
       },
     );
 
@@ -307,7 +311,7 @@ describe("Kernel Spine Fixture (Task 349)", () => {
     const trace = coordinator.getLastCycleTrace();
     expect(trace).not.toBeNull();
     expect(trace!.stepResults).toBeDefined();
-    expect(trace!.stepResults!.length).toBe(5);
+    expect(trace!.stepResults!.length).toBe(6);
 
     // Health is advisory
     const health = coordinator.getHealth();

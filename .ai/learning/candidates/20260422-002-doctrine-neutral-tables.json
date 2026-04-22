@@ -1,0 +1,33 @@
+{
+  "artifact_id": "20260422-002",
+  "artifact_type": "doctrine_candidate",
+  "state": "candidate",
+  "created_at": "2026-04-22T15:38:00-05:00",
+  "source": {
+    "kind": "chapter",
+    "chapter_range": "378-384",
+    "closure_decision": ".ai/decisions/20260421-384-operator-console-site-registry-closure.md",
+    "section": "Semantic Drift Check"
+  },
+  "title": "Generic modules must query neutral tables, not mailbox-era views",
+  "content": {
+    "principle": "Control-plane modules that are not mailbox-specific must query neutral tables (context_records, context_revisions, outbound_handoffs) and must never reference conversation_records, conversation_revisions, or outbound_commands.",
+    "rationale": "Mailbox-era schema is vertical-local compatibility only. Generic control-plane modules built against mailbox-era views create implicit vertical coupling that violates kernel substrate neutrality.",
+    "detected_in": [
+      ".ai/decisions/20260421-384-operator-console-site-registry-closure.md",
+      "AGENTS.md invariant 28-31"
+    ],
+    "enforcement": "CI lint via scripts/control-plane-lint.ts; review checklist for new persistence modules.",
+    "not_applicable_when": [
+      "Modules inside adapter/graph/, normalize/, projector/, foreman/, or outbound/ worker code",
+      "Explicit migration or compatibility adapters",
+      "Mailbox-specific observation types (MailExecutionDetail, MailboxVerticalView)"
+    ]
+  },
+  "reviewed_at": null,
+  "reviewed_by": null,
+  "accepted_at": null,
+  "accepted_by": null,
+  "superseded_by": null,
+  "rejection_reason": null
+}

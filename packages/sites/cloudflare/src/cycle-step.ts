@@ -1,31 +1,35 @@
 /**
  * Cycle Step Contract
  *
- * Typed execution surface for steps 2–6 of the bounded 8-step Cycle.
+ * Typed execution surface for steps 2–7 of the bounded 9-step Cycle.
  *
  * Step mapping:
- *   2 — sync         (source delta admission)
- *   3 — derive_work  (context formation + work opening)
- *   4 — evaluate     (charter execution)
- *   5 — handoff      (intent creation + outbound command generation)
- *   6 — reconcile    (confirmation + observation update)
+ *   2 — sync           (source delta admission)
+ *   3 — derive_work    (context formation + work opening)
+ *   4 — evaluate       (charter execution)
+ *   5 — handoff        (intent creation + outbound command generation)
+ *   6 — effect_execute (approved-only effect worker)
+ *   7 — reconcile      (confirmation + observation update)
  *
- * Steps 1, 7, and 8 are owned by the runner (lock, health/trace, release).
+ * Steps 1, 8, and 9 are owned by the runner (lock, health/trace, release).
  */
 
 import type { CloudflareEnv, CycleCoordinator } from "./coordinator.js";
 import type { CycleStepResult, FactRecord } from "./types.js";
 import type { SourceAdapter } from "./source-adapter.js";
+import type { EffectExecutionAdapter } from "./effect-worker.js";
+import { executeApprovedCommands } from "./effect-worker.js";
 import type { CharterRunner } from "@narada2/charters";
 import { runCharterInSandbox } from "./sandbox/charter-runtime.js";
 
-export type CycleStepId = 2 | 3 | 4 | 5 | 6;
+export type CycleStepId = 2 | 3 | 4 | 5 | 6 | 7;
 
 export type CycleStepName =
   | "sync"
   | "derive_work"
   | "evaluate"
   | "handoff"
+  | "effect_execute"
   | "reconcile";
 
 export type CycleStepStatus = "completed" | "skipped" | "failed";
@@ -43,8 +47,8 @@ export type CycleStepHandler = (
   canContinue: () => boolean,
 ) => Promise<CycleStepResult>;
 
-/** Ordered step IDs for the kernel spine (steps 2–6). */
-export const CYCLE_STEP_ORDER: CycleStepId[] = [2, 3, 4, 5, 6];
+/** Ordered step IDs for the kernel spine (steps 2–7). */
+export const CYCLE_STEP_ORDER: CycleStepId[] = [2, 3, 4, 5, 6, 7];
 
 /** Human-readable name for each step ID. */
 export const CYCLE_STEP_NAMES: Record<CycleStepId, CycleStepName> = {
@@ -52,7 +56,8 @@ export const CYCLE_STEP_NAMES: Record<CycleStepId, CycleStepName> = {
   3: "derive_work",
   4: "evaluate",
   5: "handoff",
-  6: "reconcile",
+  6: "effect_execute",
+  7: "reconcile",
 };
 
 /**
@@ -68,7 +73,8 @@ export function createDefaultStepHandlers(): Record<CycleStepId, CycleStepHandle
     3: createSkippedStepHandler(3, "derive_work", "Task 347"),
     4: createSkippedStepHandler(4, "evaluate", "Task 347"),
     5: createSkippedStepHandler(5, "handoff", "Task 347"),
-    6: createSkippedStepHandler(6, "reconcile", "Task 348"),
+    6: createSkippedStepHandler(6, "effect_execute", "Task 366"),
+    7: createSkippedStepHandler(7, "reconcile", "Task 348"),
   };
 }
 
@@ -490,7 +496,7 @@ export function createHandoffStepHandler(): CycleStepHandler {
           outboundId,
           ev.workItemId, // contextId proxy
           ev.scopeId,
-          ev.outcome,
+          "send_reply",
           "pending",
         );
         outboundsCreated++;
@@ -523,7 +529,90 @@ export function createHandoffStepHandler(): CycleStepHandler {
 }
 
 // ---------------------------------------------------------------------------
-// Task 348: Fixture-backed confirmation / reconciliation (step 6)
+// Task 366: Effect execution step handler (step 6)
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a step-6 handler that executes approved outbound commands.
+ *
+ * - Queries approved_for_send commands from coordinator
+ * - Calls the effect execution adapter for each eligible command
+ * - Records execution attempts and transitions commands to submitted/failed
+ * - Never transitions commands to confirmed (Task 362 owns confirmation)
+ * - Adapter failure is caught and recorded honestly by executeApprovedCommands
+ * - Unexpected exceptions from executeApprovedCommands itself fail the step
+ */
+export function createEffectExecuteStepHandler(
+  adapter: EffectExecutionAdapter,
+): CycleStepHandler {
+  return async (ctx, canContinue) => {
+    const startedAt = new Date().toISOString();
+
+    if (!canContinue()) {
+      return {
+        stepId: 6,
+        stepName: "effect_execute",
+        status: "skipped",
+        recordsWritten: 0,
+        residuals: ["deadline_exceeded_before_start"],
+        startedAt,
+        finishedAt: new Date().toISOString(),
+      };
+    }
+
+    try {
+      const approved = ctx.coordinator.getApprovedOutboundCommands();
+      if (approved.length === 0) {
+        return {
+          stepId: 6,
+          stepName: "effect_execute",
+          status: "skipped",
+          recordsWritten: 0,
+          residuals: ["no_approved_commands"],
+          startedAt,
+          finishedAt: new Date().toISOString(),
+        };
+      }
+
+      const result = await executeApprovedCommands(
+        ctx.coordinator,
+        adapter,
+        { workerId: ctx.cycleId, now: startedAt },
+      );
+
+      const recordsWritten = result.attempted;
+      const residuals = [...result.residuals];
+      if (result.attempted === 0 && result.skipped > 0) {
+        residuals.push(`skipped_${result.skipped}_commands`);
+      }
+
+      return {
+        stepId: 6,
+        stepName: "effect_execute",
+        status: result.attempted > 0 ? "completed" : "skipped",
+        recordsWritten,
+        residuals,
+        startedAt,
+        finishedAt: new Date().toISOString(),
+      };
+    } catch (error) {
+      // Unexpected worker failure — fail the step so the runner records it
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return {
+        stepId: 6,
+        stepName: "effect_execute",
+        status: "failed",
+        recordsWritten: 0,
+        residuals: [`effect_worker_exception: ${errorMessage}`],
+        startedAt,
+        finishedAt: new Date().toISOString(),
+      };
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Task 348: Fixture-backed confirmation / reconciliation (step 7)
 // ---------------------------------------------------------------------------
 
 export interface FixtureObservation {
@@ -535,15 +624,17 @@ export interface FixtureObservation {
 }
 
 /**
- * Create a step-6 handler that reconciles pending outbound commands
+ * Create a step-7 handler that reconciles submitted outbound commands
  * against fixture observations.
  *
- * - Queries pending outbound commands
+ * - Queries submitted outbound commands only (canonical reconciliation boundary)
  * - Matches against fixture observations (passed in, not generated)
  * - Updates outbound status to `confirmed` only on matching observation
- * - Unconfirmed outbounds remain `pending`
+ * - Unconfirmed outbounds remain `submitted`
  *
  * Observations are EXTERNAL input — self-confirmation is impossible.
+ * Pending outbounds are NOT reconciled; they must first pass through
+ * effect execution (step 6) to reach submitted.
  */
 export function createReconcileStepHandler(
   observations: FixtureObservation[],
@@ -553,7 +644,7 @@ export function createReconcileStepHandler(
 
     if (!canContinue()) {
       return {
-        stepId: 6,
+        stepId: 7,
         stepName: "reconcile",
         status: "skipped",
         recordsWritten: 0,
@@ -563,14 +654,14 @@ export function createReconcileStepHandler(
       };
     }
 
-    const pending = ctx.coordinator.getPendingOutboundCommands();
-    if (pending.length === 0) {
+    const submitted = ctx.coordinator.getSubmittedOutboundCommands();
+    if (submitted.length === 0) {
       return {
-        stepId: 6,
+        stepId: 7,
         stepName: "reconcile",
         status: "skipped",
         recordsWritten: 0,
-        residuals: ["no_pending_outbound_commands"],
+        residuals: ["no_submitted_outbound_commands"],
         startedAt,
         finishedAt: new Date().toISOString(),
       };
@@ -586,7 +677,7 @@ export function createReconcileStepHandler(
       observationByOutbound.set(obs.outboundId, obs);
     }
 
-    for (const cmd of pending) {
+    for (const cmd of submitted) {
       if (!canContinue()) {
         residuals.push("deadline_exceeded_mid_reconcile");
         break;
@@ -602,10 +693,10 @@ export function createReconcileStepHandler(
     }
 
     residuals.push(`confirmed_${confirmed}_outbound_commands`);
-    if (unconfirmed > 0) residuals.push(`left_${unconfirmed}_pending`);
+    if (unconfirmed > 0) residuals.push(`left_${unconfirmed}_unconfirmed`);
 
     return {
-      stepId: 6,
+      stepId: 7,
       stepName: "reconcile",
       status: "completed",
       recordsWritten: confirmed,
@@ -617,13 +708,13 @@ export function createReconcileStepHandler(
 }
 
 // ---------------------------------------------------------------------------
-// Task 354: Live reconciliation-read adapter (step 6 variant)
+// Task 354: Live reconciliation-read adapter (step 7 variant)
 // ---------------------------------------------------------------------------
 
 import type { LiveObservationAdapter, LiveObservation, PendingOutbound } from "./reconciliation/live-observation-adapter.js";
 
 /**
- * Create a step-6 handler that reconciles submitted outbound commands
+ * Create a step-7 handler that reconciles submitted outbound commands
  * using a live observation adapter.
  *
  * - Queries submitted outbound commands (execution has produced external identities)
@@ -644,7 +735,7 @@ export function createLiveReconcileStepHandler(
 
     if (!canContinue()) {
       return {
-        stepId: 6,
+        stepId: 7,
         stepName: "reconcile",
         status: "skipped",
         recordsWritten: 0,
@@ -657,7 +748,7 @@ export function createLiveReconcileStepHandler(
     const submitted = ctx.coordinator.getSubmittedOutboundCommands();
     if (submitted.length === 0) {
       return {
-        stepId: 6,
+        stepId: 7,
         stepName: "reconcile",
         status: "skipped",
         recordsWritten: 0,
@@ -723,7 +814,7 @@ export function createLiveReconcileStepHandler(
     if (unconfirmed > 0) residuals.push(`left_${unconfirmed}_unconfirmed`);
 
     return {
-      stepId: 6,
+      stepId: 7,
       stepName: "reconcile",
       status: "completed",
       recordsWritten: confirmed,

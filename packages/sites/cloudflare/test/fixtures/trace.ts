@@ -22,7 +22,7 @@ const defaultTrace: CycleTraceRecord = {
   startedAt: "2024-01-01T00:00:00Z",
   finishedAt: "2024-01-01T00:00:15Z",
   status: "complete",
-  stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8],
+  stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8, 9],
   error: null,
   traceKey: "site-1/traces/cycle-001/trace.json",
 };
@@ -50,7 +50,7 @@ export function createCompleteTrace(cycleId = "cycle-complete-001", siteId = "he
     pendingWorkItems: 2,
     locked: false,
     lockedByCycleId: null,
-    message: `Cycle ${cycleId} completed steps [1, 2, 3, 4, 5, 6, 7, 8]`,
+    message: `Cycle ${cycleId} completed steps [1, 2, 3, 4, 5, 6, 7, 8, 9]`,
     updatedAt: now,
   };
   const trace: CycleTraceRecord = {
@@ -58,7 +58,7 @@ export function createCompleteTrace(cycleId = "cycle-complete-001", siteId = "he
     startedAt: now,
     finishedAt: now,
     status: "complete",
-    stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8],
+    stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8, 9],
     error: null,
     traceKey: `${siteId}/traces/${cycleId}/trace.json`,
   };

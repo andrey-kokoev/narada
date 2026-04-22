@@ -35,6 +35,7 @@ export interface StatusOptions {
   config?: string;
   verbose?: boolean;
   format?: string;
+  site?: string;
 }
 
 interface DaemonHealthSnapshot {
@@ -112,6 +113,11 @@ export async function statusCommand(
   context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const { configPath, logger } = context;
+
+  // Windows Site path: --site takes precedence over config
+  if (options.site) {
+    return statusWindowsSite(options.site, logger);
+  }
 
   logger.info('Loading config', { path: configPath });
 
@@ -201,6 +207,60 @@ export async function statusCommand(
       ...report,
     },
   };
+}
+
+async function statusWindowsSite(
+  siteId: string,
+  logger: CommandContext['logger'],
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  logger.info('Querying Windows Site', { siteId });
+
+  const {
+    resolveSiteVariant,
+    getWindowsSiteStatus,
+  } = await import('@narada2/windows-site');
+
+  const variant = resolveSiteVariant(siteId);
+  if (!variant) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: {
+        status: 'error',
+        error: `Windows Site "${siteId}" not found. Checked native and WSL paths.`,
+        health: 'error',
+      },
+    };
+  }
+
+  try {
+    const status = await getWindowsSiteStatus(siteId, variant);
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: {
+        status: 'success',
+        site: {
+          id: status.siteId,
+          variant: status.variant,
+          rootDir: status.siteRoot,
+        },
+        health: status.health.status,
+        lastCycleAt: status.health.last_cycle_at,
+        lastCycleDurationMs: status.health.last_cycle_duration_ms,
+        consecutiveFailures: status.health.consecutive_failures,
+        message: status.health.message,
+        lastTrace: status.lastTrace,
+      },
+    };
+  } catch (error) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: {
+        status: 'error',
+        error: `Failed to query Windows Site: ${(error as Error).message}`,
+        health: 'error',
+      },
+    };
+  }
 }
 
 async function buildStatusReport(scopeId: string, rootDir: string): Promise<StatusReport> {

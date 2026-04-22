@@ -23,7 +23,7 @@ export function createCompleteTrace(cycleId = "cycle-complete-001", siteId = "he
     pendingWorkItems: 2,
     locked: false,
     lockedByCycleId: null,
-    message: `Cycle ${cycleId} completed steps [1, 2, 3, 4, 5, 6, 7, 8]`,
+    message: `Cycle ${cycleId} completed steps [1, 2, 3, 4, 5, 6, 7, 8, 9]`,
     updatedAt: now,
   };
   const trace: CycleTraceRecord = {
@@ -31,7 +31,7 @@ export function createCompleteTrace(cycleId = "cycle-complete-001", siteId = "he
     startedAt: now,
     finishedAt: now,
     status: "complete",
-    stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8],
+    stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8, 9],
     error: null,
     traceKey: `${siteId}/traces/${cycleId}/trace.json`,
   };

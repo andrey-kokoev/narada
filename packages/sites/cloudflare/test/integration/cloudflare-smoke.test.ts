@@ -155,9 +155,9 @@ describe("Cloudflare Site smoke fixture", () => {
     // Run the bounded Cycle
     const result = await runCycle(siteId, env);
 
-    // Assert: Cycle completed all 8 steps
+    // Assert: Cycle completed all 9 steps
     expect(result.status).toBe("complete");
-    expect(result.steps_completed).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(result.steps_completed).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     expect(result.site_id).toBe(siteId);
     expect(result.cycle_id).toMatch(/^cycle_/);
 
@@ -177,7 +177,7 @@ describe("Cloudflare Site smoke fixture", () => {
     expect(trace).not.toBeNull();
     expect(trace!.cycleId).toBe(result.cycle_id);
     expect(trace!.status).toBe("complete");
-    expect(trace!.stepsCompleted).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(trace!.stepsCompleted).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     expect(trace!.error).toBeNull();
 
     // Assert: R2 contains a Cycle Trace artifact

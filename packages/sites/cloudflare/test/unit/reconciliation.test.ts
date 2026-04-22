@@ -32,7 +32,7 @@ const sampleDeltas: FixtureSourceDelta[] = [
 ];
 
 describe("Reconciliation (Task 348)", () => {
-  it("matching observation confirms an outbound command", async () => {
+  it("matching observation confirms a submitted outbound command", async () => {
     const { coordinator } = createCoordinator();
     const env = createEnv(coordinator);
 
@@ -44,11 +44,15 @@ describe("Reconciliation (Task 348)", () => {
 
     expect(coordinator.getOutboundCommandCount()).toBe(1);
 
+    // Transition to submitted (as effect execution would)
+    const outboundId = coordinator.getPendingOutboundCommands()[0]!.outboundId;
+    coordinator.updateOutboundCommandStatus(outboundId, "submitted");
+
     // Provide a matching fixture observation
     const observations: FixtureObservation[] = [
       {
         observationId: "obs-1",
-        outboundId: coordinator.getPendingOutboundCommands()[0]!.outboundId,
+        outboundId,
         scopeId: "test",
         observedStatus: "confirmed",
         observedAt: "2024-01-01T00:05:00Z",
@@ -61,11 +65,11 @@ describe("Reconciliation (Task 348)", () => {
     expect(result.recordsWritten).toBe(1);
     expect(result.residuals).toContain("confirmed_1_outbound_commands");
 
-    const pending = coordinator.getPendingOutboundCommands();
-    expect(pending.length).toBe(0);
+    const submitted = coordinator.getSubmittedOutboundCommands();
+    expect(submitted.length).toBe(0);
   });
 
-  it("missing observation does not confirm", async () => {
+  it("missing observation does not confirm a submitted command", async () => {
     const { coordinator } = createCoordinator();
     const env = createEnv(coordinator);
 
@@ -74,16 +78,20 @@ describe("Reconciliation (Task 348)", () => {
     await createEvaluateStepHandler()(env, () => true);
     await createHandoffStepHandler()(env, () => true);
 
+    // Transition to submitted (as effect execution would)
+    const outboundId = coordinator.getPendingOutboundCommands()[0]!.outboundId;
+    coordinator.updateOutboundCommandStatus(outboundId, "submitted");
+
     // No observations provided
     const result = await createReconcileStepHandler([])(env, () => true);
 
     expect(result.status).toBe("completed");
     expect(result.recordsWritten).toBe(0);
     expect(result.residuals).toContain("confirmed_0_outbound_commands");
-    expect(result.residuals).toContain("left_1_pending");
+    expect(result.residuals).toContain("left_1_unconfirmed");
 
-    const pending = coordinator.getPendingOutboundCommands();
-    expect(pending.length).toBe(1);
+    const submitted = coordinator.getSubmittedOutboundCommands();
+    expect(submitted.length).toBe(1);
   });
 
   it("evaluator output alone cannot confirm", async () => {
@@ -105,7 +113,7 @@ describe("Reconciliation (Task 348)", () => {
 
     const result = await createReconcileStepHandler(observations)(env, () => true);
     expect(result.status).toBe("skipped");
-    expect(result.residuals).toContain("no_pending_outbound_commands");
+    expect(result.residuals).toContain("no_submitted_outbound_commands");
   });
 
   it("execution/attempt record alone cannot confirm unless observation says so", async () => {
@@ -118,8 +126,11 @@ describe("Reconciliation (Task 348)", () => {
     await createEvaluateStepHandler()(env, () => true);
     await createHandoffStepHandler()(env, () => true);
 
-    // Insert a fixture observation with FAILED status
+    // Transition to submitted (as effect execution would)
     const outboundId = coordinator.getPendingOutboundCommands()[0]!.outboundId;
+    coordinator.updateOutboundCommandStatus(outboundId, "submitted");
+
+    // Insert a fixture observation with FAILED status
     coordinator.insertFixtureObservation("obs-fail", outboundId, "test", "failed", "2024-01-01T00:05:00Z");
 
     // Even though the observation exists, it says "failed" not "confirmed"
@@ -127,7 +138,7 @@ describe("Reconciliation (Task 348)", () => {
 
     expect(result.status).toBe("completed");
     expect(result.recordsWritten).toBe(0);
-    expect(result.residuals).toContain("left_1_pending");
+    expect(result.residuals).toContain("left_1_unconfirmed");
   });
 
   it("partial confirmation when only some observations match", async () => {
@@ -157,14 +168,21 @@ describe("Reconciliation (Task 348)", () => {
     await createEvaluateStepHandler()(env, () => true);
     await createHandoffStepHandler()(env, () => true);
 
+    // Transition both to submitted (as effect execution would)
     const pending = coordinator.getPendingOutboundCommands();
     expect(pending.length).toBe(2);
+    for (const cmd of pending) {
+      coordinator.updateOutboundCommandStatus(cmd.outboundId, "submitted");
+    }
+
+    const submitted = coordinator.getSubmittedOutboundCommands();
+    expect(submitted.length).toBe(2);
 
     // Only confirm the first one
     const observations: FixtureObservation[] = [
       {
         observationId: "obs-1",
-        outboundId: pending[0]!.outboundId,
+        outboundId: submitted[0]!.outboundId,
         scopeId: "test",
         observedStatus: "confirmed",
         observedAt: "2024-01-01T00:05:00Z",
@@ -175,9 +193,9 @@ describe("Reconciliation (Task 348)", () => {
 
     expect(result.recordsWritten).toBe(1);
     expect(result.residuals).toContain("confirmed_1_outbound_commands");
-    expect(result.residuals).toContain("left_1_pending");
+    expect(result.residuals).toContain("left_1_unconfirmed");
 
-    expect(coordinator.getPendingOutboundCommands().length).toBe(1);
+    expect(coordinator.getSubmittedOutboundCommands().length).toBe(1);
   });
 
   it("self-confirmation is impossible without external observation", async () => {
@@ -189,12 +207,16 @@ describe("Reconciliation (Task 348)", () => {
     await createEvaluateStepHandler()(env, () => true);
     await createHandoffStepHandler()(env, () => true);
 
+    // Transition to submitted (as effect execution would)
+    const outboundId = coordinator.getPendingOutboundCommands()[0]!.outboundId;
+    coordinator.updateOutboundCommandStatus(outboundId, "submitted");
+
     // The reconcile handler receives observations as INPUT.
     // If no observations are passed, nothing gets confirmed.
     // The handler cannot generate observations from its own state.
     const result = await createReconcileStepHandler([])(env, () => true);
 
     expect(result.recordsWritten).toBe(0);
-    expect(coordinator.getPendingOutboundCommands().length).toBe(1);
+    expect(coordinator.getSubmittedOutboundCommands().length).toBe(1);
   });
 });

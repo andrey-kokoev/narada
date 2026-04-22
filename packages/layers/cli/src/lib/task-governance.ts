@@ -14,6 +14,11 @@ export interface AgentRosterEntry {
   capabilities: string[];
   first_seen_at: string;
   last_active_at: string;
+  // Operational fields (Task 385)
+  status?: 'idle' | 'working' | 'reviewing' | 'blocked' | 'done';
+  task?: number | null;
+  last_done?: number | null;
+  updated_at?: string;
 }
 
 export interface AgentRoster {
@@ -100,6 +105,49 @@ export async function loadRoster(cwd: string): Promise<AgentRoster> {
   const path = join(resolveRepoPath(cwd), ROSTER_PATH);
   const raw = await readFile(path, 'utf8');
   return JSON.parse(raw) as AgentRoster;
+}
+
+export async function saveRoster(cwd: string, roster: AgentRoster): Promise<void> {
+  const path = join(resolveRepoPath(cwd), ROSTER_PATH);
+  roster.updated_at = new Date().toISOString();
+  await atomicWriteFile(path, JSON.stringify(roster, null, 2) + '\n');
+}
+
+export async function updateAgentRosterEntry(
+  cwd: string,
+  agentId: string,
+  update: Partial<Pick<AgentRosterEntry, 'status' | 'task' | 'last_done'>>,
+): Promise<AgentRoster> {
+  const roster = await loadRoster(cwd);
+  const entry = roster.agents.find((a) => a.agent_id === agentId);
+  if (!entry) {
+    throw new Error(`Agent ${agentId} not found in roster`);
+  }
+  const now = new Date().toISOString();
+  if (update.status !== undefined) entry.status = update.status;
+  if (update.task !== undefined) entry.task = update.task;
+  if (update.last_done !== undefined) entry.last_done = update.last_done;
+  entry.last_active_at = now;
+  entry.updated_at = now;
+  await saveRoster(cwd, roster);
+  return roster;
+}
+
+export function formatRoster(roster: AgentRoster, format: 'json' | 'human' = 'human'): string {
+  if (format === 'json') {
+    return JSON.stringify(roster, null, 2);
+  }
+  const lines: string[] = [];
+  lines.push(`Agent Roster (updated ${roster.updated_at})`);
+  lines.push('');
+  for (const a of roster.agents) {
+    const status = a.status ?? 'idle';
+    const task = a.task != null ? String(a.task) : '—';
+    const lastDone = a.last_done != null ? String(a.last_done) : '—';
+    const updated = a.updated_at ? ` (updated ${a.updated_at})` : '';
+    lines.push(`  ${a.agent_id.padEnd(16)} ${status.padEnd(10)} task=${task.padEnd(6)} last_done=${lastDone}${updated}`);
+  }
+  return lines.join('\n');
 }
 
 export async function loadAssignment(cwd: string, taskId: string): Promise<TaskAssignmentRecord | null> {

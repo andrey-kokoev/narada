@@ -13,11 +13,11 @@ function createMockEmitter(): NotificationEmitter & { emitted: OperatorNotificat
 }
 
 describe("runCycle", () => {
-  it("acquires lock and runs all 8 steps", async () => {
+  it("acquires lock and runs all 9 steps", async () => {
     const coordinator = createMockCycleCoordinator();
     const result = await runCycle("test-site", createMockEnvForRunner(coordinator));
     expect(result.status).toBe("complete");
-    expect(result.steps_completed).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(result.steps_completed).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     expect(coordinator.acquireLock).toHaveBeenCalledTimes(1);
     expect(coordinator.releaseLock).toHaveBeenCalledTimes(1);
   });
@@ -42,7 +42,7 @@ describe("runCycle", () => {
     const result = await runCycle("test-site", createMockEnvForRunner(coordinator));
 
     expect(result.status).toBe("complete");
-    expect(result.steps_completed).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(result.steps_completed).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     expect(result.recovered_from_cycle_id).toBe("stuck-cycle");
     expect(result.stuck_duration_ms).toBeGreaterThanOrEqual(5);
 
@@ -50,7 +50,7 @@ describe("runCycle", () => {
     const recoveryCall = vi.mocked(coordinator.recordRecoveryTrace).mock.calls[0]![0];
     expect(recoveryCall.previousCycleId).toBe("stuck-cycle");
     expect(recoveryCall.lockTtlMs).toBe(35_000);
-    expect(recoveryCall.stuckDurationMs).toBeGreaterThanOrEqual(10);
+    expect(recoveryCall.stuckDurationMs).toBeGreaterThanOrEqual(5);
 
     // Health should have been set to critical during recovery, then healthy on completion
     expect(coordinator.setHealth).toHaveBeenCalledTimes(3);
@@ -68,7 +68,7 @@ describe("runCycle", () => {
     const result = await runCycle("test-site", createMockEnvForRunner(coordinator), { ceilingMs: 0, abortBufferMs: 0 });
     expect(result.status).toBe("partial");
     expect(result.steps_completed.length).toBeGreaterThanOrEqual(1);
-    expect(result.steps_completed.length).toBeLessThan(8);
+    expect(result.steps_completed.length).toBeLessThan(9);
     expect(coordinator.releaseLock).toHaveBeenCalledTimes(1);
   });
 

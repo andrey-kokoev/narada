@@ -1,21 +1,115 @@
 {
-  "version": 1,
-  "schema": "https://narada.dev/schemas/agent-roster/v1",
-  "updated_at": "2026-04-20T00:00:00Z",
+  "version": 2,
+  "schema": "https://narada.dev/schemas/agent-roster/v2",
+  "updated_at": "2026-04-22T15:41:00.000Z",
   "agents": [
     {
-      "agent_id": "kimicli",
+      "agent_id": "a1",
       "role": "implementer",
-      "capabilities": ["derive", "propose", "claim", "execute", "resolve", "confirm"],
-      "first_seen_at": "2026-04-20T00:00:00Z",
-      "last_active_at": "2026-04-20T00:00:00Z"
+      "capabilities": [
+        "derive",
+        "propose",
+        "claim",
+        "execute",
+        "resolve",
+        "confirm"
+      ],
+      "first_seen_at": "2026-04-21T00:00:00.000Z",
+      "last_active_at": "2026-04-21T23:59:00.000Z",
+      "status": "idle",
+      "task": null,
+      "last_done": 397,
+      "updated_at": "2026-04-22T15:40:00.000Z"
     },
     {
-      "agent_id": "human-operator",
-      "role": "admin",
-      "capabilities": ["derive", "propose", "claim", "execute", "resolve", "confirm", "admin"],
-      "first_seen_at": "2026-04-20T00:00:00Z",
-      "last_active_at": "2026-04-20T00:00:00Z"
+      "agent_id": "a2",
+      "role": "reviewer",
+      "capabilities": [
+        "derive",
+        "propose",
+        "claim",
+        "execute",
+        "resolve",
+        "confirm"
+      ],
+      "first_seen_at": "2026-04-21T00:00:00.000Z",
+      "last_active_at": "2026-04-21T23:59:00.000Z",
+      "status": "idle",
+      "task": null,
+      "last_done": 394,
+      "updated_at": "2026-04-22T01:30:00.000Z"
+    },
+    {
+      "agent_id": "a3",
+      "role": "reviewer",
+      "capabilities": [
+        "derive",
+        "propose",
+        "claim",
+        "execute",
+        "resolve",
+        "confirm"
+      ],
+      "first_seen_at": "2026-04-21T00:00:00.000Z",
+      "last_active_at": "2026-04-21T23:59:00.000Z",
+      "status": "idle",
+      "task": null,
+      "last_done": 390,
+      "updated_at": "2026-04-22T01:14:00.000Z"
+    },
+    {
+      "agent_id": "a4",
+      "role": "implementer",
+      "capabilities": [
+        "derive",
+        "propose",
+        "claim",
+        "execute",
+        "resolve",
+        "confirm"
+      ],
+      "first_seen_at": "2026-04-21T00:00:00.000Z",
+      "last_active_at": "2026-04-21T23:59:00.000Z",
+      "status": "idle",
+      "task": null,
+      "last_done": 377,
+      "updated_at": "2026-04-22T00:52:00.000Z"
+    },
+    {
+      "agent_id": "a5",
+      "role": "implementer",
+      "capabilities": [
+        "derive",
+        "propose",
+        "claim",
+        "execute",
+        "resolve",
+        "confirm"
+      ],
+      "first_seen_at": "2026-04-21T00:00:00.000Z",
+      "last_active_at": "2026-04-21T23:59:00.000Z",
+      "status": "idle",
+      "task": null,
+      "last_done": 384,
+      "updated_at": "2026-04-22T00:52:00.000Z"
+    },
+    {
+      "agent_id": "a6",
+      "role": "reviewer",
+      "capabilities": [
+        "derive",
+        "propose",
+        "claim",
+        "execute",
+        "resolve",
+        "confirm"
+      ],
+      "first_seen_at": "2026-04-21T00:00:00.000Z",
+      "last_active_at": "2026-04-21T23:59:00.000Z",
+      "status": "idle",
+      "task": null,
+      "last_done": 379,
+      "updated_at": "2026-04-22T00:52:00.000Z"
     }
   ]
 }

@@ -105,7 +105,7 @@ describe("Handler integration", () => {
       expect(body.health.locked_by_cycle_id).toBe("cycle-789");
       expect(body.last_cycle.cycle_id).toBe("cycle-789");
       expect(body.last_cycle.status).toBe("complete");
-      expect(body.last_cycle.steps_completed).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+      expect(body.last_cycle.steps_completed).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     });
 
     it("does not expose traceKey or internal paths in the response", async () => {

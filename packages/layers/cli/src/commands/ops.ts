@@ -22,6 +22,7 @@ export interface OpsOptions {
   format?: string;
   verbose?: boolean;
   limit?: number;
+  site?: string;
 }
 
 interface HealthSummary {
@@ -56,6 +57,16 @@ interface DraftPendingReview {
   decision_rationale?: string;
   charter_summary?: string;
   available_actions: string[];
+}
+
+interface WindowsSiteOpsEntry {
+  siteId: string;
+  variant: string;
+  siteRoot: string;
+  health: string;
+  lastCycleAt: string | null;
+  consecutiveFailures: number;
+  message: string;
 }
 
 interface OpsReport {
@@ -478,6 +489,11 @@ export async function opsCommand(
   const limit = options.limit ?? 5;
   const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
 
+  // If --site is provided, show only that Windows Site
+  if (options.site) {
+    return opsWindowsSite(options.site, fmt);
+  }
+
   logger.info('Loading config', { path: configPath });
 
   let raw: string;
@@ -527,6 +543,9 @@ export async function opsCommand(
       reports.push(await loadOpsReport(scope.scope_id, resolve(scope.root_dir), limit));
     }
   }
+
+  // Discover Windows Sites
+  const windowsSites = await loadWindowsSiteOpsEntries();
 
   // Human output
   if (fmt.getFormat() === 'human') {
@@ -645,9 +664,98 @@ export async function opsCommand(
       fmt.section('Suggested Next Actions');
       fmt.list(report.suggestedActions);
     }
-    return { exitCode: ExitCode.SUCCESS, result: { status: 'success', reports } };
+
+    if (windowsSites.length > 0) {
+      fmt.section('Windows Sites');
+      fmt.table(
+        [
+          { key: 'siteId', label: 'Site ID', width: 20 },
+          { key: 'variant', label: 'Variant', width: 10 },
+          { key: 'health', label: 'Health', width: 12 },
+          { key: 'lastCycle', label: 'Last Cycle', width: 24 },
+          { key: 'failures', label: 'Failures', width: 10 },
+        ],
+        windowsSites.map((s) => ({
+          siteId: s.siteId,
+          variant: s.variant,
+          health: s.health,
+          lastCycle: s.lastCycleAt ?? 'never',
+          failures: String(s.consecutiveFailures),
+        })),
+      );
+    }
+
+    return { exitCode: ExitCode.SUCCESS, result: { status: 'success', reports, windowsSites } };
   }
 
   // JSON output
-  return { exitCode: ExitCode.SUCCESS, result: { status: 'success', reports } };
+  return { exitCode: ExitCode.SUCCESS, result: { status: 'success', reports, windowsSites } };
+}
+
+async function loadWindowsSiteOpsEntries(): Promise<WindowsSiteOpsEntry[]> {
+  try {
+    const { discoverWindowsSites, getWindowsSiteStatus } = await import('@narada2/windows-site');
+    const discovered = discoverWindowsSites();
+    const entries: WindowsSiteOpsEntry[] = [];
+    for (const site of discovered) {
+      try {
+        const status = await getWindowsSiteStatus(site.siteId, site.variant);
+        entries.push({
+          siteId: site.siteId,
+          variant: site.variant,
+          siteRoot: site.siteRoot,
+          health: status.health.status,
+          lastCycleAt: status.health.last_cycle_at,
+          consecutiveFailures: status.health.consecutive_failures,
+          message: status.health.message,
+        });
+      } catch {
+        // Skip sites that cannot be read
+      }
+    }
+    return entries;
+  } catch {
+    return [];
+  }
+}
+
+async function opsWindowsSite(
+  siteId: string,
+  fmt: ReturnType<typeof createFormatter>,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const {
+    resolveSiteVariant,
+    getWindowsSiteStatus,
+  } = await import('@narada2/windows-site');
+
+  const variant = resolveSiteVariant(siteId);
+  if (!variant) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: { status: 'error', error: `Windows Site "${siteId}" not found.` },
+    };
+  }
+
+  const status = await getWindowsSiteStatus(siteId, variant);
+  const entry: WindowsSiteOpsEntry = {
+    siteId: status.siteId,
+    variant: status.variant,
+    siteRoot: status.siteRoot,
+    health: status.health.status,
+    lastCycleAt: status.health.last_cycle_at,
+    consecutiveFailures: status.health.consecutive_failures,
+    message: status.health.message,
+  };
+
+  if (fmt.getFormat() === 'human') {
+    fmt.section(`Windows Site — ${siteId}`);
+    fmt.kv('Variant', entry.variant);
+    fmt.kv('Health', entry.health);
+    fmt.kv('Last Cycle', entry.lastCycleAt ?? 'never');
+    fmt.kv('Consecutive Failures', String(entry.consecutiveFailures));
+    fmt.kv('Message', entry.message);
+    return { exitCode: ExitCode.SUCCESS, result: { status: 'success', windowsSites: [entry] } };
+  }
+
+  return { exitCode: ExitCode.SUCCESS, result: { status: 'success', windowsSites: [entry] } };
 }

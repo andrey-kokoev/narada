@@ -177,6 +177,19 @@ function validateCreateFollowupPayload(payload: unknown): { valid: boolean; erro
   return { valid: errors.length === 0, errors };
 }
 
+function validateCampaignBriefPayload(payload: unknown): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    errors.push("Payload must be an object");
+    return { valid: false, errors };
+  }
+  const p = payload as Record<string, unknown>;
+  if (!p.brief && !p.brief_text && !p.campaign_brief) {
+    errors.push("campaign_brief requires brief, brief_text, or campaign_brief");
+  }
+  return { valid: errors.length === 0, errors };
+}
+
 function defaultPayloadValidator(payload: unknown): { valid: boolean; errors: string[] } {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return { valid: false, errors: ["Payload must be an object"] };
@@ -191,6 +204,7 @@ const payloadValidators: Record<AllowedAction, (payload: unknown) => { valid: bo
   mark_read: validateMarkReadPayload,
   move_message: validateMoveMessagePayload,
   set_categories: validateSetCategoriesPayload,
+  campaign_brief: validateCampaignBriefPayload,
   extract_obligations: defaultPayloadValidator,
   create_followup: validateCreateFollowupPayload,
   tool_request: defaultPayloadValidator,

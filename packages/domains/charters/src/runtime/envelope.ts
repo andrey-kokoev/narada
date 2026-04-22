@@ -19,6 +19,7 @@ export const AllowedActionSchema = z.enum([
   "mark_read",
   "move_message",
   "set_categories",
+  "campaign_brief",
   "extract_obligations",
   "create_followup",
   "tool_request",

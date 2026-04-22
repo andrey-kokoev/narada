@@ -130,6 +130,7 @@ export function createMockCycleCoordinator(
     getApprovedOutboundCommands: vi.fn(() => [] as { outboundId: string; contextId: string; scopeId: string; actionType: string; status: string; payloadJson: string | null; internetMessageId: string | null }[]),
     getExecutionAttemptsForOutbound: vi.fn(() => []),
     getLatestExecutionAttempt: vi.fn(() => null),
+    countRetryableAttempts: vi.fn(() => 0),
     insertExecutionAttempt: vi.fn(() => {}),
     updateExecutionAttemptStatus: vi.fn(() => {}),
   };
@@ -159,7 +160,7 @@ export function createMockSiteCoordinator(
     startedAt: "2026-04-20T12:00:00Z",
     finishedAt: "2026-04-20T12:00:15Z",
     status: "complete",
-    stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8],
+    stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8, 9],
     error: null,
     traceKey: "help/traces/cycle-123",
   };

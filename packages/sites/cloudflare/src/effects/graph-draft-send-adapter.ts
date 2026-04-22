@@ -76,7 +76,7 @@ export interface GraphDraftClient {
   sendDraft(
     scopeId: string,
     draftId: string,
-  ): Promise<{ sentMessageId: string; internetMessageId?: string }>;
+  ): Promise<{ sentMessageId?: string; internetMessageId?: string }>;
 }
 
 // ---------------------------------------------------------------------------

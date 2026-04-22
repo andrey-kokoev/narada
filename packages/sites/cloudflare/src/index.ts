@@ -13,6 +13,7 @@
 import { invokeCycle, type CycleRequest } from "./cycle-entrypoint.js";
 import { resolveSiteCoordinator, type CloudflareEnv } from "./coordinator.js";
 import { executeSiteOperatorAction, type SiteOperatorActionPayload } from "./operator-actions.js";
+import { runCycle } from "./runner.js";
 import type { SiteHealthRecord, CycleTraceRecord } from "./types.js";
 
 const SUBSTRATE = "cloudflare-workers-do-sandbox";
@@ -34,6 +35,24 @@ export default {
         return handleOperatorAction(request, env);
       default:
         return notFound(url.pathname);
+    }
+  },
+
+  async scheduled(
+    event: ScheduledEvent,
+    env: CloudflareEnv,
+    _ctx: ExecutionContext,
+  ): Promise<void> {
+    // v0 single-site: site identity comes from env.SITE_ID or defaults to
+    // "default". The cron expression identifies the schedule, not the site.
+    // Multi-site requires an explicit site_id → cron mapping in config.
+    const siteId = ((env as unknown) as Record<string, unknown>).SITE_ID as string | undefined ?? "default";
+    try {
+      const result = await runCycle(siteId, env);
+      console.log(`Scheduled cycle ${result.cycle_id} (${event.cron}): ${result.status}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`Scheduled cycle failed for ${siteId} (${event.cron}): ${message}`);
     }
   },
 };

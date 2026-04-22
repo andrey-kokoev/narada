@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "updated_at": "2026-04-22T15:38:00-05:00",
+  "artifacts": {},
+  "accepted_index": {
+    "skill_candidate": [],
+    "doctrine_candidate": [],
+    "contract_patch": [],
+    "memory_note": [],
+    "anti_pattern": []
+  }
+}

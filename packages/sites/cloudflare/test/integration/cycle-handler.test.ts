@@ -25,7 +25,7 @@ describe("Cycle handler integration", () => {
     const trace = fixture.site.coordinator.getLastCycleTrace();
     expect(trace).not.toBeNull();
     expect(trace!.status).toBe("complete");
-    expect(trace!.stepsCompleted).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(trace!.stepsCompleted).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
   });
 
   it("rejects a request missing scope_id", async () => {

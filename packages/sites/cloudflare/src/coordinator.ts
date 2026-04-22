@@ -9,6 +9,10 @@ import type { NotificationRateLimiter } from "./notification.js";
 export interface CloudflareEnv {
   NARADA_SITE_COORDINATOR: DurableObjectNamespace;
   NARADA_ADMIN_TOKEN: string;
+  GRAPH_ACCESS_TOKEN?: string;
+  GRAPH_TENANT_ID?: string;
+  GRAPH_CLIENT_ID?: string;
+  GRAPH_CLIENT_SECRET?: string;
 }
 
 export interface SiteCoordinator {
@@ -78,6 +82,7 @@ export interface CycleCoordinator extends NotificationRateLimiter {
   getApprovedOutboundCommands(): { outboundId: string; contextId: string; scopeId: string; actionType: string; status: string; payloadJson: string | null; internetMessageId: string | null }[];
   getExecutionAttemptsForOutbound(outboundId: string): ExecutionAttemptRecord[];
   getLatestExecutionAttempt(outboundId: string): ExecutionAttemptRecord | null;
+  countRetryableAttempts(outboundId: string): number;
   insertExecutionAttempt(attempt: Omit<ExecutionAttemptRecord, "finishedAt">): void;
   updateExecutionAttemptStatus(executionAttemptId: string, status: string, updates?: { errorCode?: string | null; errorMessage?: string | null; responseJson?: string | null; finishedAt?: string }): void;
 }
@@ -99,8 +104,75 @@ export class NaradaSiteCoordinator {
     this.initSchema();
   }
 
-  fetch(_request: Request): Response | Promise<Response> {
-    return new Response("NaradaSiteCoordinator", { status: 200 });
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+
+    try {
+      switch (url.pathname) {
+        case "/status": {
+          if (request.method !== "GET") {
+            return jsonResponse({ error: "Method not allowed. Use GET." }, 405, { Allow: "GET" });
+          }
+          const health = this.getHealth();
+          const trace = this.getLastCycleTrace();
+          return jsonResponse({ health, trace }, 200);
+        }
+
+        case "/control/actions": {
+          if (request.method !== "POST") {
+            return jsonResponse({ error: "Method not allowed. Use POST." }, 405, { Allow: "POST" });
+          }
+          const actionBody = await request.json() as Record<string, unknown>;
+          const scopeId = url.searchParams.get("scope_id") ?? "default";
+
+          const validActions = ["approve", "reject", "retry", "cancel"] as const;
+          const actionType = String(actionBody.action_type ?? "");
+          if (!validActions.includes(actionType as typeof validActions[number])) {
+            return jsonResponse({ error: "Invalid action_type. Must be one of: approve, reject, retry, cancel" }, 422);
+          }
+          if (typeof actionBody.target_id !== "string" || actionBody.target_id === "") {
+            return jsonResponse({ error: "Missing or invalid target_id" }, 422);
+          }
+
+          const { executeSiteOperatorAction } = await import("./operator-actions.js");
+          const result = await executeSiteOperatorAction(
+            {
+              scope_id: scopeId,
+              getWorkItem: async (id) => this.getWorkItem(id),
+              updateWorkItemStatus: async (id, status, updates) => { this.updateWorkItemStatus(id, status, updates); },
+              getOutboundCommand: async (id) => this.getOutboundCommand(id),
+              updateOutboundCommandStatus: async (id, status) => { this.updateOutboundCommandStatus(id, status); },
+              insertOperatorActionRequest: async (req) => { this.insertOperatorActionRequest(req); },
+              markOperatorActionRequestExecuted: async (id, at) => { this.markOperatorActionRequestExecuted(id, at); },
+              markOperatorActionRequestRejected: async (id, reason, at) => { this.markOperatorActionRequestRejected(id, reason, at); },
+            },
+            {
+              action_type: actionType as import("./types.js").SiteOperatorActionType,
+              target_id: actionBody.target_id,
+              payload_json: typeof actionBody.payload_json === "string" ? actionBody.payload_json : undefined,
+            },
+          );
+          return jsonResponse(result, result.success ? 200 : 422);
+        }
+
+        case "/cycle": {
+          if (request.method !== "POST") {
+            return jsonResponse({ error: "Method not allowed. Use POST." }, 405, { Allow: "POST" });
+          }
+          const cycleBody = await request.json() as Record<string, unknown>;
+          const siteId = String(cycleBody.scope_id ?? "default");
+          const { runCycleOnCoordinator } = await import("./runner.js");
+          const result = await runCycleOnCoordinator(siteId, this as unknown as import("./coordinator.js").CycleCoordinator, {} as CloudflareEnv);
+          return jsonResponse(result, result.status === "complete" ? 200 : 500);
+        }
+
+        default:
+          return jsonResponse({ error: `Not found: ${url.pathname}` }, 404);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return jsonResponse({ error: "DO fetch failed", detail: message }, 500);
+    }
   }
 
   private initSchema(): void {
@@ -622,6 +694,14 @@ export class NaradaSiteCoordinator {
     };
   }
 
+  countRetryableAttempts(outboundId: string): number {
+    const cursor = this.sql.exec<{ count: number }>(
+      `SELECT COUNT(*) as count FROM execution_attempts WHERE outbound_id = ? AND status = 'failed_retryable'`,
+      outboundId
+    );
+    return cursor.one()?.count ?? 0;
+  }
+
   insertExecutionAttempt(attempt: Omit<ExecutionAttemptRecord, "finishedAt">): void {
     this.sql.exec(
       `INSERT INTO execution_attempts (execution_attempt_id, outbound_id, action_type, attempted_at, status, error_code, error_message, response_json, external_ref, worker_id, lease_expires_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -655,4 +735,14 @@ export class NaradaSiteCoordinator {
     params.push(executionAttemptId);
     this.sql.exec(`UPDATE execution_attempts SET ${fields.join(", ")} WHERE execution_attempt_id = ?`, ...params);
   }
+}
+
+function jsonResponse(body: unknown, status: number, headers?: Record<string, string>): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+  });
 }

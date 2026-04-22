@@ -150,7 +150,7 @@ describe("Fact admission (Task 346)", () => {
       createMockEnvForRunner(coordinator),
       {},
       undefined,
-      { 2: syncHandler, 3: createSkippedStep(3), 4: createSkippedStep(4), 5: createSkippedStep(5), 6: createSkippedStep(6) },
+      { 2: syncHandler, 3: createSkippedStep(3), 4: createSkippedStep(4), 5: createSkippedStep(5), 6: createSkippedStep(6), 7: createSkippedStep(7) },
     );
 
     expect(result.status).toBe("complete");
@@ -165,10 +165,10 @@ describe("Fact admission (Task 346)", () => {
   });
 });
 
-function createSkippedStep(stepId: 3 | 4 | 5 | 6) {
+function createSkippedStep(stepId: 3 | 4 | 5 | 6 | 7) {
   return async () => ({
     stepId,
-    stepName: ["", "", "sync", "derive_work", "evaluate", "handoff", "reconcile"][stepId] as any,
+    stepName: ["", "", "sync", "derive_work", "evaluate", "handoff", "effect_execute", "reconcile"][stepId] as any,
     status: "skipped" as const,
     recordsWritten: 0,
     residuals: [],

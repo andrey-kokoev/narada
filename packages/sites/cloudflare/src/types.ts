@@ -26,8 +26,8 @@ export interface CycleTraceRecord {
 }
 
 export interface CycleStepResult {
-  stepId: 2 | 3 | 4 | 5 | 6;
-  stepName: "sync" | "derive_work" | "evaluate" | "handoff" | "reconcile";
+  stepId: 2 | 3 | 4 | 5 | 6 | 7;
+  stepName: "sync" | "derive_work" | "evaluate" | "handoff" | "effect_execute" | "reconcile";
   status: "completed" | "skipped" | "failed";
   recordsWritten: number;
   residuals: string[];

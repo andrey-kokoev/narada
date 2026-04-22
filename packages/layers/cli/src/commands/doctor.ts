@@ -11,6 +11,7 @@ export interface DoctorOptions {
   verbose?: boolean;
   format?: 'json' | 'human' | 'auto';
   staleThresholdMinutes?: number;
+  site?: string;
 }
 
 interface DoctorCheck {
@@ -323,6 +324,11 @@ export async function doctorCommand(
   const fmt = createFormatter({ format: options.format, verbose });
   const staleThresholdMinutes = options.staleThresholdMinutes ?? 60;
 
+  // Windows Site path: --site takes precedence over config
+  if (options.site) {
+    return doctorWindowsSite(options.site, staleThresholdMinutes, fmt, logger);
+  }
+
   logger.info('Running doctor', { configPath, staleThresholdMinutes });
 
   let raw: string;
@@ -428,4 +434,206 @@ export async function doctorCommand(
     exitCode: overall === 'healthy' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
     result: { status: overall, ...report },
   };
+}
+
+async function doctorWindowsSite(
+  siteId: string,
+  staleThresholdMinutes: number,
+  fmt: ReturnType<typeof createFormatter>,
+  logger: CommandContext['logger'],
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  logger.info('Running doctor for Windows Site', { siteId });
+
+  const {
+    resolveSiteVariant,
+    resolveSiteRoot,
+    getWindowsSiteStatus,
+  } = await import('@narada2/windows-site');
+
+  const variant = resolveSiteVariant(siteId);
+  if (!variant) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: {
+        status: 'error',
+        error: `Windows Site "${siteId}" not found.`,
+      },
+    };
+  }
+
+  const checks: DoctorCheck[] = [];
+  const siteRoot = resolveSiteRoot(siteId, variant);
+
+  // 1. Site directory exists and is writable
+  try {
+    const s = await stat(siteRoot);
+    if (s.isDirectory()) {
+      checks.push({
+        name: 'site-directory',
+        status: 'pass',
+        detail: `Site directory exists: ${siteRoot}`,
+      });
+    } else {
+      checks.push({
+        name: 'site-directory',
+        status: 'fail',
+        detail: `Site path exists but is not a directory: ${siteRoot}`,
+        remediation: `Remove the file and recreate the site directory`,
+      });
+    }
+  } catch {
+    checks.push({
+      name: 'site-directory',
+      status: 'fail',
+      detail: `Site directory not found: ${siteRoot}`,
+      remediation: `Run narada cycle --site ${siteId} to initialize`,
+    });
+  }
+
+  // 2. Coordinator database
+  let status: WindowsSiteStatus | null = null;
+  try {
+    status = await getWindowsSiteStatus(siteId, variant);
+    checks.push({
+      name: 'coordinator-db',
+      status: 'pass',
+      detail: 'Coordinator database readable',
+    });
+  } catch {
+    checks.push({
+      name: 'coordinator-db',
+      status: 'fail',
+      detail: 'Coordinator database not found or unreadable',
+      remediation: `Run narada cycle --site ${siteId} to initialize`,
+    });
+  }
+
+  // 3. Lock not stuck
+  try {
+    const lockDir = join(siteRoot, 'state', 'cycle.lock');
+    const lockStat = await stat(lockDir);
+    const ageMs = Date.now() - lockStat.mtimeMs;
+    const staleThresholdMs = staleThresholdMinutes * 60 * 1000;
+    if (ageMs > staleThresholdMs) {
+      checks.push({
+        name: 'stuck-lock',
+        status: 'fail',
+        detail: `Lock is stale (${Math.round(ageMs / 1000)}s old)`,
+        remediation: `The next cycle will auto-recover, or run narada cycle --site ${siteId}`,
+      });
+    } else {
+      checks.push({
+        name: 'stuck-lock',
+        status: 'pass',
+        detail: 'Lock is fresh or not present',
+      });
+    }
+  } catch {
+    checks.push({
+      name: 'stuck-lock',
+      status: 'pass',
+      detail: 'No active lock',
+    });
+  }
+
+  // 4. Health status
+  if (status) {
+    const healthOk = status.health.status !== 'critical' && status.health.status !== 'auth_failed';
+    checks.push({
+      name: 'health-status',
+      status: healthOk ? 'pass' : 'fail',
+      detail: `Health: ${status.health.status} (${status.health.consecutive_failures} consecutive failures)`,
+      remediation: healthOk ? undefined : `Investigate with narada status --site ${siteId}`,
+    });
+
+    // 5. Cycle freshness
+    if (status.health.last_cycle_at) {
+      const lastCycle = new Date(status.health.last_cycle_at);
+      const minsSince = (Date.now() - lastCycle.getTime()) / (1000 * 60);
+      checks.push({
+        name: 'cycle-freshness',
+        status: minsSince <= staleThresholdMinutes ? 'pass' : 'warn',
+        detail: `Last cycle ${Math.round(minsSince)} minutes ago`,
+        remediation: minsSince <= staleThresholdMinutes ? undefined : `Check if the scheduler is running`,
+      });
+    } else {
+      checks.push({
+        name: 'cycle-freshness',
+        status: 'warn',
+        detail: 'No cycle recorded yet',
+        remediation: `Run narada cycle --site ${siteId} to start`,
+      });
+    }
+  } else {
+    checks.push({
+      name: 'health-status',
+      status: 'warn',
+      detail: 'Cannot determine health without coordinator database',
+    });
+    checks.push({
+      name: 'cycle-freshness',
+      status: 'warn',
+      detail: 'Cannot determine cycle freshness without coordinator database',
+    });
+  }
+
+  const hasFail = checks.some((c) => c.status === 'fail');
+  const overall: DoctorReport['overall'] = hasFail ? 'degraded' : 'healthy';
+
+  const scopeResult: ScopeDoctorResult = {
+    scopeId: siteId,
+    rootDir: siteRoot,
+    checks,
+    status: overall,
+  };
+
+  const report: DoctorReport = {
+    overall,
+    scopes: [scopeResult],
+    summary: {
+      pass: checks.filter((c) => c.status === 'pass').length,
+      fail: checks.filter((c) => c.status === 'fail').length,
+      warn: checks.filter((c) => c.status === 'warn').length,
+    },
+  };
+
+  if (fmt.getFormat() === 'json') {
+    return {
+      exitCode: overall === 'healthy' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
+      result: { status: overall, ...report },
+    };
+  }
+
+  const overallIcon = overall === 'healthy' ? '✓' : '✗';
+  fmt.message(`Doctor: ${overallIcon} ${overall.toUpperCase()}`, overall === 'healthy' ? 'success' : 'error');
+  fmt.message(`${report.summary.pass} pass, ${report.summary.fail} fail, ${report.summary.warn} warn`, 'info');
+
+  fmt.section(`Site: ${siteId} (${variant})`);
+  for (const check of checks) {
+    const icon = check.status === 'pass' ? '✓' : check.status === 'warn' ? '⚠' : '✗';
+    const fmtType = check.status === 'pass' ? 'success' : check.status === 'fail' ? 'error' : 'warning';
+    fmt.message(`${icon} ${check.name}: ${check.detail}`, fmtType);
+    if (check.remediation) {
+      fmt.message(`  → ${check.remediation}`, 'info');
+    }
+  }
+
+  return {
+    exitCode: overall === 'healthy' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
+    result: { status: overall, ...report },
+  };
+}
+
+interface WindowsSiteStatus {
+  siteId: string;
+  variant: string;
+  siteRoot: string;
+  health: {
+    status: string;
+    last_cycle_at: string | null;
+    last_cycle_duration_ms: number | null;
+    consecutive_failures: number;
+    message: string;
+  };
+  lastTrace: unknown;
 }

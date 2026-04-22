@@ -82,6 +82,28 @@ These rules prevent task execution from becoming performative process.
 - **Residuals preserve coherence.** If a correction is not admissible, record a bounded residual instead of narrating around the blocker or patching locally.
 - **Do not claim posture change without evidence.** A diagnosis, plan, or task graph may justify work, but completion requires verification or an explicit residual.
 
+## Agent Roster as Assignment Source of Truth
+
+The operational agent roster (`.ai/agents/roster.json`) is the canonical source of truth for which agent is currently working on which task.
+
+### Operational Rules
+
+- **Roster is inspectable**: `narada task roster` shows every agent's current status, task, last completed task, and update timestamp.
+- **Roster is updateable**: `narada task roster assign/review/done/idle` mutate operational state without touching task lifecycle authority.
+- **Roster updates are NOT lifecycle mutations**: `roster assign` does not claim a task. `roster done` does not release or close a task. Operators who need both must run the lifecycle command AND the roster command.
+- **Assignment recommendations must read the roster**: Before suggesting work to an agent, check the roster to see if the agent is already `working`, `reviewing`, or `blocked`.
+- **Chat updates should be translated into roster updates**: When an agent reports status in chat, the operator should run the corresponding `narada task roster` command to keep mechanical state in sync.
+
+### Roster Status Values
+
+| Status | Meaning |
+|--------|---------|
+| `idle` | Agent has no current task assignment |
+| `working` | Agent is actively executing a task |
+| `reviewing` | Agent is reviewing another agent's completed work |
+| `blocked` | Agent is stalled (waiting for dependency, clarification, or external action) |
+| `done` | Agent just finished a task and has not yet been reassigned |
+
 ## Planning Mode
 
 Planning mode is a risk-control mechanism, not a default ritual. Use it when the write set is large, semantically risky, or cross-cutting. Skip it for narrow corrections with an obvious write set.

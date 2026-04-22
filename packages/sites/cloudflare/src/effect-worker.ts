@@ -44,6 +44,7 @@ export interface EffectWorkerContext {
     internetMessageId: string | null;
   }[];
   getExecutionAttemptsForOutbound(outboundId: string): ExecutionAttemptRecord[];
+  countRetryableAttempts(outboundId: string): number;
   insertExecutionAttempt(
     attempt: Omit<ExecutionAttemptRecord, "finishedAt">,
   ): void;
@@ -76,11 +77,17 @@ export async function executeApprovedCommands(
   options?: {
     workerId?: string;
     leaseTtlMs?: number;
+    maxRetryLimit?: number;
+    backoffBaseDelayMs?: number;
+    backoffMaxDelayMs?: number;
     now?: string;
   },
 ): Promise<EffectWorkerResult> {
   const workerId = options?.workerId ?? "effect-worker";
   const leaseTtlMs = options?.leaseTtlMs ?? 60_000;
+  const maxRetryLimit = options?.maxRetryLimit ?? 5;
+  const backoffBaseDelayMs = options?.backoffBaseDelayMs ?? 2_000;
+  const backoffMaxDelayMs = options?.backoffMaxDelayMs ?? 60_000;
   const nowIso = options?.now ?? new Date().toISOString();
   const nowMs = new Date(nowIso).getTime();
 
@@ -125,6 +132,48 @@ export async function executeApprovedCommands(
       result.skipped++;
       result.residuals.push(`skipped_active_lease_${cmd.outboundId}`);
       continue;
+    }
+
+    // Retry limit gate: auto-promote to failed_terminal after max retryable attempts
+    const retryableCount = ctx.countRetryableAttempts(cmd.outboundId);
+    if (retryableCount >= maxRetryLimit) {
+      const executionAttemptId = `attempt-${cmd.outboundId}-${nowMs}-${Math.random().toString(36).slice(2, 8)}`;
+      ctx.insertExecutionAttempt({
+        executionAttemptId,
+        outboundId: cmd.outboundId,
+        actionType: cmd.actionType,
+        attemptedAt: nowIso,
+        status: "failed_terminal",
+        errorCode: "RETRY_LIMIT_EXHAUSTED",
+        errorMessage: `Auto-promoted to failed_terminal after ${retryableCount} retryable failures (limit: ${maxRetryLimit})`,
+        responseJson: null,
+        externalRef: null,
+        workerId,
+        leaseExpiresAt: null,
+      });
+      ctx.updateOutboundCommandStatus(cmd.outboundId, "failed_terminal");
+      result.failedTerminal++;
+      result.residuals.push(`failed_terminal_retry_limit_${cmd.outboundId}`);
+      continue;
+    }
+
+    // Backoff gate: skip if last failed_retryable is still within backoff window
+    if (retryableCount > 0) {
+      const lastFailed = attempts
+        .filter((a) => a.status === "failed_retryable")
+        .sort((a, b) => new Date(b.attemptedAt).getTime() - new Date(a.attemptedAt).getTime())[0];
+      if (lastFailed) {
+        const lastFailedAtMs = new Date(lastFailed.attemptedAt).getTime();
+        const backoffDelay = Math.min(
+          backoffBaseDelayMs * 2 ** (retryableCount - 1),
+          backoffMaxDelayMs,
+        );
+        if (nowMs - lastFailedAtMs < backoffDelay) {
+          result.skipped++;
+          result.residuals.push(`backoff_active_${cmd.outboundId}`);
+          continue;
+        }
+      }
     }
 
     // Create execution attempt record before calling adapter

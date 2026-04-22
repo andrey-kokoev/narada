@@ -13,7 +13,8 @@ export type OutboundActionType =
   | "send_new_message"
   | "mark_read"
   | "move_message"
-  | "set_categories";
+  | "set_categories"
+  | "campaign_brief";
 
 export type OutboundStatus =
   | "pending"
@@ -177,6 +178,7 @@ export function isVersionEligible(
   // - draft_reply requires draft_ready (confirmation only, no send)
   // - send_reply and send_new_message require approved_for_send (or retry_wait for retries)
   // - non-send actions (mark_read, move_message, set_categories) require draft_ready
+  // - campaign_brief is document-only in v0; requires draft_ready (operator review, no execution)
   const needsApproval = command.action_type === "send_reply" || command.action_type === "send_new_message";
   if (needsApproval && command.status !== "approved_for_send" && command.status !== "retry_wait") return false;
   if (!needsApproval && command.status !== "draft_ready") return false;

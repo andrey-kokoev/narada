@@ -4,6 +4,7 @@ import { loadEnvFile } from '@narada2/control-plane';
 
 loadEnvFile('./.env');
 import { syncCommand } from './commands/sync.js';
+import { cycleCommand } from './commands/cycle.js';
 import { integrityCommand } from './commands/integrity.js';
 import { rebuildViewsCommand } from './commands/rebuild-views.js';
 import { rebuildProjectionsCommand } from './commands/rebuild-projections.js';
@@ -11,6 +12,17 @@ import { configCommand } from './commands/config.js';
 import { configInteractiveCommand } from './commands/config-interactive.js';
 import { statusCommand } from './commands/status.js';
 import { opsCommand } from './commands/ops.js';
+import {
+  sitesListCommand,
+  sitesDiscoverCommand,
+  sitesShowCommand,
+  sitesRemoveCommand,
+} from './commands/sites.js';
+import {
+  consoleStatusCommand,
+  consoleAttentionCommand,
+  consoleControlCommand,
+} from './commands/console.js';
 import { backupCommand } from './commands/backup.js';
 import { restoreCommand } from './commands/restore.js';
 import { verifyBackupCommand } from './commands/verify-backup.js';
@@ -43,11 +55,18 @@ import { taskDeriveFromFindingCommand } from './commands/task-derive-from-findin
 import { taskLintCommand } from './commands/task-lint.js';
 import { chapterCloseCommand } from './commands/chapter-close.js';
 import { taskListCommand } from './commands/task-list.js';
+import {
+  taskRosterShowCommand,
+  taskRosterAssignCommand,
+  taskRosterReviewCommand,
+  taskRosterDoneCommand,
+  taskRosterIdleCommand,
+} from './commands/task-roster.js';
 import { verifyStatusCommand } from './commands/verify-status.js';
 import { verifySuggestCommand } from './commands/verify-suggest.js';
 import { verifyExplainCommand } from './commands/verify-explain.js';
 import { verifyRunCommand } from './commands/verify-run.js';
-import { wrapCommand } from './lib/command-wrapper.js';
+import { wrapCommand, type CommandContext } from './lib/command-wrapper.js';
 import {
   wantMailbox,
   wantWorkflow,
@@ -100,6 +119,22 @@ program
   .option('-m, --mailbox <id>', 'Operation ID (mailbox ID for mail operations) to sync')
   .action(wrapCommand('sync', (opts, ctx) =>
     syncCommand({ ...opts, format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto' }, ctx)));
+
+program
+  .command('cycle')
+  .description('Run a single Cycle for a Windows Site')
+  .option('--site <id>', 'Site ID to run cycle for')
+  .option('--site-root <path>', 'Override Site root directory')
+  .option('--ceiling-ms <ms>', 'Maximum cycle duration in milliseconds', '30000')
+  .option('--lock-ttl-ms <ms>', 'Lock TTL in milliseconds', '35000')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .action(wrapCommand('cycle', (opts, ctx) =>
+    cycleCommand({
+      ...opts,
+      ceilingMs: opts.ceilingMs ? parseInt(opts.ceilingMs, 10) : undefined,
+      lockTtlMs: opts.lockTtlMs ? parseInt(opts.lockTtlMs, 10) : undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    }, ctx)));
 
 program
   .command('integrity')
@@ -193,14 +228,162 @@ program
   .option('-c, --config <path>', 'Path to config file', './config.json')
   .option('-v, --verbose', 'Enable verbose output', false)
   .option('-l, --limit <n>', 'Number of recent items per category', '5')
+  .option('--site <id>', 'Show only the specified Windows Site')
   .action(wrapCommand('ops', (opts, ctx) =>
     opsCommand({ ...opts, limit: Number(opts.limit), format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto' }, ctx)));
+
+// ── Site registry commands ──
+
+const sitesCmd = program
+  .command('sites')
+  .description('Discover and manage Narada Sites');
+
+sitesCmd
+  .command('list')
+  .description('List discovered Sites with health status')
+  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .action(wrapCommand('sites-list', (opts, ctx) =>
+    sitesListCommand({ format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto', verbose: opts.verbose }, ctx)));
+
+sitesCmd
+  .command('discover')
+  .description('Scan filesystem and refresh registry')
+  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .action(wrapCommand('sites-discover', (opts, ctx) =>
+    sitesDiscoverCommand({ format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto', verbose: opts.verbose }, ctx)));
+
+sitesCmd
+  .command('show <site-id>')
+  .description('Show Site metadata and last-known health')
+  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .action(async (siteId: string, opts: Record<string, unknown>) => {
+    const result = await sitesShowCommand(siteId, {
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      verbose: opts.verbose as boolean | undefined,
+    }, { configPath: './config.json', verbose: !!opts.verbose, logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, trace: () => {} } as unknown as CommandContext['logger'] });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Command failed');
+      process.exit(result.exitCode);
+    }
+    if ((opts.format as string) !== 'json' && process.env.OUTPUT_FORMAT !== 'json') {
+      // human output already printed by formatter
+    } else {
+      console.log(JSON.stringify(result.result, null, 2));
+    }
+  });
+
+sitesCmd
+  .command('remove <site-id>')
+  .description('Remove a Site from the registry (does NOT delete Site files)')
+  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .action(async (siteId: string, opts: Record<string, unknown>) => {
+    const result = await sitesRemoveCommand(siteId, {
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      verbose: opts.verbose as boolean | undefined,
+    }, { configPath: './config.json', verbose: !!opts.verbose, logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, trace: () => {} } as unknown as CommandContext['logger'] });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Command failed');
+      process.exit(result.exitCode);
+    }
+    if ((opts.format as string) !== 'json' && process.env.OUTPUT_FORMAT !== 'json') {
+      // human output already printed by formatter
+    } else {
+      console.log(JSON.stringify(result.result, null, 2));
+    }
+  });
+
+// ── Console commands ──
+
+const consoleCmd = program
+  .command('console')
+  .description('Operator console for cross-Site health and control');
+
+consoleCmd
+  .command('status')
+  .description('Show cross-Site health summary')
+  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .action(wrapCommand('console-status', (opts, ctx) =>
+    consoleStatusCommand({ format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto', verbose: opts.verbose }, ctx)));
+
+consoleCmd
+  .command('attention')
+  .description('Show attention queue across all Sites')
+  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .action(wrapCommand('console-attention', (opts, ctx) =>
+    consoleAttentionCommand({ format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto', verbose: opts.verbose }, ctx)));
+
+consoleCmd
+  .command('approve <site-id> <outbound-id>')
+  .description('Approve an outbound command')
+  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+  .action(async (siteId: string, outboundId: string, opts: Record<string, unknown>) => {
+    const result = await consoleControlCommand('approve', siteId, outboundId, {
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      verbose: opts.verbose as boolean | undefined,
+    }, { configPath: './config.json', verbose: !!opts.verbose, logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, trace: () => {} } as unknown as CommandContext['logger'] });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Command failed');
+      process.exit(result.exitCode);
+    }
+    if ((opts.format as string) !== 'json' && process.env.OUTPUT_FORMAT !== 'json') {
+      // human output already printed by formatter
+    } else {
+      console.log(JSON.stringify(result.result, null, 2));
+    }
+  });
+
+consoleCmd
+  .command('reject <site-id> <outbound-id>')
+  .description('Reject an outbound command')
+  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+  .action(async (siteId: string, outboundId: string, opts: Record<string, unknown>) => {
+    const result = await consoleControlCommand('reject', siteId, outboundId, {
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      verbose: opts.verbose as boolean | undefined,
+    }, { configPath: './config.json', verbose: !!opts.verbose, logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, trace: () => {} } as unknown as CommandContext['logger'] });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Command failed');
+      process.exit(result.exitCode);
+    }
+    if ((opts.format as string) !== 'json' && process.env.OUTPUT_FORMAT !== 'json') {
+      // human output already printed by formatter
+    } else {
+      console.log(JSON.stringify(result.result, null, 2));
+    }
+  });
+
+consoleCmd
+  .command('retry <site-id> <work-item-id>')
+  .description('Retry a work item')
+  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+  .action(async (siteId: string, workItemId: string, opts: Record<string, unknown>) => {
+    const result = await consoleControlCommand('retry', siteId, workItemId, {
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      verbose: opts.verbose as boolean | undefined,
+    }, { configPath: './config.json', verbose: !!opts.verbose, logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, trace: () => {} } as unknown as CommandContext['logger'] });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Command failed');
+      process.exit(result.exitCode);
+    }
+    if ((opts.format as string) !== 'json' && process.env.OUTPUT_FORMAT !== 'json') {
+      // human output already printed by formatter
+    } else {
+      console.log(JSON.stringify(result.result, null, 2));
+    }
+  });
 
 program
   .command('status')
   .description('Show sync status and health')
   .option('-c, --config <path>', 'Path to config file', './config.json')
   .option('-v, --verbose', 'Enable verbose output', false)
+  .option('--site <id>', 'Query a Windows Site by site ID instead of reading config')
   .action(wrapCommand('status', (opts, ctx) =>
     statusCommand({ ...opts, format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto' }, ctx)));
 
@@ -227,6 +410,7 @@ program
   .option('-c, --config <path>', 'Path to config file', './config.json')
   .option('-v, --verbose', 'Enable verbose output', false)
   .option('--stale-threshold-minutes <n>', 'Sync staleness threshold in minutes', '60')
+  .option('--site <id>', 'Diagnose a Windows Site by site ID instead of reading config')
   .action(wrapCommand('doctor', (opts, ctx) =>
     doctorCommand({
       ...opts,
@@ -384,6 +568,102 @@ taskCmd
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'List failed');
+      process.exit(result.exitCode);
+    }
+    console.log(result.result);
+  });
+
+// Task roster tracking commands (Task 385)
+const rosterCmd = taskCmd
+  .command('roster')
+  .description('Show and update agent operational roster state');
+
+rosterCmd
+  .command('show')
+  .description('Show current agent roster')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await taskRosterShowCommand({
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Roster show failed');
+      process.exit(result.exitCode);
+    }
+    console.log(result.result);
+  });
+
+rosterCmd
+  .command('assign <task-number>')
+  .description('Mark agent as working on a task')
+  .requiredOption('--agent <id>', 'Agent ID from roster')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (taskNumber: string, opts: Record<string, unknown>) => {
+    const result = await taskRosterAssignCommand({
+      taskNumber,
+      agent: opts.agent as string,
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Roster assign failed');
+      process.exit(result.exitCode);
+    }
+    console.log(result.result);
+  });
+
+rosterCmd
+  .command('review <task-number>')
+  .description('Mark agent as reviewing a task')
+  .requiredOption('--agent <id>', 'Agent ID from roster')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (taskNumber: string, opts: Record<string, unknown>) => {
+    const result = await taskRosterReviewCommand({
+      taskNumber,
+      agent: opts.agent as string,
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Roster review failed');
+      process.exit(result.exitCode);
+    }
+    console.log(result.result);
+  });
+
+rosterCmd
+  .command('done <task-number>')
+  .description('Mark agent done with a task')
+  .requiredOption('--agent <id>', 'Agent ID from roster')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (taskNumber: string, opts: Record<string, unknown>) => {
+    const result = await taskRosterDoneCommand({
+      taskNumber,
+      agent: opts.agent as string,
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Roster done failed');
+      process.exit(result.exitCode);
+    }
+    console.log(result.result);
+  });
+
+rosterCmd
+  .command('idle')
+  .description('Mark agent as idle')
+  .requiredOption('--agent <id>', 'Agent ID from roster')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await taskRosterIdleCommand({
+      agent: opts.agent as string,
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Roster idle failed');
       process.exit(result.exitCode);
     }
     console.log(result.result);

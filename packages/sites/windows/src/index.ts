@@ -1,0 +1,125 @@
+export type {
+  WindowsSiteVariant,
+  WindowsSiteConfig,
+  WindowsCycleOutcome,
+  WindowsCycleResult,
+  SiteHealthRecord,
+  CycleTraceRecord,
+} from "./types.js";
+
+export {
+  detectVariant,
+  resolveSiteRoot,
+  sitePath,
+  ensureSiteDir,
+  siteConfigPath,
+  siteDbPath,
+  siteLogsPath,
+  siteTracesPath,
+} from "./path-utils.js";
+
+export {
+  SqliteSiteCoordinator,
+  openCoordinatorDb,
+  type WindowsSiteCoordinator,
+} from "./coordinator.js";
+
+export {
+  DefaultWindowsSiteRunner,
+  type WindowsSiteRunner,
+  type CycleConfig,
+} from "./runner.js";
+
+export {
+  generateSystemdUnits,
+  writeSystemdUnits,
+  generateCronEntry,
+  generateShellScript,
+  writeShellScript,
+  generateRegisterTaskScript,
+  generateUnregisterTaskScript,
+  generateTaskStatusScript,
+  buildTaskInfo,
+  type SupervisorRegistration,
+  type TaskSchedulerOptions,
+  type ScheduledTaskInfo,
+} from "./supervisor.js";
+
+export {
+  SiteRegistry,
+  type RegisteredSite,
+  type RegistryAuditRecord,
+  resolveRegistryDbPath,
+  resolveSitesBaseDir,
+  openRegistryDb,
+} from "./registry.js";
+
+export {
+  ControlRequestRouter,
+  type ConsoleControlRequest,
+  type ControlRequestResult,
+  type SiteControlClient,
+  type SiteControlClientFactory,
+} from "./router.js";
+
+export {
+  WindowsSiteControlClient,
+  type WindowsSiteControlContext,
+  type WindowsSiteControlContextFactory,
+} from "./site-control.js";
+
+export {
+  envVarName,
+  credentialManagerTarget,
+  resolveSecret,
+  resolveSecretRequired,
+  type ResolveSecretOptions,
+} from "./credentials.js";
+
+export {
+  type SiteObservationApi,
+  type StuckWorkItem,
+  type PendingOutboundCommand,
+  type PendingDraft,
+  type CredentialRequirement,
+} from "./site-observation.js";
+
+export {
+  aggregateHealth,
+  deriveAttentionQueue,
+  type CrossSiteHealthSummary,
+  type SiteHealthView,
+  type AttentionQueueItem,
+  type AttentionItemType,
+  type AttentionSeverity,
+  type AttentionRemediation,
+} from "./aggregation.js";
+
+export {
+  SiteHealthTracker,
+  shouldNotify,
+  buildNotification,
+  CrossSiteNotificationRouter,
+} from "./cross-site-notifier.js";
+
+export {
+  type OperatorNotification,
+  type NotificationAdapter,
+  type NotificationRateLimiter,
+  type NotificationEmitter,
+  LogNotificationAdapter,
+  DefaultNotificationEmitter,
+  NullNotificationEmitter,
+  notifyOperator,
+  DEFAULT_NOTIFICATION_COOLDOWN_MS,
+} from "./notification.js";
+
+export {
+  getWindowsSiteStatus,
+  getSiteHealth,
+  getLastCycleTrace,
+  discoverWindowsSites,
+  resolveSiteVariant,
+  type WindowsSiteStatus,
+  type DiscoveredSite,
+} from "./observability.js";

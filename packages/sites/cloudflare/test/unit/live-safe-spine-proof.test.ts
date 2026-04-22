@@ -145,7 +145,7 @@ describe("Live-Safe Spine Proof (Task 356)", () => {
         3: createDeriveWorkStepHandler(),
         4: createSandboxEvaluateStepHandler(charterRunner),
         5: createHandoffStepHandler(),
-        6: createLiveReconcileStepHandler(observationAdapter),
+        7: createLiveReconcileStepHandler(observationAdapter),
       },
     );
 
@@ -208,7 +208,7 @@ describe("Live-Safe Spine Proof (Task 356)", () => {
         3: createDeriveWorkStepHandler(),
         4: createSandboxEvaluateStepHandler(charterRunner),
         5: createHandoffStepHandler(),
-        6: createLiveReconcileStepHandler(observationAdapter),
+        7: createLiveReconcileStepHandler(observationAdapter),
       },
     );
 
