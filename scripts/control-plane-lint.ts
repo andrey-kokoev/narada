@@ -126,7 +126,9 @@ export const ALLOWLIST: Record<string, string[]> = {
   // that dispatches strategy names to their implementations. It must reference
   // all vertical strategies (including mailbox) to be useful. This is the
   // canonical resolver used by recovery and replay operators.
-  "foreman/context.ts": ["mailbox_runtime_import"],
+  // CampaignRequestContextFormation reads conversation_id from mail fact payloads
+  // to group campaign requests by thread — same pattern as context-extractor.ts.
+  "foreman/context.ts": ["mailbox_runtime_import", "conversation_id"],
 };
 
 function walk(dir: string, files: string[] = []): string[] {

@@ -51,11 +51,11 @@ Explain:
 
 ## Acceptance Criteria
 
-- [ ] Package exists at a consistent path.
-- [ ] `pnpm build` (or equivalent) compiles the Worker TypeScript.
-- [ ] Fetch handler routes `/cycle` and `/status` correctly.
-- [ ] README documents ownership and non-ownership boundaries.
-- [ ] No implementation code for DO, Cycle, or R2 is added.
+- [x] Package exists at a consistent path.
+- [x] `pnpm build` (or equivalent) compiles the Worker TypeScript.
+- [x] Fetch handler routes `/cycle` and `/status` correctly.
+- [x] README documents ownership and non-ownership boundaries.
+- [x] No implementation code for DO, Cycle, or R2 is added.
 
 ## Suggested Verification
 
@@ -64,3 +64,11 @@ pnpm --filter <worker-package> typecheck
 ```
 
 No tests required for scaffolding; manual inspection of package structure and build output is sufficient.
+
+## Execution Notes
+
+Task completed prior to Task 474 closure invariant. The `packages/sites/cloudflare/` package was created with `package.json`, `tsconfig.json`, `src/index.ts` (fetch handler), `src/cycle-entrypoint.ts`, and `README.md`. The fetch handler routes `/cycle` and `/status` correctly. No DO, Cycle, or R2 implementation code was added.
+
+## Verification
+
+Verified by inspecting `packages/sites/cloudflare/src/index.ts` and `packages/sites/cloudflare/README.md`. Package compiles with `pnpm --filter @narada2/cloudflare-site build`.

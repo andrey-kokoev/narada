@@ -115,6 +115,7 @@ const ALLOWED_ACTIONS = new Set([
   "mark_read",
   "move_message",
   "set_categories",
+  "campaign_brief",
   "extract_obligations",
   "create_followup",
   "tool_request",
@@ -280,6 +281,18 @@ function loadScopeConfig(rawScope: unknown, pathPrefix: string): ScopeConfig {
     ...((charterRaw.degraded_mode === "draft_only" || charterRaw.degraded_mode === "normal")
       ? { degraded_mode: charterRaw.degraded_mode as "draft_only" | "normal" }
       : {}),
+    ...(isNonEmptyString(charterRaw.cli_path)
+      ? { cli_path: charterRaw.cli_path.trim() }
+      : {}),
+    ...(isNonEmptyString(charterRaw.session_id)
+      ? { session_id: charterRaw.session_id.trim() }
+      : {}),
+    ...(isBoolean(charterRaw.continue_session)
+      ? { continue_session: charterRaw.continue_session }
+      : {}),
+    ...(isNonEmptyString(charterRaw.work_dir)
+      ? { work_dir: charterRaw.work_dir.trim() }
+      : {}),
   };
 
   // Policy
@@ -309,6 +322,34 @@ function loadScopeConfig(rawScope: unknown, pathPrefix: string): ScopeConfig {
       : {}),
   };
 
+  const admissionRaw = isObject(scope.admission) ? scope.admission : null;
+  const mailAdmissionRaw = admissionRaw && isObject(admissionRaw.mail) ? admissionRaw.mail : null;
+  const admission: ScopeConfig["admission"] | undefined = mailAdmissionRaw
+    ? {
+        mail: {
+          ...(Array.isArray(mailAdmissionRaw.allowed_sender_addresses)
+            ? {
+                allowed_sender_addresses: expectStringArray(
+                  mailAdmissionRaw.allowed_sender_addresses,
+                  `${pathPrefix}.admission.mail.allowed_sender_addresses`,
+                ),
+              }
+            : {}),
+          ...(Array.isArray(mailAdmissionRaw.allowed_sender_domains)
+            ? {
+                allowed_sender_domains: expectStringArray(
+                  mailAdmissionRaw.allowed_sender_domains,
+                  `${pathPrefix}.admission.mail.allowed_sender_domains`,
+                ),
+              }
+            : {}),
+          ...(mailAdmissionRaw.unknown_sender_behavior === "ignore" || mailAdmissionRaw.unknown_sender_behavior === "admit"
+            ? { unknown_sender_behavior: mailAdmissionRaw.unknown_sender_behavior }
+            : {}),
+        },
+      }
+    : undefined;
+
   // Executors
   const executorsRaw = Array.isArray(scope.executors) ? scope.executors : [];
   const executors = executorsRaw.length > 0
@@ -317,6 +358,21 @@ function loadScopeConfig(rawScope: unknown, pathPrefix: string): ScopeConfig {
         return {
           family: expectString(ex.family, `${pathPrefix}.executors[${i}].family`),
           ...(isObject(ex.options) ? { options: ex.options } : {}),
+        };
+      })
+    : undefined;
+
+  const toolCatalogsRaw = Array.isArray(scope.tool_catalogs) ? scope.tool_catalogs : [];
+  const tool_catalogs = toolCatalogsRaw.length > 0
+    ? toolCatalogsRaw.map((entry, i) => {
+        const catalog = expectObject(entry, `${pathPrefix}.tool_catalogs[${i}]`);
+        const type = expectString(catalog.type, `${pathPrefix}.tool_catalogs[${i}].type`);
+        if (type !== "local_path") {
+          throw new Error(`${pathPrefix}.tool_catalogs[${i}].type must be 'local_path'`);
+        }
+        return {
+          type: "local_path" as const,
+          path: expectString(catalog.path, `${pathPrefix}.tool_catalogs[${i}].path`),
         };
       })
     : undefined;
@@ -333,6 +389,27 @@ function loadScopeConfig(rawScope: unknown, pathPrefix: string): ScopeConfig {
   const operationalTrustRaw = isObject(scope.operational_trust) ? scope.operational_trust : null;
   const operational_trust = operationalTrustRaw
     ? buildOperationalTrustConfig(operationalTrustRaw, `${pathPrefix}.operational_trust`)
+    : undefined;
+
+  // Campaign request config (optional)
+  const campaignRequestSenders = Array.isArray(scope.campaign_request_senders)
+    ? expectStringArray(scope.campaign_request_senders, `${pathPrefix}.campaign_request_senders`)
+    : undefined;
+  const campaignRequestLookbackDays =
+    scope.campaign_request_lookback_days !== undefined
+      ? expectNumber(scope.campaign_request_lookback_days, `${pathPrefix}.campaign_request_lookback_days`)
+      : undefined;
+
+  // Operator contacts
+  const operatorContactsRaw = Array.isArray(scope.operator_contacts) ? scope.operator_contacts : [];
+  const operator_contacts = operatorContactsRaw.length > 0
+    ? operatorContactsRaw.map((c, i) => buildOperatorContact(c, `${pathPrefix}.operator_contacts[${i}]`))
+    : undefined;
+
+  // Confirmation providers
+  const confirmationProvidersRaw = isObject(scope.confirmation_providers) ? scope.confirmation_providers : null;
+  const confirmation_providers = confirmationProvidersRaw
+    ? buildConfirmationProviders(confirmationProvidersRaw, `${pathPrefix}.confirmation_providers`, operator_contacts)
     : undefined;
 
   // Legacy graph field for backward compat
@@ -368,12 +445,97 @@ function loadScopeConfig(rawScope: unknown, pathPrefix: string): ScopeConfig {
     runtime,
     charter,
     policy,
+    ...(admission ? { admission } : {}),
+    ...(tool_catalogs ? { tool_catalogs } : {}),
     ...(executors ? { executors } : {}),
     ...(webhook ? { webhook } : {}),
     ...(lifecycle ? { lifecycle } : {}),
     ...(operational_trust ? { operational_trust } : {}),
+    ...(campaignRequestSenders ? { campaign_request_senders: campaignRequestSenders } : {}),
+    ...(campaignRequestLookbackDays !== undefined ? { campaign_request_lookback_days: campaignRequestLookbackDays } : {}),
+    ...(operator_contacts ? { operator_contacts: operator_contacts } : {}),
+    ...(confirmation_providers ? { confirmation_providers: confirmation_providers } : {}),
     ...(graph ? { graph } : {}),
   };
+}
+
+const CONFIRMABLE_ACTIONS = new Set<string>([
+  "approve_draft_for_send",
+  "reject_draft",
+  "mark_reviewed",
+  "handled_externally",
+  "trigger_sync",
+  "request_redispatch",
+]);
+
+function buildOperatorContact(raw: unknown, path: string): import("./types.js").OperatorContact {
+  const obj = expectObject(raw, path);
+  const principalId = expectString(obj.principal_id, `${path}.principal_id`);
+  const channel = expectString(obj.channel, `${path}.channel`);
+  if (channel !== "email") {
+    throw new Error(`${path}.channel must be 'email'`);
+  }
+  const address = expectString(obj.address, `${path}.address`);
+  const identityProvider = expectString(obj.identity_provider, `${path}.identity_provider`);
+  if (identityProvider !== "microsoft_entra") {
+    throw new Error(`${path}.identity_provider must be 'microsoft_entra'`);
+  }
+  const tenantId = expectString(obj.tenant_id, `${path}.tenant_id`);
+  const entraUserId = expectString(obj.entra_user_id, `${path}.entra_user_id`);
+  const mayOpen = expectBoolean(obj.may_open_operator_requests, `${path}.may_open_operator_requests`);
+
+  const mayConfirmRaw = Array.isArray(obj.may_confirm_actions) ? obj.may_confirm_actions : [];
+  const mayConfirmActions = mayConfirmRaw.map((a, i) => {
+    const action = expectString(a, `${path}.may_confirm_actions[${i}]`);
+    if (!CONFIRMABLE_ACTIONS.has(action)) {
+      throw new Error(
+        `${path}.may_confirm_actions[${i}] must be a confirmable action, got "${action}"`,
+      );
+    }
+    return action as import("./types.js").ConfirmableOperatorAction;
+  });
+
+  return {
+    principal_id: principalId,
+    channel,
+    address,
+    identity_provider: identityProvider,
+    tenant_id: tenantId,
+    entra_user_id: entraUserId,
+    may_open_operator_requests: mayOpen,
+    may_confirm_actions: mayConfirmActions,
+  };
+}
+
+function buildConfirmationProviders(
+  raw: Record<string, unknown>,
+  path: string,
+  operatorContacts: import("./types.js").OperatorContact[] | undefined,
+): import("./types.js").ConfirmationProvidersConfig {
+  const providers: import("./types.js").ConfirmationProvidersConfig = {};
+
+  if (raw.microsoft_entra !== undefined) {
+    const ms = expectObject(raw.microsoft_entra, `${path}.microsoft_entra`);
+    providers.microsoft_entra = {
+      tenant_id: expectString(ms.tenant_id, `${path}.microsoft_entra.tenant_id`),
+      client_id: expectString(ms.client_id, `${path}.microsoft_entra.client_id`),
+      client_secret: expectString(ms.client_secret, `${path}.microsoft_entra.client_secret`),
+      redirect_base_url: expectString(ms.redirect_base_url, `${path}.microsoft_entra.redirect_base_url`),
+    };
+  }
+
+  // Validate that every operator contact references a configured provider
+  if (operatorContacts) {
+    for (const contact of operatorContacts) {
+      if (contact.identity_provider === "microsoft_entra" && !providers.microsoft_entra) {
+        throw new Error(
+          `operator contact "${contact.principal_id}" references provider "microsoft_entra" but no such provider is configured`,
+        );
+      }
+    }
+  }
+
+  return providers;
 }
 
 function buildWebhookConfig(webhookRaw: Record<string, unknown>, path: string): NonNullable<ExchangeFsSyncConfig["webhook"]> {
@@ -612,6 +774,8 @@ export async function loadConfig(
       sources: [], // will be backfilled from graph
       context_strategy: root.context_strategy ?? "mail",
       executors: root.executors,
+      campaign_request_senders: root.campaign_request_senders,
+      campaign_request_lookback_days: root.campaign_request_lookback_days,
     };
 
     scopes = [loadScopeConfig(legacyScope, "config(legacy)")];

@@ -472,4 +472,72 @@ describe("loadConfig", () => {
       /config\(legacy\)\.policy\.allowed_actions must contain at least one allowed action/,
     );
   });
+
+  it("accepts campaign_request_senders and lookback_days", async () => {
+    const path = await writeConfigFile({
+      mailbox_id: "mailbox_primary",
+      root_dir: "./data/mail-sync",
+      graph: {
+        user_id: "user@example.com",
+        prefer_immutable_ids: true,
+      },
+      scope: {
+        included_container_refs: ["inbox"],
+        included_item_kinds: ["message"],
+      },
+      campaign_request_senders: ["marketing@company.com", "boss@company.com"],
+      campaign_request_lookback_days: 14,
+    });
+    createdPaths.push(path);
+
+    const config = await loadConfig({ path });
+    const scope = config.scopes[0]!;
+    expect(scope.campaign_request_senders).toEqual(["marketing@company.com", "boss@company.com"]);
+    expect(scope.campaign_request_lookback_days).toBe(14);
+  });
+
+  it("accepts campaign_brief in allowed_actions", async () => {
+    const path = await writeConfigFile({
+      mailbox_id: "mailbox_primary",
+      root_dir: "./data/mail-sync",
+      graph: {
+        user_id: "user@example.com",
+        prefer_immutable_ids: true,
+      },
+      scope: {
+        included_container_refs: ["inbox"],
+        included_item_kinds: ["message"],
+      },
+      policy: {
+        primary_charter: "campaign_producer",
+        allowed_actions: ["campaign_brief", "send_reply", "no_action"],
+      },
+    });
+    createdPaths.push(path);
+
+    const config = await loadConfig({ path });
+    const scope = config.scopes[0]!;
+    expect(scope.policy.allowed_actions).toContain("campaign_brief");
+  });
+
+  it("rejects invalid campaign_request_lookback_days", async () => {
+    const path = await writeConfigFile({
+      mailbox_id: "mailbox_primary",
+      root_dir: "./data/mail-sync",
+      graph: {
+        user_id: "user@example.com",
+        prefer_immutable_ids: true,
+      },
+      scope: {
+        included_container_refs: ["inbox"],
+        included_item_kinds: ["message"],
+      },
+      campaign_request_lookback_days: -1,
+    });
+    createdPaths.push(path);
+
+    await expect(loadConfig({ path })).rejects.toThrow(
+      /campaign_request_lookback_days must be a non-negative finite number/,
+    );
+  });
 });

@@ -137,6 +137,14 @@ narada handled-externally <outbound-id> --ref ticket-123
 - `draft_ready` → review (`mark-reviewed`) → reject (`reject-draft`) → `cancelled`
 - `draft_ready` → handled externally (`handled-externally`) → `cancelled`
 
+**Email-originated operator requests:**
+
+An email may ask Narada to perform an operator action, but email does not carry authority. If the sender is a configured `operator_contact`, Narada may create a pending `operator_action_request` and return or draft a short-lived confirmation link.
+
+The action executes only after the operator follows the link and Microsoft/Entra authentication verifies the configured tenant, audience, nonce, token expiry, and Entra user/object id. The confirmed request then routes through the same audited `executeOperatorAction()` path as CLI or UI actions.
+
+For local Sites, confirmation links may be `http://127.0.0.1:<port>/...` and work only on the operator machine. Public Sites may expose the link publicly, but the link is still only a challenge entry point; authority comes from Microsoft/Entra verification.
+
 **Satisfied exit condition:** No drafts pending review, or all drafts have been dispositioned.
 
 ---

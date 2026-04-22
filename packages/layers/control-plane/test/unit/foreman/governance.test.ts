@@ -537,3 +537,51 @@ describe("resolveArbitration", () => {
     expect(result.winner_evaluation_id).toBe("eval-p");
   });
 });
+
+describe("campaign_brief governance", () => {
+  it("accepts campaign_brief with valid payload", () => {
+    const result = governAction(
+      {
+        action_type: "campaign_brief",
+        authority: "recommended",
+        payload_json: JSON.stringify({ name: "Spring Sale", audience: "active-users", content_summary: "Promo", timing: "next week", approval_needed: true }),
+        rationale: "Valid brief",
+      },
+      { primary_charter: "campaign_producer", allowed_actions: ["campaign_brief", "no_action"] },
+      { overall: "high", uncertainty_flags: [] },
+    );
+    expect(result.allowed).toBe(true);
+    expect(result.payload_valid).toBe(true);
+  });
+
+  it("rejects campaign_brief when not in policy allowed_actions", () => {
+    const result = governAction(
+      {
+        action_type: "campaign_brief",
+        authority: "recommended",
+        payload_json: JSON.stringify({ name: "Spring Sale", audience: "active-users", content_summary: "Promo", timing: "next week", approval_needed: true }),
+        rationale: "Valid brief",
+      },
+      { primary_charter: "support_steward", allowed_actions: ["send_reply", "no_action"] },
+      { overall: "high", uncertainty_flags: [] },
+    );
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toContain("not allowed by runtime policy");
+  });
+
+  it("rejects campaign_brief with empty payload", () => {
+    const result = governAction(
+      {
+        action_type: "campaign_brief",
+        authority: "recommended",
+        payload_json: JSON.stringify({}),
+        rationale: "Empty brief",
+      },
+      { primary_charter: "campaign_producer", allowed_actions: ["campaign_brief", "no_action"] },
+      { overall: "high", uncertainty_flags: [] },
+    );
+    expect(result.allowed).toBe(true);
+    expect(result.payload_valid).toBe(false);
+    expect(result.payload_errors[0]).toContain("campaign_brief requires");
+  });
+});

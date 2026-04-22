@@ -22,7 +22,8 @@ export type CharterRuntimeHealthClass =
   | "healthy"
   | "degraded_draft_only"
   | "partially_degraded"
-  | "broken";
+  | "broken"
+  | "interactive_auth_required";
 
 /** Canonical health snapshot for a charter runtime. */
 export interface CharterRuntimeHealth {
@@ -95,6 +96,15 @@ export function getRecoveryGuidance(
           "In production, Narada will skip charter execution when the runtime is broken. Work items remain opened and will be executed once health recovers. Existing facts, drafts, and outbound handoffs are preserved. Sync continues if source APIs are healthy.",
         inspectable:
           "All durable state remains inspectable. Operator can review pending work items, replay past evaluations, and confirm or reject existing drafts. Use `narada recover` after fixing the runtime to re-derive work if needed.",
+      };
+    case "interactive_auth_required":
+      return {
+        operator_action:
+          "Browser session authentication is required. Run `kimi login` to authenticate the Kimi CLI, then verify with `kimi info`.",
+        safe_behavior:
+          "In production, Narada will skip charter execution when the CLI runtime requires interactive authentication. Work items remain opened and will be executed once authentication is completed. Sync continues normally.",
+        inspectable:
+          "All durable state remains inspectable. Operator can review pending work items, replay past evaluations, and confirm or reject existing drafts.",
       };
     default: {
       const _exhaustive: never = healthClass;

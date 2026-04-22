@@ -92,6 +92,7 @@ export async function executeOperatorAction(
     // payload_json is already a JSON string from callers (UI stringifies
     // objects before sending). Do NOT double-encode.
     payload_json: payload.payload_json ?? null,
+    source_message_id: null,
     status: "pending",
     requested_by: "operator",
     requested_at: now,

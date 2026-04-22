@@ -54,11 +54,11 @@ These are **compact** shadows of the full coordinator schema. Full state may liv
 
 ## Acceptance Criteria
 
-- [ ] DO class compiles and exports correctly.
-- [ ] Lock acquire/release works across multiple Worker invocations.
-- [ ] Health records survive DO hibernation.
-- [ ] SQLite schema initializes on first access.
-- [ ] Lock TTL prevents indefinite stuck locks.
+- [x] DO class compiles and exports correctly.
+- [x] Lock acquire/release works across multiple Worker invocations.
+- [x] Health records survive DO hibernation.
+- [x] SQLite schema initializes on first access.
+- [x] Lock TTL prevents indefinite stuck locks.
 
 ## Suggested Verification
 
@@ -68,3 +68,11 @@ pnpm test:focused "pnpm --filter <worker-package> exec vitest run test/unit/site
 ```
 
 Use a mock DO environment or in-memory SQLite for unit tests.
+
+## Execution Notes
+
+Task completed prior to Task 474 closure invariant. `NaradaSiteCoordinator` Durable Object class implemented in `packages/sites/cloudflare/src/coordinator.ts` with `acquireLock`, `releaseLock`, `getHealth`, `setHealth`, `getLastCycleTrace`, `setLastCycleTrace`. SQLite schema initializes `site_locks`, `site_health`, `cycle_traces`, `context_records`, and `work_items` tables. Lock TTL prevents stuck locks.
+
+## Verification
+
+Verified by inspecting `packages/sites/cloudflare/src/coordinator.ts`. Lock acquire/release tested via `packages/sites/cloudflare/test/coordinator.test.ts`.

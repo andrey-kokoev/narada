@@ -87,6 +87,33 @@ Every cross-boundary relationship must satisfy these properties:
 | Chapter closure | Operator (CLI) | Task files, review artifacts | Mutate runtime state |
 | Lease acquisition | Runtime (scheduler) | Work items, leases | Read task files |
 | Number allocation | Operator (CLI) | Registry file | Assume runtime state |
+| Tool implementation | Supported system repo | Local schema, `.env`, diagnostics, runbooks | Grant operation permission by itself |
+| Tool binding | Operation repo | System-owned tool catalogs | Copy system diagnostics into ops repo |
+| Tool execution | Narada runtime | Operation binding, tool catalog, charter request | Bypass mediation/audit/timeouts |
+
+---
+
+## Tool Locality Boundary
+
+Tool capability crosses three ownership layers:
+
+```text
+System repo owns tool implementation.
+Operation repo owns tool binding and permission.
+Narada runtime owns mediation, audit, timeout, and authority enforcement.
+```
+
+This is the Tool Locality Doctrine defined canonically in [`SEMANTICS.md`](../../SEMANTICS.md). It applies whenever an operation needs diagnostic or action capability from another system.
+
+Examples:
+
+- `sonar.cloud` may define read-only diagnostic wrappers for git, PostgreSQL, and Sentry under `.narada/`.
+- `narada.sonar` may bind selected Sonar tools to `support_steward` under `allowed_tools`.
+- Narada runtime performs the actual invocation through governed tool-call records.
+
+Static grammar and operation configuration may describe tools, but only runtime-mediated execution may invoke them. A catalog declaration is not permission. Permission comes from operation policy plus authority-class validation.
+
+Do not copy system-local diagnostics, secrets, schema assumptions, or Sentry/DB wrappers into an ops repo. Bind to the system-owned catalog.
 
 ---
 
@@ -98,6 +125,38 @@ The USC bridge version is declared in root `package.json` under `config.uscVersi
 - On mismatch, the command fails with a clear, actionable error message.
 - Schema cache population happens only after version validation succeeds.
 - `narada init usc-validate <path>` can fall back to cached schemas when USC packages are unavailable, but version-checked initialization is the normative path.
+
+---
+
+## Language / Runtime Posture
+
+TypeScript is Narada's primary control-plane implementation language. It is not Narada's authority boundary.
+
+TypeScript types help construction: they make CLI code, config handling, Graph/API adapters, tests, and agent edits faster and more reviewable. They are construction scaffolding and static feedback, not proof that a lifecycle transition is valid.
+
+Authority lives in durable boundaries:
+
+- persisted facts, contexts, work items, intents, executions, confirmations, task files, reviews, and traces;
+- SQLite schemas, JSON schemas, and migration rules;
+- runtime validators and explicit state-machine transition checks;
+- operator commands that perform audited transitions.
+
+This means:
+
+- A TypeScript interface may describe a task, intent, or Site record, but it does not authorize mutation of that record.
+- Cross-language executors are allowed when they communicate through Narada's durable records and authority transitions.
+- JSON, SQLite, schemas, and trace artifacts are the interoperability boundary between implementations.
+- Rewrites away from TypeScript require a concrete invariant, deployment, substrate, performance, or operability reason. Language preference alone is not sufficient.
+- Agents must not use "the type checks" as evidence that authority boundaries are enforced. Boundary enforcement must be visible in runtime checks, persistence, tests, or operator contracts.
+
+The intended split is:
+
+| Layer | Language posture |
+|-------|------------------|
+| Control-plane grammar, CLI, config, adapters, docs tooling | TypeScript is the default implementation language |
+| Durable authority boundaries | SQLite / JSON / schemas / state-machine checks |
+| Substrate-specific execution | May use TypeScript, PowerShell, shell, Go, Rust, platform APIs, or future executors |
+| Cross-language integration | Must pass through durable facts, intents, traces, and explicit operators |
 
 ---
 

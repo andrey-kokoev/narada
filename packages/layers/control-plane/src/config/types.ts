@@ -33,6 +33,14 @@ export interface CharterRuntimeConfig {
   timeout_ms?: number;
   /** When 'draft_only', the runtime reports degraded_draft_only health and restricts effects to draft-only */
   degraded_mode?: "draft_only" | "normal";
+  /** Path to the Kimi CLI executable (default: `kimi` on PATH) */
+  cli_path?: string;
+  /** Session ID to resume for kimi-cli runtime */
+  session_id?: string;
+  /** Continue the previous session for the working directory */
+  continue_session?: boolean;
+  /** Working directory for the kimi-cli agent */
+  work_dir?: string;
 }
 
 export interface RuntimePolicy {
@@ -45,6 +53,21 @@ export interface RuntimePolicy {
   runtime_authorized?: boolean;
   /** Explicitly grants authorization for admin authority class. */
   admin_authorized?: boolean;
+}
+
+export interface ToolCatalogRef {
+  type: "local_path";
+  path: string;
+}
+
+export interface MailAdmissionConfig {
+  allowed_sender_addresses?: string[];
+  allowed_sender_domains?: string[];
+  unknown_sender_behavior?: "ignore" | "admit";
+}
+
+export interface AdmissionConfig {
+  mail?: MailAdmissionConfig;
 }
 
 /** Source configuration for a scope (e.g. Graph API, timer, webhook) */
@@ -105,11 +128,27 @@ export interface ScopeConfig {
   charter?: CharterRuntimeConfig;
   /** Policy binding */
   policy: RuntimePolicy;
+  /** Source-record admission policy. Controls which synced source records may produce work. */
+  admission?: AdmissionConfig;
+  /** External tool catalogs bound into this scope */
+  tool_catalogs?: ToolCatalogRef[];
   /** Executor bindings */
   executors?: ExecutorConfig[];
 
   /** Operational trust / stuck-detection thresholds (optional) */
   operational_trust?: OperationalTrustConfig;
+
+  /** Campaign request sender allowlist (optional) */
+  campaign_request_senders?: string[];
+
+  /** Campaign request lookback window in days (default: 7) */
+  campaign_request_lookback_days?: number;
+
+  /** Operator contacts who may open pending operator requests by email */
+  operator_contacts?: OperatorContact[];
+
+  /** Confirmation providers for email-originated operator requests */
+  confirmation_providers?: ConfirmationProvidersConfig;
 
   /**
    * @deprecated Legacy Graph API field. Prefer sources[] instead.
@@ -175,6 +214,38 @@ export interface HealthConfig {
   max_staleness_ms?: number;
   max_consecutive_errors?: number;
   max_drain_ms?: number;
+}
+
+export type ConfirmableOperatorAction =
+  | "approve_draft_for_send"
+  | "reject_draft"
+  | "mark_reviewed"
+  | "handled_externally"
+  | "trigger_sync"
+  | "request_redispatch";
+
+export interface OperatorContact {
+  principal_id: string;
+  channel: "email";
+  address: string;
+  identity_provider: "microsoft_entra";
+  tenant_id: string;
+  entra_user_id: string;
+  may_open_operator_requests: boolean;
+  may_confirm_actions: ConfirmableOperatorAction[];
+}
+
+export interface MicrosoftEntraConfirmationProvider {
+  tenant_id: string;
+  client_id: string;
+  client_secret: string;
+  redirect_base_url: string;
+}
+
+export type ConfirmationProvider = MicrosoftEntraConfirmationProvider;
+
+export interface ConfirmationProvidersConfig {
+  microsoft_entra?: MicrosoftEntraConfirmationProvider;
 }
 
 export interface ExchangeFsSyncConfig {

@@ -33,7 +33,11 @@ Narada is a generalized, deterministic kernel for turning remote source deltas i
 ### Semantic Crystallization Guidance
 
 When describing higher-order architecture, deployment, or design:
-- Prefer **`Aim / Site / Cycle / Act / Trace`** (see [`SEMANTICS.md §2.14`](SEMANTICS.md)) over overloaded generic terms like `operation`.
+- Prefer the compact tuple **`Aim / Site / Cycle / Act / Trace`** (see [`SEMANTICS.md §2.14`](SEMANTICS.md)) over overloaded generic terms like `operation`.
+- When precision matters — specifications, interfaces, authority boundaries, agent instructions — use the **canonical expansion**: `Operation Specification` / `Runtime Locus` / `Control Cycle` / phase vocabulary / `Evidence Trace` (see [`SEMANTICS.md §2.14.6`](SEMANTICS.md)).
+- Preserve Narada's **portable invariant spine** (see [`SEMANTICS.md §2.14.5`](SEMANTICS.md)): Sites, verticals, and principals may change, but durable boundaries and authority transitions must remain recognizable.
+- Use the **Control Cycle phase vocabulary** (see [`SEMANTICS.md §2.14.7`](SEMANTICS.md)) when describing Cycle internals: Source Read → Fact Admission → Context Formation → Evaluation → Governance → Intent/Handoff → Execution Attempt → Confirmation/Reconciliation → Evidence Trace.
+- Use the **Operation Specification** (not "telos") as the canonical reading of `Aim`. An Aim is inspectable, versionable, and independent of runtime.
 - **`operation`** remains current user-facing CLI language. Do not invent new meanings for it.
 - Do not call a user's configured work setup a **Narada instance**. Use **operation** for the configured unit of work, **operation specification** for its written/configured definition, and **runtime / daemon / Site** for deployed machinery.
 - Do not rename CLI flags, database columns, or package APIs as part of this vocabulary shift.
@@ -46,6 +50,7 @@ When describing higher-order architecture, deployment, or design:
 |-----|-------|----------------|
 | [SEMANTICS.md](SEMANTICS.md) | **Canonical ontology** — single source of truth for all terms | Need a definition, identity format, or invariant |
 | [SEMANTICS.md §2.13](SEMANTICS.md) | Intelligence-Authority Separation — canonical internal formulation | Need to understand why evaluation ≠ decision and why the control plane owns authority |
+| [SEMANTICS.md §2.14.5](SEMANTICS.md) | Portable invariant spine — how Narada travels across Sites, verticals, and principals | Need to prevent substrate/vertical/agent collapse |
 | [SEMANTICS.md §2.8](SEMANTICS.md) | Re-derivation / recovery operator family | Need to understand replay, preview, recovery, rebuild, or confirm operators |
 | [00-kernel.md](packages/layers/control-plane/docs/00-kernel.md) | **Irreducible kernel spec** — the canonical lawbook | Need the vertical-agnostic normative core |
 | [01-spec.md](packages/layers/control-plane/docs/01-spec.md) | Dearbitrized formal specification (mailbox vertical) | Need to understand the mailbox-specific theoretical model |
@@ -59,8 +64,11 @@ When describing higher-order architecture, deployment, or design:
 | [09-troubleshooting.md](packages/layers/control-plane/docs/09-troubleshooting.md) | Common issues and solutions | Are debugging a problem |
 | [10-ui-read-model-audit.md](packages/layers/control-plane/docs/10-ui-read-model-audit.md) | UI read surfaces, gaps, and authority rules | Are building operator UI |
 | [runtime-usc-boundary.md](docs/concepts/runtime-usc-boundary.md) | Runtime / USC / operator ownership boundary | Need to understand which layer owns what |
+| [runtime-usc-boundary.md §Language / Runtime Posture](docs/concepts/runtime-usc-boundary.md#language--runtime-posture) | TypeScript posture vs durable authority boundaries | Need to decide whether types, schemas, runtime checks, or another language own a concern |
 | [cloudflare-site-materialization.md](docs/deployment/cloudflare-site-materialization.md) | Cloudflare Site materialization design | Designing or deploying a Cloudflare-backed Narada Site |
 | [bootstrap-contract.md](docs/product/bootstrap-contract.md) | Canonical intent-to-operation bootstrap path | Setting up or onboarding a first-time user |
+| [site-bootstrap-contract.md](docs/product/site-bootstrap-contract.md) | Canonical Site first-run path (runtime locus setup) | Setting up a local Site on Windows, macOS, or Linux |
+| [tool-catalog-binding.md](docs/product/tool-catalog-binding.md) | Tool Locality Doctrine and operation-to-system tool binding | Binding diagnostic tools from an app/system repo into an operation |
 | [first-operation-proof.md](docs/product/first-operation-proof.md) | Canonical mailbox operation product proof | Understanding what is proven and how to verify it |
 | [operator-loop.md](docs/product/operator-loop.md) | Minimal operator rhythm for live operations | Running day-to-day operations |
 
@@ -91,6 +99,8 @@ When describing higher-order architecture, deployment, or design:
 | Rebuild projections | [`src/observability/rebuild.ts`](packages/layers/control-plane/src/observability/rebuild.ts) + [`narada rebuild-projections`](packages/layers/cli/src/commands/rebuild-projections.ts) |
 | Modify non-send worker | [`src/outbound/non-send-worker.ts`](packages/layers/control-plane/src/outbound/non-send-worker.ts) |
 | Bootstrap a new operation | [`docs/product/bootstrap-contract.md`](docs/product/bootstrap-contract.md) + [`packages/ops-kit/src/commands/init-repo.ts`](packages/ops-kit/src/commands/init-repo.ts) |
+| Bootstrap a new Site | [`docs/product/site-bootstrap-contract.md`](docs/product/site-bootstrap-contract.md) + [`packages/layers/cli/src/commands/sites.ts`](packages/layers/cli/src/commands/sites.ts) |
+| Render task graph as Mermaid | [`packages/layers/cli/src/commands/task-graph.ts`](packages/layers/cli/src/commands/task-graph.ts) + [`packages/layers/cli/src/lib/task-graph.ts`](packages/layers/cli/src/lib/task-graph.ts) |
 | Run the canonical product proof | [`docs/product/first-operation-proof.md`](docs/product/first-operation-proof.md) + [`test/integration/live-operation/smoke-test.test.ts`](packages/layers/control-plane/test/integration/live-operation/smoke-test.test.ts) |
 | Run the operator daily loop | [`docs/product/operator-loop.md`](docs/product/operator-loop.md) + [`narada ops`](packages/layers/cli/src/commands/ops.ts) |
 | Add a new vertical source | [`src/sources/{vertical}-source.ts`](packages/layers/control-plane/src/sources/) |
@@ -195,6 +205,12 @@ narada recover --scope <scope-id> --dry-run
 
 # Replay derivation (re-derive work from stored facts)
 narada derive-work --scope <scope-id>
+
+# Render task graph as Mermaid (read-only inspection)
+narada task graph --format mermaid
+
+# Render task graph as JSON
+narada task graph --format json --range 429-454
 ```
 
 ### `recover` vs `derive-work`
@@ -207,6 +223,34 @@ Both commands rebuild control-plane state from stored facts, but they are distin
 | `narada derive-work` | `deriveWorkFromStoredFacts()` | Operator-scoped replay for testing/policy | `derive` + `resolve` |
 
 **Shared core**: Both route through the same `onContextsAdmitted()` derivation core. The distinction is in naming, triggering context, and intended authority — not in divergent runtime behavior.
+
+### Task Completion Semantics
+
+The CLI distinguishes four levels of completion. Agents and operators must not conflate them:
+
+| Level | What it means | How to check |
+|-------|---------------|--------------|
+| **Agent attempt done** | The agent's roster entry is `done` (`task roster done`). | `narada task roster show` |
+| **Task has evidence** | The task file contains execution notes, checked acceptance criteria, and ideally a WorkResultReport. | `narada task evidence <n>` |
+| **Task artifact closed** | The task file front matter says `status: closed` (or `confirmed`). | Read the task file |
+| **Chapter ready to advance** | All tasks in the chapter are `closed` or `confirmed`, with reviews/closure decisions where required. | `narada chapter close` |
+
+**Key rules:**
+- `task roster done` marks only agent availability, not task completion. It warns (or fails with `--strict`) when the task lacks evidence.
+- `task review accepted` does **not** transition a task to `closed` if acceptance criteria are unchecked or execution evidence is missing. The task stays `in_review` until evidence is provided.
+- `narada task evidence <n>` is read-only and classifies tasks as `complete`, `attempt_complete`, `needs_review`, `needs_closure`, or `incomplete`.
+
+### Task Assignment and Claim Semantics
+
+| Operator | What it does | Mutates task file? | Mutates roster? |
+|----------|-------------|-------------------|-----------------|
+| `task roster assign <n> --agent <id>` | Assigns agent to task **and claims it by default** | Yes (status → `claimed`) | Yes (`working` + task) |
+| `task roster assign <n> --agent <id> --no-claim` | Assigns agent without claiming | No | Yes (`working` + task) |
+| `task claim <n> --agent <id>` | Claims task directly (no roster update except `last_active_at`) | Yes (status → `claimed`) | No (only timestamp) |
+| `task roster done <n> --agent <id>` | Marks agent done | No | Yes (`done`, clears task) |
+| `task review <n> --verdict accepted` | Reviews and may close task | Yes (status → `closed` or stays `in_review`) | No |
+
+**Atomicity:** `roster assign` validates claimability (task exists, status is `opened`/`needs_continuation`, dependencies met, no active assignment) **before** touching the roster. A failed validation leaves both the roster and the task file unchanged. If the task is already `claimed`, the roster is updated and a warning is emitted (non-destructive).
 
 **Conservative guarantees** (both commands):
 - No active leases are created
@@ -314,6 +358,7 @@ narada/
 19. **Observation is read-only projection**: `layers/control-plane/src/observability/` must never contain writes (`.run(`, `.exec(`, direct mutation calls). It derives its data exclusively from durable stores. Inspection requires no authority class.
 20. **Control surface is explicitly separated**: Operator actions are mounted under `/control/scopes/:scope_id/actions`. The observation namespace (`/scopes/...`) is strictly GET-only.
 21. **UI cannot become hidden authority**: The operator console (`layers/daemon/src/ui/`) may only mutate through the audited, safelisted `executeOperatorAction()` path in `operator-actions.ts`. Every action is logged to `operator_action_requests`. Direct store mutations from the observation API are forbidden.
+21a. **Email cannot become operator authority**: Email-originated operator requests may only create pending audited `operator_action_requests`. No email `From:` header, mailbox rule, or message body may directly approve send, execute a tool, mutate config, close a task, or perform any control action. Confirmation requires a configured identity provider challenge and then the canonical `executeOperatorAction()` path.
 22. **Observation API uses view types**: `ObservationApiScope` exposes only `*View` / `*OperatorView` store interfaces, removing named mutation methods at the type level.
 23. **All UI data sources are classified**: Every observation type is marked as `authoritative` (mirrors one durable row), `derived` (computed from multiple sources), or `decorative` (presentational only).
 
@@ -450,6 +495,8 @@ Runtime policy determines charter routing, allowed actions, and tool catalog for
 3. Update consumers: [`DefaultForemanFacade`](packages/layers/control-plane/src/foreman/facade.ts), [`buildInvocationEnvelope`](packages/layers/control-plane/src/charter/envelope.ts), and daemon [`service.ts`](packages/layers/daemon/src/service.ts)
 4. Update [`config.example.json`](packages/layers/control-plane/config.example.json)
 5. Add tests in [`test/unit/config/load.test.ts`](packages/layers/control-plane/test/unit/config/load.test.ts) and [`test/integration/policy-routing.test.ts`](packages/layers/daemon/test/integration/policy-routing.test.ts)
+
+**Tool locality invariant:** Do not copy system diagnostic tools into an ops repo. System repos own tool implementation (`.narada/tool-catalog.json`, scripts, `.env` naming, schema assumptions); operation repos own permission binding (`allowed_tools`, charter policy); Narada runtime owns mediation, audit, timeout, and authority enforcement. See [`SEMANTICS.md`](SEMANTICS.md) and [`docs/product/tool-catalog-binding.md`](docs/product/tool-catalog-binding.md).
 
 ### 7. Work with the USC Schema Cache
 
@@ -640,6 +687,8 @@ Reusable task contracts live in `.ai/task-contracts/`:
 - `.ai/task-contracts/agent-task-execution.md` applies to task execution unless a task explicitly overrides it.
 - `.ai/task-contracts/chapter-planning.md` applies to chapter-planning tasks in addition to the execution contract.
 - `.ai/task-contracts/question-escalation.md` tells agents when to stop and ask the architect/user instead of making arbitrary semantic, authority, safety, private-data, or product decisions.
+
+Task graph evolution is governed by `docs/governance/task-graph-evolution-boundary.md`. It defines task identity invariants, numeric allocation rules, range reservation, and the renumbering/correction operator. Agents must not allocate task numbers by `ls | tail`; they must use the reservation protocol or compute the next available number from task headings.
 
 Tasks must be self-standing. An external agent should be able to execute or review a task from `execute <task-number>` or `review <task-number>` alone. If assignment requires extra pasted constraints, patch the task file first; assignment text is routing, not hidden specification.
 

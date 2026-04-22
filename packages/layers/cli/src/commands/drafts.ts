@@ -64,6 +64,7 @@ function deriveAvailableActions(row: DraftRow): string[] {
     if (row.action_type === 'send_reply' || row.action_type === 'send_new_message') {
       actions.push('approve-draft-for-send');
     }
+    // campaign_brief is document-only in v0; never executable
   }
   if (row.status === 'blocked_policy') {
     actions.push('reject-draft');

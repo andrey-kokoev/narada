@@ -116,7 +116,7 @@ export const VALID_TRANSITIONS: Readonly<
   retry_wait: ["draft_ready", "draft_creating", "approved_for_send", "failed_terminal"],
   blocked_policy: ["superseded", "cancelled", "pending", "approved_for_send"],
   confirmed: [],
-  failed_terminal: ["approved_for_send", "draft_ready"],
+  failed_terminal: ["approved_for_send", "draft_ready", "cancelled"],
   cancelled: [],
   superseded: [],
 };
@@ -128,6 +128,8 @@ export const VALID_TRANSITIONS: Readonly<
  *   (draft_ready -> sending is blocked for these actions).
  * - Non-send actions (mark_read, move_message, set_categories) ARE allowed
  *   to transition draft_ready -> sending.
+ * - campaign_brief is document-only in v0 and may NOT transition to
+ *   approved_for_send, sending, or submitted.
  */
 export function isValidTransition(
   from: OutboundStatus,
@@ -143,6 +145,14 @@ export function isValidTransition(
     }
     return false;
   }
+
+  // campaign_brief is document-only: block transitions to executable states
+  if (actionType === "campaign_brief") {
+    if (to === "approved_for_send" || to === "sending" || to === "submitted") {
+      return false;
+    }
+  }
+
   return true;
 }
 

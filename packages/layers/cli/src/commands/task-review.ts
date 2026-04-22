@@ -14,10 +14,16 @@ import {
   readTaskFile,
   writeTaskFile,
   isValidTransition,
+  loadReport,
+  saveReport,
   type ReviewFinding,
 } from '../lib/task-governance.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import {
+  resolvePrincipalStateDir,
+  updatePrincipalRuntimeFromTaskEvent,
+} from '../lib/principal-bridge.js';
 
 export interface TaskReviewOptions {
   taskNumber?: string;
@@ -25,7 +31,9 @@ export interface TaskReviewOptions {
   agent?: string;
   verdict?: 'accepted' | 'accepted_with_notes' | 'rejected';
   findings?: string;
+  report?: string;
   cwd?: string;
+  principalStateDir?: string;
 }
 
 export async function taskReviewCommand(
@@ -132,10 +140,34 @@ export async function taskReviewCommand(
   }
 
   // Determine new status based on verdict
-  const newStatus = verdict === 'rejected' ? 'opened' : 'closed';
+  let newStatus = verdict === 'rejected' ? 'opened' : 'closed';
 
-  // Validate transition
-  if (!isValidTransition(frontMatter.status, newStatus)) {
+  // Evidence gate: accepted verdict only closes if all closure gates are satisfied
+  let evidenceBlocked = false;
+  let evidenceReason: string | undefined;
+  if (verdict !== 'rejected') {
+    const { inspectTaskEvidence } = await import('../lib/task-governance.js');
+    const evidence = await inspectTaskEvidence(cwd, taskNumber);
+    if (evidence.all_criteria_checked === false) {
+      evidenceBlocked = true;
+      evidenceReason = `${evidence.unchecked_count} acceptance criteria remain unchecked`;
+    } else if (!evidence.has_report && !evidence.has_execution_notes) {
+      evidenceBlocked = true;
+      evidenceReason = 'Task lacks execution evidence (no report or execution notes)';
+    } else if (!evidence.has_verification) {
+      evidenceBlocked = true;
+      evidenceReason = 'Task lacks verification notes';
+    } else if (evidence.violations.includes('terminal_with_derivative_files')) {
+      evidenceBlocked = true;
+      evidenceReason = 'Derivative task-status files exist';
+    }
+    if (evidenceBlocked) {
+      newStatus = 'in_review'; // Keep in review so evidence can be added
+    }
+  }
+
+  // Validate transition (allow same-status when evidence gate blocked)
+  if (newStatus !== frontMatter.status && !isValidTransition(frontMatter.status, newStatus)) {
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: {
@@ -195,6 +227,27 @@ export async function taskReviewCommand(
     }
   }
 
+  // If --report is provided, validate it belongs to this task
+  let linkedReport = null;
+  if (options.report) {
+    linkedReport = await loadReport(cwd, options.report);
+    if (!linkedReport) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: { status: 'error', error: `Report not found: ${options.report}` },
+      };
+    }
+    if (linkedReport.task_id !== taskFile.taskId) {
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: {
+          status: 'error',
+          error: `Report ${options.report} belongs to task ${linkedReport.task_id}, not ${taskFile.taskId}`,
+        },
+      };
+    }
+  }
+
   // Create review record
   const now = new Date().toISOString();
   const reviewId = `review-${taskFile.taskId}-${Date.now()}`;
@@ -205,13 +258,36 @@ export async function taskReviewCommand(
     findings,
     verdict,
     reviewed_at: now,
+    report_id: options.report ?? null,
   };
 
   await saveReview(cwd, reviewRecord);
 
+  // Update linked report status if applicable
+  if (linkedReport) {
+    linkedReport.report_status = verdict === 'rejected' ? 'rejected' : 'accepted';
+    await saveReport(cwd, linkedReport);
+  }
+
   // Update task status
   frontMatter.status = newStatus;
   await writeTaskFile(taskFile.path, frontMatter, body);
+
+  // Post-commit advisory PrincipalRuntime update
+  try {
+    const stateDir = resolvePrincipalStateDir({ cwd, principalStateDir: options.principalStateDir });
+    const bridgeResult = await updatePrincipalRuntimeFromTaskEvent(stateDir, {
+      type: verdict === 'rejected' ? 'task_review_rejected' : 'task_review_accepted',
+      agent_id: agentId,
+      task_id: taskFile.taskId,
+      review_id: reviewId,
+    });
+    if (bridgeResult.warning) {
+      fmt.message(bridgeResult.warning, 'warning');
+    }
+  } catch {
+    // Best-effort advisory update — never fail the command
+  }
 
   // Update roster last_active_at
   agent.last_active_at = now;
@@ -220,19 +296,28 @@ export async function taskReviewCommand(
   await atomicWriteFile(join(cwd, '.ai/agents/roster.json'), JSON.stringify(roster, null, 2) + '\n');
 
   if (fmt.getFormat() === 'json') {
+    const result: Record<string, unknown> = {
+      status: 'success',
+      review_id: reviewId,
+      task_id: taskFile.taskId,
+      verdict,
+      new_status: newStatus,
+    };
+    if (evidenceBlocked) {
+      result.evidence_blocked = true;
+      result.evidence_reason = evidenceReason;
+    }
     return {
       exitCode: ExitCode.SUCCESS,
-      result: {
-        status: 'success',
-        review_id: reviewId,
-        task_id: taskFile.taskId,
-        verdict,
-        new_status: newStatus,
-      },
+      result,
     };
   }
 
-  fmt.message(`Reviewed task ${taskFile.taskId}: ${verdict} → ${newStatus}`, 'success');
+  if (evidenceBlocked) {
+    fmt.message(`Reviewed task ${taskFile.taskId}: ${verdict} → ${newStatus} (evidence gate blocked: ${evidenceReason})`, 'warning');
+  } else {
+    fmt.message(`Reviewed task ${taskFile.taskId}: ${verdict} → ${newStatus}`, 'success');
+  }
   return {
     exitCode: ExitCode.SUCCESS,
     result: {
@@ -241,6 +326,7 @@ export async function taskReviewCommand(
       task_id: taskFile.taskId,
       verdict,
       new_status: newStatus,
+      ...(evidenceBlocked ? { evidence_blocked: true, evidence_reason: evidenceReason } : {}),
     },
   };
 }

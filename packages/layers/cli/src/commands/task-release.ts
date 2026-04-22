@@ -18,6 +18,10 @@ import {
 } from '../lib/task-governance.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import {
+  resolvePrincipalStateDir,
+  updatePrincipalRuntimeFromTaskEvent,
+} from '../lib/principal-bridge.js';
 
 export interface TaskReleaseOptions {
   taskNumber?: string;
@@ -25,6 +29,7 @@ export interface TaskReleaseOptions {
   reason?: 'completed' | 'abandoned' | 'superseded' | 'transferred' | 'budget_exhausted';
   continuation?: string;
   cwd?: string;
+  principalStateDir?: string;
 }
 
 export async function taskReleaseCommand(
@@ -162,6 +167,22 @@ export async function taskReleaseCommand(
   }
 
   await writeTaskFile(taskFile.path, frontMatter, body);
+
+  // Post-commit advisory PrincipalRuntime update
+  try {
+    const stateDir = resolvePrincipalStateDir({ cwd, principalStateDir: options.principalStateDir });
+    const bridgeResult = await updatePrincipalRuntimeFromTaskEvent(stateDir, {
+      type: 'task_released',
+      agent_id: active.agent_id,
+      task_id: taskFile.taskId,
+      reason: releaseReason,
+    });
+    if (bridgeResult.warning) {
+      fmt.message(bridgeResult.warning, 'warning');
+    }
+  } catch {
+    // Best-effort advisory update — never fail the command
+  }
 
   if (fmt.getFormat() === 'json') {
     return {

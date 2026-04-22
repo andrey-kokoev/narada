@@ -15,14 +15,17 @@ import {
   loadRoster,
   updateAgentRosterEntry,
   formatRoster,
+  readTaskFile,
 } from '../../src/lib/task-governance.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 function setupRepo(tempDir: string, roster?: unknown) {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'tasks', 'assignments'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'learning', 'accepted'), { recursive: true });
 
   writeFileSync(
     join(tempDir, '.ai', 'agents', 'roster.json'),
@@ -51,6 +54,19 @@ function setupRepo(tempDir: string, roster?: unknown) {
       ],
     }, null, 2),
   );
+
+  writeFileSync(
+    join(tempDir, '.ai', 'learning', 'accepted', '20260422-003-roster.json'),
+    JSON.stringify({
+      artifact_id: '20260422-003',
+      state: 'accepted',
+      title: 'Recommended assignments are operative unless rejected',
+      content: {
+        principle: 'When the architect/operator recommends a target assignment and the human operator does not disagree or correct it, the recommendation is operative and must be recorded in the roster immediately.',
+      },
+      scopes: ['roster', 'assignment', 'task-governance'],
+    }, null, 2),
+  );
 }
 
 describe('task roster operator', () => {
@@ -71,14 +87,20 @@ describe('task roster operator', () => {
       expect(result.exitCode).toBe(ExitCode.SUCCESS);
       expect(result.result).toContain('test-agent');
       expect(result.result).toContain('reviewer-agent');
+      expect(result.result).toContain('Active guidance:');
+      expect(result.result).toContain('Recommended assignments are operative unless rejected');
     });
 
     it('returns roster in json format', async () => {
       const result = await taskRosterShowCommand({ cwd: tempDir, format: 'json' });
       expect(result.exitCode).toBe(ExitCode.SUCCESS);
       expect(typeof result.result).toBe('object');
-      const parsed = result.result as { agents: unknown[] };
-      expect(parsed.agents).toHaveLength(2);
+      const parsed = result.result as { roster: { agents: unknown[] }; guidance: unknown[] };
+      expect(parsed.roster.agents).toHaveLength(2);
+      expect(parsed.guidance.length).toBeGreaterThan(0);
+      expect(parsed.guidance[0]).toMatchObject({
+        artifact_id: '20260422-003',
+      });
     });
 
     it('fails with clear error when roster is missing', async () => {
@@ -95,6 +117,11 @@ describe('task roster operator', () => {
 
   describe('assign', () => {
     it('records status working and task number', async () => {
+      writeFileSync(
+        join(tempDir, '.ai', 'tasks', '20260420-385-test.md'),
+        '---\ntask_id: 385\nstatus: opened\n---\n\n# Task 385\n',
+      );
+
       const result = await taskRosterAssignCommand({
         taskNumber: '385',
         agent: 'test-agent',
@@ -107,6 +134,12 @@ describe('task roster operator', () => {
         agent: 'test-agent',
         agent_status: 'working',
         task: 385,
+      });
+
+      const parsed = result.result as { guidance: unknown[] };
+      expect(parsed.guidance.length).toBeGreaterThan(0);
+      expect(parsed.guidance[0]).toMatchObject({
+        artifact_id: '20260422-003',
       });
 
       const roster = await loadRoster(tempDir);
@@ -136,6 +169,160 @@ describe('task roster operator', () => {
       });
       expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
       expect((result.result as { error: string }).error).toBe('Invalid task number');
+    });
+
+    it('claims an opened task by default', async () => {
+      writeFileSync(
+        join(tempDir, '.ai', 'tasks', '20260420-385-test.md'),
+        '---\ntask_id: 385\nstatus: opened\n---\n\n# Task 385\n',
+      );
+
+      const result = await taskRosterAssignCommand({
+        taskNumber: '385',
+        agent: 'test-agent',
+        cwd: tempDir,
+        format: 'json',
+      });
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      const parsed = result.result as { claimed: boolean };
+      expect(parsed.claimed).toBe(true);
+
+      // Task file updated to claimed
+      const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-385-test.md'), 'utf8');
+      expect(taskContent).toContain('status: claimed');
+
+      // Assignment record created
+      const assignmentRaw = readFileSync(
+        join(tempDir, '.ai', 'tasks', 'assignments', '20260420-385-test.json'),
+        'utf8',
+      );
+      const assignment = JSON.parse(assignmentRaw);
+      expect(assignment.task_id).toBe('20260420-385-test');
+      expect(assignment.assignments).toHaveLength(1);
+      expect(assignment.assignments[0].agent_id).toBe('test-agent');
+    });
+
+    it('preserves depends_on through claim', async () => {
+      writeFileSync(
+        join(tempDir, '.ai', 'tasks', '20260420-998-dep.md'),
+        '---\ntask_id: 998\nstatus: closed\n---\n\n# Task 998\n',
+      );
+      writeFileSync(
+        join(tempDir, '.ai', 'tasks', '20260420-385-test.md'),
+        '---\ntask_id: 385\nstatus: opened\ndepends_on:\n  - 998\nextra: preserved\n---\n\n# Task 385\n',
+      );
+
+      const result = await taskRosterAssignCommand({
+        taskNumber: '385',
+        agent: 'test-agent',
+        cwd: tempDir,
+        format: 'json',
+      });
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+
+      const { frontMatter } = await readTaskFile(join(tempDir, '.ai', 'tasks', '20260420-385-test.md'));
+      expect(frontMatter.status).toBe('claimed');
+      expect(frontMatter.depends_on).toEqual([998]);
+      expect(frontMatter.extra).toBe('preserved');
+    });
+
+    it('fails when claim validation fails and leaves roster unchanged', async () => {
+      // No task file — claim validation (findTaskFile) will fail
+      const result = await taskRosterAssignCommand({
+        taskNumber: '385',
+        agent: 'test-agent',
+        cwd: tempDir,
+        format: 'json',
+      });
+
+      expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+      expect((result.result as { error: string }).error).toMatch(/Task not found/);
+
+      // Roster must NOT have been updated
+      const roster = await loadRoster(tempDir);
+      const entry = roster.agents.find((a) => a.agent_id === 'test-agent');
+      expect(entry?.status).not.toBe('working');
+      expect(entry?.task).not.toBe(385);
+    });
+
+    it('fails when dependencies are unmet and leaves roster unchanged', async () => {
+      writeFileSync(
+        join(tempDir, '.ai', 'tasks', '20260420-998-dep.md'),
+        '---\ntask_id: 998\nstatus: opened\n---\n\n# Task 998\n',
+      );
+      writeFileSync(
+        join(tempDir, '.ai', 'tasks', '20260420-385-test.md'),
+        '---\ntask_id: 385\nstatus: opened\ndepends_on:\n  - 998\n---\n\n# Task 385\n',
+      );
+
+      const result = await taskRosterAssignCommand({
+        taskNumber: '385',
+        agent: 'test-agent',
+        cwd: tempDir,
+        format: 'json',
+      });
+
+      expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+      expect((result.result as { error: string }).error).toMatch(/unmet dependencies/);
+
+      // Roster must NOT have been updated
+      const roster = await loadRoster(tempDir);
+      const entry = roster.agents.find((a) => a.agent_id === 'test-agent');
+      expect(entry?.status).not.toBe('working');
+    });
+
+    it('is explicit and non-destructive for already-claimed tasks', async () => {
+      writeFileSync(
+        join(tempDir, '.ai', 'tasks', '20260420-385-test.md'),
+        '---\ntask_id: 385\nstatus: claimed\n---\n\n# Task 385\n',
+      );
+
+      const result = await taskRosterAssignCommand({
+        taskNumber: '385',
+        agent: 'test-agent',
+        cwd: tempDir,
+        format: 'json',
+      });
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      const parsed = result.result as { claimed: boolean; warnings?: string[] };
+      expect(parsed.claimed).toBe(false);
+      expect(parsed.warnings?.some((w) => w.includes('already claimed'))).toBe(true);
+
+      // Roster updated
+      const roster = await loadRoster(tempDir);
+      expect(roster.agents.find((a) => a.agent_id === 'test-agent')?.status).toBe('working');
+      expect(roster.agents.find((a) => a.agent_id === 'test-agent')?.task).toBe(385);
+    });
+
+    it('supports --no-claim to skip claiming', async () => {
+      writeFileSync(
+        join(tempDir, '.ai', 'tasks', '20260420-385-test.md'),
+        '---\ntask_id: 385\nstatus: opened\n---\n\n# Task 385\n',
+      );
+
+      const result = await taskRosterAssignCommand({
+        taskNumber: '385',
+        agent: 'test-agent',
+        cwd: tempDir,
+        format: 'json',
+        noClaim: true,
+      });
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      const parsed = result.result as { claimed: boolean; warnings?: string[] };
+      expect(parsed.claimed).toBe(false);
+      expect(parsed.warnings?.some((w) => w.includes('--no-claim'))).toBe(true);
+
+      // Task file unchanged
+      const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-385-test.md'), 'utf8');
+      expect(taskContent).toContain('status: opened');
+
+      // Roster updated
+      const roster = await loadRoster(tempDir);
+      expect(roster.agents.find((a) => a.agent_id === 'test-agent')?.status).toBe('working');
     });
   });
 
@@ -192,6 +379,149 @@ describe('task roster operator', () => {
       expect(entry?.status).toBe('done');
       expect(entry?.task).toBeNull();
       expect(entry?.last_done).toBe(385);
+    });
+
+    it('warns when no WorkResultReport exists for the task', async () => {
+      // Create a task file so findTaskFile can resolve it
+      mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+      writeFileSync(
+        join(tempDir, '.ai', 'tasks', '20260420-385-test.md'),
+        '---\ntask_id: 385\nstatus: claimed\n---\n\n# Task 385\n',
+      );
+
+      // First assign a task
+      await taskRosterAssignCommand({
+        taskNumber: '385',
+        agent: 'test-agent',
+        cwd: tempDir,
+        format: 'json',
+      });
+
+      // Mark done without creating a report
+      const result = await taskRosterDoneCommand({
+        taskNumber: '385',
+        agent: 'test-agent',
+        cwd: tempDir,
+        format: 'human',
+      });
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      expect(typeof result.result).toBe('string');
+      expect(result.result as string).toContain('no WorkResultReport was submitted');
+    });
+
+    it('warns when task has unchecked acceptance criteria', async () => {
+      mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+      writeFileSync(
+        join(tempDir, '.ai', 'tasks', '20260420-386-test.md'),
+        '---\ntask_id: 386\nstatus: claimed\n---\n\n# Task 386\n\n## Acceptance Criteria\n- [ ] Unchecked item\n',
+      );
+      mkdirSync(join(tempDir, '.ai', 'tasks', 'reports'), { recursive: true });
+      writeFileSync(
+        join(tempDir, '.ai', 'tasks', 'reports', 'wrr_1234567890_20260420-386-test_test-agent.json'),
+        JSON.stringify({
+          report_id: 'wrr_1234567890_20260420-386-test_test-agent',
+          task_number: 386,
+          task_id: '20260420-386-test',
+          agent_id: 'test-agent',
+          assignment_id: 'x',
+          reported_at: '2026-01-01T00:00:00Z',
+          summary: 'Done',
+          changed_files: [],
+          verification: [],
+          known_residuals: [],
+          ready_for_review: true,
+          report_status: 'submitted',
+        }),
+      );
+
+      const result = await taskRosterDoneCommand({
+        taskNumber: '386',
+        agent: 'test-agent',
+        cwd: tempDir,
+        format: 'human',
+      });
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      expect(result.result as string).toContain('unchecked acceptance criteria');
+    });
+
+    it('fails in strict mode when evidence is missing', async () => {
+      mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+      writeFileSync(
+        join(tempDir, '.ai', 'tasks', '20260420-387-test.md'),
+        '---\ntask_id: 387\nstatus: claimed\n---\n\n# Task 387\n',
+      );
+
+      const result = await taskRosterDoneCommand({
+        taskNumber: '387',
+        agent: 'test-agent',
+        cwd: tempDir,
+        format: 'json',
+        strict: true,
+      });
+
+      expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+      const parsed = result.result as { error: string; strict: boolean };
+      expect(parsed.strict).toBe(true);
+      expect(parsed.error).toContain('no execution evidence');
+    });
+
+    it('succeeds in strict mode when evidence is complete', async () => {
+      mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+      writeFileSync(
+        join(tempDir, '.ai', 'tasks', '20260420-388-test.md'),
+        '---\ntask_id: 388\nstatus: claimed\n---\n\n# Task 388\n\n## Acceptance Criteria\n- [x] Done\n\n## Execution Notes\nCompleted.\n',
+      );
+      mkdirSync(join(tempDir, '.ai', 'tasks', 'reports'), { recursive: true });
+      writeFileSync(
+        join(tempDir, '.ai', 'tasks', 'reports', 'wrr_1234567890_20260420-388-test_test-agent.json'),
+        JSON.stringify({
+          report_id: 'wrr_1234567890_20260420-388-test_test-agent',
+          task_number: 388,
+          task_id: '20260420-388-test',
+          agent_id: 'test-agent',
+          assignment_id: 'x',
+          reported_at: '2026-01-01T00:00:00Z',
+          summary: 'Done',
+          changed_files: [],
+          verification: [],
+          known_residuals: [],
+          ready_for_review: true,
+          report_status: 'submitted',
+        }),
+      );
+
+      const result = await taskRosterDoneCommand({
+        taskNumber: '388',
+        agent: 'test-agent',
+        cwd: tempDir,
+        format: 'json',
+        strict: true,
+      });
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      const parsed = result.result as { status: string; warnings: string[] | undefined };
+      expect(parsed.status).toBe('ok');
+      expect(parsed.warnings).toBeUndefined();
+    });
+
+    it('warns reviewer done when review artifact is missing', async () => {
+      mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+      writeFileSync(
+        join(tempDir, '.ai', 'tasks', '20260420-389-test.md'),
+        '---\ntask_id: 389\nstatus: in_review\n---\n\n# Task 389\n',
+      );
+
+      const result = await taskRosterDoneCommand({
+        taskNumber: '389',
+        agent: 'reviewer-agent',
+        cwd: tempDir,
+        format: 'human',
+      });
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      expect(result.result as string).toContain('no review artifact exists');
     });
   });
 
@@ -288,6 +618,89 @@ describe('task roster operator', () => {
       const output = formatRoster(roster, 'json');
       const parsed = JSON.parse(output);
       expect(parsed.agents[0].agent_id).toBe('a1');
+    });
+  });
+
+  describe('race safety', () => {
+    it('concurrent assign to different agents both persist', async () => {
+      writeFileSync(
+        join(tempDir, '.ai', 'tasks', '20260420-100-test.md'),
+        '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n',
+      );
+      writeFileSync(
+        join(tempDir, '.ai', 'tasks', '20260420-200-test.md'),
+        '---\ntask_id: 200\nstatus: opened\n---\n\n# Task 200\n',
+      );
+
+      const [r1, r2] = await Promise.all([
+        taskRosterAssignCommand({
+          taskNumber: '100',
+          agent: 'test-agent',
+          cwd: tempDir,
+          format: 'json',
+        }),
+        taskRosterAssignCommand({
+          taskNumber: '200',
+          agent: 'reviewer-agent',
+          cwd: tempDir,
+          format: 'json',
+        }),
+      ]);
+
+      expect(r1.exitCode).toBe(ExitCode.SUCCESS);
+      expect(r2.exitCode).toBe(ExitCode.SUCCESS);
+
+      const roster = await loadRoster(tempDir);
+      expect(roster.agents.find((a) => a.agent_id === 'test-agent')?.status).toBe('working');
+      expect(roster.agents.find((a) => a.agent_id === 'test-agent')?.task).toBe(100);
+      expect(roster.agents.find((a) => a.agent_id === 'reviewer-agent')?.status).toBe('working');
+      expect(roster.agents.find((a) => a.agent_id === 'reviewer-agent')?.task).toBe(200);
+    });
+
+    it('rapid sequential mutations do not lose updates', async () => {
+      writeFileSync(
+        join(tempDir, '.ai', 'tasks', '20260420-100-test.md'),
+        '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n',
+      );
+      writeFileSync(
+        join(tempDir, '.ai', 'tasks', '20260420-200-test.md'),
+        '---\ntask_id: 200\nstatus: opened\n---\n\n# Task 200\n',
+      );
+
+      await taskRosterAssignCommand({ taskNumber: '100', agent: 'test-agent', cwd: tempDir, format: 'json' });
+      await taskRosterAssignCommand({ taskNumber: '200', agent: 'reviewer-agent', cwd: tempDir, format: 'json' });
+      await taskRosterDoneCommand({ taskNumber: '100', agent: 'test-agent', cwd: tempDir, format: 'json' });
+      await taskRosterIdleCommand({ agent: 'reviewer-agent', cwd: tempDir, format: 'json' });
+
+      const roster = await loadRoster(tempDir);
+      expect(roster.agents.find((a) => a.agent_id === 'test-agent')?.status).toBe('done');
+      expect(roster.agents.find((a) => a.agent_id === 'test-agent')?.last_done).toBe(100);
+      expect(roster.agents.find((a) => a.agent_id === 'reviewer-agent')?.status).toBe('idle');
+      expect(roster.agents.find((a) => a.agent_id === 'reviewer-agent')?.task).toBeNull();
+    });
+
+    it('lock is released after a failed mutation', async () => {
+      writeFileSync(
+        join(tempDir, '.ai', 'tasks', '20260420-100-test.md'),
+        '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n',
+      );
+
+      const result = await taskRosterAssignCommand({
+        taskNumber: '100',
+        agent: 'ghost-agent',
+        cwd: tempDir,
+        format: 'json',
+      });
+      expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+
+      // A subsequent mutation should succeed (lock was released)
+      const result2 = await taskRosterAssignCommand({
+        taskNumber: '100',
+        agent: 'test-agent',
+        cwd: tempDir,
+        format: 'json',
+      });
+      expect(result2.exitCode).toBe(ExitCode.SUCCESS);
     });
   });
 });

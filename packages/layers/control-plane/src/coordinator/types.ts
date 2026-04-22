@@ -316,6 +316,15 @@ export interface CoordinatorStore {
   markOperatorActionRequestExecuted(requestId: string, executedAt?: string): void;
   markOperatorActionRequestRejected(requestId: string, rejectedAt?: string): void;
 
+  // Confirmation challenges
+  insertConfirmationChallenge(challenge: ConfirmationChallenge): void;
+  getConfirmationChallenge(challengeId: string): ConfirmationChallenge | undefined;
+  markConfirmationChallengeConfirmed(challengeId: string, confirmedAt?: string): void;
+  markConfirmationChallengeConsumed(challengeId: string, consumedAt?: string): void;
+  markConfirmationChallengeExpired(challengeId: string, expiredAt?: string): void;
+  markConfirmationChallengeRejected(challengeId: string, reason: string, rejectedAt?: string): void;
+  updateChallengeTokens(challengeId: string, stateHash: string, nonceHash: string): void;
+
   close(): void;
 }
 
@@ -345,6 +354,12 @@ export type CoordinatorStoreView = Omit<
   | "insertOverride"
   | "insertOperatorActionRequest"
   | "markOperatorActionRequestExecuted"
+  | "insertConfirmationChallenge"
+  | "markConfirmationChallengeConfirmed"
+  | "markConfirmationChallengeConsumed"
+  | "markConfirmationChallengeExpired"
+  | "markConfirmationChallengeRejected"
+  | "updateChallengeTokens"
 >;
 
 /** Operator-action view of CoordinatorStore — allows only audited, validated mutations via executeOperatorAction */
@@ -355,6 +370,13 @@ export type CoordinatorStoreOperatorView = CoordinatorStoreView &
     | "insertOperatorActionRequest"
     | "markOperatorActionRequestExecuted"
     | "markOperatorActionRequestRejected"
+    | "insertConfirmationChallenge"
+    | "getConfirmationChallenge"
+    | "markConfirmationChallengeConfirmed"
+    | "markConfirmationChallengeConsumed"
+    | "markConfirmationChallengeExpired"
+    | "markConfirmationChallengeRejected"
+    | "updateChallengeTokens"
   >;
 
 /** Safe operator action request — UI may request, never mutate control truth directly */
@@ -364,8 +386,27 @@ export interface OperatorActionRequest {
   action_type: "retry_work_item" | "retry_failed_work_items" | "acknowledge_alert" | "rebuild_views" | "rebuild_projections" | "request_redispatch" | "trigger_sync" | "derive_work" | "preview_work" | "reject_draft" | "mark_reviewed" | "handled_externally" | "approve_draft_for_send" | "retry_auth_failed";
   target_id: string | null;
   payload_json: string | null;
+  source_message_id: string | null;
   status: "pending" | "executed" | "rejected";
   requested_by: string;
   requested_at: string;
   executed_at: string | null;
+}
+
+export type ConfirmationChallengeStatus = "pending" | "confirmed" | "expired" | "rejected" | "consumed";
+
+export interface ConfirmationChallenge {
+  challenge_id: string;
+  scope_id: string;
+  operator_action_request_id: string;
+  principal_id: string;
+  provider: "microsoft_entra";
+  state_hash: string;
+  nonce_hash: string;
+  created_at: string;
+  expires_at: string;
+  confirmed_at: string | null;
+  consumed_at: string | null;
+  status: ConfirmationChallengeStatus;
+  failure_reason: string | null;
 }

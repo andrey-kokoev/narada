@@ -1,7 +1,7 @@
 {
   "version": 2,
   "schema": "https://narada.dev/schemas/agent-roster/v2",
-  "updated_at": "2026-04-22T15:41:00.000Z",
+  "updated_at": "2026-04-22T22:43:50.777Z",
   "agents": [
     {
       "agent_id": "a1",
@@ -15,11 +15,11 @@
         "confirm"
       ],
       "first_seen_at": "2026-04-21T00:00:00.000Z",
-      "last_active_at": "2026-04-21T23:59:00.000Z",
-      "status": "idle",
+      "last_active_at": "2026-04-22T22:43:50.743Z",
+      "status": "done",
       "task": null,
-      "last_done": 397,
-      "updated_at": "2026-04-22T15:40:00.000Z"
+      "last_done": 478,
+      "updated_at": "2026-04-22T22:43:50.743Z"
     },
     {
       "agent_id": "a2",
@@ -33,11 +33,11 @@
         "confirm"
       ],
       "first_seen_at": "2026-04-21T00:00:00.000Z",
-      "last_active_at": "2026-04-21T23:59:00.000Z",
-      "status": "idle",
+      "last_active_at": "2026-04-22T22:43:50.777Z",
+      "status": "done",
       "task": null,
-      "last_done": 394,
-      "updated_at": "2026-04-22T01:30:00.000Z"
+      "last_done": 479,
+      "updated_at": "2026-04-22T22:43:50.777Z"
     },
     {
       "agent_id": "a3",
@@ -51,11 +51,11 @@
         "confirm"
       ],
       "first_seen_at": "2026-04-21T00:00:00.000Z",
-      "last_active_at": "2026-04-21T23:59:00.000Z",
-      "status": "idle",
+      "last_active_at": "2026-04-22T15:46:54.323Z",
+      "status": "done",
       "task": null,
-      "last_done": 390,
-      "updated_at": "2026-04-22T01:14:00.000Z"
+      "last_done": 463,
+      "updated_at": "2026-04-22T15:46:54.323Z"
     },
     {
       "agent_id": "a4",
@@ -69,11 +69,11 @@
         "confirm"
       ],
       "first_seen_at": "2026-04-21T00:00:00.000Z",
-      "last_active_at": "2026-04-21T23:59:00.000Z",
-      "status": "idle",
+      "last_active_at": "2026-04-22T18:05:48.194Z",
+      "status": "done",
       "task": null,
-      "last_done": 377,
-      "updated_at": "2026-04-22T00:52:00.000Z"
+      "last_done": 468,
+      "updated_at": "2026-04-22T18:05:48.194Z"
     },
     {
       "agent_id": "a5",
@@ -87,11 +87,11 @@
         "confirm"
       ],
       "first_seen_at": "2026-04-21T00:00:00.000Z",
-      "last_active_at": "2026-04-21T23:59:00.000Z",
-      "status": "idle",
+      "last_active_at": "2026-04-22T18:20:52.150Z",
+      "status": "done",
       "task": null,
-      "last_done": 384,
-      "updated_at": "2026-04-22T00:52:00.000Z"
+      "last_done": 469,
+      "updated_at": "2026-04-22T18:20:52.150Z"
     },
     {
       "agent_id": "a6",
@@ -105,11 +105,11 @@
         "confirm"
       ],
       "first_seen_at": "2026-04-21T00:00:00.000Z",
-      "last_active_at": "2026-04-21T23:59:00.000Z",
-      "status": "idle",
+      "last_active_at": "2026-04-22T17:08:51.686Z",
+      "status": "done",
       "task": null,
-      "last_done": 379,
-      "updated_at": "2026-04-22T00:52:00.000Z"
+      "last_done": 454,
+      "updated_at": "2026-04-22T17:08:51.686Z"
     }
   ]
 }

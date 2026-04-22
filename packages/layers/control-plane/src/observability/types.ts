@@ -604,6 +604,36 @@ export interface OperatorActionSummary {
   created_at: string;
 }
 
+/** @source decorative — Principal runtime state observation (ephemeral, non-authoritative) */
+export interface PrincipalRuntimeObservation {
+  runtime_id: string;
+  principal_id: string;
+  principal_type: string;
+  state: string;
+  scope_id: string | null;
+  attachment_mode: string | null;
+  state_changed_at: string;
+  last_heartbeat_at: string | null;
+  active_work_item_id: string | null;
+  budget_remaining: number | null;
+  budget_unit: string | null;
+  detail: string | null;
+  /** Whether this principal can request work (derived from state) */
+  can_claim_work: boolean;
+  /** Whether this principal can execute work (derived from state) */
+  can_execute: boolean;
+}
+
+/** @source derived — Principal runtime health per scope */
+export interface ScopePrincipalHealth {
+  scope_id: string;
+  principals: PrincipalRuntimeObservation[];
+  /** True if at least one principal in this scope can claim work */
+  has_claimable_principal: boolean;
+  /** True if the default (daemon) principal is healthy and attached */
+  default_principal_healthy: boolean;
+}
+
 export interface ObservationPlaneSnapshot {
   captured_at: string;
   workers: WorkerStatusObservation[];
@@ -625,6 +655,8 @@ export interface ObservationPlaneSnapshot {
     failed_recent: IntentExecutionSummary[];
     total_count: number;
   };
+  /** Principal runtime state (Task 406) — decorative, ephemeral */
+  principal_runtimes?: PrincipalRuntimeObservation[];
   _meta?: {
     source_classifications: Record<string, SourceTrust>;
   };

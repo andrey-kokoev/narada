@@ -288,6 +288,28 @@ describe("SendExecutionWorker", () => {
     expect(result.processed).toBe(false);
   });
 
+  it("retry_wait command from confirmation ambiguity is not resent", async () => {
+    const cmd = createCommand({ status: "retry_wait" });
+    const ver = createVersion(cmd.outbound_id);
+    store.createCommand(cmd, ver);
+
+    store.appendTransition({
+      outbound_id: cmd.outbound_id,
+      version: null,
+      from_status: "submitted",
+      to_status: "retry_wait",
+      reason: "Reconciliation window expired without confirmation",
+      transition_at: new Date(Date.now() - 60_000).toISOString(),
+    });
+
+    const result = await worker.processNext();
+    expect(result.processed).toBe(false);
+
+    const updated = store.getCommand(cmd.outbound_id);
+    expect(updated?.status).toBe("retry_wait");
+    expect(draftClient.sent.size).toBe(0);
+  });
+
   it("retry_wait command is retried after cooldown expires", async () => {
     const cmd = createCommand({ status: "retry_wait" });
     const ver = createVersion(cmd.outbound_id);

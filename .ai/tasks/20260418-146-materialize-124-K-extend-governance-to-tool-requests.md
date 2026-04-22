@@ -2,7 +2,7 @@
 
 ## Source
 
-Derived from Task 124-K in `.ai/tasks/20260418-124-comprehensive-semantic-architecture-audit-report.md`.
+Derived from Task 461-K in `.ai/tasks/20260418-461-comprehensive-semantic-architecture-audit-report.md`.
 
 ## Why
 
@@ -65,4 +65,4 @@ Extend `governEvaluation()` and related foreman logic so tool requests are gover
 
 ### Architectural Notes
 
-The daemon still executes tools **before** calling `resolveWorkItem()` (Phase A read-only gating at `daemon/src/service.ts:597`). The foreman governance now covers tool requests in the decision model, but full architectural correctness — moving tool execution after foreman governance — requires a follow-up refactor that changes the daemon→foreman sequencing. The audit report (Task 124-K) notes: *"Remove the daemon's ad-hoc read-only gating once foreman governance covers tools"* — the "once" indicates this is a subsequent step after the governance extension is in place.
+The daemon still executes tools **before** calling `resolveWorkItem()` (Phase A read-only gating at `daemon/src/service.ts:597`). The foreman governance now covers tool requests in the decision model, but full architectural correctness — moving tool execution after foreman governance — requires a follow-up refactor that changes the daemon→foreman sequencing. The audit report (Task 461-K) notes: *"Remove the daemon's ad-hoc read-only gating once foreman governance covers tools"* — the "once" indicates this is a subsequent step after the governance extension is in place.

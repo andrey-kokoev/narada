@@ -97,6 +97,7 @@ Narada offers three entry paths, ordered from safest to live:
 | **Show me** | `narada demo` | Zero-setup taste with synthetic data. No credentials, no config, no files created. |
 | **Try safely** | `narada init-repo --demo ~/src/my-tryout` | A non-live trial repo with a mock-backed operation. Explore the full shaping workflow without touching any external system. |
 | **Go live** | `narada init-repo ~/src/my-ops` | A real ops repo. Declare a mailbox, add credentials, preflight, activate, and run. |
+| **Site bootstrap** | `narada sites init <id> --substrate <name>` | Create a runtime Site on your local machine (Windows, macOS, or Linux). Composes with operation bootstrap. |
 
 See [QUICKSTART.md](QUICKSTART.md) for the full gold-path guide.
 
@@ -118,6 +119,20 @@ These commands shape what the daemon will do when it runs. They are safe to run 
 | `inspect <operation>` | Show operation configuration |
 | `explain <operation>` | Explain what an operation will do and why it may be blocked |
 | `activate <operation>` | Mark an operation as live for daemon processing |
+
+### Site Management
+
+| Command | Description |
+|---------|-------------|
+| `sites init <id> --substrate <name>` | Initialize a new Site (windows-native, windows-wsl, macos, linux-user, linux-system) |
+| `sites enable <id>` | Generate supervisor configuration for a Site |
+| `sites list` | List discovered Sites with health status |
+| `sites show <id>` | Show Site metadata and last-known health |
+| `sites discover` | Scan filesystem and refresh registry |
+| `sites remove <id>` | Remove a Site from the registry (does NOT delete files) |
+| `cycle --site <id>` | Run a single Cycle for a Site |
+| `status --site <id>` | Show health and last trace for a Site |
+| `doctor --site <id>` | Diagnose a Site by ID |
 
 ### Runtime & Data
 

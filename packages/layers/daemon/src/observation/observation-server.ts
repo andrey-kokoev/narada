@@ -31,10 +31,12 @@ import {
   type SyncCompletionSignal,
   type ForemanFacade,
   type PreviewDerivationResult,
+  type ScopeConfig,
 } from "@narada2/control-plane";
 import { createLogger } from "../lib/logger.js";
 import { createObservationRoutes } from "./observation-routes.js";
 import { createOperatorActionRoutes } from "./operator-action-routes.js";
+import { createConfirmationRoutes } from "./confirmation-routes.js";
 import type { RouteHandler } from "./routes.js";
 
 export interface ObservationServerConfig {
@@ -54,6 +56,8 @@ export interface ObservationApiScope {
   workerRegistry: WorkerRegistryView;
   factStore: FactStoreView;
   foreman: ForemanFacade;
+  /** Scope configuration including operator_contacts and confirmation_providers */
+  scopeConfig: ScopeConfig;
   /** Optional callback to rebuild filesystem views (scope-specific) — deprecated, use rebuildProjections */
   rebuildViews?: () => Promise<void>;
   /** Optional callback to rebuild all projections for this scope */
@@ -111,6 +115,7 @@ export function createObservationServer(
 
   const observationRoutes = createObservationRoutes(prefix, scopeApis);
   const operatorActionRoutes = createOperatorActionRoutes(prefix, scopeApis);
+  const confirmationRoutes = createConfirmationRoutes(prefix, scopeApis);
 
   const routes: RouteHandler[] = [
     {
@@ -122,6 +127,7 @@ export function createObservationServer(
     },
     ...observationRoutes,
     ...operatorActionRoutes,
+    ...confirmationRoutes,
   ];
 
   async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {

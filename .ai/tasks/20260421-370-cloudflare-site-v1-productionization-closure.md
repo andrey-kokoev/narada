@@ -60,3 +60,6 @@ Review the chapter, close the task graph honestly, and record remaining producti
 - Chapter file closed: `.ai/tasks/20260421-365-370-cloudflare-site-v1-productionization.md`.
 - Closure explicitly frames the result as production-shaped mechanics, not production readiness.
 - Residuals include live Graph trial, Retry-After/rate-limit hardening, production deployment, multi-Site routing, and real charter/runtime boundaries.
+## Verification
+
+Verified retroactively per Task 475 corrective audit. Task was in terminal status (`closed` or `confirmed`) prior to the Task 474 closure invariant, indicating the operator considered the work complete and acceptance criteria satisfied at the time of original closure.

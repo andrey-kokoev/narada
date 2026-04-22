@@ -5,7 +5,9 @@ depends_on: [330, 331]
 
 # Task 333 — Canonical Vocabulary Hardening (Deferred)
 
-> **Status: Deferred.** Task 330's ontology closure review (`.ai/decisions/20260421-330-cloudflare-site-ontology-closure.md`) confirmed that the crystallized vocabulary `Aim / Site / Cycle / Act / Trace` is already coherent across all Cloudflare prototype artifacts. Minor drift was corrected in-place. This task is kept on file for reference but is **not in the active backlog**. It may be revived if a future substrate introduces new semantic drift that requires a dedicated hardening pass.
+> **Status: Deferred.** Task 330's ontology closure review (`.ai/decisions/20260421-330-cloudflare-site-ontology-closure.md`) confirmed that the crystallized vocabulary `Aim / Site / Cycle / Act / Trace` is already coherent across all Cloudflare prototype artifacts. Minor drift was corrected in-place. This task is kept on file for reference but is **not in the active backlog**.
+>
+> **Reopened by Task 424.** Task 424 reopens this concern due to later pressure from Windows Site work, PrincipalRuntime sharpening, and email-marketing operation-refinement needs. Task 424 performs the hardening pass that was deferred here. See `.ai/decisions/20260422-424-canonical-vocabulary-hardening.md` for the final vocabulary decision.
 
 ## Context
 

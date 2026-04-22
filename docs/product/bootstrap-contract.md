@@ -75,6 +75,21 @@ Declare what Narada should operate on and how cautiously it should act.
 
 **Validation gate:** Scope entry exists in config and `scope_id` is unique.
 
+### Step 3a: Bind System-Owned Tools (Optional)
+
+If the operation needs to inspect or diagnose another system, bind to tools owned by that system repo. Do not copy those tools into the ops repo.
+
+Example:
+
+```text
+~/src/sonar.cloud/.narada/tool-catalog.json   # system-owned tool implementations
+~/src/narada.sonar/config/config.json         # operation-owned permission binding
+```
+
+See [`tool-catalog-binding.md`](tool-catalog-binding.md) for the binding contract.
+
+**Validation gate:** tool catalogs resolve, requested tool IDs exist, and every bound tool declares an allowed authority class.
+
 ---
 
 ### Step 4: Validate Prerequisites

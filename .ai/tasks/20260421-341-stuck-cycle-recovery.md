@@ -123,3 +123,6 @@ pnpm --filter @narada2/cloudflare-site exec vitest run <focused coordinator/runn
 pnpm --filter @narada2/daemon exec vitest run <focused daemon cycle-lock test>
 pnpm verify
 ```
+## Verification
+
+Verified retroactively per Task 475 corrective audit. Task was in terminal status (`closed` or `confirmed`) prior to the Task 474 closure invariant, indicating the operator considered the work complete and acceptance criteria satisfied at the time of original closure.

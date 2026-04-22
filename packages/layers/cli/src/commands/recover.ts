@@ -89,6 +89,12 @@ export async function recoverCommand(
     logger,
     scope.policy,
     scope.context_strategy,
+    scope.campaign_request_senders
+      ? {
+          campaign_request_senders: scope.campaign_request_senders,
+          campaign_request_lookback_days: scope.campaign_request_lookback_days,
+        }
+      : undefined,
   );
 }
 
@@ -100,6 +106,7 @@ async function recoverForScope(
   logger: CommandContext['logger'],
   policy?: RuntimePolicy,
   contextStrategy = 'mail',
+  contextStrategyConfig?: unknown,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const dbDir = join(rootDir, '.narada');
   const coordinatorDbPath = join(dbDir, 'coordinator.db');
@@ -146,7 +153,7 @@ async function recoverForScope(
 
     let strategy: ReturnType<typeof resolveContextStrategy>;
     try {
-      strategy = resolveContextStrategy(contextStrategy);
+      strategy = resolveContextStrategy(contextStrategy, contextStrategyConfig);
     } catch (err) {
       return {
         exitCode: ExitCode.INVALID_CONFIG,

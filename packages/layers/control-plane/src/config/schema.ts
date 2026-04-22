@@ -81,6 +81,11 @@ const CharterRuntimeConfigSchema = z.object({
   model: z.string().min(1).optional(),
   base_url: z.string().url().optional(),
   timeout_ms: z.number().int().min(1).optional(),
+  degraded_mode: z.enum(['draft_only', 'normal']).optional(),
+  cli_path: z.string().min(1).optional(),
+  session_id: z.string().min(1).optional(),
+  continue_session: z.boolean().optional(),
+  work_dir: z.string().min(1).optional(),
 });
 
 // Allowed action enum
@@ -104,6 +109,21 @@ const RuntimePolicySchema = z.object({
   allowed_actions: z.array(AllowedActionSchema).min(1, 'At least one allowed action is required'),
   allowed_tools: z.array(z.string().min(1)).optional(),
   require_human_approval: z.boolean().optional(),
+});
+
+const ToolCatalogRefSchema = z.object({
+  type: z.literal('local_path'),
+  path: z.string().min(1),
+});
+
+const MailAdmissionSchema = z.object({
+  allowed_sender_addresses: z.array(z.string().email()).optional(),
+  allowed_sender_domains: z.array(z.string().min(1)).optional(),
+  unknown_sender_behavior: z.enum(['ignore', 'admit']).optional(),
+});
+
+const AdmissionSchema = z.object({
+  mail: MailAdmissionSchema.optional(),
 });
 
 // Webhook configuration schema
@@ -176,6 +196,35 @@ const HealthConfigSchema = z.object({
   max_drain_ms: z.number().int().min(1000).optional(),
 });
 
+const ConfirmableActionSchema = z.enum([
+  "approve_draft_for_send",
+  "reject_draft",
+  "mark_reviewed",
+  "handled_externally",
+  "trigger_sync",
+  "request_redispatch",
+]);
+
+const OperatorContactSchema = z.object({
+  principal_id: z.string().min(1),
+  channel: z.literal("email"),
+  address: z.string().min(1),
+  identity_provider: z.literal("microsoft_entra"),
+  tenant_id: z.string().min(1),
+  entra_user_id: z.string().min(1),
+  may_open_operator_requests: z.boolean(),
+  may_confirm_actions: z.array(ConfirmableActionSchema),
+});
+
+const ConfirmationProvidersSchema = z.object({
+  microsoft_entra: z.object({
+    tenant_id: z.string().min(1),
+    client_id: z.string().min(1),
+    client_secret: z.string().min(1),
+    redirect_base_url: z.string().min(1),
+  }).optional(),
+});
+
 // Scope configuration schema
 const ScopeConfigSchema = z.object({
   scope_id: z.string().min(1, 'Scope ID is required'),
@@ -187,11 +236,15 @@ const ScopeConfigSchema = z.object({
   runtime: RuntimeConfigSchema.default({}),
   charter: CharterRuntimeConfigSchema.default({}),
   policy: RuntimePolicySchema.default({ allowed_actions: ['no_action'] }),
+  admission: AdmissionSchema.optional(),
+  tool_catalogs: z.array(ToolCatalogRefSchema).optional(),
   executors: z.array(ExecutorConfigSchema).optional(),
   graph: GraphConfigSchema.optional(),
   lifecycle: LifecycleConfigSchema.optional().default({}),
   webhook: WebhookConfigSchema.optional(),
   operational_trust: OperationalTrustConfigSchema.optional(),
+  operator_contacts: z.array(OperatorContactSchema).optional(),
+  confirmation_providers: ConfirmationProvidersSchema.optional(),
 });
 
 // Main configuration schema

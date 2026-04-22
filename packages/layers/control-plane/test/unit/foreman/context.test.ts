@@ -1,12 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { MailboxContextStrategy } from "../../../src/foreman/mailbox/context-strategy.js";
-import { TimerContextStrategy } from "../../../src/foreman/context.js";
+import { AdmittedMailContextStrategy, TimerContextStrategy, CampaignRequestContextFormation } from "../../../src/foreman/context.js";
 import type { Fact } from "../../../src/facts/types.js";
 
 function makeMailFact(
   conversationId: string,
   eventKind: string,
   recordId = `rec-${conversationId}`,
+  senderEmail?: string,
 ): Omit<Fact, "created_at"> {
   const payload = {
     record_id: recordId,
@@ -16,6 +17,7 @@ function makeMailFact(
       event_kind: eventKind,
       conversation_id: conversationId,
       thread_id: conversationId,
+      ...(senderEmail ? { from: { email: senderEmail, display_name: "Sender" } } : {}),
     },
   };
   return {
@@ -99,6 +101,54 @@ describe("MailboxContextStrategy", () => {
   });
 });
 
+describe("AdmittedMailContextStrategy", () => {
+  it("admits mail from allowed sender domains", () => {
+    const strategy = new AdmittedMailContextStrategy({
+      allowed_sender_domains: ["company.com"],
+      unknown_sender_behavior: "ignore",
+    });
+
+    const facts = [
+      { ...makeMailFact("conv-allowed", "created", "rec-allowed", "person@company.com"), created_at: new Date().toISOString() },
+      { ...makeMailFact("conv-blocked", "created", "rec-blocked", "person@example.net"), created_at: new Date().toISOString() },
+    ] as Fact[];
+
+    const contexts = strategy.formContexts(facts, "scope-1");
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]!.context_id).toBe("conv-allowed");
+  });
+
+  it("admits exact sender addresses even when domain is not allowed", () => {
+    const strategy = new AdmittedMailContextStrategy({
+      allowed_sender_domains: ["company.com"],
+      allowed_sender_addresses: ["trusted@example.net"],
+      unknown_sender_behavior: "ignore",
+    });
+
+    const facts = [
+      { ...makeMailFact("conv-exact", "created", "rec-exact", "trusted@example.net"), created_at: new Date().toISOString() },
+    ] as Fact[];
+
+    const contexts = strategy.formContexts(facts, "scope-1");
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]!.context_id).toBe("conv-exact");
+  });
+
+  it("ignores unknown senders when configured to ignore", () => {
+    const strategy = new AdmittedMailContextStrategy({
+      allowed_sender_domains: ["company.com"],
+      unknown_sender_behavior: "ignore",
+    });
+
+    const facts = [
+      { ...makeMailFact("conv-unknown", "created", "rec-unknown"), created_at: new Date().toISOString() },
+    ] as Fact[];
+
+    const contexts = strategy.formContexts(facts, "scope-1");
+    expect(contexts).toHaveLength(0);
+  });
+});
+
 describe("TimerContextStrategy", () => {
   const strategy = new TimerContextStrategy();
 
@@ -138,5 +188,205 @@ describe("TimerContextStrategy", () => {
 
     const contexts = strategy.formContexts(facts, "scope-1");
     expect(contexts).toHaveLength(0);
+  });
+});
+
+describe("CampaignRequestContextFormation", () => {
+  function makeCampaignMailFact(
+    conversationId: string,
+    senderEmail: string,
+    subject: string,
+    bodyText: string,
+    receivedAt = new Date().toISOString(),
+  ): Omit<Fact, "created_at"> {
+    const payload = {
+      record_id: `rec-${conversationId}`,
+      ordinal: receivedAt,
+      event: {
+        event_id: `rec-${conversationId}`,
+        event_kind: "created",
+        conversation_id: conversationId,
+        thread_id: conversationId,
+        from: { email: senderEmail, display_name: "Sender" },
+        subject,
+        body: { text: bodyText, preview: bodyText.slice(0, 100) },
+        received_at: receivedAt,
+      },
+    };
+    return {
+      fact_id: `fact_campaign_${conversationId}_${senderEmail}`,
+      fact_type: "mail.message.discovered",
+      provenance: {
+        source_id: "exchange:test",
+        source_record_id: `rec-${conversationId}`,
+        source_version: null,
+        source_cursor: "cursor-1",
+        observed_at: receivedAt,
+      },
+      payload_json: JSON.stringify(payload),
+    };
+  }
+
+  it("opens context for allowed sender with campaign signals", () => {
+    const strategy = new CampaignRequestContextFormation({
+      campaign_request_senders: ["marketing@company.com"],
+    });
+
+    const facts = [
+      {
+        ...makeCampaignMailFact(
+          "conv-campaign-1",
+          "marketing@company.com",
+          "Need a campaign for product launch",
+          "Please create a campaign for product launch by next week.",
+        ),
+        created_at: new Date().toISOString(),
+      },
+    ] as Fact[];
+
+    const contexts = strategy.formContexts(facts, "scope-1");
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]!.context_id).toBe("conv-campaign-1");
+    expect(contexts[0]!.change_kinds).toContain("new_request");
+  });
+
+  it("silently skips non-allowed senders", () => {
+    const strategy = new CampaignRequestContextFormation({
+      campaign_request_senders: ["marketing@company.com"],
+    });
+
+    const facts = [
+      {
+        ...makeCampaignMailFact(
+          "conv-spam",
+          "random@spam.com",
+          "Campaign request",
+          "Please create a campaign for product launch.",
+        ),
+        created_at: new Date().toISOString(),
+      },
+    ] as Fact[];
+
+    const contexts = strategy.formContexts(facts, "scope-1");
+    expect(contexts).toHaveLength(0);
+  });
+
+  it("groups multiple facts by conversation_id", () => {
+    const strategy = new CampaignRequestContextFormation({
+      campaign_request_senders: ["marketing@company.com"],
+    });
+
+    const now = new Date().toISOString();
+    const facts = [
+      {
+        ...makeCampaignMailFact(
+          "conv-thread-1",
+          "marketing@company.com",
+          "Campaign for spring sale",
+          "Need a campaign for spring sale.",
+          now,
+        ),
+        created_at: now,
+      },
+      {
+        ...makeCampaignMailFact(
+          "conv-thread-1",
+          "marketing@company.com",
+          "Re: Campaign for spring sale",
+          "Also target the trial segment.",
+          now,
+        ),
+        created_at: now,
+      },
+    ] as Fact[];
+
+    const contexts = strategy.formContexts(facts, "scope-1", {
+      getLatestRevisionOrdinal: () => 1,
+    });
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]!.facts).toHaveLength(2);
+    expect(contexts[0]!.change_kinds).toContain("follow_up");
+  });
+
+  it("skips mail outside lookback window", () => {
+    const strategy = new CampaignRequestContextFormation({
+      campaign_request_senders: ["marketing@company.com"],
+      campaign_request_lookback_days: 7,
+    });
+
+    const oldDate = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
+    const facts = [
+      {
+        ...makeCampaignMailFact(
+          "conv-old",
+          "marketing@company.com",
+          "Old campaign request",
+          "Please create a campaign.",
+          oldDate,
+        ),
+        created_at: oldDate,
+      },
+    ] as Fact[];
+
+    const contexts = strategy.formContexts(facts, "scope-1");
+    expect(contexts).toHaveLength(0);
+  });
+
+  it("skips mail with low campaign confidence", () => {
+    const strategy = new CampaignRequestContextFormation({
+      campaign_request_senders: ["marketing@company.com"],
+    });
+
+    const facts = [
+      {
+        ...makeCampaignMailFact(
+          "conv-low",
+          "marketing@company.com",
+          "Lunch tomorrow?",
+          "Hey, want to grab lunch?",
+        ),
+        created_at: new Date().toISOString(),
+      },
+    ] as Fact[];
+
+    const contexts = strategy.formContexts(facts, "scope-1");
+    expect(contexts).toHaveLength(0);
+  });
+
+  it("also respects general mail admission domain allowlist", () => {
+    const strategy = new CampaignRequestContextFormation({
+      campaign_request_senders: ["marketing@company.com", "trusted@external.net"],
+      admission: {
+        mail: {
+          allowed_sender_domains: ["company.com"],
+          unknown_sender_behavior: "ignore",
+        },
+      },
+    });
+
+    const facts = [
+      {
+        ...makeCampaignMailFact(
+          "conv-campaign-domain",
+          "marketing@company.com",
+          "Need a campaign for product launch",
+          "Please create a campaign for product launch.",
+        ),
+        created_at: new Date().toISOString(),
+      },
+      {
+        ...makeCampaignMailFact(
+          "conv-campaign-blocked-domain",
+          "trusted@external.net",
+          "Need a campaign for launch",
+          "Please create a campaign for product launch.",
+        ),
+        created_at: new Date().toISOString(),
+      },
+    ] as Fact[];
+
+    const contexts = strategy.formContexts(facts, "scope-1");
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]!.context_id).toBe("conv-campaign-domain");
   });
 });

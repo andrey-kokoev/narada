@@ -88,6 +88,13 @@ vi.mock('@narada2/charters', async (importOriginal) => {
         details: 'Mock runtime.',
       }),
     })),
+    KimiCliCharterRunner: vi.fn().mockImplementation(() => ({
+      probeHealth: vi.fn().mockResolvedValue({
+        class: 'healthy',
+        checked_at: new Date().toISOString(),
+        details: 'Kimi CLI ready.',
+      }),
+    })),
   };
 });
 
@@ -159,6 +166,39 @@ describe('doctor command', () => {
     expect(scope.checks.find((c) => c.name === 'sync-freshness')?.status).toBe('pass');
     expect(scope.checks.find((c) => c.name === 'work-queue')?.status).toBe('pass');
     expect(scope.checks.find((c) => c.name === 'charter-runtime')?.status).toBe('pass');
+  });
+
+  it('accepts kimi-cli as a real charter runtime', async () => {
+    vol.fromJSON({
+      '/test/config.json': JSON.stringify({
+        ...createConfig('test@example.com', '/test/data'),
+        scopes: [
+          {
+            ...createConfig('test@example.com', '/test/data').scopes[0],
+            charter: { runtime: 'kimi-cli', cli_path: 'kimi' },
+          },
+        ],
+      }),
+      '/test/data/daemon.pid': String(process.pid),
+      '/test/data/.health.json': JSON.stringify({
+        status: 'healthy',
+        lastSyncAt: new Date().toISOString(),
+        timestamp: new Date().toISOString(),
+      }),
+    });
+    vol.mkdirSync('/test/data/.narada', { recursive: true });
+    vol.writeFileSync('/test/data/.narada/coordinator.db', '');
+    mockDb.prepare.mockReturnValue({
+      get: vi.fn(() => ({ retryable: 0, terminal: 0 })),
+    });
+
+    const result = await doctorCommand({ format: 'json' }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const report = result.result as { scopes: Array<{ checks: Array<{ name: string; status: string; detail: string }> }> };
+    const runtime = report.scopes[0].checks.find((c) => c.name === 'charter-runtime');
+    expect(runtime?.status).toBe('pass');
+    expect(runtime?.detail).toContain('Kimi CLI ready');
   });
 
   it('warns when terminal work item history exists', async () => {

@@ -129,6 +129,25 @@ export const INTENT_FAMILIES: Record<IntentType, IntentFamily> = {
     idempotency_scope: "context_action",
     confirmation_model: "none",
   },
+  "campaign.brief": {
+    intent_type: "campaign.brief",
+    executor_family: "campaign",
+    payload_schema: obj(
+      {
+        name: { type: "string" },
+        audience: { type: "string" },
+        content_summary: { type: "string" },
+        timing: { type: "string" },
+        approval_needed: { type: "boolean" },
+        from_email: { type: "string" },
+        subject_line: { type: "string" },
+        notes: { type: "string" },
+      },
+      ["name", "audience", "content_summary", "timing", "approval_needed"],
+    ),
+    idempotency_scope: "context_action",
+    confirmation_model: "explicit",
+  },
 };
 
 export function getIntentFamily(intentType: string): IntentFamily | undefined {

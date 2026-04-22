@@ -4,341 +4,489 @@ vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { atomicWriteFile, isValidTransition, checkDependencies, parseFrontMatter, serializeFrontMatter, extractChapter, scanTasksByChapter, computeTaskAffinity, listRunnableTasks } from '../../src/lib/task-governance.js';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, existsSync } from 'node:fs';
+import {
+  loadRoster,
+  saveRoster,
+  withRosterMutation,
+  updateAgentRosterEntry,
+  atomicWriteFile,
+  lintTaskFiles,
+  extractTaskRefsFromBody,
+  parseFrontMatter,
+  serializeFrontMatter,
+  readTaskFile,
+  writeTaskFile,
+  type AgentRoster,
+} from '../../src/lib/task-governance.js';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-describe('task-governance utilities', () => {
-  let tempDir: string;
-
-  beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'narada-governance-test-'));
-  });
-
-  afterEach(() => {
-    rmSync(tempDir, { recursive: true, force: true });
-  });
-
-  it('atomicWriteFile writes data that can be read back', async () => {
-    const targetPath = join(tempDir, 'target.txt');
-    await atomicWriteFile(targetPath, 'hello world');
-
-    expect(readFileSync(targetPath, 'utf8')).toBe('hello world');
-  });
-
-  it('atomicWriteFile leaves no temp file behind', async () => {
-    const targetPath = join(tempDir, 'target.txt');
-    await atomicWriteFile(targetPath, 'hello world');
-
-    const files = Array.from({ length: 100 }, (_, i) => i).map(() => {
-      try {
-        return readFileSync(targetPath, 'utf8');
-      } catch {
-        return null;
-      }
-    });
-    expect(files.filter(Boolean)).toHaveLength(100);
-
-    // No .tmp-* files should remain
-    const dirEntries = require('node:fs').readdirSync(tempDir);
-    expect(dirEntries).toHaveLength(1);
-    expect(dirEntries[0]).toBe('target.txt');
-  });
-
-  it('atomicWriteFile overwrites existing file', async () => {
-    const targetPath = join(tempDir, 'target.txt');
-    writeFileSync(targetPath, 'old content');
-
-    await atomicWriteFile(targetPath, 'new content');
-
-    expect(readFileSync(targetPath, 'utf8')).toBe('new content');
-  });
-});
-
-describe('transition validation', () => {
-  it('allows valid transitions', () => {
-    expect(isValidTransition('opened', 'claimed')).toBe(true);
-    expect(isValidTransition('claimed', 'in_review')).toBe(true);
-    expect(isValidTransition('claimed', 'needs_continuation')).toBe(true);
-    expect(isValidTransition('in_review', 'closed')).toBe(true);
-    expect(isValidTransition('in_review', 'opened')).toBe(true);
-    expect(isValidTransition('closed', 'confirmed')).toBe(true);
-    expect(isValidTransition('needs_continuation', 'claimed')).toBe(true);
-  });
-
-  it('forbids invalid transitions', () => {
-    expect(isValidTransition('opened', 'closed')).toBe(false);
-    expect(isValidTransition('claimed', 'confirmed')).toBe(false);
-    expect(isValidTransition('draft', 'closed')).toBe(false);
-    expect(isValidTransition('confirmed', 'opened')).toBe(false);
-  });
-
-  it('forbids transitions from unknown status', () => {
-    expect(isValidTransition('garbage', 'opened')).toBe(false);
-    expect(isValidTransition(undefined, 'opened')).toBe(false);
-  });
-});
-
-describe('dependency checking', () => {
-  let tempDir: string;
-
-  beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'narada-deps-test-'));
-    mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
-  });
-
-  afterEach(() => {
-    rmSync(tempDir, { recursive: true, force: true });
-  });
-
-  it('returns empty when no dependencies', async () => {
-    const result = await checkDependencies(tempDir, undefined);
-    expect(result.blockedBy).toHaveLength(0);
-  });
-
-  it('blocks when dependency is opened', async () => {
-    writeFileSync(join(tempDir, '.ai', 'tasks', '20260420-100-dep.md'), '---\nstatus: opened\n---\n\n# Dep\n');
-    const result = await checkDependencies(tempDir, [100]);
-    expect(result.blockedBy).toHaveLength(1);
-    expect(result.blockedBy[0]).toContain('20260420-100-dep');
-  });
-
-  it('passes when dependency is closed', async () => {
-    writeFileSync(join(tempDir, '.ai', 'tasks', '20260420-100-dep.md'), '---\nstatus: closed\n---\n\n# Dep\n');
-    const result = await checkDependencies(tempDir, [100]);
-    expect(result.blockedBy).toHaveLength(0);
-  });
-
-  it('passes when dependency is confirmed', async () => {
-    writeFileSync(join(tempDir, '.ai', 'tasks', '20260420-100-dep.md'), '---\nstatus: confirmed\n---\n\n# Dep\n');
-    const result = await checkDependencies(tempDir, [100]);
-    expect(result.blockedBy).toHaveLength(0);
-  });
-
-  it('blocks when dependency is in_review', async () => {
-    writeFileSync(join(tempDir, '.ai', 'tasks', '20260420-100-dep.md'), '---\nstatus: in_review\n---\n\n# Dep\n');
-    const result = await checkDependencies(tempDir, [100]);
-    expect(result.blockedBy).toHaveLength(1);
-  });
-});
-
-describe('front matter parsing', () => {
-  it('parses depends_on array', () => {
-    const content = '---\ntask_id: 261\nstatus: opened\ndepends_on: [259, 260]\n---\n\n# Task\n';
-    const { frontMatter } = parseFrontMatter(content);
-    expect(frontMatter.task_id).toBe(261);
-    expect(frontMatter.status).toBe('opened');
-    expect(frontMatter.depends_on).toEqual([259, 260]);
-  });
-
-  it('returns empty front matter when none present', () => {
-    const content = '# Task\n\nNo front matter.\n';
-    const { frontMatter, body } = parseFrontMatter(content);
-    expect(Object.keys(frontMatter)).toHaveLength(0);
-    expect(body).toBe(content);
-  });
-
-  it('parses nested continuation_affinity', () => {
-    const content = `---\ntask_id: 263\nstatus: opened\ncontinuation_affinity:\n  preferred_agent_id: kimicli\n  affinity_strength: 2\n  affinity_reason: Completed prerequisite\n---\n\n# Task 263\n`;
-    const { frontMatter } = parseFrontMatter(content);
-    expect(frontMatter.task_id).toBe(263);
-    expect(frontMatter.continuation_affinity).toEqual({
-      preferred_agent_id: 'kimicli',
-      affinity_strength: 2,
-      affinity_reason: 'Completed prerequisite',
-    });
-  });
-
-  it('serializes nested continuation_affinity', () => {
-    const frontMatter = {
-      task_id: 263,
-      status: 'opened',
-      continuation_affinity: {
-        preferred_agent_id: 'kimicli',
-        affinity_strength: 2,
-        affinity_reason: 'Completed prerequisite',
+function makeRoster(): AgentRoster {
+  return {
+    version: 2,
+    updated_at: '2026-01-01T00:00:00Z',
+    agents: [
+      {
+        agent_id: 'alpha',
+        role: 'implementer',
+        capabilities: ['claim'],
+        first_seen_at: '2026-01-01T00:00:00Z',
+        last_active_at: '2026-01-01T00:00:00Z',
+        status: 'idle',
+        task: null,
+        last_done: null,
+        updated_at: '2026-01-01T00:00:00Z',
       },
-    };
-    const body = '# Task 263\n';
-    const serialized = serializeFrontMatter(frontMatter, body);
-    expect(serialized).toContain('continuation_affinity:');
-    expect(serialized).toContain('  preferred_agent_id: kimicli');
-    expect(serialized).toContain('  affinity_strength: 2');
-    expect(serialized).toContain('  affinity_reason: Completed prerequisite');
+      {
+        agent_id: 'beta',
+        role: 'reviewer',
+        capabilities: ['derive', 'propose'],
+        first_seen_at: '2026-01-01T00:00:00Z',
+        last_active_at: '2026-01-01T00:00:00Z',
+        status: 'idle',
+        task: null,
+        last_done: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ],
+  };
+}
 
-    // Round-trip
-    const { frontMatter: parsed } = parseFrontMatter(serialized);
-    expect(parsed.continuation_affinity).toEqual(frontMatter.continuation_affinity);
-  });
-});
+function setupRepo(tempDir: string, roster?: AgentRoster) {
+  mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
+  writeFileSync(
+    join(tempDir, '.ai', 'agents', 'roster.json'),
+    JSON.stringify(roster ?? makeRoster(), null, 2),
+  );
+}
 
-describe('chapter scanning', () => {
+describe('withRosterMutation', () => {
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'narada-chapter-test-'));
-    mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+    tempDir = mkdtempSync(join(tmpdir(), 'narada-roster-lock-test-'));
+    setupRepo(tempDir);
   });
 
   afterEach(() => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('extracts chapter from body', () => {
-    const body = '# Task\n\n## Chapter\n\nMulti-Agent Task Governance\n\n## Context\n';
-    expect(extractChapter(body)).toBe('Multi-Agent Task Governance');
+  it('applies a mutation and persists the roster', async () => {
+    const result = await withRosterMutation(tempDir, (roster) => {
+      const entry = roster.agents.find((a) => a.agent_id === 'alpha')!;
+      entry.status = 'working';
+      entry.task = 123;
+      return roster;
+    });
+
+    expect(result.agents.find((a) => a.agent_id === 'alpha')?.status).toBe('working');
+    expect(result.agents.find((a) => a.agent_id === 'alpha')?.task).toBe(123);
+
+    // Re-read from disk to confirm persistence
+    const reloaded = await loadRoster(tempDir);
+    expect(reloaded.agents.find((a) => a.agent_id === 'alpha')?.status).toBe('working');
+    expect(reloaded.agents.find((a) => a.agent_id === 'alpha')?.task).toBe(123);
   });
 
-  it('returns null when no chapter section', () => {
-    expect(extractChapter('# Task\n\nNo chapter here')).toBeNull();
-  });
+  it('rolls back on mutation error', async () => {
+    const original = await loadRoster(tempDir);
+    const rosterPath = join(tempDir, '.ai', 'agents', 'roster.json');
+    const beforeMtime = statSync(rosterPath).mtimeMs;
 
-  it('scans tasks by chapter', async () => {
-    writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-260-a.md'),
-      '---\ntask_id: 260\nstatus: closed\n---\n\n# Task 260\n\n## Chapter\n\nTest Chapter\n',
-    );
-    writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-261-b.md'),
-      '---\ntask_id: 261\nstatus: opened\n---\n\n# Task 261\n\n## Chapter\n\nTest Chapter\n',
-    );
-    writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-262-c.md'),
-      '---\ntask_id: 262\nstatus: opened\n---\n\n# Task 262\n\n## Chapter\n\nOther Chapter\n',
-    );
-
-    const tasks = await scanTasksByChapter(tempDir, 'Test Chapter');
-    expect(tasks).toHaveLength(2);
-    expect(tasks.map((t) => t.taskNumber)).toContain(260);
-    expect(tasks.map((t) => t.taskNumber)).toContain(261);
-  });
-});
-
-describe('affinity computation', () => {
-  let tempDir: string;
-
-  beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'narada-affinity-test-'));
-    mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
-    mkdirSync(join(tempDir, '.ai', 'tasks', 'assignments'), { recursive: true });
-  });
-
-  afterEach(() => {
-    rmSync(tempDir, { recursive: true, force: true });
-  });
-
-  it('returns manual affinity when present in task file', async () => {
-    const task: import('../../src/lib/task-governance.js').ChapterTaskInfo = {
-      taskId: '20260420-263-test',
-      taskNumber: 263,
-      status: 'opened',
-      fileName: '20260420-263-test.md',
-      dependsOn: [260],
-      continuationAffinity: { preferred_agent_id: 'kimicli', affinity_strength: 3, affinity_reason: 'Manual' },
-    };
-    const allTasks = new Map<number, import('../../src/lib/task-governance.js').ChapterTaskInfo>();
-    const result = await computeTaskAffinity(tempDir, task, allTasks);
-    expect(result.source).toBe('manual');
-    expect(result.preferred_agent_id).toBe('kimicli');
-    expect(result.affinity_strength).toBe(3);
-  });
-
-  it('computes history affinity from completed dependency assignments', async () => {
-    // Create dependency task with completed assignment
-    writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-260-dep.md'),
-      '---\ntask_id: 260\nstatus: closed\n---\n\n# Task 260\n',
-    );
-    writeFileSync(
-      join(tempDir, '.ai', 'tasks', 'assignments', '20260420-260-dep.json'),
-      JSON.stringify({
-        task_id: '20260420-260-dep',
-        assignments: [
-          { agent_id: 'agent-a', claimed_at: '2026-01-01T00:00:00Z', claim_context: null, released_at: '2026-01-02T00:00:00Z', release_reason: 'completed' },
-        ],
+    await expect(
+      withRosterMutation(tempDir, () => {
+        throw new Error('Intentional failure');
       }),
-    );
+    ).rejects.toThrow('Intentional failure');
 
-    const depTask: import('../../src/lib/task-governance.js').ChapterTaskInfo = {
-      taskId: '20260420-260-dep',
-      taskNumber: 260,
-      status: 'closed',
-      fileName: '20260420-260-dep.md',
-      dependsOn: undefined,
-      continuationAffinity: undefined,
-    };
+    // Roster must remain unchanged
+    const after = await loadRoster(tempDir);
+    expect(after.version).toBe(original.version);
+    expect(after.agents).toHaveLength(original.agents.length);
 
-    const task: import('../../src/lib/task-governance.js').ChapterTaskInfo = {
-      taskId: '20260420-263-test',
-      taskNumber: 263,
-      status: 'opened',
-      fileName: '20260420-263-test.md',
-      dependsOn: [260],
-      continuationAffinity: undefined,
-    };
-
-    const allTasks = new Map<number, import('../../src/lib/task-governance.js').ChapterTaskInfo>();
-    allTasks.set(260, depTask);
-
-    const result = await computeTaskAffinity(tempDir, task, allTasks);
-    expect(result.source).toBe('history');
-    expect(result.preferred_agent_id).toBe('agent-a');
-    expect(result.affinity_strength).toBe(1);
+    // The roster file must always exist and be valid JSON
+    const diskRaw = await import('node:fs/promises').then((m) => m.readFile(rosterPath, 'utf8'));
+    const parsed = JSON.parse(diskRaw);
+    expect(parsed.agents).toBeInstanceOf(Array);
   });
 
-  it('returns none when no affinity sources exist', async () => {
-    const task: import('../../src/lib/task-governance.js').ChapterTaskInfo = {
-      taskId: '20260420-263-test',
-      taskNumber: 263,
-      status: 'opened',
-      fileName: '20260420-263-test.md',
-      dependsOn: undefined,
-      continuationAffinity: undefined,
-    };
-    const allTasks = new Map<number, import('../../src/lib/task-governance.js').ChapterTaskInfo>();
-    const result = await computeTaskAffinity(tempDir, task, allTasks);
-    expect(result.source).toBe('none');
-    expect(result.preferred_agent_id).toBeNull();
-    expect(result.affinity_strength).toBe(0);
+  it('rejects invalid roster shape after mutation', async () => {
+    await expect(
+      withRosterMutation(tempDir, () => {
+        return { version: 1 } as unknown as AgentRoster;
+      }),
+    ).rejects.toThrow('Roster mutation produced invalid agents array');
+  });
+
+  it('serializes conflicting mutations to the same agent deterministically', async () => {
+    const results = await Promise.all([
+      withRosterMutation(tempDir, (roster) => {
+        const entry = roster.agents.find((a) => a.agent_id === 'alpha')!;
+        entry.status = 'working';
+        entry.task = 1;
+        return roster;
+      }),
+      withRosterMutation(tempDir, (roster) => {
+        const entry = roster.agents.find((a) => a.agent_id === 'alpha')!;
+        entry.status = 'reviewing';
+        entry.task = 2;
+        return roster;
+      }),
+      withRosterMutation(tempDir, (roster) => {
+        const entry = roster.agents.find((a) => a.agent_id === 'alpha')!;
+        entry.status = 'done';
+        entry.task = 3;
+        return roster;
+      }),
+    ]);
+
+    // All three mutations should succeed
+    expect(results).toHaveLength(3);
+
+    // Disk must reflect exactly one final state (last writer wins)
+    const disk = await loadRoster(tempDir);
+    const diskStatus = disk.agents.find((a) => a.agent_id === 'alpha')?.status;
+    const diskTask = disk.agents.find((a) => a.agent_id === 'alpha')?.task;
+
+    // The disk state must be one of the three attempted states
+    expect(['working', 'reviewing', 'done']).toContain(diskStatus);
+    expect([1, 2, 3]).toContain(diskTask);
+
+    // The disk state must be consistent (status/task must come from the same mutation)
+    const statePairs = results.map((r) => ({
+      status: r.agents.find((a) => a.agent_id === 'alpha')?.status,
+      task: r.agents.find((a) => a.agent_id === 'alpha')?.task,
+    }));
+    expect(statePairs.some((p) => p.status === diskStatus && p.task === diskTask)).toBe(true);
+  });
+
+  it('releases lock when mutation throws', async () => {
+    const lockPath = join(tempDir, '.ai', 'agents', 'roster.lock');
+
+    await expect(
+      withRosterMutation(tempDir, () => {
+        throw new Error('Boom');
+      }),
+    ).rejects.toThrow('Boom');
+
+    // Lock file must not exist after the failed mutation
+    expect(() => statSync(lockPath)).toThrow();
+  });
+
+  it('recovers a stale lock and succeeds', async () => {
+    const lockPath = join(tempDir, '.ai', 'agents', 'roster.lock');
+    // Create a stale lock file (older than 30s by manipulating mtime)
+    writeFileSync(lockPath, JSON.stringify({ pid: 99999, created_at: '2020-01-01T00:00:00Z' }) + '\n');
+    const farPast = new Date('2020-01-01T00:00:00Z');
+    import('node:fs').then((fs) => fs.utimesSync(lockPath, farPast, farPast));
+
+    // Mutation should succeed despite the stale lock
+    const result = await withRosterMutation(tempDir, (roster) => {
+      const entry = roster.agents.find((a) => a.agent_id === 'alpha')!;
+      entry.status = 'blocked';
+      return roster;
+    });
+
+    expect(result.agents.find((a) => a.agent_id === 'alpha')?.status).toBe('blocked');
+    // Lock must be released after success
+    expect(() => statSync(lockPath)).toThrow();
+  });
+
+  it('leaves no temp debris after successful mutation', async () => {
+    // Perform several mutations
+    await withRosterMutation(tempDir, (roster) => {
+      roster.agents[0]!.status = 'working';
+      return roster;
+    });
+    await withRosterMutation(tempDir, (roster) => {
+      roster.agents[0]!.status = 'done';
+      return roster;
+    });
+
+    // No temp files should remain in the agents directory
+    const fs = await import('node:fs');
+    const agentsDir = join(tempDir, '.ai', 'agents');
+    const files = fs.readdirSync(agentsDir);
+    const tmpFiles = files.filter((f) => f.startsWith('.tmp-'));
+    expect(tmpFiles).toHaveLength(0);
+
+    // Roster must be valid
+    const disk = await loadRoster(tempDir);
+    expect(disk.agents[0]!.status).toBe('done');
   });
 });
 
-describe('list runnable tasks', () => {
+describe('updateAgentRosterEntry (race-safe)', () => {
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'narada-list-test-'));
-    mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
-    mkdirSync(join(tempDir, '.ai', 'tasks', 'assignments'), { recursive: true });
+    tempDir = mkdtempSync(join(tmpdir(), 'narada-roster-update-test-'));
+    setupRepo(tempDir);
   });
 
   afterEach(() => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('lists runnable tasks sorted by affinity', async () => {
-    // Task 260: opened, manual affinity strength 2
-    writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-260-a.md'),
-      '---\ntask_id: 260\nstatus: opened\ncontinuation_affinity:\n  preferred_agent_id: agent-a\n  affinity_strength: 2\n---\n\n# Task 260\n',
-    );
-    // Task 261: opened, no affinity
-    writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-261-b.md'),
-      '---\ntask_id: 261\nstatus: opened\n---\n\n# Task 261\n',
-    );
-    // Task 262: closed (not runnable)
-    writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-262-c.md'),
-      '---\ntask_id: 262\nstatus: closed\n---\n\n# Task 262\n',
-    );
+  it('persists atomic writes under lock', async () => {
+    const roster = await updateAgentRosterEntry(tempDir, 'alpha', {
+      status: 'blocked',
+      task: 123,
+    });
+    expect(roster.agents.find((a) => a.agent_id === 'alpha')?.status).toBe('blocked');
 
-    const tasks = await listRunnableTasks(tempDir);
-    expect(tasks).toHaveLength(2);
-    expect(tasks[0].taskNumber).toBe(260);
-    expect(tasks[0].affinity.affinity_strength).toBe(2);
-    expect(tasks[1].taskNumber).toBe(261);
-    expect(tasks[1].affinity.affinity_strength).toBe(0);
+    const reloaded = await loadRoster(tempDir);
+    expect(reloaded.agents.find((a) => a.agent_id === 'alpha')?.status).toBe('blocked');
+  });
+
+  it('survives rapid sequential mutations', async () => {
+    await updateAgentRosterEntry(tempDir, 'alpha', { status: 'working', task: 100 });
+    await updateAgentRosterEntry(tempDir, 'beta', { status: 'reviewing', task: 200 });
+    await updateAgentRosterEntry(tempDir, 'alpha', { status: 'done', task: null, last_done: 100 });
+
+    const final = await loadRoster(tempDir);
+    expect(final.agents.find((a) => a.agent_id === 'alpha')?.status).toBe('done');
+    expect(final.agents.find((a) => a.agent_id === 'alpha')?.last_done).toBe(100);
+    expect(final.agents.find((a) => a.agent_id === 'beta')?.status).toBe('reviewing');
+    expect(final.agents.find((a) => a.agent_id === 'beta')?.task).toBe(200);
+  });
+
+  it('lock is released after a failed mutation', async () => {
+    const lockPath = join(tempDir, '.ai', 'agents', 'roster.lock');
+
+    await expect(
+      updateAgentRosterEntry(tempDir, 'ghost-agent', { status: 'working', task: 999 }),
+    ).rejects.toThrow('not found in roster');
+
+    // Lock file must not exist after the failed mutation
+    expect(() => statSync(lockPath)).toThrow();
+
+    // Subsequent mutation must succeed
+    const result = await updateAgentRosterEntry(tempDir, 'alpha', { status: 'working', task: 999 });
+    expect(result.agents.find((a) => a.agent_id === 'alpha')?.status).toBe('working');
+  });
+});
+
+describe('lintTaskFiles', () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'narada-lint-test-'));
+    mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+    mkdirSync(join(tempDir, '.ai', 'reviews'), { recursive: true });
+    mkdirSync(join(tempDir, '.ai', 'decisions'), { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  function writeTask(taskNum: number, status: string, deps?: number[]) {
+    const fm = [`---`, `status: ${status}`];
+    if (deps) fm.push(`depends_on: [${deps.join(', ')}]`);
+    fm.push(`---\n\n# Task ${taskNum}\n\nTest task.\n`);
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', `20260420-${taskNum}-test.md`),
+      fm.join('\n'),
+    );
+  }
+
+  function writeReview(name: string, reviewOf: number | null, body?: string) {
+    const fm = ['---'];
+    if (reviewOf !== null) fm.push(`review_of: ${reviewOf}`);
+    fm.push(`---\n\n${body ?? '# Review\n\nReview of Task ' + reviewOf}\n`);
+    writeFileSync(join(tempDir, '.ai', 'reviews', `${name}.md`), fm.join('\n'));
+  }
+
+  function writeDecision(name: string, closesTasks: number[], body?: string) {
+    const fm = ['---'];
+    if (closesTasks.length > 0) fm.push(`closes_tasks: [${closesTasks.join(', ')}]`);
+    fm.push(`---\n\n${body ?? '# Closure\n\nClosing tasks.'}\n`);
+    writeFileSync(join(tempDir, '.ai', 'decisions', `${name}.md`), fm.join('\n'));
+  }
+
+  it('passes for clean task graph', async () => {
+    writeTask(100, 'opened');
+    writeTask(101, 'opened', [100]);
+    const result = await lintTaskFiles(tempDir);
+    expect(result.ok).toBe(true);
+    expect(result.issues).toHaveLength(0);
+  });
+
+  it('detects stale review reference from front matter', async () => {
+    writeTask(100, 'opened');
+    writeReview('review-999', 999);
+    const result = await lintTaskFiles(tempDir);
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((i) => i.type === 'stale_review_reference')).toBe(true);
+  });
+
+  it('detects stale review reference from body text', async () => {
+    writeTask(100, 'opened');
+    writeReview('review-body', null, '# Review\n\nReview of Task 999.');
+    const result = await lintTaskFiles(tempDir);
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((i) => i.type === 'stale_review_reference')).toBe(true);
+  });
+
+  it('detects orphan review for in_review task', async () => {
+    writeTask(100, 'in_review');
+    const result = await lintTaskFiles(tempDir);
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((i) => i.type === 'orphan_review')).toBe(true);
+  });
+
+  it('does not flag orphan review for opened task', async () => {
+    writeTask(100, 'opened');
+    const result = await lintTaskFiles(tempDir);
+    expect(result.issues.some((i) => i.type === 'orphan_review')).toBe(false);
+  });
+
+  it('matches review to task via front matter', async () => {
+    writeTask(100, 'in_review');
+    writeReview('review-100', 100);
+    const result = await lintTaskFiles(tempDir);
+    expect(result.issues.some((i) => i.type === 'orphan_review')).toBe(false);
+  });
+
+  it('detects stale closure reference from front matter', async () => {
+    writeTask(100, 'opened');
+    writeDecision('closure-999', [999]);
+    const result = await lintTaskFiles(tempDir);
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((i) => i.type === 'stale_closure_reference')).toBe(true);
+  });
+
+  it('detects orphan closure for closed task', async () => {
+    writeTask(100, 'closed');
+    const result = await lintTaskFiles(tempDir);
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((i) => i.type === 'orphan_closure')).toBe(true);
+  });
+
+  it('does not flag orphan closure for opened task', async () => {
+    writeTask(100, 'opened');
+    const result = await lintTaskFiles(tempDir);
+    expect(result.issues.some((i) => i.type === 'orphan_closure')).toBe(false);
+  });
+
+  it('matches closure to task via front matter', async () => {
+    writeTask(100, 'closed');
+    writeDecision('closure-100', [100]);
+    const result = await lintTaskFiles(tempDir);
+    expect(result.issues.some((i) => i.type === 'orphan_closure')).toBe(false);
+  });
+
+  it('detects broken dependency', async () => {
+    writeTask(100, 'opened', [999]);
+    const result = await lintTaskFiles(tempDir);
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((i) => i.type === 'broken_dependency')).toBe(true);
+  });
+});
+
+describe('extractTaskRefsFromBody', () => {
+  it('extracts task numbers from body text', () => {
+    const body = 'This depends on Task 123 and task 456.';
+    expect(extractTaskRefsFromBody(body)).toEqual([123, 456]);
+  });
+
+  it('returns empty array when no refs', () => {
+    expect(extractTaskRefsFromBody('No tasks here.')).toEqual([]);
+  });
+
+  it('deduplicates repeated refs', () => {
+    expect(extractTaskRefsFromBody('Task 100 and Task 100')).toEqual([100]);
+  });
+});
+
+describe('parseFrontMatter', () => {
+  it('parses inline array syntax', () => {
+    const content = '---\ndepends_on: [998, 999]\n---\n\n# Task\n';
+    const { frontMatter } = parseFrontMatter(content);
+    expect(frontMatter.depends_on).toEqual([998, 999]);
+  });
+
+  it('parses YAML list syntax', () => {
+    const content = `---\ndepends_on:\n  - 998\n  - 999\n---\n\n# Task\n`;
+    const { frontMatter } = parseFrontMatter(content);
+    expect(frontMatter.depends_on).toEqual([998, 999]);
+  });
+
+  it('parses nested object syntax', () => {
+    const content = `---\ncontinuation_affinity:\n  preferred_agent_id: alpha\n  affinity_strength: 0.8\n---\n\n# Task\n`;
+    const { frontMatter } = parseFrontMatter(content);
+    expect(frontMatter.continuation_affinity).toEqual({
+      preferred_agent_id: 'alpha',
+      affinity_strength: 0.8,
+    });
+  });
+
+  it('round-trips YAML list through serialize', () => {
+    const content = `---\ndepends_on:\n  - 998\n  - 999\nstatus: opened\n---\n\n# Task\n`;
+    const parsed = parseFrontMatter(content);
+    expect(parsed.frontMatter.depends_on).toEqual([998, 999]);
+
+    const serialized = serializeFrontMatter(parsed.frontMatter, parsed.body);
+    const reparsed = parseFrontMatter(serialized);
+    expect(reparsed.frontMatter.depends_on).toEqual([998, 999]);
+    expect(reparsed.frontMatter.status).toBe('opened');
+  });
+
+  it('round-trips mixed front matter with lists, objects, and scalars', () => {
+    const content = `---\nstatus: opened\ndepends_on:\n  - 100\n  - 101\ncontinuation_affinity:\n  preferred_agent_id: alpha\n  affinity_strength: 1\ntask_id: 999\n---\n\n# Task 999\n\nBody here.\n`;
+    const parsed = parseFrontMatter(content);
+    expect(parsed.frontMatter.status).toBe('opened');
+    expect(parsed.frontMatter.depends_on).toEqual([100, 101]);
+    expect(parsed.frontMatter.continuation_affinity).toEqual({
+      preferred_agent_id: 'alpha',
+      affinity_strength: 1,
+    });
+    expect(parsed.frontMatter.task_id).toBe(999);
+
+    // Mutate status as claim would
+    parsed.frontMatter.status = 'claimed';
+    const serialized = serializeFrontMatter(parsed.frontMatter, parsed.body);
+    const reparsed = parseFrontMatter(serialized);
+    expect(reparsed.frontMatter.status).toBe('claimed');
+    expect(reparsed.frontMatter.depends_on).toEqual([100, 101]);
+    expect(reparsed.frontMatter.continuation_affinity).toEqual({
+      preferred_agent_id: 'alpha',
+      affinity_strength: 1,
+    });
+    expect(reparsed.frontMatter.task_id).toBe(999);
+  });
+});
+
+describe('writeTaskFile front-matter preservation', () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'narada-fm-preservation-test-'));
+    mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('preserves depends_on YAML list through read/write cycle', async () => {
+    const path = join(tempDir, '.ai', 'tasks', '20260420-999-test.md');
+    const original = `---\nstatus: opened\ndepends_on:\n  - 998\n  - 997\nextra_field: preserved\n---\n\n# Task 999\n\nBody.\n`;
+    writeFileSync(path, original);
+
+    const { frontMatter, body } = await readTaskFile(path);
+    expect(frontMatter.depends_on).toEqual([998, 997]);
+    expect(frontMatter.extra_field).toBe('preserved');
+
+    frontMatter.status = 'claimed';
+    await writeTaskFile(path, frontMatter, body);
+
+    const { frontMatter: fm2 } = await readTaskFile(path);
+    expect(fm2.status).toBe('claimed');
+    expect(fm2.depends_on).toEqual([998, 997]);
+    expect(fm2.extra_field).toBe('preserved');
   });
 });

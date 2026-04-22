@@ -142,6 +142,8 @@ export type {
   ToolCallRecord,
   ToolCallStatus,
   OperatorActionRequest,
+  ConfirmationChallenge,
+  ConfirmationChallengeStatus,
   CoordinatorStoreView,
   CoordinatorStoreOperatorView,
   ContinuationAffinity,
@@ -160,8 +162,10 @@ export {
   TimerContextStrategy,
   WebhookContextStrategy,
   FilesystemContextStrategy,
+  CampaignRequestContextFormation,
   resolveContextStrategy,
 } from "./foreman/context.js";
+export type { CampaignRequestConfig } from "./foreman/context.js";
 export type {
   ForemanFacade,
   SyncCompletionSignal,
@@ -671,6 +675,10 @@ export type {
   StuckWorkThresholds,
   StuckOutboundThresholds,
   OperationalTrustConfig,
+  OperatorContact,
+  ConfirmableOperatorAction,
+  ConfirmationProvider,
+  ConfirmationProvidersConfig,
 } from "./config/types.js";
 export type {
   GraphAdapterConfig,
@@ -698,6 +706,36 @@ export type {
 export type {
   NormalizeBatchInput,
 } from "./normalize/batch.js";
+
+// Principal runtime exports
+export {
+  PrincipalRuntimeRegistry,
+  InMemoryPrincipalRuntimeRegistry,
+  JsonPrincipalRuntimeRegistry,
+  isValidPrincipalRuntimeTransition,
+  validNextStates,
+  canClaimWork,
+  canExecute,
+  isAttached,
+  hasActiveWork,
+  isTerminalState,
+  transitionState,
+  attachPrincipal,
+  detachPrincipal,
+  markStale,
+  getPrincipalHealth,
+  toSnapshot,
+  createPrincipalRuntime,
+} from "./principal-runtime/index.js";
+export type {
+  PrincipalRuntime,
+  PrincipalRuntimeState,
+  PrincipalAttachmentMode,
+  PrincipalType,
+  CreatePrincipalRuntimeInput,
+  PrincipalRuntimeHealth,
+  PrincipalRuntimeSnapshot,
+} from "./principal-runtime/index.js";
 
 // Re-export all types from types directory
 export * from "./types/index.js";
@@ -746,3 +784,43 @@ export type {
   OperatorActionResult,
   OperatorActionContext,
 } from "./operator-actions/executor.js";
+
+// Email-originated operator request admission
+export {
+  admitEmailOperatorRequest,
+} from "./operator-actions/email-operator-request.js";
+export type {
+  EmailOperatorRequestInput,
+  AdmitEmailOperatorRequestResult,
+} from "./operator-actions/email-operator-request.js";
+
+// Confirmation challenge logic
+export {
+  createConfirmationChallenge,
+  generateChallengeTokens,
+  buildConfirmationUrl,
+  verifyChallengeState,
+  resolveContactByEmail,
+  resolveContactByPrincipalId,
+  getMicrosoftAuthUrl,
+} from "./operator-actions/confirmation.js";
+export type {
+  CreateChallengeOptions,
+  CreateChallengeResult,
+  VerifyChallengeResult,
+} from "./operator-actions/confirmation.js";
+
+// Microsoft auth verification
+export {
+  verifyMicrosoftAuth,
+  base64UrlJwtDecoder,
+  createMicrosoftTokenExchangeClient,
+} from "./operator-actions/microsoft-auth.js";
+export type {
+  MicrosoftTokenClaims,
+  TokenExchangeResult,
+  TokenExchangeClient,
+  TokenDecoder,
+  VerifyMicrosoftAuthOptions,
+  VerifyMicrosoftAuthResult,
+} from "./operator-actions/microsoft-auth.js";

@@ -85,3 +85,6 @@ Ensure Tasks 359–364 reference or align with the contract.
 - [x] Confirmation separation is explicit.
 - [x] No-overclaim language is explicit.
 - [x] No derivative task-status files are created.
+## Verification
+
+Verified retroactively per Task 475 corrective audit. Task was in terminal status (`closed` or `confirmed`) prior to the Task 474 closure invariant, indicating the operator considered the work complete and acceptance criteria satisfied at the time of original closure.

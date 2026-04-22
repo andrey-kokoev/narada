@@ -80,3 +80,6 @@ This task proves the WSL substrate can run a Narada Cycle end-to-end.
   - `test/unit/supervisor.test.ts` — 8 tests (systemd, cron, shell templates)
 - WSL boundaries documented in `packages/sites/windows/README.md` §WSL Boundaries
 - No live Graph API, charter runtime, or email send logic implemented (steps 2–6 are fixture stubs)
+## Verification
+
+Verified retroactively per Task 475 corrective audit. Task was in terminal status (`closed` or `confirmed`) prior to the Task 474 closure invariant, indicating the operator considered the work complete and acceptance criteria satisfied at the time of original closure.

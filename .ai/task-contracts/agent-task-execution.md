@@ -12,6 +12,22 @@ It is paired with `.ai/task-contracts/question-escalation.md`. If a task becomes
 - Put completion evidence in the original task under `Execution Notes`, `Verification`, or `Outcome`.
 - If a task is obsolete, blocked, or superseded, mark that in the original task file.
 
+## Task Number Allocation
+
+- **Never allocate task numbers by inspecting `ls | tail` or similar filename-ordering heuristics.**
+- Use the reservation/allocation protocol defined in `docs/governance/task-graph-evolution-boundary.md` §3.
+- **Reserve ranges before creating batches or chapter DAGs** using `scripts/task-reserve.ts`:
+  ```bash
+  pnpm exec tsx scripts/task-reserve.ts --range START-END --purpose "..." --agent <name>
+  ```
+- If the reservation script does not exist yet, compute the next available number by scanning all `# Task NNN` headings in `.ai/tasks/*.md` (not by filename sorting) and record the reservation manually in `.ai/tasks/.registry.json`.
+- If `.ai/tasks/.registry.json` exists, check it for active reservations and the `last_allocated` value before creating tasks.
+- If a collision is detected (a task number already claimed by another file), **stop** and invoke the correction path:
+  - Record the collision in `.ai/feedback/governance.md` or the affected task file.
+  - If `scripts/task-renumber.ts` (Task 446) exists, use it to resolve the collision.
+  - If no tooling exists yet, correct the collision explicitly by renumbering and patching all references.
+- Do not create tasks inside an active reserved range belonging to another agent or chapter.
+
 ## Self-Standing Task Requirement
 
 A task file must contain enough execution context for an agent to act from `execute <task-number>` alone.
@@ -63,6 +79,57 @@ Static grammar may define what a task, finding, roster entry, or chapter is. Ope
 - If verification cannot be run, record why in the original task file.
 - If verification exposes an unrelated blocker, record it clearly rather than hiding or broadening the task.
 
+## Accepted Learning Recall
+
+Accepted learning artifacts in `.ai/learning/accepted/` are **active guidance** only when surfaced by tool lookup at the point of action. They are not silently enforced and must not automatically mutate task, roster, assignment, report, review, or runtime state.
+
+- Commands that surface guidance (`narada task roster`, `narada task report`, `narada task recommend`) display concise reminders/warnings but keep the command's primary output unobscured.
+- Agents should **prefer tool-surfaced accepted learning** over private model memory. If a learning artifact exists for a command surface, rely on it rather than recalling the rule from chat history.
+- Local/private model memories are **fallback only**, not Narada-authoritative. The canonical behavior constraint lives in the accepted artifact file.
+- Learning artifacts may declare `scopes` (e.g., `roster`, `assignment`, `report`, `recommendation`, `review`, `task-governance`) to control where they are surfaced. Artifacts without scopes are not automatically recalled.
+
+## Review and Closure Artifacts
+
+Reviews and closures are durable governance artifacts that must be linked to the tasks they govern.
+
+### Review Files
+
+Review files live in `.ai/reviews/` and must use standardized front matter:
+
+```yaml
+---
+review_of: 351
+reviewer: agent-name
+reviewed_at: 2026-04-21T00:00:00Z
+verdict: accepted   # accepted | rejected | partial
+---
+```
+
+- `review_of` is the task number being reviewed.
+- `verdict` records the review outcome.
+- Review is **separate** from report. A WorkResultReport signals readiness for review; the review file records the independent evaluation.
+
+### Closure Decision Files
+
+Closure decisions live in `.ai/decisions/` and should use standardized front matter when closing tasks:
+
+```yaml
+---
+closes_tasks: [287, 296]
+closed_at: 2026-04-20T00:00:00Z
+closed_by: operator-name
+---
+```
+
+- `closes_tasks` lists the task numbers being closed.
+- Closure is a **governed promotion** from `closed` to `confirmed`, not an automatic transition.
+
+### Validation
+
+- `narada task lint` detects stale review references (review_of non-existent task) and orphan reviews (task in `in_review` with no review file).
+- `narada task lint` detects stale closure references (closes_tasks references non-existent task) and orphan closures (task marked `closed` with no closure decision).
+- `scripts/task-lifecycle-check.ts` validates deeper consistency: task status vs review verdict mismatches, confirmed tasks without closures, etc.
+
 ## Governance Feedback
 
 If you observe friction in the task-governed development system itself (ambiguous contracts, repeated acceptance criteria, hard-to-apply verification policy, task-DAG blocking, contract/implementation mismatch, or a better governing rule), append feedback to `.ai/feedback/governance.md` after completing the task.
@@ -71,6 +138,17 @@ Governance feedback is **not** escalation. Escalation means the task is blocked 
 
 - If the issue blocks the task, use `## Escalation Needed` in the task file (see `.ai/task-contracts/question-escalation.md`).
 - If the issue does not block the task, finish the task and add governance feedback separately.
+
+## Construction Loop Controller
+
+The construction loop controller (`narada construction-loop plan`) is an advisory composition layer that automates mechanical observation and planning steps. It does not replace individual operators.
+
+- It may **read** all task-governance artifacts.
+- It may **not** mutate task files, roster, or assignment state.
+- It produces a **plan** that the operator reviews before executing.
+- All promotion, assignment, review, closure, and commit authority remains with the operator.
+
+Agents should treat controller output as advisory. The operator may accept, modify, or reject the plan. Chat messages and controller plans are not authoritative over durable task state.
 
 ## Coherence Control Rules
 
@@ -82,6 +160,24 @@ These rules prevent task execution from becoming performative process.
 - **Residuals preserve coherence.** If a correction is not admissible, record a bounded residual instead of narrating around the blocker or patching locally.
 - **Do not claim posture change without evidence.** A diagnosis, plan, or task graph may justify work, but completion requires verification or an explicit residual.
 
+## Work Result Reports
+
+When an agent believes a claimed task is ready for review, it must submit a **WorkResultReport** using `narada task report` instead of relying on chat as completion evidence.
+
+### Report Requirements
+
+- **Summary**: Human-readable description of what was done and why.
+- **Changed files**: List of paths the agent modified.
+- **Verification**: Focused verification commands and their results.
+- **Known residuals**: Explicitly bounded gaps, blockers, or deferred items.
+
+### Invariants
+
+- A report is **evidence**, not authority. It does not close a task.
+- A report does **not** prove correctness. It signals readiness for review.
+- Chat summaries may mirror the report but are **not authoritative**.
+- Review remains **separate** from reporting. A submitted report awaits independent review.
+
 ## Agent Roster as Assignment Source of Truth
 
 The operational agent roster (`.ai/agents/roster.json`) is the canonical source of truth for which agent is currently working on which task.
@@ -92,7 +188,17 @@ The operational agent roster (`.ai/agents/roster.json`) is the canonical source 
 - **Roster is updateable**: `narada task roster assign/review/done/idle` mutate operational state without touching task lifecycle authority.
 - **Roster updates are NOT lifecycle mutations**: `roster assign` does not claim a task. `roster done` does not release or close a task. Operators who need both must run the lifecycle command AND the roster command.
 - **Assignment recommendations must read the roster**: Before suggesting work to an agent, check the roster to see if the agent is already `working`, `reviewing`, or `blocked`.
+- **Promotion is the preferred path from recommendation to assignment**: Use `narada task promote-recommendation --task <n> --agent <id> --by <operator>` to turn an advisory recommendation into a durable assignment. This validates current state, writes an audit record, and delegates mutation to `task claim`. Direct `task claim` is still available as the low-level primitive, but promotion adds governance scaffolding.
+- **Recommended assignments are operative unless rejected**: When the architect/operator recommends a target assignment and the human operator does not disagree or correct it, treat the recommendation as assigned and immediately update the roster. Do not leave accepted recommendations as chat-only intent.
 - **Chat updates should be translated into roster updates**: When an agent reports status in chat, the operator should run the corresponding `narada task roster` command to keep mechanical state in sync.
+- **Conversation beats stale roster**: If conversational assignment state and roster state diverge, treat the conversation as the source of the correction and update the roster promptly. Then report the exact roster state from `narada task roster show`.
+
+### Roster Race-Safety Invariant
+
+- **Roster mutations are serialized**: All `narada task roster ...` mutations route through `withRosterMutation`, which acquires an exclusive file lock (`.ai/agents/roster.lock`) before reading, applies the mutation, writes atomically via temp-file rename, and releases the lock in `finally`.
+- **Stale locks are recovered automatically**: If a lock is abandoned for more than 30 seconds, it is removed and the waiting mutation proceeds.
+- **Do not edit `.ai/agents/roster.json` manually while CLI coordination is active**: Manual edits bypass the lock and can corrupt operational state.
+- **Temp-file atomic write does not by itself solve read-modify-write races**: The lock is required because two processes can read the same file, compute mutations on stale copies, and overwrite each other's changes. Atomic rename only prevents partial writes, not lost updates.
 
 ### Roster Status Values
 
@@ -175,6 +281,27 @@ Use this in a task file when the task is narrow and corrective:
 
 Proceed directly. This is a narrow corrective task; use focused edits only.
 ```
+
+## Governed Task Closure Invariant
+
+A task may enter `closed` or `confirmed` only when:
+
+1. **All acceptance criteria are checked** — every `- [ ]` in `## Acceptance Criteria` is `- [x]`.
+2. **Execution notes exist** — the task file contains an `## Execution Notes` section with concrete evidence of what was done.
+3. **Verification notes exist** — the task file contains a `## Verification` section describing how correctness was checked.
+4. **No derivative task-status files exist** — no `-EXECUTED.md`, `-DONE.md`, `-RESULT.md`, `-FINAL.md`, or `-SUPERSEDED.md` files for this task.
+
+If a criterion is intentionally not completed, it must be moved out of **Acceptance Criteria** into **Residuals / Deferred Work** with rationale and a concrete follow-up task reference.
+
+Acceptance criteria are not decorative. They are closure gates.
+
+### Closure Authority
+
+- **Review path**: `in_review` → review accepted → `closed` (reviewer-driven).
+- **Direct path**: operator may close a task with `narada task close <task-number> --by <operator-id>` if all gates are satisfied.
+- **Governed path**: `narada chapter close <range> --finish` transitions `closed` → `confirmed` only after validating every terminal task in the range satisfies the closure invariant.
+
+A task that is terminal-by-front-matter (`closed` or `confirmed`) but invalid-by-evidence is an **invariant violation**, not a documentation nuisance. The violation code is `terminal_with_unchecked_criteria` and is reported by `narada task evidence`, `narada task lint`, and `narada chapter close --finish`.
 
 ## Completion
 

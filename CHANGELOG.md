@@ -4,6 +4,38 @@ This changelog tracks semantic chapters in Narada's development: concepts that b
 
 It is not a package-level release log. Package publishing changes belong in Changesets.
 
+## Construction Operation
+
+Narada's task-graph execution loop was defined, designed, and fixture-proven as a governed Construction Operation — the human-architect-agent development cycle that advances a system while preserving long-horizon coherence.
+
+- **Boundary contract** (Task 410): `.ai/decisions/20260422-410-construction-operation-boundary-contract.md` defines the Aim ("advance a software system through governed task-graph execution"), Site (local filesystem with `.ai/tasks/`, roster, assignments, reviews), Cycle (scan → recommend → claim → execute → review → confirm), Act taxonomy (12 governed actions with authority classes), Trace taxonomy (10 trace types with retention rules), and an authority matrix separating operator, architect, agent, and system roles.
+- **Assignment planner design** (Task 411): `.ai/decisions/20260422-411-assignment-planner-design.md` defines a 6-dimension scoring function (affinity 0.30, capability 0.25, load 0.20, history 0.10, review separation 0.10, budget 0.05), greedy conflict resolution, confidence classification (high/medium/low), and 6 explicit abstain conditions. The planner is advisory — it does not auto-claim.
+- **PrincipalRuntime integration contract** (Task 412): `.ai/decisions/20260422-412-principal-runtime-integration-contract.md` defines read-only data flow from PrincipalRuntime state and roster into the planner, conservative conflict resolution favoring operator knowledge, and budget-exhaustion handoff semantics.
+- **Review separation and write-set conflict design** (Task 413): `.ai/decisions/20260422-413-review-separation-write-set-conflict.md` defines manifest-based write-set tracking (`--files` at claim time), file-overlap conflict detection, review-separation checks (reviewer≠worker), and backward-compatible schema extensions.
+- **Fixture proof** (Task 414): `packages/layers/cli/test/fixtures/construction-operation/` contains a synthetic task graph (10 tasks), roster (4 agents), PrincipalRuntime states, and a recommendation engine test harness. 10 tests pass covering basic recommendation, affinity routing, dependency blocking, review separation, write-set conflict, budget exhaustion, and graceful abstention. Top-3 accuracy ≥ 80%, 0 false negatives for separation and conflict detection.
+
+Concrete outcomes:
+
+- 4 decision artifacts in `.ai/decisions/` (410–413).
+- 1 fixture with 10 passing tests in `packages/layers/cli/test/fixtures/construction-operation/`.
+- No production code changes — this chapter was pure design and fixture proof.
+
+Authority clarifications:
+
+- Assignment recommendation is advisory, not authoritative. Human operator retains final claim/priority/veto authority.
+- Review separation and write-set checks are warnings, not blockers.
+- PrincipalRuntime state is ephemeral; roster is advisory; task governance is durable.
+
+Deferred:
+
+- Autonomous dispatch and auto-claim — post-415 chapter.
+- Cost estimation with live budget telemetry — post-415 chapter.
+- Dynamic capability learning from historical assignments — future telemetry task.
+- Git-diff based write-set tracking — post-415 chapter.
+- Production integration of planner into `narada task recommend` — future implementation chapter.
+
+---
+
 ## Operator Console / Site Registry
 
 Narada gained a cross-Site operator console backed by a Site Registry that discovers, inspects, and routes control requests without becoming hidden authority:

@@ -148,11 +148,19 @@ The goal is not to implement a terminal session manager. The goal is to define t
 
 ## Acceptance Criteria
 
-- [ ] Decision artifact exists at `.ai/decisions/20260422-397-session-attachment-semantics.md`.
-- [ ] Session vocabulary is precise and does not overload `operation`.
-- [ ] Attachment, authority, detach, transfer, and resume are distinguished.
-- [ ] Resume context is defined as a projection from durable state, not scrollback/log authority.
-- [ ] Single-active-controller default is explicitly stated.
-- [ ] Existing roster/task assignment/continuation-affinity surfaces are mapped.
-- [ ] Canonical docs reference the decision without duplicating it.
-- [ ] No derivative task-status files are created.
+- [x] Decision artifact exists at `.ai/decisions/20260422-397-session-attachment-semantics.md`.
+- [x] Session vocabulary is precise and does not overload `operation`.
+- [x] Attachment, authority, detach, transfer, and resume are distinguished.
+- [x] Resume context is defined as a projection from durable state, not scrollback/log authority.
+- [x] Single-active-controller default is explicitly stated.
+- [x] Existing roster/task assignment/continuation-affinity surfaces are mapped.
+- [x] Canonical docs reference the decision without duplicating it.
+- [x] No derivative task-status files are created.
+
+## Execution Notes
+
+Task completed prior to Task 474 closure invariant. Decision artifact created at `.ai/decisions/20260422-397-session-attachment-semantics.md` (21512 bytes) containing full object model, lifecycle table, authority invariant table, resume context fields, and implementation recommendations. Session vocabulary uses `AgentSession`, `OperatorSession`, `SiteAttachment`, `ResumeContext` without overloading `operation`. Canonical docs (`SEMANTICS.md`, `AGENTS.md`, `docs/product/operator-loop.md`) updated by reference only.
+
+## Verification
+
+Verified by inspecting `.ai/decisions/20260422-397-session-attachment-semantics.md` and searching canonical docs for session-attachment references.

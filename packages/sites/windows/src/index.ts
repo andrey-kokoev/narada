@@ -28,7 +28,34 @@ export {
   DefaultWindowsSiteRunner,
   type WindowsSiteRunner,
   type CycleConfig,
+  type CycleRunOptions,
 } from "./runner.js";
+
+export {
+  WindowsCycleCoordinator,
+  type FactRecord,
+  type FixtureSourceDelta,
+  type ExecutionAttemptRecord,
+} from "./cycle-coordinator.js";
+
+export {
+  createSyncStepHandler,
+  createDeriveWorkStepHandler,
+  createEvaluateStepHandler,
+  createHandoffStepHandler,
+  createEffectExecuteStepHandler,
+  createReconcileStepHandler,
+  createDefaultStepHandlers,
+  fixtureEvaluate,
+  type CycleStepId,
+  type CycleStepName,
+  type CycleStepStatus,
+  type CycleStepContext,
+  type CycleStepHandler,
+  type CycleStepResult,
+  type FixtureEvaluationInput,
+  type FixtureEvaluationOutput,
+} from "./cycle-step.js";
 
 export {
   generateSystemdUnits,

@@ -12,6 +12,7 @@ import { createFormatter } from '../lib/formatter.js';
 export interface TaskAllocateOptions {
   format?: 'json' | 'human' | 'auto';
   cwd?: string;
+  dryRun?: boolean;
 }
 
 export async function taskAllocateCommand(
@@ -21,6 +22,24 @@ export async function taskAllocateCommand(
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
 
   try {
+    if (options.dryRun) {
+      const { previewNextTaskNumber } = await import('../lib/task-governance.js');
+      const number = await previewNextTaskNumber(cwd);
+
+      if (fmt.getFormat() === 'json') {
+        return {
+          exitCode: ExitCode.SUCCESS,
+          result: { status: 'dry_run', next_number: number },
+        };
+      }
+
+      fmt.message(`Next allocatable number: ${number} (dry run — no mutation)`, 'info');
+      return {
+        exitCode: ExitCode.SUCCESS,
+        result: { status: 'dry_run', next_number: number },
+      };
+    }
+
     const number = await allocateTaskNumber(cwd);
 
     if (fmt.getFormat() === 'json') {

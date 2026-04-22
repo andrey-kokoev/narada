@@ -184,8 +184,20 @@ function validateCampaignBriefPayload(payload: unknown): { valid: boolean; error
     return { valid: false, errors };
   }
   const p = payload as Record<string, unknown>;
-  if (!p.brief && !p.brief_text && !p.campaign_brief) {
-    errors.push("campaign_brief requires brief, brief_text, or campaign_brief");
+  if (!p.name || typeof p.name !== "string" || p.name.trim().length === 0) {
+    errors.push("campaign_brief requires name");
+  }
+  if (!p.audience || typeof p.audience !== "string" || p.audience.trim().length === 0) {
+    errors.push("campaign_brief requires audience");
+  }
+  if (!p.content_summary || typeof p.content_summary !== "string" || p.content_summary.trim().length === 0) {
+    errors.push("campaign_brief requires content_summary");
+  }
+  if (!p.timing || typeof p.timing !== "string" || p.timing.trim().length === 0) {
+    errors.push("campaign_brief requires timing");
+  }
+  if (p.approval_needed !== true) {
+    errors.push("campaign_brief requires approval_needed to be true in v0");
   }
   return { valid: errors.length === 0, errors };
 }

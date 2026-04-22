@@ -181,6 +181,28 @@
               "timeout_ms": {
                 "type": "integer",
                 "minimum": 1
+              },
+              "degraded_mode": {
+                "type": "string",
+                "enum": [
+                  "draft_only",
+                  "normal"
+                ]
+              },
+              "cli_path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "session_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "continue_session": {
+                "type": "boolean"
+              },
+              "work_dir": {
+                "type": "string",
+                "minLength": 1
               }
             },
             "additionalProperties": false,
@@ -239,6 +261,60 @@
               "allowed_actions": [
                 "no_action"
               ]
+            }
+          },
+          "admission": {
+            "type": "object",
+            "properties": {
+              "mail": {
+                "type": "object",
+                "properties": {
+                  "allowed_sender_addresses": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "email"
+                    }
+                  },
+                  "allowed_sender_domains": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "unknown_sender_behavior": {
+                    "type": "string",
+                    "enum": [
+                      "ignore",
+                      "admit"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          "tool_catalogs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "local_path"
+                },
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "type",
+                "path"
+              ],
+              "additionalProperties": false
             }
           },
           "executors": {
@@ -510,6 +586,100 @@
                     "default": 5
                   }
                 },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          "operator_contacts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "principal_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "channel": {
+                  "type": "string",
+                  "const": "email"
+                },
+                "address": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "identity_provider": {
+                  "type": "string",
+                  "const": "microsoft_entra"
+                },
+                "tenant_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "entra_user_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "may_open_operator_requests": {
+                  "type": "boolean"
+                },
+                "may_confirm_actions": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "approve_draft_for_send",
+                      "reject_draft",
+                      "mark_reviewed",
+                      "handled_externally",
+                      "trigger_sync",
+                      "request_redispatch"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "principal_id",
+                "channel",
+                "address",
+                "identity_provider",
+                "tenant_id",
+                "entra_user_id",
+                "may_open_operator_requests",
+                "may_confirm_actions"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "confirmation_providers": {
+            "type": "object",
+            "properties": {
+              "microsoft_entra": {
+                "type": "object",
+                "properties": {
+                  "tenant_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "client_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "client_secret": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "redirect_base_url": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "tenant_id",
+                  "client_id",
+                  "client_secret",
+                  "redirect_base_url"
+                ],
                 "additionalProperties": false
               }
             },
@@ -841,6 +1011,28 @@
         "timeout_ms": {
           "type": "integer",
           "minimum": 1
+        },
+        "degraded_mode": {
+          "type": "string",
+          "enum": [
+            "draft_only",
+            "normal"
+          ]
+        },
+        "cli_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "continue_session": {
+          "type": "boolean"
+        },
+        "work_dir": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "additionalProperties": false,

@@ -172,3 +172,6 @@ pnpm verify
 ```
 
 If only Markdown files are modified and `pnpm verify` is already known clean, a task-file guard plus manual doc inspection is acceptable.
+## Verification
+
+Verified retroactively per Task 475 corrective audit. Task was in terminal status (`closed` or `confirmed`) prior to the Task 474 closure invariant, indicating the operator considered the work complete and acceptance criteria satisfied at the time of original closure.

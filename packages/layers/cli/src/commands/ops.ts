@@ -23,6 +23,7 @@ export interface OpsOptions {
   verbose?: boolean;
   limit?: number;
   site?: string;
+  mode?: string;
 }
 
 interface HealthSummary {
@@ -62,6 +63,25 @@ interface DraftPendingReview {
 interface WindowsSiteOpsEntry {
   siteId: string;
   variant: string;
+  siteRoot: string;
+  health: string;
+  lastCycleAt: string | null;
+  consecutiveFailures: number;
+  message: string;
+}
+
+interface LinuxSiteOpsEntry {
+  siteId: string;
+  mode: string;
+  siteRoot: string;
+  health: string;
+  lastCycleAt: string | null;
+  consecutiveFailures: number;
+  message: string;
+}
+
+interface MacosSiteOpsEntry {
+  siteId: string;
   siteRoot: string;
   health: string;
   lastCycleAt: string | null;
@@ -410,6 +430,7 @@ async function loadOpsReport(
         if (r.action_type === 'send_reply' || r.action_type === 'send_new_message') {
           actions.push('approve-draft-for-send');
         }
+        // campaign_brief is document-only in v0; never executable
       }
       if (r.status === 'blocked_policy') {
         actions.push('reject-draft');
@@ -489,8 +510,27 @@ export async function opsCommand(
   const limit = options.limit ?? 5;
   const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
 
-  // If --site is provided, show only that Windows Site
+  // If --site is provided, show only that Site
   if (options.site) {
+    if (options.mode === 'system' || options.mode === 'user') {
+      return opsLinuxSite(options.site, options.mode, fmt);
+    }
+
+    const { isMacosSite } = await import('@narada2/macos-site');
+    if (isMacosSite(options.site)) {
+      return opsMacosSite(options.site, fmt);
+    }
+
+    try {
+      const { isLinuxSite, resolveLinuxSiteMode } = await import('@narada2/linux-site');
+      const linuxMode = resolveLinuxSiteMode(options.site);
+      if (linuxMode) {
+        return opsLinuxSite(options.site, linuxMode, fmt);
+      }
+    } catch {
+      // Linux package not available
+    }
+
     return opsWindowsSite(options.site, fmt);
   }
 
@@ -544,8 +584,10 @@ export async function opsCommand(
     }
   }
 
-  // Discover Windows Sites
+  // Discover Windows, Linux, and macOS Sites
   const windowsSites = await loadWindowsSiteOpsEntries();
+  const linuxSites = await loadLinuxSiteOpsEntries();
+  const macosSites = await loadMacosSiteOpsEntries();
 
   // Human output
   if (fmt.getFormat() === 'human') {
@@ -685,11 +727,49 @@ export async function opsCommand(
       );
     }
 
-    return { exitCode: ExitCode.SUCCESS, result: { status: 'success', reports, windowsSites } };
+    if (linuxSites.length > 0) {
+      fmt.section('Linux Sites');
+      fmt.table(
+        [
+          { key: 'siteId', label: 'Site ID', width: 20 },
+          { key: 'mode', label: 'Mode', width: 10 },
+          { key: 'health', label: 'Health', width: 12 },
+          { key: 'lastCycle', label: 'Last Cycle', width: 24 },
+          { key: 'failures', label: 'Failures', width: 10 },
+        ],
+        linuxSites.map((s) => ({
+          siteId: s.siteId,
+          mode: s.mode,
+          health: s.health,
+          lastCycle: s.lastCycleAt ?? 'never',
+          failures: String(s.consecutiveFailures),
+        })),
+      );
+    }
+
+    if (macosSites.length > 0) {
+      fmt.section('macOS Sites');
+      fmt.table(
+        [
+          { key: 'siteId', label: 'Site ID', width: 20 },
+          { key: 'health', label: 'Health', width: 12 },
+          { key: 'lastCycle', label: 'Last Cycle', width: 24 },
+          { key: 'failures', label: 'Failures', width: 10 },
+        ],
+        macosSites.map((s) => ({
+          siteId: s.siteId,
+          health: s.health,
+          lastCycle: s.lastCycleAt ?? 'never',
+          failures: String(s.consecutiveFailures),
+        })),
+      );
+    }
+
+    return { exitCode: ExitCode.SUCCESS, result: { status: 'success', reports, windowsSites, linuxSites, macosSites } };
   }
 
   // JSON output
-  return { exitCode: ExitCode.SUCCESS, result: { status: 'success', reports, windowsSites } };
+  return { exitCode: ExitCode.SUCCESS, result: { status: 'success', reports, windowsSites, linuxSites, macosSites } };
 }
 
 async function loadWindowsSiteOpsEntries(): Promise<WindowsSiteOpsEntry[]> {
@@ -719,6 +799,64 @@ async function loadWindowsSiteOpsEntries(): Promise<WindowsSiteOpsEntry[]> {
   }
 }
 
+async function loadLinuxSiteOpsEntries(): Promise<LinuxSiteOpsEntry[]> {
+  try {
+    const { listAllSites, getLinuxSiteStatus } = await import('@narada2/linux-site');
+    const discovered = listAllSites();
+    const entries: LinuxSiteOpsEntry[] = [];
+    for (const site of discovered) {
+      try {
+        const status = await getLinuxSiteStatus(site.siteId, site.mode);
+        entries.push({
+          siteId: site.siteId,
+          mode: site.mode,
+          siteRoot: site.siteRoot,
+          health: status.health.status,
+          lastCycleAt: status.health.last_cycle_at,
+          consecutiveFailures: status.health.consecutive_failures,
+          message: status.health.message,
+        });
+      } catch {
+        // Skip sites that cannot be read
+      }
+    }
+    return entries;
+  } catch {
+    return [];
+  }
+}
+
+async function opsLinuxSite(
+  siteId: string,
+  mode: string,
+  fmt: ReturnType<typeof createFormatter>,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const { getLinuxSiteStatus } = await import('@narada2/linux-site');
+
+  const status = await getLinuxSiteStatus(siteId, mode as 'system' | 'user');
+  const entry: LinuxSiteOpsEntry = {
+    siteId: status.siteId,
+    mode: status.mode,
+    siteRoot: status.siteRoot,
+    health: status.health.status,
+    lastCycleAt: status.health.last_cycle_at,
+    consecutiveFailures: status.health.consecutive_failures,
+    message: status.health.message,
+  };
+
+  if (fmt.getFormat() === 'human') {
+    fmt.section(`Linux Site — ${siteId}`);
+    fmt.kv('Mode', entry.mode);
+    fmt.kv('Health', entry.health);
+    fmt.kv('Last Cycle', entry.lastCycleAt ?? 'never');
+    fmt.kv('Consecutive Failures', String(entry.consecutiveFailures));
+    fmt.kv('Message', entry.message);
+    return { exitCode: ExitCode.SUCCESS, result: { status: 'success', linuxSites: [entry] } };
+  }
+
+  return { exitCode: ExitCode.SUCCESS, result: { status: 'success', linuxSites: [entry] } };
+}
+
 async function opsWindowsSite(
   siteId: string,
   fmt: ReturnType<typeof createFormatter>,
@@ -732,7 +870,7 @@ async function opsWindowsSite(
   if (!variant) {
     return {
       exitCode: ExitCode.GENERAL_ERROR,
-      result: { status: 'error', error: `Windows Site "${siteId}" not found.` },
+      result: { status: 'error', error: `Site "${siteId}" not found. Checked macOS, Linux (system/user), and Windows (native/WSL) paths.` },
     };
   }
 
@@ -758,4 +896,59 @@ async function opsWindowsSite(
   }
 
   return { exitCode: ExitCode.SUCCESS, result: { status: 'success', windowsSites: [entry] } };
+}
+
+
+async function loadMacosSiteOpsEntries(): Promise<MacosSiteOpsEntry[]> {
+  try {
+    const { discoverMacosSites, getMacosSiteStatus } = await import('@narada2/macos-site');
+    const discovered = discoverMacosSites();
+    const entries: MacosSiteOpsEntry[] = [];
+    for (const site of discovered) {
+      try {
+        const status = await getMacosSiteStatus(site.siteId);
+        entries.push({
+          siteId: site.siteId,
+          siteRoot: site.siteRoot,
+          health: status.health.status,
+          lastCycleAt: status.health.last_cycle_at,
+          consecutiveFailures: status.health.consecutive_failures,
+          message: status.health.message,
+        });
+      } catch {
+        // Skip sites that cannot be read
+      }
+    }
+    return entries;
+  } catch {
+    return [];
+  }
+}
+
+async function opsMacosSite(
+  siteId: string,
+  fmt: ReturnType<typeof createFormatter>,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const { getMacosSiteStatus } = await import('@narada2/macos-site');
+
+  const status = await getMacosSiteStatus(siteId);
+  const entry: MacosSiteOpsEntry = {
+    siteId: status.siteId,
+    siteRoot: status.siteRoot,
+    health: status.health.status,
+    lastCycleAt: status.health.last_cycle_at,
+    consecutiveFailures: status.health.consecutive_failures,
+    message: status.health.message,
+  };
+
+  if (fmt.getFormat() === 'human') {
+    fmt.section(`macOS Site — ${siteId}`);
+    fmt.kv('Health', entry.health);
+    fmt.kv('Last Cycle', entry.lastCycleAt ?? 'never');
+    fmt.kv('Consecutive Failures', String(entry.consecutiveFailures));
+    fmt.kv('Message', entry.message);
+    return { exitCode: ExitCode.SUCCESS, result: { status: 'success', macosSites: [entry] } };
+  }
+
+  return { exitCode: ExitCode.SUCCESS, result: { status: 'success', macosSites: [entry] } };
 }

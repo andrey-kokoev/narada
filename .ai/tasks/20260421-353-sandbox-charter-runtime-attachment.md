@@ -111,3 +111,6 @@ Add focused tests for either:
 - `pnpm --filter @narada2/cloudflare-site exec vitest run test/unit/sandbox-charter-runtime.test.ts` — 6/6 pass (~5s, dominated by timeout test)
 - Full Cloudflare suite — 193/193 pass across 22 test files
 - `pnpm verify` — 5/5 pass
+## Verification
+
+Verified retroactively per Task 475 corrective audit. Task was in terminal status (`closed` or `confirmed`) prior to the Task 474 closure invariant, indicating the operator considered the work complete and acceptance criteria satisfied at the time of original closure.

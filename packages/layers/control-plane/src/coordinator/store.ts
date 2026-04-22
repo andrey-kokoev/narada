@@ -165,10 +165,29 @@ function rowToOperatorActionRequest(row: Record<string, unknown>): OperatorActio
     action_type: String(row.action_type) as OperatorActionRequest["action_type"],
     target_id: row.target_id ? String(row.target_id) : null,
     payload_json: row.payload_json ? String(row.payload_json) : null,
+    source_message_id: row.source_message_id ? String(row.source_message_id) : null,
     status: String(row.status) as OperatorActionRequest["status"],
     requested_by: row.requested_by ? String(row.requested_by) : "operator",
     requested_at: String(row.requested_at),
     executed_at: row.executed_at ? String(row.executed_at) : null,
+  };
+}
+
+function rowToConfirmationChallenge(row: Record<string, unknown>): import("./types.js").ConfirmationChallenge {
+  return {
+    challenge_id: String(row.challenge_id),
+    scope_id: String(row.scope_id),
+    operator_action_request_id: String(row.operator_action_request_id),
+    principal_id: String(row.principal_id),
+    provider: String(row.provider) as import("./types.js").ConfirmationChallenge["provider"],
+    state_hash: String(row.state_hash),
+    nonce_hash: String(row.nonce_hash),
+    created_at: String(row.created_at),
+    expires_at: String(row.expires_at),
+    confirmed_at: row.confirmed_at ? String(row.confirmed_at) : null,
+    consumed_at: row.consumed_at ? String(row.consumed_at) : null,
+    status: String(row.status) as import("./types.js").ConfirmationChallengeStatus,
+    failure_reason: row.failure_reason ? String(row.failure_reason) : null,
   };
 }
 
@@ -427,6 +446,7 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
         action_type text not null,
         target_id text,
         payload_json text,
+        source_message_id text,
         status text not null default 'pending',
         requested_by text not null default 'operator',
         requested_at text not null default (datetime('now')),
@@ -435,6 +455,28 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
 
       create index if not exists idx_operator_actions_scope_status
         on operator_action_requests(scope_id, status, requested_at);
+
+      -- confirmation challenges for email-originated operator requests
+      create table if not exists confirmation_challenges (
+        challenge_id text primary key,
+        scope_id text not null,
+        operator_action_request_id text not null,
+        principal_id text not null,
+        provider text not null,
+        state_hash text not null,
+        nonce_hash text not null,
+        created_at text not null default (datetime('now')),
+        expires_at text not null,
+        confirmed_at text,
+        consumed_at text,
+        status text not null default 'pending',
+        failure_reason text
+      );
+
+      create index if not exists idx_confirmation_challenges_request
+        on confirmation_challenges(operator_action_request_id, status);
+      create index if not exists idx_confirmation_challenges_scope
+        on confirmation_challenges(scope_id, status, created_at);
     `);
 
     this.migrateAgentSessionsSchema();
@@ -495,6 +537,9 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     const names = new Set(columns.map((c) => c.name));
     if (!names.has('requested_by')) {
       this.db.prepare(`alter table operator_action_requests add column requested_by text not null default 'operator'`).run();
+    }
+    if (!names.has('source_message_id')) {
+      this.db.prepare(`alter table operator_action_requests add column source_message_id text`).run();
     }
   }
 
@@ -1113,15 +1158,16 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
   insertOperatorActionRequest(request: OperatorActionRequest): void {
     this.db.prepare(`
       insert into operator_action_requests (
-        request_id, scope_id, action_type, target_id, payload_json,
+        request_id, scope_id, action_type, target_id, payload_json, source_message_id,
         status, requested_by, requested_at, executed_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       request.request_id,
       request.scope_id,
       request.action_type,
       request.target_id,
       request.payload_json,
+      request.source_message_id,
       request.status,
       request.requested_by,
       request.requested_at,
@@ -1149,6 +1195,67 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
     this.db.prepare(`
       update operator_action_requests set status = 'rejected', executed_at = ? where request_id = ?
     `).run(rejectedAt ?? new Date().toISOString(), requestId);
+  }
+
+  insertConfirmationChallenge(challenge: import("./types.js").ConfirmationChallenge): void {
+    this.db.prepare(`
+      insert into confirmation_challenges (
+        challenge_id, scope_id, operator_action_request_id, principal_id, provider,
+        state_hash, nonce_hash, created_at, expires_at, confirmed_at, consumed_at,
+        status, failure_reason
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      challenge.challenge_id,
+      challenge.scope_id,
+      challenge.operator_action_request_id,
+      challenge.principal_id,
+      challenge.provider,
+      challenge.state_hash,
+      challenge.nonce_hash,
+      challenge.created_at,
+      challenge.expires_at,
+      challenge.confirmed_at,
+      challenge.consumed_at,
+      challenge.status,
+      challenge.failure_reason,
+    );
+  }
+
+  getConfirmationChallenge(challengeId: string): import("./types.js").ConfirmationChallenge | undefined {
+    const row = this.db.prepare(`
+      select * from confirmation_challenges where challenge_id = ?
+    `).get(challengeId) as Record<string, unknown> | undefined;
+    return row ? rowToConfirmationChallenge(row) : undefined;
+  }
+
+  markConfirmationChallengeConfirmed(challengeId: string, confirmedAt?: string): void {
+    this.db.prepare(`
+      update confirmation_challenges set status = 'confirmed', confirmed_at = ? where challenge_id = ?
+    `).run(confirmedAt ?? new Date().toISOString(), challengeId);
+  }
+
+  markConfirmationChallengeConsumed(challengeId: string, consumedAt?: string): void {
+    this.db.prepare(`
+      update confirmation_challenges set status = 'consumed', consumed_at = ? where challenge_id = ?
+    `).run(consumedAt ?? new Date().toISOString(), challengeId);
+  }
+
+  markConfirmationChallengeExpired(challengeId: string, _expiredAt?: string): void {
+    this.db.prepare(`
+      update confirmation_challenges set status = 'expired', failure_reason = 'expired' where challenge_id = ?
+    `).run(challengeId);
+  }
+
+  markConfirmationChallengeRejected(challengeId: string, reason: string, _rejectedAt?: string): void {
+    this.db.prepare(`
+      update confirmation_challenges set status = 'rejected', failure_reason = ? where challenge_id = ?
+    `).run(reason, challengeId);
+  }
+
+  updateChallengeTokens(challengeId: string, stateHash: string, nonceHash: string): void {
+    this.db.prepare(`
+      update confirmation_challenges set state_hash = ?, nonce_hash = ? where challenge_id = ?
+    `).run(stateHash, nonceHash, challengeId);
   }
 
   close(): void {

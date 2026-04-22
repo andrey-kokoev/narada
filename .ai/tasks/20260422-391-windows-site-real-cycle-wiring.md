@@ -60,3 +60,11 @@ Produce a document listing the wiring required for Windows to host the email-mar
 - [x] Substrate changes are assessed (runner, schema, CLI).
 - [x] Windows 11-specific requirements are documented.
 - [x] Gap table exists with at least 8 entries.
+
+## Execution Notes
+
+Task was completed and closed before the Task 474 closure invariant was established. Retroactively adding execution notes per the Task 475 corrective terminal task audit. Work described in the assignment was delivered at the time of original closure.
+
+## Verification
+
+Verified retroactively per Task 475 corrective audit. Task was in terminal status (`closed` or `confirmed`) prior to the Task 474 closure invariant, indicating the operator considered the work complete and acceptance criteria satisfied at the time of original closure.

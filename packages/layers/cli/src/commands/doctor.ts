@@ -3,8 +3,8 @@ import { readFile, stat } from 'node:fs/promises';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
-import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig, loadCharterEnv } from '@narada2/control-plane';
-import { CodexCharterRunner, MockCharterRunner, getRecoveryGuidance } from '@narada2/charters';
+import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig, loadCharterEnv, loadEnvFile } from '@narada2/control-plane';
+import { CodexCharterRunner, MockCharterRunner, KimiCliCharterRunner, getRecoveryGuidance } from '@narada2/charters';
 
 export interface DoctorOptions {
   config?: string;
@@ -12,6 +12,7 @@ export interface DoctorOptions {
   format?: 'json' | 'human' | 'auto';
   staleThresholdMinutes?: number;
   site?: string;
+  mode?: string;
 }
 
 interface DoctorCheck {
@@ -117,7 +118,8 @@ async function checkScope(
   scopeId: string,
   rootDir: string,
   staleThresholdMinutes: number,
-  scopeConfig?: { charter?: { runtime?: string; api_key?: string; model?: string; base_url?: string; timeout_ms?: number } },
+  scopeConfig?: { charter?: { runtime?: string; api_key?: string; model?: string; base_url?: string; timeout_ms?: number; cli_path?: string; session_id?: string; continue_session?: boolean; work_dir?: string; degraded_mode?: "draft_only" | "normal" } },
+  stateDir?: string,
 ): Promise<ScopeDoctorResult> {
   const checks: DoctorCheck[] = [];
 
@@ -219,6 +221,25 @@ async function checkScope(
             remediation: health.class === 'healthy' ? undefined : guidance.operator_action,
           });
         }
+      } else if (runtime === 'kimi-cli') {
+        runner = new KimiCliCharterRunner({
+          cliPath: scopeConfig.charter.cli_path,
+          model: scopeConfig.charter.model,
+          sessionId: scopeConfig.charter.session_id,
+          continueSession: scopeConfig.charter.continue_session,
+          workDir: scopeConfig.charter.work_dir,
+          timeoutMs: scopeConfig.charter.timeout_ms,
+          degradedMode: scopeConfig.charter.degraded_mode,
+        });
+        const health = await runner.probeHealth();
+        const guidance = getRecoveryGuidance(health.class);
+        const checkStatus = health.class === 'healthy' ? 'pass' : health.class === 'degraded_draft_only' || health.class === 'partially_degraded' ? 'warn' : 'fail';
+        checks.push({
+          name: 'charter-runtime',
+          status: checkStatus,
+          detail: `${health.class}: ${health.details}`,
+          remediation: health.class === 'healthy' ? undefined : guidance.operator_action,
+        });
       } else if (runtime === 'mock') {
         runner = new MockCharterRunner();
         const health = await runner.probeHealth();
@@ -233,7 +254,7 @@ async function checkScope(
           name: 'charter-runtime',
           status: 'fail',
           detail: `Invalid charter runtime: ${runtime}`,
-          remediation: "Set `charter.runtime` to 'codex-api', 'kimi-api', or 'mock'.",
+          remediation: "Set `charter.runtime` to 'codex-api', 'kimi-api', 'kimi-cli', or 'mock'.",
         });
       }
     } catch (error) {
@@ -254,7 +275,50 @@ async function checkScope(
     });
   }
 
-  // 5. Failed work items (coordinator DB)
+  // 5. Principal runtime health (Task 406)
+  try {
+    const { JsonPrincipalRuntimeRegistry } = await import('@narada2/control-plane');
+    const principalStateDir = stateDir ?? rootDir;
+    const principalRegistry = new JsonPrincipalRuntimeRegistry({ rootDir: principalStateDir });
+    await principalRegistry.init();
+    const principals = principalRegistry.list(scopeId);
+    if (principals.length === 0) {
+      checks.push({
+        name: 'principal-runtime',
+        status: 'warn',
+        detail: 'No principal runtimes registered for this scope',
+        remediation: 'Daemon will create a default principal on next dispatch cycle',
+      });
+    } else {
+      const defaultPrincipal = principals.find((p) => p.principal_type === 'worker');
+      if (defaultPrincipal) {
+        const { canClaimWork } = await import('@narada2/control-plane');
+        const canClaim = canClaimWork(defaultPrincipal.state);
+        checks.push({
+          name: 'principal-runtime',
+          status: canClaim ? 'pass' : 'warn',
+          detail: `Default principal ${defaultPrincipal.runtime_id}: ${defaultPrincipal.state}${defaultPrincipal.detail ? ` (${defaultPrincipal.detail})` : ''}`,
+          remediation: canClaim ? undefined : `Principal state "${defaultPrincipal.state}" blocks work claiming. Check charter runtime health.`,
+        });
+      }
+      const otherPrincipals = principals.filter((p) => p.principal_type !== 'worker');
+      for (const p of otherPrincipals) {
+        checks.push({
+          name: 'principal-runtime',
+          status: 'pass',
+          detail: `Principal ${p.runtime_id} (${p.principal_type}): ${p.state}`,
+        });
+      }
+    }
+  } catch {
+    checks.push({
+      name: 'principal-runtime',
+      status: 'warn',
+      detail: 'Could not check principal runtime state',
+    });
+  }
+
+  // 6. Failed work items (coordinator DB)
   const dbPath = join(rootDir, '.narada', 'coordinator.db');
   try {
     const dbStat = await stat(dbPath);
@@ -324,16 +388,39 @@ export async function doctorCommand(
   const fmt = createFormatter({ format: options.format, verbose });
   const staleThresholdMinutes = options.staleThresholdMinutes ?? 60;
 
-  // Windows Site path: --site takes precedence over config
+  // Site path: --site takes precedence over config
   if (options.site) {
+    if (options.mode === 'system' || options.mode === 'user') {
+      return doctorLinuxSite(options.site, options.mode, staleThresholdMinutes, fmt, logger);
+    }
+
+    const { isMacosSite } = await import('@narada2/macos-site');
+    if (isMacosSite(options.site)) {
+      return doctorMacosSite(options.site, staleThresholdMinutes, fmt, logger);
+    }
+
+    try {
+      const { isLinuxSite, resolveLinuxSiteMode } = await import('@narada2/linux-site');
+      const linuxMode = resolveLinuxSiteMode(options.site);
+      if (linuxMode) {
+        return doctorLinuxSite(options.site, linuxMode, staleThresholdMinutes, fmt, logger);
+      }
+    } catch {
+      // Linux package not available
+    }
+
     return doctorWindowsSite(options.site, staleThresholdMinutes, fmt, logger);
   }
 
   logger.info('Running doctor', { configPath, staleThresholdMinutes });
+  const resolvedConfigPath = resolve(configPath);
+  const configDir = dirname(resolvedConfigPath);
+  loadEnvFile(join(configDir, '.env'));
+  loadEnvFile(join(dirname(configDir), '.env'));
 
   let raw: string;
   try {
-    raw = await readFile(configPath, 'utf8');
+    raw = await readFile(resolvedConfigPath, 'utf8');
   } catch (error) {
     return {
       exitCode: ExitCode.INVALID_CONFIG,
@@ -360,7 +447,7 @@ export async function doctorCommand(
   const scopes: ScopeDoctorResult[] = [];
 
   if (isMultiMailboxConfig(parsed)) {
-    const { config, valid, scopes: loadedScopes } = await loadMultiMailboxConfig({ path: configPath });
+    const { config, valid, scopes: loadedScopes } = await loadMultiMailboxConfig({ path: resolvedConfigPath });
     if (!valid) {
       return {
         exitCode: ExitCode.INVALID_CONFIG,
@@ -369,12 +456,12 @@ export async function doctorCommand(
     }
     for (const mailbox of config.mailboxes) {
       const scopeCfg = loadedScopes.find((s) => s.scope_id === mailbox.mailbox_id);
-      scopes.push(await checkScope(mailbox.mailbox_id, resolve(mailbox.root_dir), staleThresholdMinutes, scopeCfg));
+      scopes.push(await checkScope(mailbox.mailbox_id, resolve(mailbox.root_dir), staleThresholdMinutes, scopeCfg, configDir));
     }
   } else {
     let config;
     try {
-      config = await loadConfig({ path: configPath });
+      config = await loadConfig({ path: resolvedConfigPath });
     } catch (error) {
       return {
         exitCode: ExitCode.INVALID_CONFIG,
@@ -391,7 +478,7 @@ export async function doctorCommand(
         result: { status: 'error', error: 'No operations configured' },
       };
     }
-    scopes.push(await checkScope(scope.scope_id, resolve(scope.root_dir), staleThresholdMinutes, scope));
+    scopes.push(await checkScope(scope.scope_id, resolve(scope.root_dir), staleThresholdMinutes, scope, configDir));
   }
 
   const pass = scopes.reduce((sum, s) => sum + s.checks.filter((c) => c.status === 'pass').length, 0);
@@ -427,6 +514,273 @@ export async function doctorCommand(
       if (check.remediation) {
         fmt.message(`  → ${check.remediation}`, 'info');
       }
+    }
+  }
+
+  return {
+    exitCode: overall === 'healthy' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
+    result: { status: overall, ...report },
+  };
+}
+
+async function doctorMacosSite(
+  siteId: string,
+  staleThresholdMinutes: number,
+  fmt: ReturnType<typeof createFormatter>,
+  logger: CommandContext['logger'],
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  logger.info('Running doctor for macOS Site', { siteId });
+
+  const {
+    resolveSiteRoot,
+    getMacosSiteStatus,
+  } = await import('@narada2/macos-site');
+
+  const checks: DoctorCheck[] = [];
+  const siteRoot = resolveSiteRoot(siteId);
+
+  // 1. Site directory exists and is writable
+  try {
+    const s = await stat(siteRoot);
+    if (s.isDirectory()) {
+      checks.push({
+        name: 'site-directory',
+        status: 'pass',
+        detail: `Site directory exists: ${siteRoot}`,
+      });
+    } else {
+      checks.push({
+        name: 'site-directory',
+        status: 'fail',
+        detail: `Site path exists but is not a directory: ${siteRoot}`,
+        remediation: `Remove the file and recreate the site directory`,
+      });
+    }
+  } catch {
+    checks.push({
+      name: 'site-directory',
+      status: 'fail',
+      detail: `Site directory not found: ${siteRoot}`,
+      remediation: `Run narada cycle --site ${siteId} to initialize`,
+    });
+  }
+
+  // 2. Coordinator database
+  let status: { health: { status: string; last_cycle_at: string | null; consecutive_failures: number; message: string }; lastTrace: unknown } | null = null;
+  try {
+    status = await getMacosSiteStatus(siteId);
+    checks.push({
+      name: 'coordinator-db',
+      status: 'pass',
+      detail: 'Coordinator database readable',
+    });
+  } catch {
+    checks.push({
+      name: 'coordinator-db',
+      status: 'fail',
+      detail: 'Coordinator database not found or unreadable',
+      remediation: `Run narada cycle --site ${siteId} to initialize`,
+    });
+  }
+
+  // 3. Lock not stuck
+  try {
+    const lockDir = join(siteRoot, 'state', 'cycle.lock');
+    const lockStat = await stat(lockDir);
+    const ageMs = Date.now() - lockStat.mtimeMs;
+    const staleThresholdMs = staleThresholdMinutes * 60 * 1000;
+    if (ageMs > staleThresholdMs) {
+      checks.push({
+        name: 'stuck-lock',
+        status: 'fail',
+        detail: `Lock is stale (${Math.round(ageMs / 1000)}s old)`,
+        remediation: `The next cycle will auto-recover, or run narada cycle --site ${siteId}`,
+      });
+    } else {
+      checks.push({
+        name: 'stuck-lock',
+        status: 'pass',
+        detail: 'Lock is fresh or not present',
+      });
+    }
+  } catch {
+    checks.push({
+      name: 'stuck-lock',
+      status: 'pass',
+      detail: 'No active lock',
+    });
+  }
+
+  // 4. LaunchAgent plist registered
+  try {
+    const plistPath = join(process.env.HOME ?? '~', 'Library', 'LaunchAgents', `dev.narada.site.${siteId}.plist`);
+    const plistStat = await stat(plistPath);
+    if (plistStat.isFile()) {
+      checks.push({
+        name: 'launchagent',
+        status: 'pass',
+        detail: `LaunchAgent plist registered: ${plistPath}`,
+      });
+    } else {
+      checks.push({
+        name: 'launchagent',
+        status: 'warn',
+        detail: `LaunchAgent path exists but is not a file`,
+        remediation: `Run the site setup to regenerate the LaunchAgent plist`,
+      });
+    }
+  } catch {
+    checks.push({
+      name: 'launchagent',
+      status: 'warn',
+      detail: 'LaunchAgent plist not found — site is not scheduled',
+      remediation: `Run the site setup to create the LaunchAgent plist`,
+    });
+  }
+
+  // 5. Health status
+  if (status) {
+    const healthOk = status.health.status !== 'critical' && status.health.status !== 'auth_failed';
+    checks.push({
+      name: 'health-status',
+      status: healthOk ? 'pass' : 'fail',
+      detail: `Health: ${status.health.status} (${status.health.consecutive_failures} consecutive failures)`,
+      remediation: healthOk ? undefined : `Investigate with narada status --site ${siteId}`,
+    });
+
+    // 6. Cycle freshness
+    if (status.health.last_cycle_at) {
+      const lastCycle = new Date(status.health.last_cycle_at);
+      const minsSince = (Date.now() - lastCycle.getTime()) / (1000 * 60);
+      checks.push({
+        name: 'cycle-freshness',
+        status: minsSince <= staleThresholdMinutes ? 'pass' : 'warn',
+        detail: `Last cycle ${Math.round(minsSince)} minutes ago`,
+        remediation: minsSince <= staleThresholdMinutes ? undefined : `Check if the LaunchAgent is loaded: launchctl list | grep dev.narada.site.${siteId}`,
+      });
+    } else {
+      checks.push({
+        name: 'cycle-freshness',
+        status: 'warn',
+        detail: 'No cycle recorded yet',
+        remediation: `Run narada cycle --site ${siteId} to start`,
+      });
+    }
+  } else {
+    checks.push({
+      name: 'health-status',
+      status: 'warn',
+      detail: 'Cannot determine health without coordinator database',
+    });
+    checks.push({
+      name: 'cycle-freshness',
+      status: 'warn',
+      detail: 'Cannot determine cycle freshness without coordinator database',
+    });
+  }
+
+  const hasFail = checks.some((c) => c.status === 'fail');
+  const overall: DoctorReport['overall'] = hasFail ? 'degraded' : 'healthy';
+
+  const scopeResult: ScopeDoctorResult = {
+    scopeId: siteId,
+    rootDir: siteRoot,
+    checks,
+    status: overall,
+  };
+
+  const report: DoctorReport = {
+    overall,
+    scopes: [scopeResult],
+    summary: {
+      pass: checks.filter((c) => c.status === 'pass').length,
+      fail: checks.filter((c) => c.status === 'fail').length,
+      warn: checks.filter((c) => c.status === 'warn').length,
+    },
+  };
+
+  if (fmt.getFormat() === 'json') {
+    return {
+      exitCode: overall === 'healthy' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
+      result: { status: overall, ...report },
+    };
+  }
+
+  const overallIcon = overall === 'healthy' ? '✓' : '✗';
+  fmt.message(`Doctor: ${overallIcon} ${overall.toUpperCase()}`, overall === 'healthy' ? 'success' : 'error');
+  fmt.message(`${report.summary.pass} pass, ${report.summary.fail} fail, ${report.summary.warn} warn`, 'info');
+
+  fmt.section(`Site: ${siteId} (macOS)`);
+  for (const check of checks) {
+    const icon = check.status === 'pass' ? '✓' : check.status === 'warn' ? '⚠' : '✗';
+    const fmtType = check.status === 'pass' ? 'success' : check.status === 'fail' ? 'error' : 'warning';
+    fmt.message(`${icon} ${check.name}: ${check.detail}`, fmtType);
+    if (check.remediation) {
+      fmt.message(`  → ${check.remediation}`, 'info');
+    }
+  }
+
+  return {
+    exitCode: overall === 'healthy' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
+    result: { status: overall, ...report },
+  };
+}
+
+async function doctorLinuxSite(
+  siteId: string,
+  mode: 'system' | 'user',
+  staleThresholdMinutes: number,
+  fmt: ReturnType<typeof createFormatter>,
+  logger: CommandContext['logger'],
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  logger.info('Running doctor for Linux Site', { siteId, mode });
+
+  const {
+    resolveSiteRoot,
+    checkSite,
+  } = await import('@narada2/linux-site');
+
+  const checks = await checkSite(siteId, mode, staleThresholdMinutes);
+  const siteRoot = resolveSiteRoot(siteId, mode);
+
+  const hasFail = checks.some((c) => c.status === 'fail');
+  const overall: DoctorReport['overall'] = hasFail ? 'degraded' : 'healthy';
+
+  const scopeResult: ScopeDoctorResult = {
+    scopeId: siteId,
+    rootDir: siteRoot,
+    checks,
+    status: overall,
+  };
+
+  const report: DoctorReport = {
+    overall,
+    scopes: [scopeResult],
+    summary: {
+      pass: checks.filter((c) => c.status === 'pass').length,
+      fail: checks.filter((c) => c.status === 'fail').length,
+      warn: checks.filter((c) => c.status === 'warn').length,
+    },
+  };
+
+  if (fmt.getFormat() === 'json') {
+    return {
+      exitCode: overall === 'healthy' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
+      result: { status: overall, ...report },
+    };
+  }
+
+  const overallIcon = overall === 'healthy' ? '✓' : '✗';
+  fmt.message(`Doctor: ${overallIcon} ${overall.toUpperCase()}`, overall === 'healthy' ? 'success' : 'error');
+  fmt.message(`${report.summary.pass} pass, ${report.summary.fail} fail, ${report.summary.warn} warn`, 'info');
+
+  fmt.section(`Site: ${siteId} (linux-${mode})`);
+  for (const check of checks) {
+    const icon = check.status === 'pass' ? '✓' : check.status === 'warn' ? '⚠' : '✗';
+    const fmtType = check.status === 'pass' ? 'success' : check.status === 'fail' ? 'error' : 'warning';
+    fmt.message(`${icon} ${check.name}: ${check.detail}`, fmtType);
+    if (check.remediation) {
+      fmt.message(`  → ${check.remediation}`, 'info');
     }
   }
 

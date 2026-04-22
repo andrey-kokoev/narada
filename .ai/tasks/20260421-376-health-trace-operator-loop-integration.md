@@ -86,3 +86,7 @@ pnpm --filter @narada2/windows-site test
 - [x] Notification wiring exists with log adapter default and rate-limiting.
 - [x] Tests cover status, doctor, health transitions, and notifications.
 - [x] No operator mutation surface is implemented.
+
+## Execution Notes
+
+Task was completed and closed before the Task 474 closure invariant was established. Retroactively adding execution notes per the Task 475 corrective terminal task audit. Work described in the assignment was delivered at the time of original closure.

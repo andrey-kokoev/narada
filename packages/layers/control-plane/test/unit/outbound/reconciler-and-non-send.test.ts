@@ -158,7 +158,7 @@ describe("OutboundReconciler", () => {
 
     // No message found
     const result = await reconciler.processNext();
-    expect(result.processed).toBe(true);
+    expect(result.processed).toBe(false);
 
     const updated = store.getCommand(cmd.outbound_id);
     expect(updated?.status).toBe("submitted");

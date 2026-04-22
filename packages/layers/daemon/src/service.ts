@@ -3,7 +3,7 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import { resolve, join } from 'node:path';
+import { dirname, isAbsolute, resolve, join } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import {
   loadConfig,
@@ -80,7 +80,7 @@ import {
   type WorkItemLease,
 } from '@narada2/control-plane';
 import { SearchEngine } from '@narada2/search';
-import { CodexCharterRunner, ToolRunner } from '@narada2/charters';
+import { CodexCharterRunner, KimiCliCharterRunner, ToolRunner } from '@narada2/charters';
 import type { ToolDefinition, ToolInvocationRequest } from '@narada2/charters';
 import { createLogger } from './lib/logger.js';
 import { PidFile } from './lib/pid-file.js';
@@ -88,6 +88,14 @@ import { HealthFile, type HealthStatus as DaemonHealthStatus } from './lib/healt
 import { computeHealthTransition, type CycleOutcome, type HealthStatus } from '@narada2/control-plane';
 // TODO(Task 342): Wire computeHealthTransition into updateHealth when notification emission is implemented.
 import { getRecoveryGuidance, healthClassPermitsExecution } from '@narada2/charters';
+import {
+  InMemoryPrincipalRuntimeRegistry,
+  canClaimWork,
+  transitionState,
+  attachPrincipal,
+  getPrincipalHealth,
+  type PrincipalRuntimeRegistry,
+} from '@narada2/control-plane';
 import { createObservationServer, type ObservationApiScope } from './observation/observation-server.js';
 import { registerScopeApis } from './observation/scope-registry.js';
 import type { WakeReason } from './observation/types.js';
@@ -263,6 +271,79 @@ const phaseAToolDefinitions: Record<string, ToolDefinition> = {
   },
 };
 
+interface LocalToolCatalogFile {
+  tools?: Array<{
+    tool_id?: unknown;
+    description?: unknown;
+    command?: unknown;
+    authority_class?: unknown;
+    read_only?: unknown;
+    requires_approval?: unknown;
+    timeout_ms?: unknown;
+    schema_args?: unknown;
+  }>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+async function loadScopeTooling(scope: ScopeConfig): Promise<{
+  toolCatalog: ToolCatalogEntry[];
+  toolDefinitions: Record<string, ToolDefinition>;
+}> {
+  if (!scope.tool_catalogs || scope.tool_catalogs.length === 0) {
+    return { toolCatalog: phaseAToolCatalog, toolDefinitions: phaseAToolDefinitions };
+  }
+
+  const toolCatalog: ToolCatalogEntry[] = [];
+  const toolDefinitions: Record<string, ToolDefinition> = {};
+
+  for (const ref of scope.tool_catalogs) {
+    if (ref.type !== 'local_path') continue;
+    const catalogPath = isAbsolute(ref.path) ? ref.path : resolve(scope.root_dir, ref.path);
+    const catalogDir = dirname(catalogPath);
+    const parsed = JSON.parse(await readFile(catalogPath, 'utf8')) as LocalToolCatalogFile;
+
+    for (const raw of parsed.tools ?? []) {
+      if (!isRecord(raw)) continue;
+      const toolId = String(raw.tool_id ?? '').trim();
+      const command = String(raw.command ?? '').trim();
+      if (!toolId || !command) continue;
+
+      const timeoutMs = typeof raw.timeout_ms === 'number' ? raw.timeout_ms : 30000;
+      const schemaArgs = Array.isArray(raw.schema_args)
+        ? raw.schema_args.filter(isRecord).map((arg) => ({
+            name: String(arg.name ?? ''),
+            type: String(arg.type ?? 'string'),
+            required: Boolean(arg.required),
+            description: String(arg.description ?? ''),
+          })).filter((arg) => arg.name.length > 0)
+        : [];
+
+      toolCatalog.push({
+        tool_id: toolId,
+        tool_signature: `${toolId}@v1`,
+        description: String(raw.description ?? toolId),
+        schema_args: schemaArgs,
+        read_only: raw.read_only !== false,
+        requires_approval: raw.requires_approval === true,
+        timeout_ms: timeoutMs,
+        authority_class: String(raw.authority_class ?? 'derive') as ToolCatalogEntry['authority_class'],
+      });
+
+      toolDefinitions[toolId] = {
+        id: toolId,
+        source_type: 'local_executable',
+        executable_path: isAbsolute(command) ? command : resolve(catalogDir, command),
+        working_directory: catalogDir,
+      };
+    }
+  }
+
+  return { toolCatalog, toolDefinitions };
+}
+
 function createDefaultCharterRunner(
   cfg: ScopeConfig,
   store: InstanceType<typeof SqliteCoordinatorStore>,
@@ -277,6 +358,35 @@ function createDefaultCharterRunner(
         apiKey: apiKey!,
         model: cfg.charter?.model,
         baseUrl: cfg.charter?.base_url,
+        timeoutMs: cfg.charter?.timeout_ms,
+        degradedMode: cfg.charter?.degraded_mode,
+      },
+      {
+        persistTrace: (trace) => {
+          try {
+            store.db
+              .prepare(
+                `insert into agent_traces (trace_id, execution_id, envelope_json, reasoning_log, created_at)
+                 values (?, ?, ?, ?, ?)
+                 on conflict(trace_id) do update set envelope_json=excluded.envelope_json, reasoning_log=excluded.reasoning_log`,
+              )
+              .run(trace.trace_id, trace.execution_id, trace.envelope_json, trace.reasoning_log ?? null, trace.created_at);
+          } catch {
+            // Ignore trace persistence errors
+          }
+        },
+      },
+    ) as unknown as CharterRunner;
+  }
+
+  if (runtime === 'kimi-cli') {
+    return new KimiCliCharterRunner(
+      {
+        cliPath: cfg.charter?.cli_path,
+        model: cfg.charter?.model,
+        sessionId: cfg.charter?.session_id,
+        continueSession: cfg.charter?.continue_session,
+        workDir: cfg.charter?.work_dir,
         timeoutMs: cfg.charter?.timeout_ms,
         degradedMode: cfg.charter?.degraded_mode,
       },
@@ -318,7 +428,7 @@ function createDefaultCharterRunner(
     });
   }
 
-  throw new Error(`Invalid charter runtime: ${runtime}. Expected 'codex-api', 'kimi-api', or 'mock'.`);
+  throw new Error(`Invalid charter runtime: ${runtime}. Expected 'codex-api', 'kimi-api', 'kimi-cli', or 'mock'.`);
 }
 
 export interface ShutdownSignal {
@@ -366,6 +476,7 @@ async function createDispatchContext(
     processExecutionStore: InstanceType<typeof SqliteProcessExecutionStore>;
     processExecutor: InstanceType<typeof ProcessExecutor>;
     factStore: InstanceType<typeof SqliteFactStore>;
+    principalRegistry: PrincipalRuntimeRegistry;
   } | null = null;
 
   async function initDispatchDeps(): Promise<NonNullable<typeof dispatchDeps>> {
@@ -406,6 +517,19 @@ async function createDispatchContext(
       return policy;
     };
 
+    // Initialize PrincipalRuntime registry (Task 406)
+    const principalRegistry = new InMemoryPrincipalRuntimeRegistry();
+    const defaultPrincipal = principalRegistry.create({
+      runtime_id: `daemon_${scope.scope_id}`,
+      principal_id: scope.scope_id,
+      principal_type: "worker",
+      scope_id: scope.scope_id,
+      detail: "Daemon default principal",
+    });
+    // Default principal starts attached so the daemon can auto-claim work
+    transitionState(defaultPrincipal, "available");
+    attachPrincipal(defaultPrincipal, scope.scope_id, "interact");
+
     const foreman = new DefaultForemanFacade({
       coordinatorStore,
       outboundStore,
@@ -413,7 +537,18 @@ async function createDispatchContext(
       db,
       foremanId: scope.scope_id,
       getRuntimePolicy,
-      contextFormationStrategy: resolveContextStrategy(scope.context_strategy ?? 'mail'),
+      contextFormationStrategy: resolveContextStrategy(
+        scope.context_strategy ?? 'mail',
+        {
+          admission: scope.admission,
+          ...(scope.campaign_request_senders
+            ? {
+                campaign_request_senders: scope.campaign_request_senders,
+                campaign_request_lookback_days: scope.campaign_request_lookback_days,
+              }
+            : {}),
+        },
+      ),
     });
 
     const scheduler = new SqliteScheduler(coordinatorStore, {
@@ -422,8 +557,9 @@ async function createDispatchContext(
     });
 
     const charterRunner = opts.charterRunner ?? createDefaultCharterRunner(scope, coordinatorStore);
-    const toolCatalog = opts.toolCatalog ?? phaseAToolCatalog;
-    const toolDefinitions = opts.toolDefinitions ?? phaseAToolDefinitions;
+    const loadedTooling = await loadScopeTooling(scope);
+    const toolCatalog = opts.toolCatalog ?? loadedTooling.toolCatalog;
+    const toolDefinitions = opts.toolDefinitions ?? loadedTooling.toolDefinitions;
 
     const processExecutionStore = new SqliteProcessExecutionStore({ db });
     processExecutionStore.initSchema();
@@ -618,7 +754,7 @@ async function createDispatchContext(
       });
     }
 
-    dispatchDeps = { db, coordinatorStore, outboundStore, intentStore, traceStore, foreman, scheduler, charterRunner, materializerRegistry, toolCatalog, toolDefinitions, processExecutionStore, workerRegistry, processExecutor, factStore };
+    dispatchDeps = { db, coordinatorStore, outboundStore, intentStore, traceStore, foreman, scheduler, charterRunner, materializerRegistry, toolCatalog, toolDefinitions, processExecutionStore, workerRegistry, processExecutor, factStore, principalRegistry };
     return dispatchDeps;
   }
 
@@ -750,6 +886,14 @@ async function createDispatchContext(
       // Stale-lease recovery means the runner vanished (crash/restart), not that
       // the work failed. Use `immediate` so the item is runnable right away.
       deps.foreman.failWorkItem(workItemId, "Lease abandoned due to stale recovery", true, "immediate");
+
+      // Also reset any principal tracking this work item (Task 406)
+      const stuckPrincipal = deps.principalRegistry.list(scope.scope_id).find((p) => p.active_work_item_id === workItemId);
+      if (stuckPrincipal) {
+        transitionState(stuckPrincipal, "attached_interact", "Lease recovered by scheduler — resetting principal");
+        stuckPrincipal.active_work_item_id = null;
+        stuckPrincipal.active_session_id = null;
+      }
     }
 
     // Probe charter runtime health for observability and execution gating (Task 284).
@@ -772,6 +916,36 @@ async function createDispatchContext(
     const isProductionRunner = !opts.charterRunner;
     const executionBlocked = isProductionRunner && charterHealth && !healthClassPermitsExecution(charterHealth.class);
 
+    // Update default principal runtime state based on charter health (Task 406)
+    const defaultPrincipal = deps.principalRegistry.get(`daemon_${scope.scope_id}`);
+    if (defaultPrincipal) {
+      // Recover principal if it's in a work state but has no active lease
+      if (defaultPrincipal.active_work_item_id) {
+        const activeLease = deps.coordinatorStore.db.prepare(
+          `select lease_id from work_item_leases where work_item_id = ? and released_at is null`
+        ).get(defaultPrincipal.active_work_item_id) as { lease_id: string } | undefined;
+        if (!activeLease) {
+          transitionState(defaultPrincipal, "attached_interact", "No active lease for tracked work item — recovering principal");
+          defaultPrincipal.active_work_item_id = null;
+          defaultPrincipal.active_session_id = null;
+        }
+      }
+
+      if (executionBlocked) {
+        if (defaultPrincipal.state !== "unavailable") {
+          transitionState(defaultPrincipal, "unavailable", `Charter runtime ${charterHealth?.class}`);
+        }
+      } else if (charterHealth && charterHealth.class !== 'healthy') {
+        if (defaultPrincipal.state !== "attached_interact" && defaultPrincipal.state !== "claiming" && defaultPrincipal.state !== "executing" && defaultPrincipal.state !== "waiting_review") {
+          transitionState(defaultPrincipal, "attached_interact", `Charter runtime degraded: ${charterHealth.class}`);
+        }
+      } else {
+        if (defaultPrincipal.state === "unavailable") {
+          transitionState(defaultPrincipal, "attached_interact", "Charter runtime healthy");
+        }
+      }
+    }
+
     if (executionBlocked) {
       const guidance = getRecoveryGuidance(charterHealth.class);
       logger.warn('Charter runtime degraded — skipping execution', {
@@ -790,7 +964,16 @@ async function createDispatchContext(
       });
     }
 
-    while (!executionBlocked && !deps.scheduler.isQuiescent(scope.scope_id)) {
+    // Principal runtime gating: default principal must permit claiming (Task 406)
+    const principalBlocked = defaultPrincipal ? !canClaimWork(defaultPrincipal.state) : true;
+    if (principalBlocked) {
+      logger.info('Principal runtime blocked — skipping execution', {
+        scope: scope.scope_id,
+        principal_state: defaultPrincipal?.state ?? "missing",
+      });
+    }
+
+    while (!executionBlocked && !principalBlocked && !deps.scheduler.isQuiescent(scope.scope_id)) {
       if (shutdownSignal?.shuttingDown) {
         logger.info('Dispatch phase interrupted by shutdown', { scope: scope.scope_id });
         break;
@@ -802,9 +985,20 @@ async function createDispatchContext(
       }
 
       const workItem = runnable[0]!;
+
+      // Transition default principal to claiming (Task 406)
+      if (defaultPrincipal) {
+        transitionState(defaultPrincipal, "claiming", `Claiming work item ${workItem.work_item_id}`);
+        defaultPrincipal.active_work_item_id = workItem.work_item_id;
+      }
+
       const leaseResult = deps.scheduler.acquireLease(workItem.work_item_id, scope.scope_id);
       if (!leaseResult.success) {
         logger.warn('Failed to acquire lease', { scope: scope.scope_id, work_item_id: workItem.work_item_id, error: leaseResult.error });
+        if (defaultPrincipal) {
+          transitionState(defaultPrincipal, "attached_interact", "Lease acquisition failed");
+          defaultPrincipal.active_work_item_id = null;
+        }
         continue;
       }
 
@@ -820,6 +1014,12 @@ async function createDispatchContext(
         workItem.opened_for_revision_id,
         JSON.stringify(envelope),
       );
+
+      // Transition default principal to executing (Task 406)
+      if (defaultPrincipal) {
+        transitionState(defaultPrincipal, "executing", `Executing work item ${workItem.work_item_id}`);
+        defaultPrincipal.active_session_id = attempt.session_id;
+      }
 
       await opts.dispatchHooks?.beforeRuntimeInvoke?.(workItem, attempt, envelope);
 
@@ -932,11 +1132,21 @@ async function createDispatchContext(
 
           await opts.dispatchHooks?.afterToolExecution?.(workItem, attempt);
         }
+
+        // Transition default principal back to attached_interact on success (Task 406)
+        if (defaultPrincipal) {
+          transitionState(defaultPrincipal, "attached_interact", `Completed work item ${workItem.work_item_id}`);
+        }
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         deps.scheduler.failExecution(attempt.execution_id, msg, true);
         deps.foreman.failWorkItem(workItem.work_item_id, msg, true);
         logger.error('Execution failed', { scope: scope.scope_id, work_item_id: workItem.work_item_id, error: msg });
+
+        // Transition default principal back to attached_interact on failure (Task 406)
+        if (defaultPrincipal) {
+          transitionState(defaultPrincipal, "attached_interact", `Failed work item ${workItem.work_item_id}: ${msg}`);
+        }
       } finally {
         if (leaseRenewalTimer) {
           clearInterval(leaseRenewalTimer);
@@ -1014,6 +1224,10 @@ async function createDispatchContext(
       };
     }
 
+    // Principal runtime health (Task 406)
+    const principalHealth = deps.principalRegistry.list(scope.scope_id).map((p) => getPrincipalHealth(p));
+    const defaultPrincipalHealth = principalHealth.find((h) => h.principal_id === scope.scope_id);
+
     return {
       openWorkItems: summary.active_work_items,
       leasedWorkItems: summary.leased_work_items,
@@ -1027,7 +1241,7 @@ async function createDispatchContext(
         outbound_handoffs: stuckOutbound,
       },
       readiness: {
-        dispatchReady: syncFresh,
+        dispatchReady: syncFresh && (defaultPrincipalHealth?.can_claim_work ?? false),
         outboundHealthy: summary.readiness.outbound_healthy,
         workersRegistered,
         syncFresh,
@@ -1035,6 +1249,7 @@ async function createDispatchContext(
         charterRuntimeHealthClass: charterRuntimeHealth.class,
       },
       charterRuntimeHealth,
+      principalRuntimeHealth: principalHealth,
     };
   }
 
@@ -1056,6 +1271,7 @@ async function createDispatchContext(
       workerRegistry: deps.workerRegistry,
       factStore: deps.factStore,
       foreman: deps.foreman,
+      scopeConfig: scope,
       rebuildViews: callbacks?.rebuildViews,
       rebuildProjections: callbacks?.rebuildProjections,
       runDispatchPhase,

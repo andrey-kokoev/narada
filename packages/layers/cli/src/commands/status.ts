@@ -36,6 +36,7 @@ export interface StatusOptions {
   verbose?: boolean;
   format?: string;
   site?: string;
+  mode?: string;
 }
 
 interface DaemonHealthSnapshot {
@@ -114,8 +115,30 @@ export async function statusCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const { configPath, logger } = context;
 
-  // Windows Site path: --site takes precedence over config
+  // Site path: --site takes precedence over config
   if (options.site) {
+    // If explicit mode provided for Linux
+    if (options.mode === 'system' || options.mode === 'user') {
+      return statusLinuxSite(options.site, options.mode, logger);
+    }
+
+    // Try macOS first
+    const { isMacosSite } = await import('@narada2/macos-site');
+    if (isMacosSite(options.site)) {
+      return statusMacosSite(options.site, logger);
+    }
+
+    // Try Linux next
+    try {
+      const { isLinuxSite, resolveLinuxSiteMode } = await import('@narada2/linux-site');
+      const linuxMode = resolveLinuxSiteMode(options.site);
+      if (linuxMode) {
+        return statusLinuxSite(options.site, linuxMode, logger);
+      }
+    } catch {
+      // Linux package not available
+    }
+
     return statusWindowsSite(options.site, logger);
   }
 
@@ -209,6 +232,86 @@ export async function statusCommand(
   };
 }
 
+async function statusMacosSite(
+  siteId: string,
+  logger: CommandContext['logger'],
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  logger.info('Querying macOS Site', { siteId });
+
+  const { getMacosSiteStatus } = await import('@narada2/macos-site');
+
+  try {
+    const status = await getMacosSiteStatus(siteId);
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: {
+        status: 'success',
+        site: {
+          id: status.siteId,
+          substrate: 'macos',
+          rootDir: status.siteRoot,
+        },
+        health: status.health.status,
+        lastCycleAt: status.health.last_cycle_at,
+        lastCycleDurationMs: status.health.last_cycle_duration_ms,
+        consecutiveFailures: status.health.consecutive_failures,
+        message: status.health.message,
+        lastTrace: status.lastTrace,
+      },
+    };
+  } catch (error) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: {
+        status: 'error',
+        error: `Failed to query macOS Site: ${(error as Error).message}`,
+        health: 'error',
+      },
+    };
+  }
+}
+
+async function statusLinuxSite(
+  siteId: string,
+  mode: 'system' | 'user',
+  logger: CommandContext['logger'],
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  logger.info('Querying Linux Site', { siteId, mode });
+
+  const { getLinuxSiteStatus } = await import('@narada2/linux-site');
+
+  try {
+    const status = await getLinuxSiteStatus(siteId, mode);
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: {
+        status: 'success',
+        site: {
+          id: status.siteId,
+          substrate: 'linux',
+          mode: status.mode,
+          rootDir: status.siteRoot,
+        },
+        health: status.health.status,
+        lastCycleAt: status.health.last_cycle_at,
+        lastCycleDurationMs: status.health.last_cycle_duration_ms,
+        consecutiveFailures: status.health.consecutive_failures,
+        message: status.health.message,
+        lastTrace: status.lastTrace,
+      },
+    };
+  } catch (error) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: {
+        status: 'error',
+        error: `Failed to query Linux Site: ${(error as Error).message}`,
+        health: 'error',
+      },
+    };
+  }
+}
+
 async function statusWindowsSite(
   siteId: string,
   logger: CommandContext['logger'],
@@ -226,7 +329,7 @@ async function statusWindowsSite(
       exitCode: ExitCode.GENERAL_ERROR,
       result: {
         status: 'error',
-        error: `Windows Site "${siteId}" not found. Checked native and WSL paths.`,
+        error: `Site "${siteId}" not found. Checked macOS, Linux (system/user), and Windows (native/WSL) paths.`,
         health: 'error',
       },
     };

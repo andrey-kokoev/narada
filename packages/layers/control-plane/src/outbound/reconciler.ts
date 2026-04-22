@@ -86,8 +86,8 @@ export class OutboundReconciler {
     }
 
     const { command, version } = candidates[0]!;
-    await this.reconcile(command, version);
-    return { processed: true, outboundId: command.outbound_id };
+    const changed = await this.reconcile(command, version);
+    return { processed: changed, outboundId: changed ? command.outbound_id : undefined };
   }
 
   /**
@@ -129,7 +129,7 @@ export class OutboundReconciler {
     };
   }
 
-  private async reconcile(command: OutboundCommand, version: OutboundVersion): Promise<void> {
+  private async reconcile(command: OutboundCommand, version: OutboundVersion): Promise<boolean> {
     const { messageFinder, logger } = this.deps;
 
     const submittedAt = command.submitted_at
@@ -176,7 +176,7 @@ export class OutboundReconciler {
           this.transition(command.outbound_id, "submitted", "failed_terminal", {
             terminal_reason: "Missing target_message_id in payload",
           });
-          return;
+          return true;
         }
 
         const message = await messageFinder.findByMessageId(
@@ -194,7 +194,7 @@ export class OutboundReconciler {
               this.transition(command.outbound_id, "submitted", "failed_terminal", {
                 terminal_reason: "Missing destination_folder_id in payload",
               });
-              return;
+              return true;
             }
             confirmed = message.folderRefs?.includes(dest) ?? false;
             evidence = confirmed
@@ -217,7 +217,7 @@ export class OutboundReconciler {
         error: (error as Error).message,
       });
       // Retryable lookup error: leave in submitted and try again later
-      return;
+      return false;
     }
 
     if (confirmed) {
@@ -228,7 +228,7 @@ export class OutboundReconciler {
         outboundId: command.outbound_id,
         evidence,
       });
-      return;
+      return true;
     }
 
     // Not confirmed yet. If window elapsed, transition to retry_wait for review.
@@ -240,8 +240,10 @@ export class OutboundReconciler {
         outboundId: command.outbound_id,
         elapsedMs,
       });
+      return true;
     }
     // Else: leave in submitted and try again next poll
+    return false;
   }
 
   private transition(

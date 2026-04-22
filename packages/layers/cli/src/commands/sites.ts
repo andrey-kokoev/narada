@@ -4,6 +4,7 @@
  * Site discovery and registry management commands.
  */
 
+import { writeFile } from 'node:fs/promises';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
@@ -69,6 +70,38 @@ export async function sitesListCommand(
       }
     }
 
+    // Also discover macOS sites
+    try {
+      const { discoverMacosSites, getMacosSiteStatus } = await import('@narada2/macos-site');
+      const macosSites = discoverMacosSites();
+      for (const site of macosSites) {
+        // Avoid duplicates
+        if (entries.some((e) => e.siteId === site.siteId)) continue;
+        try {
+          const status = await getMacosSiteStatus(site.siteId);
+          entries.push({
+            siteId: site.siteId,
+            variant: 'macos',
+            substrate: 'macos-native',
+            health: status.health.status,
+            lastCycle: status.health.last_cycle_at,
+            failures: status.health.consecutive_failures,
+          });
+        } catch {
+          entries.push({
+            siteId: site.siteId,
+            variant: 'macos',
+            substrate: 'macos-native',
+            health: 'unknown',
+            lastCycle: null,
+            failures: 0,
+          });
+        }
+      }
+    } catch {
+      // macOS site package not available
+    }
+
     if (fmt.getFormat() === 'human') {
       if (entries.length === 0) {
         fmt.message('No Sites registered. Run `narada sites discover` to scan.', 'info');
@@ -118,6 +151,19 @@ export async function sitesDiscoverCommand(
       } catch {
         // Skip variants that fail to scan
       }
+    }
+
+    // Discover macOS sites
+    try {
+      const { discoverMacosSites } = await import('@narada2/macos-site');
+      const macosSites = discoverMacosSites();
+      for (const site of macosSites) {
+        if (!discovered.some((d) => d.siteId === site.siteId)) {
+          discovered.push({ siteId: site.siteId, variant: 'macos' });
+        }
+      }
+    } catch {
+      // macOS site package not available
     }
 
     if (fmt.getFormat() === 'human') {
@@ -231,5 +277,497 @@ export async function sitesRemoveCommand(
     return { exitCode: ExitCode.SUCCESS, result: { status: 'success', removed: siteId } };
   } finally {
     registry.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Site init
+// ---------------------------------------------------------------------------
+
+export interface SitesInitOptions extends SitesOptions {
+  substrate?: string;
+  operation?: string;
+  root?: string;
+  dryRun?: boolean;
+}
+
+const VALID_SUBSTRATES = [
+  'windows-native',
+  'windows-wsl',
+  'macos',
+  'linux-user',
+  'linux-system',
+];
+
+export async function sitesInitCommand(
+  siteId: string,
+  options: SitesInitOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
+  const substrate = options.substrate;
+
+  // Validate substrate
+  if (!substrate || !VALID_SUBSTRATES.includes(substrate)) {
+    const validList = VALID_SUBSTRATES.join(', ');
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        status: 'error',
+        error: `Unsupported substrate: "${substrate ?? ''}". Valid substrates: ${validList}`,
+        remediation: `Choose one of: ${validList}`,
+      },
+    };
+  }
+
+  const dryRun = !!options.dryRun;
+  const intervalMinutes = 5;
+  const lockTtlMs = 310_000;
+  const ceilingMs = 300_000;
+
+  // Resolve site root and config per substrate
+  let siteRoot: string;
+  let configPath: string;
+  let configContent: Record<string, unknown>;
+
+  try {
+    if (substrate === 'windows-native' || substrate === 'windows-wsl') {
+      const variant = substrate === 'windows-native' ? 'native' : 'wsl';
+      const {
+        resolveSiteRoot,
+        ensureSiteDir,
+        siteConfigPath,
+      } = await import('@narada2/windows-site');
+
+      siteRoot = options.root ?? resolveSiteRoot(siteId, variant);
+      configPath = siteConfigPath(siteId, variant);
+
+      if (!dryRun) {
+        await ensureSiteDir(siteId, variant);
+      }
+
+      configContent = {
+        site_id: siteId,
+        variant,
+        site_root: siteRoot,
+        config_path: configPath,
+        cycle_interval_minutes: intervalMinutes,
+        lock_ttl_ms: lockTtlMs,
+        ceiling_ms: ceilingMs,
+      };
+
+      if (!dryRun) {
+        await writeFile(configPath, JSON.stringify(configContent, null, 2) + '\n', 'utf8');
+
+        // Register in Windows SiteRegistry
+        const registry = await openRegistry();
+        try {
+          registry.registerSite({
+            siteId,
+            variant,
+            siteRoot,
+            substrate: substrate === 'windows-native' ? 'windows-native' : 'windows-wsl',
+            aimJson: options.operation ?? null,
+            controlEndpoint: null,
+            lastSeenAt: null,
+            createdAt: new Date().toISOString(),
+          });
+        } finally {
+          registry.close();
+        }
+      }
+    } else if (substrate === 'macos') {
+      const {
+        resolveSiteRoot,
+        ensureSiteDir,
+        siteConfigPath,
+      } = await import('@narada2/macos-site');
+
+      siteRoot = options.root ?? resolveSiteRoot(siteId);
+      configPath = siteConfigPath(siteId);
+
+      if (!dryRun) {
+        await ensureSiteDir(siteId);
+      }
+
+      configContent = {
+        site_id: siteId,
+        site_root: siteRoot,
+        config_path: configPath,
+        cycle_interval_minutes: intervalMinutes,
+        lock_ttl_ms: lockTtlMs,
+        ceiling_ms: ceilingMs,
+      };
+
+      if (!dryRun) {
+        await writeFile(configPath, JSON.stringify(configContent, null, 2) + '\n', 'utf8');
+      }
+    } else {
+      // linux-user or linux-system
+      const mode = substrate === 'linux-user' ? 'user' : 'system';
+      const {
+        resolveSiteRoot,
+        ensureSiteDir,
+        siteConfigPath,
+      } = await import('@narada2/linux-site');
+
+      siteRoot = options.root ?? resolveSiteRoot(siteId, mode);
+      configPath = siteConfigPath(siteId, mode);
+
+      if (!dryRun) {
+        await ensureSiteDir(siteId, mode);
+      }
+
+      configContent = {
+        site_id: siteId,
+        mode,
+        site_root: siteRoot,
+        config_path: configPath,
+        cycle_interval_minutes: intervalMinutes,
+        lock_ttl_ms: lockTtlMs,
+        ceiling_ms: ceilingMs,
+      };
+
+      if (!dryRun) {
+        await writeFile(configPath, JSON.stringify(configContent, null, 2) + '\n', 'utf8');
+      }
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: { status: 'error', error: `Failed to initialize Site: ${message}` },
+    };
+  }
+
+  // Output
+  if (fmt.getFormat() === 'human') {
+    fmt.message(dryRun ? 'Dry run — no changes made' : `Initialized Site: ${siteId}`, 'success');
+    fmt.kv('Substrate', substrate);
+    fmt.kv('Site Root', siteRoot!);
+    fmt.kv('Config Path', configPath!);
+    if (options.operation) {
+      fmt.kv('Operation', options.operation);
+    }
+    fmt.section('Next steps');
+    fmt.message(`1. Set credentials: export NARADA_${siteId.toUpperCase().replace(/[^A-Z0-9]/g, '_')}_GRAPH_ACCESS_TOKEN="..."`, 'info');
+    fmt.message(`2. Validate:      narada doctor --site ${siteId}`, 'info');
+    fmt.message(`3. First Cycle:    narada cycle --site ${siteId}`, 'info');
+    fmt.message(`4. Enable supervisor: narada sites enable ${siteId}`, 'info');
+  }
+
+  return {
+    exitCode: ExitCode.SUCCESS,
+    result: {
+      status: 'success',
+      siteId,
+      substrate,
+      siteRoot: siteRoot!,
+      configPath: configPath!,
+      dryRun,
+      config: configContent!,
+      nextSteps: [
+        `narada doctor --site ${siteId}`,
+        `narada cycle --site ${siteId}`,
+        `narada sites enable ${siteId}`,
+      ],
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Site enable
+// ---------------------------------------------------------------------------
+
+export interface SitesEnableOptions extends SitesOptions {
+  intervalMinutes?: number;
+  dryRun?: boolean;
+}
+
+export async function sitesEnableCommand(
+  siteId: string,
+  options: SitesEnableOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
+  const dryRun = !!options.dryRun;
+  const intervalMinutes = options.intervalMinutes ?? 5;
+
+  // Detect substrate (same routing as cycle/status/doctor)
+  let substrate: string;
+  let enableResult: Record<string, unknown> = {};
+
+  try {
+    // Try macOS first
+    try {
+      const { isMacosSite } = await import('@narada2/macos-site');
+      if (isMacosSite(siteId)) {
+        substrate = 'macos';
+        const {
+          resolveSiteRoot,
+          siteConfigPath,
+          writeLaunchAgentFiles,
+        } = await import('@narada2/macos-site');
+
+        const siteRoot = resolveSiteRoot(siteId);
+        const configPath = siteConfigPath(siteId);
+
+        // Read config to get MacosSiteConfig shape
+        let config: { site_id: string; site_root: string; config_path: string; cycle_interval_minutes: number; lock_ttl_ms: number; ceiling_ms: number };
+        try {
+          const { readFile } = await import('node:fs/promises');
+          const raw = await readFile(configPath, 'utf8');
+          config = JSON.parse(raw);
+        } catch {
+          // Use defaults if config missing
+          config = {
+            site_id: siteId,
+            site_root: siteRoot,
+            config_path: configPath,
+            cycle_interval_minutes: intervalMinutes,
+            lock_ttl_ms: 310_000,
+            ceiling_ms: 300_000,
+          };
+        }
+
+        if (!dryRun) {
+          const paths = await writeLaunchAgentFiles(config);
+          enableResult = { substrate: 'macos', paths };
+        } else {
+          enableResult = { substrate: 'macos', paths: null, dryRun: true };
+        }
+
+        if (fmt.getFormat() === 'human') {
+          fmt.message(dryRun ? 'Dry run — no changes made' : `Enabled supervisor for Site: ${siteId}`, 'success');
+          fmt.kv('Substrate', 'macos');
+          fmt.kv('Interval', `${intervalMinutes} minutes`);
+          if (!dryRun && 'paths' in enableResult && enableResult.paths) {
+            const p = enableResult.paths as Record<string, string>;
+            fmt.kv('Plist', p.plistPath ?? '-');
+            fmt.kv('Script', p.scriptPath ?? '-');
+          }
+          fmt.section('Activation');
+          fmt.message(`Run: launchctl load ~/Library/LaunchAgents/dev.narada.site.${siteId}.plist`, 'info');
+          fmt.message(`Logs: narada status --site ${siteId}`, 'info');
+        }
+
+        return {
+          exitCode: ExitCode.SUCCESS,
+          result: {
+            status: 'success',
+            siteId,
+            substrate: 'macos',
+            dryRun,
+            intervalMinutes,
+            ...enableResult,
+            activationCommand: `launchctl load ~/Library/LaunchAgents/dev.narada.site.${siteId}.plist`,
+          },
+        };
+      }
+    } catch {
+      // macOS package not available
+    }
+
+    // Try Linux next
+    try {
+      const { isLinuxSite, resolveLinuxSiteMode } = await import('@narada2/linux-site');
+      const linuxMode = resolveLinuxSiteMode(siteId);
+      if (linuxMode) {
+        substrate = `linux-${linuxMode}`;
+        const {
+          resolveSiteRoot,
+          siteConfigPath,
+          DefaultLinuxSiteSupervisor,
+        } = await import('@narada2/linux-site');
+
+        const siteRoot = resolveSiteRoot(siteId, linuxMode);
+        const configPath = siteConfigPath(siteId, linuxMode);
+
+        let config: { site_id: string; mode: 'system' | 'user'; site_root: string; config_path: string; cycle_interval_minutes: number; lock_ttl_ms: number; ceiling_ms: number };
+        try {
+          const { readFile } = await import('node:fs/promises');
+          const raw = await readFile(configPath, 'utf8');
+          config = JSON.parse(raw);
+        } catch {
+          config = {
+            site_id: siteId,
+            mode: linuxMode as 'system' | 'user',
+            site_root: siteRoot,
+            config_path: configPath,
+            cycle_interval_minutes: intervalMinutes,
+            lock_ttl_ms: 310_000,
+            ceiling_ms: 300_000,
+          };
+        }
+
+        if (!dryRun) {
+          const supervisor = new DefaultLinuxSiteSupervisor();
+          const registration = await supervisor.register(config);
+          enableResult = { substrate: `linux-${linuxMode}`, registration };
+        } else {
+          enableResult = { substrate: `linux-${linuxMode}`, registration: null, dryRun: true };
+        }
+
+        if (fmt.getFormat() === 'human') {
+          fmt.message(dryRun ? 'Dry run — no changes made' : `Enabled supervisor for Site: ${siteId}`, 'success');
+          fmt.kv('Substrate', `linux-${linuxMode}`);
+          fmt.kv('Interval', `${intervalMinutes} minutes`);
+          if (!dryRun && 'registration' in enableResult && enableResult.registration) {
+            const r = enableResult.registration as { servicePath?: string; timerPath?: string; cronEntry?: string };
+            if (r.servicePath) fmt.kv('Service', r.servicePath);
+            if (r.timerPath) fmt.kv('Timer', r.timerPath);
+            if (r.cronEntry) fmt.kv('Cron', r.cronEntry);
+          }
+          fmt.section('Activation');
+          const scope = linuxMode === 'system' ? '' : ' --user';
+          fmt.message(`Run: systemctl${scope} enable narada-site-${siteId}.timer`, 'info');
+          fmt.message(`Run: systemctl${scope} start narada-site-${siteId}.timer`, 'info');
+          fmt.message(`Logs: journalctl${scope} -u narada-site-${siteId}.service`, 'info');
+        }
+
+        return {
+          exitCode: ExitCode.SUCCESS,
+          result: {
+            status: 'success',
+            siteId,
+            substrate: `linux-${linuxMode}`,
+            dryRun,
+            intervalMinutes,
+            ...enableResult,
+            activationCommands: [
+              `systemctl${linuxMode === 'system' ? '' : ' --user'} enable narada-site-${siteId}.timer`,
+              `systemctl${linuxMode === 'system' ? '' : ' --user'} start narada-site-${siteId}.timer`,
+            ],
+          },
+        };
+      }
+    } catch {
+      // Linux package not available
+    }
+
+    // Fallback to Windows
+    try {
+      const { resolveSiteVariant, resolveSiteRoot, siteConfigPath } = await import('@narada2/windows-site');
+      const variant = resolveSiteVariant(siteId);
+      if (!variant) {
+        return {
+          exitCode: ExitCode.GENERAL_ERROR,
+          result: {
+            status: 'error',
+            error: `Site "${siteId}" not found. Checked macOS, Linux (system/user), and Windows (native/WSL) paths.`,
+            remediation: `Run narada sites init ${siteId} --substrate <substrate> to create the Site first.`,
+          },
+        };
+      }
+
+      substrate = variant === 'native' ? 'windows-native' : 'windows-wsl';
+      const siteRoot = resolveSiteRoot(siteId, variant);
+      const configPath = siteConfigPath(siteId, variant);
+
+      let config: { site_id: string; variant: 'native' | 'wsl'; site_root: string; config_path: string; cycle_interval_minutes: number; lock_ttl_ms: number; ceiling_ms: number };
+      try {
+        const { readFile } = await import('node:fs/promises');
+        const raw = await readFile(configPath, 'utf8');
+        config = JSON.parse(raw);
+      } catch {
+        config = {
+          site_id: siteId,
+          variant: variant as 'native' | 'wsl',
+          site_root: siteRoot,
+          config_path: configPath,
+          cycle_interval_minutes: intervalMinutes,
+          lock_ttl_ms: 310_000,
+          ceiling_ms: 300_000,
+        };
+      }
+
+      if (variant === 'native') {
+        const { generateRegisterTaskScript } = await import('@narada2/windows-site');
+        const script = generateRegisterTaskScript({
+          siteId,
+          siteRoot,
+          intervalMinutes,
+        });
+        if (!dryRun) {
+          const { writeFile } = await import('node:fs/promises');
+          const scriptPath = `${siteRoot}/register-task.ps1`;
+          await writeFile(scriptPath, script, 'utf8');
+          enableResult = { substrate: 'windows-native', scriptPath };
+        } else {
+          enableResult = { substrate: 'windows-native', scriptPath: null, dryRun: true };
+        }
+
+        if (fmt.getFormat() === 'human') {
+          fmt.message(dryRun ? 'Dry run — no changes made' : `Enabled supervisor for Site: ${siteId}`, 'success');
+          fmt.kv('Substrate', 'windows-native');
+          fmt.kv('Interval', `${intervalMinutes} minutes`);
+          fmt.section('Activation');
+          fmt.message(`Run: powershell -ExecutionPolicy Bypass -File "${siteRoot}/register-task.ps1"`, 'info');
+        }
+
+        return {
+          exitCode: ExitCode.SUCCESS,
+          result: {
+            status: 'success',
+            siteId,
+            substrate: 'windows-native',
+            dryRun,
+            intervalMinutes,
+            ...enableResult,
+            activationCommand: `powershell -ExecutionPolicy Bypass -File "${siteRoot}/register-task.ps1"`,
+          },
+        };
+      } else {
+        // WSL
+        const { writeSystemdUnits, writeShellScript } = await import('@narada2/windows-site');
+        if (!dryRun) {
+          const systemdPaths = await writeSystemdUnits(config);
+          const scriptPath = await writeShellScript(config);
+          enableResult = { substrate: 'windows-wsl', systemdPaths, scriptPath };
+        } else {
+          enableResult = { substrate: 'windows-wsl', dryRun: true };
+        }
+
+        if (fmt.getFormat() === 'human') {
+          fmt.message(dryRun ? 'Dry run — no changes made' : `Enabled supervisor for Site: ${siteId}`, 'success');
+          fmt.kv('Substrate', 'windows-wsl');
+          fmt.kv('Interval', `${intervalMinutes} minutes`);
+          fmt.section('Activation');
+          fmt.message(`Run: sudo systemctl enable narada-site-${siteId}.timer`, 'info');
+          fmt.message(`Run: sudo systemctl start narada-site-${siteId}.timer`, 'info');
+        }
+
+        return {
+          exitCode: ExitCode.SUCCESS,
+          result: {
+            status: 'success',
+            siteId,
+            substrate: 'windows-wsl',
+            dryRun,
+            intervalMinutes,
+            ...enableResult,
+            activationCommands: [
+              `sudo systemctl enable narada-site-${siteId}.timer`,
+              `sudo systemctl start narada-site-${siteId}.timer`,
+            ],
+          },
+        };
+      }
+    } catch {
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: {
+          status: 'error',
+          error: `Site "${siteId}" not found. No substrate detected.`,
+          remediation: `Run narada sites init ${siteId} --substrate <substrate> to create the Site first.`,
+        },
+      };
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: { status: 'error', error: `Failed to enable supervisor: ${message}` },
+    };
   }
 }

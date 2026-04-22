@@ -243,4 +243,36 @@ describe('task claim operator', () => {
     const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'), 'utf8');
     expect(taskContent).toContain('status: claimed');
   });
+
+  it('preserves depends_on YAML list syntax when claiming', async () => {
+    // Create closed dependency
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-998-dep-task.md'),
+      '---\ntask_id: 998\nstatus: closed\n---\n\n# Task 998: Dependency\n',
+    );
+
+    // Create task with YAML list depends_on
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+      '---\ntask_id: 999\nstatus: opened\ndepends_on:\n  - 998\nextra_field: preserved\n---\n\n# Task 999: Test Task\n',
+    );
+
+    const result = await taskClaimCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+
+    const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'), 'utf8');
+    expect(taskContent).toContain('status: claimed');
+
+    // Re-parse and verify depends_on survived
+    const { readTaskFile } = await import('../../src/lib/task-governance.js');
+    const { frontMatter } = await readTaskFile(join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'));
+    expect(frontMatter.depends_on).toEqual([998]);
+    expect(frontMatter.extra_field).toBe('preserved');
+  });
 });

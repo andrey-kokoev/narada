@@ -1,0 +1,651 @@
+/**
+ * Task assignment recommendation engine.
+ *
+ * Read-only advisory operator. Never mutates task, roster, assignment,
+ * report, review, or PrincipalRuntime state.
+ */
+
+import { readFile, readdir } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import {
+  loadRoster,
+  listRunnableTasks,
+  loadAssignment,
+  loadReport,
+  listReportsForTask,
+  parseFrontMatter,
+  type AgentRoster,
+  type AgentRosterEntry,
+  type ChapterTaskInfo,
+  type ComputedAffinity,
+  type WorkResultReport,
+} from './task-governance.js';
+
+// ── Types ──
+
+export interface TaskRecommendation {
+  recommendation_id: string;
+  generated_at: string;
+  recommender_id: string;
+  primary: CandidateAssignment | null;
+  alternatives: CandidateAssignment[];
+  abstained: AbstainedTask[];
+  summary: string;
+}
+
+export interface CandidateAssignment {
+  task_id: string;
+  task_number: number | null;
+  task_title: string | null;
+  principal_id: string;
+  principal_type: 'operator' | 'agent' | 'worker' | 'external';
+  score: number;
+  confidence: 'high' | 'medium' | 'low';
+  breakdown: ScoreBreakdown;
+  rationale: string;
+  reasons: RecommendationReason[];
+  risks: RecommendationRisk[];
+}
+
+export interface ScoreBreakdown {
+  affinity: number;
+  capability: number;
+  load: number;
+  history: number;
+  review_separation: number;
+  budget: number;
+}
+
+export interface RecommendationReason {
+  category: 'dependency' | 'capability' | 'warm_context' | 'workload' | 'availability';
+  description: string;
+}
+
+export interface RecommendationRisk {
+  category: 'blocked' | 'write_set' | 'review_separation' | 'budget' | 'capability_gap' | 'workload' | 'availability';
+  severity: 'none' | 'low' | 'medium' | 'high';
+  description: string;
+}
+
+export interface AbstainedTask {
+  task_id: string;
+  task_number: number | null;
+  reason: string;
+}
+
+export interface RecommendationOptions {
+  cwd: string;
+  agentFilter?: string;
+  taskFilter?: string;
+  limit?: number;
+  principalRuntimePath?: string | null;
+}
+
+export interface PrincipalSnapshot {
+  principal_id: string;
+  state: string;
+  budget_remaining: number | null;
+  active_work_item_id: string | null;
+}
+
+// Internal task representation used by the recommender
+interface TaskInfo {
+  taskId: string;
+  taskNumber: number | null;
+  status: string;
+  title: string | null;
+  fileName: string;
+  dependsOn: number[] | undefined;
+  continuationAffinity: ComputedAffinity;
+  body: string;
+}
+
+// ── Default weights ──
+
+const DEFAULT_WEIGHTS: ScoreBreakdown = {
+  affinity: 0.30,
+  capability: 0.25,
+  load: 0.20,
+  history: 0.10,
+  review_separation: 0.10,
+  budget: 0.05,
+};
+
+// ── Capability extraction ──
+
+const CAPABILITY_KEYWORDS: Array<{ keywords: string[]; capability: string }> = [
+  { keywords: ['TypeScript', 'typecheck', 'type-check'], capability: 'typescript' },
+  { keywords: ['test', 'fixture', 'vitest'], capability: 'testing' },
+  { keywords: ['SQLite', 'schema', 'database'], capability: 'database' },
+  { keywords: ['Graph API', 'mailbox', 'mail', 'exchange'], capability: 'mailbox_vertical' },
+  { keywords: ['Cloudflare', 'Durable Object', 'Worker', 'DO'], capability: 'cloudflare' },
+  { keywords: ['design', 'contract', 'boundary', 'architecture'], capability: 'architecture' },
+  { keywords: ['documentation', 'README', 'docs'], capability: 'documentation' },
+  { keywords: ['CLI', 'command'], capability: 'cli' },
+  { keywords: ['principal', 'runtime', 'state machine'], capability: 'principal_runtime' },
+];
+
+export function extractCapabilities(body: string): string[] {
+  const caps = new Set<string>();
+  const text = body.toLowerCase();
+  for (const { keywords, capability } of CAPABILITY_KEYWORDS) {
+    for (const kw of keywords) {
+      if (text.includes(kw.toLowerCase())) {
+        caps.add(capability);
+        break;
+      }
+    }
+  }
+  return Array.from(caps);
+}
+
+// ── PrincipalRuntime loading (advisory, degrades gracefully) ──
+
+export async function loadPrincipalRuntimeSnapshots(cwd: string): Promise<Map<string, PrincipalSnapshot>> {
+  const map = new Map<string, PrincipalSnapshot>();
+  const registryPath = join(resolve(cwd), '.ai', 'principal-runtime.json');
+  try {
+    const raw = await readFile(registryPath, 'utf8');
+    const data = JSON.parse(raw) as { principals?: PrincipalSnapshot[] };
+    if (Array.isArray(data.principals)) {
+      for (const p of data.principals) {
+        map.set(p.principal_id, p);
+      }
+    }
+  } catch {
+    // Graceful degradation: no registry file means no runtime data
+  }
+  return map;
+}
+
+// ── Write-set risk heuristic ──
+
+async function computeWriteSetRisk(
+  cwd: string,
+  task: TaskInfo,
+  agentId: string,
+  activeAssignments: Map<string, string[]>, // task_id -> agent_id[]
+): Promise<RecommendationRisk | null> {
+  // Load report for this task if any
+  const reports = await listReportsForTask(cwd, task.taskId);
+  const recentReport = reports[reports.length - 1];
+  const taskFiles = recentReport ? recentReport.changed_files : [];
+
+  if (taskFiles.length === 0) {
+    return null;
+  }
+
+  // Check overlap with other active assignments
+  for (const [otherTaskId, otherAgents] of activeAssignments) {
+    if (otherTaskId === task.taskId) continue;
+    if (otherAgents.includes(agentId)) continue; // Same agent on multiple tasks is a different concern
+
+    const otherReports = await listReportsForTask(cwd, otherTaskId);
+    const otherRecent = otherReports[otherReports.length - 1];
+    const otherFiles = otherRecent ? otherRecent.changed_files : [];
+
+    const overlap = taskFiles.filter((f) => otherFiles.includes(f));
+    if (overlap.length > 0) {
+      return {
+        category: 'write_set',
+        severity: 'medium',
+        description: `File overlap with active task ${otherTaskId}: ${overlap.join(', ')}`,
+      };
+    }
+  }
+
+  return null;
+}
+
+// ── Scoring dimensions ──
+
+function scoreAffinity(task: TaskInfo, agentId: string, computedAffinity: ComputedAffinity | undefined): number {
+  if (task.continuationAffinity?.preferred_agent_id === agentId) return 1.0;
+  if (computedAffinity?.preferred_agent_id === agentId) {
+    return computedAffinity.source === 'manual' ? 1.0 : 0.7;
+  }
+  return 0.0;
+}
+
+function scoreCapability(taskCaps: string[], agentCaps: string[]): number {
+  if (taskCaps.length === 0) return 0.5;
+  const intersection = taskCaps.filter((c) => agentCaps.includes(c));
+  return intersection.length / taskCaps.length;
+}
+
+function scoreLoad(agent: AgentRosterEntry): number {
+  const busyStatuses: Array<string | undefined> = ['working', 'reviewing', 'blocked'];
+  if (busyStatuses.includes(agent.status)) {
+    // Count active assignments from roster task field
+    const activeCount = agent.task != null ? 1 : 0;
+    const maxConcurrent = 3;
+    return Math.max(0, 1 - activeCount / maxConcurrent);
+  }
+  return 1.0;
+}
+
+function scoreHistory(
+  completed: number,
+  abandoned: number,
+): number {
+  const total = completed + abandoned;
+  if (total === 0) return 0.5;
+  return completed / total;
+}
+
+function scoreReviewSeparation(taskId: string, agentId: string, lastWorkerMap: Map<string, string | null>): number {
+  const lastWorker = lastWorkerMap.get(taskId);
+  if (lastWorker === agentId) return 0.0;
+  return 1.0;
+}
+
+function scoreBudget(snapshot: PrincipalSnapshot | undefined): number {
+  if (!snapshot) return 1.0;
+  if (snapshot.budget_remaining === null) return 1.0;
+  if (snapshot.budget_remaining <= 0) return 0.0;
+  return Math.min(1.0, snapshot.budget_remaining / 10000);
+}
+
+// ── Confidence classification ──
+
+function classifyConfidence(score: number, nextBestScore: number): 'high' | 'medium' | 'low' {
+  if (score >= 0.8 && score - nextBestScore >= 0.2) return 'high';
+  if (score >= 0.5) return 'medium';
+  return 'low';
+}
+
+// ── Rationale builder ──
+
+function buildRationale(
+  agent: AgentRosterEntry,
+  taskCaps: string[],
+  agentCaps: string[],
+  affinityScore: number,
+  computedAffinity: ComputedAffinity | undefined,
+  loadScore: number,
+  historyScore: number,
+  reviewSepScore: number,
+  budgetScore: number,
+  budgetWarning: boolean,
+): string {
+  const capIntersection = taskCaps.filter((c) => agentCaps.includes(c));
+  const capSummary = taskCaps.length === 0
+    ? 'no capability preference'
+    : capIntersection.length === taskCaps.length
+      ? `capability match [${capIntersection.join(', ')}] (${capIntersection.length}/${taskCaps.length})`
+      : capIntersection.length > 0
+        ? `partial match [${capIntersection.join(', ')}] (${capIntersection.length}/${taskCaps.length})`
+        : 'no capability match';
+
+  const affinityClause = affinityScore >= 1.0
+    ? 'Manual affinity from task file'
+    : affinityScore >= 0.7
+      ? `History affinity: ${computedAffinity?.affinity_reason ?? 'completed prerequisite tasks'}`
+      : 'No affinity';
+
+  const loadClause = loadScore >= 1.0
+    ? 'Idle'
+    : loadScore > 0
+      ? `Currently working on task(s)`
+      : 'At capacity';
+
+  const historyClause = historyScore >= 0.8
+    ? 'Strong completion record'
+    : historyScore >= 0.5
+      ? 'Moderate completion record'
+      : 'No recent history or poor record';
+
+  const caveats: string[] = [];
+  if (reviewSepScore === 0.0) {
+    caveats.push('Warning: this principal may be disqualified as reviewer for this task');
+  }
+  if (budgetWarning) {
+    caveats.push('Budget low');
+  }
+
+  return `${agent.agent_id} is ${agent.status ?? 'unknown'} with ${capSummary}. ${affinityClause}. ${loadClause}. ${historyClause}.${caveats.length > 0 ? ' ' + caveats.join('. ') + '.' : ''}`;
+}
+
+// ── Main recommendation engine ──
+
+export async function generateRecommendations(
+  options: RecommendationOptions,
+): Promise<TaskRecommendation> {
+  const cwd = resolve(options.cwd);
+  const weights = DEFAULT_WEIGHTS;
+  const now = new Date().toISOString();
+
+  // 1. Load task graph directly (need dependsOn which listRunnableTasks omits)
+  const tasksDir = join(cwd, '.ai', 'tasks');
+  const taskFiles = (await readdir(tasksDir).catch(() => [] as string[])).filter((f) => f.endsWith('.md'));
+
+  const allTasks: TaskInfo[] = [];
+  const dependencyStatus = new Map<number, string>();
+
+  for (const f of taskFiles) {
+    try {
+      const content = await readFile(join(tasksDir, f), 'utf8');
+      const { frontMatter, body } = parseFrontMatter(content);
+      const status = frontMatter.status as string | undefined;
+      const numMatch = f.match(/-(\d+)-/);
+      const taskNumber = numMatch ? Number(numMatch[1]) : (typeof frontMatter.task_id === 'number' ? frontMatter.task_id : null);
+      if (taskNumber !== null && status) {
+        dependencyStatus.set(taskNumber, status);
+      }
+      const titleMatch = body.match(/^#\s+(.+)$/m);
+      allTasks.push({
+        taskId: f.replace(/\.md$/, ''),
+        taskNumber,
+        status: status ?? '',
+        title: titleMatch ? titleMatch[1].trim() : null,
+        fileName: f,
+        dependsOn: frontMatter.depends_on as number[] | undefined,
+        continuationAffinity: (frontMatter.continuation_affinity as ComputedAffinity) ?? { preferred_agent_id: null, affinity_strength: 0, affinity_reason: null, source: 'none' },
+        body,
+      });
+    } catch {
+      // Skip unreadable files
+    }
+  }
+
+  // Filter to runnable tasks with satisfied dependencies
+  const dependencyBlocked: TaskInfo[] = [];
+  const inReviewTasks: TaskInfo[] = [];
+  const runnableTasks = allTasks.filter((task) => {
+    if (task.status === 'in_review') {
+      inReviewTasks.push(task);
+      return false;
+    }
+    if (task.status !== 'opened' && task.status !== 'needs_continuation') return false;
+    const deps = task.dependsOn ?? [];
+    for (const depNum of deps) {
+      const depStatus = dependencyStatus.get(depNum);
+      if (depStatus !== 'closed' && depStatus !== 'confirmed') {
+        dependencyBlocked.push(task);
+        return false;
+      }
+    }
+    return true;
+  });
+
+  // 2. Load roster
+  const roster = await loadRoster(cwd);
+
+  // 3. Load PrincipalRuntime (advisory, degrades gracefully)
+  const runtimeSnapshots = await loadPrincipalRuntimeSnapshots(cwd);
+
+  // 4. Load assignment history and build last-worker map
+  const lastWorkerMap = new Map<string, string | null>();
+  const assignmentDir = join(cwd, '.ai', 'tasks', 'assignments');
+  const completionCounts = new Map<string, { completed: number; abandoned: number }>();
+
+  let assignmentFiles: string[] = [];
+  try {
+    assignmentFiles = (await readdir(assignmentDir)).filter((f) => f.endsWith('.json'));
+  } catch {
+    // No assignments yet
+  }
+
+  for (const f of assignmentFiles) {
+    const taskId = f.replace(/\.json$/, '');
+    const record = await loadAssignment(cwd, taskId);
+    if (!record) continue;
+
+    // Find last completed worker
+    const completed = record.assignments
+      .filter((a) => a.release_reason === 'completed')
+      .sort((a, b) => (b.released_at ?? '').localeCompare(a.released_at ?? ''));
+    if (completed.length > 0) {
+      lastWorkerMap.set(taskId, completed[0]!.agent_id);
+    }
+
+    // Count per-agent completion/abandonment
+    for (const a of record.assignments) {
+      const counts = completionCounts.get(a.agent_id) ?? { completed: 0, abandoned: 0 };
+      if (a.release_reason === 'completed') counts.completed++;
+      else if (a.release_reason === 'abandoned') counts.abandoned++;
+      completionCounts.set(a.agent_id, counts);
+    }
+  }
+
+  // Build active assignment map for write-set risk
+  const activeAssignments = new Map<string, string[]>();
+  for (const f of assignmentFiles) {
+    const taskId = f.replace(/\.json$/, '');
+    const record = await loadAssignment(cwd, taskId);
+    if (!record) continue;
+    const active = record.assignments.find((a) => a.released_at === null);
+    if (active) {
+      const agents = activeAssignments.get(taskId) ?? [];
+      agents.push(active.agent_id);
+      activeAssignments.set(taskId, agents);
+    }
+  }
+
+  // 5. Filter tasks if --task specified
+  let tasksToConsider = runnableTasks;
+  if (options.taskFilter) {
+    tasksToConsider = runnableTasks.filter((t) =>
+      t.taskId.includes(options.taskFilter!) ||
+      String(t.taskNumber) === options.taskFilter,
+    );
+  }
+
+  // 6. Filter agents if --agent specified
+  let agentsToConsider = roster.agents;
+  if (options.agentFilter) {
+    agentsToConsider = roster.agents.filter((a) => a.agent_id === options.agentFilter);
+  }
+
+  // 7. Score all candidate pairs
+  const allCandidates: CandidateAssignment[] = [];
+  const abstained: AbstainedTask[] = [];
+
+  // Add dependency-blocked tasks to abstained
+  for (const task of dependencyBlocked) {
+    abstained.push({
+      task_id: task.taskId,
+      task_number: task.taskNumber,
+      reason: 'Blocked by unmet dependencies',
+    });
+  }
+
+  // Add in-review tasks to abstained (need review/closure, not ordinary open work)
+  for (const task of inReviewTasks) {
+    abstained.push({
+      task_id: task.taskId,
+      task_number: task.taskNumber,
+      reason: 'Completed, awaiting review or closure',
+    });
+  }
+
+  for (const task of tasksToConsider) {
+    const taskCaps = extractCapabilities(task.body);
+
+    const taskCandidates: CandidateAssignment[] = [];
+
+    for (const agent of agentsToConsider) {
+      const reasons: RecommendationReason[] = [];
+      const risks: RecommendationRisk[] = [];
+
+      // Check dependency readiness (defensive; listRunnableTasks should filter)
+      const deps = task.dependsOn ?? [];
+      if (deps.length > 0) {
+        // Dependencies should already be satisfied if task is in runnableTasks
+        reasons.push({ category: 'dependency', description: 'Dependencies satisfied' });
+      }
+
+      // Availability check
+      const runtime = runtimeSnapshots.get(agent.agent_id);
+      const unavailableStates = ['unavailable', 'stale', 'failed', 'budget_exhausted', 'executing', 'waiting_review', 'claiming'];
+      if (runtime && unavailableStates.includes(runtime.state)) {
+        risks.push({
+          category: 'availability',
+          severity: 'high',
+          description: `PrincipalRuntime state is ${runtime.state}`,
+        });
+        continue; // Skip unavailable principals
+      }
+
+      // Active work item check
+      if (runtime?.active_work_item_id) {
+        risks.push({
+          category: 'workload',
+          severity: 'high',
+          description: 'Principal has active work item',
+        });
+        continue;
+      }
+
+      // Budget check
+      const budgetScore = scoreBudget(runtime);
+      let budgetWarning = false;
+      if (runtime && runtime.budget_remaining !== null && runtime.budget_remaining > 0 && runtime.budget_remaining <= 1000) {
+        budgetWarning = true;
+      }
+      if (budgetScore === 0.0) {
+        risks.push({ category: 'budget', severity: 'high', description: 'Budget exhausted' });
+        continue;
+      }
+
+      // Load score
+      const loadScore = scoreLoad(agent);
+      if (loadScore === 0.0) {
+        risks.push({ category: 'workload', severity: 'medium', description: 'Agent at capacity' });
+      } else if (loadScore < 1.0) {
+        reasons.push({ category: 'workload', description: 'Partially available' });
+      } else {
+        reasons.push({ category: 'workload', description: 'Idle or done' });
+      }
+
+      // Capability score
+      const capabilityScore = scoreCapability(taskCaps, agent.capabilities ?? []);
+      if (capabilityScore >= 0.5) {
+        reasons.push({ category: 'capability', description: `Capability match ${Math.round(capabilityScore * 100)}%` });
+      } else if (taskCaps.length > 0) {
+        risks.push({ category: 'capability_gap', severity: 'low', description: 'Limited capability match' });
+      }
+
+      // Affinity score
+      const affinityScore = scoreAffinity(task, agent.agent_id, task.continuationAffinity);
+      if (affinityScore > 0.0) {
+        reasons.push({ category: 'warm_context', description: 'Continuation affinity' });
+      }
+
+      // History score
+      const counts = completionCounts.get(agent.agent_id) ?? { completed: 0, abandoned: 0 };
+      const historyScore = scoreHistory(counts.completed, counts.abandoned);
+
+      // Review separation score
+      const reviewSepScore = scoreReviewSeparation(task.taskId, agent.agent_id, lastWorkerMap);
+      if (reviewSepScore === 0.0) {
+        risks.push({
+          category: 'review_separation',
+          severity: 'low',
+          description: 'Agent was last worker on this task; may be disqualified as reviewer',
+        });
+      }
+
+      // Write-set risk
+      const writeSetRisk = await computeWriteSetRisk(cwd, task, agent.agent_id, activeAssignments);
+      if (writeSetRisk) {
+        risks.push(writeSetRisk);
+      }
+
+      // Composite score
+      const score =
+        weights.affinity * affinityScore +
+        weights.capability * capabilityScore +
+        weights.load * loadScore +
+        weights.history * historyScore +
+        weights.review_separation * reviewSepScore +
+        weights.budget * budgetScore;
+
+      if (score <= 0) {
+        continue; // Completely unsuitable
+      }
+
+      taskCandidates.push({
+        task_id: task.taskId,
+        task_number: task.taskNumber,
+        task_title: task.title,
+        principal_id: agent.agent_id,
+        principal_type: 'agent',
+        score: Math.round(score * 1000) / 1000,
+        confidence: 'low', // Will be updated after sorting
+        breakdown: {
+          affinity: Math.round(affinityScore * 1000) / 1000,
+          capability: Math.round(capabilityScore * 1000) / 1000,
+          load: Math.round(loadScore * 1000) / 1000,
+          history: Math.round(historyScore * 1000) / 1000,
+          review_separation: Math.round(reviewSepScore * 1000) / 1000,
+          budget: Math.round(budgetScore * 1000) / 1000,
+        },
+        rationale: buildRationale(agent, taskCaps, agent.capabilities ?? [], affinityScore, task.continuationAffinity, loadScore, historyScore, reviewSepScore, budgetScore, budgetWarning),
+        reasons,
+        risks,
+      });
+    }
+
+    // Sort candidates by score descending
+    taskCandidates.sort((a, b) => b.score - a.score);
+
+    // Classify confidence
+    for (let i = 0; i < taskCandidates.length; i++) {
+      const nextBest = taskCandidates[i + 1]?.score ?? 0;
+      taskCandidates[i]!.confidence = classifyConfidence(taskCandidates[i]!.score, nextBest);
+    }
+
+    if (taskCandidates.length === 0) {
+      abstained.push({
+        task_id: task.taskId,
+        task_number: task.taskNumber,
+        reason: 'No available principal with suitable capabilities',
+      });
+    } else {
+      allCandidates.push(...taskCandidates);
+    }
+  }
+
+  // 8. Greedy conflict resolution: one task per principal, one principal per task
+  allCandidates.sort((a, b) => b.score - a.score);
+
+  const assignedTasks = new Set<string>();
+  const assignedAgents = new Set<string>();
+  const primaryList: CandidateAssignment[] = [];
+  const alternativeList: CandidateAssignment[] = [];
+
+  for (const cand of allCandidates) {
+    if (assignedTasks.has(cand.task_id)) {
+      // Task already has primary; add as alternative if agent not used elsewhere
+      if (!assignedAgents.has(cand.principal_id)) {
+        alternativeList.push(cand);
+      }
+      continue;
+    }
+    if (assignedAgents.has(cand.principal_id)) {
+      // Agent already assigned; add as alternative
+      alternativeList.push(cand);
+      continue;
+    }
+    assignedTasks.add(cand.task_id);
+    assignedAgents.add(cand.principal_id);
+    primaryList.push(cand);
+  }
+
+  // Apply limit
+  const limit = options.limit ?? primaryList.length;
+  const limitedPrimary = primaryList.slice(0, limit);
+
+  const summary = `${limitedPrimary.length} recommendation${limitedPrimary.length !== 1 ? 's' : ''}, ${alternativeList.length} alternative${alternativeList.length !== 1 ? 's' : ''}, ${abstained.length} abstained.`;
+
+  return {
+    recommendation_id: `rec-${Date.now()}`,
+    generated_at: now,
+    recommender_id: 'system',
+    primary: limitedPrimary[0] ?? null,
+    alternatives: limitedPrimary.slice(1).concat(alternativeList),
+    abstained,
+    summary,
+  };
+}

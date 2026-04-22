@@ -78,6 +78,14 @@ export class SendExecutionWorker {
     if (command.status === "retry_wait") {
       const latestRetryTransition = this.deps.store.getLatestNonCreationTransition(command.outbound_id, "retry_wait");
       if (latestRetryTransition) {
+        if (latestRetryTransition.from_status === "submitted") {
+          this.deps.logger?.warn("Skipping retry_wait send command created by confirmation ambiguity", {
+            outboundId: command.outbound_id,
+            reason: latestRetryTransition.reason,
+          });
+          return { processed: false };
+        }
+
         const elapsedMs = Date.now() - new Date(latestRetryTransition.transition_at).getTime();
         if (elapsedMs < this.RETRY_WAIT_COOLDOWN_MS) {
           this.deps.logger?.info("Skipping retry_wait command inside cooldown", {
@@ -370,5 +378,4 @@ function isAuthError(error: unknown): boolean {
   }
   return false;
 }
-
 

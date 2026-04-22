@@ -58,6 +58,46 @@ Do not mark a coordinate corrected merely because a task was created.
 - Explain why each deferred capability is outside the chapter.
 - Do not bury deferred work as vague “future work”.
 
+## Range Reservation
+
+Before creating a chapter, the task-number range MUST be reserved.
+
+### Workflow
+
+1. **Agent proposes** chapter title, task count, and task titles.
+2. **Operator approves** and reserves range NNN–MMM.
+3. **Agent creates** the chapter DAG file with the reserved range declared.
+4. **Agent creates** individual task files inside the reserved range.
+5. **Agent marks** the reservation as `released` when all tasks are created.
+
+### Reservation methods
+
+- **Preferred**: Use `scripts/task-chapter-create.ts`:
+  ```bash
+  pnpm exec tsx scripts/task-chapter-create.ts \
+    --title "Chapter Title" \
+    --tasks "task one,task two,task three" \
+    --depends-on 443
+  ```
+  This automatically computes the next available range, creates the chapter DAG file, creates stub task files, and updates `.registry.json`.
+
+- **Manual**: Compute the next available number, add a reservation entry to `.ai/tasks/.registry.json`, then create files by hand.
+
+### Rules
+
+- Do not create tasks inside an active reserved range belonging to another chapter.
+- Do not guess numbers by `ls | tail`.
+- Chapter DAG filenames MUST include the range: `YYYYMMDD-NNN-MMM-chapter-title.md`.
+- Chapter body MUST declare the range explicitly: `# Chapter DAG — Title (Tasks NNN–MMM)`.
+
+## Partial Recovery
+
+If a chapter is partially created (some tasks missing):
+
+1. Run `scripts/task-graph-lint.ts` to identify missing task files.
+2. Create the missing task files.
+3. Update `.ai/tasks/.registry.json` to mark the reservation as `released`.
+
 ## Completion Evidence
 
 - The planning task should link or name:

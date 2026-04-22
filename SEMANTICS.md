@@ -303,6 +303,39 @@ A governed, durable record of a charter's request to invoke an external tool.
 
 Validated by the foreman before execution. Exit status is recorded for observability and operator categorization.
 
+#### `tool catalog`
+
+A declared set of external capabilities that may be bound into an operation.
+
+- **Layer**: System repo / operation repo / Narada runtime boundary
+- **User-facing**: Yes when configuring operations
+- **Durable boundary**: Operation config and tool-call records
+- **Authority owner**: System repo defines capability; operation repo grants permission; Narada runtime mediates execution
+
+Tool catalogs obey the **Tool Locality Doctrine**:
+
+```text
+System repo owns tool implementation.
+Operation repo owns tool binding and permission.
+Narada runtime owns mediation, audit, timeout, and authority enforcement.
+```
+
+A system repo is the repository for the system being diagnosed or acted upon (for example, `sonar.cloud`). It owns local diagnostic scripts, safe query wrappers, Sentry wrappers, schema assumptions, and `.env` naming because those are system-local facts.
+
+An operation repo (for example, `narada.sonar`) must not copy those tools into itself. It references system-owned tool catalogs and grants a bounded subset to charters through runtime policy.
+
+Narada runtime never treats a tool catalog as permission by itself. Permission is the operation's binding of a tool to a charter under an authority class. Execution is mediated by Narada so calls can be validated, timed out, audited, and classified.
+
+Example:
+
+```text
+~/src/sonar.cloud/.narada/tool-catalog.json   # declares sonar.git.read, sonar.db.query_readonly, sonar.sentry.search, sonar.git.write
+~/src/narada.sonar/config/config.json         # allows support_steward to request selected tools
+Narada runtime                               # validates, executes, records tool_call
+```
+
+This prevents operation/tool collapse, knowledge/authority collapse, and repo/env collapse.
+
 #### `trace`
 
 A durable record of charter execution metadata.
@@ -334,7 +367,29 @@ A durable request for a human operator to perform a safe, UI-mediated mutation.
 - **Durable boundary**: `operator_action_requests` table
 - **Authority owner**: Operator
 
-The explicit bridge between human judgment and system state. Current safelisted actions: `retry_work_item`, `acknowledge_alert`. Future extensions (e.g., draft approval, decision override) must be added explicitly to the safelist before they become available.
+The explicit bridge between human judgment and system state. Safelisted actions include operational repair, draft disposition, confirmation replay, and controlled redispatch. New actions must be added explicitly to the safelist before they become available.
+
+#### `email-originated operator request`
+
+A proposal for an operator action whose initial carrier is an email message.
+
+- **Layer**: Mail vertical / control plane boundary
+- **User-facing**: Yes when a configured operator contact sends an instruction by email
+- **Durable boundary**: `operator_action_requests` table plus `confirmation_challenges` table
+- **Authority owner**: Operator identity provider confirmation, then canonical `executeOperatorAction()`
+
+Email is admissible as input, not as authority. A recognized `operator_contact.address` may open a pending audited request, but the request remains inert until a short-lived confirmation challenge is completed through the configured identity provider.
+
+For Microsoft/Entra confirmation, authority is carried by verified token claims: tenant, audience, nonce, expiry, and the configured Entra object id for the operator contact. The `From:` header never approves send, git push, config mutation, task closure, or any other effect.
+
+The valid authority chain is:
+
+```text
+email fact -> pending operator_action_request -> confirmation_challenge
+  -> Microsoft/Entra verified identity -> executeOperatorAction()
+```
+
+Any direct `email -> mutation` path is authority collapse.
 
 ---
 
@@ -869,47 +924,60 @@ These five terms are **architectural**, not immediate replacements for every imp
 
 ### 2.14.1 Definitions
 
+These five terms are **compact prose shorthand** for Narada's higher-order semantics. Each term has a sharper **canonical expansion** for precision contexts (specifications, interfaces, authority boundaries). See [§2.14.6](#canonical-expansion-table) for the expansion table.
+
 #### `Aim`
 
-The **pursued telos** or user-level objective.
+The **inspectable, versionable specification of desired outcome** for an operation.
 
-- "Reduce support response time" is an Aim.
-- "Build an ERP system" is an Aim.
+- An Aim is realized as an [`operation specification`](#operation) (§1.1): sources, charters, posture, knowledge, allowed actions, and review rules.
+- "Reduce support response time" is an Aim realized by a mailbox-triage operation specification.
+- "Build an ERP system" is an Aim realized by a USC constructor operation specification.
 - An Aim is independent of any particular runtime, substrate, or deployment target.
+
+> **Old reading deprecated**: `Aim` was previously defined as "pursued telos." That reading is too human-centric for an AI-facing, inspectable grammar. The canonical reading is specification-bearing.
 
 #### `Site`
 
-The **anchored place** where state, substrate bindings, and runtime context live.
+The **anchored place** where state, substrate bindings, and runtime context live. Also called the **Runtime Locus** when substrate-neutrality matters.
 
 - A local filesystem root with a SQLite coordinator is a Site.
 - A Cloudflare-backed runtime with Durable Objects and R2 is a Site.
+- A Windows process with a local coordinator is a Site.
 - A Site materializes an Aim into a concrete execution context.
 
 #### `Cycle`
 
-One **bounded attempt** to advance an Aim at a Site.
+One **bounded Control Cycle** to advance an Aim at a Site. Distinguished from generic loops by its governance phases.
 
-- A single sync-and-dispatch pass is a Cycle.
-- A daemon heartbeat that scans, leases, executes, and confirms is a Cycle.
-- A `run once` invocation is a Cycle.
+- A single sync-and-dispatch pass is a Control Cycle.
+- A daemon heartbeat that scans, leases, executes, and confirms is a Control Cycle.
+- A `run once` invocation is a Control Cycle.
 - Cycles are bounded: they start, they advance, they end, and they leave Traces.
+- A Cycle is not merely "any loop." It is the nine-phase governance engine defined in [§2.14.7](#control-cycle-phase-vocabulary).
 
 #### `Act`
 
-A **governed side effect candidate** or **committed side effect**.
+A **governed effect** produced within a Cycle. An Act is realized through three canonical phases:
 
-- A `draft_reply` proposed by a charter is an Act candidate.
-- An `outbound_command` confirmed after worker execution is a committed Act.
+1. **`Effect Intent`** — the durable proposal (`intent`, `outbound_command`)
+2. **`Effect Attempt`** — the bounded execution (`execution_attempt`)
+3. **`Confirmation`** — the reconciliation that proves the effect landed
+
+- A `draft_reply` proposed by a charter is an Effect Intent.
+- An `outbound_command` confirmed after worker execution is a Confirmed Act.
 - Acts may not bypass governance. Every Act originates from a decision and is recorded as an intent.
+
+> **Precision rule**: When describing a specific phase, use the phase name (`Effect Intent`, `Effect Attempt`, `Confirmation`). Do not use `Act` to mean a single phase. `Act` is a family name, not a phase name.
 
 #### `Trace`
 
-**Durable explanation and history** of what happened and why.
+**Durable explanation and history** of what happened and why. Also called **Evidence Trace** when audit precision matters.
 
-- `evaluation` records are Traces of charter judgment.
-- `foreman_decision` records are Traces of authority.
-- `execution_attempt` records are Traces of mechanical effort.
-- Logs, transitions, and operator actions are all Traces.
+- `evaluation` records are Evidence Traces of charter judgment.
+- `foreman_decision` records are Evidence Traces of authority.
+- `execution_attempt` records are Evidence Traces of mechanical effort.
+- Logs, transitions, and operator actions are all Evidence Traces.
 - Trace is a projection and lens over durable records. A traced record may also be an authoritative structure (e.g., a `foreman_decision` is both a control-authority record and a Trace of how that authority was exercised). Trace does not strip authority from the records it explains.
 
 ### 2.14.2 Current-Term Mapping
@@ -934,13 +1002,19 @@ These five crystallized terms do not immediately replace existing code labels. U
 
 Agents and documentation should avoid these overloaded phrases and use the preferred replacements.
 
-| Avoid | Prefer |
-|-------|--------|
-| `Cloudflare operation` | `Cloudflare Site substrate` or `Cloudflare-backed Site` |
-| `operation deploys operation` | `an Aim creates or materializes another Aim-at-Site binding` |
-| `daemon operation` | `Cycle scheduler` or `continuous Cycle runner` |
-| `deployment operation` | `Site materialization` |
-| `running an operation` (when you mean the process) | `running a Cycle` or `advancing an Aim at a Site` |
+| Avoid | Prefer | Why |
+|-------|--------|-----|
+| `Cloudflare operation` | `Cloudflare Site substrate` or `Cloudflare-backed Site` | `operation` smear |
+| `operation deploys operation` | `an Aim creates or materializes another Aim-at-Site binding` | `operation` smear |
+| `daemon operation` | `Cycle scheduler` or `continuous Cycle runner` | `operation` smear |
+| `deployment operation` | `Site materialization` | `operation` smear |
+| `running an operation` (when you mean the process) | `running a Cycle` or `advancing an Aim at a Site` | `operation` smear |
+| "Aim is the pursued telos" | "Aim is the inspectable operation specification" | Old human-centric definition |
+| "the Act was executed" | "the Effect Intent was attempted" or "the Effect Attempt completed" | Collapses intent and attempt |
+| "the Act was confirmed" | "the Effect Attempt was Confirmed after reconciliation" | Collapses all three phases |
+| "Trace" meaning only logs | "Evidence Trace" or "observational logs" | Trace includes authoritative records |
+| "Cycle" meaning any loop | "Control Cycle" or "iteration" | Must distinguish governance cycle |
+| "Site" meaning only web deployment | "Runtime Locus" | Must be substrate-neutral |
 
 ### 2.14.4 Relationship Diagram
 
@@ -958,6 +1032,75 @@ flowchart LR
 - **Cycle** is the bounded engine that advances the Aim using Site resources.
 - **Act** is the governed effect produced by a Cycle.
 - **Trace** records what happened, feeding back into future Cycles.
+
+### 2.14.5 Portable Invariant Spine
+
+Narada travels across Sites, verticals, and principals by preserving authority boundaries and durable object transitions, not by preserving implementation shape.
+
+This is the portable invariant spine:
+
+| What Changes | What Must Remain Invariant |
+|--------------|----------------------------|
+| Site substrate: local daemon, Windows, WSL, Cloudflare | Aim advances only through bounded Cycles with durable Traces |
+| Vertical: mailbox, email marketing, process, webhook | External change enters as Fact before downstream governance |
+| Principal: human operator, charter runner, coding agent, Site worker | Principal state does not grant authority by itself |
+| Runtime mechanism: SQLite, Durable Object, R2, filesystem | Durable boundaries remain explicit and replayable |
+| Effect adapter: Graph, Klaviyo, process runner, future APIs | Effects originate as governed Act/Intent records before execution |
+| Observation surface: CLI, console, health file, trace view | Observation remains read-only unless routed through explicit control operators |
+
+Do not identify Narada with the substrate currently carrying it. Cloudflare is a Site substrate, not Narada. Mailbox is a vertical, not Narada. An agent is a principal or charter runner, not Narada. Narada is the invariant control form that remains recognizable as it travels through these carriers.
+
+### 2.14.6 Canonical Expansion Table
+
+When precision matters — specifications, interfaces, authority boundaries, agent instructions — use the canonical expansion, not the compact term alone.
+
+| Compact Term | Canonical Expansion | Use the Expansion When... |
+|--------------|---------------------|---------------------------|
+| **Aim** | **Operation Specification** | Describing the inspectable, versionable configured definition (sources, charters, posture, knowledge, allowed actions). |
+| **Site** | **Runtime Locus** | Emphasizing substrate neutrality (local daemon, Cloudflare, Windows, future container). |
+| **Cycle** | **Control Cycle** | Distinguishing from generic loops, and when enumerating governance phases. |
+| **Act** | **Effect Intent** → **Effect Attempt** → **Confirmation** | Describing the effect lifecycle with phase precision. Never use `Act` alone to mean a specific phase. |
+| **Trace** | **Evidence Trace** | Emphasizing that the record includes authoritative decisions and evaluations, not merely decorative logs. |
+
+The compact tuple remains valid for prose, architectural summaries, and high-level design. The expansions are required for precision contexts.
+
+### 2.14.7 Control Cycle Phase Vocabulary
+
+A `Control Cycle` is not a black box. It has nine canonical phases. Agents must use these phase names when describing Cycle internals.
+
+```text
+Source Read → Fact Admission → Context Formation → Evaluation → Governance → Intent/Handoff → Execution Attempt → Confirmation/Reconciliation → Evidence Trace
+```
+
+| # | Phase | Compact Name | Canonical Object / Output | Durable Boundary | Authority |
+|---|-------|-------------|---------------------------|------------------|-----------|
+| 1 | Source read | `read` | `Source` pull | Checkpoint (`cursor`) | `derive` (adapter) |
+| 2 | Fact admission | `admit` | `Fact` ingestion | `fact_id` | `derive` + `resolve` (live); `derive` (replay) |
+| 3 | Context formation | `form` | `PolicyContext` | `context_id`, `revision_id` | `derive` |
+| 4 | Evaluation | `evaluate` | `CharterOutputEnvelope` / `evaluation` | `evaluation_id` | `propose` (charter) |
+| 5 | Governance | `govern` | `foreman_decision` | `decision_id` | `resolve` (foreman) |
+| 6 | Intent / Handoff | `handoff` | `Intent` + `outbound_handoff` | `intent_id`, `outbound_id` | `resolve` → `execute` |
+| 7 | Execution attempt | `execute` | `execution_attempt` | `execution_id` | `execute` (worker) |
+| 8 | Confirmation / Reconciliation | `confirm` | `Confirmation` status | — | `confirm` (reconciler) |
+| 9 | Evidence trace | `trace` | `agent_traces`, `operator_action_requests` | `trace_id` | Advisory / read-only |
+
+Do not invent new phase names. Do not collapse adjacent phases (e.g., "evaluate-and-govern" is not a phase).
+
+### 2.14.8 Operation Refinement Path
+
+An operation becomes better by changing its **Operation Specification** along one or more dimensions. Refinement is a process, not a new top-level object.
+
+| Refinement Dimension | What Changes | Canonical Object | Authority |
+|---------------------|--------------|------------------|-----------|
+| **Specification** | Sources, admission rules, scope boundaries | `operation specification` | `admin` |
+| **Charters** | Policy instructions, judgment organization | `operation charter set` | `admin` |
+| **Knowledge** | External references consumed by charters | `knowledge source` | `admin` |
+| **Tools** | Allowed external capabilities; implementations remain local to the supported system repo per Tool Locality Doctrine | `tool catalog` | `admin` |
+| **Selectors** | Bounding grammar for operator input sets | `selector` | `derive` (read) / `admin` (mutate) |
+| **Posture** | Safety preset, allowed actions | `posture` | `admin` |
+| **Site constraints** | Runtime locus limits (budget, latency, substrate) | `Site` config | `admin` |
+
+A refined Aim is still an Aim; its `operation specification` has changed. Refinement does not introduce a new ontological layer.
 
 ---
 

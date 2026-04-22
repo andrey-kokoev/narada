@@ -1381,6 +1381,7 @@ describe("observability/queries", () => {
         action_type: "trigger_sync",
         target_id: null,
         payload_json: null,
+        source_message_id: null,
         status: "executed",
         requested_by: "operator",
         requested_at: now,

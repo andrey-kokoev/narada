@@ -106,7 +106,7 @@ Ensure no derivative task-status files exist.
 
 - [x] The Task 332 doctrine state is explicitly resolved as restored or deferred.
 - [x] Task 338 closure decision no longer describes an intentional doctrine task as an accidental phantom.
-- [ ] If restored, `docs/concepts/coherent-evolution.md` exists and is indexed. *(N/A — deferral chosen)*
+- [x] If restored, `docs/concepts/coherent-evolution.md` exists and is indexed. *(N/A — deferral chosen)*
 - [x] If deferred, the closure decision references `/home/andrey/src/thoughts/content/concepts/constructive-coherence-coordinates.md`.
 - [x] No duplicate `332` task files exist.
 - [x] No derivative task-status files exist.
@@ -130,3 +130,6 @@ rg -n "phantom|coherent-evolution|constructive-coherence-coordinates|Task 332" .
 find .ai/tasks -maxdepth 1 -type f \( -name '*-EXECUTED.md' -o -name '*-DONE.md' -o -name '*-RESULT.md' -o -name '*-FINAL.md' -o -name '*-SUPERSEDED.md' \) -print
 ```
 
+## Verification
+
+Verified by inspecting `.ai/decisions/20260421-338-post-cloudflare-coherence-closure.md` §3, which now reads "intentionally deferred" with reference to `/home/andrey/src/thoughts/content/concepts/constructive-coherence-coordinates.md`. No Task 332 file exists. No derivative files exist.

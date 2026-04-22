@@ -1,4 +1,4 @@
-# Task 124 Result: Comprehensive Semantic Architecture Audit
+# Task 461 Result: Comprehensive Semantic Architecture Audit
 
 > **Corrected by Task 127 (2026-04-18):** Factual drift against the current tree has been repaired. The `@narada2/charters` runtime surface, evaluation persistence state, README characterization, and `operation` atomicity contradiction have been updated. Each cavity now separates observed present state from proposed future state.
 
@@ -357,41 +357,41 @@ If an operation can span multiple mailboxes, then it is not atomic — it is a c
 
 ### Package / Physical Architecture
 
-- **Task 124-A:** Rename `@narada2/kernel` → `@narada2/control-plane`; update all dependents
-- **Task 124-B:** Delete 7 empty layer packages (`scheduler`, `execution`, `foreman`, `intent`, `observation`, `sources`, `outbound`)
-- **Task 124-C:** Document the monolithic state: add `ARCHITECTURE.md` section explaining why control-plane is monolithic and what extraction would require
+- **Task 461-A:** Rename `@narada2/kernel` → `@narada2/control-plane`; update all dependents
+- **Task 461-B:** Delete 7 empty layer packages (`scheduler`, `execution`, `foreman`, `intent`, `observation`, `sources`, `outbound`)
+- **Task 461-C:** Document the monolithic state: add `ARCHITECTURE.md` section explaining why control-plane is monolithic and what extraction would require
 
 ### User-Facing Ontology
 
-- **Task 124-D:** Rename CLI `<scope-id>` arguments → `<operation>` across all ops-kit and cli commands
-- **Task 124-E:** Fix `explain` posture labels to match canonical preset names
-- **Task 124-F:** Align posture preset naming to unified progression (`observe-only` → `draft-only` → `review-required` → `autonomous`)
-- **Task 124-G:** Rewrite `README.md` to reflect the full 19-command surface and ops-repo narrative
+- **Task 461-D:** Rename CLI `<scope-id>` arguments → `<operation>` across all ops-kit and cli commands
+- **Task 461-E:** Fix `explain` posture labels to match canonical preset names
+- **Task 461-F:** Align posture preset naming to unified progression (`observe-only` → `draft-only` → `review-required` → `autonomous`)
+- **Task 461-G:** Rewrite `README.md` to reflect the full 19-command surface and ops-repo narrative
 
 ### Control-Plane Authority
 
-- **Task 124-H:** Make daemon/runtime persist evaluations via `insertEvaluation()` before calling `resolveWorkItem()`; change `ResolveWorkItemRequest` to accept `evaluation_id` instead of full `EvaluationEnvelope` (precedes or is part of Task 123)
-- **Task 124-I:** Consolidate envelope authority into `@narada2/charters` (Task 123)
-- **Task 124-J:** Add `ForemanFacade.failWorkItem()` so scheduler delegates terminal failure transitions to foreman
-- **Task 124-K:** Extend `governEvaluation()` to cover `tool_requests`
+- **Task 461-H:** Make daemon/runtime persist evaluations via `insertEvaluation()` before calling `resolveWorkItem()`; change `ResolveWorkItemRequest` to accept `evaluation_id` instead of full `EvaluationEnvelope` (precedes or is part of Task 123)
+- **Task 461-I:** Consolidate envelope authority into `@narada2/charters` (Task 123)
+- **Task 461-J:** Add `ForemanFacade.failWorkItem()` so scheduler delegates terminal failure transitions to foreman
+- **Task 461-K:** Extend `governEvaluation()` to cover `tool_requests`
 
 ### Database / Schema Hygiene
 
-- **Task 124-L:** Delete or clearly mark stale `coordinator/schema.sql`
-- **Task 124-M:** Resolve `charter_outputs` fate: either revive write path or remove table and update `observability/mailbox.ts` to query `evaluations`
-- **Task 124-N:** Rename `agent_traces.conversation_id` → `context_id`
+- **Task 461-L:** Delete or clearly mark stale `coordinator/schema.sql`
+- **Task 461-M:** Resolve `charter_outputs` fate: either revive write path or remove table and update `observability/mailbox.ts` to query `evaluations`
+- **Task 461-N:** Rename `agent_traces.conversation_id` → `context_id`
 
 ### Runtime / Daemon
 
-- **Task 124-O:** Register mail outbound workers in `WorkerRegistry`; unify daemon dispatch
-- **Task 124-P:** Unify process executor lease/recovery with scheduler lease model (or document dual model)
-- **Task 124-Q:** Extract observation routes from daemon into a dedicated module or package
+- **Task 461-O:** Register mail outbound workers in `WorkerRegistry`; unify daemon dispatch
+- **Task 461-P:** Unify process executor lease/recovery with scheduler lease model (or document dual model)
+- **Task 461-Q:** Extract observation routes from daemon into a dedicated module or package
 
 ### Documentation
 
-- **Task 124-R:** Update `kernel/docs/00-kernel.md` Authority Boundaries to reflect scheduler's role in failing work items
-- **Task 124-S:** Create a single `SEMANTICS.md` or `ONTOLOGY.md` at repo root that consolidates `TERMINOLOGY.md` + this audit's inventory
-- **Task 124-T:** Fix `TERMINOLOGY.md` to remove the "support operation spanning multiple mailboxes" example; establish `operation` as strictly atomic
+- **Task 461-R:** Update `kernel/docs/00-kernel.md` Authority Boundaries to reflect scheduler's role in failing work items
+- **Task 461-S:** Create a single `SEMANTICS.md` or `ONTOLOGY.md` at repo root that consolidates `TERMINOLOGY.md` + this audit's inventory
+- **Task 461-T:** Fix `TERMINOLOGY.md` to remove the "support operation spanning multiple mailboxes" example; establish `operation` as strictly atomic
 
 ---
 
@@ -413,7 +413,7 @@ If an operation can span multiple mailboxes, then it is not atomic — it is a c
 
 ---
 
-## Definition of Done for Task 124
+## Definition of Done for Task 461
 
 - [x] Narada's semantic stack has been audited across user, operational, control-plane, runtime, artifact, and package layers
 - [x] Canonical objects and terms are explicitly enumerated (Section 1)
@@ -422,3 +422,7 @@ If an operation can span multiple mailboxes, then it is not atomic — it is a c
 - [x] Factual drift against the current tree has been corrected (corrected by Task 127)
 - [x] The missed multi-mailbox `operation` ontology contradiction is explicitly identified (corrected by Task 127)
 - [x] Follow-up corrective tasks are derived by area, aligned with corrected facts, and ranked by priority (Sections 3–4)
+
+## Corrections
+
+- **2026-04-22**: Renumbered from Task 124 to Task 461 to resolve collision.

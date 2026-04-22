@@ -2,7 +2,7 @@
 
 ## Source
 
-Derived from Task 124-O in `.ai/tasks/20260418-124-comprehensive-semantic-architecture-audit-report.md`.
+Derived from Task 461-O in `.ai/tasks/20260418-461-comprehensive-semantic-architecture-audit-report.md`.
 
 ## Why
 

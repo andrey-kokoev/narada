@@ -396,18 +396,39 @@ export class DefaultForemanFacade implements ForemanFacade {
     };
 
     const validation = validateCharterOutput(outputEnvelope, invocation);
-    const effectiveOutcome = validation.corrected_outcome ?? outputEnvelope.outcome;
 
-    // After validation, determine the effective proposed action
-    const validActions = validation.stripped_actions
-      ? evaluation.proposed_actions.filter(
-          (a) => !validation.stripped_actions!.some((s) => s === a),
+    // Determine whether Rule 4 is enforcing charter contract bounds or runtime
+    // policy. When invocation.allowed_actions matches policy.allowed_actions,
+    // Rule 4 is effectively policy enforcement and should go through governance
+    // for explicit rejection. When they differ, Rule 4 is charter contract
+    // bounding and should still be enforced by validation.
+    const policy = this.deps.getRuntimePolicy(workItem.scope_id);
+    const policyActions = new Set(policy.allowed_actions);
+    const rule4IsPolicyEnforcement =
+      invocation.allowed_actions.length === policy.allowed_actions.length &&
+      invocation.allowed_actions.every((a) => policyActions.has(a));
+
+    // Rule 10/4 is a secondary correction triggered by Rule 4 stripping.
+    const policyOnlyErrors = rule4IsPolicyEnforcement
+      ? validation.errors.filter(
+          (e) => e.startsWith("Rule 4:") || e.startsWith("Rule 10/4:"),
         )
-      : evaluation.proposed_actions;
+      : [];
+    const hasStructuralErrors = validation.errors.length > policyOnlyErrors.length;
+
+    const effectiveOutcome = hasStructuralErrors
+      ? (validation.corrected_outcome ?? outputEnvelope.outcome)
+      : outputEnvelope.outcome;
+
+    const validActions =
+      hasStructuralErrors && validation.stripped_actions
+        ? evaluation.proposed_actions.filter(
+            (a) => !validation.stripped_actions!.some((s) => s === a),
+          )
+        : evaluation.proposed_actions;
 
     // Apply governance BEFORE any terminal resolution.
     // Tool requests are part of agent effect authority and must not bypass governance.
-    const policy = this.deps.getRuntimePolicy(workItem.scope_id);
     const governance = governEvaluation(evaluation, policy, validActions, effectiveOutcome);
 
     if (governance.outcome === "reject") {

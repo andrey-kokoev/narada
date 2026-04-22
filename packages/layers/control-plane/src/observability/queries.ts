@@ -2255,6 +2255,50 @@ export function getDraftReviewDetails(
     .filter((d): d is import("./types.js").DraftReviewDetail => d !== undefined);
 }
 
+/** Build PrincipalRuntime observations from a registry snapshot (Task 406) */
+export function getPrincipalRuntimeObservations(
+  snapshots: Array<{
+    runtime_id: string;
+    principal_id: string;
+    principal_type: string;
+    state: string;
+    scope_id: string | null;
+    attachment_mode: string | null;
+    state_changed_at: string;
+    last_heartbeat_at: string | null;
+    active_work_item_id: string | null;
+    budget_remaining: number | null;
+    budget_unit: string | null;
+    detail: string | null;
+  }>,
+): import("./types.js").PrincipalRuntimeObservation[] {
+  return snapshots.map((s) => ({
+    ...s,
+    can_claim_work: s.state === "attached_interact" || s.state === "claiming",
+    can_execute: s.state === "executing",
+  }));
+}
+
+/** Build scope-level principal health summary (Task 406) */
+export function getScopePrincipalHealth(
+  scopeId: string,
+  snapshots: Parameters<typeof getPrincipalRuntimeObservations>[0],
+): import("./types.js").ScopePrincipalHealth {
+  const observations = getPrincipalRuntimeObservations(snapshots.filter((s) => s.scope_id === scopeId));
+  const hasClaimable = observations.some((o) => o.can_claim_work);
+  const defaultPrincipal = observations.find((o) => o.principal_type === "worker");
+  const defaultHealthy = defaultPrincipal
+    ? defaultPrincipal.state === "attached_interact" || defaultPrincipal.state === "claiming" || defaultPrincipal.state === "executing"
+    : false;
+
+  return {
+    scope_id: scopeId,
+    principals: observations,
+    has_claimable_principal: hasClaimable,
+    default_principal_healthy: defaultHealthy,
+  };
+}
+
 export function buildObservationPlaneSnapshot(
   registry: WorkerRegistryView,
   coordinatorStore: CoordinatorStoreView,

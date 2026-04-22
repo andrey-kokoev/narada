@@ -97,4 +97,43 @@ describe('task lint tool', () => {
     const issues = (result.result as { issues: Array<{ type: string }> }).issues;
     expect(issues.some((i) => i.type === 'duplicate_number')).toBe(true);
   });
+
+  it('detects terminal task with unchecked criteria', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-105-closed-bad.md'),
+      `---\ntask_id: 105\nstatus: closed\n---\n\n# Task 105\n\n## Acceptance Criteria\n- [ ] Unchecked\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
+    );
+
+    const result = await taskLintCommand({ cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    const issues = (result.result as { issues: Array<{ type: string }> }).issues;
+    expect(issues.some((i) => i.type === 'terminal_with_unchecked_criteria')).toBe(true);
+  });
+
+  it('detects terminal task without execution notes', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-106-closed-no-notes.md'),
+      `---\ntask_id: 106\nstatus: closed\n---\n\n# Task 106\n\n## Acceptance Criteria\n- [x] Checked\n\n## Verification\nOK.\n`,
+    );
+
+    const result = await taskLintCommand({ cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    const issues = (result.result as { issues: Array<{ type: string }> }).issues;
+    expect(issues.some((i) => i.type === 'terminal_without_execution_notes')).toBe(true);
+  });
+
+  it('detects terminal task without verification', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-107-closed-no-verif.md'),
+      `---\ntask_id: 107\nstatus: closed\n---\n\n# Task 107\n\n## Acceptance Criteria\n- [x] Checked\n\n## Execution Notes\nDone.\n`,
+    );
+
+    const result = await taskLintCommand({ cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    const issues = (result.result as { issues: Array<{ type: string }> }).issues;
+    expect(issues.some((i) => i.type === 'terminal_without_verification')).toBe(true);
+  });
 });

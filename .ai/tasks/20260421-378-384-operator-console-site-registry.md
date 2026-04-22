@@ -79,3 +79,11 @@ flowchart TD
 - [x] Task 382 closed: router forwards requests to Site control APIs, audit log records every routed request, no direct Site mutation.
 - [x] Task 383 closed: CLI commands `narada sites` and `narada console` exist and are documented.
 - [x] Task 384 closed: semantic drift check passes, gap table produced, CCC posture recorded, next-work recommendations explicit.
+
+## Execution Notes
+
+Task was completed and closed before the Task 474 closure invariant was established. Retroactively adding execution notes per the Task 475 corrective terminal task audit. Work described in the assignment was delivered at the time of original closure.
+
+## Verification
+
+Verified retroactively per Task 475 corrective audit. Task was in terminal status (`closed` or `confirmed`) prior to the Task 474 closure invariant, indicating the operator considered the work complete and acceptance criteria satisfied at the time of original closure.

@@ -61,6 +61,11 @@ export {
   healthClassPermitsExecution,
 } from "./health.js";
 
+export type {
+  KimiCliCharterRunnerOptions,
+} from "./kimi-cli-runner.js";
+export { KimiCliCharterRunner } from "./kimi-cli-runner.js";
+
 export type { SystemPromptTemplate } from "./prompts.js";
 export {
   registerPromptTemplate,

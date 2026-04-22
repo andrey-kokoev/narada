@@ -1,0 +1,15 @@
+# Private data — NEVER commit these files
+.env
+site-root/
+coordinator.db
+*.db
+logs/
+traces/
+snapshots/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/

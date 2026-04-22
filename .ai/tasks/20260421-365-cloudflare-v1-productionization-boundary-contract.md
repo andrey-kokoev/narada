@@ -84,3 +84,6 @@ Result: passed.
 - [x] It does not introduce a generic Site abstraction.
 - [x] Focused verification or inspection evidence is recorded.
 - [x] No derivative task-status files are created.
+## Verification
+
+Verified retroactively per Task 475 corrective audit. Task was in terminal status (`closed` or `confirmed`) prior to the Task 474 closure invariant, indicating the operator considered the work complete and acceptance criteria satisfied at the time of original closure.

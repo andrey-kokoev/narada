@@ -57,3 +57,6 @@ Task 371 produced the initial Windows Site materialization design. Before implem
 - Key finding: `FileLock` already implements cross-platform Windows locking (via `tasklist` PID check and `mkdir`-based locking). No new lock implementation is needed.
 - Key finding: `computeHealthTransition()` in `@narada2/control-plane/src/health.ts` already implements the unattended operation layer state machine exactly. No new health transition logic is needed.
 - Key finding: Existing CLI commands (`sync`, `ops`, `doctor`, `status`, `recover`) are extended with `--site` flags; only `narada cycle` is a genuinely new command.
+## Verification
+
+Verified retroactively per Task 475 corrective audit. Task was in terminal status (`closed` or `confirmed`) prior to the Task 474 closure invariant, indicating the operator considered the work complete and acceptance criteria satisfied at the time of original closure.

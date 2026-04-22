@@ -171,6 +171,35 @@ Narada will:
 4. Create durable draft proposals
 5. Log activity to `logs/`
 
+---
+
+### 4. Site bootstrap — local runtime locus (optional)
+
+If you prefer a Site-based model (one bounded Cycle per scheduled invocation) instead of a long-running daemon:
+
+```bash
+# After operation bootstrap (steps 1–3 above)
+narada sites init local-help --substrate linux-user --operation help@company.com
+
+# Set credentials
+export NARADA_LOCAL_HELP_GRAPH_ACCESS_TOKEN="..."
+
+# Validate
+narada doctor --site local-help
+
+# First Cycle
+narada cycle --site local-help
+
+# Enable supervisor (systemd, launchd, or Task Scheduler)
+narada sites enable local-help
+
+# Inspect
+narada status --site local-help
+narada ops --site local-help
+```
+
+See [`docs/product/site-bootstrap-contract.md`](docs/product/site-bootstrap-contract.md) for the full Site bootstrap contract.
+
 ## What's Next
 
 - Read [`docs/bootstrap-contract.md`](docs/bootstrap-contract.md) for the canonical artifact and validation reference

@@ -65,6 +65,10 @@ describe("outbound state machine", () => {
     it("allows blocked_policy -> pending", () => {
       expect(isValidTransition("blocked_policy", "pending")).toBe(true);
     });
+
+    it("allows failed_terminal -> cancelled for operator cleanup", () => {
+      expect(isValidTransition("failed_terminal", "cancelled")).toBe(true);
+    });
   });
 
   describe("disallowed transitions", () => {
@@ -115,10 +119,10 @@ describe("outbound state machine", () => {
       }
     });
 
-    it("has no transitions out of any terminal state except operator-recovery from failed_terminal", () => {
+    it("has no transitions out of any terminal state except operator-recovery/cleanup from failed_terminal", () => {
       for (const status of TERMINAL_STATUSES) {
         if (status === "failed_terminal") {
-          expect(VALID_TRANSITIONS[status]).toEqual(["approved_for_send", "draft_ready"]);
+          expect(VALID_TRANSITIONS[status]).toEqual(["approved_for_send", "draft_ready", "cancelled"]);
           continue;
         }
         expect(VALID_TRANSITIONS[status]).toHaveLength(0);
@@ -243,6 +247,54 @@ describe("outbound state machine", () => {
       expect(() =>
         assertSingleLatestEligible("outbound-001", [v1], cmd),
       ).not.toThrow();
+    });
+  });
+
+  describe("campaign_brief transitions", () => {
+    it("allows pending -> draft_ready for campaign_brief", () => {
+      expect(isValidTransition("pending", "draft_ready", "campaign_brief")).toBe(true);
+    });
+
+    it("allows draft_ready -> confirmed for campaign_brief", () => {
+      expect(isValidTransition("draft_ready", "confirmed", "campaign_brief")).toBe(true);
+    });
+
+    it("allows draft_ready -> cancelled for campaign_brief", () => {
+      expect(isValidTransition("draft_ready", "cancelled", "campaign_brief")).toBe(true);
+    });
+
+    it("blocks draft_ready -> approved_for_send for campaign_brief", () => {
+      expect(isValidTransition("draft_ready", "approved_for_send", "campaign_brief")).toBe(false);
+    });
+
+    it("blocks draft_ready -> sending for campaign_brief", () => {
+      expect(isValidTransition("draft_ready", "sending", "campaign_brief")).toBe(false);
+    });
+
+    it("blocks approved_for_send -> sending for campaign_brief", () => {
+      expect(isValidTransition("approved_for_send", "sending", "campaign_brief")).toBe(false);
+    });
+
+    it("blocks sending -> submitted for campaign_brief", () => {
+      expect(isValidTransition("sending", "submitted", "campaign_brief")).toBe(false);
+    });
+
+    it("still allows draft_ready -> approved_for_send for send_reply", () => {
+      expect(isValidTransition("draft_ready", "approved_for_send", "send_reply")).toBe(true);
+    });
+  });
+
+  describe("isVersionEligible for campaign_brief", () => {
+    it("returns true for campaign_brief in draft_ready", () => {
+      const cmd = createOutboundCommand({ action_type: "campaign_brief", status: "draft_ready", latest_version: 1 });
+      const v = createOutboundVersion({ version: 1, superseded_at: null });
+      expect(isVersionEligible(v, cmd)).toBe(true);
+    });
+
+    it("returns false for campaign_brief in approved_for_send (not a valid state)", () => {
+      const cmd = createOutboundCommand({ action_type: "campaign_brief", status: "approved_for_send", latest_version: 1 });
+      const v = createOutboundVersion({ version: 1, superseded_at: null });
+      expect(isVersionEligible(v, cmd)).toBe(false);
     });
   });
 

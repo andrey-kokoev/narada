@@ -20,6 +20,10 @@ import {
 } from '../lib/task-governance.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import {
+  resolvePrincipalStateDir,
+  updatePrincipalRuntimeFromTaskEvent,
+} from '../lib/principal-bridge.js';
 
 export interface TaskClaimOptions {
   taskNumber?: string;
@@ -27,6 +31,8 @@ export interface TaskClaimOptions {
   agent?: string;
   reason?: string;
   cwd?: string;
+  updatePrincipalRuntime?: boolean;
+  principalStateDir?: string;
 }
 
 export async function taskClaimCommand(
@@ -167,6 +173,23 @@ export async function taskClaimCommand(
   const { join } = await import('node:path');
   const { atomicWriteFile } = await import('../lib/task-governance.js');
   await atomicWriteFile(join(cwd, '.ai/agents/roster.json'), JSON.stringify(roster, null, 2) + '\n');
+
+  // Post-commit advisory PrincipalRuntime update
+  if (options.updatePrincipalRuntime && agentId) {
+    try {
+      const stateDir = resolvePrincipalStateDir({ cwd, principalStateDir: options.principalStateDir });
+      const bridgeResult = await updatePrincipalRuntimeFromTaskEvent(stateDir, {
+        type: 'task_claimed',
+        agent_id: agentId,
+        task_id: taskFile.taskId,
+      });
+      if (bridgeResult.warning) {
+        fmt.message(bridgeResult.warning, 'warning');
+      }
+    } catch {
+      // Best-effort advisory update — never fail the command
+    }
+  }
 
   if (fmt.getFormat() === 'json') {
     return {

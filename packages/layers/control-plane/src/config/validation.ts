@@ -37,9 +37,15 @@ export function validateCharterRuntimeConfig(cfg: ExchangeFsSyncConfig): void {
     return;
   }
 
+  if (runtime === "kimi-cli") {
+    // Browser-session backed CLI does not require an API key.
+    // Optional fields (cli_path, session_id, etc.) are passed through to the runner.
+    return;
+  }
+
   if (runtime === "mock") {
     return;
   }
 
-  throw new Error(`Invalid charter runtime: ${runtime}. Expected 'codex-api', 'kimi-api', or 'mock'.`);
+  throw new Error(`Invalid charter runtime: ${runtime}. Expected 'codex-api', 'kimi-api', 'kimi-cli', or 'mock'.`);
 }

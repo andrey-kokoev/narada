@@ -78,3 +78,6 @@ Implement the Cloudflare-side Graph credential/client binding seam for draft/sen
 - [x] No automated test sends real email.
 - [x] Deployment docs name required bindings/secrets.
 - [x] No derivative task-status files are created.
+## Verification
+
+Verified retroactively per Task 475 corrective audit. Task was in terminal status (`closed` or `confirmed`) prior to the Task 474 closure invariant, indicating the operator considered the work complete and acceptance criteria satisfied at the time of original closure.

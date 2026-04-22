@@ -1,0 +1,29 @@
+{
+  "artifact_id": "20260422-003",
+  "artifact_type": "contract_patch",
+  "state": "accepted",
+  "created_at": "2026-04-22T13:31:00-05:00",
+  "source": {
+    "kind": "operator_instruction",
+    "conversation_context": "Narada multi-agent roster management",
+    "contract_file": ".ai/task-contracts/agent-task-execution.md"
+  },
+  "title": "Recommended assignments are operative unless rejected",
+  "content": {
+    "principle": "When the architect/operator recommends a target assignment and the human operator does not disagree or correct it, the recommendation is operative and must be recorded in the roster immediately.",
+    "rationale": "Leaving accepted assignment recommendations as chat-only intent creates roster drift and increases operator coordination load. Narada's task-governed build-out requires mechanical roster state to track accepted assignment intent.",
+    "contract_patch": "Add operational rules under Agent Roster as Assignment Source of Truth: recommended assignments are operative unless rejected; conversation state corrects stale roster state.",
+    "not_applicable_when": [
+      "The human operator explicitly rejects or corrects the recommendation",
+      "The recommendation conflicts with task dependencies or active roster state that the operator has not acknowledged",
+      "The recommendation is framed as a hypothetical option rather than a target assignment"
+    ]
+  },
+  "reviewed_at": "2026-04-22T13:31:00-05:00",
+  "reviewed_by": "operator",
+  "accepted_at": "2026-04-22T13:31:00-05:00",
+  "accepted_by": "operator",
+  "scopes": ["task-governance", "roster", "assignment"],
+  "superseded_by": null,
+  "rejection_reason": null
+}

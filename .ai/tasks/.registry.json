@@ -1,0 +1,171 @@
+{
+  "version": 1,
+  "last_allocated": 477,
+  "reserved": [
+    471,
+    472,
+    473,
+    474,
+    475,
+    476,
+    477
+  ],
+  "released": [
+    474
+  ],
+  "reservations": [
+    {
+      "range_start": 454,
+      "range_end": 454,
+      "purpose": "Single task test",
+      "reserved_by": "test-agent",
+      "reserved_at": "2026-04-22T14:07:47.654Z",
+      "expires_at": "2026-04-23T14:07:47.654Z",
+      "status": "released"
+    },
+    {
+      "range_start": 455,
+      "range_end": 455,
+      "purpose": "Race-safe roster mutation hardening",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-22T14:15:00.000Z",
+      "expires_at": "2026-04-23T14:15:00.000Z",
+      "status": "released"
+    },
+    {
+      "range_start": 463,
+      "range_end": 463,
+      "purpose": "Task completion evidence and closure enforcement",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-22T15:10:00.000Z",
+      "expires_at": "2026-04-23T15:10:00.000Z",
+      "status": "released"
+    },
+    {
+      "range_start": 464,
+      "range_end": 464,
+      "purpose": "Narada self-build operation design",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-22T15:20:00.000Z",
+      "expires_at": "2026-04-23T15:20:00.000Z",
+      "status": "released"
+    },
+    {
+      "range_start": 465,
+      "range_end": 465,
+      "purpose": "Task graph Mermaid inspection operator",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-22T15:35:00.000Z",
+      "expires_at": "2026-04-23T15:35:00.000Z",
+      "status": "released"
+    },
+    {
+      "range_start": 466,
+      "range_end": 466,
+      "purpose": "Correct task allocate CLI runtime failure",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-22T15:40:00.000Z",
+      "expires_at": "2026-04-23T15:40:00.000Z",
+      "status": "released"
+    },
+    {
+      "range_start": 467,
+      "range_end": 467,
+      "purpose": "CCC posture artifact and recommender input",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-22T15:45:00.000Z",
+      "expires_at": "2026-04-23T15:45:00.000Z",
+      "status": "released"
+    },
+    {
+      "range_start": 468,
+      "range_end": 468,
+      "purpose": "Assignment promotion implementation",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-22T15:50:00.000Z",
+      "expires_at": "2026-04-23T15:50:00.000Z",
+      "status": "released"
+    },
+    {
+      "range_start": 469,
+      "range_end": 469,
+      "purpose": "Chapter state command",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-22T15:55:00.000Z",
+      "expires_at": "2026-04-23T15:55:00.000Z",
+      "status": "released"
+    },
+    {
+      "range_start": 470,
+      "range_end": 470,
+      "purpose": "Construction loop controller design",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-22T16:00:00.000Z",
+      "expires_at": "2026-04-23T16:00:00.000Z",
+      "status": "released"
+    },
+    {
+      "range_start": 471,
+      "range_end": 471,
+      "purpose": "Construction loop plan command",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-22T16:05:00.000Z",
+      "expires_at": "2026-04-23T16:05:00.000Z",
+      "status": "active"
+    },
+    {
+      "range_start": 472,
+      "range_end": 472,
+      "purpose": "Construction loop policy file and validation",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-22T16:05:00.000Z",
+      "expires_at": "2026-04-23T16:05:00.000Z",
+      "status": "active"
+    },
+    {
+      "range_start": 473,
+      "range_end": 473,
+      "purpose": "Bounded auto-promotion mode",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-22T16:05:00.000Z",
+      "expires_at": "2026-04-23T16:05:00.000Z",
+      "status": "active"
+    },
+    {
+      "range_start": 474,
+      "range_end": 474,
+      "purpose": "Governed task closure invariant",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-22T19:10:00.000Z",
+      "expires_at": "2026-04-23T19:10:00.000Z",
+      "status": "released"
+    },
+    {
+      "range_start": 475,
+      "range_end": 475,
+      "purpose": "Corrective terminal task audit",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-22T19:30:00.000Z",
+      "expires_at": "2026-04-23T19:30:00.000Z",
+      "status": "active"
+    },
+    {
+      "range_start": 476,
+      "range_end": 476,
+      "purpose": "Kimi CLI browser-session charter runtime",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-22T19:55:00.000Z",
+      "expires_at": "2026-04-23T19:55:00.000Z",
+      "status": "active"
+    },
+    {
+      "range_start": 477,
+      "range_end": 477,
+      "purpose": "Correct Narada tool locality path to .narada",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-22T20:30:00.000Z",
+      "expires_at": "2026-04-23T20:30:00.000Z",
+      "status": "active"
+    }
+  ]
+}

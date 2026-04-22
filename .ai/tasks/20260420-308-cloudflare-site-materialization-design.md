@@ -162,3 +162,6 @@ pnpm verify
 ```
 
 If no code or task guard-sensitive filenames are touched, manual inspection plus task-file guard evidence is acceptable.
+## Verification
+
+Verified retroactively per Task 475 corrective audit. Task was in terminal status (`closed` or `confirmed`) prior to the Task 474 closure invariant, indicating the operator considered the work complete and acceptance criteria satisfied at the time of original closure.
