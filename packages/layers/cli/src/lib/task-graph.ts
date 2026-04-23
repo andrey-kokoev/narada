@@ -17,12 +17,14 @@ export interface TaskGraphNode {
   status: string;
   file: string;
   assignedAgentId?: string;
+  kind: 'task' | 'chapter';
 }
 
 export interface TaskGraphEdge {
   from: number;
   to: number;
   kind: 'depends_on' | 'blocked_by';
+  toKind: 'task' | 'chapter';
 }
 
 export interface TaskGraph {
@@ -44,6 +46,7 @@ interface RawTaskEntry {
   file: string;
   dependsOn: number[];
   blockedBy: number[];
+  kind: 'task' | 'chapter';
 }
 
 /**
@@ -69,6 +72,9 @@ export async function readTaskGraph(options: ReadTaskGraphOptions): Promise<Task
     const taskNumber = numMatch ? Number(numMatch[1]) : (typeof frontMatter.task_id === 'number' ? frontMatter.task_id : null);
     if (taskNumber === null) continue;
 
+    // Detect chapter files by range pattern: DATE-START-END-...
+    const isChapter = /^[0-9]{8}-[0-9]+-[0-9]+/.test(base);
+
     const titleMatch = body.match(/^#\s+(.+)$/m);
     const title = titleMatch ? titleMatch[1].trim() : base;
 
@@ -82,6 +88,7 @@ export async function readTaskGraph(options: ReadTaskGraphOptions): Promise<Task
       file: base,
       dependsOn,
       blockedBy,
+      kind: isChapter ? 'chapter' : 'task',
     });
   }
 
@@ -109,16 +116,17 @@ export async function readTaskGraph(options: ReadTaskGraphOptions): Promise<Task
     status: e.status,
     file: e.file,
     assignedAgentId: assignedByTaskNumber?.get(e.taskNumber),
+    kind: e.kind,
   }));
 
   // Build full edge list
   const allEdges: TaskGraphEdge[] = [];
   for (const entry of entries) {
     for (const dep of entry.dependsOn) {
-      allEdges.push({ from: dep, to: entry.taskNumber, kind: 'depends_on' });
+      allEdges.push({ from: dep, to: entry.taskNumber, kind: 'depends_on', toKind: entry.kind });
     }
     for (const blocker of entry.blockedBy) {
-      allEdges.push({ from: blocker, to: entry.taskNumber, kind: 'blocked_by' });
+      allEdges.push({ from: blocker, to: entry.taskNumber, kind: 'blocked_by', toKind: entry.kind });
     }
   }
 
@@ -152,7 +160,9 @@ export async function readTaskGraph(options: ReadTaskGraphOptions): Promise<Task
   const dependencyContextNodes = new Map<number, TaskGraphNode>();
   for (const edge of allEdges) {
     if (visibleNumbers.has(edge.to) && !visibleNumbers.has(edge.from)) {
-      const depNode = allNodes.find((n) => n.taskNumber === edge.from);
+      // Prefer task nodes over chapter nodes for dependency context
+      const depNode = allNodes.find((n) => n.taskNumber === edge.from && n.kind === 'task')
+        ?? allNodes.find((n) => n.taskNumber === edge.from);
       if (depNode) {
         dependencyContextNodes.set(edge.from, depNode);
       }
@@ -191,26 +201,37 @@ export function renderMermaid(graph: TaskGraph): string {
   const lines: string[] = ['flowchart TD'];
 
   for (const node of graph.nodes) {
-    const id = mermaidNodeId(node.taskNumber);
+    const id = mermaidNodeId(node);
     const label = mermaidNodeLabel(node);
     lines.push(`  ${id}["${label}"]`);
   }
 
+  // De-duplicate edges by string representation
+  const edgeLines = new Set<string>();
   for (const edge of graph.edges) {
-    const fromId = mermaidNodeId(edge.from);
-    const toId = mermaidNodeId(edge.to);
-    if (edge.kind === 'blocked_by') {
-      lines.push(`  ${fromId} -.->|blocked| ${toId}`);
-    } else {
-      lines.push(`  ${fromId} --> ${toId}`);
-    }
+    const fromId = mermaidNodeIdForNumber(graph, edge.from, 'task');
+    const toId = mermaidNodeIdForNumber(graph, edge.to, edge.toKind);
+    const line = edge.kind === 'blocked_by'
+      ? `  ${fromId} -.->|blocked| ${toId}`
+      : `  ${fromId} --> ${toId}`;
+    edgeLines.add(line);
+  }
+  for (const line of edgeLines) {
+    lines.push(line);
   }
 
   return lines.join('\n') + '\n';
 }
 
-function mermaidNodeId(taskNumber: number): string {
-  return `T${taskNumber}`;
+function mermaidNodeId(node: TaskGraphNode): string {
+  return node.kind === 'chapter' ? `C${node.taskNumber}` : `T${node.taskNumber}`;
+}
+
+function mermaidNodeIdForNumber(graph: TaskGraph, taskNumber: number, preferredKind: 'task' | 'chapter'): string {
+  // Look for node matching the preferred kind first, then fallback
+  const node = graph.nodes.find((n) => n.taskNumber === taskNumber && n.kind === preferredKind)
+    ?? graph.nodes.find((n) => n.taskNumber === taskNumber);
+  return node ? mermaidNodeId(node) : `T${taskNumber}`;
 }
 
 function mermaidNodeLabel(node: TaskGraphNode): string {
@@ -244,6 +265,7 @@ export interface TaskGraphJson {
     status: string;
     file: string;
     assigned_agent_id: string | null;
+    kind: 'task' | 'chapter';
   }>;
   edges: Array<{
     from: number;
@@ -260,6 +282,7 @@ export function renderJson(graph: TaskGraph): TaskGraphJson {
       status: n.status,
       file: n.file,
       assigned_agent_id: n.assignedAgentId ?? null,
+      kind: n.kind,
     })),
     edges: graph.edges.map((e) => ({
       from: e.from,

@@ -209,4 +209,71 @@ describe('task graph inspection operator', () => {
     expect(r.edges).toHaveLength(0);
     rmSync(emptyDir, { recursive: true, force: true });
   });
+
+  it('distinguishes chapter and task nodes with same number in mermaid', async () => {
+    writeTask(tempDir, '20260423-522-525-chapter.md', 'status: opened\ndepends_on: []\n', 'Chapter 522–525');
+    writeTask(tempDir, '20260423-522-task.md', 'task_id: 522\nstatus: opened\ndepends_on: []\n', 'Task 522');
+
+    const result = await taskGraphCommand({ cwd: tempDir, format: 'mermaid' });
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const mermaid = (result.result as { mermaid: string }).mermaid;
+
+    // Both nodes must appear with distinct IDs
+    expect(mermaid).toContain('C522[');
+    expect(mermaid).toContain('T522[');
+    // No duplicate declarations
+    const c522Matches = mermaid.match(/C522\[/g);
+    const t522Matches = mermaid.match(/T522\[/g);
+    expect(c522Matches?.length).toBe(1);
+    expect(t522Matches?.length).toBe(1);
+  });
+
+  it('distinguishes chapter and task nodes in json output', async () => {
+    writeTask(tempDir, '20260423-522-525-chapter.md', 'status: opened\ndepends_on: []\n', 'Chapter 522–525');
+    writeTask(tempDir, '20260423-522-task.md', 'task_id: 522\nstatus: opened\ndepends_on: []\n', 'Task 522');
+
+    const result = await taskGraphCommand({ cwd: tempDir, format: 'json' });
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const r = result.result as { nodes: Array<{ task_number: number; kind: string }> };
+
+    expect(r.nodes).toHaveLength(2);
+    const chapterNode = r.nodes.find((n) => n.kind === 'chapter');
+    const taskNode = r.nodes.find((n) => n.kind === 'task');
+    expect(chapterNode).toBeDefined();
+    expect(taskNode).toBeDefined();
+    expect(chapterNode!.task_number).toBe(522);
+    expect(taskNode!.task_number).toBe(522);
+  });
+
+  it('renders chapter dependencies with correct edge targets', async () => {
+    writeTask(tempDir, '20260423-520-alpha.md', 'task_id: 520\nstatus: opened\ndepends_on: []\n', 'Task 520');
+    writeTask(tempDir, '20260423-522-525-chapter.md', 'status: opened\ndepends_on: [520]\n', 'Chapter 522–525');
+    writeTask(tempDir, '20260423-522-task.md', 'task_id: 522\nstatus: opened\ndepends_on: [520]\n', 'Task 522');
+
+    const result = await taskGraphCommand({ cwd: tempDir, format: 'mermaid' });
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const mermaid = (result.result as { mermaid: string }).mermaid;
+
+    // Chapter depends on task 520
+    expect(mermaid).toContain('T520 --> C522');
+    // Task 522 depends on task 520
+    expect(mermaid).toContain('T520 --> T522');
+    // Chapter and task are distinct nodes
+    expect(mermaid).toContain('C522[');
+    expect(mermaid).toContain('T522[');
+  });
+
+  it('prefers task node over chapter for dependency edges when both exist', async () => {
+    writeTask(tempDir, '20260423-522-525-chapter.md', 'status: opened\ndepends_on: []\n', 'Chapter 522–525');
+    writeTask(tempDir, '20260423-522-task.md', 'task_id: 522\nstatus: opened\ndepends_on: []\n', 'Task 522');
+    writeTask(tempDir, '20260423-523-other.md', 'task_id: 523\nstatus: opened\ndepends_on: [522]\n', 'Task 523');
+
+    const result = await taskGraphCommand({ cwd: tempDir, format: 'mermaid' });
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const mermaid = (result.result as { mermaid: string }).mermaid;
+
+    // Edge from 523 should point to task 522, not chapter 522
+    expect(mermaid).toContain('T522 --> T523');
+    expect(mermaid).not.toContain('C522 --> T523');
+  });
 });

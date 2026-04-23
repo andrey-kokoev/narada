@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_allocated": 521,
+  "last_allocated": 529,
   "reserved": [
     471,
     472,
@@ -327,6 +327,24 @@
       "reserved_by": "codex",
       "reserved_at": "2026-04-23T15:01:02-05:00",
       "expires_at": "2026-04-24T15:01:02-05:00",
+      "status": "released"
+    },
+    {
+      "range_start": 522,
+      "range_end": 525,
+      "purpose": "Local self-build runtime and workbench chapter",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-23T23:15:00-05:00",
+      "expires_at": "2026-04-24T23:15:00-05:00",
+      "status": "released"
+    },
+    {
+      "range_start": 526,
+      "range_end": 529,
+      "purpose": "Workbench v0 build chapter",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-24T00:10:00-05:00",
+      "expires_at": "2026-04-25T00:10:00-05:00",
       "status": "released"
     }
   ]
