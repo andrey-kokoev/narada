@@ -1,0 +1,12 @@
+{
+  "task_id": "20260422-485-operator-console-http-api-for-browser-ui",
+  "assignments": [
+    {
+      "agent_id": "a1",
+      "claimed_at": "2026-04-23T13:36:03.116Z",
+      "claim_context": null,
+      "released_at": "2026-04-23T15:00:00.000Z",
+      "release_reason": "completed"
+    }
+  ]
+}

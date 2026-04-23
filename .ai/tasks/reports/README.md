@@ -24,7 +24,9 @@ This directory contains durable `WorkResultReport` records submitted by agents w
 - A report does **not** close a task. It is evidence, not authority.
 - A report does **not** prove correctness. It is a principal's belief that work is ready for review.
 - Reports are **append-only**. A rejected report remains in history.
-- A task may have **multiple reports** over time.
+- A task may have **multiple reports** over time, but **one assignment_id → at most one submitted WorkResultReport**.
+  - Report identity is deterministic: `wrr_<hash>_<task_id>_<agent_id>` where the hash is derived from `task_id`, `agent_id`, and `assignment_id`.
+  - Re-invoking `narada task report` for the same assignment returns the existing report without creating a duplicate.
 - Report status transitions are governed by review: `submitted` → `accepted` or `rejected`.
 
 ## File Naming

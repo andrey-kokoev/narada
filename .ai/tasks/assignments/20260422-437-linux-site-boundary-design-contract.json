@@ -1,0 +1,14 @@
+{
+  "task_id": "20260422-437-linux-site-boundary-design-contract",
+  "assignments": [
+    {
+      "agent_id": "a2",
+      "claimed_at": "2026-04-23T19:52:37.335Z",
+      "claim_context": null,
+      "released_at": null,
+      "released_at": "2026-04-23T20:06:27.000Z",
+      "release_reason": "task_close:a2",
+      "intent": "primary"
+    }
+  ]
+}

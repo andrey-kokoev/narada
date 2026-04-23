@@ -1,0 +1,16 @@
+{
+  "report_id": "wrr_b665e9ed_20260423-505-taxonomy-mapping-and-backfill_a2",
+  "task_number": "505",
+  "task_id": "20260423-505-taxonomy-mapping-and-backfill",
+  "agent_id": "a2",
+  "assignment_id": "20260423-505-taxonomy-mapping-and-backfill-2026-04-23T19:31:30.905Z",
+  "reported_at": "2026-04-23T19:34:46.622Z",
+  "summary": "Verified taxonomy mapping completeness: all 12 zones mapped to zone templates in ZONE_TEMPLATE_INVENTORY, all 11 crossings mapped to regime kinds in CROSSING_REGIME_INVENTORY. Ambiguous and deferred cases already recorded. Mapping lives in both machine-readable inventory and SEMANTICS.md. No code changes required.",
+  "changed_files": [
+    ".ai/tasks/20260423-505-taxonomy-mapping-and-backfill.md"
+  ],
+  "verification": [],
+  "known_residuals": [],
+  "ready_for_review": true,
+  "report_status": "submitted"
+}

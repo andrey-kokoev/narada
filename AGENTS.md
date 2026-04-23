@@ -8,9 +8,29 @@
 
 ## Project Overview
 
-Narada is a generalized, deterministic kernel for turning remote source deltas into locally materialized state and durable side-effect intents. It tolerates crashes at any point, handles re-fetching overlapping data, and converges to correct state without coordination with the source.
+Narada is a composed topology of authority-homogeneous zones connected by governed crossings.
 
-**Core Identity**: This is NOT a sync client, cache, or mirror. It is a deterministic state compiler from remote deltas into local canonical state, with a durable control plane for action governance.
+- A **zone** is a region in which one authority grammar remains invariant.
+- A **governed crossing** is the durable, admissible transfer from one zone to another.
+- A crossing is not separate from its regime: each crossing edge carries its own admissibility regime, crossing artifact, and confirmation law.
+- Narada preserves correctness by preventing illicit shortcuts across zones and by requiring every meaningful crossing to produce a durable artifact under an explicit regime.
+
+Viewed operationally, Narada is a generalized, deterministic kernel for turning remote source deltas into locally materialized state and durable side-effect intents. It tolerates crashes at any point, handles re-fetching overlapping data, and converges to correct state without coordination with the source.
+
+**Primary Shape**: Narada is not best understood as a bag of modules or only as a pipeline. Its primary explanatory shape is:
+
+- a composed topology of authority-homogeneous zones,
+- connected by governed crossings.
+
+From that primary shape, the familiar Narada readings follow:
+
+- **state compiler**: what the topology does;
+- **nine-layer pipeline**: one canonical traversal through the topology;
+- **Aim / Site / Cycle / Act / Trace**: operator/runtime view of the same topology;
+- **Intelligence-Authority Separation**: one core invariant of the topology;
+- **crossing regime**: the local law governing each crossing.
+
+**Core Identity**: This is NOT a sync client, cache, or mirror. It is a deterministic state compiler from remote deltas into local canonical state, with a durable control plane for action governance. That compiler reading is derived from the deeper zone-and-crossing structure above.
 
 **Mailbox as One Vertical**: The Microsoft Graph/Exchange mailbox integration is the first vertical built on the kernel. It uses:
 - `ExchangeSource` as one `Source` implementation
@@ -33,9 +53,11 @@ Narada is a generalized, deterministic kernel for turning remote source deltas i
 ### Semantic Crystallization Guidance
 
 When describing higher-order architecture, deployment, or design:
+- Use the topology reading as the primary semantic lens: Narada is a composed topology of authority-homogeneous zones connected by governed crossings.
 - Prefer the compact tuple **`Aim / Site / Cycle / Act / Trace`** (see [`SEMANTICS.md §2.14`](SEMANTICS.md)) over overloaded generic terms like `operation`.
 - When precision matters — specifications, interfaces, authority boundaries, agent instructions — use the **canonical expansion**: `Operation Specification` / `Runtime Locus` / `Control Cycle` / phase vocabulary / `Evidence Trace` (see [`SEMANTICS.md §2.14.6`](SEMANTICS.md)).
 - Preserve Narada's **portable invariant spine** (see [`SEMANTICS.md §2.14.5`](SEMANTICS.md)): Sites, verticals, and principals may change, but durable boundaries and authority transitions must remain recognizable.
+- Treat the nine-layer pipeline as a canonical traversal through the zone topology, not as the deeper primitive.
 - Use the **Control Cycle phase vocabulary** (see [`SEMANTICS.md §2.14.7`](SEMANTICS.md)) when describing Cycle internals: Source Read → Fact Admission → Context Formation → Evaluation → Governance → Intent/Handoff → Execution Attempt → Confirmation/Reconciliation → Evidence Trace.
 - Use the **Operation Specification** (not "telos") as the canonical reading of `Aim`. An Aim is inspectable, versionable, and independent of runtime.
 - **`operation`** remains current user-facing CLI language. Do not invent new meanings for it.
@@ -51,6 +73,8 @@ When describing higher-order architecture, deployment, or design:
 | [SEMANTICS.md](SEMANTICS.md) | **Canonical ontology** — single source of truth for all terms | Need a definition, identity format, or invariant |
 | [SEMANTICS.md §2.13](SEMANTICS.md) | Intelligence-Authority Separation — canonical internal formulation | Need to understand why evaluation ≠ decision and why the control plane owns authority |
 | [SEMANTICS.md §2.14.5](SEMANTICS.md) | Portable invariant spine — how Narada travels across Sites, verticals, and principals | Need to prevent substrate/vertical/agent collapse |
+| [SEMANTICS.md §2.15](SEMANTICS.md) | Crossing regime — unifying abstraction of zone, boundary, crossing regime, and crossing artifact | Need to reason about boundary crossings generically |
+| [SEMANTICS.md §2.17](SEMANTICS.md) | Zone template taxonomy — reusable zone templates, instance/template/stage distinction | Need to understand which zones share structural roles and invariant authority grammar |
 | [SEMANTICS.md §2.8](SEMANTICS.md) | Re-derivation / recovery operator family | Need to understand replay, preview, recovery, rebuild, or confirm operators |
 | [00-kernel.md](packages/layers/control-plane/docs/00-kernel.md) | **Irreducible kernel spec** — the canonical lawbook | Need the vertical-agnostic normative core |
 | [01-spec.md](packages/layers/control-plane/docs/01-spec.md) | Dearbitrized formal specification (mailbox vertical) | Need to understand the mailbox-specific theoretical model |
@@ -113,6 +137,13 @@ When describing higher-order architecture, deployment, or design:
 | Add a new field to messages | [`src/types/normalized.ts`](packages/layers/control-plane/src/types/normalized.ts) + [`src/normalize/message.ts`](packages/layers/control-plane/src/normalize/message.ts) |
 | Modify config schema | [`src/config/types.ts`](packages/layers/control-plane/src/config/types.ts) + [`src/config/load.ts`](packages/layers/control-plane/src/config/load.ts) |
 | Write integration tests | [`test/integration/`](packages/layers/control-plane/test/integration/) + see [05-testing.md](packages/layers/control-plane/docs/05-testing.md) |
+| Modify crossing regime declaration | [`src/types/crossing-regime.ts`](packages/layers/control-plane/src/types/crossing-regime.ts) + [`SEMANTICS.md §2.15.8`](SEMANTICS.md) |
+| Modify crossing regime kind taxonomy | [`src/types/crossing-regime.ts`](packages/layers/control-plane/src/types/crossing-regime.ts) + [`SEMANTICS.md §2.15.9`](SEMANTICS.md) |
+| Modify crossing regime inventory | [`src/types/crossing-regime-inventory.ts`](packages/layers/control-plane/src/types/crossing-regime-inventory.ts) |
+| Modify crossing regime lint gate | [`scripts/task-graph-lint.ts`](scripts/task-graph-lint.ts) + [`src/lib/task-governance.ts`](packages/layers/cli/src/lib/task-governance.ts) |
+| Modify crossing regime construction surface | [`src/commands/chapter-init.ts`](packages/layers/cli/src/commands/chapter-init.ts) + [`src/lib/construction-loop-plan.ts`](packages/layers/cli/src/lib/construction-loop-plan.ts) + [`chapter-planning.md`](.ai/task-contracts/chapter-planning.md) |
+| Modify zone template taxonomy | [`src/types/zone-template.ts`](packages/layers/control-plane/src/types/zone-template.ts) + [`SEMANTICS.md §2.17`](SEMANTICS.md) |
+| Inspect crossing regimes | [`src/commands/crossing.ts`](packages/layers/cli/src/commands/crossing.ts) |
 
 ### By Concept
 
@@ -154,6 +185,16 @@ When describing higher-order architecture, deployment, or design:
 | **confirmation replay** | `Execution` → `Confirmation` recomputation without re-performing effects | [`SEMANTICS.md §2.8`](SEMANTICS.md) |
 | **advisory signals** | Non-authoritative hints that influence routing, timing, review, and attention without determining truth or permission | [`SEMANTICS.md §2.12`](SEMANTICS.md) |
 | **authoritative structures** | Durable boundaries and authority classes that determine truth, permission, and commitment | [`SEMANTICS.md §2.12`](SEMANTICS.md) |
+| **crossing regime** | Explicit set of rules governing what may cross a boundary, in what form, under what authority, and with what confirmation | [`SEMANTICS.md §2.15`](SEMANTICS.md) |
+| **zone** | Region of authority homogeneity within which a single authority owner governs state and transitions | [`SEMANTICS.md §2.15`](SEMANTICS.md) |
+| **boundary** | Interface between two adjacent zones where authority changes and a durable artifact is produced | [`SEMANTICS.md §2.15`](SEMANTICS.md) |
+| **crossing artifact** | Durable record produced by a boundary crossing, carrying state from source zone to destination zone | [`SEMANTICS.md §2.15`](SEMANTICS.md) |
+| **crossing regime declaration** | Canonical six-field contract (`source_zone`, `destination_zone`, `authority_owner`, `admissibility_regime`, `crossing_artifact`, `confirmation_rule`) that lint, inspection, and construction surfaces consume mechanically | [`SEMANTICS.md §2.15.8`](SEMANTICS.md) + [`src/types/crossing-regime.ts`](packages/layers/control-plane/src/types/crossing-regime.ts) |
+| **crossing regime kind** | Reusable taxonomy of edge-law patterns (`self_certifying`, `policy_governed`, `intent_handoff`, `challenge_confirmed`, `review_gated`, `observation_reconciled`) that cluster concrete crossing declarations | [`SEMANTICS.md §2.15.9`](SEMANTICS.md) + [`src/types/crossing-regime.ts`](packages/layers/control-plane/src/types/crossing-regime.ts) |
+| **crossing regime inventory** | Canonical initial inventory of declared crossings (canonical, advisory, deferred) against the Task 495 contract | [`src/types/crossing-regime-inventory.ts`](packages/layers/control-plane/src/types/crossing-regime-inventory.ts) |
+| **crossing regime inspection** | Read-only CLI surface (`narada crossing list`, `narada crossing show`) over the canonical inventory | [`src/commands/crossing.ts`](packages/layers/cli/src/commands/crossing.ts) |
+| **zone template** | Reusable pattern defined by invariant authority grammar that multiple zones may instantiate | [`SEMANTICS.md §2.17`](SEMANTICS.md) + [`src/types/zone-template.ts`](packages/layers/control-plane/src/types/zone-template.ts) |
+| **zone template inventory** | Canonical inventory of zone templates with fit strength, instances, and ambiguity notes | [`src/types/zone-template.ts`](packages/layers/control-plane/src/types/zone-template.ts) |
 
 ---
 
@@ -232,13 +273,15 @@ The CLI distinguishes four levels of completion. Agents and operators must not c
 |-------|---------------|--------------|
 | **Agent attempt done** | The agent's roster entry is `done` (`task roster done`). | `narada task roster show` |
 | **Task has evidence** | The task file contains execution notes, checked acceptance criteria, and ideally a WorkResultReport. | `narada task evidence <n>` |
+| **Tasks not complete by evidence** | Lists tasks that are incomplete, attempt-complete, needs-review, or needs-closure across the repo. | `narada task evidence list` |
 | **Task artifact closed** | The task file front matter says `status: closed` (or `confirmed`). | Read the task file |
 | **Chapter ready to advance** | All tasks in the chapter are `closed` or `confirmed`, with reviews/closure decisions where required. | `narada chapter close` |
 
 **Key rules:**
-- `task roster done` marks only agent availability, not task completion. It warns (or fails with `--strict`) when the task lacks evidence.
+- `task roster done` marks only agent availability, not task completion. It blocks by default when the task is not complete by evidence. Use `--allow-incomplete` only when intentionally recording agent availability while preserving the task as incomplete.
 - `task review accepted` does **not** transition a task to `closed` if acceptance criteria are unchecked or execution evidence is missing. The task stays `in_review` until evidence is provided.
-- `narada task evidence <n>` is read-only and classifies tasks as `complete`, `attempt_complete`, `needs_review`, `needs_closure`, or `incomplete`.
+- `narada task evidence <n>` is read-only and classifies a single task as `complete`, `attempt_complete`, `needs_review`, `needs_closure`, or `incomplete`.
+- `narada task evidence list` is read-only and lists all tasks that are not complete by evidence (default filter). Use `--verdict` to filter, `--status` to scope by front-matter status, and `--range` for number ranges.
 
 ### Task Assignment and Claim Semantics
 
@@ -247,10 +290,25 @@ The CLI distinguishes four levels of completion. Agents and operators must not c
 | `task roster assign <n> --agent <id>` | Assigns agent to task **and claims it by default** | Yes (status → `claimed`) | Yes (`working` + task) |
 | `task roster assign <n> --agent <id> --no-claim` | Assigns agent without claiming | No | Yes (`working` + task) |
 | `task claim <n> --agent <id>` | Claims task directly (no roster update except `last_active_at`) | Yes (status → `claimed`) | No (only timestamp) |
-| `task roster done <n> --agent <id>` | Marks agent done | No | Yes (`done`, clears task) |
+| `task roster done <n> --agent <id>` | Marks agent done only if required evidence exists | No | Yes (`done`, clears task) |
+| `task roster done <n> --agent <id> --allow-incomplete` | Records agent availability despite missing evidence | No | Yes (`done`, clears task) |
+| `task finish <n> --agent <id>` | Canonical completion: report/review → evidence → roster done | Yes (report/review) | Yes (`done`, clears task) |
+| `task continue <n> --agent <id> --reason <r>` | Continue/take over an already-claimed task | Yes (status → `claimed` if `needs_continuation`) | Yes (`working` + task) |
 | `task review <n> --verdict accepted` | Reviews and may close task | Yes (status → `closed` or stays `in_review`) | No |
 
 **Atomicity:** `roster assign` validates claimability (task exists, status is `opened`/`needs_continuation`, dependencies met, no active assignment) **before** touching the roster. A failed validation leaves both the roster and the task file unchanged. If the task is already `claimed`, the roster is updated and a warning is emitted (non-destructive).
+
+**Continuation / Takeover (`task continue`):**
+- Valid only for tasks with status `claimed` or `needs_continuation`.
+- `opened` tasks must use `task claim` or `task roster assign` instead.
+- Supported reasons:
+  - `evidence_repair` — continuation agent assists without superseding primary; prior assignment stays active.
+  - `review_fix` — continuation agent addresses review findings without superseding primary.
+  - `handoff` — explicit transfer; prior assignment is released as `continued`.
+  - `blocked_agent` — prior agent is blocked; prior assignment is released as `continued`.
+  - `operator_override` — operator directive; prior assignment is released as `continued`.
+- Assignment history is append-only; prior assignments are never erased.
+- `task report` accepts reports from both primary and continuation agents. A continuation report does not release the primary assignment or transition task status.
 
 **Conservative guarantees** (both commands):
 - No active leases are created
@@ -386,6 +444,99 @@ narada/
 38. **Advisory signals have no lifecycle side effect**: Emitting or consuming an advisory signal must not transition the lifecycle state of a durable object (fact, work item, intent, execution).
 39. **Continuation affinity is advisory**: `WorkItem` may carry `continuation_affinity` fields (`preferred_session_id`, `affinity_strength`, `affinity_expires_at`), but the scheduler must treat them as a reordering hint, not a mandatory assignment. Affinity must not bypass leasing, override governance, or block runnable work indefinitely.
 40. **Advisory signals make no truth claim**: An advisory signal must never be presented as evidence that something is true; it only expresses preference, probability, or attention-worthiness.
+
+### Crossing Regime (Task 491)
+41. **No crossing without regime**: Every zone-to-zone boundary crossing that produces a durable artifact must have an explicit crossing regime (source zone, destination zone, authority owner, admissibility regime, crossing artifact, confirmation rule).
+42. **Authority changes at boundaries**: If a transition does not change authority owner, it is not a boundary crossing — it is an internal state transition within a zone.
+43. **Artifacts are durable**: A crossing artifact must be durable enough to survive a crash in either zone. Ephemeral signals do not qualify as crossing artifacts.
+44. **Confirmation is downstream or self-certifying**: Every crossing either carries its own proof (content hash) or defines how it will be confirmed later (reconciliation, review, challenge, inbound observation).
+45. **Regimes are not transitive shortcuts**: Crossing regimes compose sequentially, not by skipping zones. `Source → Fact → Context → Work` is valid; `Source → Work` is an authority collapse.
+
+### Speaking Doctrine (Task 502)
+
+Narada adopts a disciplined way of speaking about architecture, borrowed from BSFG where it strengthens clarity and rejected where it would cause semantic smear.
+
+#### Role vs Implementation
+
+A **role** is what a component must do (authority, invariant, obligation). An **implementation** is how it does it (code, process, substrate).
+
+| Role | Example Implementations |
+|------|------------------------|
+| Source adapter (`derive`) | Graph API client, filesystem watcher, timer trigger, webhook receiver |
+| Foreman (`resolve`) | SQLite-backed scheduler, Cloudflare Durable Object, in-memory test harness |
+| Worker (`execute`) | Send-reply worker, process runner, future automation executor |
+
+> **Rule**: When describing a boundary, name the role and authority class first. Name the implementation only when substrate specificity matters.
+
+#### Three-Layer Ontology
+
+Every architectural statement belongs to one of three layers:
+
+| Layer | Contains | Does NOT contain |
+|-------|----------|------------------|
+| **Principle** | Zones, regimes, invariants, authority grammars | Services, languages, deployable artifacts |
+| **Logical System** | Control plane, operators, state machines, CLI | Substrate-specific APIs, deployment details |
+| **Substrate** | SQLite, filesystem, Cloudflare, Windows, R2 | Authority boundaries, crossing regimes |
+
+> **Rule**: Do not identify Narada with its substrate. SQLite is a substrate, not Narada. TypeScript is the current implementation language, not the authority boundary.
+
+#### Named Operational Modes
+
+Narada operates in explicit modes. Name the mode when describing behavior:
+
+| Mode | When Active | Key Guarantee |
+|------|-------------|---------------|
+| **Live** | Normal operation | All authority transitions are durable and real |
+| **Replay Derivation** | `narada derive-work`, `narada recover` | No new facts admitted; reconstructs from stored artifacts |
+| **Preview Derivation** | `narada preview-work` | Read-only computation; no work opened, no intents created |
+| **Recovery** | Post-coordinator-loss reconstruction | Facts are authoritative starting point; no in-flight executions resurrected |
+| **Inspection** | `narada status`, `narada show`, `narada crossing list` | No durable mutation; no leases; no effects |
+
+> **Rule**: Do not assume "live" as the default. A command or surface must declare its mode explicitly.
+
+#### Canonical Naming Grammar
+
+Narada identifiers follow these principles:
+
+| Pattern | Example | Use For |
+|---------|---------|---------|
+| `lower_snake_case` | `source_adapter`, `foreman_decision` | Code identifiers, config keys, fact predicates |
+| `kebab-case` | `crossing-regime`, `task-attachment` | File names, CLI commands, URL paths |
+| `PascalCase` | `CrossingRegime`, `TaskAssignment` | TypeScript types, interfaces, classes |
+| `SCREAMING_SNAKE_CASE` | `CROSSING_REGIME_INVENTORY` | Constants, enums, environment variables |
+| `lower.kind:id` | `mail:thread_abc123` | Subject identifiers in facts |
+
+> **Rule**: Past tense for predicates (`order_created`, not `create_order`). Specific verbs (`shipped`, `confirmed`, not `updated`). Stable once deployed.
+
+#### Irreducible Semantic Units
+
+Every first-class concept in Narada must be stateable as an irreducible unit:
+
+- A **zone** is a region where one authority grammar remains invariant.
+- A **crossing regime** is the explicit set of rules that determine what may cross a boundary, in what form, under what authority, and with what confirmation obligation.
+- A **governed crossing** is the admissible, durable transfer from one zone to another under an explicit crossing regime.
+
+> **Rule**: If a concept cannot be stated in one sentence without referencing implementation details, it is not yet a first-class semantic unit.
+
+#### Short Invariant Bullets
+
+Invariants are stated as short, load-bearing bullets:
+
+> **No meaningful boundary crossing without an explicit admissibility regime.**
+> **Intelligence may contribute judgment. Authority must remain in governed structure.**
+> **Removing every advisory signal from the system must leave all durable boundaries intact.**
+
+> **Rule**: An invariant must fit on one line. If it needs a paragraph, it is a design note, not an invariant.
+
+#### What Was Rejected from BSFG
+
+| BSFG Concept | Rejected Because | Narada Equivalent |
+|--------------|------------------|-------------------|
+| Four-buffer model (ISB/IFB/ESB/EFB) | Narada is authority-first, not connectivity-first | Crossing regime + zone topology |
+| IT/OT zone language | Manufacturing-specific; would smear into Narada's vertical-neutral kernel | Generic zone + vertical taxonomy |
+| Message/envelope as universal primary frame | Narada's fact is one artifact among many; not all boundaries carry messages | Crossing artifact (varies by boundary) |
+| Connectivity-first topology | Narada's topology is defined by authority change, not network connectivity | Authority-homogeneous zones |
+| `putIfAbsent` forward buffer deduplication | Substrate-specific implementation detail | Idempotency enforced at `event_id` → `apply_log` |
 
 ---
 
@@ -689,6 +840,14 @@ Reusable task contracts live in `.ai/task-contracts/`:
 - `.ai/task-contracts/question-escalation.md` tells agents when to stop and ask the architect/user instead of making arbitrary semantic, authority, safety, private-data, or product decisions.
 
 Task graph evolution is governed by `docs/governance/task-graph-evolution-boundary.md`. It defines task identity invariants, numeric allocation rules, range reservation, and the renumbering/correction operator. Agents must not allocate task numbers by `ls | tail`; they must use the reservation protocol or compute the next available number from task headings.
+
+### Architectural Pruning Contract
+
+Architecture-heavy review and pruning tasks are governed by `docs/governance/architectural-pruning.md` (PE-lite). It provides a compact procedure for distinguishing necessary complexity from concealed non-necessity using preservation context, burden ledgers, simplification witnesses, and displacement audits.
+
+- **Required** for: architecture-heavy tasks, closure reviews touching multiple authority boundaries, and tasks whose primary goal is simplification or legacy removal.
+- **Not required** for: ordinary implementation tasks, localized bug fixes, additive changes, or test/documentation-only work.
+- **Subordinate**: PE-lite cannot override Narada authority boundaries, kernel invariants, or runtime semantics.
 
 Tasks must be self-standing. An external agent should be able to execute or review a task from `execute <task-number>` or `review <task-number>` alone. If assignment requires extra pasted constraints, patch the task file first; assignment text is routing, not hidden specification.
 

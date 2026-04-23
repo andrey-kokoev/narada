@@ -1,6 +1,8 @@
 ---
-status: opened
+status: closed
 depends_on: [411, 412, 413, 425]
+closed_at: 2026-04-23T13:54:26.995Z
+closed_by: a2
 ---
 
 # Task 426 — Assignment Recommendation Implementation
@@ -162,24 +164,60 @@ Clarify:
 - Do not add a daemon or background scheduler.
 - Do not create derivative `*-EXECUTED`, `*-DONE`, `*-RESULT`, `*-FINAL`, or `*-SUPERSEDED` files.
 
-## Acceptance Criteria
+## Execution Notes
 
-- [ ] `narada task recommend` exists and is read-only.
-- [ ] Recommendations include scores, reasons, and risks.
-- [ ] Blocked tasks are not recommended as assignable.
-- [ ] Idle/done capable agents are preferred over busy agents.
-- [ ] Warm context is advisory and cannot override dependency blockers.
-- [ ] PrincipalRuntime input is optional and advisory.
-- [ ] WorkResultReport input is consumed only as evidence, not authority.
-- [ ] Focused tests prove scoring, filtering, JSON output, and read-only behavior.
-- [ ] Docs/contracts reflect implementation boundaries.
-- [ ] No derivative task-status files are created.
+### Implementation State at Claim
+The core implementation was already present in the repo from a prior commit (construction governance batch). This execution verified completeness, filled type-surface gaps, and closed the task formally.
 
-## Suggested Verification
+### Verification Steps Performed
+1. Confirmed `task-recommender.ts` contains full scoring engine (dependency, capability, load, history, review separation, budget, write-set risk).
+2. Confirmed `task-recommend.ts` CLI command exists and is wired in `main.ts`.
+3. Confirmed 12 tests in `task-recommend.test.ts` pass (idle agent preference, blocked task exclusion, write-set risk surfacing, read-only behavior, JSON stability, PrincipalRuntime graceful degradation, in_review abstention).
+4. Confirmed 30 tests in `task-governance.test.ts` pass.
+5. Added missing required types `AgentCandidateScore` and `RecommendationInputSnapshot` to `task-recommender.ts` with helper functions `toAgentCandidateScore` and `buildInputSnapshot`.
+6. Verified `pnpm --filter @narada2/cli typecheck` passes after type additions.
+7. Ran `narada task recommend --format json --cwd .` on live repo — produces valid recommendations.
+8. Verified `.ai/task-contracts/agent-task-execution.md` already references `task recommend` and advisory boundaries.
+9. Verified decision files 411 and 412 do not require amendment (implementation follows design).
+10. Confirmed no derivative task-status files exist for this task.
+
+### Write Set
+- `packages/layers/cli/src/lib/task-recommender.ts` — added `AgentCandidateScore`, `RecommendationInputSnapshot`, `toAgentCandidateScore()`, `buildInputSnapshot()`
+- `.ai/tasks/20260422-426-assignment-recommendation-implementation.md` — this file
+
+## Verification
 
 ```bash
+cd /home/andrey/src/narada
 pnpm --filter @narada2/cli exec vitest run test/commands/task-recommend.test.ts test/lib/task-governance.test.ts
+pnpm --filter @narada2/cli typecheck
 node packages/layers/cli/dist/main.js task recommend --format json --cwd .
 ```
 
-Do not run broad suites unless focused verification exposes a cross-package failure that requires escalation.
+**Results:**
+- `task-recommend.test.ts`: 12 passed
+- `task-governance.test.ts`: 30 passed
+- `pnpm --filter @narada2/cli typecheck`: passed
+- Live `task recommend`: produces valid JSON recommendations
+
+## Acceptance Criteria
+
+- [x] `narada task recommend` exists and is read-only.
+- [x] Recommendations include scores, reasons, and risks.
+- [x] Blocked tasks are not recommended as assignable.
+- [x] Idle/done capable agents are preferred over busy agents.
+- [x] Warm context is advisory and cannot override dependency blockers.
+- [x] PrincipalRuntime input is optional and advisory.
+- [x] WorkResultReport input is consumed only as evidence, not authority.
+- [x] Focused tests prove scoring, filtering, JSON output, and read-only behavior.
+- [x] Docs/contracts reflect implementation boundaries.
+- [x] No derivative task-status files are created.
+
+## Residuals / Deferred Work
+
+- Weight tuning remains empirical; the default weights in `task-recommender.ts` are starting heuristics.
+- `--explain` flag for per-candidate reasoning detail is not implemented (listed as future enhancement in Decision 411).
+- Durable recommendation storage in `.ai/tasks/recommendations/` is not implemented (schema is defined but no storage operator exists).
+
+
+

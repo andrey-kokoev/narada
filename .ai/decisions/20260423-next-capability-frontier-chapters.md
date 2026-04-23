@@ -1,0 +1,56 @@
+# Next Capability Frontier Chapters
+
+> Backlog decision that turns the missing-capabilities frontier into governed chapter programs.
+
+**Date:** 2026-04-23
+
+**Primary input:** `.ai/decisions/20260423-narada-missing-capabilities-frontier.md`
+
+## Decision
+
+The next chapter backlog after the crossing-regime / taxonomy tranches is:
+
+1. **Self-Governance Extraction** (`510–513`)
+2. **Agent Runtime First-Class Modeling** (`514–517`)
+3. **Second Traveling Operation Selection And Proof** (`518–521`)
+
+## Not New Chapters
+
+The following remain active prerequisite lines, not new chapter definitions:
+
+- `399–405` supervised live proof / email-marketing live dry run
+- `431` macOS root contract repair
+- `437` Linux root contract repair
+
+These are existing open lines and should be completed or explicitly superseded, not duplicated by new chapter shaping.
+
+## Why These Three
+
+### 1. Self-Governance Extraction
+
+Narada still relies too much on the human operator as the hidden scheduler. This chapter extracts the governed promotion path from recommendation to assignment and reduces hidden manual control.
+
+### 2. Agent Runtime First-Class Modeling
+
+Narada still does not fully model the architect-operator + agent swarm pattern actually used to build it. This chapter makes that runtime legible as a Narada-governed object.
+
+### 3. Second Traveling Operation
+
+Narada needs one more real operation family to prove the topology travels beyond mailbox/email-marketing. This chapter does not assume the operation in advance; it selects one and shapes the first proof.
+
+## Sequencing
+
+```text
+Prerequisites already open:
+  399–405 supervised live proof
+  431 macOS root contract repair
+  437 Linux root contract repair
+
+Backlog chapters:
+  510–513 Self-Governance Extraction
+  514–517 Agent Runtime First-Class Modeling
+  518–521 Second Traveling Operation
+```
+
+The chapters may overlap in planning, but implementation should generally proceed in the listed order.
+

@@ -81,13 +81,48 @@ When specificity matters:
 
 Terms used inside the kernel, control plane, and runtime.
 
+### 2.0 Primary Shape
+
+Narada's primary explanatory shape is:
+
+- a composed topology of authority-homogeneous zones,
+- connected by governed crossings.
+
+A **zone** is a region in which one authority grammar remains invariant: the same authority owner governs what counts as valid state, what transitions are admissible, what artifacts are authoritative, and what confirmations matter.
+
+A **governed crossing** is the admissible, durable transfer from one zone to another under an explicit crossing regime.
+
+This is the deepest semantic lens. The other major Narada descriptions are derived views:
+
+- the **deterministic state compiler** description says what the topology does;
+- the **nine-layer pipeline** says one canonical traversal order through the topology;
+- **Aim / Site / Cycle / Act / Trace** gives the operator/runtime reading of the same structure;
+- **Intelligence-Authority Separation** states one of the topology's core anti-collapse invariants;
+- **crossing regime** names the local law at each governed crossing.
+
+#### Three-Layer Ontology
+
+To avoid confusion between roles and implementations, Narada distinguishes three layers:
+
+| Layer | What It Contains | What It Is NOT | Examples |
+|-------|------------------|----------------|----------|
+| **Principle** | Zones, crossing regimes, authority grammars, anti-collapse invariants | Not a service, process, or deployable artifact | "Source zone", "Foreman (`resolve`)", "No crossing without regime" |
+| **Logical System** | The control plane, pipeline, operators, CLI commands, state machines | Not tied to a specific substrate or language | Scheduler leases, foreman decisions, intent handoff, `narada task claim` |
+| **Substrate** | Zone-local durability, transport, and execution machinery | Not the authority boundary itself | SQLite coordinator, Cloudflare Durable Objects, filesystem, Windows/WSL |
+
+A principle describes what must remain true regardless of substrate. A logical system implements the principles in code and state machines. A substrate provides the durable storage and compute that the logical system uses.
+
+> **Do not identify Narada with its current substrate.** SQLite is a substrate, not Narada. TypeScript is the current implementation language, not the authority boundary. Cloudflare is a Site substrate, not a zone.
+
 ### 2.1 The Nine-Layer Pipeline
 
-All verticals traverse the same pipeline:
+All verticals traverse the same canonical traversal through the zone topology:
 
 ```
 Source → Fact → Context → Work → Policy → Intent → Execution → Confirmation → Observation
 ```
+
+This pipeline is not deeper than the zone-and-crossing reading. It is the standard ordered path by which Narada moves artifacts across zones.
 
 | Layer | Responsibility | Durable? | Canonical Name |
 |-------|----------------|----------|----------------|
@@ -1104,6 +1139,414 @@ A refined Aim is still an Aim; its `operation specification` has changed. Refine
 
 ---
 
+<a name="crossing-regime"></a>
+## 2.15 Crossing Regime
+
+Narada repeatedly relies on the same deep invariant:
+
+> **No meaningful boundary crossing without an explicit admissibility regime.**
+
+This section crystallizes the cross-cutting concept of **zone**, **boundary**, **crossing regime**, and **crossing artifact**, and establishes it as a first-class semantic object.
+
+This section should be read together with §2.0. Narada is not merely a pipeline that happens to have boundaries; it is a composed topology of zones, and crossing regime is the local law that makes that topology governable.
+
+In graph language:
+
+- zones are the nodes;
+- governed crossings are the edges;
+- a regime is not parallel to an edge, but the governing law carried by that edge;
+- crossing artifact and confirmation rule are edge properties too.
+
+What flows through this graph is not one conserved substance. Different edges carry different durable artifacts. More precisely:
+
+- artifacts flow across edges;
+- authority does not flow — it is rebound at boundaries;
+- truth/commitment is re-established zone by zone, not merely forwarded unchanged.
+
+Narada therefore moves **durable artifacts under governed transformation**. Each governed crossing admits an artifact, applies a regime, and emits or binds a downstream artifact under a new authority owner.
+
+### 2.15.1 Definitions
+
+#### Zone
+
+A **zone** is a region of authority homogeneity — a conceptual region within which a single authority owner governs state and transitions.
+
+Zones are **not** implementation modules. A single codebase file may touch multiple zones. Zones are semantic/authority regions.
+
+| Zone | Authority Owner | Canonical Objects |
+|------|----------------|-------------------|
+| Source | Source adapter (`derive`) | Remote records, checkpoints, cursors |
+| Fact | Source adapter + normalizer (`derive`) | `fact_id`, `event_id`, normalized payload |
+| Context | Context formation strategy (`derive`) | `context_id`, `revision_id`, `PolicyContext` |
+| Work | Foreman (`resolve`) | `work_item_id`, `work_item` status |
+| Evaluation | Charter runtime (`propose`) | `evaluation_id`, `CharterOutputEnvelope` |
+| Decision | Foreman (`resolve`) | `decision_id`, `foreman_decision` |
+| Intent | Foreman handoff (`resolve` → `execute`) | `intent_id`, `outbound_handoff` |
+| Execution | Worker (`execute`) | `execution_id`, `execution_attempt` |
+| Confirmation | Reconciler (`confirm`) | Confirmation status, `apply_log` |
+| Observation | Observation layer (read-only) | Derived views, projections, traces |
+| Operator | Operator (`admin`) | `operator_action_request` |
+| Task | Task governance system (`claim`/`resolve`) | `TaskAssignment`, `TaskContinuation` |
+
+#### Boundary
+
+A **boundary** is the interface between two adjacent zones. A boundary crossing is meaningful when it moves a durable artifact from one authority owner to another.
+
+Not every function call is a boundary crossing. A boundary crossing requires:
+1. A change in authority owner, **and**
+2. Production of a durable artifact, **and**
+3. An explicit admissibility regime governing the transition.
+
+#### Crossing Regime
+
+A **crossing regime** is the explicit set of rules that determine what may cross a boundary, in what form, under what authority, and with what confirmation obligation.
+
+#### Crossing Artifact
+
+A **crossing artifact** is the durable record produced by a boundary crossing. It is the token that proves the crossing occurred and carries state from the source zone into the destination zone.
+
+### 2.15.2 Isomorphism with Existing Structures
+
+The crossing-regime concept does not introduce new runtime machinery. It reveals structure that is already present:
+
+| Existing Structure | Crossing-Regime Reading |
+|-------------------|------------------------|
+| Nine-layer pipeline (§2.1) | Sequence of zone-to-zone boundary crossings |
+| Operator algebra `Boundary A → Boundary B` (§2.8) | Crossing regime parameterized by mode, effect, authority |
+| Boundary ownership table (§2.13.2) | Authority owner per boundary crossing |
+| Control cycle phases (§2.14.7) | Canonical ordering of crossing regimes |
+| Authority classes (§2.7) | The permission grammar of who may initiate which crossing |
+| Assignment intent enum (Decision 490) | Task-zone crossing regime classification |
+
+### 2.15.3 Irreducible Fields
+
+Every crossing regime in Narada contains at least these six irreducible fields:
+
+| Field | Meaning | Narada Example |
+|-------|---------|----------------|
+| **source_zone** | The zone providing the artifact | `Source`, `Evaluation`, `Operator`, `Agent` |
+| **destination_zone** | The zone receiving the artifact | `Fact`, `Decision`, `Control`, `Task` |
+| **authority_owner** | The component/role with permission to govern this crossing | `Foreman`, `Source adapter`, `Operator`, `Reviewer` |
+| **admissibility_regime** | The explicit rules for what may cross, in what form | Content hash, policy validation, identity challenge, intent enum |
+| **crossing_artifact** | The durable record produced by the crossing | `Fact`, `Intent`, `operator_action_request`, `TaskAssignment` |
+| **confirmation_rule** | How the crossing is verified or reconciled | Self-certifying hash, downstream execution, challenge token, roster exclusivity, inbound observation |
+
+No crossing regime in Narada omits any of these six fields. A transition that lacks one is either not a meaningful boundary crossing, or an authority collapse.
+
+### 2.15.4 Canonical Cases
+
+The seven canonical crossings below are the structurally load-bearing boundaries in Narada. They are backfilled as `DocumentedCrossingRegime` instances in the machine-readable inventory at `packages/layers/control-plane/src/types/crossing-regime-inventory.ts`.
+
+| # | Crossing | Source Zone → Destination Zone | Authority Owner | Admissibility Regime | Crossing Artifact | Confirmation Rule |
+|---|----------|-------------------------------|-----------------|---------------------|-------------------|-------------------|
+| 1 | Fact admission | Source → Fact | Source adapter (`derive`) | Deterministic normalization + content-addressed `event_id` | `Fact` | Self-certifying (`event_id` hash) |
+| 2 | Intent admission | Decision → Intent | Foreman handoff (`resolve`) | Decision `accept` + atomic handoff transaction | `Intent` | Downstream execution + reconciliation |
+| 3 | Operator action request | Operator → Control | Operator (`admin`) + identity provider | Recognized contact + confirmation challenge + safelist | `operator_action_request` | Challenge token verification |
+| 4 | Task completion | Work → Review/Closure | Agent (`claim`) + reviewer (`resolve`) | Report + evidence artifact + review acceptance | Task report / review artifact | Review artifact passes acceptance criteria |
+| 5 | Task attachment/carriage | Agent → Task | Agent (`claim`) / Operator (`admin`) | Intent enum + reason + dependency check + exclusivity | `TaskAssignment` | Roster state reflects attachment; single-primary-carriage invariant |
+| 6 | Evaluation → decision | Evaluation → Decision | Foreman (`resolve`) | Policy validation + governance rules | `foreman_decision` | Append-only; reversal requires new decision |
+| 7 | Execution → confirmation | Execution → Confirmation | Reconciler (`confirm`) | External observation or inbound reconciliation | Confirmation status | Inbound observation matches expected outcome |
+
+The inventory also contains **advisory** crossings (real boundaries that are less structurally central, e.g. `Fact → Context`, `Context → Work`, `Work → Evaluation`) and **deferred** crossings (suspected but not yet crystallized, e.g. `Intent → Execution`). See the inventory file for full declarations and classification rationale.
+
+### 2.15.5 Crossing-Regime Invariants
+
+1. **No crossing without regime**: Every zone-to-zone boundary crossing that produces a durable artifact must have an explicit crossing regime.
+2. **Authority changes at boundaries**: If a transition does not change authority owner, it is not a boundary crossing (it is an internal state transition within a zone).
+3. **Artifacts are durable**: A crossing artifact must be durable enough to survive a crash in either zone. Ephemeral signals do not qualify.
+4. **Confirmation is downstream or self-certifying**: Every crossing either carries its own proof (content hash) or defines how it will be confirmed later (reconciliation, review, challenge).
+5. **Regimes are not transitive shortcuts**: Crossing regimes compose sequentially, not by skipping zones. `Source → Fact → Context → Work` is valid; `Source → Work` is an authority collapse.
+
+### 2.15.6 Relationship to Operator Families
+
+The operator families defined in §2.8–§2.11 are **crossing-regime operators** parameterized by mode:
+
+| Operator Family | What It Does to Crossing Regimes |
+|----------------|----------------------------------|
+| Re-derivation (§2.8) | Replays or previews a crossing regime using stored artifacts from an earlier zone |
+| Selection (§2.9) | Bounds which artifacts may enter a crossing regime |
+| Promotion (§2.10) | Advances an artifact to the next zone under explicit operator trigger |
+| Inspection (§2.11) | Observes artifacts within a zone without initiating a crossing |
+
+### 2.15.7 Non-Goals
+
+- This section does not introduce a generic `CrossingRegime` class or runtime abstraction.
+- It does not rename existing concrete types (`Fact`, `Work`, `Intent`, `TaskAssignment`).
+- It does not force every subsystem into a fake linear pipeline.
+- It is a semantic lens, not a refactoring mandate.
+
+### 2.15.8 Declaration Contract
+
+The six irreducible fields (§2.15.3) are not merely documentation. They form a **canonical declaration contract** that lint, inspection, and construction surfaces consume mechanically.
+
+#### Canonical Shape
+
+A valid crossing regime declaration is an object containing exactly these fields:
+
+| Field | Type | Cardinality | Description |
+|-------|------|-------------|-------------|
+| `source_zone` | string | 1 | The zone providing the artifact |
+| `destination_zone` | string | 1 | The zone receiving the artifact |
+| `authority_owner` | string | 1 | The component/role with permission to govern this crossing |
+| `admissibility_regime` | string | 1 | The explicit rules for what may cross, in what form |
+| `crossing_artifact` | string | 1 | The durable record produced by the crossing |
+| `confirmation_rule` | string | 1 | How the crossing is verified or reconciled |
+
+#### Admissible Representations
+
+The contract may be expressed in multiple forms. All forms must preserve the same six fields.
+
+| Representation | Status | Canonical Location | Purpose |
+|----------------|--------|-------------------|---------|
+| Prose + tables | **Active** | SEMANTICS.md §2.15 | Human authority, semantic source of truth |
+| TypeScript interface | **Active** | `packages/layers/control-plane/src/types/crossing-regime.ts` | Machine-readable contract for lint, inspection, and construction surfaces |
+| JSON Schema | **Deferred** | TBD | Will be generated from the TypeScript interface when a concrete consumer requires it |
+
+#### Canonical Home
+
+- **Semantic authority**: SEMANTICS.md §2.15 is the single source of truth for what a crossing regime means.
+- **Machine-readable contract**: `packages/layers/control-plane/src/types/crossing-regime.ts` is the canonical import for code that validates, inspects, or constructs crossing regime declarations.
+- **Inventory backfill**: `packages/layers/control-plane/src/types/crossing-regime-inventory.ts` contains the canonical initial inventory of `CrossingRegimeInventoryEntry` values against this contract.
+- **Lint gate**: `scripts/task-graph-lint.ts` warns when a task file appears to introduce a durable authority-changing boundary without referencing the crossing regime declaration contract. The `validateCrossingRegimeDeclaration()` function in `packages/layers/control-plane/src/types/crossing-regime.ts` provides mechanical validation of individual declarations.
+- **Construction surface**: `narada chapter init` task templates include an optional commented `## Crossing Regime` section. The construction loop plan warns when open tasks lack crossing regime references. The chapter planning contract requires crossing regime awareness for boundary-shaping chapters..
+
+#### What the Declaration Contract Does NOT Own
+
+The declaration contract is **static grammar only**. It explicitly does NOT own:
+
+| Concern | Owner | Why |
+|---------|-------|-----|
+| Runtime orchestration | The scheduler, workers, and adapters that execute crossings | Declaration describes shape; execution performs effect |
+| State-machine transitions | Individual subsystems (`foreman_decision`, `work_item`, `outbound_handoff`) | Declaration is not a lifecycle engine |
+| Side-effect execution | Outbound workers, charter runtime, source adapters | Declaration governs admissibility, not performance |
+| Generic inheritance requirements | None — Narada explicitly avoids a `CrossingRegime` base class | Concrete types (`Fact`, `Intent`, `TaskAssignment`) remain independent |
+| Enforcement timing | Lint and review surfaces (Task 497) | The contract defines what to check; enforcement is a separate concern |
+
+#### Enforcement
+
+The declaration contract is enforced through two complementary surfaces:
+
+| Surface | Type | Location | Behavior |
+|---------|------|----------|----------|
+| **Task lint heuristic** | Automated warning | `scripts/task-graph-lint.ts` + `narada task lint` | Warns when a task file appears to introduce a durable authority-changing boundary without referencing the crossing regime declaration contract. Emits `crossing-regime-missing-declaration` as a **warning** (not error) to avoid theater on unrelated tasks. |
+| **Review checklist** | Human gate | `.ai/task-contracts/agent-task-execution.md` §Crossing Regime Review Checklist | Reviewers must explicitly verify that tasks introducing new durable boundaries declare the six irreducible fields and reference the canonical contract. |
+| **Machine validation** | Programmatic API | `packages/layers/control-plane/src/types/crossing-regime.ts` | `validateCrossingRegimeDeclaration(candidate)` checks a candidate object against the six-field contract and returns structured violations. |
+
+**Residual**: Fully automatic detection of "new durable authority-changing crossings" is not yet admissible. Static text heuristics cannot reliably distinguish a task that introduces a new boundary from one that merely discusses existing boundaries. The lint warning is an advisory signal (§2.12) — it draws attention without blocking. Human review remains the authoritative gate.
+
+#### Stability Guarantee
+
+The six irreducible fields are **stable**. New fields may be added only if:
+
+1. They are genuinely irreducible (no crossing regime can be complete without them), AND
+2. They are added to ALL canonical representations (docs, TypeScript, and eventually JSON Schema), AND
+3. The change is approved through the same decision process that accepted the crossing regime concept (Task 491).
+
+Optional metadata (name, description, anti-collapse invariant, documented-at anchor) may be added to documented crossings without destabilizing the core contract.
+
+### 2.15.9 Crossing Regime Kind Taxonomy
+
+The eleven crossings in the canonical inventory do not each invent a unique edge law. They cluster into a smaller family of **regime kinds** — reusable patterns defined by admissibility law and confirmation shape, not by the specific zones involved.
+
+A regime kind answers: *What sort of law governs this edge?* A concrete crossing declaration answers: *Which zones does this edge connect, and who owns the authority?* The kind is the reusable pattern; the declaration is the local instance.
+
+#### Kind Definitions
+
+Each kind is defined by its edge law, typical confirmation shape, and what it excludes.
+
+| Kind | Edge Law (Admissibility) | Typical Confirmation | What It Excludes |
+|------|-------------------------|---------------------|------------------|
+| **`self_certifying`** | The artifact is valid because it was produced by a deterministic, replay-stable transformation of the source. | Content-addressed hash or replay determinism. | Any crossing where validity depends on external state, governance decision, or post-hoc observation. |
+| **`policy_governed`** | A governance component validates the artifact against explicit policy rules before admitting it. | Append-only durable record of the admission decision. | Crossings that create effect boundaries, require external challenge, or depend on post-hoc observation. |
+| **`intent_handoff`** | A governed decision crosses into the universal durable effect boundary through an atomic transaction. | Downstream execution and reconciliation. | Non-effect admissions, non-atomic handoffs, admissions without an effect boundary. |
+| **`challenge_confirmed`** | An external verifier must complete a challenge-response before the crossing is confirmed. | Verified challenge completion token or roster-state invariant. | Self-certifying crossings, policy-governed admissions without external challenge, post-hoc observation. |
+| **`review_gated`** | A human or peer reviewer validates artifact quality against explicit acceptance criteria. | Review artifact with sign-off. | Automated validation, identity verification, self-certification. |
+| **`observation_reconciled`** | The crossing is confirmed by observing external state after the effect has been attempted. | Inbound observation matches expected outcome. | Pre-observation confirmations, self-certifying crossings, governance-only admissions. |
+
+#### Inventory Mapping
+
+| Crossing | Primary Kind | Classification | Notes |
+|----------|-------------|----------------|-------|
+| Fact admission | `self_certifying` | Canonical | Content hash is the proof. |
+| Fact → Context | `self_certifying` | Advisory | Replay determinism ensures same facts produce same grouping. |
+| Evaluation → Decision | `policy_governed` | Canonical | Foreman applies governance rules. |
+| Context → Work | `policy_governed` | Advisory | Foreman opens work under at-most-one-non-terminal invariant. |
+| Work → Evaluation | `policy_governed` | Advisory | Charter runtime evaluates under read-only sandbox policy. |
+| Intent admission | `intent_handoff` | Canonical | Atomic creation of the universal effect boundary. |
+| Operator action request | `challenge_confirmed` | Canonical | Identity provider challenge completion. |
+| Task attachment / carriage | `challenge_confirmed` | Canonical | Exclusivity check against roster state functions as a challenge. |
+| Task completion | `review_gated` | Canonical | Reviewer validates report against acceptance criteria. |
+| Execution → Confirmation | `observation_reconciled` | Canonical | Inbound observation proves effect took hold. |
+| Intent → Execution | `observation_reconciled` | Deferred | Downstream reconciliation confirms the effect. |
+
+#### Ambiguous and Overlapping Cases
+
+**Task attachment** is a hybrid. Its admissibility regime includes policy governance (intent enum, reason, dependency check) AND exclusivity enforcement (single-primary-carriage invariant). The exclusivity check against roster state functions like a challenge, which is why it maps to `challenge_confirmed`, but this fit is imperfect. A stricter taxonomy might treat it as `policy_governed` with an exclusivity modifier.
+
+**Intent admission** could be treated as `policy_governed` because the foreman validates the decision before admitting it. It is classified as `intent_handoff` because the structural significance of creating the universal effect boundary outweighs the policy-governance similarity. This is a deliberate taxonomic promotion, not a natural cluster.
+
+**Review-gated vs. challenge-confirmed**: Both involve an external verifier, but the verifier evaluates quality (`review_gated`) rather than identity (`challenge_confirmed`). This boundary is clean in current crossings but may blur if future crossings involve hybrid verification.
+
+#### What Should Remain Local Declaration
+
+Not every crossing deserves taxonomic promotion:
+
+- **Advisory crossings** (`Fact → Context`, `Context → Work`, `Work → Evaluation`) do not represent distinct regime kinds. They are pipeline stages that instantiate the same kinds as their canonical counterparts.
+- **Exclusivity enforcement** is a crossing modifier, not a kind. It can combine with `policy_governed` or `challenge_confirmed` but does not define a fundamental edge law by itself.
+- **Lease acquisition** (e.g., scheduler claiming a work item) is an internal mechanism, not a crossing regime.
+
+#### Kind Invariants
+
+1. **Kinds are doctrine, not runtime switches**. The taxonomy classifies; it does not dispatch.
+2. **A concrete declaration may have at most one primary kind**. Hybrids must be mapped honestly to the best fit, with ambiguity recorded.
+3. **Kinds are stable**. Adding a new kind requires the same decision process as adding a new irreducible field to the declaration contract.
+4. **Kinds do not replace the six-field contract**. They are an additional clustering layer. A valid crossing declaration must still declare all six irreducible fields regardless of kind.
+
+---
+
+<a name="named-operational-modes"></a>
+## 2.16 Named Operational Modes
+
+Narada operates in distinguishable modes. Naming the mode explicitly prevents confusion about what is active, what guarantees hold, and what authority is required.
+
+### Live Mode
+
+The normal operating condition: sources are connected, the scheduler is claiming and running work, effects are being executed and confirmed, and operators may interact through the CLI and observation surfaces.
+
+- All authority transitions are live and durable.
+- New facts enter through source adapters.
+- The foreman opens work, resolves evaluations, and creates intents.
+- Workers perform effects and the reconciler confirms them.
+- Operators may approve, reject, retry, or inspect.
+
+### Replay Derivation Mode
+
+An explicit operator-triggered mode that re-derives work, decisions, or confirmations from stored artifacts without requiring fresh inbound events. Replay is bounded by scope, context, time range, or fact set.
+
+- No new facts are admitted.
+- Existing facts are replayed through the same pipeline to reconstruct downstream state.
+- Used for recovery after coordinator loss, or for testing policy changes against historical facts.
+- Requires `derive`, `resolve`, or `admin` authority depending on the operator.
+
+### Preview Derivation Mode
+
+A read-only variant of replay that computes what would happen without mutating durable state. Preview produces evaluations or context formations but does not create work items, decisions, or intents.
+
+- No leases are created.
+- No work items are opened.
+- No intents are created.
+- Used for policy testing, charter debugging, and operator review.
+
+### Recovery Mode
+
+A special-case replay triggered after partial durable state loss (e.g., coordinator database corruption or accidental deletion). Recovery reconstructs control-plane state from the fact boundary upward.
+
+- Facts are the authoritative starting point.
+- Context formation, work opening, and foreman decisions are re-derived.
+- No in-flight executions are resurrected.
+- No submitted outbound effects are re-submitted.
+- Requires `admin` authority.
+
+### Inspection Mode
+
+A permanently read-only mode. All inspection operators (`narada status`, `narada show`, `narada crossing list`, `narada select`, etc.) operate in this mode.
+
+- No durable state is mutated.
+- No leases are acquired.
+- No effects are performed.
+- Observation API routes are inspection-only by construction.
+
+### Mode Invariants
+
+1. **Modes are explicit, not inferred**: A command or surface must declare which mode it operates in. Do not assume "live" as the default.
+2. **Replay does not admit**: Replay and preview modes must not mark facts as admitted or transition fact lifecycle states. Fact admission is the exclusive concern of live dispatch.
+3. **Recovery is bounded**: Recovery mode must not create active leases, resurrect in-flight execution attempts, or fabricate outbound confirmations.
+4. **Inspection never mutates**: Inspection mode must not contain `.run()`, `.exec()`, or direct mutation calls.
+5. **Mode transitions require operator trigger**: No mode switches automatically. An operator must explicitly request replay, preview, recovery, or inspection.
+
+---
+
+<a name="zone-template-taxonomy"></a>
+## 2.17 Zone Template Taxonomy
+
+Narada's zones (§2.15.1) are authority-homogeneous regions. Not every zone instantiates a reusable template, but many do. A **zone template** is a reusable pattern defined by invariant authority grammar, typical artifacts, and explicit negative boundaries.
+
+### 2.17.1 Purpose
+
+The taxonomy reduces ambiguity by answering:
+
+- Which zones share the same structural role?
+- What authority grammar is invariant within that role?
+- What is a zone instance, what is a template, and what is a local stage that should not be promoted?
+
+Templates are **descriptive**, not prescriptive. They provide a vocabulary for reasoning about zones but do not mandate runtime refactoring.
+
+### 2.17.2 Templates
+
+| Template | Name | Invariant Authority Grammar | Typical Artifacts | What It Is NOT | Instances | Fit |
+|----------|------|----------------------------|-------------------|----------------|-----------|-----|
+| `ingress` | Ingress | Receives data from outside the governed topology; produces first internal representation. Does not govern, decide, or execute. Authority varies by type (`derive` for automated, `admin` for human). | Remote records, checkpoints, cursors, `operator_action_request` | Governance, computation, or effect zone | Source, Operator | strong |
+| `canonicalization` | Canonicalization | `derive` only. Computes outputs from inputs. No side effects. Content-addressed and idempotent. Safe to re-run. | `fact_id`, `event_id`, `NormalizedPayload` | Governance or effect zone | Fact | single-instance pattern |
+| `compilation` | Compilation | `derive` or `propose`. Requires upstream artifacts; produces downstream artifacts. No direct authority change at boundary. Safe to re-run or produces structured proposals. | `context_id`, `revision_id`, `PolicyContext`, `evaluation_id`, `CharterOutputEnvelope` | Governance zone | Context, Evaluation | moderate |
+| `governance` | Governance | `resolve` or `claim`. Decides what proceeds. Advances or blocks lifecycle state. Not safe to re-run without concurrency control. | `work_item_id`, `foreman_decision`, `TaskAssignment` | Computation or direct effect zone | Work, Decision, Task | strong |
+| `effect_boundary` | Effect Boundary | `resolve` → `execute` handoff. Governance produces effect representation; execution claims it. Atomic creation. Idempotency key ensures safe re-execution. | `intent_id`, `outbound_handoff`, `idempotency_key` | Governance or performance zone | Intent | single-instance pattern |
+| `performance` | Performance | `execute` only. Mutates external state. Records attempt artifacts. Idempotent where possible; requires crash/retry handling. | `execution_id`, `execution_attempt`, `outbound_command` | Governance or verification zone | Execution | single-instance pattern |
+| `verification` | Verification | `confirm` only. Binds external observation to durable state. Idempotent. Requires inbound observation. API success alone is insufficient. | Confirmation status, `apply_log`, reconciliation record | Performance zone | Confirmation | single-instance pattern |
+| `observation` | Observation | No mutating authority. Read-only. Non-authoritative: may be deleted and rebuilt without affecting correctness. | Derived views, projections, traces, search indexes | Any zone with mutating authority | Observation | single-instance pattern |
+
+### 2.17.3 Template vs Instance vs Local Stage
+
+**Zone instance** — a concrete zone in Narada's topology (e.g., `Source`, `Fact`, `Work`). Defined in §2.15.1.
+
+**Zone template** — a reusable pattern that multiple instances may share (e.g., `ingress`, `governance`). Defined by invariant authority grammar, not by implementation module.
+
+**Local stage** — a mechanical step within a zone that should not be promoted to zone or template status. Examples:
+
+| Local Stage | Containing Zone | Why It Stays Local |
+|-------------|-----------------|-------------------|
+| `revision_tracking` | Context | Snapshotting is a mechanism, not an authority region |
+| `lease_management` | Work | Lease acquisition/release is scheduling mechanics, not governance |
+| `handoff_transaction` | Intent | Atomic creation moment is an implementation detail, not a zone |
+| `normalization` | Fact | Payload transformation is canonicalization mechanics |
+| `checkpoint_persistence` | Source | Cursor durability is substrate concern, not authority region |
+
+### 2.17.4 Ambiguous and Weakly Fitting Cases
+
+1. **Compilation template (Context + Evaluation)**  
+   Context groups facts (organization); Evaluation produces intelligence proposals (analysis). They share "computation" but differ in nature. Evaluation is governance-adjacent, which makes the boundary fuzzy. The template is kept because both transform upstream artifacts into downstream ones without direct authority change.
+
+2. **Work within Governance**  
+   Work includes scheduling mechanics (leases, execution attempts) that are mechanical rather than purely governance. However, the core authority grammar is governance: the foreman decides whether work opens, resolves, or fails. Leases are a scheduling substrate concern within the governance zone.
+
+3. **Task within Governance**  
+   Task includes human review, which introduces a different authority grammar than automated foreman governance. However, at the structural level, Task is still governance: it decides lifecycle transitions (assignment, completion, closure).
+
+4. **Fact not fitting Ingress**  
+   Fact is canonicalization, not ingress. Source and Operator are ingress because they receive from outside. Fact receives from Source (already inside the topology) and transforms into canonical form. This distinction matters: ingress is "external → internal"; canonicalization is "raw → canonical."
+
+5. **Single-instance templates**  
+   Five templates (`canonicalization`, `effect_boundary`, `performance`, `verification`, `observation`) currently have one instance each. They are kept as templates because the pattern is clear and reusable for future verticals or extensions. Removing them would make the taxonomy incomplete.
+
+### 2.17.5 Non-Goals
+
+- This section does not introduce a `ZoneTemplate` runtime enum or generic class.
+- It does not force every zone into a template.
+- It does not mandate refactoring of existing code.
+- It is a semantic lens, not an implementation mandate.
+
+### 2.17.6 Machine-Readable Contract
+
+The canonical TypeScript declaration lives at `packages/layers/control-plane/src/types/zone-template.ts`.
+
+| Concern | Location |
+|---------|----------|
+| Semantic authority | SEMANTICS.md §2.17 (this section) |
+| Machine-readable contract | `packages/layers/control-plane/src/types/zone-template.ts` |
+| Inventory | `ZONE_TEMPLATE_INVENTORY` constant in the TypeScript file |
+| Lookup helpers | `getZoneTemplateForZone()`, `getZonesForTemplate()`, `getTemplatesByFitStrength()` |
+
+---
+
 <a name="prohibited-terms"></a>
 ## 3. Prohibited Terms
 
@@ -1144,6 +1587,9 @@ Words that should not be used in user-facing or generic system contexts:
 | [§2.10](SEMANTICS.md#promotion-operator-family) | Promotion operator family | **Defines**: the promotable objects, transition algebra, authority mapping, and audit rules for lifecycle advancement |
 | [§2.11](SEMANTICS.md#inspection-operator-family) | Inspection operator family | **Defines**: the read-only operator family, its members, and its distinction from preview derivation |
 | [§2.12](SEMANTICS.md#advisory-signals-clan) | Advisory signals clan | **Defines**: the split between authoritative structures and advisory signals, the sibling families, and their invariants |
+| [§2.15](SEMANTICS.md#crossing-regime) | Crossing regime | **Defines**: the unifying abstraction of zone, boundary, crossing regime, and crossing artifact |
+| [§2.17](SEMANTICS.md#zone-template-taxonomy) | Zone template taxonomy | **Defines**: reusable zone templates, instance/template/stage distinction, and ambiguous fits |
+
 | [`docs/04-identity.md`](packages/layers/control-plane/docs/04-identity.md) | Identity and determinism | **Specializes**: identity schemes, serialization, and hashing. Assumes the ontology here. |
 | [`AGENTS.md`](AGENTS.md) | Agent navigation hub | **Indexes**: concept-to-file lookup table. Definitions point here. |
 
@@ -1158,5 +1604,6 @@ Words that should not be used in user-facing or generic system contexts:
 5. If the term is a new promotion operator, add it to §2.10 and ensure it declares its authority class
 6. If the term is a new inspection operator, add it to §2.11 and ensure it is read-only and authority-agnostic
 7. If the term is a new advisory-signal family, add it to §2.12 and ensure it is non-authoritative and overrideable
-8. If user-facing, also update `TERMINOLOGY.md`
+8. If the term is a new crossing-regime concept, add it to §2.15 and ensure it identifies the six irreducible fields
+9. If user-facing, also update `TERMINOLOGY.md`
 9. Never redefine an existing term; deprecate and alias instead

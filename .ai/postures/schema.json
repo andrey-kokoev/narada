@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CCCPosture",
+  "description": "Coherence / Constructive / Counterweight posture advisory signal",
+  "type": "object",
+  "required": ["posture_id", "created_at", "updated_at", "source", "coordinates", "counterweight_intent", "recommended_next_slices", "expires_at"],
+  "properties": {
+    "posture_id": { "type": "string" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "source": { "type": "string", "description": "e.g. chapter-closure-<range>, manual, task-<number>" },
+    "coordinates": {
+      "type": "object",
+      "required": ["semantic_resolution", "invariant_preservation", "constructive_executability", "grounded_universalization", "authority_reviewability", "teleological_pressure"],
+      "properties": {
+        "semantic_resolution": {
+          "type": "object",
+          "required": ["reading", "evidence"],
+          "properties": {
+            "reading": { "type": "string", "enum": ["stable", "improving", "degraded"] },
+            "evidence": { "type": "string" }
+          }
+        },
+        "invariant_preservation": {
+          "type": "object",
+          "required": ["reading", "evidence"],
+          "properties": {
+            "reading": { "type": "string", "enum": ["strong", "adequate", "weak"] },
+            "evidence": { "type": "string" }
+          }
+        },
+        "constructive_executability": {
+          "type": "object",
+          "required": ["reading", "evidence"],
+          "properties": {
+            "reading": { "type": "string", "enum": ["strong", "improved", "stalled", "weak"] },
+            "evidence": { "type": "string" }
+          }
+        },
+        "grounded_universalization": {
+          "type": "object",
+          "required": ["reading", "evidence"],
+          "properties": {
+            "reading": { "type": "string", "enum": ["healthy", "premature", "deferred"] },
+            "evidence": { "type": "string" }
+          }
+        },
+        "authority_reviewability": {
+          "type": "object",
+          "required": ["reading", "evidence"],
+          "properties": {
+            "reading": { "type": "string", "enum": ["strong", "overweighted", "underweighted"] },
+            "evidence": { "type": "string" }
+          }
+        },
+        "teleological_pressure": {
+          "type": "object",
+          "required": ["reading", "evidence"],
+          "properties": {
+            "reading": { "type": "string", "enum": ["focused", "diffuse", "needs_target"] },
+            "evidence": { "type": "string" }
+          }
+        }
+      }
+    },
+    "counterweight_intent": { "type": "string" },
+    "recommended_next_slices": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "expires_at": { "type": "string", "format": "date-time" }
+  }
+}

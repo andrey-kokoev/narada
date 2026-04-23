@@ -1,0 +1,14 @@
+{
+  "report_id": "wrr_1603a3ca_20260423-494-assignment-intent-operator-integration_a1",
+  "task_number": "494",
+  "task_id": "20260423-494-assignment-intent-operator-integration",
+  "agent_id": "a1",
+  "assignment_id": "20260423-494-assignment-intent-operator-integration-2026-04-23T16:18:35.571Z",
+  "reported_at": "2026-04-23T16:38:38.099Z",
+  "summary": "Implemented explicit assignment intent enum and integrated it into task-governance operators, assignment records, evidence surfaces, and tests.",
+  "changed_files": [],
+  "verification": [],
+  "known_residuals": [],
+  "ready_for_review": true,
+  "report_status": "submitted"
+}

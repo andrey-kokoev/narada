@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_allocated": 477,
+  "last_allocated": 521,
   "reserved": [
     471,
     472,
@@ -111,7 +111,7 @@
       "reserved_by": "codex",
       "reserved_at": "2026-04-22T16:05:00.000Z",
       "expires_at": "2026-04-23T16:05:00.000Z",
-      "status": "active"
+      "status": "expired"
     },
     {
       "range_start": 472,
@@ -120,7 +120,7 @@
       "reserved_by": "codex",
       "reserved_at": "2026-04-22T16:05:00.000Z",
       "expires_at": "2026-04-23T16:05:00.000Z",
-      "status": "active"
+      "status": "expired"
     },
     {
       "range_start": 473,
@@ -129,7 +129,7 @@
       "reserved_by": "codex",
       "reserved_at": "2026-04-22T16:05:00.000Z",
       "expires_at": "2026-04-23T16:05:00.000Z",
-      "status": "active"
+      "status": "expired"
     },
     {
       "range_start": 474,
@@ -166,6 +166,168 @@
       "reserved_at": "2026-04-22T20:30:00.000Z",
       "expires_at": "2026-04-23T20:30:00.000Z",
       "status": "active"
+    },
+    {
+      "range_start": 481,
+      "range_end": 481,
+      "purpose": "Progressive Essentialization architectural pruning contract",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-22T19:56:35-05:00",
+      "expires_at": "2026-04-23T19:56:35-05:00",
+      "status": "released"
+    },
+    {
+      "range_start": 482,
+      "range_end": 482,
+      "purpose": "Operator Console live Site control and observation",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-22T20:56:49-05:00",
+      "expires_at": "2026-04-23T20:56:49-05:00",
+      "status": "released"
+    },
+    {
+      "range_start": 483,
+      "range_end": 483,
+      "purpose": "Operator Console Cloudflare Site adapter interface",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-22T22:44:49-05:00",
+      "expires_at": "2026-04-23T22:44:49-05:00",
+      "status": "released"
+    },
+    {
+      "range_start": 484,
+      "range_end": 484,
+      "purpose": "Linux and WSL Operator Console Site adapter alignment",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-22T23:00:26-05:00",
+      "expires_at": "2026-04-23T23:00:26-05:00",
+      "status": "released"
+    },
+    {
+      "range_start": 485,
+      "range_end": 485,
+      "purpose": "Operator Console HTTP API for browser UI",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-22T23:04:53-05:00",
+      "expires_at": "2026-04-23T23:04:53-05:00",
+      "status": "released"
+    },
+    {
+      "range_start": 486,
+      "range_end": 486,
+      "purpose": "Agent completion finalizer for report/evidence/roster handoff",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-23T07:22:35-05:00",
+      "expires_at": "2026-04-24T07:22:35-05:00",
+      "status": "released"
+    },
+    {
+      "range_start": 487,
+      "range_end": 487,
+      "purpose": "Task continuation/takeover assignment operator",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-23T07:31:06-05:00",
+      "expires_at": "2026-04-24T07:31:06-05:00",
+      "status": "released"
+    },
+    {
+      "range_start": 488,
+      "range_end": 488,
+      "purpose": "Evidence-based not-complete task list",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-23T08:51:37-05:00",
+      "expires_at": "2026-04-24T08:51:37-05:00",
+      "status": "released"
+    },
+    {
+      "range_start": 489,
+      "range_end": 489,
+      "purpose": "WorkResultReport dedup and deterministic identity",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-23T09:52:16-05:00",
+      "expires_at": "2026-04-24T09:52:16-05:00",
+      "status": "released"
+    },
+    {
+      "range_start": 490,
+      "range_end": 494,
+      "purpose": "Task attachment/carriage, crossing regime, template ladder, sidecar live-operation template, assignment intent integration",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-23T10:43:02-05:00",
+      "expires_at": "2026-04-24T10:43:02-05:00",
+      "status": "released"
+    },
+    {
+      "range_start": 495,
+      "range_end": 500,
+      "purpose": "Crossing regime first-class tranche",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-23T17:17:47.980Z",
+      "expires_at": "2026-04-24T17:17:47.980Z",
+      "status": "active"
+    },
+    {
+      "range_start": 501,
+      "range_end": 501,
+      "purpose": "Prevent direct task terminal-state bypass by raw file mutation",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-23T17:30:41.393Z",
+      "expires_at": "2026-04-24T17:30:41.393Z",
+      "status": "active"
+    },
+    {
+      "range_start": 502,
+      "range_end": 502,
+      "purpose": "Lift useful BSFG speaking discipline into Narada doctrine",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-23T18:29:16.717Z",
+      "expires_at": "2026-04-24T18:29:16.717Z",
+      "status": "active"
+    },
+    {
+      "range_start": 503,
+      "range_end": 506,
+      "purpose": "Zone template and regime-kind taxonomy chapter",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-23T18:38:32.179Z",
+      "expires_at": "2026-04-24T18:38:32.179Z",
+      "status": "active"
+    },
+    {
+      "range_start": 507,
+      "range_end": 507,
+      "purpose": "Make valid task closure artifact shape the path of least resistance",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-23T13:57:05-05:00",
+      "expires_at": "2026-04-24T13:57:05-05:00",
+      "status": "released"
+    },
+    {
+      "range_start": 508,
+      "range_end": 508,
+      "purpose": "Agent-facing CLI output austerity for governance commands",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-23T13:58:59-05:00",
+      "expires_at": "2026-04-24T13:58:59-05:00",
+      "status": "released"
+    },
+    {
+      "range_start": 509,
+      "range_end": 509,
+      "purpose": "Move verbose governance guidance behind explicit verbose path",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-23T14:25:06-05:00",
+      "expires_at": "2026-04-24T14:25:06-05:00",
+      "status": "released"
+    },
+    {
+      "range_start": 510,
+      "range_end": 521,
+      "purpose": "Next capability frontier backlog chapters",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-23T15:01:02-05:00",
+      "expires_at": "2026-04-24T15:01:02-05:00",
+      "status": "released"
     }
   ]
 }

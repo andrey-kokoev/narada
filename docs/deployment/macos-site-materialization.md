@@ -264,7 +264,8 @@ A `.env` file in the Site root directory is the third fallback:
 ```text
 ~/Library/Application Support/Narada/{site_id}/
   ├── config.json              # Site configuration (posture, sources, charters)
-  ├── coordinator.db           # SQLite: locks, health, traces, control state
+  ├── db/
+  │   └── coordinator.db       # SQLite: locks, health, traces, control state
   ├── .env                     # Optional fallback secrets
   ├── logs/
   │   └── cycles/              # Structured JSON log lines per Cycle
@@ -485,5 +486,6 @@ Unlike Windows (Tasks 380–381), macOS v0 does not implement `SiteRegistry`, `a
 | [`docs/deployment/cloudflare-site-materialization.md`](cloudflare-site-materialization.md) | Cloudflare sibling materialization |
 | [`docs/deployment/windows-site-materialization.md`](windows-site-materialization.md) | Windows sibling materialization |
 | [`docs/product/unattended-operation-layer.md`](../product/unattended-operation-layer.md) | Unattended semantics apply equally to macOS Sites |
+| [`docs/deployment/macos-site-boundary-contract.md`](macos-site-boundary-contract.md) | Actionable boundary contract with authority table, interface signatures, and reuse inventory |
 | [`AGENTS.md`](../../AGENTS.md) | Agent navigation hub; critical invariants |
 | `packages/sites/macos/` | Implementation package (created by Tasks 431–435) |

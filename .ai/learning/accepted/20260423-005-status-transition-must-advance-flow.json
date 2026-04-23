@@ -1,0 +1,20 @@
+{
+  "artifact_id": "20260423-005",
+  "state": "accepted",
+  "title": "Status transition acknowledgments must advance the flow",
+  "content": {
+    "principle": "When the operator reports or requests a roster/status transition such as 'a2 done', do not stop at local acknowledgment. After confirming the actual state, also state the next concrete action from that new state.",
+    "why": "Pure acknowledgment without next-step guidance breaks the operating rhythm and forces the operator to re-ask for flow continuation."
+  },
+  "scopes": [
+    "task-governance",
+    "roster",
+    "assignment",
+    "recommendation"
+  ],
+  "not_applicable_when": [
+    "The operator explicitly asks only for factual state confirmation and says not to suggest next steps",
+    "The confirmed state does not yet permit a safe next action because critical facts are still unknown"
+  ],
+  "accepted_at": "2026-04-23T16:12:00Z"
+}

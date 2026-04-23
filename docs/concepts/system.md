@@ -1,8 +1,51 @@
 # Narada As A System
 
-Narada is a deterministic state compiler and governed execution runtime.
+Narada is a composed topology of authority-homogeneous zones connected by governed crossings.
+
+In that reading:
+
+- a **zone** is a region where one authority grammar remains invariant;
+- a **governed crossing** is the admissible, durable transfer between zones under explicit authority and confirmation rules.
+
+Narada is also a deterministic state compiler and governed execution runtime, but that compiler/runtime description is derived from the deeper zone-and-crossing structure.
 
 It turns external deltas into durable facts, forms contexts and work, invokes policy/charter evaluation, creates durable intents, executes side effects through workers, confirms effects through observation, and exposes read-only operational views.
+
+## What Narada Is / What Narada Is Not
+
+| What Narada Is | What Narada Is Not |
+|----------------|--------------------|
+| A composed topology of authority-homogeneous zones connected by governed crossings | A message bus, ETL pipeline, or connectivity layer |
+| A deterministic state compiler from remote deltas into local canonical state | A sync client, cache, or mirror |
+| A governed execution runtime with explicit authority separation | An autonomous agent framework |
+| A principle-first architecture (zones, regimes, invariants) | A substrate-first architecture (SQLite, Cloudflare, TypeScript) |
+| A system where intelligence proposes and authority decides | A system where intelligence owns permission or truth |
+
+### Zone vs Substrate
+
+A **zone** is a region where one authority grammar remains invariant. A **substrate** is the durable storage and compute that hosts a zone.
+
+| Zone | Substrate |
+|------|-----------|
+| Fact store (`derive`) | SQLite, R2, Durable Object |
+| Control plane (`resolve`, `execute`) | Scheduler loop, worker pool, CLI process |
+| Charter runtime (`propose`) | Sandboxed evaluator, HTTP tool runner |
+| Operator surface (`admin`) | CLI, daemon, web console |
+
+The same zone may run on different substrates. The same substrate may host different zones. Do not confuse the authority boundary with the hardware or software carrying it.
+
+### Role vs Implementation
+
+A **role** defines what a component must do. An **implementation** is one way to fulfill that role.
+
+| Role | Authority | Example Implementations |
+|------|-----------|------------------------|
+| Source adapter | `derive` | Graph API client, filesystem watcher, timer trigger |
+| Foreman | `resolve` | SQLite-backed scheduler, in-memory test harness |
+| Worker | `execute` | Send-reply worker, process runner, future executor |
+| Reconciler | `confirm` | Inbound observation matcher, Graph delta reconciler |
+
+When describing a boundary, name the role and authority class first. Name the implementation only when substrate specificity matters.
 
 ```mermaid
 flowchart TD

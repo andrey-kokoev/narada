@@ -91,8 +91,6 @@ pnpm verify
 
 ## Execution Notes
 
-### Changes Made
-
 1. **Front-matter parser fix** (`packages/layers/cli/src/lib/task-governance.ts`):
    - `parseFrontMatter()` now handles YAML list syntax (`- item`) in addition to inline arrays and nested objects.
    - `parseScalar()` fixed to parse float values (e.g., `0.8`) not just integers.
@@ -118,8 +116,14 @@ pnpm verify
    - Added "Task Assignment and Claim Semantics" table documenting the exact difference between assignment, claim, done, review, and close operators.
    - Documented atomicity guarantee and `--no-claim` behavior.
 
-### Verification Results
+## Verification
 
-- `pnpm --filter @narada2/cli exec vitest run test/commands/task-roster.test.ts test/commands/task-claim.test.ts test/lib/task-governance.test.ts`: **79 tests pass**
-- `pnpm --filter @narada2/cli exec vitest run` (full CLI suite): **485 tests pass**
+### Method
+- Ran focused CLI tests for task-governance, task-roster, and task-claim.
+- Ran full CLI suite.
+- Ran `pnpm verify` for cross-package typecheck and fast tests.
+
+### Results
+- `pnpm --filter @narada2/cli exec vitest run test/commands/task-roster.test.ts test/commands/task-claim.test.ts test/lib/task-governance.test.ts`: **87 tests pass** (3 test files)
+- `pnpm --filter @narada2/cli exec vitest run` (full CLI suite): **pass**
 - `pnpm verify`: **All 5 steps pass**

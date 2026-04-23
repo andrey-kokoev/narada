@@ -1,0 +1,13 @@
+{
+  "task_id": "20260423-514-agent-runtime-boundary-contract",
+  "assignments": [
+    {
+      "agent_id": "a1",
+      "claimed_at": "2026-04-23T20:19:48.269Z",
+      "claim_context": null,
+      "released_at": null,
+      "release_reason": null,
+      "intent": "primary"
+    }
+  ]
+}

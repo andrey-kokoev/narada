@@ -1,0 +1,13 @@
+{
+  "task_id": "20260423-508-agent-facing-cli-output-austerity-for-governance-commands",
+  "assignments": [
+    {
+      "agent_id": "a1",
+      "claimed_at": "2026-04-23T19:07:00.000Z",
+      "claim_context": null,
+      "released_at": "2026-04-23T19:12:47.898Z",
+      "release_reason": "completed",
+      "intent": "primary"
+    }
+  ]
+}

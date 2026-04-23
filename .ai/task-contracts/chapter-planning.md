@@ -52,6 +52,29 @@ Do not mark a coordinate corrected merely because a task was created.
 - Do not include tasks for nice-to-have work unless needed for chapter acceptance.
 - Do not implement chapter work inside the planning task.
 
+## Crossing Regime Awareness
+
+When a chapter includes tasks that introduce **new durable authority-changing boundaries**, the chapter plan must ensure those tasks contain explicit crossing regime declarations.
+
+### When Crossing Regime Declaration Is Required
+
+A task needs a crossing regime declaration when it:
+1. Creates a new durable artifact that crosses from one authority owner to another, OR
+2. Introduces a new boundary in the nine-layer pipeline (Source → Fact → Context → Work → Evaluation → Decision → Intent → Execution → Confirmation), OR
+3. Changes the admissibility rules for an existing boundary.
+
+Tasks that merely **use** existing canonical crossings (e.g., adding a new fact type, creating a new intent) do NOT need a new declaration.
+
+### Chapter Planner Responsibility
+
+Before marking a chapter plan complete, verify:
+- [ ] Any task introducing a new boundary has a `## Crossing Regime` section (or equivalent).
+- [ ] The declaration identifies the six irreducible fields (source_zone, destination_zone, authority_owner, admissibility_regime, crossing_artifact, confirmation_rule).
+- [ ] The task references `SEMANTICS.md §2.15` or `Task 495` to show awareness of the contract.
+- [ ] The anti-collapse invariant is stated.
+
+If no tasks in the chapter introduce new boundaries, this checklist does not apply.
+
 ## Deferred Work
 
 - Name deferred capabilities explicitly.

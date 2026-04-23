@@ -1,0 +1,13 @@
+{
+  "task_id": "20260423-510-self-governance-boundary-contract",
+  "assignments": [
+    {
+      "agent_id": "a2",
+      "claimed_at": "2026-04-23T20:04:40.650Z",
+      "claim_context": null,
+      "released_at": "2026-04-23T20:30:00.000Z",
+      "release_reason": "task_close:a2",
+      "intent": "primary"
+    }
+  ]
+}

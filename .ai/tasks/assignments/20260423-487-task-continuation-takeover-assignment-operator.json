@@ -1,0 +1,12 @@
+{
+  "task_id": "20260423-487-task-continuation-takeover-assignment-operator",
+  "assignments": [
+    {
+      "agent_id": "a2",
+      "claimed_at": "2026-04-23T14:20:03.248Z",
+      "claim_context": null,
+      "released_at": "2026-04-23T14:31:20.990Z",
+      "release_reason": "completed"
+    }
+  ]
+}

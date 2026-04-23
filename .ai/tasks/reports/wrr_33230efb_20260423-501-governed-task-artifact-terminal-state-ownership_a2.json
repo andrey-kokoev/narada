@@ -1,0 +1,39 @@
+{
+  "report_id": "wrr_33230efb_20260423-501-governed-task-artifact-terminal-state-ownership_a2",
+  "task_number": "501",
+  "task_id": "20260423-501-governed-task-artifact-terminal-state-ownership",
+  "agent_id": "a2",
+  "assignment_id": "20260423-501-governed-task-artifact-terminal-state-ownership-2026-04-23T17:32:09.810Z",
+  "reported_at": "2026-04-23T18:09:17.689Z",
+  "summary": "Implemented governed task artifact terminal-state ownership: added governed_by provenance field, hardened evidence/lint surfaces against raw bypass, created task reopen repair command, updated all governed operators, added focused tests.",
+  "changed_files": [
+    "[\"packages/layers/cli/src/lib/task-governance.ts\"",
+    "\"packages/layers/cli/src/commands/task-close.ts\"",
+    "\"packages/layers/cli/src/commands/task-review.ts\"",
+    "\"packages/layers/cli/src/commands/chapter-close.ts\"",
+    "\"packages/layers/cli/src/commands/task-reopen.ts\"",
+    "\"packages/layers/cli/src/main.ts\"",
+    "\".ai/task-contracts/agent-task-execution.md\"",
+    "\"packages/layers/cli/test/commands/task-close.test.ts\"",
+    "\"packages/layers/cli/test/commands/task-review.test.ts\"",
+    "\"packages/layers/cli/test/commands/task-evidence.test.ts\"",
+    "\"packages/layers/cli/test/commands/task-lint.test.ts\"",
+    "\"packages/layers/cli/test/commands/task-reopen.test.ts\"",
+    "\"packages/layers/cli/test/commands/chapter-close.test.ts\"",
+    "\"packages/layers/cli/test/commands/task-evidence-list.test.ts\"",
+    "\"packages/layers/cli/test/commands/task-promote-recommendation.test.ts\"]"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --filter @narada2/cli exec vitest run",
+      "result": "611 passed"
+    },
+    {
+      "command": "pnpm verify",
+      "result": "all 5 steps passed"
+    }
+  ],
+  "known_residuals": [],
+  "ready_for_review": true,
+  "report_status": "submitted"
+}

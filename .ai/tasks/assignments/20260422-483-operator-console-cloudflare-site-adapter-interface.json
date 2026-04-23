@@ -1,0 +1,12 @@
+{
+  "task_id": "20260422-483-operator-console-cloudflare-site-adapter-interface",
+  "assignments": [
+    {
+      "agent_id": "a2",
+      "claimed_at": "2026-04-23T03:54:20.353Z",
+      "claim_context": null,
+      "released_at": "2026-04-23T12:45:01.241Z",
+      "release_reason": "completed"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "task_id": "20260423-486-agent-completion-finalizer-report-evidence-roster-handoff",
+  "assignments": [
+    {
+      "agent_id": "a2",
+      "claimed_at": "2026-04-23T12:23:45.387Z",
+      "claim_context": null,
+      "released_at": null,
+      "release_reason": null
+    }
+  ]
+}

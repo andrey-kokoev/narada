@@ -1,0 +1,13 @@
+{
+  "task_id": "20260423-501-governed-task-artifact-terminal-state-ownership",
+  "assignments": [
+    {
+      "agent_id": "a2",
+      "claimed_at": "2026-04-23T17:32:09.810Z",
+      "claim_context": null,
+      "released_at": "2026-04-23T18:09:17.689Z",
+      "release_reason": "completed",
+      "intent": "primary"
+    }
+  ]
+}

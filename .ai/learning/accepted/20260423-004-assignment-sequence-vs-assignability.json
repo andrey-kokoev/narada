@@ -1,0 +1,29 @@
+{
+  "artifact_id": "20260423-004",
+  "artifact_type": "contract_patch",
+  "state": "accepted",
+  "created_at": "2026-04-23T10:50:00-05:00",
+  "source": {
+    "kind": "operator_instruction",
+    "conversation_context": "Narada task assignment sequencing vs immediate assignability",
+    "contract_file": ".ai/task-contracts/agent-task-execution.md"
+  },
+  "title": "Do not present dependency-blocked task order as immediately assignable roster work",
+  "content": {
+    "principle": "When recommending multiple task assignments, distinguish explicitly between what is assignable now and what is only a future dependency-ordered sequence. Never format blocked future work as if it can be assigned immediately.",
+    "rationale": "Collapsing planned order and present assignability causes operator-facing assignment errors and misstates what the CLI/DAG will accept. Narada task governance requires dependency truth to remain explicit at recommendation time, not only at command failure time.",
+    "contract_patch": "Add assignment guidance: separate 'Now assignable' from 'Queued after dependency closure' whenever any recommended task is currently blocked by the DAG.",
+    "not_applicable_when": [
+      "All recommended tasks are immediately claimable",
+      "The operator explicitly asked only for a long-range sequence and not for current assignments",
+      "The response clearly labels the output as a dependency-ordered plan rather than immediate assignment"
+    ]
+  },
+  "reviewed_at": "2026-04-23T10:50:00-05:00",
+  "reviewed_by": "operator",
+  "accepted_at": "2026-04-23T10:50:00-05:00",
+  "accepted_by": "operator",
+  "scopes": ["task-governance", "roster", "assignment", "recommendation"],
+  "superseded_by": null,
+  "rejection_reason": null
+}

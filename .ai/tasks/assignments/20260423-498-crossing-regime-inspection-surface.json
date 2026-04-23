@@ -1,0 +1,13 @@
+{
+  "task_id": "20260423-498-crossing-regime-inspection-surface",
+  "assignments": [
+    {
+      "agent_id": "a3",
+      "claimed_at": "2026-04-23T17:44:21.864Z",
+      "claim_context": null,
+      "released_at": null,
+      "release_reason": null,
+      "intent": "primary"
+    }
+  ]
+}

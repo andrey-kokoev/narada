@@ -1,0 +1,36 @@
+{
+  "report_id": "wrr_24fd4a40_20260423-489-work-result-report-dedup-and-deterministic-identity_a1",
+  "task_number": "489",
+  "task_id": "20260423-489-work-result-report-dedup-and-deterministic-identity",
+  "agent_id": "a1",
+  "assignment_id": "20260423-489-work-result-report-dedup-and-deterministic-identity-2026-04-23T15:06:41.053Z",
+  "reported_at": "2026-04-23T15:25:00.000Z",
+  "summary": "Made WorkResultReport creation deterministic and idempotent per assignment. Replaced timestamp-based report_id with a djb2 hash of task_id:agent_id:assignment_id. Added findReportByAssignmentId() and detectReportAnomalies() helpers. Updated task report command to return existing report on duplicate attempts. Added 9 new tests across task-report and task-governance. Updated reports/README.md with the single-report-per-assignment invariant.",
+  "changed_files": [
+    "packages/layers/cli/src/lib/task-governance.ts",
+    "packages/layers/cli/src/commands/task-report.ts",
+    "packages/layers/cli/test/commands/task-report.test.ts",
+    "packages/layers/cli/test/lib/task-governance.test.ts",
+    ".ai/tasks/reports/README.md"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --filter @narada2/cli exec vitest run test/commands/task-report.test.ts test/lib/task-governance.test.ts",
+      "result": "49 passed (9 task-report + 40 task-governance)"
+    },
+    {
+      "command": "pnpm --filter @narada2/cli exec vitest run",
+      "result": "571 passed"
+    },
+    {
+      "command": "pnpm verify",
+      "result": "all 5 steps passed"
+    }
+  ],
+  "known_residuals": [
+    "Historical duplicate reports (e.g., task 485) are not automatically cleaned up.",
+    "detectReportAnomalies() is not yet wired into narada task lint or narada task evidence."
+  ],
+  "ready_for_review": true,
+  "report_status": "submitted"
+}

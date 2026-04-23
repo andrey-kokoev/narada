@@ -1,0 +1,35 @@
+{
+  "report_id": "wrr_1776953053680_20260422-467-ccc-posture-artifact_a2",
+  "task_number": "467",
+  "task_id": "20260422-467-ccc-posture-artifact",
+  "agent_id": "a2",
+  "assignment_id": "20260422-467-ccc-posture-artifact-2026-04-23T13:55:00.182Z",
+  "reported_at": "2026-04-23T14:04:13.680Z",
+  "summary": "Implemented CCC Posture Artifact and Recommender Input. Created posture schema, CLI commands (show/update/check), wired into task recommend with --ignore-posture, added 16 new focused tests. All 58 related tests pass. pnpm verify clean.",
+  "changed_files": [
+    "packages/layers/cli/src/commands/posture.ts",
+    "packages/layers/cli/src/commands/task-recommend.ts",
+    "packages/layers/cli/src/main.ts",
+    "packages/layers/cli/test/commands/posture.test.ts",
+    "packages/layers/cli/test/commands/task-recommend.test.ts",
+    ".ai/postures/schema.json",
+    ".ai/postures/README.md"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --filter @narada2/cli exec vitest run test/commands/posture.test.ts test/commands/task-recommend.test.ts",
+      "result": "28 passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/cli typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm verify",
+      "result": "5/5 passed"
+    }
+  ],
+  "known_residuals": [],
+  "ready_for_review": true,
+  "report_status": "submitted"
+}

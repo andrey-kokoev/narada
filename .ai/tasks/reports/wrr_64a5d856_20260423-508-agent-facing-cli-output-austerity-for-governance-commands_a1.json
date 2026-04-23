@@ -1,0 +1,33 @@
+{
+  "report_id": "wrr_64a5d856_20260423-508-agent-facing-cli-output-austerity-for-governance-commands_a1",
+  "task_number": "508",
+  "task_id": "20260423-508-agent-facing-cli-output-austerity-for-governance-commands",
+  "agent_id": "a1",
+  "assignment_id": "20260423-508-agent-facing-cli-output-austerity-for-governance-commands-2026-04-23T19:07:00.000Z",
+  "reported_at": "2026-04-23T19:12:47.898Z",
+  "summary": "Gated accepted-learning guidance behind --verbose for high-frequency governance commands. Added verbose option to task roster, task report, task recommend, and task finish. Updated contract docs. Added focused tests proving default terse output and verbose guidance exposure. Fixed pre-existing type error in task-report.ts.",
+  "changed_files": [
+    "packages/layers/cli/src/commands/task-roster.ts",
+    "packages/layers/cli/src/commands/task-report.ts",
+    "packages/layers/cli/src/commands/task-recommend.ts",
+    "packages/layers/cli/src/commands/task-finish.ts",
+    "packages/layers/cli/src/main.ts",
+    "packages/layers/cli/test/commands/task-roster.test.ts",
+    "packages/layers/cli/test/commands/task-report.test.ts",
+    "packages/layers/cli/test/commands/task-recommend.test.ts",
+    ".ai/task-contracts/agent-task-execution.md"
+  ],
+  "verification": [
+    {
+      "command": "pnpm verify",
+      "result": "all 5 steps passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/cli exec vitest run test/commands/task-roster.test.ts test/commands/task-report.test.ts test/commands/task-recommend.test.ts test/commands/task-finish.test.ts",
+      "result": "67 tests passed"
+    }
+  ],
+  "known_residuals": [],
+  "ready_for_review": true,
+  "report_status": "submitted"
+}
