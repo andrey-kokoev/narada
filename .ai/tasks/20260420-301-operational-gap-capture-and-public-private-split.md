@@ -1,6 +1,6 @@
 # Task 301 — Operational Gap Capture and Public/Private Split
 
-Status: completed
+status: closed
 
 Depends on: 300
 

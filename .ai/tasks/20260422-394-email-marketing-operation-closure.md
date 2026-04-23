@@ -1,7 +1,10 @@
 ---
-status: completed
-closed: 2026-04-22
+status: closed
 depends_on: [393]
+closed_at: 2026-04-23T19:56:00Z
+closed_by: codex
+governed_by: task_close:codex
+closure_artifact: .ai/decisions/20260422-394-email-marketing-operation-closure.md
 ---
 
 # Task 394 — Email Marketing Operation Chapter Closure
@@ -61,3 +64,55 @@ Close the chapter with evidence, residuals, CCC posture, and next-work recommend
 - [x] CCC posture is recorded.
 - [x] Closure decision exists in `.ai/decisions/`.
 - [x] No derivative task-status files are created.
+
+## Execution Notes
+
+### Closure Review Performed
+
+Reviewed the chapter outputs for Tasks 387–393 against the closure contract and recorded the chapter closure in `.ai/decisions/20260422-394-email-marketing-operation-closure.md`.
+
+The closure review established:
+
+1. **Semantic coherence**:
+   - The chapter consistently treated email marketing as a second vertical on the same kernel, not as a helpdesk variant and not as a generic marketing framework.
+   - Aim / Site / Cycle / Act / Trace language remained grounded in Narada semantics rather than SaaS-specific abstractions.
+
+2. **Authority boundary integrity**:
+   - Intelligence remains advisory only; it does not publish or send campaigns.
+   - Klaviyo mutation remains deferred behind a durable intent boundary.
+   - Campaign briefs remain reviewable operator artifacts rather than autonomous execution.
+   - Observation surfaces remain read-only.
+
+3. **Constructive proof scope**:
+   - The chapter produced a real integration fixture proving `inbound request fact -> campaign work item -> charter evaluation -> durable draft campaign intent -> operator attention / approval`.
+   - It did not overclaim live Klaviyo API execution or a fully materialized Windows runtime.
+
+4. **Residual gaps captured honestly**:
+   - Windows step-handler porting
+   - charter runtime on Windows
+   - effect worker on Windows
+   - `campaign_brief` runtime integration
+   - campaign charter materialization
+   - context formation implementation
+   - real observation queries
+   - Klaviyo adapter implementation
+
+### Chapter Artifact Updated
+
+The chapter-level closure outcome remains recorded in:
+
+- `.ai/decisions/20260422-394-email-marketing-operation-closure.md`
+
+This task file is now normalized to the canonical post-Task-474 closure grammar so evidence tooling can classify it correctly.
+
+## Verification
+
+- Reviewed `.ai/decisions/20260422-394-email-marketing-operation-closure.md` and confirmed it contains:
+  - semantic drift assessment,
+  - authority boundary check,
+  - gap table,
+  - CCC posture table,
+  - residuals,
+  - next-work recommendations.
+- Acceptance criteria in this task are all checked and match the closure artifact contents.
+- No derivative task-status files were created during normalization.

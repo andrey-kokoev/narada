@@ -1,5 +1,5 @@
 ---
-status: completed
+status: closed
 closed: 2026-04-22
 depends_on: [387]
 ---

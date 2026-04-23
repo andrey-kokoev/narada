@@ -1,6 +1,6 @@
 # Task 305 — Kimi API Charter Evaluation Schema Validation Failure
 
-Status: completed
+status: closed
 
 ## Chapter
 

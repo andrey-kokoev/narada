@@ -1,0 +1,13 @@
+{
+  "task_id": "20260423-518-second-operation-selection-contract",
+  "assignments": [
+    {
+      "agent_id": "a1",
+      "claimed_at": "2026-04-23T21:23:20.188Z",
+      "claim_context": null,
+      "released_at": null,
+      "release_reason": null,
+      "intent": "primary"
+    }
+  ]
+}

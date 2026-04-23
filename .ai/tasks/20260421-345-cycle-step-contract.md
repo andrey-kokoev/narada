@@ -37,7 +37,7 @@ Create types for:
 Each step result should include:
 
 - step id
-- status: completed / skipped / failed
+- status: closed / skipped / failed
 - records written count or summary
 - residuals
 - started/finished timestamps

@@ -1,6 +1,6 @@
 # Task 299 — Controlled-Thread Draft Generation Trial
 
-Status: completed
+status: closed
 
 Depends on: 298
 

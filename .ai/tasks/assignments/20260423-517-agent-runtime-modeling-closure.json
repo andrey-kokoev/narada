@@ -1,0 +1,13 @@
+{
+  "task_id": "20260423-517-agent-runtime-modeling-closure",
+  "assignments": [
+    {
+      "agent_id": "a2",
+      "claimed_at": "2026-04-23T21:12:13.769Z",
+      "claim_context": null,
+      "released_at": null,
+      "release_reason": null,
+      "intent": "primary"
+    }
+  ]
+}

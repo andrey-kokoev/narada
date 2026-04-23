@@ -13,3 +13,4 @@ coverage/
 config.json
 .history
 .ai/metrics/
+.ai/agents/roster.json

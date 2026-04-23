@@ -1,5 +1,7 @@
 ---
-status: opened
+status: closed
+closed: 2026-04-23
+governed_by: task_close:a2
 created: 2026-04-23
 reservation: 514-517
 depends_on: [409, 412, 444, 456]

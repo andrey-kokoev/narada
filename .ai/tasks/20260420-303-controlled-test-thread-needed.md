@@ -1,6 +1,6 @@
 # Task 303: Controlled Test Thread Needed for Mailbox Operational Trial
 
-Status: completed
+status: closed
 
 ## Chapter
 

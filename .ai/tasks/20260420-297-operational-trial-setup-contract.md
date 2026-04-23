@@ -1,6 +1,6 @@
 # Task 297 — Operational Trial Setup Contract
 
-Status: completed
+status: closed
 
 ## Context
 

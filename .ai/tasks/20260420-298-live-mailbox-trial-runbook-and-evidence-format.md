@@ -1,6 +1,6 @@
 # Task 298 — Live Mailbox Trial Runbook and Evidence Format
 
-Status: completed
+status: closed
 
 Depends on: 297
 

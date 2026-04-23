@@ -1,5 +1,5 @@
 ---
-status: completed
+status: closed
 closed_at: 2026-04-22
 depends_on: [399, 400, 401, 402]
 ---
