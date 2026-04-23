@@ -45,8 +45,13 @@ function extractMailSenderEmail(fact: Fact): string | null {
     const event = payload.event as Record<string, unknown> | undefined;
     if (!event || typeof event !== "object") return null;
 
-    const from = event.from as Record<string, unknown> | undefined;
-    const sender = event.sender as Record<string, unknown> | undefined;
+    const normalizedPayload = event.payload as Record<string, unknown> | undefined;
+    const from =
+      (event.from as Record<string, unknown> | undefined) ??
+      (normalizedPayload?.from as Record<string, unknown> | undefined);
+    const sender =
+      (event.sender as Record<string, unknown> | undefined) ??
+      (normalizedPayload?.sender as Record<string, unknown> | undefined);
     const email =
       typeof from?.email === "string"
         ? from.email

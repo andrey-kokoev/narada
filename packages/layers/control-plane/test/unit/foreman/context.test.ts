@@ -34,6 +34,39 @@ function makeMailFact(
   };
 }
 
+function makeNormalizedMailFact(
+  conversationId: string,
+  recordId: string,
+  senderEmail: string,
+): Omit<Fact, "created_at"> {
+  const payload = {
+    record_id: recordId,
+    ordinal: new Date().toISOString(),
+    event: {
+      event_id: recordId,
+      event_kind: "upsert",
+      conversation_id: conversationId,
+      payload: {
+        conversation_id: conversationId,
+        from: { email: senderEmail, display_name: "Sender" },
+        sender: { email: senderEmail, display_name: "Sender" },
+      },
+    },
+  };
+  return {
+    fact_id: `fact_mail_${conversationId}_${recordId}`,
+    fact_type: "mail.message.discovered",
+    provenance: {
+      source_id: "exchange:test",
+      source_record_id: recordId,
+      source_version: null,
+      source_cursor: "cursor-1",
+      observed_at: new Date().toISOString(),
+    },
+    payload_json: JSON.stringify(payload),
+  };
+}
+
 function makeTimerFact(scheduleId: string, tickAt = new Date().toISOString()): Omit<Fact, "created_at"> {
   const payload = {
     record_id: `tick_${scheduleId}`,
@@ -116,6 +149,21 @@ describe("AdmittedMailContextStrategy", () => {
     const contexts = strategy.formContexts(facts, "scope-1");
     expect(contexts).toHaveLength(1);
     expect(contexts[0]!.context_id).toBe("conv-allowed");
+  });
+
+  it("admits normalized mail payloads from allowed sender domains", () => {
+    const strategy = new AdmittedMailContextStrategy({
+      allowed_sender_domains: ["company.com"],
+      unknown_sender_behavior: "ignore",
+    });
+
+    const facts = [
+      { ...makeNormalizedMailFact("conv-normalized", "rec-normalized", "person@company.com"), created_at: new Date().toISOString() },
+    ] as Fact[];
+
+    const contexts = strategy.formContexts(facts, "scope-1");
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]!.context_id).toBe("conv-normalized");
   });
 
   it("admits exact sender addresses even when domain is not allowed", () => {
