@@ -25,6 +25,7 @@ import {
   consoleAttentionCommand,
   consoleControlCommand,
 } from './commands/console.js';
+import { createConsoleServer } from './commands/console-server.js';
 import { backupCommand } from './commands/backup.js';
 import { restoreCommand } from './commands/restore.js';
 import { verifyBackupCommand } from './commands/verify-backup.js';
@@ -60,12 +61,20 @@ import { taskClaimCommand } from './commands/task-claim.js';
 import { taskReleaseCommand } from './commands/task-release.js';
 import { taskReviewCommand } from './commands/task-review.js';
 import { taskReportCommand } from './commands/task-report.js';
+import { taskFinishCommand } from './commands/task-finish.js';
+import { taskContinueCommand } from './commands/task-continue.js';
 import { taskRecommendCommand } from './commands/task-recommend.js';
+import {
+  postureShowCommand,
+  postureUpdateCommand,
+  postureCheckCommand,
+} from './commands/posture.js';
 import { taskAllocateCommand } from './commands/task-allocate.js';
 import { taskDeriveFromFindingCommand } from './commands/task-derive-from-finding.js';
 import { taskPromoteRecommendationCommand } from './commands/task-promote-recommendation.js';
 import { taskLintCommand } from './commands/task-lint.js';
 import { taskCloseCommand } from './commands/task-close.js';
+import { taskReopenCommand } from './commands/task-reopen.js';
 import { chapterCloseCommand } from './commands/chapter-close.js';
 import { chapterInitCommand } from './commands/chapter-init.js';
 import { chapterStatusCommand } from './commands/chapter-status.js';
@@ -82,6 +91,7 @@ import {
 import { taskListCommand } from './commands/task-list.js';
 import { taskGraphCommand } from './commands/task-graph.js';
 import { taskEvidenceCommand } from './commands/task-evidence.js';
+import { taskEvidenceListCommand } from './commands/task-evidence-list.js';
 import {
   taskRosterShowCommand,
   taskRosterAssignCommand,
@@ -90,6 +100,10 @@ import {
   taskRosterIdleCommand,
 } from './commands/task-roster.js';
 import { verifyStatusCommand } from './commands/verify-status.js';
+import {
+  crossingListCommand,
+  crossingShowCommand,
+} from './commands/crossing.js';
 import { verifySuggestCommand } from './commands/verify-suggest.js';
 import { verifyExplainCommand } from './commands/verify-explain.js';
 import { verifyRunCommand } from './commands/verify-run.js';
@@ -461,6 +475,25 @@ consoleCmd
     }
   });
 
+consoleCmd
+  .command('serve')
+  .description('Start the Operator Console HTTP API for browser UI')
+  .option('--host <host>', 'Host to bind to', '127.0.0.1')
+  .option('--port <port>', 'Port to bind to (0 for ephemeral)', '0')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .action(async (opts: Record<string, unknown>) => {
+    const host = (opts.host as string) ?? '127.0.0.1';
+    const port = opts.port ? parseInt(String(opts.port), 10) : 0;
+    const server = await createConsoleServer({ host, port, verbose: !!opts.verbose });
+    const url = await server.start();
+    console.log(`Operator Console HTTP API listening at ${url}`);
+    console.log('Press Ctrl+C to stop');
+    process.on('SIGINT', async () => {
+      await server.stop();
+      process.exit(0);
+    });
+  });
+
 program
   .command('status')
   .description('Show sync status and health')
@@ -729,6 +762,7 @@ taskCmd
   .option('--residuals <json>', 'JSON array of known residual strings')
   .option('--principal-state-dir <path>', 'Directory containing PrincipalRuntime state file')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
     const result = await taskReportCommand({
       taskNumber,
@@ -740,9 +774,68 @@ taskCmd
       cwd: opts.cwd as string | undefined,
       format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
       principalStateDir: opts.principalStateDir as string | undefined,
+      verbose: opts.verbose as boolean | undefined,
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Report failed');
+      process.exit(result.exitCode);
+    }
+    console.log(result.result);
+  });
+
+taskCmd
+  .command('continue <task-number>')
+  .description('Continue or take over an already-claimed task')
+  .requiredOption('--agent <id>', 'Continuation agent ID from roster')
+  .requiredOption('--reason <reason>', 'Continuation reason: evidence_repair, review_fix, handoff, blocked_agent, operator_override')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (taskNumber: string, opts: Record<string, unknown>) => {
+    const result = await taskContinueCommand({
+      taskNumber,
+      agent: opts.agent as string,
+      reason: opts.reason as 'evidence_repair' | 'review_fix' | 'handoff' | 'blocked_agent' | 'operator_override',
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Continue failed');
+      process.exit(result.exitCode);
+    }
+    console.log(result.result);
+  });
+
+taskCmd
+  .command('finish <task-number>')
+  .description('Canonical agent completion: report/review → evidence → roster done')
+  .requiredOption('--agent <id>', 'Agent ID from roster')
+  .option('--summary <text>', 'Implementer: Work result summary')
+  .option('--changed-files <csv>', 'Implementer: Comma-separated changed file paths')
+  .option('--verification <json>', 'Implementer: JSON array of {command, result}')
+  .option('--residuals <json>', 'Implementer: JSON array of known residual strings')
+  .option('--verdict <verdict>', 'Reviewer: accepted, accepted_with_notes, or rejected')
+  .option('--findings <json>', 'Reviewer: JSON array of review findings')
+  .option('--report <id>', 'Reviewer: Link to a specific report ID')
+  .option('--allow-incomplete', 'Record roster availability even when evidence is missing', false)
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
+  .action(async (taskNumber: string, opts: Record<string, unknown>) => {
+    const result = await taskFinishCommand({
+      taskNumber,
+      agent: opts.agent as string,
+      summary: opts.summary as string | undefined,
+      changedFiles: opts.changedFiles as string | undefined,
+      verification: opts.verification as string | undefined,
+      residuals: opts.residuals as string | undefined,
+      verdict: opts.verdict as 'accepted' | 'accepted_with_notes' | 'rejected' | undefined,
+      findings: opts.findings as string | undefined,
+      report: opts.report as string | undefined,
+      allowIncomplete: opts.allowIncomplete as boolean | undefined,
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      verbose: opts.verbose as boolean | undefined,
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Finish failed');
       process.exit(result.exitCode);
     }
     console.log(result.result);
@@ -754,14 +847,18 @@ taskCmd
   .option('--agent <id>', 'Restrict to a specific agent')
   .option('--task <number>', 'Recommend for a specific task only')
   .option('--limit <n>', 'Maximum recommendations to show', '10')
+  .option('--ignore-posture', 'Disable CCC posture score adjustments', false)
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
   .action(async (opts: Record<string, unknown>) => {
     const result = await taskRecommendCommand({
       taskNumber: opts.task as string | undefined,
       agent: opts.agent as string | undefined,
       limit: opts.limit ? Number(opts.limit) : undefined,
+      ignorePosture: opts.ignorePosture as boolean | undefined,
       cwd: opts.cwd as string | undefined,
       format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      verbose: opts.verbose as boolean | undefined,
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Recommendation failed');
@@ -921,6 +1018,66 @@ taskCmd
     console.log(result.result);
   });
 
+// Posture commands (Task 467)
+const postureCmd = program
+  .command('posture')
+  .description('CCC posture advisory signal management');
+
+postureCmd
+  .command('show')
+  .description('Display current CCC posture')
+  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await postureShowCommand({
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      cwd: opts.cwd as string | undefined,
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Posture show failed');
+      process.exit(result.exitCode);
+    }
+    console.log(result.result);
+  });
+
+postureCmd
+  .command('update')
+  .description('Update CCC posture from a JSON file')
+  .requiredOption('--from <source>', 'Source label, e.g. manual or chapter-closure-400-410')
+  .option('--file <path>', 'Path to posture JSON file')
+  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await postureUpdateCommand({
+      from: opts.from as string,
+      file: opts.file as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      cwd: opts.cwd as string | undefined,
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Posture update failed');
+      process.exit(result.exitCode);
+    }
+    console.log(result.result);
+  });
+
+postureCmd
+  .command('check')
+  .description('Validate current CCC posture schema and freshness')
+  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await postureCheckCommand({
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      cwd: opts.cwd as string | undefined,
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Posture check failed');
+      process.exit(result.exitCode);
+    }
+    console.log(result.result);
+  });
+
 // Task roster tracking commands (Task 385)
 const rosterCmd = taskCmd
   .command('roster')
@@ -930,10 +1087,12 @@ rosterCmd
   .command('show')
   .description('Show current agent roster')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
   .action(async (opts: Record<string, unknown>) => {
     const result = await taskRosterShowCommand({
       cwd: opts.cwd as string | undefined,
       format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      verbose: opts.verbose as boolean | undefined,
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Roster show failed');
@@ -948,6 +1107,7 @@ rosterCmd
   .requiredOption('--agent <id>', 'Agent ID from roster')
   .option('--no-claim', 'Skip claiming the task (exceptional: only for planning)')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
     const result = await taskRosterAssignCommand({
       taskNumber,
@@ -955,6 +1115,7 @@ rosterCmd
       noClaim: opts.noClaim as boolean | undefined,
       cwd: opts.cwd as string | undefined,
       format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      verbose: opts.verbose as boolean | undefined,
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Roster assign failed');
@@ -968,12 +1129,14 @@ rosterCmd
   .description('Mark agent as reviewing a task')
   .requiredOption('--agent <id>', 'Agent ID from roster')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
     const result = await taskRosterReviewCommand({
       taskNumber,
       agent: opts.agent as string,
       cwd: opts.cwd as string | undefined,
       format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      verbose: opts.verbose as boolean | undefined,
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Roster review failed');
@@ -1003,36 +1166,121 @@ taskCmd
   });
 
 taskCmd
-  .command('evidence <task-number>')
-  .description('Inspect task completion evidence (read-only)')
+  .command('reopen <task-number>')
+  .description('Reopen a terminal task with governance violations so it can be re-closed through a governed operator')
+  .option('--by <id>', 'Operator or agent ID performing the reopen', 'operator')
+  .option('--force', 'Reopen even if the task is valid by evidence', false)
   .option('--format <fmt>', 'Output format: json or human', 'human')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (taskNumber: string, opts: Record<string, unknown>) => {
+    const result = await taskReopenCommand({
+      taskNumber,
+      by: opts.by as string | undefined,
+      force: opts.force as boolean | undefined,
+      cwd: opts.cwd as string | undefined,
+      format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Reopen failed');
+      process.exit(result.exitCode);
+    }
+    console.log(result.result);
+  });
+
+const taskEvidenceCmd = taskCmd
+  .command('evidence')
+  .description('Task evidence operators (inspect, list)');
+
+taskEvidenceCmd
+  .command('inspect <task-number>')
+  .description('Inspect task completion evidence for a single task (read-only)')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
     const result = await taskEvidenceCommand({
       taskNumber,
       cwd: opts.cwd as string | undefined,
-      format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Evidence inspection failed');
       process.exit(result.exitCode);
     }
-    console.log(result.result);
+    if (typeof result.result === 'string') {
+      console.log(result.result);
+    } else {
+      console.log(JSON.stringify(result.result, null, 2));
+    }
+  });
+
+taskEvidenceCmd
+  .command('list')
+  .description('List tasks by completion evidence (read-only)')
+  .option('--verdict <csv>', 'Filter by verdict (comma-separated: complete,attempt_complete,needs_review,needs_closure,incomplete,unknown)')
+  .option('--status <csv>', 'Filter by front-matter status (comma-separated)')
+  .option('--range <start-end>', 'Filter tasks to a number range (e.g. 480-490)')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await taskEvidenceListCommand({
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      verdict: opts.verdict as string | undefined,
+      status: opts.status as string | undefined,
+      range: opts.range as string | undefined,
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Evidence list failed');
+      process.exit(result.exitCode);
+    }
+    if (typeof result.result === 'string') {
+      console.log(result.result);
+    } else {
+      console.log(JSON.stringify(result.result, null, 2));
+    }
+  });
+
+// Backward compatibility: `narada task evidence <task-number>` routes to inspect
+// This is handled by a catch-all argument on the parent evidence command
+taskEvidenceCmd
+  .argument('[task-number]', 'Task number to inspect (backward compatibility; prefer `inspect`)')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (taskNumber: string | undefined, opts: Record<string, unknown>) => {
+    if (!taskNumber) {
+      taskEvidenceCmd.help();
+      return;
+    }
+    const result = await taskEvidenceCommand({
+      taskNumber,
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Evidence inspection failed');
+      process.exit(result.exitCode);
+    }
+    if (typeof result.result === 'string') {
+      console.log(result.result);
+    } else {
+      console.log(JSON.stringify(result.result, null, 2));
+    }
   });
 
 rosterCmd
   .command('done <task-number>')
   .description('Mark agent done with a task')
   .requiredOption('--agent <id>', 'Agent ID from roster')
-  .option('--strict', 'Fail if required evidence is missing', false)
+  .option('--strict', 'Fail if required evidence is missing (default behavior)', false)
+  .option('--allow-incomplete', 'Record roster availability even when task evidence is missing', false)
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
     const result = await taskRosterDoneCommand({
       taskNumber,
       agent: opts.agent as string,
       strict: opts.strict as boolean | undefined,
+      allowIncomplete: opts.allowIncomplete as boolean | undefined,
       cwd: opts.cwd as string | undefined,
       format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      verbose: opts.verbose as boolean | undefined,
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Roster done failed');
@@ -1046,11 +1294,13 @@ rosterCmd
   .description('Mark agent as idle')
   .requiredOption('--agent <id>', 'Agent ID from roster')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
   .action(async (opts: Record<string, unknown>) => {
     const result = await taskRosterIdleCommand({
       agent: opts.agent as string,
       cwd: opts.cwd as string | undefined,
       format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      verbose: opts.verbose as boolean | undefined,
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Roster idle failed');
@@ -1704,6 +1954,53 @@ program
       limit: opts.limit ? Number(opts.limit) : undefined,
       offset: opts.offset ? Number(opts.offset) : undefined,
     }, ctx)));
+
+// ── Crossing regime inspection commands (Task 498) ──
+
+const crossingCmd = program
+  .command('crossing')
+  .description('Crossing regime inspection operators (read-only)');
+
+crossingCmd
+  .command('list')
+  .description('List declared crossing regimes from the canonical inventory')
+  .option('--classification <csv>', 'Filter by classification: canonical,advisory,deferred')
+  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await crossingListCommand({
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      classification: opts.classification as string | undefined,
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Command failed');
+      process.exit(result.exitCode);
+    }
+    if (typeof result.result === 'string') {
+      console.log(result.result);
+    } else {
+      console.log(JSON.stringify(result.result, null, 2));
+    }
+  });
+
+crossingCmd
+  .command('show <name>')
+  .description('Show a single crossing regime declaration')
+  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+  .action(async (name: string, opts: Record<string, unknown>) => {
+    const result = await crossingShowCommand({
+      name,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Command failed');
+      process.exit(result.exitCode);
+    }
+    if (typeof result.result === 'string') {
+      console.log(result.result);
+    } else {
+      console.log(JSON.stringify(result.result, null, 2));
+    }
+  });
 
 // ── Operation shaping commands (from ops-kit) ──
 

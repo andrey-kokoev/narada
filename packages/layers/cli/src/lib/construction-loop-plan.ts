@@ -211,6 +211,25 @@ export async function buildPlan(options: BuildPlanOptions): Promise<Construction
     }
   }
 
+  // Crossing regime heuristic: warn if open tasks look like boundary work
+  // but lack crossing regime declaration references.
+  const crossingKeywords =
+    /\b(new\s+durable|authority\s+owner|boundary\s+crossing|crossing\s+artifact|new\s+boundary|new\s+crossing)\b/i;
+  const regimeReferences =
+    /\b(crossing\s+regime|SEMANTICS\.md\s+§2\.15|Task\s+49[567])\b/i;
+  for (const task of openTasks) {
+    try {
+      const content = await readFile(resolve(cwd, '.ai', 'tasks', task.file), 'utf8');
+      if (crossingKeywords.test(content) && !regimeReferences.test(content)) {
+        warnings.push(
+          `Task ${task.taskNumber} appears to introduce a durable boundary but lacks a crossing regime declaration reference (SEMANTICS.md §2.15).`,
+        );
+      }
+    } catch {
+      // Ignore unreadable task files
+    }
+  }
+
   // ── Step 5: Derive chapter states ──
   const chapterSummaries: ChapterSummary[] = [];
   const allTaskNumbers = graph.nodes.map((n) => n.taskNumber).filter((n) => n != null);

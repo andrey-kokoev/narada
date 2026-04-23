@@ -28,17 +28,37 @@ export interface AgentRoster {
   agents: AgentRosterEntry[];
 }
 
+export const ASSIGNMENT_INTENTS = ['primary', 'review', 'repair', 'takeover'] as const;
+export type AssignmentIntent = typeof ASSIGNMENT_INTENTS[number];
+
 export interface TaskAssignment {
   agent_id: string;
   claimed_at: string;
   claim_context: string | null;
   released_at: string | null;
-  release_reason: 'completed' | 'abandoned' | 'superseded' | 'transferred' | 'budget_exhausted' | null;
+  release_reason: 'completed' | 'abandoned' | 'superseded' | 'transferred' | 'budget_exhausted' | 'continued' | null;
+  /** If this assignment is a continuation/takeover, the reason why. */
+  continuation_reason?: 'evidence_repair' | 'review_fix' | 'handoff' | 'blocked_agent' | 'operator_override' | null;
+  /** The agent_id of the prior active assignment, if this is a continuation. */
+  previous_agent_id?: string | null;
+  /** What kind of attachment this is (primary, review, repair, takeover). */
+  intent?: AssignmentIntent;
+}
+
+export interface TaskContinuation {
+  agent_id: string;
+  started_at: string;
+  reason: 'evidence_repair' | 'review_fix' | 'handoff' | 'blocked_agent' | 'operator_override';
+  previous_agent_id: string | null;
+  /** Whether the continuation is still active or has been completed. */
+  completed_at?: string | null;
 }
 
 export interface TaskAssignmentRecord {
   task_id: string;
   assignments: TaskAssignment[];
+  /** Secondary agents working on the task without superseding the primary assignment. */
+  continuations?: TaskContinuation[];
 }
 
 export interface TaskContinuationAffinity {
@@ -52,6 +72,8 @@ export interface TaskFrontMatter {
   status?: string;
   depends_on?: number[];
   continuation_affinity?: TaskContinuationAffinity;
+  /** Governed closure provenance — set exclusively by governed operators (task_close, task_review, chapter_close) */
+  governed_by?: string;
   [key: string]: unknown;
 }
 
@@ -127,9 +149,133 @@ export interface WorkResultReport {
   report_status: 'submitted' | 'accepted' | 'rejected' | 'superseded';
 }
 
-export function createReportId(taskId: string, agentId: string): string {
-  const ts = Date.now();
-  return `wrr_${ts}_${taskId}_${agentId}`;
+/**
+ * Deterministic hash of a string using djb2.
+ * Produces a stable 8-char hex hash for report identity.
+ */
+function stableHash(input: string): string {
+  let hash = 5381;
+  for (let i = 0; i < input.length; i++) {
+    hash = ((hash << 5) + hash) + input.charCodeAt(i);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+/**
+ * Create a deterministic report ID from stable fields.
+ *
+ * Identity is derived from task_id + agent_id + assignment_id so that
+ * repeated invocations for the same assignment produce the same report_id.
+ */
+export function createReportId(taskId: string, agentId: string, assignmentId: string): string {
+  const hash = stableHash(`${taskId}:${agentId}:${assignmentId}`);
+  return `wrr_${hash}_${taskId}_${agentId}`;
+}
+
+/**
+ * Find an existing submitted report for a given assignment_id.
+ */
+export async function findReportByAssignmentId(
+  cwd: string,
+  assignmentId: string,
+): Promise<WorkResultReport | null> {
+  const dir = join(resolveRepoPath(cwd), REPORTS_DIR);
+  try {
+    const files = await readdir(dir);
+    for (const f of files) {
+      if (!f.endsWith('.json')) continue;
+      try {
+        const raw = await readFile(join(dir, f), 'utf8');
+        const report = JSON.parse(raw) as WorkResultReport;
+        if (report.assignment_id === assignmentId && report.report_status === 'submitted') {
+          return report;
+        }
+      } catch {
+        // Skip malformed report files
+      }
+    }
+  } catch {
+    // Directory may not exist
+  }
+  return null;
+}
+
+export interface ReportAnomaly {
+  type: 'duplicate_report_id' | 'multiple_reports_per_assignment' | 'filename_id_mismatch';
+  report_id: string;
+  assignment_id?: string;
+  detail: string;
+}
+
+/**
+ * Scan all reports and detect integrity anomalies.
+ */
+export async function detectReportAnomalies(cwd: string): Promise<ReportAnomaly[]> {
+  const dir = join(resolveRepoPath(cwd), REPORTS_DIR);
+  const anomalies: ReportAnomaly[] = [];
+  const byReportId = new Map<string, WorkResultReport[]>();
+  const byAssignment = new Map<string, WorkResultReport[]>();
+
+  let files: string[] = [];
+  try {
+    files = await readdir(dir);
+  } catch {
+    return [];
+  }
+
+  for (const f of files) {
+    if (!f.endsWith('.json')) continue;
+    try {
+      const raw = await readFile(join(dir, f), 'utf8');
+      const report = JSON.parse(raw) as WorkResultReport;
+
+      // filename / report_id mismatch
+      const expectedFilename = `${report.report_id}.json`;
+      if (f !== expectedFilename) {
+        anomalies.push({
+          type: 'filename_id_mismatch',
+          report_id: report.report_id,
+          detail: `File ${f} contains report_id ${report.report_id}`,
+        });
+      }
+
+      // group by report_id
+      const idList = byReportId.get(report.report_id) ?? [];
+      idList.push(report);
+      byReportId.set(report.report_id, idList);
+
+      // group by assignment_id
+      const assignList = byAssignment.get(report.assignment_id) ?? [];
+      assignList.push(report);
+      byAssignment.set(report.assignment_id, assignList);
+    } catch {
+      // Skip malformed
+    }
+  }
+
+  for (const [reportId, list] of byReportId) {
+    if (list.length > 1) {
+      anomalies.push({
+        type: 'duplicate_report_id',
+        report_id: reportId,
+        detail: `${list.length} files share report_id ${reportId}`,
+      });
+    }
+  }
+
+  for (const [assignmentId, list] of byAssignment) {
+    const submitted = list.filter((r) => r.report_status === 'submitted');
+    if (submitted.length > 1) {
+      anomalies.push({
+        type: 'multiple_reports_per_assignment',
+        report_id: submitted[0]!.report_id,
+        assignment_id: assignmentId,
+        detail: `${submitted.length} submitted reports for assignment ${assignmentId}`,
+      });
+    }
+  }
+
+  return anomalies;
 }
 
 export function getReportPath(cwd: string, reportId: string): string {
@@ -242,9 +388,11 @@ export interface TaskCompletionEvidence {
   has_report: boolean;
   has_review: boolean;
   has_closure: boolean;
+  has_governed_provenance: boolean;
   verdict: 'complete' | 'attempt_complete' | 'needs_review' | 'needs_closure' | 'incomplete' | 'unknown';
   warnings: string[];
   violations: string[];
+  active_assignment_intent: AssignmentIntent | null;
 }
 
 function countUncheckedCriteria(body: string): { allChecked: boolean | null; unchecked: number } {
@@ -266,6 +414,59 @@ function countUncheckedCriteria(body: string): { allChecked: boolean | null; unc
 }
 
 const DERIVATIVE_SUFFIXES = ['-EXECUTED.md', '-DONE.md', '-RESULT.md', '-FINAL.md', '-SUPERSEDED.md'];
+
+/**
+ * Determine whether a terminal task has governed provenance.
+ *
+ * A task may enter terminal state (closed/confirmed) only through a governed operator.
+ * Valid provenance markers:
+ * 1. `governed_by` field set by a governed operator (task_close, task_review, chapter_close)
+ * 2. `closed_by` + `closed_at` front matter (pre-task-501 task_close backward compatibility)
+ * 3. Review record exists and status is closed (pre-task-501 task_review backward compatibility)
+ * 4. Closure decision exists and status is confirmed (pre-task-501 chapter_close backward compatibility)
+ *
+ * Raw markdown edits that set `status: closed` without any of these markers are invalid.
+ */
+export function hasGovernedProvenance(
+  frontMatter: TaskFrontMatter,
+  hasReview: boolean,
+  hasClosure: boolean,
+): boolean {
+  // New explicit governed-by marker
+  if (typeof frontMatter.governed_by === 'string' && frontMatter.governed_by.length > 0) {
+    return true;
+  }
+
+  // If the task was reopened after its last closure, stale provenance markers
+  // from the prior closure must not count as valid. Governed re-closure requires
+  // a fresh governed_by marker.
+  const closedAt = typeof frontMatter.closed_at === 'string' ? frontMatter.closed_at : null;
+  const reopenedAt = typeof frontMatter.reopened_at === 'string' ? frontMatter.reopened_at : null;
+  if (closedAt && reopenedAt && reopenedAt > closedAt) {
+    // Stale: reopened after closure. Require governed_by (checked above).
+    return false;
+  }
+
+  // Pre-501 backward compatibility: task_close left closed_by + closed_at
+  if (
+    typeof frontMatter.closed_by === 'string' && frontMatter.closed_by.length > 0 &&
+    closedAt !== null
+  ) {
+    return true;
+  }
+
+  // Pre-501 backward compatibility: task_review left a review record
+  if (hasReview && frontMatter.status === 'closed') {
+    return true;
+  }
+
+  // Pre-501 backward compatibility: chapter_close left a closure decision
+  if (hasClosure && frontMatter.status === 'confirmed') {
+    return true;
+  }
+
+  return false;
+}
 
 export async function hasDerivativeFiles(cwd: string, taskNumber: number): Promise<boolean> {
   const dir = join(resolveRepoPath(cwd), TASKS_DIR);
@@ -313,9 +514,11 @@ export async function inspectTaskEvidence(cwd: string, taskNumber: string): Prom
       has_report: false,
       has_review: false,
       has_closure: false,
+      has_governed_provenance: false,
       verdict: 'unknown',
       warnings: [`Task file not found for ${taskNumber}`],
       violations: [],
+      active_assignment_intent: null,
     };
   }
 
@@ -337,6 +540,17 @@ export async function inspectTaskEvidence(cwd: string, taskNumber: string): Prom
   const closures = num !== null ? await listClosureDecisionsForTask(cwd, num) : [];
   const hasClosure = closures.length > 0;
   const hasDerivatives = num !== null ? await hasDerivativeFiles(cwd, num) : false;
+  const hasGovernedProvenanceValue = hasGovernedProvenance(frontMatter, hasReview, hasClosure);
+
+  // Determine active assignment intent
+  let activeAssignmentIntent: AssignmentIntent | null = null;
+  const assignmentRecord = await loadAssignment(cwd, taskFile.taskId);
+  if (assignmentRecord) {
+    const active = getActiveAssignment(assignmentRecord);
+    if (active) {
+      activeAssignmentIntent = getAssignmentIntent(active);
+    }
+  }
 
   const warnings: string[] = [];
   const violations: string[] = [];
@@ -347,6 +561,7 @@ export async function inspectTaskEvidence(cwd: string, taskNumber: string): Prom
   const terminalStatuses: Array<string | undefined> = ['closed', 'confirmed'];
 
   const hasEvidence = hasReport || hasExecutionNotes;
+  const governedProvenance = hasGovernedProvenance(frontMatter, hasReview, hasClosure);
 
   if (terminalStatuses.includes(status)) {
     if (!hasEvidence) {
@@ -364,6 +579,10 @@ export async function inspectTaskEvidence(cwd: string, taskNumber: string): Prom
     if (hasDerivatives) {
       warnings.push('Task is closed/confirmed but derivative task-status files exist');
       violations.push('terminal_with_derivative_files');
+    }
+    if (!governedProvenance) {
+      warnings.push('Task is terminal but lacks governed closure provenance; raw file mutation detected');
+      violations.push('terminal_without_governed_provenance');
     }
     if (!hasReview && !hasClosure && !(hasExecutionNotes && hasVerification)) {
       warnings.push('Task is closed/confirmed without review or closure decision; direct closure requires execution notes and verification');
@@ -417,9 +636,11 @@ export async function inspectTaskEvidence(cwd: string, taskNumber: string): Prom
     has_report: hasReport,
     has_review: hasReview,
     has_closure: hasClosure,
+    has_governed_provenance: governedProvenance,
     verdict,
     warnings,
     violations,
+    active_assignment_intent: activeAssignmentIntent,
   };
 }
 
@@ -635,8 +856,34 @@ export async function findTaskFile(cwd: string, taskNumber: string): Promise<{ p
       if (base.includes(suffix.replace(/\.md$/, ''))) return false;
     }
     // Match patterns like 20260420-260-... or 260 anywhere in the filename
-    return base.includes(`-${taskNumber}-`) || base === taskNumber || base.endsWith(`-${taskNumber}`);
+    // Also handle zero-padded numbers (e.g., 050 matches 50)
+    const numMatch = base.match(/-(\d+)-/);
+    const fileNum = numMatch ? Number(numMatch[1]) : null;
+    return fileNum === Number(taskNumber) || base.includes(`-${taskNumber}-`) || base === taskNumber || base.endsWith(`-${taskNumber}`);
   });
+
+  const executableCandidates: string[] = [];
+  for (const candidate of candidates) {
+    try {
+      const content = await readFile(join(dir, candidate), 'utf8');
+      if (content.match(new RegExp(`^# Task ${taskNumber}\\b`, 'm'))) {
+        executableCandidates.push(candidate);
+      }
+    } catch {
+      // Ignore unreadable candidates and fall back to the existing ambiguity logic.
+    }
+  }
+
+  if (executableCandidates.length === 1) {
+    return {
+      path: join(dir, executableCandidates[0]!),
+      taskId: executableCandidates[0]!.replace(/\.md$/, ''),
+    };
+  }
+
+  if (executableCandidates.length > 1) {
+    throw new Error(`Ambiguous task number ${taskNumber}: matches ${executableCandidates.join(', ')}`);
+  }
 
   if (candidates.length === 1) {
     return { path: join(dir, candidates[0]!), taskId: candidates[0]!.replace(/\.md$/, '') };
@@ -788,12 +1035,12 @@ export type TaskStatus = typeof TASK_STATUSES[number];
  */
 const ALLOWED_TRANSITIONS: Record<string, TaskStatus[]> = {
   draft: ['opened'],
-  opened: ['claimed'],
+  opened: ['claimed', 'closed'],
   claimed: ['in_review', 'opened', 'needs_continuation'],
   needs_continuation: ['claimed', 'opened'],
   in_review: ['closed', 'opened'],
-  closed: ['confirmed'],
-  confirmed: [],
+  closed: ['confirmed', 'opened', 'in_review'],
+  confirmed: ['opened', 'in_review'],
 };
 
 export function isValidTransition(from: string | undefined, to: string): boolean {
@@ -807,6 +1054,50 @@ export function getActiveAssignment(record: TaskAssignmentRecord): TaskAssignmen
 }
 
 /**
+ * Find an active continuation for a specific agent.
+ * A continuation is active if it has no completed_at timestamp.
+ */
+export function getActiveContinuation(
+  record: TaskAssignmentRecord,
+  agentId: string,
+): TaskContinuation | null {
+  return record.continuations?.find((c) => c.agent_id === agentId && !c.completed_at) ?? null;
+}
+
+/**
+ * Map a continuation reason to its canonical assignment intent.
+ */
+export function continuationReasonToIntent(
+  reason: TaskAssignment['continuation_reason'],
+): AssignmentIntent {
+  switch (reason) {
+    case 'evidence_repair':
+    case 'review_fix':
+      return 'repair';
+    case 'handoff':
+    case 'blocked_agent':
+    case 'operator_override':
+      return 'takeover';
+    default:
+      return 'primary';
+  }
+}
+
+/**
+ * Return the canonical intent for an assignment.
+ *
+ * Backward compatibility: if `intent` is not explicitly set, infer it from
+ * `continuation_reason` or default to `primary`.
+ */
+export function getAssignmentIntent(assignment: TaskAssignment): AssignmentIntent {
+  if (assignment.intent) return assignment.intent;
+  if (assignment.continuation_reason) {
+    return continuationReasonToIntent(assignment.continuation_reason);
+  }
+  return 'primary';
+}
+
+/**
  * Check that all dependency tasks are in a terminal or near-terminal state.
  * Returns the list of blocking dependency task IDs.
  */
@@ -817,33 +1108,26 @@ export async function checkDependencies(
   if (!dependsOn || dependsOn.length === 0) return { blockedBy: [] };
 
   const blockedBy: string[] = [];
-  const dir = join(resolveRepoPath(cwd), TASKS_DIR);
-  const files = await readdir(dir);
 
   for (const depNum of dependsOn) {
-    // Find the task file for this dependency number
-    const candidates = files.filter((f) => {
-      if (!f.endsWith('.md')) return false;
-      const base = f.replace(/\.md$/, '');
-      // Match numeric portion in filenames like 20260422-050-... or simple 50.md
-      const numMatch = base.match(/-(\d+)-/);
-      const fileNum = numMatch ? Number(numMatch[1]) : null;
-      return fileNum === depNum || base === String(depNum) || base.endsWith(`-${depNum}`);
-    });
+    let taskFile: { path: string; taskId: string } | null = null;
+    try {
+      taskFile = await findTaskFile(cwd, String(depNum));
+    } catch {
+      // Ambiguous dependency resolution remains blocking to be safe.
+    }
 
-    if (candidates.length !== 1) {
-      // Cannot resolve dependency — treat as blocking to be safe
+    if (!taskFile) {
       blockedBy.push(String(depNum));
       continue;
     }
 
-    const taskPath = join(dir, candidates[0]!);
-    const content = await readFile(taskPath, 'utf8');
+    const content = await readFile(taskFile.path, 'utf8');
     const { frontMatter } = parseFrontMatter(content);
     const depStatus = frontMatter.status;
 
     if (depStatus !== 'closed' && depStatus !== 'confirmed') {
-      blockedBy.push(candidates[0]!.replace(/\.md$/, ''));
+      blockedBy.push(taskFile.taskId);
     }
   }
 
@@ -1098,6 +1382,22 @@ export async function lintTaskFiles(cwd: string): Promise<{
         }
       }
     }
+
+    // Crossing regime declaration heuristic
+    // Tasks that mention new durable boundaries should reference the crossing regime contract.
+    // This is a warning, not an error, to avoid theater on unrelated tasks.
+    const crossingKeywords =
+      /\b(new\s+durable|authority\s+owner|boundary\s+crossing|crossing\s+artifact|new\s+boundary|new\s+crossing|durable\s+artifact\s+(from|across|between))\b/i;
+    const regimeReferences =
+      /\b(crossing\s+regime|SEMANTICS\.md\s+§2\.15|Task\s+49[567])\b/i;
+    if (crossingKeywords.test(content) && !regimeReferences.test(content)) {
+      issues.push({
+        type: 'crossing_regime_missing_declaration',
+        file: f,
+        detail:
+          'Task appears to introduce a durable authority-changing boundary but does not reference the crossing regime declaration contract. If this is a false positive, it may be ignored.',
+      });
+    }
   }
 
   // ── Review / closure checks ──
@@ -1234,6 +1534,15 @@ export async function lintTaskFiles(cwd: string): Promise<{
           detail: `Task ${num} is ${status} but lacks verification notes`,
         });
       }
+      const hasReview = tasksWithReviews.has(num);
+      const hasClosure = tasksWithClosures.has(num);
+      if (!hasGovernedProvenance(task.frontMatter, hasReview, hasClosure)) {
+        issues.push({
+          type: 'terminal_without_governed_provenance',
+          file: task.filename,
+          detail: `Task ${num} is ${status} but lacks governed closure provenance (raw file mutation suspected)`,
+        });
+      }
     }
   }
 
@@ -1261,6 +1570,52 @@ export async function lintTaskFilesForRange(
   for (let n = rangeStart; n <= rangeEnd; n++) rangeNumbers.add(n);
 
   const tasksInRange: Array<{ filename: string; frontMatter: TaskFrontMatter; body: string }> = [];
+  const taskNumbersInRange = new Set<number>();
+
+  // Scan reviews and closures for governed-provenance checks
+  const repoPath = resolveRepoPath(cwd);
+  const reviewsDir = join(repoPath, '.ai', 'reviews');
+  const decisionsDir = join(repoPath, '.ai', 'decisions');
+  const tasksWithReviews = new Set<number>();
+  const tasksWithClosures = new Set<number>();
+
+  try {
+    const reviewFiles = (await readdir(reviewsDir)).filter((f) => f.endsWith('.json'));
+    for (const rf of reviewFiles) {
+      try {
+        const raw = await readFile(join(reviewsDir, rf), 'utf8');
+        const review = JSON.parse(raw) as { task_id?: string };
+        const taskNum = extractTaskNumberFromFileName(review.task_id ?? rf);
+        if (taskNum !== null && rangeNumbers.has(taskNum)) {
+          tasksWithReviews.add(taskNum);
+        }
+      } catch {
+        // Skip malformed
+      }
+    }
+  } catch {
+    // Reviews dir may not exist
+  }
+
+  try {
+    const decisionFiles = (await readdir(decisionsDir)).filter((f) => f.endsWith('.md'));
+    for (const df of decisionFiles) {
+      try {
+        const raw = await readFile(join(decisionsDir, df), 'utf8');
+        const { frontMatter: dfm } = parseFrontMatter(raw);
+        const closesTasks = dfm.closes_tasks as number[] | undefined;
+        if (Array.isArray(closesTasks)) {
+          for (const ct of closesTasks) {
+            if (rangeNumbers.has(ct)) tasksWithClosures.add(ct);
+          }
+        }
+      } catch {
+        // Skip malformed
+      }
+    }
+  } catch {
+    // Decisions dir may not exist
+  }
 
   for (const f of mdFiles) {
     const taskNumber = extractTaskNumberFromFileName(f);
@@ -1390,6 +1745,15 @@ export async function lintTaskFilesForRange(
           type: 'terminal_without_verification',
           file: filename,
           detail: `Task ${taskNumber} is ${status} but lacks verification notes`,
+        });
+      }
+      const hasReview = tasksWithReviews.has(taskNumber);
+      const hasClosure = tasksWithClosures.has(taskNumber);
+      if (!hasGovernedProvenance(frontMatter, hasReview, hasClosure)) {
+        issues.push({
+          type: 'terminal_without_governed_provenance',
+          file: filename,
+          detail: `Task ${taskNumber} is ${status} but lacks governed closure provenance (raw file mutation suspected)`,
         });
       }
     }
@@ -1595,6 +1959,131 @@ export async function computeTaskAffinity(
     affinity_reason: `Completed ${bestCount} prerequisite task${bestCount > 1 ? 's' : ''}`,
     source: 'history',
   };
+}
+
+// ── Evidence-based task listing ──
+
+export interface EvidenceBasedTaskEntry {
+  task_number: number | null;
+  task_id: string;
+  title: string | null;
+  status: string | undefined;
+  verdict: TaskCompletionEvidence['verdict'];
+  unchecked_count: number;
+  has_execution_notes: boolean;
+  has_verification: boolean;
+  has_report: boolean;
+  has_review: boolean;
+  has_closure: boolean;
+  warnings: string[];
+  violations: string[];
+  assigned_agent: string | null;
+  active_assignment_intent: AssignmentIntent | null;
+}
+
+const NOT_COMPLETE_VERDICTS: TaskCompletionEvidence['verdict'][] = [
+  'incomplete',
+  'attempt_complete',
+  'needs_review',
+  'needs_closure',
+];
+
+/**
+ * List tasks with evidence-based completion classification.
+ *
+ * Read-only: scans task files and inspects evidence. Does not mutate.
+ *
+ * @param verdictFilter - If provided, only include tasks with these verdicts.
+ *                        If omitted, defaults to not-complete verdicts.
+ * @param statusFilter - If provided, only include tasks with these statuses.
+ * @param rangeFilter - If provided, only include tasks in [start, end].
+ */
+export async function listEvidenceBasedTasks(
+  cwd: string,
+  options?: {
+    verdictFilter?: TaskCompletionEvidence['verdict'][];
+    statusFilter?: string[];
+    rangeFilter?: { start: number; end: number };
+  },
+): Promise<EvidenceBasedTaskEntry[]> {
+  const dir = join(resolveRepoPath(cwd), TASKS_DIR);
+  const files = await readdir(dir).catch(() => [] as string[]);
+  const mdFiles = files.filter((f) => f.endsWith('.md'));
+
+  // Load roster once for assignment lookup
+  let roster: AgentRoster | null = null;
+  try {
+    roster = await loadRoster(cwd);
+  } catch {
+    // Roster may not exist
+  }
+
+  const entries: EvidenceBasedTaskEntry[] = [];
+
+  for (const f of mdFiles) {
+    const base = f.replace(/\.md$/, '');
+    const taskNumber = extractTaskNumberFromFileName(f);
+
+    // Exclude derivative status files
+    const isDerivative = DERIVATIVE_SUFFIXES.some((suffix) =>
+      base.includes(suffix.replace(/\.md$/, '')),
+    );
+    if (isDerivative) continue;
+
+    // Range filter
+    if (options?.rangeFilter && taskNumber !== null) {
+      if (taskNumber < options.rangeFilter.start || taskNumber > options.rangeFilter.end) {
+        continue;
+      }
+    }
+
+    const evidence = await inspectTaskEvidence(cwd, taskNumber !== null ? String(taskNumber) : base);
+
+    // Status filter
+    if (options?.statusFilter && evidence.status !== undefined) {
+      if (!options.statusFilter.includes(evidence.status)) continue;
+    }
+
+    // Verdict filter
+    const effectiveVerdictFilter = options?.verdictFilter ?? NOT_COMPLETE_VERDICTS;
+    if (!effectiveVerdictFilter.includes(evidence.verdict)) continue;
+
+    // Find assigned agent from roster
+    let assignedAgent: string | null = null;
+    if (roster && taskNumber !== null) {
+      const agent = roster.agents.find((a) => a.task === taskNumber);
+      if (agent) assignedAgent = agent.agent_id;
+    }
+
+    // Extract title from body
+    const content = await readFile(join(dir, f), 'utf8');
+    const { body } = parseFrontMatter(content);
+    const titleMatch = body.match(/^#\s+(.+)$/m);
+    const title = titleMatch ? titleMatch[1].trim() : null;
+
+    entries.push({
+      task_number: evidence.task_number,
+      task_id: evidence.task_id ?? base,
+      title,
+      status: evidence.status,
+      verdict: evidence.verdict,
+      unchecked_count: evidence.unchecked_count,
+      has_execution_notes: evidence.has_execution_notes,
+      has_verification: evidence.has_verification,
+      has_report: evidence.has_report,
+      has_review: evidence.has_review,
+      has_closure: evidence.has_closure,
+      warnings: evidence.warnings,
+      violations: evidence.violations,
+      assigned_agent: assignedAgent,
+      active_assignment_intent: evidence.active_assignment_intent,
+    });
+  }
+
+  // Sort by task number ascending
+  entries.sort((a, b) => (a.task_number ?? 0) - (b.task_number ?? 0));
+
+  return entries;
 }
 
 // ── Task listing with affinity ──

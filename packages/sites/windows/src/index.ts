@@ -1,5 +1,6 @@
 export type {
   WindowsSiteVariant,
+  SiteVariant,
   WindowsSiteConfig,
   WindowsCycleOutcome,
   WindowsCycleResult,
@@ -91,6 +92,8 @@ export {
 
 export {
   WindowsSiteControlClient,
+  createWindowsSiteControlClient,
+  createWindowsSiteControlClientFactory,
   type WindowsSiteControlContext,
   type WindowsSiteControlContextFactory,
 } from "./site-control.js";
@@ -147,6 +150,13 @@ export {
   getLastCycleTrace,
   discoverWindowsSites,
   resolveSiteVariant,
+  WindowsSiteObservationApi,
+  createWindowsSiteObservationApi,
   type WindowsSiteStatus,
   type DiscoveredSite,
 } from "./observability.js";
+
+export {
+  type ConsoleSiteAdapter,
+  windowsSiteAdapter,
+} from "./console-adapter.js";

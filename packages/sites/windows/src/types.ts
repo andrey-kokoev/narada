@@ -4,6 +4,11 @@
 export type WindowsSiteVariant = "native" | "wsl";
 
 /**
+ * All Site variants known to the registry, including remote substrates.
+ */
+export type SiteVariant = WindowsSiteVariant | "cloudflare" | "linux-user" | "linux-system";
+
+/**
  * Live source configuration for a Windows Site.
  *
  * Only `graph` is supported in v0. The source is bounded by

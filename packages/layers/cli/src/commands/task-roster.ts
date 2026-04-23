@@ -11,6 +11,7 @@ import {
   updateAgentRosterEntry,
   formatRoster,
   listReportsForTask,
+  listReviewsForTask,
   findTaskFile,
   readTaskFile,
   writeTaskFile,
@@ -32,12 +33,14 @@ import {
 export interface TaskRosterOptions {
   format?: 'json' | 'human' | 'auto';
   cwd?: string;
+  verbose?: boolean;
 }
 
 export interface TaskRosterAssignOptions extends TaskRosterOptions {
   taskNumber: string;
   agent: string;
   strict?: boolean;
+  allowIncomplete?: boolean;
   noClaim?: boolean;
 }
 
@@ -79,7 +82,7 @@ export async function taskRosterShowCommand(
 
   const lines: string[] = [];
   lines.push(formatRoster(roster, 'human'));
-  if (guidance.length > 0) {
+  if (options.verbose && guidance.length > 0) {
     lines.push('');
     lines.push('Active guidance:');
     lines.push(...formatGuidanceForHumans(guidance));
@@ -218,6 +221,7 @@ export async function taskRosterAssignCommand(
         claim_context: null,
         released_at: null,
         release_reason: null,
+        intent: 'primary',
       });
       await saveAssignment(cwd, record);
 
@@ -253,7 +257,7 @@ export async function taskRosterAssignCommand(
     for (const w of claimWarnings) {
       lines.push(`⚠ ${w}`);
     }
-    if (guidance.length > 0) {
+    if (options.verbose && guidance.length > 0) {
       lines.push('');
       lines.push('Active guidance:');
       lines.push(...formatGuidanceForHumans(guidance));
@@ -290,6 +294,26 @@ export async function taskRosterReviewCommand(
       task: taskNumber,
     });
 
+    // Find task file for assignment recording
+    const taskFile = await findTaskFile(cwd, options.taskNumber);
+    if (taskFile) {
+      const now = new Date().toISOString();
+      // Record review intent as a released assignment (review is parallel, not an active claim)
+      const assignmentRecord = (await loadAssignment(cwd, taskFile.taskId)) ?? {
+        task_id: taskFile.taskId,
+        assignments: [],
+      };
+      assignmentRecord.assignments.push({
+        agent_id: options.agent,
+        claimed_at: now,
+        claim_context: null,
+        released_at: now,
+        release_reason: 'completed',
+        intent: 'review',
+      });
+      await saveAssignment(cwd, assignmentRecord);
+    }
+
     const { guidance } = await recallAcceptedLearning({
       cwd,
       scopes: ['review', 'roster', 'task-governance'],
@@ -304,15 +328,16 @@ export async function taskRosterReviewCommand(
           agent_status: 'reviewing',
           task: taskNumber,
           roster,
+          intent: 'review',
           guidance: formatGuidanceForJson(guidance),
         },
       };
     }
 
     const lines: string[] = [
-      `Assigned ${options.agent} → review task ${taskNumber} (status: reviewing)`,
+      `Assigned ${options.agent} → review task ${taskNumber} (status: reviewing, intent: review)`,
     ];
-    if (guidance.length > 0) {
+    if (options.verbose && guidance.length > 0) {
       lines.push('');
       lines.push('Active guidance:');
       lines.push(...formatGuidanceForHumans(guidance));
@@ -348,21 +373,40 @@ export async function taskRosterDoneCommand(
 
     // Inspect task evidence before marking done
     let evidence;
+    let evidenceError: string | null = null;
     try {
       evidence = await inspectTaskEvidence(cwd, String(taskNumber));
-    } catch {
+    } catch (error) {
       evidence = null;
+      evidenceError = error instanceof Error ? error.message : String(error);
     }
 
     const roster = await loadRoster(cwd);
     const agent = roster.agents.find((a) => a.agent_id === options.agent);
-    const isReviewer = agent?.role === 'reviewer' || agent?.role === 'admin';
+    if (!agent) {
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: { status: 'error', error: `Agent ${options.agent} not found in roster` },
+      };
+    }
 
     const warnings: string[] = [];
 
-    if (evidence) {
-      // Implementer completion checks
-      if (!isReviewer) {
+    if (!evidence) {
+      warnings.push(
+        `Task ${taskNumber} evidence could not be inspected${evidenceError ? `: ${evidenceError}` : ''}.`,
+      );
+    } else {
+      const reports = evidence.task_id ? await listReportsForTask(cwd, evidence.task_id) : [];
+      const reviews = evidence.task_id ? await listReviewsForTask(cwd, evidence.task_id) : [];
+      const hasAgentReport = reports.some((report) => report.agent_id === options.agent);
+      const hasAgentReview = reviews.some((review) => review.reviewer_agent_id === options.agent);
+      const completionHandoffSatisfied =
+        evidence.verdict === 'complete'
+        || hasAgentReport
+        || hasAgentReview;
+
+      if (!completionHandoffSatisfied) {
         if (!evidence.has_report && !evidence.has_execution_notes) {
           warnings.push(
             `Task ${taskNumber} has no execution evidence; roster done marks only agent availability, not task completion.`,
@@ -373,31 +417,27 @@ export async function taskRosterDoneCommand(
             `Task ${taskNumber} has ${evidence.unchecked_count} unchecked acceptance criteria.`,
           );
         }
-        if (!evidence.has_report) {
-          warnings.push(
-            `Agent ${options.agent} marked done for task ${taskNumber} but no WorkResultReport was submitted.`,
-          );
+        if (!evidence.has_verification) {
+          warnings.push(`Task ${taskNumber} has no verification notes.`);
         }
-      }
-
-      // Reviewer completion checks
-      if (isReviewer) {
-        if (!evidence.has_review) {
-          warnings.push(
-            `Reviewer ${options.agent} marked done for task ${taskNumber} but no review artifact exists.`,
-          );
+        if (evidence.verdict === 'needs_review' && !evidence.has_review) {
+          warnings.push(`Task ${taskNumber} still requires review before it is complete.`);
+        }
+        if (evidence.verdict === 'needs_closure') {
+          warnings.push(`Task ${taskNumber} is not complete by evidence and still needs closure repair.`);
         }
       }
     }
 
-    // Strict mode: fail on warnings
-    if (options.strict && warnings.length > 0) {
+    const shouldFailOnWarnings = warnings.length > 0 && !options.allowIncomplete;
+    if (shouldFailOnWarnings) {
       return {
         exitCode: ExitCode.GENERAL_ERROR,
         result: {
           status: 'error',
-          error: warnings.join('\n'),
-          strict: true,
+          error: `${warnings.join('\n')}\nSubmit the missing report/review evidence first, or rerun with --allow-incomplete to record roster availability only.`,
+          strict: options.strict ?? true,
+          allow_incomplete: false,
         },
       };
     }
@@ -423,6 +463,7 @@ export async function taskRosterDoneCommand(
           last_done: taskNumber,
           roster: updatedRoster,
           warnings: warnings.length > 0 ? warnings : undefined,
+          allow_incomplete: options.allowIncomplete || undefined,
           guidance: formatGuidanceForJson(guidance),
         },
       };
@@ -435,9 +476,16 @@ export async function taskRosterDoneCommand(
       for (const w of warnings) {
         lines.push(`⚠ ${w}`);
       }
-      lines.push(`Run \`narada task evidence ${taskNumber}\` for details.`);
+      if (options.verbose) {
+        lines.push(`Run \`narada task evidence ${taskNumber}\` for details.`);
+      } else {
+        lines.push(`Run \`narada task evidence ${taskNumber}\` for details, or use --verbose for guidance.`);
+      }
+      if (options.allowIncomplete) {
+        lines.push('Incomplete evidence was explicitly allowed; this records roster availability only.');
+      }
     }
-    if (guidance.length > 0) {
+    if (options.verbose && guidance.length > 0) {
       lines.push('');
       lines.push('Active guidance:');
       lines.push(...formatGuidanceForHumans(guidance));
@@ -488,7 +536,7 @@ export async function taskRosterIdleCommand(
     const lines: string[] = [
       `Marked ${options.agent} as idle`,
     ];
-    if (guidance.length > 0) {
+    if (options.verbose && guidance.length > 0) {
       lines.push('');
       lines.push('Active guidance:');
       lines.push(...formatGuidanceForHumans(guidance));

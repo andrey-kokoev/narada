@@ -545,6 +545,54 @@ describe('checkHardGates', () => {
     expect(gate?.passed).toBe(false);
   });
 
+  it('fails task_not_blocked gate when task is in blocked range', () => {
+    const candidate = {
+      task_id: 't1',
+      task_number: 1,
+      agent_id: 'a1',
+      score: 0.9,
+      confidence: 'high' as const,
+      dry_run_result: { status: 'dry_run_ok' },
+      blocked_by_policy: ['task is in blocked range 1-10'],
+    };
+
+    const results = checkHardGates({
+      policy: basePolicy,
+      plan: basePlan,
+      candidate,
+      rosterAgent: { status: 'idle', updated_at: new Date(Date.now() - 10 * 60000).toISOString() },
+      taskStatus: 'opened',
+      todaysPromotionsForAgent: 0,
+    });
+
+    const gate = results.find((g) => g.gate === 'task_not_blocked');
+    expect(gate?.passed).toBe(false);
+  });
+
+  it('fails agent_not_blocked gate when agent is blocked', () => {
+    const candidate = {
+      task_id: 't1',
+      task_number: 1,
+      agent_id: 'a1',
+      score: 0.9,
+      confidence: 'high' as const,
+      dry_run_result: { status: 'dry_run_ok' },
+      blocked_by_policy: ['agent a1 is in blocked_agent_ids'],
+    };
+
+    const results = checkHardGates({
+      policy: basePolicy,
+      plan: basePlan,
+      candidate,
+      rosterAgent: { status: 'idle', updated_at: new Date(Date.now() - 10 * 60000).toISOString() },
+      taskStatus: 'opened',
+      todaysPromotionsForAgent: 0,
+    });
+
+    const gate = results.find((g) => g.gate === 'agent_not_blocked');
+    expect(gate?.passed).toBe(false);
+  });
+
   it('returns all gate results, not just failures', () => {
     const candidate = {
       task_id: 't1',

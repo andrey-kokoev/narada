@@ -71,6 +71,7 @@ describe('task claim operator', () => {
     expect(assignment.assignments[0].agent_id).toBe('test-agent');
     expect(assignment.assignments[0].claim_context).toBe('Testing claim');
     expect(assignment.assignments[0].released_at).toBeNull();
+    expect(assignment.assignments[0].intent).toBe('primary');
   });
 
   it('fails when task is already claimed', async () => {
@@ -209,6 +210,30 @@ describe('task claim operator', () => {
     );
 
     // Create main task with depends_on: [998]
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+      '---\ntask_id: 999\nstatus: opened\ndepends_on: [998]\n---\n\n# Task 999: Test Task\n',
+    );
+
+    const result = await taskClaimCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+  });
+
+  it('treats an executable dependency as satisfied even when a chapter range file shares its number', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260423-998-1000-synthetic-chapter.md'),
+      '---\nstatus: opened\n---\n\n# Synthetic Chapter\n',
+    );
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-998-dep-task.md'),
+      '---\ntask_id: 998\nstatus: closed\n---\n\n# Task 998: Dependency\n',
+    );
     writeFileSync(
       join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
       '---\ntask_id: 999\nstatus: opened\ndepends_on: [998]\n---\n\n# Task 999: Test Task\n',

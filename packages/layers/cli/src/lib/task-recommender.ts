@@ -79,6 +79,8 @@ export interface RecommendationOptions {
   taskFilter?: string;
   limit?: number;
   principalRuntimePath?: string | null;
+  /** Architect principal ID that produced this recommendation. Defaults to 'system'. */
+  architectId?: string;
 }
 
 export interface PrincipalSnapshot {
@@ -86,6 +88,36 @@ export interface PrincipalSnapshot {
   state: string;
   budget_remaining: number | null;
   active_work_item_id: string | null;
+}
+
+/**
+ * Per-agent score summary for a specific task candidate.
+ * Used by downstream consumers that need scoring without full assignment context.
+ */
+export interface AgentCandidateScore {
+  agent_id: string;
+  agent_role: string;
+  score: number;
+  confidence: 'high' | 'medium' | 'low';
+  breakdown: ScoreBreakdown;
+  reasons: RecommendationReason[];
+  risks: RecommendationRisk[];
+}
+
+/**
+ * Snapshot of all inputs consumed by the recommendation engine at generation time.
+ * Advisory diagnostic surface for debugging recommendation quality.
+ */
+export interface RecommendationInputSnapshot {
+  snapshot_id: string;
+  captured_at: string;
+  task_count: number;
+  runnable_task_count: number;
+  agent_count: number;
+  principal_runtime_available: boolean;
+  assignment_count: number;
+  report_count: number;
+  review_count: number;
 }
 
 // Internal task representation used by the recommender
@@ -642,10 +674,74 @@ export async function generateRecommendations(
   return {
     recommendation_id: `rec-${Date.now()}`,
     generated_at: now,
-    recommender_id: 'system',
+    recommender_id: options.architectId ?? 'system',
     primary: limitedPrimary[0] ?? null,
     alternatives: limitedPrimary.slice(1).concat(alternativeList),
     abstained,
     summary,
+  };
+}
+
+/**
+ * Convert a CandidateAssignment into a per-agent score summary.
+ */
+export function toAgentCandidateScore(cand: CandidateAssignment): AgentCandidateScore {
+  return {
+    agent_id: cand.principal_id,
+    agent_role: cand.principal_type,
+    score: cand.score,
+    confidence: cand.confidence,
+    breakdown: cand.breakdown,
+    reasons: cand.reasons,
+    risks: cand.risks,
+  };
+}
+
+/**
+ * Build an input snapshot describing what the recommender consumed.
+ */
+export async function buildInputSnapshot(
+  options: RecommendationOptions,
+): Promise<RecommendationInputSnapshot> {
+  const cwd = resolve(options.cwd);
+  const tasksDir = join(cwd, '.ai', 'tasks');
+  const taskFiles = (await readdir(tasksDir).catch(() => [] as string[])).filter((f) => f.endsWith('.md'));
+
+  const roster = await loadRoster(cwd).catch(() => ({ version: 1, updated_at: new Date().toISOString(), agents: [] }) as AgentRoster);
+  const runtimeSnapshots = await loadPrincipalRuntimeSnapshots(cwd);
+
+  const assignmentDir = join(cwd, '.ai', 'tasks', 'assignments');
+  const assignmentFiles = (await readdir(assignmentDir).catch(() => [] as string[])).filter((f) => f.endsWith('.json'));
+
+  const reportsDir = join(cwd, '.ai', 'tasks', 'reports');
+  const reportFiles = (await readdir(reportsDir).catch(() => [] as string[])).filter((f) => f.endsWith('.json'));
+
+  const reviewsDir = join(cwd, '.ai', 'reviews');
+  const reviewFiles = (await readdir(reviewsDir).catch(() => [] as string[])).filter((f) => f.endsWith('.json'));
+
+  let runnableCount = 0;
+  for (const f of taskFiles) {
+    try {
+      const content = await readFile(join(tasksDir, f), 'utf8');
+      const { frontMatter } = parseFrontMatter(content);
+      const status = frontMatter.status as string | undefined;
+      if (status === 'opened' || status === 'needs_continuation') {
+        runnableCount++;
+      }
+    } catch {
+      // ignore unreadable
+    }
+  }
+
+  return {
+    snapshot_id: `snap-${Date.now()}`,
+    captured_at: new Date().toISOString(),
+    task_count: taskFiles.length,
+    runnable_task_count: runnableCount,
+    agent_count: roster.agents.length,
+    principal_runtime_available: runtimeSnapshots.size > 0,
+    assignment_count: assignmentFiles.length,
+    report_count: reportFiles.length,
+    review_count: reviewFiles.length,
   };
 }

@@ -199,6 +199,32 @@ Proceed directly. This is a narrow corrective task; use focused edits only.
 - Do not create derivative task-status files.
 - Do not mutate live external systems unless explicitly authorized.
 
+## Crossing Regime
+
+<!--
+Fill in ONLY if this task introduces a new durable authority-changing boundary.
+If the task uses an existing canonical crossing (e.g., Source → Fact, Decision → Intent),
+leave this section commented and delete it before closing.
+
+See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
+
+- source_zone:
+- destination_zone:
+- authority_owner:
+- admissibility_regime:
+- crossing_artifact:
+- confirmation_rule:
+- anti_collapse_invariant:
+-->
+
+## Execution Notes
+
+<!-- Record what was done, decisions made, and files changed during execution. -->
+
+## Verification
+
+<!-- Record commands run, results observed, and how correctness was checked. -->
+
 ## Acceptance Criteria
 
 - [ ] TBD

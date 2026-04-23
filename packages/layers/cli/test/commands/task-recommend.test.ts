@@ -100,9 +100,25 @@ describe('task recommend operator', () => {
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     const rec = result.result as { abstained: Array<{ task_id: string; reason: string }> };
-    const blocked = rec.abstained.find((a) => a.task_id === '20260420-997-blocked-task');
-    // Task 997 depends_on [998], so it should be abstained (not in runnable tasks)
+    const blocked = rec.abstained.find((a) => a.task_id.includes('997'));
     expect(blocked).toBeDefined();
+    expect(blocked!.reason).toContain('Blocked');
+  });
+
+  it('records architect provenance when --architect is provided', async () => {
+    const result = await taskRecommendCommand({ cwd: tempDir, format: 'json', architect: 'architect-codex' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const rec = result.result as { recommender_id: string };
+    expect(rec.recommender_id).toBe('architect-codex');
+  });
+
+  it('defaults recommender_id to system when no architect is provided', async () => {
+    const result = await taskRecommendCommand({ cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const rec = result.result as { recommender_id: string };
+    expect(rec.recommender_id).toBe('system');
   });
 
   it('prefers idle agent over working agent', async () => {
@@ -283,5 +299,180 @@ describe('task recommend operator', () => {
     const inReviewAbstained = rec.abstained.find((a) => a.task_id === '20260420-996-review-task');
     expect(inReviewAbstained).toBeDefined();
     expect(inReviewAbstained!.reason).toContain('review or closure');
+  });
+
+  it('warns when posture is missing', async () => {
+    const result = await taskRecommendCommand({ cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const rec = result.result as { posture_warning?: string };
+    expect(rec.posture_warning).toBeDefined();
+    expect(rec.posture_warning).toContain('No active CCC posture');
+  });
+
+  it('warns when posture is expired', async () => {
+    mkdirSync(join(tempDir, '.ai', 'postures'), { recursive: true });
+    writeFileSync(
+      join(tempDir, '.ai', 'postures', 'current.json'),
+      JSON.stringify({
+        posture_id: 'expired',
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        source: 'manual',
+        coordinates: {
+          semantic_resolution: { reading: 'stable', evidence: 'ok' },
+          invariant_preservation: { reading: 'strong', evidence: 'ok' },
+          constructive_executability: { reading: 'strong', evidence: 'ok' },
+          grounded_universalization: { reading: 'healthy', evidence: 'ok' },
+          authority_reviewability: { reading: 'strong', evidence: 'ok' },
+          teleological_pressure: { reading: 'focused', evidence: 'ok' },
+        },
+        counterweight_intent: 'test',
+        recommended_next_slices: [],
+        expires_at: '2020-01-01T00:00:00Z',
+      }),
+    );
+
+    const result = await taskRecommendCommand({ cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const rec = result.result as { posture_warning?: string };
+    expect(rec.posture_warning).toBeDefined();
+    expect(rec.posture_warning).toContain('expired');
+  });
+
+  it('boosts runnable-proof tasks when constructive_executability is low', async () => {
+    // Add a task with "test" in the title
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-995-test-task.md'),
+      '---\ntask_id: 995\nstatus: opened\n---\n\n# Task 995: Add Test Fixture\n\nImplement a test fixture.\n',
+    );
+
+    mkdirSync(join(tempDir, '.ai', 'postures'), { recursive: true });
+    writeFileSync(
+      join(tempDir, '.ai', 'postures', 'current.json'),
+      JSON.stringify({
+        posture_id: 'low-exec',
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        source: 'manual',
+        coordinates: {
+          semantic_resolution: { reading: 'stable', evidence: 'ok' },
+          invariant_preservation: { reading: 'strong', evidence: 'ok' },
+          constructive_executability: { reading: 'weak', evidence: 'build is red' },
+          grounded_universalization: { reading: 'healthy', evidence: 'ok' },
+          authority_reviewability: { reading: 'strong', evidence: 'ok' },
+          teleological_pressure: { reading: 'focused', evidence: 'ok' },
+        },
+        counterweight_intent: 'test',
+        recommended_next_slices: [],
+        expires_at: '2026-12-31T23:59:59Z',
+      }),
+    );
+
+    // Get baseline without posture
+    const baselineResult = await taskRecommendCommand({ cwd: tempDir, format: 'json', ignorePosture: true });
+    const baseline = baselineResult.result as { alternatives: Array<{ task_id: string; score: number }> };
+    const baselineTestScore = baseline.alternatives.find((a) => a.task_id === '20260420-995-test-task')?.score ?? 0;
+
+    // Get with posture
+    const postureResult = await taskRecommendCommand({ cwd: tempDir, format: 'json' });
+    const postureRec = postureResult.result as { alternatives: Array<{ task_id: string; score: number }>; posture_adjustments?: string[] };
+    const postureTestScore = postureRec.alternatives.find((a) => a.task_id === '20260420-995-test-task')?.score ?? 0;
+
+    expect(postureRec.posture_adjustments).toBeDefined();
+    expect(postureRec.posture_adjustments!.some((r) => r.includes('constructive_executability'))).toBe(true);
+    // The test task should be boosted relative to baseline
+    expect(postureTestScore).toBeGreaterThanOrEqual(baselineTestScore);
+  });
+
+  it('penalizes meta tasks when teleological_pressure is unfocused', async () => {
+    // Add a meta task
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-994-meta-task.md'),
+      '---\ntask_id: 994\nstatus: opened\n---\n\n# Task 994: Governance Contract Update\n\nUpdate the governance contract.\n',
+    );
+
+    mkdirSync(join(tempDir, '.ai', 'postures'), { recursive: true });
+    writeFileSync(
+      join(tempDir, '.ai', 'postures', 'current.json'),
+      JSON.stringify({
+        posture_id: 'diffuse',
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        source: 'manual',
+        coordinates: {
+          semantic_resolution: { reading: 'stable', evidence: 'ok' },
+          invariant_preservation: { reading: 'strong', evidence: 'ok' },
+          constructive_executability: { reading: 'strong', evidence: 'ok' },
+          grounded_universalization: { reading: 'healthy', evidence: 'ok' },
+          authority_reviewability: { reading: 'strong', evidence: 'ok' },
+          teleological_pressure: { reading: 'diffuse', evidence: 'no clear target' },
+        },
+        counterweight_intent: 'test',
+        recommended_next_slices: [],
+        expires_at: '2026-12-31T23:59:59Z',
+      }),
+    );
+
+    const result = await taskRecommendCommand({ cwd: tempDir, format: 'json' });
+    const rec = result.result as { posture_adjustments?: string[] };
+
+    expect(rec.posture_adjustments).toBeDefined();
+    expect(rec.posture_adjustments!.some((r) => r.includes('teleological_pressure'))).toBe(true);
+  });
+
+  it('--ignore-posture disables CCC scoring', async () => {
+    mkdirSync(join(tempDir, '.ai', 'postures'), { recursive: true });
+    writeFileSync(
+      join(tempDir, '.ai', 'postures', 'current.json'),
+      JSON.stringify({
+        posture_id: 'ignore-test',
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        source: 'manual',
+        coordinates: {
+          semantic_resolution: { reading: 'stable', evidence: 'ok' },
+          invariant_preservation: { reading: 'strong', evidence: 'ok' },
+          constructive_executability: { reading: 'weak', evidence: 'build is red' },
+          grounded_universalization: { reading: 'healthy', evidence: 'ok' },
+          authority_reviewability: { reading: 'strong', evidence: 'ok' },
+          teleological_pressure: { reading: 'focused', evidence: 'ok' },
+        },
+        counterweight_intent: 'test',
+        recommended_next_slices: [],
+        expires_at: '2026-12-31T23:59:59Z',
+      }),
+    );
+
+    const result = await taskRecommendCommand({ cwd: tempDir, format: 'json', ignorePosture: true });
+    const rec = result.result as { posture_adjustments?: string[]; posture_warning?: string };
+
+    expect(rec.posture_adjustments).toBeUndefined();
+    expect(rec.posture_warning).toBeUndefined();
+  });
+
+  it('human default output is terse and omits guidance', async () => {
+    const logs: string[] = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((msg: string) => { logs.push(msg); });
+
+    const result = await taskRecommendCommand({ cwd: tempDir, format: 'human' });
+
+    spy.mockRestore();
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const hasGuidance = logs.some((l) => l.includes('Active guidance:'));
+    expect(hasGuidance).toBe(false);
+  });
+
+  it('human verbose output includes guidance', async () => {
+    const logs: string[] = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((msg: string) => { logs.push(msg); });
+
+    const result = await taskRecommendCommand({ cwd: tempDir, format: 'human', verbose: true });
+
+    spy.mockRestore();
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const hasGuidance = logs.some((l) => l.includes('Active guidance:'));
+    expect(hasGuidance).toBe(true);
   });
 });

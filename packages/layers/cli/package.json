@@ -53,7 +53,8 @@
     "@narada2/search": "workspace:*",
     "@narada2/windows-site": "workspace:*",
     "@narada2/macos-site": "workspace:*",
-    "@narada2/linux-site": "workspace:*"
+    "@narada2/linux-site": "workspace:*",
+    "@narada2/cloudflare-site": "workspace:*"
   },
   "devDependencies": {
     "@types/cli-progress": "^3.11.6",

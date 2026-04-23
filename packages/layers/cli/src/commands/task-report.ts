@@ -14,10 +14,13 @@ import {
   readTaskFile,
   writeTaskFile,
   getActiveAssignment,
+  getActiveContinuation,
+  getAssignmentIntent,
   isValidTransition,
   updateAgentRosterEntry,
   createReportId,
   saveReport,
+  findReportByAssignmentId,
   type WorkResultReport,
 } from '../lib/task-governance.js';
 import { ExitCode } from '../lib/exit-codes.js';
@@ -42,6 +45,7 @@ export interface TaskReportOptions {
   residuals?: string;
   cwd?: string;
   principalStateDir?: string;
+  verbose?: boolean;
 }
 
 export async function taskReportCommand(
@@ -116,7 +120,8 @@ export async function taskReportCommand(
   }
 
   // Read task file
-  const { frontMatter, body } = await readTaskFile(taskFile.path);
+  const { frontMatter, body: rawBody } = await readTaskFile(taskFile.path);
+  let body = rawBody;
 
   // Task must be claimed
   if (frontMatter.status !== 'claimed') {
@@ -142,6 +147,8 @@ export async function taskReportCommand(
   }
 
   const activeAssignment = getActiveAssignment(assignmentRecord);
+  const activeContinuation = getActiveContinuation(assignmentRecord, agentId);
+
   if (!activeAssignment) {
     return {
       exitCode: ExitCode.GENERAL_ERROR,
@@ -152,12 +159,63 @@ export async function taskReportCommand(
     };
   }
 
-  if (activeAssignment.agent_id !== agentId) {
+  const isPrimary = activeAssignment.agent_id === agentId;
+  const isContinuation = activeContinuation != null;
+  const activeIntent = getAssignmentIntent(activeAssignment);
+
+  // Review-intent agents should submit reviews, not WorkResultReports
+  if (activeIntent === 'review' && isPrimary) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: {
+        status: 'error',
+        error: `Agent ${agentId} has review intent for task ${taskFile.taskId}; use 'narada task review' instead of 'narada task report'.`,
+      },
+    };
+  }
+
+  if (!isPrimary && !isContinuation) {
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: {
         status: 'error',
         error: `Task ${taskFile.taskId} is claimed by ${activeAssignment.agent_id}, not ${agentId}`,
+      },
+    };
+  }
+
+  const assignmentId = isContinuation
+    ? `${taskFile.taskId}-continuation-${activeContinuation!.started_at}`
+    : `${taskFile.taskId}-${activeAssignment.claimed_at}`;
+
+  // ── Idempotency check ──
+  // Before any mutation or status transition, detect existing report for this assignment.
+  const existingReport = await findReportByAssignmentId(cwd, assignmentId);
+  if (existingReport) {
+    if (fmt.getFormat() === 'json') {
+      return {
+        exitCode: ExitCode.SUCCESS,
+        result: {
+          status: 'success',
+          report_id: existingReport.report_id,
+          task_id: taskFile.taskId,
+          agent_id: agentId,
+          new_status: frontMatter.status,
+          note: 'Report already exists for this assignment; returning existing report without duplicate.',
+        },
+      };
+    }
+
+    fmt.message(`Report already exists for this assignment: ${existingReport.report_id}`, 'warning');
+    fmt.message('Returning existing report without creating a duplicate.', 'info');
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: {
+        status: 'success',
+        report_id: existingReport.report_id,
+        task_id: taskFile.taskId,
+        agent_id: agentId,
+        new_status: frontMatter.status,
       },
     };
   }
@@ -252,14 +310,14 @@ export async function taskReportCommand(
   // ── Mutation phase ──
 
   const now = new Date().toISOString();
-  const reportId = createReportId(taskFile.taskId, agentId);
+  const reportId = createReportId(taskFile.taskId, agentId, assignmentId);
 
   const report: WorkResultReport = {
     report_id: reportId,
     task_number: taskNumber,
     task_id: taskFile.taskId,
     agent_id: agentId,
-    assignment_id: `${taskFile.taskId}-${activeAssignment.claimed_at}`,
+    assignment_id: assignmentId,
     reported_at: now,
     summary,
     changed_files: changedFiles,
@@ -271,14 +329,35 @@ export async function taskReportCommand(
 
   await saveReport(cwd, report);
 
-  // Release assignment
-  activeAssignment.released_at = now;
-  activeAssignment.release_reason = 'completed';
-  await saveAssignment(cwd, assignmentRecord);
+  // Scaffold missing completion sections into the task file
+  const missingSections: string[] = [];
+  if (!/##\s*Execution Notes\s*\n/i.test(body)) {
+    missingSections.push('## Execution Notes\n\n<!-- Record what was done, decisions made, and files changed. -->\n');
+  }
+  if (!/##\s*Verification\s*\n/i.test(body)) {
+    missingSections.push('## Verification\n\n<!-- Record commands run, results observed, and how correctness was checked. -->\n');
+  }
+  if (missingSections.length > 0) {
+    body = body.trimEnd() + '\n\n' + missingSections.join('\n');
+  }
 
-  // Update task status
-  frontMatter.status = 'in_review';
-  await writeTaskFile(taskFile.path, frontMatter, body);
+  if (isContinuation) {
+    // Mark continuation as completed; do not touch primary assignment or task status
+    activeContinuation!.completed_at = now;
+    await saveAssignment(cwd, assignmentRecord);
+    if (missingSections.length > 0) {
+      await writeTaskFile(taskFile.path, frontMatter, body);
+    }
+  } else {
+    // Primary agent: normal release flow
+    activeAssignment.released_at = now;
+    activeAssignment.release_reason = 'completed';
+    await saveAssignment(cwd, assignmentRecord);
+
+    // Update task status
+    frontMatter.status = 'in_review';
+    await writeTaskFile(taskFile.path, frontMatter, body);
+  }
 
   // Update roster
   await updateAgentRosterEntry(cwd, agentId, {
@@ -323,7 +402,7 @@ export async function taskReportCommand(
   }
 
   fmt.message(`Reported task ${taskFile.taskId}: in_review`, 'success');
-  if (guidance.length > 0) {
+  if (options.verbose && guidance.length > 0) {
     fmt.message('Active guidance:', 'info');
     for (const line of formatGuidanceForHumans(guidance)) {
       fmt.message(line, 'info');

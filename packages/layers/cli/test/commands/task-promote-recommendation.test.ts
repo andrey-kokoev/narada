@@ -64,7 +64,7 @@ function setupRepo(tempDir: string) {
   // Opened task with satisfied dependency
   writeFileSync(
     join(tempDir, '.ai', 'tasks', '20260422-050-dep-satisfied.md'),
-    '---\ntask_id: 50\nstatus: closed\n---\n\n# Task 50 — Completed dependency\n',
+    '---\ntask_id: 50\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 50 — Completed dependency\n',
   );
 
   writeFileSync(
@@ -429,6 +429,26 @@ describe('task promote-recommendation operator', () => {
     expect(promo.recommendation_snapshot.generated_at).toBeDefined();
     expect(promo.validation_results).toBeInstanceOf(Array);
     expect(promo.validation_results.length).toBeGreaterThanOrEqual(7);
+  });
+
+  it('records architect-operator pair provenance in promotion request', async () => {
+    await taskPromoteRecommendationCommand({
+      cwd: tempDir,
+      format: 'json',
+      taskNumber: '100',
+      agent: 'a1',
+      by: 'operator-kimi',
+    });
+
+    const promoFiles = readdirSync(join(tempDir, '.ai', 'tasks', 'promotions'));
+    const promo = JSON.parse(
+      readFileSync(join(tempDir, '.ai', 'tasks', 'promotions', promoFiles[0]!), 'utf8'),
+    );
+
+    // architect_id should be present (defaults to 'system' when no architect specified)
+    expect(promo.architect_id).toBeDefined();
+    expect(promo.requested_by).toBe('operator-kimi');
+    expect(promo.recommendation_snapshot.recommender_id).toBe(promo.architect_id);
   });
 
   it('fails atomically when validation check fails (no partial mutations)', async () => {

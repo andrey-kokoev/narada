@@ -37,7 +37,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@narada2/charters": "workspace:*"
+    "@narada2/charters": "workspace:*",
+    "@narada2/windows-site": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260421.1",

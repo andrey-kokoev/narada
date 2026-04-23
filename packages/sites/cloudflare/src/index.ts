@@ -16,6 +16,8 @@ import { executeSiteOperatorAction, type SiteOperatorActionPayload } from "./ope
 import { runCycle } from "./runner.js";
 import type { SiteHealthRecord, CycleTraceRecord } from "./types.js";
 
+export { cloudflareSiteAdapter, CloudflareSiteObservationApi, CloudflareSiteControlClient } from "./console-adapter.js";
+
 const SUBSTRATE = "cloudflare-workers-do-sandbox";
 
 export default {

@@ -48,12 +48,15 @@ export interface AssignmentPromotionRequest {
   task_id: string;
   task_number: number | null;
   agent_id: string;
+  /** Architect principal ID that produced the recommendation being promoted. */
+  architect_id: string | null;
   requested_by: string;
   requested_at: string;
   executed_at: string | null;
   status: 'requested' | 'executed' | 'rejected' | 'stale' | 'failed';
   recommendation_snapshot: {
     generated_at: string;
+    recommender_id: string;
     primary: {
       task_id: string;
       principal_id: string;
@@ -323,6 +326,7 @@ export async function taskPromoteRecommendationCommand(
   // ── Build snapshot ──
   const snapshot = {
     generated_at: recomputedRec?.generated_at ?? now,
+    recommender_id: recomputedRec?.recommender_id ?? 'unknown',
     primary: candidate
       ? {
           task_id: candidate.task_id,
@@ -387,6 +391,7 @@ export async function taskPromoteRecommendationCommand(
       task_id: taskFile.taskId,
       task_number: Number.isFinite(Number(taskNumber)) ? Number(taskNumber) : null,
       agent_id: agentId,
+      architect_id: snapshot.recommender_id,
       requested_by: operatorId,
       requested_at: now,
       executed_at: null,
@@ -429,6 +434,7 @@ export async function taskPromoteRecommendationCommand(
       task_id: taskFile.taskId,
       task_number: Number.isFinite(Number(taskNumber)) ? Number(taskNumber) : null,
       agent_id: agentId,
+      architect_id: snapshot.recommender_id,
       requested_by: operatorId,
       requested_at: now,
       executed_at: null,
@@ -459,6 +465,7 @@ export async function taskPromoteRecommendationCommand(
     task_id: taskFile.taskId,
     task_number: Number.isFinite(Number(taskNumber)) ? Number(taskNumber) : null,
     agent_id: agentId,
+    architect_id: snapshot.recommender_id,
     requested_by: operatorId,
     requested_at: now,
     executed_at: now,

@@ -17,6 +17,13 @@ import type {
 } from "./types.js";
 import { resolveSiteRoot } from "./path-utils.js";
 import { SqliteSiteCoordinator, openCoordinatorDb } from "./coordinator.js";
+import type {
+  SiteObservationApi,
+  StuckWorkItem,
+  PendingOutboundCommand,
+  PendingDraft,
+  CredentialRequirement,
+} from "./site-observation.js";
 
 export interface WindowsSiteStatus {
   siteId: string;
@@ -144,6 +151,207 @@ function isSiteDir(siteRoot: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Read-only observation API implementation for a single Windows Site.
+ *
+ * Queries the Site's coordinator SQLite directly. Never mutates Site state.
+ */
+export class WindowsSiteObservationApi implements SiteObservationApi {
+  private siteId: string;
+  private variant: WindowsSiteVariant;
+
+  constructor(siteId: string, variant: WindowsSiteVariant) {
+    this.siteId = siteId;
+    this.variant = variant;
+  }
+
+  async getHealth(): Promise<SiteHealthRecord> {
+    return getSiteHealth(this.siteId, this.variant);
+  }
+
+  async getStuckWorkItems(): Promise<StuckWorkItem[]> {
+    const db = await openCoordinatorDb(this.siteId, this.variant);
+    try {
+      // Schema may not exist yet on a freshly created site
+      const tableCheck = db.prepare(
+        `select 1 from sqlite_master where type = 'table' and name = 'work_items'`
+      ).get() as { "1": number } | undefined;
+      if (!tableCheck) return [];
+
+      const rows = db.prepare(
+        `select
+           work_item_id,
+           scope_id,
+           status,
+           context_id,
+           updated_at as last_updated_at,
+           coalesce(error_message, status) as summary
+         from work_items
+         where status in ('failed_retryable', 'leased', 'executing')
+           and (
+             (status = 'leased' and updated_at < datetime('now', '-120 minutes'))
+             or (status = 'executing' and updated_at < datetime('now', '-30 minutes'))
+             or (status = 'failed_retryable')
+           )
+         order by priority desc, updated_at asc`
+      ).all() as Array<{
+        work_item_id: string;
+        scope_id: string;
+        status: string;
+        context_id: string;
+        last_updated_at: string;
+        summary: string;
+      }>;
+
+      return rows.map((r) => ({
+        work_item_id: r.work_item_id,
+        scope_id: r.scope_id,
+        status: r.status as StuckWorkItem["status"],
+        context_id: r.context_id,
+        last_updated_at: r.last_updated_at,
+        summary: r.summary,
+      }));
+    } finally {
+      db.close();
+    }
+  }
+
+  async getPendingOutboundCommands(): Promise<PendingOutboundCommand[]> {
+    const db = await openCoordinatorDb(this.siteId, this.variant);
+    try {
+      const tableCheck = db.prepare(
+        `select 1 from sqlite_master where type = 'table' and name = 'outbound_handoffs'`
+      ).get() as { "1": number } | undefined;
+      if (!tableCheck) return [];
+
+      const rows = db.prepare(
+        `select
+           outbound_id,
+           scope_id,
+           context_id,
+           action_type,
+           status,
+           created_at,
+           action_type || ' — ' || status as summary
+         from outbound_handoffs
+         where status in ('pending', 'draft_creating', 'sending')
+           and (
+             (status = 'pending' and created_at < datetime('now', '-15 minutes'))
+             or (status = 'draft_creating' and created_at < datetime('now', '-10 minutes'))
+             or (status = 'sending' and created_at < datetime('now', '-5 minutes'))
+           )
+         order by created_at asc`
+      ).all() as Array<{
+        outbound_id: string;
+        scope_id: string;
+        context_id: string;
+        action_type: string;
+        status: string;
+        created_at: string;
+        summary: string;
+      }>;
+
+      return rows.map((r) => ({
+        outbound_id: r.outbound_id,
+        scope_id: r.scope_id,
+        context_id: r.context_id,
+        action_type: r.action_type,
+        status: r.status,
+        created_at: r.created_at,
+        summary: r.summary,
+      }));
+    } finally {
+      db.close();
+    }
+  }
+
+  async getPendingDrafts(): Promise<PendingDraft[]> {
+    const db = await openCoordinatorDb(this.siteId, this.variant);
+    try {
+      const tableCheck = db.prepare(
+        `select 1 from sqlite_master where type = 'table' and name = 'outbound_handoffs'`
+      ).get() as { "1": number } | undefined;
+      if (!tableCheck) return [];
+
+      const rows = db.prepare(
+        `select
+           outbound_id as draft_id,
+           scope_id,
+           context_id,
+           status,
+           created_at,
+           action_type || ' draft' as summary
+         from outbound_handoffs
+         where status = 'draft_ready'
+         order by created_at asc`
+      ).all() as Array<{
+        draft_id: string;
+        scope_id: string;
+        context_id: string;
+        status: string;
+        created_at: string;
+        summary: string;
+      }>;
+
+      return rows.map((r) => ({
+        draft_id: r.draft_id,
+        scope_id: r.scope_id,
+        context_id: r.context_id,
+        status: r.status as PendingDraft["status"],
+        created_at: r.created_at,
+        summary: r.summary,
+      }));
+    } finally {
+      db.close();
+    }
+  }
+
+  async getCredentialRequirements(): Promise<CredentialRequirement[]> {
+    const db = await openCoordinatorDb(this.siteId, this.variant);
+    try {
+      const tableCheck = db.prepare(
+        `select 1 from sqlite_master where type = 'table' and name = 'site_health'`
+      ).get() as { "1": number } | undefined;
+      if (!tableCheck) return [];
+
+      const row = db.prepare(
+        `select status, message, updated_at from site_health where site_id = ?`
+      ).get(this.siteId) as
+        | { status: string; message: string; updated_at: string }
+        | undefined;
+
+      if (row && row.status === "auth_failed") {
+        return [
+          {
+            requirement_id: `auth:${this.siteId}`,
+            scope_id: this.siteId,
+            subtype: "interactive_auth_required",
+            summary: row.message,
+            remediation_command: "narada auth --site <site-id>",
+            remediation_description:
+              "Re-authenticate the Site's source connection (e.g., az login)",
+            requested_at: row.updated_at,
+          },
+        ];
+      }
+
+      return [];
+    } finally {
+      db.close();
+    }
+  }
+}
+
+/**
+ * Factory that creates a WindowsSiteObservationApi for a given site.
+ */
+export function createWindowsSiteObservationApi(
+  siteId: string,
+  variant: WindowsSiteVariant,
+): SiteObservationApi {
+  return new WindowsSiteObservationApi(siteId, variant);
 }
 
 /**

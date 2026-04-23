@@ -47,7 +47,7 @@ describe('chapter close operator — legacy chapter-name mode', () => {
   });
 
   it('dry-run reports task statuses without mutating', async () => {
-    writeTask(tempDir, '20260420-260-a.md', 'task_id: 260\nstatus: closed\n', 'Task 260', '\n## Chapter\n\nTest Chapter\n');
+    writeTask(tempDir, '20260420-260-a.md', 'task_id: 260\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n', 'Task 260', '\n## Chapter\n\nTest Chapter\n');
     writeTask(tempDir, '20260420-261-b.md', 'task_id: 261\nstatus: opened\n', 'Task 261', '\n## Chapter\n\nTest Chapter\n');
 
     const result = await chapterCloseCommand({
@@ -74,8 +74,8 @@ describe('chapter close operator — legacy chapter-name mode', () => {
   });
 
   it('non-dry-run writes artifact and transitions closed to confirmed', async () => {
-    writeTask(tempDir, '20260420-260-a.md', 'task_id: 260\nstatus: closed\n', 'Task 260', '\n## Chapter\n\nTest Chapter\n');
-    writeTask(tempDir, '20260420-261-b.md', 'task_id: 261\nstatus: confirmed\n', 'Task 261', '\n## Chapter\n\nTest Chapter\n');
+    writeTask(tempDir, '20260420-260-a.md', 'task_id: 260\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n', 'Task 260', '\n## Chapter\n\nTest Chapter\n');
+    writeTask(tempDir, '20260420-261-b.md', 'task_id: 261\nstatus: confirmed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n', 'Task 261', '\n## Chapter\n\nTest Chapter\n');
 
     const result = await chapterCloseCommand({
       chapterName: 'Test Chapter',
@@ -99,7 +99,7 @@ describe('chapter close operator — legacy chapter-name mode', () => {
   });
 
   it('non-dry-run fails when tasks are not terminal', async () => {
-    writeTask(tempDir, '20260420-260-a.md', 'task_id: 260\nstatus: closed\n', 'Task 260', '\n## Chapter\n\nTest Chapter\n');
+    writeTask(tempDir, '20260420-260-a.md', 'task_id: 260\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n', 'Task 260', '\n## Chapter\n\nTest Chapter\n');
     writeTask(tempDir, '20260420-261-b.md', 'task_id: 261\nstatus: opened\n', 'Task 261', '\n## Chapter\n\nTest Chapter\n');
 
     const result = await chapterCloseCommand({
@@ -124,7 +124,7 @@ describe('chapter close operator — legacy chapter-name mode', () => {
   });
 
   it('includes review findings in closure artifact', async () => {
-    writeTask(tempDir, '20260420-260-a.md', 'task_id: 260\nstatus: closed\n', 'Task 260', '\n## Chapter\n\nTest Chapter\n');
+    writeTask(tempDir, '20260420-260-a.md', 'task_id: 260\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n', 'Task 260', '\n## Chapter\n\nTest Chapter\n');
     writeFileSync(
       join(tempDir, '.ai', 'reviews', 'review-20260420-260-a-123.json'),
       JSON.stringify({
@@ -171,7 +171,7 @@ describe('chapter close operator — range-based mode', () => {
   });
 
   it('--start generates closure decision template with all sections', async () => {
-    writeTask(tempDir, '20260420-100-a.md', 'task_id: 100\nstatus: closed\n', 'Task 100 — A');
+    writeTask(tempDir, '20260420-100-a.md', 'task_id: 100\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n', 'Task 100 — A');
     writeTask(tempDir, '20260420-101-b.md', 'task_id: 101\nstatus: confirmed\n', 'Task 101 — B');
 
     const result = await chapterCloseCommand({
@@ -197,7 +197,7 @@ describe('chapter close operator — range-based mode', () => {
   });
 
   it('--start fails if tasks not terminal', async () => {
-    writeTask(tempDir, '20260420-100-a.md', 'task_id: 100\nstatus: closed\n', 'Task 100 — A');
+    writeTask(tempDir, '20260420-100-a.md', 'task_id: 100\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n', 'Task 100 — A');
     writeTask(tempDir, '20260420-101-b.md', 'task_id: 101\nstatus: opened\n', 'Task 101 — B');
 
     const result = await chapterCloseCommand({
@@ -218,7 +218,7 @@ describe('chapter close operator — range-based mode', () => {
   });
 
   it('--finish accepts closure and transitions tasks to confirmed', async () => {
-    writeTask(tempDir, '20260420-100-a.md', 'task_id: 100\nstatus: closed\n', 'Task 100 — A');
+    writeTask(tempDir, '20260420-100-a.md', 'task_id: 100\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n', 'Task 100 — A');
     writeTask(tempDir, '20260420-101-b.md', 'task_id: 101\nstatus: confirmed\n', 'Task 101 — B');
     // confirmed task was already validated when transitioned; no re-check needed for it
 
@@ -256,7 +256,7 @@ describe('chapter close operator — range-based mode', () => {
   });
 
   it('--finish fails if no draft exists', async () => {
-    writeTask(tempDir, '20260420-100-a.md', 'task_id: 100\nstatus: closed\n', 'Task 100 — A');
+    writeTask(tempDir, '20260420-100-a.md', 'task_id: 100\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n', 'Task 100 — A');
 
     const result = await chapterCloseCommand({
       range: '100',
@@ -272,7 +272,7 @@ describe('chapter close operator — range-based mode', () => {
   });
 
   it('--finish fails if draft is incomplete', async () => {
-    writeTask(tempDir, '20260420-100-a.md', 'task_id: 100\nstatus: closed\n', 'Task 100 — A');
+    writeTask(tempDir, '20260420-100-a.md', 'task_id: 100\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n', 'Task 100 — A');
     writeFileSync(
       join(tempDir, '.ai', 'decisions', '20260422-100-100-chapter-closure-draft.md'),
       '---\nstatus: draft\n---\n\n# Incomplete Draft\n',
@@ -330,7 +330,7 @@ describe('chapter close operator — range-based mode', () => {
   });
 
   it('no persistent chapter state file is created', async () => {
-    writeTask(tempDir, '20260420-100-a.md', 'task_id: 100\nstatus: closed\n', 'Task 100 — A');
+    writeTask(tempDir, '20260420-100-a.md', 'task_id: 100\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n', 'Task 100 — A');
 
     await chapterCloseCommand({
       range: '100',

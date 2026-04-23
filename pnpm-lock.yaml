@@ -51,6 +51,9 @@ importers:
       '@narada2/charters':
         specifier: workspace:*
         version: link:../../domains/charters
+      '@narada2/cloudflare-site':
+        specifier: workspace:*
+        version: link:../../sites/cloudflare
       '@narada2/control-plane':
         specifier: workspace:*
         version: link:../control-plane
@@ -190,6 +193,9 @@ importers:
       '@narada2/charters':
         specifier: workspace:*
         version: link:../../domains/charters
+      '@narada2/windows-site':
+        specifier: workspace:*
+        version: link:../windows
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20260421.1
@@ -209,6 +215,9 @@ importers:
       '@narada2/control-plane':
         specifier: workspace:*
         version: link:../../layers/control-plane
+      '@narada2/windows-site':
+        specifier: workspace:*
+        version: link:../windows
     devDependencies:
       better-sqlite3:
         specifier: ^12.9.0

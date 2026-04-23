@@ -8,6 +8,7 @@ import {
   getLastCycleTrace,
   discoverWindowsSites,
   resolveSiteVariant,
+  WindowsSiteObservationApi,
 } from "../../src/observability.js";
 import { SqliteSiteCoordinator, openCoordinatorDb } from "../../src/coordinator.js";
 
@@ -150,6 +151,185 @@ describe("observability", () => {
       process.env.NARADA_SITE_VARIANT = "native";
       expect(resolveSiteVariant("any")).toBe("native");
       delete process.env.NARADA_SITE_VARIANT;
+    });
+  });
+
+  describe("WindowsSiteObservationApi", () => {
+    it("returns stuck work items from real DB state", async () => {
+      mkdirSync(join(tempDir, "obs-site", "db"), { recursive: true });
+      const db = await openCoordinatorDb("obs-site", "wsl");
+      const coordinator = new SqliteSiteCoordinator(db);
+      coordinator.setHealth({
+        site_id: "obs-site",
+        status: "healthy",
+        last_cycle_at: null,
+        last_cycle_duration_ms: null,
+        consecutive_failures: 0,
+        message: "OK",
+        updated_at: new Date().toISOString(),
+      });
+
+      // Seed work_items via raw SQL (schema init happens in SqliteCoordinatorStore)
+      const { SqliteCoordinatorStore } = await import("@narada2/control-plane");
+      const coordStore = new SqliteCoordinatorStore({ db });
+      coordStore.initSchema();
+      db.prepare(
+        `insert into context_records (context_id, scope_id, primary_charter, secondary_charters_json, status, created_at, updated_at)
+         values (?, ?, ?, ?, ?, ?, ?)`
+      ).run("ctx-1", "scope-1", "test_charter", "[]", "active", "2026-04-20T09:00:00Z", "2026-04-20T09:00:00Z");
+      db.prepare(
+        `insert into work_items (work_item_id, context_id, scope_id, status, opened_for_revision_id, updated_at, created_at, error_message)
+         values (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run("wi-stuck-1", "ctx-1", "scope-1", "failed_retryable", "rev-1", "2026-04-20T10:00:00Z", "2026-04-20T09:00:00Z", "Sync error");
+      coordinator.close();
+
+      const api = new WindowsSiteObservationApi("obs-site", "wsl");
+      const stuck = await api.getStuckWorkItems();
+      expect(stuck).toHaveLength(1);
+      expect(stuck[0]!.work_item_id).toBe("wi-stuck-1");
+      expect(stuck[0]!.status).toBe("failed_retryable");
+    });
+
+    it("returns pending outbound commands from real DB state", async () => {
+      mkdirSync(join(tempDir, "obs-site-2", "db"), { recursive: true });
+      const db = await openCoordinatorDb("obs-site-2", "wsl");
+      const coordinator = new SqliteSiteCoordinator(db);
+      coordinator.setHealth({
+        site_id: "obs-site-2",
+        status: "healthy",
+        last_cycle_at: null,
+        last_cycle_duration_ms: null,
+        consecutive_failures: 0,
+        message: "OK",
+        updated_at: new Date().toISOString(),
+      });
+
+      const { SqliteOutboundStore } = await import("@narada2/control-plane");
+      const outboundStore = new SqliteOutboundStore({ db });
+      outboundStore.initSchema();
+      db.prepare(
+        `insert into outbound_handoffs (outbound_id, context_id, scope_id, action_type, status, latest_version, created_at, created_by, idempotency_key)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run("ob-1", "ctx-1", "scope-1", "send_reply", "pending", 1, "2026-04-20T08:00:00Z", "system", "ik-1");
+      coordinator.close();
+
+      const api = new WindowsSiteObservationApi("obs-site-2", "wsl");
+      const pending = await api.getPendingOutboundCommands();
+      expect(pending).toHaveLength(1);
+      expect(pending[0]!.outbound_id).toBe("ob-1");
+    });
+
+    it("returns pending drafts from real DB state", async () => {
+      mkdirSync(join(tempDir, "obs-site-3", "db"), { recursive: true });
+      const db = await openCoordinatorDb("obs-site-3", "wsl");
+      const coordinator = new SqliteSiteCoordinator(db);
+      coordinator.setHealth({
+        site_id: "obs-site-3",
+        status: "healthy",
+        last_cycle_at: null,
+        last_cycle_duration_ms: null,
+        consecutive_failures: 0,
+        message: "OK",
+        updated_at: new Date().toISOString(),
+      });
+
+      const { SqliteOutboundStore } = await import("@narada2/control-plane");
+      const outboundStore = new SqliteOutboundStore({ db });
+      outboundStore.initSchema();
+      db.prepare(
+        `insert into outbound_handoffs (outbound_id, context_id, scope_id, action_type, status, latest_version, created_at, created_by, idempotency_key)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run("draft-1", "ctx-1", "scope-1", "send_reply", "draft_ready", 1, "2026-04-20T08:00:00Z", "system", "ik-1");
+      coordinator.close();
+
+      const api = new WindowsSiteObservationApi("obs-site-3", "wsl");
+      const drafts = await api.getPendingDrafts();
+      expect(drafts).toHaveLength(1);
+      expect(drafts[0]!.draft_id).toBe("draft-1");
+    });
+
+    it("returns credential requirements when health is auth_failed", async () => {
+      mkdirSync(join(tempDir, "obs-site-4", "db"), { recursive: true });
+      const db = await openCoordinatorDb("obs-site-4", "wsl");
+      const coordinator = new SqliteSiteCoordinator(db);
+      coordinator.setHealth({
+        site_id: "obs-site-4",
+        status: "auth_failed",
+        last_cycle_at: null,
+        last_cycle_duration_ms: null,
+        consecutive_failures: 2,
+        message: "Token expired",
+        updated_at: "2026-04-20T10:00:00Z",
+      });
+      coordinator.close();
+
+      const api = new WindowsSiteObservationApi("obs-site-4", "wsl");
+      const creds = await api.getCredentialRequirements();
+      expect(creds).toHaveLength(1);
+      expect(creds[0]!.subtype).toBe("interactive_auth_required");
+      expect(creds[0]!.summary).toBe("Token expired");
+    });
+
+    it("returns empty arrays when tables do not exist", async () => {
+      mkdirSync(join(tempDir, "obs-site-5", "db"), { recursive: true });
+      const db = await openCoordinatorDb("obs-site-5", "wsl");
+      const coordinator = new SqliteSiteCoordinator(db);
+      coordinator.setHealth({
+        site_id: "obs-site-5",
+        status: "healthy",
+        last_cycle_at: null,
+        last_cycle_duration_ms: null,
+        consecutive_failures: 0,
+        message: "OK",
+        updated_at: new Date().toISOString(),
+      });
+      coordinator.close();
+      db.close();
+
+      const api = new WindowsSiteObservationApi("obs-site-5", "wsl");
+      expect(await api.getStuckWorkItems()).toEqual([]);
+      expect(await api.getPendingOutboundCommands()).toEqual([]);
+      expect(await api.getPendingDrafts()).toEqual([]);
+    });
+
+    it("does not mutate Site state", async () => {
+      mkdirSync(join(tempDir, "obs-site-6", "db"), { recursive: true });
+      const db = await openCoordinatorDb("obs-site-6", "wsl");
+      const coordinator = new SqliteSiteCoordinator(db);
+      coordinator.setHealth({
+        site_id: "obs-site-6",
+        status: "healthy",
+        last_cycle_at: null,
+        last_cycle_duration_ms: null,
+        consecutive_failures: 0,
+        message: "OK",
+        updated_at: "2026-04-20T10:00:00Z",
+      });
+
+      const { SqliteCoordinatorStore } = await import("@narada2/control-plane");
+      const coordStore = new SqliteCoordinatorStore({ db });
+      coordStore.initSchema();
+      db.prepare(
+        `insert into context_records (context_id, scope_id, primary_charter, secondary_charters_json, status, created_at, updated_at)
+         values (?, ?, ?, ?, ?, ?, ?)`
+      ).run("ctx-1", "scope-1", "test_charter", "[]", "active", "2026-04-20T09:00:00Z", "2026-04-20T09:00:00Z");
+      db.prepare(
+        `insert into work_items (work_item_id, context_id, scope_id, status, opened_for_revision_id, updated_at, created_at)
+         values (?, ?, ?, ?, ?, ?, ?)`
+      ).run("wi-1", "ctx-1", "scope-1", "opened", "rev-1", "2026-04-20T10:00:00Z", "2026-04-20T09:00:00Z");
+      coordinator.close();
+
+      const api = new WindowsSiteObservationApi("obs-site-6", "wsl");
+      await api.getStuckWorkItems();
+      await api.getPendingOutboundCommands();
+      await api.getPendingDrafts();
+      await api.getCredentialRequirements();
+
+      // Re-open and verify no mutations
+      const db2 = await openCoordinatorDb("obs-site-6", "wsl");
+      const row = db2.prepare(`select status from work_items where work_item_id = ?`).get("wi-1") as { status: string };
+      expect(row.status).toBe("opened");
+      db2.close();
     });
   });
 });

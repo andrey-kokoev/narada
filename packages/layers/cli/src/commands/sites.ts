@@ -49,14 +49,23 @@ export async function sitesListCommand(
     const entries: SiteListEntry[] = [];
     for (const site of sites) {
       try {
-        const status = await getWindowsSiteStatus(site.siteId, site.variant);
+        let health: { status: string; last_cycle_at: string | null; consecutive_failures: number };
+        if (site.variant === 'linux-user' || site.variant === 'linux-system') {
+          const mode = site.variant === 'linux-system' ? 'system' : 'user';
+          const { getSiteHealth } = await import('@narada2/linux-site');
+          const h = await getSiteHealth(site.siteId, mode);
+          health = { status: h.status, last_cycle_at: h.last_cycle_at, consecutive_failures: h.consecutive_failures };
+        } else {
+          const status = await getWindowsSiteStatus(site.siteId, site.variant as import('@narada2/windows-site').WindowsSiteVariant);
+          health = { status: status.health.status, last_cycle_at: status.health.last_cycle_at, consecutive_failures: status.health.consecutive_failures };
+        }
         entries.push({
           siteId: site.siteId,
           variant: site.variant,
           substrate: site.substrate,
-          health: status.health.status,
-          lastCycle: status.health.last_cycle_at,
-          failures: status.health.consecutive_failures,
+          health: health.status,
+          lastCycle: health.last_cycle_at,
+          failures: health.consecutive_failures,
         });
       } catch {
         entries.push({
@@ -166,6 +175,30 @@ export async function sitesDiscoverCommand(
       // macOS site package not available
     }
 
+    // Discover Linux sites
+    try {
+      const { listAllSites } = await import('@narada2/linux-site');
+      const linuxSites = listAllSites();
+      for (const site of linuxSites) {
+        if (!discovered.some((d) => d.siteId === site.siteId)) {
+          const variant = site.mode === 'system' ? 'linux-system' : 'linux-user';
+          registry.registerSite({
+            siteId: site.siteId,
+            variant,
+            siteRoot: site.siteRoot,
+            substrate: 'linux',
+            aimJson: null,
+            controlEndpoint: null,
+            lastSeenAt: null,
+            createdAt: new Date().toISOString(),
+          });
+          discovered.push({ siteId: site.siteId, variant });
+        }
+      }
+    } catch {
+      // Linux site package not available
+    }
+
     if (fmt.getFormat() === 'human') {
       if (discovered.length === 0) {
         fmt.message('No new Sites discovered.', 'info');
@@ -205,7 +238,13 @@ export async function sitesShowCommand(
 
     let health = null;
     try {
-      health = (await getWindowsSiteStatus(siteId, site.variant)).health;
+      if (site.variant === 'linux-user' || site.variant === 'linux-system') {
+        const mode = site.variant === 'linux-system' ? 'system' : 'user';
+        const { getSiteHealth } = await import('@narada2/linux-site');
+        health = await getSiteHealth(siteId, mode);
+      } else {
+        health = (await getWindowsSiteStatus(siteId, site.variant as import('@narada2/windows-site').WindowsSiteVariant)).health;
+      }
     } catch {
       // health stays null
     }
@@ -430,6 +469,23 @@ export async function sitesInitCommand(
 
       if (!dryRun) {
         await writeFile(configPath, JSON.stringify(configContent, null, 2) + '\n', 'utf8');
+
+        // Register in SiteRegistry
+        const registry = await openRegistry();
+        try {
+          registry.registerSite({
+            siteId,
+            variant: mode === 'user' ? 'linux-user' : 'linux-system',
+            siteRoot,
+            substrate: 'linux',
+            aimJson: options.operation ?? null,
+            controlEndpoint: null,
+            lastSeenAt: null,
+            createdAt: new Date().toISOString(),
+          });
+        } finally {
+          registry.close();
+        }
       }
     }
   } catch (err) {

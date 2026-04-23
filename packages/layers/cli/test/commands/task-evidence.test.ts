@@ -131,7 +131,7 @@ describe('task evidence operator', () => {
   it('classifies direct closed task with execution notes and verification as complete', async () => {
     writeFileSync(
       join(tempDir, '.ai', 'tasks', '20260420-108-test.md'),
-      `---\ntask_id: 108\nstatus: closed\nclosed_by: operator\n---\n\n# Task 108: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n- [x] Do thing B\n\n## Execution Notes\nDone directly by operator.\n\n## Verification\nFocused check passed.\n`,
+      `---\ntask_id: 108\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 108: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n- [x] Do thing B\n\n## Execution Notes\nDone directly by operator.\n\n## Verification\nFocused check passed.\n`,
     );
     const result = await taskEvidenceCommand({ taskNumber: '108', cwd: tempDir, format: 'json' });
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
@@ -144,7 +144,7 @@ describe('task evidence operator', () => {
   it('classifies direct closed task without verification as needs_closure', async () => {
     writeFileSync(
       join(tempDir, '.ai', 'tasks', '20260420-109-test.md'),
-      `---\ntask_id: 109\nstatus: closed\nclosed_by: operator\n---\n\n# Task 109: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n- [x] Do thing B\n\n## Execution Notes\nDone directly by operator.\n`,
+      `---\ntask_id: 109\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 109: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n- [x] Do thing B\n\n## Execution Notes\nDone directly by operator.\n`,
     );
     const result = await taskEvidenceCommand({ taskNumber: '109', cwd: tempDir, format: 'json' });
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
@@ -161,6 +161,19 @@ describe('task evidence operator', () => {
     const parsed = result.result as { evidence: { verdict: string; has_review: boolean } };
     expect(parsed.evidence.verdict).toBe('needs_review');
     expect(parsed.evidence.has_review).toBe(false);
+  });
+
+  it('detects raw terminal mutation without governed provenance', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-110-test.md'),
+      `---\ntask_id: 110\nstatus: closed\n---\n\n# Task 110: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
+    );
+    const result = await taskEvidenceCommand({ taskNumber: '110', cwd: tempDir, format: 'json' });
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const parsed = result.result as { evidence: { verdict: string; violations: string[]; has_governed_provenance: boolean } };
+    expect(parsed.evidence.verdict).toBe('needs_closure');
+    expect(parsed.evidence.has_governed_provenance).toBe(false);
+    expect(parsed.evidence.violations).toContain('terminal_without_governed_provenance');
   });
 
   it('returns human-readable output', async () => {

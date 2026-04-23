@@ -71,6 +71,9 @@ describe('task review operator', () => {
 
     const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'), 'utf8');
     expect(taskContent).toContain('status: closed');
+    expect(taskContent).toContain('governed_by: task_review:reviewer');
+    expect(taskContent).toContain('closed_by: reviewer');
+    expect(taskContent).toContain('closed_at:');
   });
 
   it('rejects a completed task', async () => {
@@ -127,7 +130,7 @@ describe('task review operator', () => {
     expect((result.result as { error: string }).error).toContain('verdict must be one of');
   });
 
-  it('fails when agent is not reviewer or admin', async () => {
+  it('allows any rostered agent to review an in_review task', async () => {
     await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
     await taskReleaseCommand({ taskNumber: '999', reason: 'completed', cwd: tempDir, format: 'json' });
 
@@ -139,9 +142,12 @@ describe('task review operator', () => {
       format: 'json',
     });
 
-    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
-    expect((result.result as { error: string }).error).toContain('only');
-    expect((result.result as { error: string }).error).toContain('reviewer');
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      verdict: 'accepted',
+      new_status: 'closed',
+    });
   });
 
   it('rejects invalid findings shape', async () => {

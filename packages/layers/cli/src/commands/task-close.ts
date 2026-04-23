@@ -140,6 +140,20 @@ export async function taskCloseCommand(
   }
 
   if (gateFailures.length > 0) {
+    const remediation: string[] = [];
+    if (evidence.all_criteria_checked === false) {
+      remediation.push('  → Check all acceptance criteria: replace `- [ ]` with `- [x]` in `## Acceptance Criteria`');
+    }
+    if (!evidence.has_execution_notes) {
+      remediation.push('  → Add `## Execution Notes` section describing what was done and why');
+    }
+    if (!evidence.has_verification) {
+      remediation.push('  → Add `## Verification` section with commands run and results observed');
+    }
+    if (num !== null && await hasDerivativeFiles(cwd, num)) {
+      remediation.push('  → Remove derivative task-status files (`-EXECUTED.md`, `-DONE.md`, etc.)');
+    }
+
     if (fmt.getFormat() === 'json') {
       return {
         exitCode: ExitCode.GENERAL_ERROR,
@@ -149,6 +163,7 @@ export async function taskCloseCommand(
           task_number: Number(taskNumber),
           current_status: currentStatus,
           gate_failures: gateFailures,
+          remediation,
           violations: evidence.violations,
         },
       };
@@ -157,6 +172,10 @@ export async function taskCloseCommand(
     fmt.message(`Cannot close task ${taskFile.taskId} — closure gates failed`, 'error');
     for (const f of gateFailures) {
       fmt.message(`  ❌ ${f}`, 'error');
+    }
+    fmt.message('Remediation:', 'info');
+    for (const r of remediation) {
+      fmt.message(r, 'info');
     }
 
     return {
@@ -167,6 +186,7 @@ export async function taskCloseCommand(
         task_number: Number(taskNumber),
         current_status: currentStatus,
         gate_failures: gateFailures,
+        remediation,
         violations: evidence.violations,
       },
     };
@@ -176,6 +196,7 @@ export async function taskCloseCommand(
   frontMatter.status = 'closed';
   frontMatter.closed_at = new Date().toISOString();
   frontMatter.closed_by = closedBy;
+  frontMatter.governed_by = `task_close:${closedBy}`;
 
   await writeTaskFile(taskFile.path, frontMatter, body);
 

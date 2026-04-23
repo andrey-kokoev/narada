@@ -16,7 +16,14 @@ import {
   serializeFrontMatter,
   readTaskFile,
   writeTaskFile,
+  findTaskFile,
+  createReportId,
+  findReportByAssignmentId,
+  detectReportAnomalies,
+  continuationReasonToIntent,
+  getAssignmentIntent,
   type AgentRoster,
+  type TaskAssignment,
 } from '../../src/lib/task-governance.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -269,6 +276,33 @@ describe('updateAgentRosterEntry (race-safe)', () => {
   });
 });
 
+describe('findTaskFile', () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'narada-find-task-file-test-'));
+    mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('prefers an executable task file over a chapter range file with the same number', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260423-495-500-crossing-regime-first-class-chapter.md'),
+      '---\nstatus: opened\n---\n\n# Crossing Regime First-Class Chapter\n',
+    );
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260423-495-crossing-regime-declaration-contract.md'),
+      '---\nstatus: opened\n---\n\n# Task 495 - Crossing Regime Declaration Contract\n',
+    );
+
+    const result = await findTaskFile(tempDir, '495');
+    expect(result?.taskId).toBe('20260423-495-crossing-regime-declaration-contract');
+  });
+});
+
 describe('lintTaskFiles', () => {
   let tempDir: string;
 
@@ -488,5 +522,282 @@ describe('writeTaskFile front-matter preservation', () => {
     expect(fm2.status).toBe('claimed');
     expect(fm2.depends_on).toEqual([998, 997]);
     expect(fm2.extra_field).toBe('preserved');
+  });
+});
+
+describe('createReportId', () => {
+  it('produces deterministic report_id for same inputs', () => {
+    const id1 = createReportId('task-1', 'agent-a', 'task-1-2026-01-01T00:00:00Z');
+    const id2 = createReportId('task-1', 'agent-a', 'task-1-2026-01-01T00:00:00Z');
+    expect(id1).toBe(id2);
+    expect(id1).toMatch(/^wrr_[a-f0-9]{8}_task-1_agent-a$/);
+  });
+
+  it('produces different ids for different assignments', () => {
+    const id1 = createReportId('task-1', 'agent-a', 'task-1-2026-01-01T00:00:00Z');
+    const id2 = createReportId('task-1', 'agent-a', 'task-1-2026-01-02T00:00:00Z');
+    expect(id1).not.toBe(id2);
+  });
+
+  it('produces different ids for different agents', () => {
+    const id1 = createReportId('task-1', 'agent-a', 'task-1-2026-01-01T00:00:00Z');
+    const id2 = createReportId('task-1', 'agent-b', 'task-1-2026-01-01T00:00:00Z');
+    expect(id1).not.toBe(id2);
+  });
+});
+
+describe('findReportByAssignmentId', () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'narada-report-find-test-'));
+    mkdirSync(join(tempDir, '.ai', 'tasks', 'reports'), { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('returns existing report matching assignment_id', async () => {
+    const report = {
+      report_id: 'wrr_abc123_task-1_agent-a',
+      task_number: '1',
+      task_id: 'task-1',
+      agent_id: 'agent-a',
+      assignment_id: 'task-1-2026-01-01T00:00:00Z',
+      reported_at: '2026-01-01T00:00:00Z',
+      summary: 'Test',
+      changed_files: [],
+      verification: [],
+      known_residuals: [],
+      ready_for_review: true,
+      report_status: 'submitted',
+    };
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', 'reports', 'wrr_abc123_task-1_agent-a.json'),
+      JSON.stringify(report, null, 2),
+    );
+
+    const found = await findReportByAssignmentId(tempDir, 'task-1-2026-01-01T00:00:00Z');
+    expect(found).not.toBeNull();
+    expect(found!.report_id).toBe('wrr_abc123_task-1_agent-a');
+  });
+
+  it('returns null when no report matches assignment_id', async () => {
+    const found = await findReportByAssignmentId(tempDir, 'nonexistent');
+    expect(found).toBeNull();
+  });
+
+  it('ignores non-submitted reports', async () => {
+    const report = {
+      report_id: 'wrr_abc123_task-1_agent-a',
+      task_number: '1',
+      task_id: 'task-1',
+      agent_id: 'agent-a',
+      assignment_id: 'task-1-2026-01-01T00:00:00Z',
+      reported_at: '2026-01-01T00:00:00Z',
+      summary: 'Test',
+      changed_files: [],
+      verification: [],
+      known_residuals: [],
+      ready_for_review: true,
+      report_status: 'superseded',
+    };
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', 'reports', 'wrr_abc123_task-1_agent-a.json'),
+      JSON.stringify(report, null, 2),
+    );
+
+    const found = await findReportByAssignmentId(tempDir, 'task-1-2026-01-01T00:00:00Z');
+    expect(found).toBeNull();
+  });
+});
+
+describe('continuationReasonToIntent', () => {
+  it('maps evidence_repair to repair', () => {
+    expect(continuationReasonToIntent('evidence_repair')).toBe('repair');
+  });
+
+  it('maps review_fix to repair', () => {
+    expect(continuationReasonToIntent('review_fix')).toBe('repair');
+  });
+
+  it('maps handoff to takeover', () => {
+    expect(continuationReasonToIntent('handoff')).toBe('takeover');
+  });
+
+  it('maps blocked_agent to takeover', () => {
+    expect(continuationReasonToIntent('blocked_agent')).toBe('takeover');
+  });
+
+  it('maps operator_override to takeover', () => {
+    expect(continuationReasonToIntent('operator_override')).toBe('takeover');
+  });
+
+  it('defaults null to primary', () => {
+    expect(continuationReasonToIntent(null)).toBe('primary');
+  });
+});
+
+describe('getAssignmentIntent', () => {
+  it('returns explicit intent when set', () => {
+    const assignment: TaskAssignment = {
+      agent_id: 'a1',
+      claimed_at: '2026-01-01T00:00:00Z',
+      claim_context: null,
+      released_at: null,
+      release_reason: null,
+      intent: 'review',
+      continuation_reason: 'handoff',
+    };
+    expect(getAssignmentIntent(assignment)).toBe('review');
+  });
+
+  it('infers from continuation_reason when intent is absent', () => {
+    const assignment: TaskAssignment = {
+      agent_id: 'a1',
+      claimed_at: '2026-01-01T00:00:00Z',
+      claim_context: null,
+      released_at: null,
+      release_reason: null,
+      continuation_reason: 'evidence_repair',
+    };
+    expect(getAssignmentIntent(assignment)).toBe('repair');
+  });
+
+  it('defaults to primary when no intent or continuation_reason', () => {
+    const assignment: TaskAssignment = {
+      agent_id: 'a1',
+      claimed_at: '2026-01-01T00:00:00Z',
+      claim_context: null,
+      released_at: null,
+      release_reason: null,
+    };
+    expect(getAssignmentIntent(assignment)).toBe('primary');
+  });
+});
+
+describe('detectReportAnomalies', () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'narada-report-anomalies-test-'));
+    mkdirSync(join(tempDir, '.ai', 'tasks', 'reports'), { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('returns empty array for clean reports', async () => {
+    const report = {
+      report_id: 'wrr_abc123_task-1_agent-a',
+      task_number: '1',
+      task_id: 'task-1',
+      agent_id: 'agent-a',
+      assignment_id: 'task-1-2026-01-01T00:00:00Z',
+      reported_at: '2026-01-01T00:00:00Z',
+      summary: 'Test',
+      changed_files: [],
+      verification: [],
+      known_residuals: [],
+      ready_for_review: true,
+      report_status: 'submitted',
+    };
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', 'reports', 'wrr_abc123_task-1_agent-a.json'),
+      JSON.stringify(report, null, 2),
+    );
+
+    const anomalies = await detectReportAnomalies(tempDir);
+    expect(anomalies).toHaveLength(0);
+  });
+
+  it('detects duplicate report_id', async () => {
+    const report = {
+      report_id: 'wrr_dup_task-1_agent-a',
+      task_number: '1',
+      task_id: 'task-1',
+      agent_id: 'agent-a',
+      assignment_id: 'task-1-2026-01-01T00:00:00Z',
+      reported_at: '2026-01-01T00:00:00Z',
+      summary: 'Test',
+      changed_files: [],
+      verification: [],
+      known_residuals: [],
+      ready_for_review: true,
+      report_status: 'submitted',
+    };
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', 'reports', 'wrr_dup_task-1_agent-a.json'),
+      JSON.stringify(report, null, 2),
+    );
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', 'reports', 'wrr_dup_task-1_agent-a_copy.json'),
+      JSON.stringify(report, null, 2),
+    );
+
+    const anomalies = await detectReportAnomalies(tempDir);
+    expect(anomalies.some((a) => a.type === 'duplicate_report_id')).toBe(true);
+  });
+
+  it('detects multiple reports per assignment', async () => {
+    const report1 = {
+      report_id: 'wrr_aaa_task-1_agent-a',
+      task_number: '1',
+      task_id: 'task-1',
+      agent_id: 'agent-a',
+      assignment_id: 'task-1-2026-01-01T00:00:00Z',
+      reported_at: '2026-01-01T00:00:00Z',
+      summary: 'First',
+      changed_files: [],
+      verification: [],
+      known_residuals: [],
+      ready_for_review: true,
+      report_status: 'submitted',
+    };
+    const report2 = {
+      report_id: 'wrr_bbb_task-1_agent-a',
+      task_number: '1',
+      task_id: 'task-1',
+      agent_id: 'agent-a',
+      assignment_id: 'task-1-2026-01-01T00:00:00Z',
+      reported_at: '2026-01-02T00:00:00Z',
+      summary: 'Second',
+      changed_files: [],
+      verification: [],
+      known_residuals: [],
+      ready_for_review: true,
+      report_status: 'submitted',
+    };
+    writeFileSync(join(tempDir, '.ai', 'tasks', 'reports', 'wrr_aaa_task-1_agent-a.json'), JSON.stringify(report1, null, 2));
+    writeFileSync(join(tempDir, '.ai', 'tasks', 'reports', 'wrr_bbb_task-1_agent-a.json'), JSON.stringify(report2, null, 2));
+
+    const anomalies = await detectReportAnomalies(tempDir);
+    expect(anomalies.some((a) => a.type === 'multiple_reports_per_assignment')).toBe(true);
+  });
+
+  it('detects filename / report_id mismatch', async () => {
+    const report = {
+      report_id: 'wrr_real_task-1_agent-a',
+      task_number: '1',
+      task_id: 'task-1',
+      agent_id: 'agent-a',
+      assignment_id: 'task-1-2026-01-01T00:00:00Z',
+      reported_at: '2026-01-01T00:00:00Z',
+      summary: 'Test',
+      changed_files: [],
+      verification: [],
+      known_residuals: [],
+      ready_for_review: true,
+      report_status: 'submitted',
+    };
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', 'reports', 'wrong_name.json'),
+      JSON.stringify(report, null, 2),
+    );
+
+    const anomalies = await detectReportAnomalies(tempDir);
+    expect(anomalies.some((a) => a.type === 'filename_id_mismatch')).toBe(true);
   });
 });

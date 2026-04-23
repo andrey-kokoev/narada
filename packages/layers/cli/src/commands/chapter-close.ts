@@ -426,6 +426,7 @@ ${dryRun ? '**Dry run** — no mutations performed.' : 'Chapter closure artifact
     const { frontMatter, body } = await readTaskFile(taskFile.path);
     if (frontMatter.status === 'closed') {
       frontMatter.status = 'confirmed';
+      frontMatter.governed_by = `chapter_close:${options.by ?? 'operator'}`;
       await writeTaskFile(taskFile.path, frontMatter, body);
       transitioned.push(task.taskId);
     }
@@ -636,6 +637,7 @@ async function runRangeClose(
       const { frontMatter, body } = await readTaskFile(taskFile.path);
       if (frontMatter.status === 'closed') {
         frontMatter.status = 'confirmed';
+        frontMatter.governed_by = `chapter_close:${options.by ?? 'operator'}`;
         await writeTaskFile(taskFile.path, frontMatter, body);
         transitioned.push(task.taskId);
       }

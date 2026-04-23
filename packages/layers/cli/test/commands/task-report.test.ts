@@ -211,7 +211,61 @@ describe('task report operator', () => {
     expect((result.result as { error: string }).error).toContain('Failed to parse residuals');
   });
 
-  it('preserves multiple reports append-only', async () => {
+  it('is idempotent: repeated report on same assignment does not create duplicate', async () => {
+    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
+
+    // First report
+    const firstResult = await taskReportCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      summary: 'First attempt',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(firstResult.exitCode).toBe(ExitCode.SUCCESS);
+    const firstReportId = (firstResult.result as { report_id: string }).report_id;
+
+    const reportsDir = join(tempDir, '.ai', 'tasks', 'reports');
+    const reportFilesAfterFirst = readdirSync(reportsDir).filter((f) => f.endsWith('.json'));
+    expect(reportFilesAfterFirst).toHaveLength(1);
+
+    // Reset task to claimed and assignment to active (same claimed_at)
+    // to simulate an accidental re-invocation before the first report finished
+    const assignmentRaw = readFileSync(join(tempDir, '.ai', 'tasks', 'assignments', '20260420-999-test-task.json'), 'utf8');
+    const assignment = JSON.parse(assignmentRaw);
+    assignment.assignments[0].released_at = null;
+    assignment.assignments[0].release_reason = null;
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', 'assignments', '20260420-999-test-task.json'),
+      JSON.stringify(assignment, null, 2),
+    );
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+      '---\ntask_id: 999\nstatus: claimed\n---\n\n# Task 999: Test Task\n',
+    );
+
+    // Second report (same assignment) — should return existing without creating duplicate
+    const secondResult = await taskReportCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      summary: 'Second attempt',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(secondResult.exitCode).toBe(ExitCode.SUCCESS);
+    const secondReportId = (secondResult.result as { report_id: string }).report_id;
+    expect(secondReportId).toBe(firstReportId);
+
+    const reportFilesAfterSecond = readdirSync(reportsDir).filter((f) => f.endsWith('.json'));
+    expect(reportFilesAfterSecond).toHaveLength(1);
+
+    const note = (secondResult.result as { note?: string }).note;
+    expect(note).toContain('already exists');
+  });
+
+  it('creates a new report after re-claim with a different assignment', async () => {
     await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
 
     // First report
@@ -229,14 +283,15 @@ describe('task report operator', () => {
       '---\ntask_id: 999\nstatus: claimed\n---\n\n# Task 999: Test Task\n',
     );
 
-    // Clear assignment released state for re-claim simulation
+    // Clear assignment released state for re-claim simulation with NEW claimed_at
+    const newClaimedAt = new Date().toISOString();
     writeFileSync(
       join(tempDir, '.ai', 'tasks', 'assignments', '20260420-999-test-task.json'),
       JSON.stringify({
         task_id: '20260420-999-test-task',
         assignments: [{
           agent_id: 'test-agent',
-          claimed_at: new Date().toISOString(),
+          claimed_at: newClaimedAt,
           claim_context: null,
           released_at: null,
           release_reason: null,
@@ -244,8 +299,8 @@ describe('task report operator', () => {
       }, null, 2),
     );
 
-    // Second report
-    await taskReportCommand({
+    // Second report — different assignment_id due to new claimed_at
+    const secondResult = await taskReportCommand({
       taskNumber: '999',
       agent: 'test-agent',
       summary: 'Second attempt',
@@ -253,8 +308,95 @@ describe('task report operator', () => {
       format: 'json',
     });
 
+    expect(secondResult.exitCode).toBe(ExitCode.SUCCESS);
     const reportsDir = join(tempDir, '.ai', 'tasks', 'reports');
     const reportFiles = readdirSync(reportsDir).filter((f) => f.endsWith('.json'));
     expect(reportFiles).toHaveLength(2);
+  });
+
+  it('scaffolds missing Execution Notes and Verification sections into task file', async () => {
+    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
+
+    const result = await taskReportCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      summary: 'Implemented feature X',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+
+    const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'), 'utf8');
+    expect(taskContent).toContain('## Execution Notes');
+    expect(taskContent).toContain('<!-- Record what was done, decisions made, and files changed. -->');
+    expect(taskContent).toContain('## Verification');
+    expect(taskContent).toContain('<!-- Record commands run, results observed, and how correctness was checked. -->');
+  });
+
+  it('does not duplicate sections if they already exist', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+      '---\ntask_id: 999\nstatus: opened\n---\n\n# Task 999: Test Task\n\n## Execution Notes\nAlready present.\n\n## Verification\nAlready present.\n',
+    );
+
+    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
+
+    const result = await taskReportCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      summary: 'Implemented feature X',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+
+    const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'), 'utf8');
+    const executionNotesCount = (taskContent.match(/## Execution Notes/g) || []).length;
+    const verificationCount = (taskContent.match(/## Verification/g) || []).length;
+    expect(executionNotesCount).toBe(1);
+    expect(verificationCount).toBe(1);
+  });
+
+  it('human default output is terse and omits guidance', async () => {
+    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
+
+    const logs: string[] = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((msg: string) => { logs.push(msg); });
+
+    const result = await taskReportCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      summary: 'Implemented feature X',
+      cwd: tempDir,
+      format: 'human',
+    });
+
+    spy.mockRestore();
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const hasGuidance = logs.some((l) => l.includes('Active guidance:'));
+    expect(hasGuidance).toBe(false);
+  });
+
+  it('human verbose output includes guidance', async () => {
+    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
+
+    const logs: string[] = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((msg: string) => { logs.push(msg); });
+
+    const result = await taskReportCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      summary: 'Implemented feature X',
+      cwd: tempDir,
+      format: 'human',
+      verbose: true,
+    });
+
+    spy.mockRestore();
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const hasGuidance = logs.some((l) => l.includes('Active guidance:'));
+    expect(hasGuidance).toBe(true);
   });
 });

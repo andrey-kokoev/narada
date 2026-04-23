@@ -62,6 +62,7 @@ export async function taskEvidenceCommand(
     `  report:              ${evidence.has_report ? 'yes' : 'no'}`,
     `  review:              ${evidence.has_review ? 'yes' : 'no'}`,
     `  closure:             ${evidence.has_closure ? 'yes' : 'no'}`,
+    `  assignment intent:   ${evidence.active_assignment_intent ?? 'none'}`,
   ];
 
   if (evidence.violations.length > 0) {

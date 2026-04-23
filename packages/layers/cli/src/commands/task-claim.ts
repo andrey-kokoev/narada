@@ -160,6 +160,7 @@ export async function taskClaimCommand(
     claim_context: reason ?? null,
     released_at: null,
     release_reason: null,
+    intent: 'primary',
   });
 
   await saveAssignment(cwd, record);

@@ -12,7 +12,7 @@ import { homedir } from "node:os";
 import { readdirSync, existsSync, readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import type { Database } from "better-sqlite3";
-import type { WindowsSiteVariant } from "./types.js";
+import type { WindowsSiteVariant, SiteVariant } from "./types.js";
 
 function getPathLib(variant: WindowsSiteVariant) {
   return variant === "native" ? win32 : posix;
@@ -24,7 +24,7 @@ function getPathLib(variant: WindowsSiteVariant) {
 
 export interface RegisteredSite {
   siteId: string;
-  variant: WindowsSiteVariant;
+  variant: SiteVariant;
   siteRoot: string;
   substrate: string;
   aimJson: string | null;
@@ -235,7 +235,7 @@ export class SiteRegistry {
       )
       .get(siteId) as {
       site_id: string;
-      variant: WindowsSiteVariant;
+      variant: SiteVariant;
       site_root: string;
       substrate: string;
       aim_json: string | null;
@@ -267,7 +267,7 @@ export class SiteRegistry {
     const existing = this.getSite(siteId);
     if (!existing) return null;
 
-    const pathLib = getPathLib(existing.variant);
+    const pathLib = getPathLib(existing.variant as WindowsSiteVariant);
     const configPath = pathLib.join(existing.siteRoot, "config.json");
     let aimJson: string | null = existing.aimJson;
     let substrate = existing.substrate;
@@ -318,7 +318,7 @@ export class SiteRegistry {
       .get(siteId) as
       | {
           site_id: string;
-          variant: WindowsSiteVariant;
+          variant: SiteVariant;
           site_root: string;
           substrate: string;
           aim_json: string | null;
@@ -353,7 +353,7 @@ export class SiteRegistry {
       )
       .all() as Array<{
       site_id: string;
-      variant: WindowsSiteVariant;
+      variant: SiteVariant;
       site_root: string;
       substrate: string;
       aim_json: string | null;

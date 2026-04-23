@@ -87,6 +87,14 @@ describe('task roster operator', () => {
       expect(result.exitCode).toBe(ExitCode.SUCCESS);
       expect(result.result).toContain('test-agent');
       expect(result.result).toContain('reviewer-agent');
+      // Default human output is terse; guidance is gated behind --verbose
+      expect(result.result).not.toContain('Active guidance:');
+    });
+
+    it('shows guidance in human format when verbose is set', async () => {
+      const result = await taskRosterShowCommand({ cwd: tempDir, format: 'human', verbose: true });
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      expect(result.result).toContain('test-agent');
       expect(result.result).toContain('Active guidance:');
       expect(result.result).toContain('Recommended assignments are operative unless rejected');
     });
@@ -328,6 +336,11 @@ describe('task roster operator', () => {
 
   describe('review', () => {
     it('records status reviewing and task number', async () => {
+      writeFileSync(
+        join(tempDir, '.ai', 'tasks', '20260420-370-test.md'),
+        '---\ntask_id: 370\nstatus: in_review\n---\n\n# Task 370\n',
+      );
+
       const result = await taskRosterReviewCommand({
         taskNumber: '370',
         agent: 'reviewer-agent',
@@ -340,12 +353,23 @@ describe('task roster operator', () => {
         agent: 'reviewer-agent',
         agent_status: 'reviewing',
         task: 370,
+        intent: 'review',
       });
 
       const roster = await loadRoster(tempDir);
       const entry = roster.agents.find((a) => a.agent_id === 'reviewer-agent');
       expect(entry?.status).toBe('reviewing');
       expect(entry?.task).toBe(370);
+
+      // Assignment record created with review intent (released immediately)
+      const assignmentRaw = readFileSync(
+        join(tempDir, '.ai', 'tasks', 'assignments', '20260420-370-test.json'),
+        'utf8',
+      );
+      const assignment = JSON.parse(assignmentRaw);
+      expect(assignment.assignments).toHaveLength(1);
+      expect(assignment.assignments[0].intent).toBe('review');
+      expect(assignment.assignments[0].released_at).not.toBeNull();
     });
   });
 
@@ -365,6 +389,7 @@ describe('task roster operator', () => {
         agent: 'test-agent',
         cwd: tempDir,
         format: 'json',
+        allowIncomplete: true,
       });
       expect(result.exitCode).toBe(ExitCode.SUCCESS);
       expect(result.result).toMatchObject({
@@ -381,7 +406,7 @@ describe('task roster operator', () => {
       expect(entry?.last_done).toBe(385);
     });
 
-    it('warns when no WorkResultReport exists for the task', async () => {
+    it('fails by default when no WorkResultReport exists for the task', async () => {
       // Create a task file so findTaskFile can resolve it
       mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
       writeFileSync(
@@ -397,7 +422,6 @@ describe('task roster operator', () => {
         format: 'json',
       });
 
-      // Mark done without creating a report
       const result = await taskRosterDoneCommand({
         taskNumber: '385',
         agent: 'test-agent',
@@ -405,12 +429,12 @@ describe('task roster operator', () => {
         format: 'human',
       });
 
-      expect(result.exitCode).toBe(ExitCode.SUCCESS);
-      expect(typeof result.result).toBe('string');
-      expect(result.result as string).toContain('no WorkResultReport was submitted');
+      expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+      expect((result.result as { error: string }).error).toContain('no execution evidence');
+      expect((result.result as { error: string }).error).toContain('--allow-incomplete');
     });
 
-    it('warns when task has unchecked acceptance criteria', async () => {
+    it('records done with warnings only when incomplete evidence is explicitly allowed', async () => {
       mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
       writeFileSync(
         join(tempDir, '.ai', 'tasks', '20260420-386-test.md'),
@@ -418,12 +442,12 @@ describe('task roster operator', () => {
       );
       mkdirSync(join(tempDir, '.ai', 'tasks', 'reports'), { recursive: true });
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', 'reports', 'wrr_1234567890_20260420-386-test_test-agent.json'),
+        join(tempDir, '.ai', 'tasks', 'reports', 'wrr_1234567890_20260420-386-test_other-agent.json'),
         JSON.stringify({
-          report_id: 'wrr_1234567890_20260420-386-test_test-agent',
+          report_id: 'wrr_1234567890_20260420-386-test_other-agent',
           task_number: 386,
           task_id: '20260420-386-test',
-          agent_id: 'test-agent',
+          agent_id: 'other-agent',
           assignment_id: 'x',
           reported_at: '2026-01-01T00:00:00Z',
           summary: 'Done',
@@ -440,10 +464,12 @@ describe('task roster operator', () => {
         agent: 'test-agent',
         cwd: tempDir,
         format: 'human',
+        allowIncomplete: true,
       });
 
       expect(result.exitCode).toBe(ExitCode.SUCCESS);
       expect(result.result as string).toContain('unchecked acceptance criteria');
+      expect(result.result as string).toContain('explicitly allowed');
     });
 
     it('fails in strict mode when evidence is missing', async () => {
@@ -471,7 +497,7 @@ describe('task roster operator', () => {
       mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
       writeFileSync(
         join(tempDir, '.ai', 'tasks', '20260420-388-test.md'),
-        '---\ntask_id: 388\nstatus: claimed\n---\n\n# Task 388\n\n## Acceptance Criteria\n- [x] Done\n\n## Execution Notes\nCompleted.\n',
+        '---\ntask_id: 388\nstatus: claimed\n---\n\n# Task 388\n\n## Acceptance Criteria\n- [x] Done\n\n## Execution Notes\nCompleted.\n\n## Verification\nChecked.\n',
       );
       mkdirSync(join(tempDir, '.ai', 'tasks', 'reports'), { recursive: true });
       writeFileSync(
@@ -506,22 +532,27 @@ describe('task roster operator', () => {
       expect(parsed.warnings).toBeUndefined();
     });
 
-    it('warns reviewer done when review artifact is missing', async () => {
+    it('does not block done for a complete task just because no review artifact exists', async () => {
       mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
       writeFileSync(
         join(tempDir, '.ai', 'tasks', '20260420-389-test.md'),
-        '---\ntask_id: 389\nstatus: in_review\n---\n\n# Task 389\n',
+        '---\ntask_id: 389\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 389\n\n## Acceptance Criteria\n- [x] Done\n\n## Execution Notes\nCompleted.\n\n## Verification\nChecked.\n',
       );
 
       const result = await taskRosterDoneCommand({
         taskNumber: '389',
         agent: 'reviewer-agent',
         cwd: tempDir,
-        format: 'human',
+        format: 'json',
       });
 
       expect(result.exitCode).toBe(ExitCode.SUCCESS);
-      expect(result.result as string).toContain('no review artifact exists');
+      expect(result.result).toMatchObject({
+        status: 'ok',
+        agent: 'reviewer-agent',
+        agent_status: 'done',
+        last_done: 389,
+      });
     });
   });
 
@@ -539,6 +570,7 @@ describe('task roster operator', () => {
         agent: 'test-agent',
         cwd: tempDir,
         format: 'json',
+        allowIncomplete: true,
       });
 
       // Then idle
@@ -669,7 +701,7 @@ describe('task roster operator', () => {
 
       await taskRosterAssignCommand({ taskNumber: '100', agent: 'test-agent', cwd: tempDir, format: 'json' });
       await taskRosterAssignCommand({ taskNumber: '200', agent: 'reviewer-agent', cwd: tempDir, format: 'json' });
-      await taskRosterDoneCommand({ taskNumber: '100', agent: 'test-agent', cwd: tempDir, format: 'json' });
+      await taskRosterDoneCommand({ taskNumber: '100', agent: 'test-agent', cwd: tempDir, format: 'json', allowIncomplete: true });
       await taskRosterIdleCommand({ agent: 'reviewer-agent', cwd: tempDir, format: 'json' });
 
       const roster = await loadRoster(tempDir);

@@ -75,7 +75,7 @@ export async function taskReviewCommand(
     };
   }
 
-  // Verify agent exists in roster and has reviewer role
+  // Verify agent exists in roster
   let roster;
   try {
     roster = await loadRoster(cwd);
@@ -92,17 +92,6 @@ export async function taskReviewCommand(
     return {
       exitCode: ExitCode.INVALID_CONFIG,
       result: { status: 'error', error: `Agent not found in roster: ${agentId}` },
-    };
-  }
-
-  // Enforce reviewer authority: role must be reviewer or admin
-  if (agent.role !== 'reviewer' && agent.role !== 'admin') {
-    return {
-      exitCode: ExitCode.GENERAL_ERROR,
-      result: {
-        status: 'error',
-        error: `Agent ${agentId} has role '${agent.role}' but only 'reviewer' or 'admin' may review tasks`,
-      },
     };
   }
 
@@ -271,6 +260,11 @@ export async function taskReviewCommand(
 
   // Update task status
   frontMatter.status = newStatus;
+  if (newStatus === 'closed') {
+    frontMatter.governed_by = `task_review:${agentId}`;
+    frontMatter.closed_at = new Date().toISOString();
+    frontMatter.closed_by = agentId;
+  }
   await writeTaskFile(taskFile.path, frontMatter, body);
 
   // Post-commit advisory PrincipalRuntime update

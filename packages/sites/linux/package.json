@@ -21,7 +21,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@narada2/control-plane": "workspace:*"
+    "@narada2/control-plane": "workspace:*",
+    "@narada2/windows-site": "workspace:*"
   },
   "devDependencies": {
     "better-sqlite3": "^12.9.0",

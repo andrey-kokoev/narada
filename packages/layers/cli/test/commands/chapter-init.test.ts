@@ -79,6 +79,8 @@ describe('chapter init operator', () => {
       expect(content).toContain('## Context');
       expect(content).toContain('## Required Work');
       expect(content).toContain('## Non-Goals');
+      expect(content).toContain('## Execution Notes');
+      expect(content).toContain('## Verification');
       expect(content).toContain('## Acceptance Criteria');
     }
   });

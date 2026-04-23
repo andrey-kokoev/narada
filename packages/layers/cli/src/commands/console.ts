@@ -7,45 +7,15 @@
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import {
+  openRegistry,
+  createObservationFactory,
+  createControlClientFactory,
+} from '../lib/console-core.js';
 
 export interface ConsoleOptions {
   format?: string;
   verbose?: boolean;
-}
-
-async function openRegistry() {
-  const {
-    resolveRegistryDbPath,
-    openRegistryDb,
-    SiteRegistry,
-  } = await import('@narada2/windows-site');
-  const dbPath = resolveRegistryDbPath();
-  const db = await openRegistryDb(dbPath);
-  return new SiteRegistry(db);
-}
-
-function createObservationFactory() {
-  return (site: { siteId: string; variant: string }) => {
-    return {
-      getHealth() {
-        return import('@narada2/windows-site').then((mod) =>
-          mod.getWindowsSiteStatus(site.siteId, site.variant as 'native' | 'wsl').then((s) => s.health)
-        );
-      },
-      getStuckWorkItems() {
-        return Promise.resolve([]);
-      },
-      getPendingOutboundCommands() {
-        return Promise.resolve([]);
-      },
-      getPendingDrafts() {
-        return Promise.resolve([]);
-      },
-      getCredentialRequirements() {
-        return Promise.resolve([]);
-      },
-    };
-  };
 }
 
 export async function consoleStatusCommand(
@@ -152,13 +122,7 @@ export async function consoleControlCommand(
 
     const router = new ControlRequestRouter({
       registry,
-      clientFactory: () => {
-        // For the CLI console, control requests are routed to the Site's
-        // control API. In a full implementation this would create a
-        // WindowsSiteControlClient. For now, requests without a bound
-        // client are rejected with an informative error.
-        return undefined;
-      },
+      clientFactory: createControlClientFactory(registry),
     });
 
     const request = {

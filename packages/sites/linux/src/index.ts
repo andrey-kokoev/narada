@@ -81,3 +81,10 @@ export type {
   DiscoveredLinuxSite,
   SiteDoctorCheck,
 } from "./observability.js";
+
+// Console adapter
+export {
+  linuxSiteAdapter,
+  LinuxSiteObservationApi,
+  LinuxSiteControlClient,
+} from "./console-adapter.js";

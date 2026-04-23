@@ -60,6 +60,31 @@ describe('task close operator', () => {
     expect(content).toContain('closed_at:');
   });
 
+  it('allows direct close from opened when closure gates are satisfied', async () => {
+    writeTask(
+      tempDir,
+      108,
+      'opened',
+      '## Execution Notes\nDid the work.\n\n## Verification\nTests pass.\n',
+    );
+
+    const result = await taskCloseCommand({
+      taskNumber: '108',
+      by: 'operator-1',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const r = result.result as { status: string; new_status: string; closed_by: string };
+    expect(r.status).toBe('success');
+    expect(r.new_status).toBe('closed');
+    expect(r.closed_by).toBe('operator-1');
+
+    const content = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-108-test.md'), 'utf8');
+    expect(content).toContain('status: closed');
+  });
+
   it('fails with unchecked criteria', async () => {
     writeFileSync(
       join(tempDir, '.ai', 'tasks', '20260420-101-test.md'),
@@ -159,11 +184,9 @@ describe('task close operator', () => {
   });
 
   it('reports valid for already-closed task with good evidence', async () => {
-    writeTask(
-      tempDir,
-      105,
-      'closed',
-      '## Execution Notes\nDone.\n\n## Verification\nOK.\n',
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-105-test.md'),
+      `---\ntask_id: 105\nstatus: closed\nclosed_by: operator-1\nclosed_at: 2026-04-23T17:35:00Z\n---\n\n# Task 105: Test\n\n## Acceptance Criteria\n- [x] Criterion A\n- [x] Criterion B\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
     );
 
     const result = await taskCloseCommand({
@@ -221,6 +244,29 @@ describe('task close operator', () => {
     expect(text.new_status).toBe('closed');
   });
 
+  it('includes remediation guidance in gate failure response', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-112-test.md'),
+      `---\ntask_id: 112\nstatus: in_review\n---\n\n# Task 112: Test\n\n## Acceptance Criteria\n- [ ] Unchecked A\n- [x] Checked B\n`,
+    );
+
+    const result = await taskCloseCommand({
+      taskNumber: '112',
+      by: 'operator-1',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    const r = result.result as { status: string; remediation: string[]; gate_failures: string[] };
+    expect(r.status).toBe('error');
+    expect(r.remediation).toBeDefined();
+    expect(r.remediation.length).toBeGreaterThanOrEqual(2);
+    expect(r.remediation.some((m) => m.includes('Check all acceptance criteria'))).toBe(true);
+    expect(r.remediation.some((m) => m.includes('Execution Notes'))).toBe(true);
+    expect(r.remediation.some((m) => m.includes('Verification'))).toBe(true);
+  });
+
   it('fails for invalid task number', async () => {
     const result = await taskCloseCommand({
       taskNumber: 'not-a-number',
@@ -243,5 +289,45 @@ describe('task close operator', () => {
 
     expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
     expect((result.result as { error: string }).error).toContain('not found');
+  });
+
+  it('sets governed_by on closure', async () => {
+    writeTask(
+      tempDir,
+      110,
+      'in_review',
+      '## Execution Notes\nDone.\n\n## Verification\nOK.\n',
+    );
+
+    const result = await taskCloseCommand({
+      taskNumber: '110',
+      by: 'operator-1',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const content = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-110-test.md'), 'utf8');
+    expect(content).toContain('governed_by: task_close:operator-1');
+  });
+
+  it('reports invalid for already-closed task without governed provenance (raw mutation)', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-111-test.md'),
+      `---\ntask_id: 111\nstatus: closed\n---\n\n# Task 111: Test\n\n## Acceptance Criteria\n- [x] Criterion A\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
+    );
+
+    const result = await taskCloseCommand({
+      taskNumber: '111',
+      by: 'operator-1',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    const r = result.result as { status: string; valid: boolean; violations: string[] };
+    expect(r.status).toBe('error');
+    expect(r.valid).toBe(false);
+    expect(r.violations).toContain('terminal_without_governed_provenance');
   });
 });

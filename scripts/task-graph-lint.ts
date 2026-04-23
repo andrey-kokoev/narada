@@ -690,6 +690,36 @@ function scanRoster(allTaskNumbers: Set<number>): Finding[] {
   return findings;
 }
 
+function checkCrossingRegimeDeclarations(tasks: TaskFile[]): Finding[] {
+  const findings: Finding[] = [];
+
+  // Keywords that suggest a task is introducing a new durable authority-changing boundary.
+  // This is a heuristic — it will produce false positives on tasks that mention these
+  // terms without introducing a new crossing. The warning message acknowledges this.
+  const crossingKeywords =
+    /\b(new\s+durable|authority\s+owner|boundary\s+crossing|crossing\s+artifact|new\s+boundary|new\s+crossing|durable\s+artifact\s+(from|across|between))\b/i;
+
+  // References that indicate the task acknowledges the crossing regime contract.
+  const regimeReferences =
+    /\b(crossing\s+regime|SEMANTICS\.md\s+§2\.15|Task\s+49[567])\b/i;
+
+  for (const t of tasks) {
+    if (t.headingNumber === null) continue; // only executable tasks
+
+    if (crossingKeywords.test(t.body) && !regimeReferences.test(t.body)) {
+      findings.push({
+        severity: "warning",
+        checkId: "crossing-regime-missing-declaration",
+        file: t.filepath,
+        message:
+          "Task appears to introduce a durable authority-changing boundary but does not reference the crossing regime declaration contract (SEMANTICS.md §2.15, Task 495). If this task does not introduce a new crossing, this warning is a false positive and may be ignored.",
+      });
+    }
+  }
+
+  return findings;
+}
+
 function scanLearning(allTaskNumbers: Set<number>): Finding[] {
   const findings: Finding[] = [];
   const files = readDirSafe(LEARNING_DIR, (n) => n.endsWith(".json"));
@@ -760,6 +790,7 @@ function main(): number {
     findings.push(...scanDecisions(allTaskNumbers, taskByNumber));
     findings.push(...scanRoster(allTaskNumbers));
     findings.push(...scanLearning(allTaskNumbers));
+    findings.push(...checkCrossingRegimeDeclarations(tasks));
 
     // Sort: errors first, then by file
     findings.sort((a, b) => {
