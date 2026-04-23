@@ -98,6 +98,7 @@ export { createSyncService as default } from "./service.js";
 // ---------------------------------------------------------------------------
 
 import { loadEnvFile } from "@narada2/control-plane";
+import type { LogFormat } from "./lib/logger.js";
 
 async function main(): Promise<void> {
   loadEnvFile("./.env");
@@ -113,6 +114,7 @@ async function main(): Promise<void> {
     }
   }
   let verbose = false;
+  let logFormat: LogFormat | undefined;
   let once = false;
   let pidFilePath: string | undefined;
   let observationApiPort: number | undefined;
@@ -127,6 +129,12 @@ async function main(): Promise<void> {
       configPath = args[++i] ?? configPath;
     } else if (arg === "-v" || arg === "--verbose") {
       verbose = true;
+    } else if (arg === "--log-format") {
+      const raw = args[++i];
+      if (raw !== "json" && raw !== "pretty" && raw !== "auto") {
+        throw new Error(`Invalid --log-format: ${raw}. Valid: json, pretty, auto`);
+      }
+      logFormat = raw;
     } else if (arg === "--once") {
       once = true;
     } else if (arg === "--pid-file") {
@@ -146,9 +154,13 @@ async function main(): Promise<void> {
       const raw = args[++i];
       maxDrainMs = raw ? Number(raw) : undefined;
     } else if (arg === "-h" || arg === "--help") {
-      console.log("Usage: narada-daemon [-c config.json] [-v] [--once] [--pid-file path] [--observation-port port] [--observation-host host] [--max-staleness-ms ms] [--max-consecutive-errors n] [--max-drain-ms ms]");
+      console.log("Usage: narada-daemon [-c config.json] [-v] [--log-format json|pretty|auto] [--once] [--pid-file path] [--observation-port port] [--observation-host host] [--max-staleness-ms ms] [--max-consecutive-errors n] [--max-drain-ms ms]");
       process.exit(0);
     }
+  }
+
+  if (logFormat) {
+    process.env.NARADA_LOG_FORMAT = logFormat;
   }
 
   if (observationApiPort !== undefined && (!Number.isInteger(observationApiPort) || observationApiPort <= 0)) {
@@ -169,6 +181,7 @@ async function main(): Promise<void> {
   const service = await createSyncService({
     configPath,
     verbose,
+    logFormat,
     pidFilePath,
     observationApiPort,
     observationApiHost,

@@ -83,6 +83,7 @@ import { SearchEngine } from '@narada2/search';
 import { CodexCharterRunner, KimiCliCharterRunner, ToolRunner } from '@narada2/charters';
 import type { ToolDefinition, ToolInvocationRequest } from '@narada2/charters';
 import { createLogger } from './lib/logger.js';
+import type { LogFormat } from './lib/logger.js';
 import { PidFile } from './lib/pid-file.js';
 import { HealthFile, type HealthStatus as DaemonHealthStatus } from './lib/health.js';
 import { computeHealthTransition, type CycleOutcome, type HealthStatus } from '@narada2/control-plane';
@@ -105,6 +106,7 @@ import { OUTBOUND_WORKER_IDS } from './lib/workers.js';
 export interface SyncServiceConfig {
   configPath: string;
   verbose?: boolean;
+  logFormat?: LogFormat;
   pidFilePath?: string;
   /** Override the Graph adapter (for testing) */
   adapter?: GraphAdapter;
@@ -1482,7 +1484,7 @@ export async function createScopeService(
 export async function createSyncService(
   opts: SyncServiceConfig,
 ): Promise<SyncService> {
-  const logger = createLogger({ component: 'service', verbose: opts.verbose });
+  const logger = createLogger({ component: 'service', verbose: opts.verbose, format: opts.logFormat });
 
   logger.info('Loading configuration', { path: opts.configPath });
   let parsed: unknown;

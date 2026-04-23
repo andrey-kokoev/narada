@@ -10,6 +10,8 @@ export interface LogEntry {
   meta?: Record<string, unknown>;
 }
 
+export type LogFormat = 'json' | 'pretty' | 'auto';
+
 export interface Logger {
   debug(message: string, meta?: unknown): void;
   info(message: string, meta?: unknown): void;
@@ -20,15 +22,18 @@ export interface Logger {
 export interface LoggerOptions {
   component?: string;
   verbose?: boolean;
+  format?: LogFormat;
 }
 
 class ConsoleLogger implements Logger {
   private readonly component: string;
   private readonly verbose: boolean;
+  private readonly format: Exclude<LogFormat, 'auto'>;
 
   constructor(options: LoggerOptions = {}) {
     this.component = options.component ?? 'daemon';
     this.verbose = options.verbose ?? false;
+    this.format = resolveLogFormat(options.format);
   }
 
   private log(level: LogEntry['level'], message: string, meta?: unknown): void {
@@ -42,8 +47,7 @@ class ConsoleLogger implements Logger {
         : {}),
     };
 
-    // Output structured JSON to stderr for logging
-    console.error(JSON.stringify(entry));
+    console.error(this.format === 'json' ? JSON.stringify(entry) : formatPretty(entry));
   }
 
   debug(message: string, meta?: unknown): void {
@@ -76,6 +80,42 @@ class ConsoleLogger implements Logger {
     }
     this.log('error', message, enrichedMeta);
   }
+}
+
+export function resolveLogFormat(format: LogFormat | undefined): Exclude<LogFormat, 'auto'> {
+  const requested = format ?? parseLogFormat(process.env.NARADA_LOG_FORMAT ?? process.env.LOG_FORMAT) ?? 'auto';
+  if (requested === 'auto') {
+    return process.stderr.isTTY ? 'pretty' : 'json';
+  }
+  return requested;
+}
+
+function parseLogFormat(value: string | undefined): LogFormat | undefined {
+  if (value === 'json' || value === 'pretty' || value === 'auto') {
+    return value;
+  }
+  return undefined;
+}
+
+function formatPretty(entry: LogEntry): string {
+  const time = entry.timestamp.slice(11, 19);
+  const level = entry.level.toUpperCase().padEnd(5);
+  const component = entry.component ? ` ${entry.component}` : '';
+  const meta = entry.meta && Object.keys(entry.meta).length > 0 ? ` ${formatMeta(entry.meta)}` : '';
+  return `${time} ${level}${component}: ${entry.message}${meta}`;
+}
+
+function formatMeta(meta: Record<string, unknown>): string {
+  return Object.entries(meta)
+    .map(([key, value]) => `${key}=${formatMetaValue(value)}`)
+    .join(' ');
+}
+
+function formatMetaValue(value: unknown): string {
+  if (value === null) return 'null';
+  if (typeof value === 'string') return value.includes(' ') ? JSON.stringify(value) : value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return JSON.stringify(value);
 }
 
 export function createLogger(options?: LoggerOptions): Logger {
