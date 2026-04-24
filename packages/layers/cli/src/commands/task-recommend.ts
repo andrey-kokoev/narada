@@ -7,6 +7,7 @@
 
 import { resolve } from 'node:path';
 import { generateRecommendations, type TaskRecommendation, type CandidateAssignment } from '../lib/task-recommender.js';
+import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import {
@@ -143,112 +144,129 @@ function applyPostureAdjustment(
 export async function taskRecommendCommand(
   options: TaskRecommendOptions,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const fmt = createFormatter({ format: options.format || 'auto', verbose: false });
-  const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
-  const agentFilter = options.agent;
-  const taskFilter = options.taskNumber;
-  const limit = options.limit ?? 10;
+  try {
+    const fmt = createFormatter({ format: options.format || 'auto', verbose: false });
+    const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
+    const agentFilter = options.agent;
+    const taskFilter = options.taskNumber;
+    const limit = options.limit ?? 10;
 
-  let recommendation = await generateRecommendations({
-    cwd,
-    agentFilter,
-    taskFilter,
-    limit,
-    architectId: options.architect,
-  });
+    let store;
+    try {
+      store = openTaskLifecycleStore(cwd);
+    } catch {
+      // Store may not exist yet; fallback to markdown-only reads
+    }
 
-  const { guidance } = await recallAcceptedLearning({
-    cwd,
-    scopes: ['recommendation', 'assignment', 'task-governance'],
-  });
+    let recommendation = await generateRecommendations({
+      cwd,
+      agentFilter,
+      taskFilter,
+      limit,
+      architectId: options.architect,
+      store,
+    });
 
-  // ── CCC Posture integration ──
-  let postureWarning: string | null = null;
-  let postureReasons: string[] = [];
+    if (store) store.db.close();
 
-  if (!options.ignorePosture) {
-    const posture = await loadPosture(cwd);
-    if (posture) {
-      const expired = new Date(posture.expires_at) < new Date();
-      if (!expired) {
-        const allCandidates = recommendation.primary
-          ? [recommendation.primary, ...recommendation.alternatives]
-          : recommendation.alternatives;
+    const { guidance } = await recallAcceptedLearning({
+      cwd,
+      scopes: ['recommendation', 'assignment', 'task-governance'],
+    });
 
-        const { adjusted, reasons } = applyPostureAdjustment(allCandidates, posture);
-        postureReasons = reasons;
+    // ── CCC Posture integration ──
+    let postureWarning: string | null = null;
+    let postureReasons: string[] = [];
 
-        if (adjusted.length > 0) {
-          recommendation = {
-            ...recommendation,
-            primary: adjusted[0] ?? null,
-            alternatives: adjusted.slice(1),
-          };
+    if (!options.ignorePosture) {
+      const posture = await loadPosture(cwd);
+      if (posture) {
+        const expired = new Date(posture.expires_at) < new Date();
+        if (!expired) {
+          const allCandidates = recommendation.primary
+            ? [recommendation.primary, ...recommendation.alternatives]
+            : recommendation.alternatives;
+
+          const { adjusted, reasons } = applyPostureAdjustment(allCandidates, posture);
+          postureReasons = reasons;
+
+          if (adjusted.length > 0) {
+            recommendation = {
+              ...recommendation,
+              primary: adjusted[0] ?? null,
+              alternatives: adjusted.slice(1),
+            };
+          }
+        } else {
+          postureWarning = 'CCC posture has expired; using local heuristics';
         }
       } else {
-        postureWarning = 'CCC posture has expired; using local heuristics';
+        postureWarning = 'No active CCC posture; recommendations use local heuristics only.';
       }
-    } else {
-      postureWarning = 'No active CCC posture; recommendations use local heuristics only.';
     }
-  }
 
-  if (fmt.getFormat() === 'json') {
-    const result: Record<string, unknown> = {
-      ...recommendation,
-      guidance: formatGuidanceForJson(guidance),
-    };
-    if (postureWarning) result.posture_warning = postureWarning;
-    if (postureReasons.length > 0) result.posture_adjustments = postureReasons;
+    if (fmt.getFormat() === 'json') {
+      const result: Record<string, unknown> = {
+        ...recommendation,
+        guidance: formatGuidanceForJson(guidance),
+      };
+      if (postureWarning) result.posture_warning = postureWarning;
+      if (postureReasons.length > 0) result.posture_adjustments = postureReasons;
+      return {
+        exitCode: recommendation.primary ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
+        result,
+      };
+    }
+
+    // Human-readable output
+    if (postureWarning) {
+      fmt.message(postureWarning, 'warning');
+    }
+
+    if (recommendation.primary) {
+      fmt.message(`Top recommendation: ${recommendation.primary.task_id} → ${recommendation.primary.principal_id}`, 'success');
+      fmt.message(`  Score: ${recommendation.primary.score} (confidence: ${recommendation.primary.confidence})`, 'info');
+      fmt.message(`  ${recommendation.primary.rationale}`, 'info');
+    } else {
+      fmt.message('No recommendations available.', 'warning');
+    }
+
+    if (postureReasons.length > 0) {
+      fmt.message('\nPosture adjustments:', 'info');
+      for (const reason of postureReasons) {
+        fmt.message(`  ${reason}`, 'info');
+      }
+    }
+
+    if (recommendation.alternatives.length > 0) {
+      fmt.message(`\nAlternatives (${recommendation.alternatives.length}):`, 'info');
+      for (const alt of recommendation.alternatives.slice(0, limit)) {
+        fmt.message(`  ${alt.task_id} → ${alt.principal_id} (score: ${alt.score}, ${alt.confidence})`, 'info');
+      }
+    }
+
+    if (recommendation.abstained.length > 0) {
+      fmt.message(`\nAbstained (${recommendation.abstained.length}):`, 'warning');
+      for (const abs of recommendation.abstained.slice(0, limit)) {
+        fmt.message(`  ${abs.task_id}: ${abs.reason}`, 'warning');
+      }
+    }
+
+    if (options.verbose && guidance.length > 0) {
+      fmt.message('\nActive guidance:', 'info');
+      for (const line of formatGuidanceForHumans(guidance)) {
+        fmt.message(line, 'info');
+      }
+    }
+
     return {
       exitCode: recommendation.primary ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
-      result,
+      result: recommendation,
+    };
+  } catch (err) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: { error: (err as Error).message },
     };
   }
-
-  // Human-readable output
-  if (postureWarning) {
-    fmt.message(postureWarning, 'warning');
-  }
-
-  if (recommendation.primary) {
-    fmt.message(`Top recommendation: ${recommendation.primary.task_id} → ${recommendation.primary.principal_id}`, 'success');
-    fmt.message(`  Score: ${recommendation.primary.score} (confidence: ${recommendation.primary.confidence})`, 'info');
-    fmt.message(`  ${recommendation.primary.rationale}`, 'info');
-  } else {
-    fmt.message('No recommendations available.', 'warning');
-  }
-
-  if (postureReasons.length > 0) {
-    fmt.message('\nPosture adjustments:', 'info');
-    for (const reason of postureReasons) {
-      fmt.message(`  ${reason}`, 'info');
-    }
-  }
-
-  if (recommendation.alternatives.length > 0) {
-    fmt.message(`\nAlternatives (${recommendation.alternatives.length}):`, 'info');
-    for (const alt of recommendation.alternatives.slice(0, limit)) {
-      fmt.message(`  ${alt.task_id} → ${alt.principal_id} (score: ${alt.score}, ${alt.confidence})`, 'info');
-    }
-  }
-
-  if (recommendation.abstained.length > 0) {
-    fmt.message(`\nAbstained (${recommendation.abstained.length}):`, 'warning');
-    for (const abs of recommendation.abstained.slice(0, limit)) {
-      fmt.message(`  ${abs.task_id}: ${abs.reason}`, 'warning');
-    }
-  }
-
-  if (options.verbose && guidance.length > 0) {
-    fmt.message('\nActive guidance:', 'info');
-    for (const line of formatGuidanceForHumans(guidance)) {
-      fmt.message(line, 'info');
-    }
-  }
-
-  return {
-    exitCode: recommendation.primary ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
-    result: recommendation,
-  };
 }

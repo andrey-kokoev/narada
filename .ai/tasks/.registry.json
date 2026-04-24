@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_allocated": 529,
+  "last_allocated": 592,
   "reserved": [
     471,
     472,
@@ -8,11 +8,11 @@
     474,
     475,
     476,
-    477
+    477,
+    474,
+    592
   ],
-  "released": [
-    474
-  ],
+  "released": [],
   "reservations": [
     {
       "range_start": 454,
@@ -345,6 +345,60 @@
       "reserved_by": "codex",
       "reserved_at": "2026-04-24T00:10:00-05:00",
       "expires_at": "2026-04-25T00:10:00-05:00",
+      "status": "released"
+    },
+    {
+      "range_start": 530,
+      "range_end": 530,
+      "purpose": "Distinguish chapter nodes from task nodes in task graph rendering",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-24T00:22:00-05:00",
+      "expires_at": "2026-04-25T00:22:00-05:00",
+      "status": "released"
+    },
+    {
+      "range_start": 531,
+      "range_end": 535,
+      "purpose": "Mail connectivity generalization and provider boundary chapter",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-23T23:20:00-05:00",
+      "expires_at": "2026-04-24T23:20:00-05:00",
+      "status": "released"
+    },
+    {
+      "range_start": 536,
+      "range_end": 540,
+      "purpose": "Operator console substrate completion chapter",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-23T23:32:00-05:00",
+      "expires_at": "2026-04-24T23:32:00-05:00",
+      "status": "released"
+    },
+    {
+      "range_start": 541,
+      "range_end": 545,
+      "purpose": "Messaging connectivity family boundary chapter",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-23T23:40:00-05:00",
+      "expires_at": "2026-04-24T23:40:00-05:00",
+      "status": "released"
+    },
+    {
+      "range_start": 546,
+      "range_end": 550,
+      "purpose": "Task lifecycle state authority migration chapter",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-23T23:52:00-05:00",
+      "expires_at": "2026-04-24T23:52:00-05:00",
+      "status": "released"
+    },
+    {
+      "range_start": 551,
+      "range_end": 551,
+      "purpose": "Workbench browser connectivity and handshake e2e fix",
+      "reserved_by": "codex",
+      "reserved_at": "2026-04-24T00:47:00-05:00",
+      "expires_at": "2026-04-25T00:47:00-05:00",
       "status": "released"
     }
   ]

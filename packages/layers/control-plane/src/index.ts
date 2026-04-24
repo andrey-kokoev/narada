@@ -726,6 +726,8 @@ export {
   getPrincipalHealth,
   toSnapshot,
   createPrincipalRuntime,
+  InMemoryPrincipalSessionBindingRegistry,
+  JsonPrincipalSessionBindingRegistry,
 } from "./principal-runtime/index.js";
 export type {
   PrincipalRuntime,
@@ -735,6 +737,8 @@ export type {
   CreatePrincipalRuntimeInput,
   PrincipalRuntimeHealth,
   PrincipalRuntimeSnapshot,
+  KimiSessionBinding,
+  PrincipalSessionBindingSnapshot,
 } from "./principal-runtime/index.js";
 
 // Re-export all types from types directory

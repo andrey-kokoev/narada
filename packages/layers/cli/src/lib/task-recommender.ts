@@ -14,12 +14,18 @@ import {
   loadReport,
   listReportsForTask,
   parseFrontMatter,
+  checkDependencies,
+  resolveTaskStatus,
+  isExecutableTaskFile,
+  extractChapter,
+  extractTaskNumberFromFileName,
   type AgentRoster,
   type AgentRosterEntry,
   type ChapterTaskInfo,
   type ComputedAffinity,
   type WorkResultReport,
 } from './task-governance.js';
+import type { TaskLifecycleStore } from './task-lifecycle-store.js';
 
 // ── Types ──
 
@@ -49,6 +55,7 @@ export interface CandidateAssignment {
 
 export interface ScoreBreakdown {
   affinity: number;
+  warm_context: number;
   capability: number;
   load: number;
   history: number;
@@ -81,6 +88,8 @@ export interface RecommendationOptions {
   principalRuntimePath?: string | null;
   /** Architect principal ID that produced this recommendation. Defaults to 'system'. */
   architectId?: string;
+  /** SQLite-backed lifecycle store for authoritative status reads. */
+  store?: TaskLifecycleStore;
 }
 
 export interface PrincipalSnapshot {
@@ -132,13 +141,24 @@ interface TaskInfo {
   body: string;
 }
 
+// Warm-context record for advisory routing signals
+interface WarmContextRecord {
+  task_id: string;
+  task_number: number | null;
+  chapter: string | null;
+  claimed_at: string | null;
+  released_at: string | null;
+  release_reason: 'completed' | 'abandoned' | 'superseded' | 'transferred' | 'budget_exhausted' | 'continued' | null;
+}
+
 // ── Default weights ──
 
 const DEFAULT_WEIGHTS: ScoreBreakdown = {
-  affinity: 0.30,
+  affinity: 0.25,
+  warm_context: 0.10,
   capability: 0.25,
   load: 0.20,
-  history: 0.10,
+  history: 0.05,
   review_separation: 0.10,
   budget: 0.05,
 };
@@ -278,6 +298,67 @@ function scoreBudget(snapshot: PrincipalSnapshot | undefined): number {
   return Math.min(1.0, snapshot.budget_remaining / 10000);
 }
 
+/**
+ * Compute warm-context affinity score for an agent relative to a task.
+ * Advisory signal only — never overrides hard blockers.
+ *
+ * Signals:
+ * - Same chapter continuity (agent worked on another task in same chapter)
+ * - Adjacent task continuity (agent worked on nearby task numbers)
+ * - Dependency recency (agent completed a prerequisite recently)
+ *
+ * Decay: exponential with 7-day half-life so stale context fades.
+ */
+function scoreWarmContext(
+  task: TaskInfo,
+  agentId: string,
+  agentWarmContexts: Map<string, WarmContextRecord[]>,
+  now: Date,
+): number {
+  const contexts = agentWarmContexts.get(agentId) ?? [];
+  const taskChapter = extractChapter(task.body);
+
+  let bestScore = 0;
+
+  for (const ctx of contexts) {
+    if (ctx.task_id === task.taskId) continue;
+
+    const isActive = ctx.released_at === null;
+    const timestamp = isActive ? ctx.claimed_at : ctx.released_at;
+    if (!timestamp) continue;
+
+    let decay = 1.0;
+    if (!isActive) {
+      const ageMs = now.getTime() - new Date(timestamp).getTime();
+      const ageDays = ageMs / (1000 * 60 * 60 * 24);
+      decay = Math.exp(-ageDays / 7); // 7-day half-life
+    }
+
+    // Same chapter signal
+    if (taskChapter && ctx.chapter === taskChapter) {
+      const baseScore = isActive ? 0.3 : 0.7;
+      bestScore = Math.max(bestScore, baseScore * decay);
+    }
+
+    // Adjacent task number signal (within ±3)
+    if (ctx.task_number !== null && task.taskNumber !== null) {
+      const distance = Math.abs(ctx.task_number - task.taskNumber);
+      if (distance > 0 && distance <= 3) {
+        const baseScore = isActive ? 0.2 : 0.5;
+        bestScore = Math.max(bestScore, baseScore * decay);
+      }
+    }
+
+    // Dependency recency signal (complements history affinity)
+    if (task.dependsOn?.includes(ctx.task_number ?? -1)) {
+      const baseScore = isActive ? 0.15 : 0.4;
+      bestScore = Math.max(bestScore, baseScore * decay);
+    }
+  }
+
+  return Math.min(1.0, bestScore);
+}
+
 // ── Confidence classification ──
 
 function classifyConfidence(score: number, nextBestScore: number): 'high' | 'medium' | 'low' {
@@ -294,6 +375,7 @@ function buildRationale(
   agentCaps: string[],
   affinityScore: number,
   computedAffinity: ComputedAffinity | undefined,
+  warmContextScore: number,
   loadScore: number,
   historyScore: number,
   reviewSepScore: number,
@@ -315,6 +397,12 @@ function buildRationale(
       ? `History affinity: ${computedAffinity?.affinity_reason ?? 'completed prerequisite tasks'}`
       : 'No affinity';
 
+  const warmContextClause = warmContextScore >= 0.5
+    ? `Warm context: recently worked on related task (${Math.round(warmContextScore * 100)}%)`
+    : warmContextScore > 0
+      ? `Warm context: some related work (${Math.round(warmContextScore * 100)}%)`
+      : 'Cold context';
+
   const loadClause = loadScore >= 1.0
     ? 'Idle'
     : loadScore > 0
@@ -335,7 +423,7 @@ function buildRationale(
     caveats.push('Budget low');
   }
 
-  return `${agent.agent_id} is ${agent.status ?? 'unknown'} with ${capSummary}. ${affinityClause}. ${loadClause}. ${historyClause}.${caveats.length > 0 ? ' ' + caveats.join('. ') + '.' : ''}`;
+  return `${agent.agent_id} is ${agent.status ?? 'unknown'} with ${capSummary}. ${affinityClause}. ${warmContextClause}. ${loadClause}. ${historyClause}.${caveats.length > 0 ? ' ' + caveats.join('. ') + '.' : ''}`;
 }
 
 // ── Main recommendation engine ──
@@ -346,24 +434,51 @@ export async function generateRecommendations(
   const cwd = resolve(options.cwd);
   const weights = DEFAULT_WEIGHTS;
   const now = new Date().toISOString();
+  const store = options.store;
 
   // 1. Load task graph directly (need dependsOn which listRunnableTasks omits)
   const tasksDir = join(cwd, '.ai', 'tasks');
-  const taskFiles = (await readdir(tasksDir).catch(() => [] as string[])).filter((f) => f.endsWith('.md'));
+  const allMdFiles = (await readdir(tasksDir).catch(() => [] as string[])).filter((f) => f.endsWith('.md'));
+  const taskFiles = allMdFiles.filter(isExecutableTaskFile);
+
+  // Build chapter map for all tasks (needed for warm-context affinity)
+  const taskChapterMap = new Map<string, string | null>();
+  for (const f of allMdFiles) {
+    try {
+      const content = await readFile(join(tasksDir, f), 'utf8');
+      const { body } = parseFrontMatter(content);
+      const chapter = extractChapter(body);
+      taskChapterMap.set(f.replace(/\.md$/, ''), chapter);
+    } catch {
+      // Skip unreadable files
+    }
+  }
+
+  // Pre-load all SQLite statuses for efficiency
+  const sqliteStatusMap = new Map<number, string>();
+  if (store) {
+    for (const row of store.getAllLifecycle()) {
+      sqliteStatusMap.set(row.task_number, row.status);
+    }
+  }
 
   const allTasks: TaskInfo[] = [];
-  const dependencyStatus = new Map<number, string>();
 
   for (const f of taskFiles) {
     try {
       const content = await readFile(join(tasksDir, f), 'utf8');
       const { frontMatter, body } = parseFrontMatter(content);
-      const status = frontMatter.status as string | undefined;
       const numMatch = f.match(/-(\d+)-/);
       const taskNumber = numMatch ? Number(numMatch[1]) : (typeof frontMatter.task_id === 'number' ? frontMatter.task_id : null);
-      if (taskNumber !== null && status) {
-        dependencyStatus.set(taskNumber, status);
+
+      // Prefer SQLite status if available
+      let status: string | undefined;
+      if (taskNumber !== null && sqliteStatusMap.has(taskNumber)) {
+        status = sqliteStatusMap.get(taskNumber);
+      } else {
+        status = frontMatter.status as string | undefined;
       }
+
       const titleMatch = body.match(/^#\s+(.+)$/m);
       allTasks.push({
         taskId: f.replace(/\.md$/, ''),
@@ -380,25 +495,26 @@ export async function generateRecommendations(
     }
   }
 
-  // Filter to runnable tasks with satisfied dependencies
+  // Filter to runnable tasks with satisfied dependencies (evidence-valid)
   const dependencyBlocked: TaskInfo[] = [];
   const inReviewTasks: TaskInfo[] = [];
-  const runnableTasks = allTasks.filter((task) => {
+  const runnableTasks: TaskInfo[] = [];
+
+  for (const task of allTasks) {
     if (task.status === 'in_review') {
       inReviewTasks.push(task);
-      return false;
+      continue;
     }
-    if (task.status !== 'opened' && task.status !== 'needs_continuation') return false;
-    const deps = task.dependsOn ?? [];
-    for (const depNum of deps) {
-      const depStatus = dependencyStatus.get(depNum);
-      if (depStatus !== 'closed' && depStatus !== 'confirmed') {
-        dependencyBlocked.push(task);
-        return false;
-      }
+    if (task.status !== 'opened' && task.status !== 'needs_continuation') continue;
+
+    const { blockedBy } = await checkDependencies(cwd, task.dependsOn, store);
+    if (blockedBy.length > 0) {
+      dependencyBlocked.push(task);
+      continue;
     }
-    return true;
-  });
+
+    runnableTasks.push(task);
+  }
 
   // 2. Load roster
   const roster = await loadRoster(cwd);
@@ -406,10 +522,11 @@ export async function generateRecommendations(
   // 3. Load PrincipalRuntime (advisory, degrades gracefully)
   const runtimeSnapshots = await loadPrincipalRuntimeSnapshots(cwd);
 
-  // 4. Load assignment history and build last-worker map
+  // 4. Load assignment history and build last-worker map + warm-context records
   const lastWorkerMap = new Map<string, string | null>();
   const assignmentDir = join(cwd, '.ai', 'tasks', 'assignments');
   const completionCounts = new Map<string, { completed: number; abandoned: number }>();
+  const agentWarmContexts = new Map<string, WarmContextRecord[]>();
 
   let assignmentFiles: string[] = [];
   try {
@@ -431,12 +548,23 @@ export async function generateRecommendations(
       lastWorkerMap.set(taskId, completed[0]!.agent_id);
     }
 
-    // Count per-agent completion/abandonment
+    // Count per-agent completion/abandonment + build warm-context records
     for (const a of record.assignments) {
       const counts = completionCounts.get(a.agent_id) ?? { completed: 0, abandoned: 0 };
       if (a.release_reason === 'completed') counts.completed++;
       else if (a.release_reason === 'abandoned') counts.abandoned++;
       completionCounts.set(a.agent_id, counts);
+
+      const contexts = agentWarmContexts.get(a.agent_id) ?? [];
+      contexts.push({
+        task_id: taskId,
+        task_number: extractTaskNumberFromFileName(taskId + '.json') ?? extractTaskNumberFromFileName(taskId + '.md'),
+        chapter: taskChapterMap.get(taskId) ?? null,
+        claimed_at: a.claimed_at,
+        released_at: a.released_at,
+        release_reason: a.release_reason,
+      });
+      agentWarmContexts.set(a.agent_id, contexts);
     }
   }
 
@@ -564,6 +692,12 @@ export async function generateRecommendations(
         reasons.push({ category: 'warm_context', description: 'Continuation affinity' });
       }
 
+      // Warm-context score
+      const warmContextScore = scoreWarmContext(task, agent.agent_id, agentWarmContexts, new Date(now));
+      if (warmContextScore > 0.0) {
+        reasons.push({ category: 'warm_context', description: `Warm context ${Math.round(warmContextScore * 100)}%` });
+      }
+
       // History score
       const counts = completionCounts.get(agent.agent_id) ?? { completed: 0, abandoned: 0 };
       const historyScore = scoreHistory(counts.completed, counts.abandoned);
@@ -587,6 +721,7 @@ export async function generateRecommendations(
       // Composite score
       const score =
         weights.affinity * affinityScore +
+        weights.warm_context * warmContextScore +
         weights.capability * capabilityScore +
         weights.load * loadScore +
         weights.history * historyScore +
@@ -607,13 +742,14 @@ export async function generateRecommendations(
         confidence: 'low', // Will be updated after sorting
         breakdown: {
           affinity: Math.round(affinityScore * 1000) / 1000,
+          warm_context: Math.round(warmContextScore * 1000) / 1000,
           capability: Math.round(capabilityScore * 1000) / 1000,
           load: Math.round(loadScore * 1000) / 1000,
           history: Math.round(historyScore * 1000) / 1000,
           review_separation: Math.round(reviewSepScore * 1000) / 1000,
           budget: Math.round(budgetScore * 1000) / 1000,
         },
-        rationale: buildRationale(agent, taskCaps, agent.capabilities ?? [], affinityScore, task.continuationAffinity, loadScore, historyScore, reviewSepScore, budgetScore, budgetWarning),
+        rationale: buildRationale(agent, taskCaps, agent.capabilities ?? [], affinityScore, task.continuationAffinity, warmContextScore, loadScore, historyScore, reviewSepScore, budgetScore, budgetWarning),
         reasons,
         risks,
       });

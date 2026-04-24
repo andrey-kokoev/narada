@@ -7,6 +7,7 @@
 
 import { readFile, writeFile, readdir, rename, open, unlink } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
+import type { TaskLifecycleStore } from './task-lifecycle-store.js';
 
 export interface AgentRosterEntry {
   agent_id: string;
@@ -416,6 +417,35 @@ function countUncheckedCriteria(body: string): { allChecked: boolean | null; unc
 const DERIVATIVE_SUFFIXES = ['-EXECUTED.md', '-DONE.md', '-RESULT.md', '-FINAL.md', '-SUPERSEDED.md'];
 
 /**
+ * Determine whether a file in `.ai/tasks/` is an executable task file.
+ *
+ * Excludes:
+ * - Derivative status files (-EXECUTED, -DONE, -RESULT, -FINAL, -SUPERSEDED)
+ * - Chapter range files (DATE-START-END-...)
+ * - Chapter task files (basename contains `-chapter`)
+ * - Chapter closure files (basename ends with `-closure`)
+ * - Non-markdown files
+ */
+export function isExecutableTaskFile(fileName: string): boolean {
+  if (!fileName.endsWith('.md')) return false;
+  const base = fileName.replace(/\.md$/, '');
+
+  // Exclude derivative status files
+  for (const suffix of DERIVATIVE_SUFFIXES) {
+    if (base.includes(suffix.replace(/\.md$/, ''))) return false;
+  }
+
+  // Exclude chapter range files: DATE-START-END-...
+  if (/^[0-9]{8}-[0-9]+-[0-9]+/.test(base)) return false;
+
+  // Exclude chapter artifacts (chapter tasks and chapter closures)
+  if (base.includes('-chapter')) return false;
+  if (base.endsWith('-closure')) return false;
+
+  return true;
+}
+
+/**
  * Determine whether a terminal task has governed provenance.
  *
  * A task may enter terminal state (closed/confirmed) only through a governed operator.
@@ -431,6 +461,7 @@ export function hasGovernedProvenance(
   frontMatter: TaskFrontMatter,
   hasReview: boolean,
   hasClosure: boolean,
+  resolvedStatus?: string,
 ): boolean {
   // New explicit governed-by marker
   if (typeof frontMatter.governed_by === 'string' && frontMatter.governed_by.length > 0) {
@@ -455,13 +486,16 @@ export function hasGovernedProvenance(
     return true;
   }
 
+  // Use resolved status (e.g. from SQLite) if provided, otherwise front matter
+  const effectiveStatus = resolvedStatus ?? frontMatter.status;
+
   // Pre-501 backward compatibility: task_review left a review record
-  if (hasReview && frontMatter.status === 'closed') {
+  if (hasReview && effectiveStatus === 'closed') {
     return true;
   }
 
   // Pre-501 backward compatibility: chapter_close left a closure decision
-  if (hasClosure && frontMatter.status === 'confirmed') {
+  if (hasClosure && effectiveStatus === 'confirmed') {
     return true;
   }
 
@@ -494,7 +528,11 @@ export async function hasDerivativeFiles(cwd: string, taskNumber: number): Promi
   return false;
 }
 
-export async function inspectTaskEvidence(cwd: string, taskNumber: string): Promise<TaskCompletionEvidence> {
+export async function inspectTaskEvidence(
+  cwd: string,
+  taskNumber: string,
+  store?: TaskLifecycleStore,
+): Promise<TaskCompletionEvidence> {
   let taskFile;
   try {
     taskFile = await findTaskFile(cwd, taskNumber);
@@ -523,8 +561,15 @@ export async function inspectTaskEvidence(cwd: string, taskNumber: string): Prom
   }
 
   const { frontMatter, body } = await readTaskFile(taskFile.path);
-  const status = frontMatter.status as string | undefined;
+  // Prefer SQLite status when available
+  let status: string | undefined;
   const num = Number.isFinite(Number(taskNumber)) ? Number(taskNumber) : null;
+  if (store && num !== null) {
+    const lifecycle = store.getLifecycleByNumber(num);
+    status = lifecycle?.status ?? (frontMatter.status as string | undefined);
+  } else {
+    status = frontMatter.status as string | undefined;
+  }
 
   const criteria = countUncheckedCriteria(body);
   const hasExecutionNotes = /##\s*Execution Notes\s*\n/i.test(body);
@@ -540,7 +585,7 @@ export async function inspectTaskEvidence(cwd: string, taskNumber: string): Prom
   const closures = num !== null ? await listClosureDecisionsForTask(cwd, num) : [];
   const hasClosure = closures.length > 0;
   const hasDerivatives = num !== null ? await hasDerivativeFiles(cwd, num) : false;
-  const hasGovernedProvenanceValue = hasGovernedProvenance(frontMatter, hasReview, hasClosure);
+  const hasGovernedProvenanceValue = hasGovernedProvenance(frontMatter, hasReview, hasClosure, status);
 
   // Determine active assignment intent
   let activeAssignmentIntent: AssignmentIntent | null = null;
@@ -561,7 +606,7 @@ export async function inspectTaskEvidence(cwd: string, taskNumber: string): Prom
   const terminalStatuses: Array<string | undefined> = ['closed', 'confirmed'];
 
   const hasEvidence = hasReport || hasExecutionNotes;
-  const governedProvenance = hasGovernedProvenance(frontMatter, hasReview, hasClosure);
+  const governedProvenance = hasGovernedProvenance(frontMatter, hasReview, hasClosure, status);
 
   if (terminalStatuses.includes(status)) {
     if (!hasEvidence) {
@@ -866,7 +911,8 @@ export async function findTaskFile(cwd: string, taskNumber: string): Promise<{ p
   for (const candidate of candidates) {
     try {
       const content = await readFile(join(dir, candidate), 'utf8');
-      if (content.match(new RegExp(`^# Task ${taskNumber}\\b`, 'm'))) {
+      const heading = content.match(/^# Task (\d+)(?:\s+-|\s*$)/m);
+      if (heading && Number(heading[1]) === Number(taskNumber)) {
         executableCandidates.push(candidate);
       }
     } catch {
@@ -1098,16 +1144,61 @@ export function getAssignmentIntent(assignment: TaskAssignment): AssignmentInten
 }
 
 /**
- * Check that all dependency tasks are in a terminal or near-terminal state.
- * Returns the list of blocking dependency task IDs.
+ * Result of checking whether a dependency is satisfied.
+ *
+ * A dependency is satisfied only when it is:
+ * 1. In a terminal status ('closed' or 'confirmed'), AND
+ * 2. Complete by evidence (verdict === 'complete').
  */
+export interface DependencyCheckDetail {
+  taskId: string;
+  reason: string;
+}
+
+/**
+ * Check that all dependency tasks are in a terminal state AND complete by evidence.
+ * Returns the list of blocking dependency task IDs with explanatory reasons.
+ */
+/**
+ * Resolve a task's status from SQLite (preferred) or markdown fallback.
+ * When a store is provided, looks up by task_number in the lifecycle store.
+ * Falls back to reading the task file's front matter when the store has no
+ * record or when no store is given.
+ */
+export async function resolveTaskStatus(
+  cwd: string,
+  taskNumber: number,
+  store?: TaskLifecycleStore,
+): Promise<{ status: string | undefined; source: 'sqlite' | 'markdown' }> {
+  if (store) {
+    const lifecycle = store.getLifecycleByNumber(taskNumber);
+    if (lifecycle) {
+      return { status: lifecycle.status, source: 'sqlite' };
+    }
+  }
+  // Fallback: read markdown front matter
+  try {
+    const taskFile = await findTaskFile(cwd, String(taskNumber));
+    if (taskFile) {
+      const content = await readFile(taskFile.path, 'utf8');
+      const { frontMatter } = parseFrontMatter(content);
+      return { status: frontMatter.status as string | undefined, source: 'markdown' };
+    }
+  } catch {
+    // File not found or unreadable
+  }
+  return { status: undefined, source: 'markdown' };
+}
+
 export async function checkDependencies(
   cwd: string,
   dependsOn: number[] | undefined,
-): Promise<{ blockedBy: string[] }> {
-  if (!dependsOn || dependsOn.length === 0) return { blockedBy: [] };
+  store?: TaskLifecycleStore,
+): Promise<{ blockedBy: string[]; details: DependencyCheckDetail[] }> {
+  if (!dependsOn || dependsOn.length === 0) return { blockedBy: [], details: [] };
 
   const blockedBy: string[] = [];
+  const details: DependencyCheckDetail[] = [];
 
   for (const depNum of dependsOn) {
     let taskFile: { path: string; taskId: string } | null = null;
@@ -1119,19 +1210,34 @@ export async function checkDependencies(
 
     if (!taskFile) {
       blockedBy.push(String(depNum));
+      details.push({ taskId: String(depNum), reason: 'Dependency task file not found' });
       continue;
     }
 
-    const content = await readFile(taskFile.path, 'utf8');
-    const { frontMatter } = parseFrontMatter(content);
-    const depStatus = frontMatter.status;
+    const { status: depStatus } = await resolveTaskStatus(cwd, depNum, store);
 
     if (depStatus !== 'closed' && depStatus !== 'confirmed') {
       blockedBy.push(taskFile.taskId);
+      details.push({
+        taskId: taskFile.taskId,
+        reason: `Dependency is not in a terminal status (current: ${depStatus ?? 'missing'})`,
+      });
+      continue;
+    }
+
+    // Terminal by status — now check evidence completeness
+    const evidence = await inspectTaskEvidence(cwd, String(depNum), store);
+    if (evidence.verdict !== 'complete') {
+      blockedBy.push(taskFile.taskId);
+      const firstWarning = evidence.warnings[0] ?? 'Task is not complete by evidence';
+      details.push({
+        taskId: taskFile.taskId,
+        reason: `Dependency is ${depStatus} but not complete by evidence: ${firstWarning}`,
+      });
     }
   }
 
-  return { blockedBy };
+  return { blockedBy, details };
 }
 
 /**
@@ -2098,11 +2204,16 @@ export interface RunnableTask {
 
 /**
  * List all runnable (opened / needs_continuation) tasks sorted by affinity.
+ * When a store is provided, statuses are read from SQLite first, falling back
+ * to markdown front matter for tasks not yet backfilled.
  */
-export async function listRunnableTasks(cwd: string): Promise<RunnableTask[]> {
+export async function listRunnableTasks(
+  cwd: string,
+  store?: TaskLifecycleStore,
+): Promise<RunnableTask[]> {
   const dir = join(resolveRepoPath(cwd), TASKS_DIR);
   const files = await readdir(dir);
-  const mdFiles = files.filter((f) => f.endsWith('.md'));
+  const mdFiles = files.filter(isExecutableTaskFile);
 
   // First pass: collect all task info
   const allTaskInfos = new Map<number, ChapterTaskInfo>();
@@ -2111,12 +2222,21 @@ export async function listRunnableTasks(cwd: string): Promise<RunnableTask[]> {
   for (const f of mdFiles) {
     const content = await readFile(join(dir, f), 'utf8');
     const { frontMatter, body } = parseFrontMatter(content);
-    const status = frontMatter.status as string | undefined;
-    if (status !== 'opened' && status !== 'needs_continuation') continue;
-
     const base = f.replace(/\.md$/, '');
     const numMatch = base.match(/-(\d+)-/);
     const taskNumber = numMatch ? Number(numMatch[1]) : (typeof frontMatter.task_id === 'number' ? frontMatter.task_id : null);
+
+    // Prefer SQLite status if available
+    let status: string | undefined;
+    if (store && taskNumber !== null) {
+      const resolved = store.getLifecycleByNumber(taskNumber);
+      status = resolved?.status ?? (frontMatter.status as string | undefined);
+    } else {
+      status = frontMatter.status as string | undefined;
+    }
+
+    if (status !== 'opened' && status !== 'needs_continuation') continue;
+
     const titleMatch = body.match(/^#\s+(.+)$/m);
 
     const info: ChapterTaskInfo = {

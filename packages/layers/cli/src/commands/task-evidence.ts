@@ -7,6 +7,7 @@
 
 import { resolve } from 'node:path';
 import { inspectTaskEvidence, type TaskCompletionEvidence } from '../lib/task-governance.js';
+import { inspectTaskEvidenceWithProjection } from '../lib/task-projection.js';
 import { ExitCode } from '../lib/exit-codes.js';
 
 export interface TaskEvidenceOptions {
@@ -30,7 +31,14 @@ export async function taskEvidenceCommand(
 
   let evidence: TaskCompletionEvidence;
   try {
-    evidence = await inspectTaskEvidence(cwd, taskNumber);
+    // Try projection-backed inspection first (SQLite lifecycle + markdown spec)
+    const projected = await inspectTaskEvidenceWithProjection(cwd, taskNumber);
+    if (projected) {
+      evidence = projected;
+    } else {
+      // Fall back to pure markdown inspection when SQLite is unavailable
+      evidence = await inspectTaskEvidence(cwd, taskNumber);
+    }
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     return {

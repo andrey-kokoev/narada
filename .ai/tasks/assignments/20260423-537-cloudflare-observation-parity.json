@@ -1,0 +1,13 @@
+{
+  "task_id": "20260423-537-cloudflare-observation-parity",
+  "assignments": [
+    {
+      "agent_id": "a1",
+      "claimed_at": "2026-04-24T00:13:02.269Z",
+      "claim_context": null,
+      "released_at": null,
+      "release_reason": null,
+      "intent": "primary"
+    }
+  ]
+}

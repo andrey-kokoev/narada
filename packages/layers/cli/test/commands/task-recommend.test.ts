@@ -8,6 +8,7 @@ import { taskRecommendCommand } from '../../src/commands/task-recommend.js';
 import { taskClaimCommand } from '../../src/commands/task-claim.js';
 import { taskReportCommand } from '../../src/commands/task-report.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
+import * as taskRecommender from '../../src/lib/task-recommender.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -474,5 +475,184 @@ describe('task recommend operator', () => {
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     const hasGuidance = logs.some((l) => l.includes('Active guidance:'));
     expect(hasGuidance).toBe(true);
+  });
+
+  it('excludes chapter range files from recommendation candidates', async () => {
+    // Create a chapter file that would appear as an opened task
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-995-999-chapter-artifact.md'),
+      '---\nstatus: opened\n---\n\n# Chapter 995–999\n\nA chapter artifact.\n',
+    );
+
+    const result = await taskRecommendCommand({ cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const rec = result.result as { primary: { task_id: string } | null; alternatives: Array<{ task_id: string }>; abstained: Array<{ task_id: string }> };
+    const allTaskIds = [
+      rec.primary?.task_id,
+      ...rec.alternatives.map((a) => a.task_id),
+      ...rec.abstained.map((a) => a.task_id),
+    ].filter(Boolean);
+    expect(allTaskIds).not.toContain('20260420-995-999-chapter-artifact');
+  });
+
+  it('excludes derivative files from recommendation candidates', async () => {
+    // Create a derivative file that would appear as an opened task
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-994-task-DONE.md'),
+      '---\nstatus: opened\n---\n\n# Task 994 Done\n\nDerivative artifact.\n',
+    );
+
+    const result = await taskRecommendCommand({ cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const rec = result.result as { primary: { task_id: string } | null; alternatives: Array<{ task_id: string }>; abstained: Array<{ task_id: string }> };
+    const allTaskIds = [
+      rec.primary?.task_id,
+      ...rec.alternatives.map((a) => a.task_id),
+      ...rec.abstained.map((a) => a.task_id),
+    ].filter(Boolean);
+    expect(allTaskIds).not.toContain('20260420-994-task-DONE');
+  });
+
+  it('recommends executable task when chapter file shares overlapping numbers', async () => {
+    // Create a chapter range that overlaps with an executable task number
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-990-995-chapter-range.md'),
+      '---\nstatus: opened\n---\n\n# Chapter 990–995\n',
+    );
+    // Create executable task 991 inside the chapter range
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-991-executable-task.md'),
+      '---\ntask_id: 991\nstatus: opened\n---\n\n# Task 991: Executable Task Inside Range\n\nDo something.\n',
+    );
+
+    const result = await taskRecommendCommand({ cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const rec = result.result as { primary: { task_id: string } | null; alternatives: Array<{ task_id: string }>; abstained: Array<{ task_id: string }> };
+    const allTaskIds = [
+      rec.primary?.task_id,
+      ...rec.alternatives.map((a) => a.task_id),
+      ...rec.abstained.map((a) => a.task_id),
+    ].filter(Boolean);
+    // Chapter should not appear
+    expect(allTaskIds).not.toContain('20260420-990-995-chapter-range');
+    // Executable task should appear
+    expect(allTaskIds).toContain('20260420-991-executable-task');
+  });
+
+  it('filters by specific executable task number despite chapter files', async () => {
+    // Create a chapter range
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-980-985-chapter-range.md'),
+      '---\nstatus: opened\n---\n\n# Chapter 980–985\n',
+    );
+
+    const result = await taskRecommendCommand({ cwd: tempDir, format: 'json', taskNumber: '998' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const rec = result.result as { primary: { task_id: string } | null; alternatives: Array<{ task_id: string }>; abstained: Array<{ task_id: string }> };
+    // Should only recommend task 998, not the chapter
+    expect(rec.primary?.task_id).toBe('20260420-998-typescript-task');
+    const allTaskIds = [
+      rec.primary?.task_id,
+      ...rec.alternatives.map((a) => a.task_id),
+      ...rec.abstained.map((a) => a.task_id),
+    ].filter(Boolean);
+    expect(allTaskIds).not.toContain('20260420-980-985-chapter-range');
+  });
+
+  it('excludes chapter closure tasks from recommendation candidates', async () => {
+    // Create a chapter closure file with opened status
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-975-mail-connectivity-chapter-closure.md'),
+      '---\nstatus: opened\ndepends_on: [998]\n---\n\n# Task 975 - Mail Connectivity Chapter Closure\n',
+    );
+
+    const result = await taskRecommendCommand({ cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const rec = result.result as { primary: { task_id: string } | null; alternatives: Array<{ task_id: string }>; abstained: Array<{ task_id: string }> };
+    const allTaskIds = [
+      rec.primary?.task_id,
+      ...rec.alternatives.map((a) => a.task_id),
+      ...rec.abstained.map((a) => a.task_id),
+    ].filter(Boolean);
+    expect(allTaskIds).not.toContain('20260420-975-mail-connectivity-chapter-closure');
+  });
+
+  it('excludes completed (closed) executable tasks from recommendation candidates', async () => {
+    // Create a closed executable task
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-970-completed-task.md'),
+      '---\ntask_id: 970\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 970: Completed Task\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Execution Notes\n\nCompleted.\n\n## Verification\n\nVerified.\n',
+    );
+
+    const result = await taskRecommendCommand({ cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const rec = result.result as { primary: { task_id: string } | null; alternatives: Array<{ task_id: string }>; abstained: Array<{ task_id: string }> };
+    const allTaskIds = [
+      rec.primary?.task_id,
+      ...rec.alternatives.map((a) => a.task_id),
+      ...rec.abstained.map((a) => a.task_id),
+    ].filter(Boolean);
+    expect(allTaskIds).not.toContain('20260420-970-completed-task');
+  });
+
+  it('includes clean executable opened tasks in recommendation candidates', async () => {
+    // Task 998 is already set up as an opened executable task in setupRepo
+    const result = await taskRecommendCommand({ cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const rec = result.result as { primary: { task_id: string } | null; alternatives: Array<{ task_id: string }>; abstained: Array<{ task_id: string }> };
+    const allTaskIds = [
+      rec.primary?.task_id,
+      ...rec.alternatives.map((a) => a.task_id),
+      ...rec.abstained.map((a) => a.task_id),
+    ].filter(Boolean);
+    expect(allTaskIds).toContain('20260420-998-typescript-task');
+  });
+
+  it('reports empty recommendation honestly in human mode', async () => {
+    // Mark all tasks as claimed so no recommendations are available
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-998-typescript-task.md'),
+      '---\ntask_id: 998\nstatus: claimed\n---\n\n# Task 998\n',
+    );
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-999-database-task.md'),
+      '---\ntask_id: 999\nstatus: claimed\n---\n\n# Task 999\n',
+    );
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((msg: string) => { logs.push(msg); });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await taskRecommendCommand({ cwd: tempDir, format: 'human' });
+
+    logSpy.mockRestore();
+    errorSpy.mockRestore();
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    const rec = result.result as { primary: null; abstained: unknown[] };
+    expect(rec.primary).toBeNull();
+    // Should report empty honestly, not as a failure
+    expect(logs.some((l) => l.includes('No recommendations available.'))).toBe(true);
+    // Should NOT print the misleading failure message
+    expect(logs.some((l) => l.includes('Recommendation failed'))).toBe(false);
+  });
+
+  it('reports actual command failure as failure', async () => {
+    const spy = vi.spyOn(taskRecommender, 'generateRecommendations').mockRejectedValue(new Error('Simulated engine failure'));
+
+    const result = await taskRecommendCommand({ cwd: tempDir, format: 'json' });
+
+    spy.mockRestore();
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    const rec = result.result as { error: string };
+    expect(rec.error).toBe('Simulated engine failure');
   });
 });

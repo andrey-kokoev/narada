@@ -1,0 +1,63 @@
+{
+  "promotion_id": "promotion-1777002774827-a97aiw",
+  "recommendation_id": "rec-1777002754974",
+  "task_id": "20260423-547-sqlite-schema-and-projection-split",
+  "task_number": 547,
+  "agent_id": "a1",
+  "architect_id": "system",
+  "requested_by": "codex",
+  "requested_at": "2026-04-24T03:52:54.827Z",
+  "executed_at": "2026-04-24T03:52:54.827Z",
+  "status": "executed",
+  "recommendation_snapshot": {
+    "generated_at": "2026-04-24T03:52:54.831Z",
+    "recommender_id": "system",
+    "primary": {
+      "task_id": "20260423-547-sqlite-schema-and-projection-split",
+      "principal_id": "a1",
+      "score": 0.45,
+      "confidence": "low",
+      "rationale": "a1 is done with no capability match. No affinity. Idle. Strong completion record."
+    }
+  },
+  "validation_results": [
+    {
+      "check": "task_exists",
+      "passed": true
+    },
+    {
+      "check": "task_status",
+      "passed": true
+    },
+    {
+      "check": "dependencies",
+      "passed": true
+    },
+    {
+      "check": "agent_exists",
+      "passed": true
+    },
+    {
+      "check": "agent_available",
+      "passed": true,
+      "detail": "status is done"
+    },
+    {
+      "check": "no_active_assignment",
+      "passed": true
+    },
+    {
+      "check": "write_set_risk",
+      "passed": true
+    },
+    {
+      "check": "recommendation_fresh",
+      "passed": true
+    },
+    {
+      "check": "principal_unavailable",
+      "passed": true
+    }
+  ],
+  "assignment_id": "20260423-547-sqlite-schema-and-projection-split"
+}

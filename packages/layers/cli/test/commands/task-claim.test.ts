@@ -202,11 +202,11 @@ describe('task claim operator', () => {
     expect((result.result as { error: string }).error).toContain('20260420-998-dep-task');
   });
 
-  it('succeeds when dependencies are closed', async () => {
-    // Create dependency task 998 (closed)
+  it('succeeds when dependencies are closed and complete by evidence', async () => {
+    // Create dependency task 998 (closed, complete by evidence)
     writeFileSync(
       join(tempDir, '.ai', 'tasks', '20260420-998-dep-task.md'),
-      '---\ntask_id: 998\nstatus: closed\n---\n\n# Task 998: Dependency\n',
+      '---\ntask_id: 998\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 998: Dependency\n\n## Acceptance Criteria\n\n- [x] Criterion 1\n\n## Execution Notes\n\nCompleted.\n\n## Verification\n\nVerified.\n',
     );
 
     // Create main task with depends_on: [998]
@@ -225,6 +225,33 @@ describe('task claim operator', () => {
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
   });
 
+  it('fails when dependency is closed but not complete by evidence', async () => {
+    // Create dependency task 998 (closed, but missing execution notes and verification)
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-998-dep-task.md'),
+      '---\ntask_id: 998\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 998: Dependency\n\n## Acceptance Criteria\n\n- [x] Criterion 1\n',
+    );
+
+    // Create main task with depends_on: [998]
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+      '---\ntask_id: 999\nstatus: opened\ndepends_on: [998]\n---\n\n# Task 999: Test Task\n',
+    );
+
+    const result = await taskClaimCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    const error = (result.result as { error: string }).error;
+    expect(error).toContain('unmet dependencies');
+    expect(error).toContain('not complete by evidence');
+    expect(error).toContain('20260420-998-dep-task');
+  });
+
   it('treats an executable dependency as satisfied even when a chapter range file shares its number', async () => {
     writeFileSync(
       join(tempDir, '.ai', 'tasks', '20260423-998-1000-synthetic-chapter.md'),
@@ -232,7 +259,7 @@ describe('task claim operator', () => {
     );
     writeFileSync(
       join(tempDir, '.ai', 'tasks', '20260420-998-dep-task.md'),
-      '---\ntask_id: 998\nstatus: closed\n---\n\n# Task 998: Dependency\n',
+      '---\ntask_id: 998\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 998: Dependency\n\n## Acceptance Criteria\n\n- [x] Criterion 1\n\n## Execution Notes\n\nCompleted.\n\n## Verification\n\nVerified.\n',
     );
     writeFileSync(
       join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
@@ -270,10 +297,10 @@ describe('task claim operator', () => {
   });
 
   it('preserves depends_on YAML list syntax when claiming', async () => {
-    // Create closed dependency
+    // Create closed dependency (complete by evidence)
     writeFileSync(
       join(tempDir, '.ai', 'tasks', '20260420-998-dep-task.md'),
-      '---\ntask_id: 998\nstatus: closed\n---\n\n# Task 998: Dependency\n',
+      '---\ntask_id: 998\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 998: Dependency\n\n## Acceptance Criteria\n\n- [x] Criterion 1\n\n## Execution Notes\n\nCompleted.\n\n## Verification\n\nVerified.\n',
     );
 
     // Create task with YAML list depends_on

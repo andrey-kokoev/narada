@@ -20,6 +20,7 @@ import {
 } from '../lib/task-governance.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import type { TaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 import {
   resolvePrincipalStateDir,
   updatePrincipalRuntimeFromTaskEvent,
@@ -34,6 +35,7 @@ export interface TaskReviewOptions {
   report?: string;
   cwd?: string;
   principalStateDir?: string;
+  store?: TaskLifecycleStore;
 }
 
 export async function taskReviewCommand(
@@ -117,13 +119,46 @@ export async function taskReviewCommand(
   // Read task file
   const { frontMatter, body } = await readTaskFile(taskFile.path);
 
+  // --- SQLite-backed lifecycle path (Task 567) ---
+  const store = options.store;
+  let sqliteStatus: string | undefined;
+  if (store) {
+    let lifecycle = store.getLifecycle(taskFile.taskId);
+    if (!lifecycle) {
+      // Backfill: task exists in markdown but not yet in SQLite
+      const taskNum = Number(taskNumber);
+      if (!Number.isFinite(taskNum)) {
+        return {
+          exitCode: ExitCode.GENERAL_ERROR,
+          result: { status: 'error', error: 'Cannot determine task number for SQLite backfill' },
+        };
+      }
+      store.upsertLifecycle({
+        task_id: taskFile.taskId,
+        task_number: taskNum,
+        status: (frontMatter.status as import('../lib/task-lifecycle-store.js').TaskStatus) ?? 'opened',
+        governed_by: (frontMatter.governed_by as string) || null,
+        closed_at: (frontMatter.closed_at as string) || null,
+        closed_by: (frontMatter.closed_by as string) || null,
+        reopened_at: (frontMatter.reopened_at as string) || null,
+        reopened_by: (frontMatter.reopened_by as string) || null,
+        continuation_packet_json: null,
+        updated_at: new Date().toISOString(),
+      });
+      lifecycle = store.getLifecycle(taskFile.taskId)!;
+    }
+    sqliteStatus = lifecycle.status;
+  }
+
+  const currentStatus = sqliteStatus ?? (frontMatter.status as string | undefined);
+
   // Task must be in_review to be reviewed
-  if (frontMatter.status !== 'in_review') {
+  if (currentStatus !== 'in_review') {
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: {
         status: 'error',
-        error: `Task ${taskFile.taskId} cannot be reviewed (status: ${frontMatter.status ?? 'missing'}, expected: in_review)`,
+        error: `Task ${taskFile.taskId} cannot be reviewed (status: ${currentStatus ?? 'missing'}, expected: in_review)`,
       },
     };
   }
@@ -156,12 +191,12 @@ export async function taskReviewCommand(
   }
 
   // Validate transition (allow same-status when evidence gate blocked)
-  if (newStatus !== frontMatter.status && !isValidTransition(frontMatter.status, newStatus)) {
+  if (newStatus !== currentStatus && !isValidTransition(currentStatus, newStatus)) {
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: {
         status: 'error',
-        error: `Transition from '${String(frontMatter.status)}' to '${newStatus}' is not allowed by the state machine`,
+        error: `Transition from '${String(currentStatus)}' to '${newStatus}' is not allowed by the state machine`,
       },
     };
   }
@@ -252,17 +287,39 @@ export async function taskReviewCommand(
 
   await saveReview(cwd, reviewRecord);
 
+  // Write authoritative review and lifecycle state to SQLite
+  if (store) {
+    store.insertReview({
+      review_id: reviewId,
+      task_id: taskFile.taskId,
+      reviewer_agent_id: agentId,
+      verdict: verdict === 'accepted_with_notes' ? 'accepted' : verdict,
+      findings_json: findings.length > 0 ? JSON.stringify(findings) : null,
+      reviewed_at: now,
+    });
+
+    if (newStatus === 'closed') {
+      store.updateStatus(taskFile.taskId, 'closed', agentId, {
+        closed_at: now,
+        closed_by: agentId,
+        governed_by: `task_review:${agentId}`,
+      });
+    } else if (newStatus === 'opened') {
+      store.updateStatus(taskFile.taskId, 'opened', agentId);
+    }
+  }
+
   // Update linked report status if applicable
   if (linkedReport) {
     linkedReport.report_status = verdict === 'rejected' ? 'rejected' : 'accepted';
     await saveReport(cwd, linkedReport);
   }
 
-  // Update task status
+  // Preserve markdown front matter as compatibility projection
   frontMatter.status = newStatus;
   if (newStatus === 'closed') {
     frontMatter.governed_by = `task_review:${agentId}`;
-    frontMatter.closed_at = new Date().toISOString();
+    frontMatter.closed_at = now;
     frontMatter.closed_by = agentId;
   }
   await writeTaskFile(taskFile.path, frontMatter, body);

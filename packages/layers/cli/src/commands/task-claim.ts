@@ -18,6 +18,7 @@ import {
   checkDependencies,
   type TaskAssignmentRecord,
 } from '../lib/task-governance.js';
+import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import {
@@ -123,15 +124,23 @@ export async function taskClaimCommand(
     };
   }
 
-  // Enforce dependencies at claim time
+  // Enforce dependencies at claim time (prefer SQLite-backed status)
   const dependsOn = frontMatter.depends_on as number[] | undefined;
-  const { blockedBy } = await checkDependencies(cwd, dependsOn);
+  let store;
+  try {
+    store = openTaskLifecycleStore(cwd);
+  } catch {
+    // Store may not exist yet; fallback to markdown-only checkDependencies
+  }
+  const { blockedBy, details } = await checkDependencies(cwd, dependsOn, store);
+  if (store) store.db.close();
   if (blockedBy.length > 0) {
+    const detailMessages = details.map((d) => `${d.taskId}: ${d.reason}`).join('; ');
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: {
         status: 'error',
-        error: `Task ${taskFile.taskId} has unmet dependencies: ${blockedBy.join(', ')}`,
+        error: `Task ${taskFile.taskId} has unmet dependencies: ${blockedBy.join(', ')}. ${detailMessages}`,
       },
     };
   }

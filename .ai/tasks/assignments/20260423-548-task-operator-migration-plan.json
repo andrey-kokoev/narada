@@ -1,0 +1,13 @@
+{
+  "task_id": "20260423-548-task-operator-migration-plan",
+  "assignments": [
+    {
+      "agent_id": "a2",
+      "claimed_at": "2026-04-24T03:52:55.082Z",
+      "claim_context": "Promoted by codex",
+      "released_at": null,
+      "release_reason": null,
+      "intent": "primary"
+    }
+  ]
+}

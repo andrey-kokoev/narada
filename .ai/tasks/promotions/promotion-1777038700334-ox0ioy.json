@@ -1,0 +1,63 @@
+{
+  "promotion_id": "promotion-1777038700334-ox0ioy",
+  "recommendation_id": "rec-1777038675475",
+  "task_id": "20260424-567-second-governed-writer-migration",
+  "task_number": 567,
+  "agent_id": "a2",
+  "architect_id": "system",
+  "requested_by": "codex",
+  "requested_at": "2026-04-24T13:51:40.333Z",
+  "executed_at": "2026-04-24T13:51:40.333Z",
+  "status": "executed",
+  "recommendation_snapshot": {
+    "generated_at": "2026-04-24T13:51:40.377Z",
+    "recommender_id": "system",
+    "primary": {
+      "task_id": "20260424-567-second-governed-writer-migration",
+      "principal_id": "a2",
+      "score": 0.45,
+      "confidence": "low",
+      "rationale": "a2 is done with no capability match. No affinity. Idle. Strong completion record."
+    }
+  },
+  "validation_results": [
+    {
+      "check": "task_exists",
+      "passed": true
+    },
+    {
+      "check": "task_status",
+      "passed": true
+    },
+    {
+      "check": "dependencies",
+      "passed": true
+    },
+    {
+      "check": "agent_exists",
+      "passed": true
+    },
+    {
+      "check": "agent_available",
+      "passed": true,
+      "detail": "status is done"
+    },
+    {
+      "check": "no_active_assignment",
+      "passed": true
+    },
+    {
+      "check": "write_set_risk",
+      "passed": true
+    },
+    {
+      "check": "recommendation_fresh",
+      "passed": true
+    },
+    {
+      "check": "principal_unavailable",
+      "passed": true
+    }
+  ],
+  "assignment_id": "20260424-567-second-governed-writer-migration"
+}

@@ -50,10 +50,20 @@ Architect/operator assignment text should usually be only `execute N` or `review
 
 ## Safety
 
+- Do not interpret, narrow, relax, or silently carve exceptions into operator-set constraints.
+- If an operator constraint appears ambiguous, ask instead of inferring a narrower rule.
+- Treat operator prohibitions as still in force until the operator explicitly lifts or changes them.
 - Do not send email unless the task explicitly authorizes sending.
 - Do not mutate live external systems unless the task explicitly authorizes the mutation.
 - Do not commit secrets, credentials, tokens, private mailbox contents, or private operational data to the public repo.
 - Prefer fixture-backed or mock-backed verification for live-operation work unless live access is explicitly required.
+
+## Operator Input Format
+
+- When asking for operator input, number the question and letter the options.
+- Mark the recommended option with `(*)`.
+- If more than one question is needed, ask them one at a time in order of decreasing entropy gain.
+- Do not add editorial comments around the questions.
 
 ## Authority Boundaries
 

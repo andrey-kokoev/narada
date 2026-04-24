@@ -35,6 +35,12 @@ export default {
         return handleStatus(request, env);
       case "/control/actions":
         return handleOperatorAction(request, env);
+      case "/stuck-work-items":
+        return handleStuckWorkItems(request, env);
+      case "/pending-outbounds":
+        return handlePendingOutbounds(request, env);
+      case "/pending-drafts":
+        return handlePendingDrafts(request, env);
       default:
         return notFound(url.pathname);
     }
@@ -321,6 +327,111 @@ function validateOperatorActionPayload(body: unknown): SiteOperatorActionPayload
     target_id: obj.target_id,
     payload_json: typeof obj.payload_json === "string" ? obj.payload_json : undefined,
   };
+}
+
+async function handleStuckWorkItems(
+  request: Request,
+  env: CloudflareEnv,
+): Promise<Response> {
+  if (request.method !== "GET") {
+    return methodNotAllowed("GET");
+  }
+
+  const authError = authenticateRequest(request, env);
+  if (authError) {
+    return authError;
+  }
+
+  const url = new URL(request.url);
+  const siteId = url.searchParams.get("site_id");
+  if (!siteId) {
+    return jsonResponse(
+      { error: "Missing required query parameter: site_id" },
+      400,
+    );
+  }
+
+  try {
+    const coordinator = resolveSiteCoordinator(env, siteId);
+    const items = await coordinator.getStuckWorkItems();
+    return jsonResponse({ stuck_work_items: items }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return jsonResponse(
+      { error: "Failed to read stuck work items", detail: message },
+      500,
+    );
+  }
+}
+
+async function handlePendingOutbounds(
+  request: Request,
+  env: CloudflareEnv,
+): Promise<Response> {
+  if (request.method !== "GET") {
+    return methodNotAllowed("GET");
+  }
+
+  const authError = authenticateRequest(request, env);
+  if (authError) {
+    return authError;
+  }
+
+  const url = new URL(request.url);
+  const siteId = url.searchParams.get("site_id");
+  if (!siteId) {
+    return jsonResponse(
+      { error: "Missing required query parameter: site_id" },
+      400,
+    );
+  }
+
+  try {
+    const coordinator = resolveSiteCoordinator(env, siteId);
+    const commands = await coordinator.getPendingOutboundCommandsForObservation();
+    return jsonResponse({ pending_outbound_commands: commands }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return jsonResponse(
+      { error: "Failed to read pending outbound commands", detail: message },
+      500,
+    );
+  }
+}
+
+async function handlePendingDrafts(
+  request: Request,
+  env: CloudflareEnv,
+): Promise<Response> {
+  if (request.method !== "GET") {
+    return methodNotAllowed("GET");
+  }
+
+  const authError = authenticateRequest(request, env);
+  if (authError) {
+    return authError;
+  }
+
+  const url = new URL(request.url);
+  const siteId = url.searchParams.get("site_id");
+  if (!siteId) {
+    return jsonResponse(
+      { error: "Missing required query parameter: site_id" },
+      400,
+    );
+  }
+
+  try {
+    const coordinator = resolveSiteCoordinator(env, siteId);
+    const drafts = await coordinator.getPendingDrafts();
+    return jsonResponse({ pending_drafts: drafts }, 200);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return jsonResponse(
+      { error: "Failed to read pending drafts", detail: message },
+      500,
+    );
+  }
 }
 
 function validateCycleRequest(body: unknown): CycleRequest | null {

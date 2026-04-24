@@ -10,6 +10,10 @@ import {
   LinuxSiteControlClient,
 } from "../src/console-adapter.js";
 import { SqliteSiteCoordinator } from "../src/coordinator.js";
+import type {
+  LinuxSiteControlContext,
+  LinuxSiteControlContextFactory,
+} from "../src/site-control.js";
 
 function makeSite(overrides: Partial<RegisteredSite> = {}): RegisteredSite {
   return {
@@ -60,6 +64,7 @@ describe("linuxSiteAdapter", () => {
     it("returns a LinuxSiteControlClient instance for user mode", () => {
       const client = linuxSiteAdapter.createControlClient(makeSite({ variant: "linux-user" }));
       expect(client).toBeDefined();
+      expect(client).toBeInstanceOf(LinuxSiteControlClient);
       expect(typeof client.executeControlRequest).toBe("function");
     });
   });
@@ -117,22 +122,123 @@ describe("LinuxSiteObservationApi", () => {
     expect(health.message).toContain("Failed to read Linux Site health");
   });
 
-  it("getStuckWorkItems returns empty array", async () => {
+  it("getStuckWorkItems returns empty array when table missing", async () => {
     seedSite("site-2", "healthy");
     const api = new LinuxSiteObservationApi("site-2", "user");
     expect(await api.getStuckWorkItems()).toEqual([]);
   });
 
-  it("getPendingOutboundCommands returns empty array", async () => {
+  it("getStuckWorkItems returns real data when table exists", async () => {
+    seedSite("site-2b", "healthy");
+    const db = new Database(join(tmpDir, "site-2b", "db", "coordinator.db"));
+    db.exec(`
+      CREATE TABLE work_items (
+        work_item_id TEXT PRIMARY KEY,
+        scope_id TEXT NOT NULL,
+        context_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        priority INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL,
+        error_message TEXT
+      )
+    `);
+    db.prepare(`INSERT INTO work_items (work_item_id, scope_id, context_id, status, priority, updated_at, error_message)
+      VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      .run("wi-1", "scope-1", "ctx-1", "failed_retryable", 5, "2026-04-22T08:00:00Z", "Test error");
+    db.close();
+
+    const api = new LinuxSiteObservationApi("site-2b", "user");
+    const items = await api.getStuckWorkItems();
+    expect(items).toHaveLength(1);
+    expect(items[0]!.work_item_id).toBe("wi-1");
+    expect(items[0]!.status).toBe("failed_retryable");
+    expect(items[0]!.summary).toBe("Test error");
+  });
+
+  it("getPendingOutboundCommands returns empty array when table missing", async () => {
     seedSite("site-3", "healthy");
     const api = new LinuxSiteObservationApi("site-3", "user");
     expect(await api.getPendingOutboundCommands()).toEqual([]);
   });
 
-  it("getPendingDrafts returns empty array", async () => {
+  it("getPendingOutboundCommands returns empty for non-stale commands", async () => {
+    seedSite("site-3b", "healthy");
+    const db = new Database(join(tmpDir, "site-3b", "db", "coordinator.db"));
+    db.exec(`
+      CREATE TABLE outbound_handoffs (
+        outbound_id TEXT PRIMARY KEY,
+        scope_id TEXT NOT NULL,
+        context_id TEXT NOT NULL,
+        action_type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    `);
+    // Recent command — not stale yet
+    db.prepare(`INSERT INTO outbound_handoffs (outbound_id, scope_id, context_id, action_type, status, created_at)
+      VALUES (?, ?, ?, ?, ?, datetime('now', '-5 minutes'))`)
+      .run("ob-1", "scope-1", "ctx-1", "send_reply", "pending");
+    db.close();
+
+    const api = new LinuxSiteObservationApi("site-3b", "user");
+    const cmds = await api.getPendingOutboundCommands();
+    expect(cmds).toHaveLength(0);
+  });
+
+  it("getPendingOutboundCommands returns stale commands", async () => {
+    seedSite("site-3c", "healthy");
+    const db = new Database(join(tmpDir, "site-3c", "db", "coordinator.db"));
+    db.exec(`
+      CREATE TABLE outbound_handoffs (
+        outbound_id TEXT PRIMARY KEY,
+        scope_id TEXT NOT NULL,
+        context_id TEXT NOT NULL,
+        action_type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    `);
+    db.prepare(`INSERT INTO outbound_handoffs (outbound_id, scope_id, context_id, action_type, status, created_at)
+      VALUES (?, ?, ?, ?, ?, datetime('now', '-20 minutes'))`)
+      .run("ob-1", "scope-1", "ctx-1", "send_reply", "pending");
+    db.close();
+
+    const api = new LinuxSiteObservationApi("site-3c", "user");
+    const cmds = await api.getPendingOutboundCommands();
+    expect(cmds).toHaveLength(1);
+    expect(cmds[0]!.outbound_id).toBe("ob-1");
+    expect(cmds[0]!.action_type).toBe("send_reply");
+  });
+
+  it("getPendingDrafts returns empty array when table missing", async () => {
     seedSite("site-4", "healthy");
     const api = new LinuxSiteObservationApi("site-4", "user");
     expect(await api.getPendingDrafts()).toEqual([]);
+  });
+
+  it("getPendingDrafts returns real data when table exists", async () => {
+    seedSite("site-4b", "healthy");
+    const db = new Database(join(tmpDir, "site-4b", "db", "coordinator.db"));
+    db.exec(`
+      CREATE TABLE outbound_handoffs (
+        outbound_id TEXT PRIMARY KEY,
+        scope_id TEXT NOT NULL,
+        context_id TEXT NOT NULL,
+        action_type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    `);
+    db.prepare(`INSERT INTO outbound_handoffs (outbound_id, scope_id, context_id, action_type, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)`)
+      .run("ob-1", "scope-1", "ctx-1", "send_reply", "draft_ready", "2026-04-22T08:00:00Z");
+    db.close();
+
+    const api = new LinuxSiteObservationApi("site-4b", "user");
+    const drafts = await api.getPendingDrafts();
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]!.draft_id).toBe("ob-1");
+    expect(drafts[0]!.status).toBe("draft_ready");
   });
 
   it("getCredentialRequirements returns empty array when healthy", async () => {
@@ -168,36 +274,281 @@ describe("LinuxSiteObservationApi", () => {
 });
 
 describe("LinuxSiteControlClient", () => {
-  it("returns unsupported error for all control requests", async () => {
-    const client = new LinuxSiteControlClient("site-1");
+  function createMockContextFactory(options?: {
+    command?: { outbound_id: string; action_type: string; status: string; latest_version: number };
+    workItem?: { work_item_id: string; status: string; error_message?: string | null };
+  }): LinuxSiteControlContextFactory {
+    return async () => {
+      const dbClose = { close: () => undefined } as Database.Database;
+      const operatorRequests: Array<Record<string, unknown>> = [];
+      const outboundTransitions: Array<Record<string, unknown>> = [];
+      const updatedCommands: Array<Record<string, unknown>> = [];
+      const updatedWorkItems: Array<Record<string, unknown>> = [];
+
+      const ctx: LinuxSiteControlContext = {
+        scope_id: "scope-1",
+        db: dbClose,
+        coordinatorStore: {
+          insertOperatorActionRequest: (req) => {
+            operatorRequests.push(req as unknown as Record<string, unknown>);
+          },
+          markOperatorActionRequestExecuted: () => undefined,
+          markOperatorActionRequestRejected: () => undefined,
+          getWorkItem: (id: string) =>
+            options?.workItem && options.workItem.work_item_id === id
+              ? ({
+                  work_item_id: options.workItem.work_item_id,
+                  context_id: "ctx-1",
+                  scope_id: "scope-1",
+                  status: options.workItem.status,
+                  priority: 1,
+                  opened_for_revision_id: "rev-1",
+                  resolved_revision_id: null,
+                  resolution_outcome: null,
+                  error_message: options.workItem.error_message ?? null,
+                  retry_count: 0,
+                  next_retry_at: null,
+                  context_json: null,
+                  created_at: "2026-04-20T09:00:00Z",
+                  updated_at: "2026-04-20T10:00:00Z",
+                  preferred_session_id: null,
+                  preferred_agent_id: null,
+                  affinity_group_id: null,
+                  affinity_strength: 0,
+                  affinity_expires_at: null,
+                  affinity_reason: null,
+                } as any)
+              : undefined,
+          updateWorkItemStatus: (workItemId: string, status: string, updates?: Record<string, unknown>) => {
+            updatedWorkItems.push({ workItemId, status, updates });
+          },
+        } as any,
+        outboundStore: {
+          getCommand: (id: string) =>
+            options?.command && options.command.outbound_id === id
+              ? ({
+                  outbound_id: options.command.outbound_id,
+                  context_id: "ctx-1",
+                  scope_id: "scope-1",
+                  action_type: options.command.action_type,
+                  status: options.command.status,
+                  latest_version: options.command.latest_version,
+                  created_at: "2026-04-20T10:00:00Z",
+                  created_by: "system",
+                  submitted_at: null,
+                  confirmed_at: null,
+                  blocked_reason: null,
+                  terminal_reason: null,
+                  idempotency_key: "ik-1",
+                  reviewed_at: null,
+                  reviewer_notes: null,
+                  external_reference: null,
+                  approved_at: null,
+                } as any)
+              : undefined,
+          updateCommandStatus: (outboundId: string, status: string, updates?: Record<string, unknown>) => {
+            updatedCommands.push({ outboundId, status, updates });
+          },
+          appendTransition: (transition: Record<string, unknown>) => {
+            outboundTransitions.push(transition);
+          },
+        } as any,
+        intentStore: {
+          getByTargetId: () => undefined,
+          updateStatus: () => undefined,
+        } as any,
+      };
+
+      return ctx;
+    };
+  }
+
+  it("routes approve request through executeOperatorAction", async () => {
+    const client = new LinuxSiteControlClient(
+      "site-live",
+      createMockContextFactory({
+        command: {
+          outbound_id: "ob-draft-1",
+          action_type: "send_reply",
+          status: "draft_ready",
+          latest_version: 1,
+        },
+      })
+    );
+
     const result = await client.executeControlRequest({
       requestId: "req-1",
-      siteId: "site-1",
+      siteId: "site-live",
       actionType: "approve",
-      targetId: "ob-1",
+      targetId: "ob-draft-1",
+      targetKind: "outbound_command",
+      requestedAt: "2026-04-22T10:00:00Z",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.status).toBe("accepted");
+  });
+
+  it("routes retry request through executeOperatorAction", async () => {
+    const client = new LinuxSiteControlClient(
+      "site-live-2",
+      createMockContextFactory({
+        workItem: {
+          work_item_id: "wi-failed-1",
+          status: "failed_retryable",
+          error_message: "Error",
+        },
+      })
+    );
+
+    const result = await client.executeControlRequest({
+      requestId: "req-2",
+      siteId: "site-live-2",
+      actionType: "retry",
+      targetId: "wi-failed-1",
+      targetKind: "work_item",
+      requestedAt: "2026-04-22T10:00:00Z",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.status).toBe("accepted");
+  });
+
+  it("routes reject request through executeOperatorAction", async () => {
+    const client = new LinuxSiteControlClient(
+      "site-live-3",
+      createMockContextFactory({
+        command: {
+          outbound_id: "ob-draft-2",
+          action_type: "send_reply",
+          status: "draft_ready",
+          latest_version: 1,
+        },
+      })
+    );
+
+    const result = await client.executeControlRequest({
+      requestId: "req-3",
+      siteId: "site-live-3",
+      actionType: "reject",
+      targetId: "ob-draft-2",
+      targetKind: "outbound_command",
+      requestedAt: "2026-04-22T10:00:00Z",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.status).toBe("accepted");
+  });
+
+  it("routes mark_reviewed request through executeOperatorAction", async () => {
+    const client = new LinuxSiteControlClient(
+      "site-live-4",
+      createMockContextFactory({
+        command: {
+          outbound_id: "ob-draft-3",
+          action_type: "send_reply",
+          status: "draft_ready",
+          latest_version: 1,
+        },
+      })
+    );
+
+    const result = await client.executeControlRequest({
+      requestId: "req-4",
+      siteId: "site-live-4",
+      actionType: "mark_reviewed",
+      targetId: "ob-draft-3",
+      targetKind: "outbound_command",
+      requestedAt: "2026-04-22T10:00:00Z",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.status).toBe("accepted");
+  });
+
+  it("returns rejected when target does not exist", async () => {
+    const client = new LinuxSiteControlClient(
+      "site-live-5",
+      createMockContextFactory()
+    );
+
+    const result = await client.executeControlRequest({
+      requestId: "req-5",
+      siteId: "site-live-5",
+      actionType: "approve",
+      targetId: "nonexistent",
       targetKind: "outbound_command",
       requestedAt: "2026-04-22T10:00:00Z",
     });
 
     expect(result.success).toBe(false);
-    expect(result.status).toBe("error");
-    expect(result.detail).toContain("not yet implemented in v0");
-    expect(result.detail).toContain("site-1");
+    expect(result.status).toBe("rejected");
   });
 
-  it("returns unsupported error for retry requests", async () => {
-    const client = new LinuxSiteControlClient("site-1");
+  it("rejects generic outbound retry with clear message", async () => {
+    const client = new LinuxSiteControlClient(
+      "site-live-6",
+      createMockContextFactory({
+        command: {
+          outbound_id: "ob-draft-1",
+          action_type: "send_reply",
+          status: "draft_ready",
+          latest_version: 1,
+        },
+      })
+    );
+
     const result = await client.executeControlRequest({
-      requestId: "req-2",
-      siteId: "site-1",
+      requestId: "req-retry-outbound",
+      siteId: "site-live-6",
       actionType: "retry",
+      targetId: "ob-draft-1",
+      targetKind: "outbound_command",
+      requestedAt: "2026-04-22T10:00:00Z",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.status).toBe("rejected");
+    expect(result.detail).toContain("Generic retry for outbound commands is not supported");
+  });
+
+  it("rejects cancel work item with clear message", async () => {
+    const client = new LinuxSiteControlClient(
+      "site-live-7",
+      createMockContextFactory()
+    );
+
+    const result = await client.executeControlRequest({
+      requestId: "req-cancel",
+      siteId: "site-live-7",
+      actionType: "cancel",
       targetId: "wi-1",
       targetKind: "work_item",
       requestedAt: "2026-04-22T10:00:00Z",
     });
 
     expect(result.success).toBe(false);
-    expect(result.status).toBe("error");
-    expect(result.detail).toContain("retry");
+    expect(result.status).toBe("rejected");
+    expect(result.detail).toContain("Cancel for work items is not supported");
+  });
+
+  it("rejects unsupported action combination", async () => {
+    const client = new LinuxSiteControlClient(
+      "site-live-8",
+      createMockContextFactory()
+    );
+
+    const result = await client.executeControlRequest({
+      requestId: "req-unsupported",
+      siteId: "site-live-8",
+      actionType: "approve",
+      targetId: "wi-1",
+      targetKind: "work_item",
+      requestedAt: "2026-04-22T10:00:00Z",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.status).toBe("rejected");
+    expect(result.detail).toContain("Unsupported control action combination");
   });
 });

@@ -82,9 +82,16 @@ export type {
   SiteDoctorCheck,
 } from "./observability.js";
 
+// Site control
+export {
+  LinuxSiteControlClient,
+  createLinuxSiteControlClient,
+  type LinuxSiteControlContext,
+  type LinuxSiteControlContextFactory,
+} from "./site-control.js";
+
 // Console adapter
 export {
   linuxSiteAdapter,
   LinuxSiteObservationApi,
-  LinuxSiteControlClient,
 } from "./console-adapter.js";

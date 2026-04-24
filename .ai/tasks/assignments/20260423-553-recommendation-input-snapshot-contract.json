@@ -1,0 +1,13 @@
+{
+  "task_id": "20260423-553-recommendation-input-snapshot-contract",
+  "assignments": [
+    {
+      "agent_id": "a1",
+      "claimed_at": "2026-04-24T01:12:26.870Z",
+      "claim_context": "Promoted by codex",
+      "released_at": null,
+      "release_reason": null,
+      "intent": "primary"
+    }
+  ]
+}

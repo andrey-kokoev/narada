@@ -29,6 +29,9 @@ export interface SiteCoordinator {
   getPendingOperatorActionRequests(scopeId?: string): Promise<import("./types.js").SiteOperatorActionRequest[]>;
   markOperatorActionRequestExecuted(requestId: string, executedAt?: string): Promise<void>;
   markOperatorActionRequestRejected(requestId: string, reason: string, rejectedAt?: string): Promise<void>;
+  getStuckWorkItems(): Promise<{ workItemId: string; scopeId: string; status: string; contextId: string; lastUpdatedAt: string; summary: string }[]>;
+  getPendingOutboundCommandsForObservation(): Promise<{ outboundId: string; scopeId: string; contextId: string; actionType: string; status: string; createdAt: string; summary: string }[]>;
+  getPendingDrafts(): Promise<{ draftId: string; scopeId: string; contextId: string; status: string; createdAt: string; summary: string }[]>;
 }
 
 /**
@@ -164,6 +167,30 @@ export class NaradaSiteCoordinator {
           const { runCycleOnCoordinator } = await import("./runner.js");
           const result = await runCycleOnCoordinator(siteId, this as unknown as import("./coordinator.js").CycleCoordinator, {} as CloudflareEnv);
           return jsonResponse(result, result.status === "complete" ? 200 : 500);
+        }
+
+        case "/stuck-work-items": {
+          if (request.method !== "GET") {
+            return jsonResponse({ error: "Method not allowed. Use GET." }, 405, { Allow: "GET" });
+          }
+          const stuck = this.getStuckWorkItems();
+          return jsonResponse({ stuck_work_items: stuck }, 200);
+        }
+
+        case "/pending-outbounds": {
+          if (request.method !== "GET") {
+            return jsonResponse({ error: "Method not allowed. Use GET." }, 405, { Allow: "GET" });
+          }
+          const pending = this.getPendingOutboundCommandsForObservation();
+          return jsonResponse({ pending_outbound_commands: pending }, 200);
+        }
+
+        case "/pending-drafts": {
+          if (request.method !== "GET") {
+            return jsonResponse({ error: "Method not allowed. Use GET." }, 405, { Allow: "GET" });
+          }
+          const drafts = this.getPendingDrafts();
+          return jsonResponse({ pending_drafts: drafts }, 200);
         }
 
         default:
@@ -507,6 +534,61 @@ export class NaradaSiteCoordinator {
 
   updateOutboundCommandStatus(outboundId: string, status: string): void {
     this.sql.exec(`UPDATE outbound_commands SET status = ? WHERE outbound_id = ?`, status, outboundId);
+  }
+
+  getStuckWorkItems(): { workItemId: string; scopeId: string; status: string; contextId: string; lastUpdatedAt: string; summary: string }[] {
+    const cursor = this.sql.exec<{ work_item_id: string; scope_id: string; status: string; context_id: string; updated_at: string; error_message: string | null; priority: number }>(
+      `SELECT work_item_id, scope_id, status, context_id, updated_at, error_message, priority FROM work_items WHERE status IN ('failed_retryable', 'leased', 'executing') AND ((status = 'leased' AND updated_at < datetime('now', '-120 minutes')) OR (status = 'executing' AND updated_at < datetime('now', '-30 minutes')) OR (status = 'failed_retryable')) ORDER BY priority DESC, updated_at ASC`
+    );
+    const results: { workItemId: string; scopeId: string; status: string; contextId: string; lastUpdatedAt: string; summary: string }[] = [];
+    for (const row of cursor) {
+      results.push({
+        workItemId: row.work_item_id,
+        scopeId: row.scope_id,
+        status: row.status,
+        contextId: row.context_id,
+        lastUpdatedAt: row.updated_at,
+        summary: row.error_message ?? row.status,
+      });
+    }
+    return results;
+  }
+
+  getPendingOutboundCommandsForObservation(): { outboundId: string; scopeId: string; contextId: string; actionType: string; status: string; createdAt: string; summary: string }[] {
+    const cursor = this.sql.exec<{ outbound_id: string; scope_id: string; context_id: string; action_type: string; status: string; created_at: string }>(
+      `SELECT outbound_id, scope_id, context_id, action_type, status, created_at FROM outbound_commands WHERE status IN ('pending', 'draft_creating', 'sending') AND ((status = 'pending' AND created_at < datetime('now', '-15 minutes')) OR (status = 'draft_creating' AND created_at < datetime('now', '-10 minutes')) OR (status = 'sending' AND created_at < datetime('now', '-5 minutes'))) ORDER BY created_at ASC`
+    );
+    const results: { outboundId: string; scopeId: string; contextId: string; actionType: string; status: string; createdAt: string; summary: string }[] = [];
+    for (const row of cursor) {
+      results.push({
+        outboundId: row.outbound_id,
+        scopeId: row.scope_id,
+        contextId: row.context_id,
+        actionType: row.action_type,
+        status: row.status,
+        createdAt: row.created_at,
+        summary: `${row.action_type} — ${row.status}`,
+      });
+    }
+    return results;
+  }
+
+  getPendingDrafts(): { draftId: string; scopeId: string; contextId: string; status: string; createdAt: string; summary: string }[] {
+    const cursor = this.sql.exec<{ outbound_id: string; scope_id: string; context_id: string; action_type: string; status: string; created_at: string }>(
+      `SELECT outbound_id, scope_id, context_id, action_type, status, created_at FROM outbound_commands WHERE status = 'draft_ready' ORDER BY created_at ASC`
+    );
+    const results: { draftId: string; scopeId: string; contextId: string; status: string; createdAt: string; summary: string }[] = [];
+    for (const row of cursor) {
+      results.push({
+        draftId: row.outbound_id,
+        scopeId: row.scope_id,
+        contextId: row.context_id,
+        status: row.status,
+        createdAt: row.created_at,
+        summary: `${row.action_type} draft`,
+      });
+    }
+    return results;
   }
 
   insertFixtureObservation(observationId: string, outboundId: string, scopeId: string, observedStatus: string, observedAt: string): void {

@@ -1,0 +1,13 @@
+{
+  "task_id": "20260423-531-mail-connectivity-boundary-contract",
+  "assignments": [
+    {
+      "agent_id": "a2",
+      "claimed_at": "2026-04-23T23:58:58.735Z",
+      "claim_context": null,
+      "released_at": null,
+      "release_reason": null,
+      "intent": "primary"
+    }
+  ]
+}

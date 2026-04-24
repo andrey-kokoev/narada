@@ -115,22 +115,67 @@ export class CloudflareSiteObservationApi implements SiteObservationApi {
     };
   }
 
+  private async fetchObservation<T>(path: string): Promise<T | null> {
+    const url = new URL(this.endpoint(path));
+    url.searchParams.set("site_id", this.site.siteId);
+
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+    };
+    if (this.token) {
+      headers["Authorization"] = `Bearer ${this.token}`;
+    }
+
+    try {
+      const response = await fetch(url.toString(), { headers });
+      if (!response.ok) {
+        return null;
+      }
+      const body = (await response.json()) as Record<string, unknown>;
+      return body as T;
+    } catch {
+      return null;
+    }
+  }
+
   async getStuckWorkItems(): Promise<StuckWorkItem[]> {
-    // Cloudflare Worker does not yet expose stuck-work-items endpoint.
-    // Residual: add GET /scopes/:scope_id/stuck-work-items to Cloudflare Site.
-    return [];
+    const body = await this.fetchObservation<{ stuck_work_items?: Array<{ workItemId: string; scopeId: string; status: string; contextId: string; lastUpdatedAt: string; summary: string }> }>("stuck-work-items");
+    if (!body?.stuck_work_items) return [];
+    return body.stuck_work_items.map((item) => ({
+      work_item_id: item.workItemId,
+      scope_id: item.scopeId,
+      status: item.status as StuckWorkItem["status"],
+      context_id: item.contextId,
+      last_updated_at: item.lastUpdatedAt,
+      summary: item.summary,
+    }));
   }
 
   async getPendingOutboundCommands(): Promise<PendingOutboundCommand[]> {
-    // Cloudflare Worker does not yet expose pending-outbounds endpoint.
-    // Residual: add GET /scopes/:scope_id/pending-outbounds to Cloudflare Site.
-    return [];
+    const body = await this.fetchObservation<{ pending_outbound_commands?: Array<{ outboundId: string; scopeId: string; contextId: string; actionType: string; status: string; createdAt: string; summary: string }> }>("pending-outbounds");
+    if (!body?.pending_outbound_commands) return [];
+    return body.pending_outbound_commands.map((item) => ({
+      outbound_id: item.outboundId,
+      scope_id: item.scopeId,
+      context_id: item.contextId,
+      action_type: item.actionType,
+      status: item.status,
+      created_at: item.createdAt,
+      summary: item.summary,
+    }));
   }
 
   async getPendingDrafts(): Promise<PendingDraft[]> {
-    // Cloudflare Worker does not yet expose pending-drafts endpoint.
-    // Residual: add GET /scopes/:scope_id/pending-drafts to Cloudflare Site.
-    return [];
+    const body = await this.fetchObservation<{ pending_drafts?: Array<{ draftId: string; scopeId: string; contextId: string; status: string; createdAt: string; summary: string }> }>("pending-drafts");
+    if (!body?.pending_drafts) return [];
+    return body.pending_drafts.map((item) => ({
+      draft_id: item.draftId,
+      scope_id: item.scopeId,
+      context_id: item.contextId,
+      status: item.status as PendingDraft["status"],
+      created_at: item.createdAt,
+      summary: item.summary,
+    }));
   }
 
   async getCredentialRequirements(): Promise<CredentialRequirement[]> {

@@ -1,0 +1,13 @@
+{
+  "task_id": "20260424-568-sqlite-backed-dependency-and-recommendation-reads",
+  "assignments": [
+    {
+      "agent_id": "a3",
+      "claimed_at": "2026-04-24T13:51:40.794Z",
+      "claim_context": "Promoted by codex",
+      "released_at": "2026-04-24T15:51:30.844Z",
+      "release_reason": "completed",
+      "intent": "primary"
+    }
+  ]
+}

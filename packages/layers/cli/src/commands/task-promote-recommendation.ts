@@ -17,9 +17,11 @@ import {
   loadAssignment,
   getActiveAssignment,
   checkDependencies,
+  resolveTaskStatus,
   atomicWriteFile,
   type TaskFrontMatter,
 } from '../lib/task-governance.js';
+import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 import { generateRecommendations, type TaskRecommendation, type CandidateAssignment, type RecommendationRisk } from '../lib/task-recommender.js';
 import { taskClaimCommand } from './task-claim.js';
 import { ExitCode } from '../lib/exit-codes.js';
@@ -172,15 +174,30 @@ export async function taskPromoteRecommendationCommand(
 
   // ── Load task state ──
   const { frontMatter } = await readTaskFile(taskFile.path);
-  const currentStatus = frontMatter.status;
   const dependsOn = frontMatter.depends_on as number[] | undefined;
 
-  // ── Load roster ──
-  let roster;
+  // Prefer SQLite-backed lifecycle status
+  let store;
   try {
-    roster = await loadRoster(cwd);
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
+    store = openTaskLifecycleStore(cwd);
+  } catch {
+    // Store may not exist yet
+  }
+
+  try {
+    const taskNum = Number(taskNumber);
+    const { status: currentStatus } = await resolveTaskStatus(
+      cwd,
+      Number.isFinite(taskNum) ? taskNum : 0,
+      store,
+    );
+
+    // ── Load roster ──
+    let roster;
+    try {
+      roster = await loadRoster(cwd);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: { status: 'error', error: `Failed to load agent roster: ${msg}` },
@@ -211,9 +228,11 @@ export async function taskPromoteRecommendationCommand(
   let depsSatisfied = true;
   let depsDetail: string | undefined;
   if (dependsOn && dependsOn.length > 0) {
-    const { blockedBy } = await checkDependencies(cwd, dependsOn);
+    const { blockedBy, details } = await checkDependencies(cwd, dependsOn, store);
     depsSatisfied = blockedBy.length === 0;
-    depsDetail = depsSatisfied ? undefined : `blocked by ${blockedBy.join(', ')}`;
+    if (!depsSatisfied) {
+      depsDetail = details.map((d) => `${d.taskId}: ${d.reason}`).join('; ');
+    }
   }
   validationResults.push({
     check: 'dependencies',
@@ -509,4 +528,7 @@ export async function taskPromoteRecommendationCommand(
       agent_id: agentId,
     },
   };
+  } finally {
+    if (store) store.db.close();
+  }
 }

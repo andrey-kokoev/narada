@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Narada Workbench</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-2: #21262d;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-secondary: #8b949e;
+      --accent: #58a6ff;
+      --accent-hover: #79c0ff;
+      --success: #3fb950;
+      --warning: #d29922;
+      --danger: #f85149;
+      --muted: #484f58;
+      --trust-authoritative: #3fb950;
+      --trust-derived: #58a6ff;
+      --trust-decorative: #8b949e;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+    .toolbar {
+      height: 44px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      flex-shrink: 0;
+    }
+    .toolbar h1 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+    .toolbar .status {
+      font-size: 12px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .toolbar .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+    .toolbar .status-dot.ok { background: var(--success); }
+    .toolbar .status-dot.error { background: var(--danger); }
+    .toolbar .status-dot.pending { background: var(--warning); animation: pulse 1.5s infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .btn {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .btn:hover { background: var(--border); }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn.primary:hover { background: var(--accent-hover); }
+    .btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 8px;
+      padding: 8px;
+      height: calc(100vh - 44px);
+    }
+    .pane {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+    }
+    .pane-header {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface-2);
+      flex-shrink: 0;
+    }
+    .pane-header .title {
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .pane-header .badge {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      background: var(--muted);
+      color: var(--text-secondary);
+    }
+    .pane-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 12px;
+      font-size: 12px;
+    }
+    .pane-body::-webkit-scrollbar { width: 6px; }
+    .pane-body::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 3px; }
+
+    /* Agent-specific header colors */
+    .pane.agent .pane-header { border-left: 3px solid var(--accent); }
+    .pane.agent.status-working .pane-header { border-left-color: var(--success); }
+    .pane.agent.status-idle .pane-header { border-left-color: var(--muted); }
+    .pane.agent.status-done .pane-header { border-left-color: var(--accent); }
+    .pane.agent.status-reviewing .pane-header { border-left-color: var(--warning); }
+
+    /* Architect pane styling */
+    .pane.architect {
+      grid-column: span 2;
+    }
+    .pane.architect .pane-header {
+      border-left: 3px solid var(--warning);
+    }
+
+    .section {
+      margin-bottom: 12px;
+    }
+    .section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .trust-indicator {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .trust-indicator.authoritative { background: var(--trust-authoritative); }
+    .trust-indicator.derived { background: var(--trust-derived); }
+    .trust-indicator.decorative { background: var(--trust-decorative); }
+
+    .field {
+      display: flex;
+      justify-content: space-between;
+      padding: 3px 0;
+      border-bottom: 1px solid rgba(48, 54, 61, 0.5);
+    }
+    .field:last-child { border-bottom: none; }
+    .field .label { color: var(--text-secondary); }
+    .field .value { font-weight: 500; }
+    .field .value.ok { color: var(--success); }
+    .field .value.warn { color: var(--warning); }
+    .field .value.error { color: var(--danger); }
+
+    .controls {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .empty-state {
+      color: var(--text-secondary);
+      text-align: center;
+      padding: 20px;
+      font-style: italic;
+    }
+
+    .list-item {
+      padding: 6px 8px;
+      background: var(--surface-2);
+      border-radius: 4px;
+      margin-bottom: 6px;
+      border-left: 2px solid var(--muted);
+    }
+    .list-item.blocked { border-left-color: var(--danger); }
+    .list-item.runnable { border-left-color: var(--success); }
+    .list-item .item-title { font-weight: 500; margin-bottom: 2px; }
+    .list-item .item-meta { font-size: 11px; color: var(--text-secondary); }
+
+    .recommendation-card {
+      padding: 8px;
+      background: var(--surface-2);
+      border-radius: 4px;
+      border-left: 2px solid var(--accent);
+    }
+    .recommendation-card .score {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    .error-banner {
+      background: rgba(248, 81, 73, 0.15);
+      border: 1px solid var(--danger);
+      color: var(--danger);
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+
+    .architect-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .architect-grid .section { margin-bottom: 0; }
+
+    @media (max-width: 1200px) {
+      .layout {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto;
+        height: auto;
+        overflow-y: auto;
+      }
+      .pane.architect { grid-column: span 2; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <h1>🛠️ Narada Workbench</h1>
+    <div class="status">
+      <span id="conn-status" class="status-dot pending"></span>
+      <span id="conn-text">Connecting...</span>
+      <button class="btn" onclick="refreshAll()">↻ Refresh</button>
+    </div>
+  </div>
+
+  <div class="layout" id="workbench-layout">
+    <!-- Agent panes a1-a6 will be injected here -->
+    <div class="pane architect" id="architect-pane">
+      <div class="pane-header">
+        <span class="title">Architect</span>
+        <span class="badge" id="architect-badge">overview</span>
+      </div>
+      <div class="pane-body" id="architect-body">
+        <div class="empty-state">Loading architect view...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = window.location.origin;
+    const POLL_INTERVAL = 5000;
+    const SLOW_POLL_INTERVAL = 30000;
+
+    let pollTimer = null;
+    let slowPollTimer = null;
+    let lastError = null;
+
+    // ── Data caches ──
+    const state = {
+      roster: null,
+      tasks: [],
+      assignments: [],
+      reviews: [],
+      policy: null,
+      audit: [],
+      principals: [],
+      graph: { nodes: [], edges: [] },
+      recommendations: null,
+      plan: null,
+    };
+
+    // ── Utility ──
+    async function apiGet(path) {
+      const res = await fetch(`${API_BASE}${path}`);
+      if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+      return res.json();
+    }
+
+    async function apiPost(path, body) {
+      const res = await fetch(`${API_BASE}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      return { ok: res.ok, status: res.status, data };
+    }
+
+    function setStatus(ok, text) {
+      const dot = document.getElementById('conn-status');
+      const label = document.getElementById('conn-text');
+      dot.className = 'status-dot ' + (ok ? 'ok' : 'error');
+      label.textContent = text;
+    }
+
+    function fmtDate(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      return d.toLocaleString();
+    }
+
+    function el(tag, cls, text) {
+      const e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text !== undefined) e.textContent = text;
+      return e;
+    }
+
+    function sectionTitle(title, trust) {
+      const div = el('div', 'section-title');
+      const dot = el('span', 'trust-indicator ' + (trust || 'decorative'));
+      div.appendChild(dot);
+      div.appendChild(document.createTextNode(title));
+      return div;
+    }
+
+    function fieldRow(label, value, valueClass) {
+      const row = el('div', 'field');
+      const l = el('span', 'label', label);
+      const v = el('span', 'value' + (valueClass ? ' ' + valueClass : ''), value);
+      row.appendChild(l);
+      row.appendChild(v);
+      return row;
+    }
+
+    function emptyState(text) {
+      return el('div', 'empty-state', text);
+    }
+
+    // ── Pane builders ──
+    function buildAgentPane(agent) {
+      const pane = el('div', 'pane agent');
+      pane.classList.add('status-' + (agent.status || 'idle'));
+
+      const header = el('div', 'pane-header');
+      const title = el('span', 'title', agent.agent_id);
+      const badge = el('span', 'badge', agent.status || 'idle');
+      header.appendChild(title);
+      header.appendChild(badge);
+      pane.appendChild(header);
+
+      const body = el('div', 'pane-body');
+
+      // Header section
+      const headerSec = el('div', 'section');
+      headerSec.appendChild(sectionTitle('Identity', 'authoritative'));
+      headerSec.appendChild(fieldRow('Status', agent.status || 'idle'));
+      headerSec.appendChild(fieldRow('Current task', agent.task ? '#' + agent.task : '—'));
+      headerSec.appendChild(fieldRow('Updated', fmtDate(agent.updated_at)));
+      body.appendChild(headerSec);
+
+      // Find assigned task details
+      const assignedTask = state.tasks.find(t =>
+        t.task_number === agent.task ||
+        String(t.task_id).includes(String(agent.task))
+      );
+      const assignment = state.assignments.find(a =>
+        a.task_id && String(a.task_id).includes(String(agent.task))
+      );
+      const activeClaim = assignment?.assignments?.find(a => !a.released_at);
+
+      // Task Card section
+      if (assignedTask || activeClaim) {
+        const taskSec = el('div', 'section');
+        taskSec.appendChild(sectionTitle('Task Card', 'authoritative'));
+        if (assignedTask) {
+          taskSec.appendChild(fieldRow('Task', '#' + (assignedTask.task_number || assignedTask.task_id)));
+          taskSec.appendChild(fieldRow('Title', assignedTask.title || '—'));
+          taskSec.appendChild(fieldRow('Status', assignedTask.status || '—'));
+        }
+        if (activeClaim) {
+          taskSec.appendChild(fieldRow('Claimed', fmtDate(activeClaim.claimed_at)));
+        }
+        if (assignedTask?.depends_on?.length) {
+          taskSec.appendChild(fieldRow('Depends on', assignedTask.depends_on.join(', ')));
+        }
+        body.appendChild(taskSec);
+      }
+
+      // Evidence section (derived)
+      if (assignedTask) {
+        const evSec = el('div', 'section');
+        evSec.appendChild(sectionTitle('Evidence', 'derived'));
+        evSec.appendChild(fieldRow('Has notes', 'TBD', 'warn'));
+        evSec.appendChild(fieldRow('Has verification', 'TBD', 'warn'));
+        evSec.appendChild(fieldRow('Unchecked criteria', 'TBD', 'warn'));
+        body.appendChild(evSec);
+      }
+
+      // Last action from audit
+      const agentAudit = state.audit
+        .filter(r => r.agent_id === agent.agent_id)
+        .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      if (agentAudit.length > 0) {
+        const last = agentAudit[0];
+        const actSec = el('div', 'section');
+        actSec.appendChild(sectionTitle('Last Action', 'authoritative'));
+        actSec.appendChild(fieldRow('Type', last.status || '—'));
+        actSec.appendChild(fieldRow('Time', fmtDate(last.timestamp)));
+        actSec.appendChild(fieldRow('Result', last.detail || '—',
+          last.status === 'promoted' ? 'ok' : last.status === 'rejected' ? 'error' : ''));
+        body.appendChild(actSec);
+      }
+
+      // Controls
+      const ctrlSec = el('div', 'section');
+      ctrlSec.appendChild(sectionTitle('Controls', 'decorative'));
+      const controls = el('div', 'controls');
+
+      const btnIdle = el('button', 'btn', 'Mark idle');
+      btnIdle.onclick = () => sendControl('idle', { agent: agent.agent_id });
+      controls.appendChild(btnIdle);
+
+      if (agent.task) {
+        const btnDone = el('button', 'btn', 'Mark done');
+        btnDone.onclick = () => sendControl('done', { agent: agent.agent_id, task: String(agent.task) });
+        controls.appendChild(btnDone);
+      }
+
+      ctrlSec.appendChild(controls);
+      body.appendChild(ctrlSec);
+
+      pane.appendChild(body);
+      return pane;
+    }
+
+    function buildArchitectPane() {
+      const body = document.getElementById('architect-body');
+      body.innerHTML = '';
+
+      if (lastError) {
+        const err = el('div', 'error-banner', 'Error: ' + lastError);
+        body.appendChild(err);
+      }
+
+      const grid = el('div', 'architect-grid');
+
+      // ── Chapter Frontier ──
+      const frontierSec = el('div', 'section');
+      frontierSec.appendChild(sectionTitle('Chapter Frontier', 'derived'));
+      const openTasks = state.tasks.filter(t => t.status === 'opened' || t.status === 'claimed');
+      frontierSec.appendChild(fieldRow('Open tasks', String(openTasks.length)));
+      frontierSec.appendChild(fieldRow('Claimed tasks', String(state.tasks.filter(t => t.status === 'claimed').length)));
+      frontierSec.appendChild(fieldRow('Closed tasks', String(state.tasks.filter(t => t.status === 'closed').length)));
+      grid.appendChild(frontierSec);
+
+      // ── Dependency State ──
+      const depSec = el('div', 'section');
+      depSec.appendChild(sectionTitle('Dependencies', 'derived'));
+      const blockedTasks = state.tasks.filter(t => {
+        if (!t.depends_on?.length) return false;
+        return t.depends_on.some(depNum => {
+          const dep = state.tasks.find(dt => dt.task_number === depNum);
+          return !dep || dep.status !== 'closed';
+        });
+      });
+      depSec.appendChild(fieldRow('Runnable', String(state.tasks.length - blockedTasks.length)));
+      depSec.appendChild(fieldRow('Blocked', String(blockedTasks.length), blockedTasks.length > 0 ? 'warn' : 'ok'));
+      grid.appendChild(depSec);
+
+      // ── Recommendation Queue ──
+      const recSec = el('div', 'section');
+      recSec.appendChild(sectionTitle('Recommendations', 'derived'));
+      if (state.recommendations && state.recommendations.recommendations) {
+        const recs = state.recommendations.recommendations;
+        const top = recs[0];
+        if (top) {
+          const card = el('div', 'recommendation-card');
+          card.appendChild(el('div', 'item-title', '#' + top.task_number + ' → ' + top.agent_id));
+          card.appendChild(el('div', 'score', 'Score: ' + (top.score ?? '—') + ' | Confidence: ' + (top.confidence ?? '—')));
+          recSec.appendChild(card);
+        }
+        recSec.appendChild(fieldRow('Total', String(recs.length)));
+      } else if (state.recommendations && state.recommendations.candidates) {
+        const cands = state.recommendations.candidates;
+        const top = cands[0];
+        if (top) {
+          const card = el('div', 'recommendation-card');
+          card.appendChild(el('div', 'item-title', top.task_id + ' → ' + top.agent_id));
+          card.appendChild(el('div', 'score', 'Score: ' + (top.score ?? '—')));
+          recSec.appendChild(card);
+        }
+        recSec.appendChild(fieldRow('Total', String(cands.length)));
+      } else {
+        recSec.appendChild(emptyState('No recommendations yet. Click "Recommend" to generate.'));
+      }
+      grid.appendChild(recSec);
+
+      // ── Review Findings ──
+      const reviewSec = el('div', 'section');
+      reviewSec.appendChild(sectionTitle('Reviews', 'authoritative'));
+      const pendingReviews = state.reviews.filter(r => !r.verdict || r.verdict === 'pending');
+      reviewSec.appendChild(fieldRow('Total reviews', String(state.reviews.length)));
+      reviewSec.appendChild(fieldRow('Pending', String(pendingReviews.length), pendingReviews.length > 0 ? 'warn' : 'ok'));
+      grid.appendChild(reviewSec);
+
+      body.appendChild(grid);
+
+      // ── Operator-Gated Decisions ──
+      const decisionsSec = el('div', 'section');
+      decisionsSec.appendChild(sectionTitle('Operator State', 'authoritative'));
+      decisionsSec.appendChild(fieldRow('Policy level', state.policy?.allowed_autonomy_level || '—'));
+      decisionsSec.appendChild(fieldRow('Max simultaneous', String(state.policy?.max_simultaneous_assignments || '—')));
+      decisionsSec.appendChild(fieldRow('Audit entries', String(state.audit.length)));
+      decisionsSec.appendChild(fieldRow('Principals', String(state.principals.length)));
+      body.appendChild(decisionsSec);
+
+      // ── Architect Controls ──
+      const ctrlSec = el('div', 'section');
+      ctrlSec.appendChild(sectionTitle('Controls', 'decorative'));
+      const controls = el('div', 'controls');
+
+      const btnRec = el('button', 'btn', 'Recommend');
+      btnRec.onclick = () => sendControl('recommend', {});
+      controls.appendChild(btnRec);
+
+      const btnPause = el('button', 'btn', 'Pause');
+      btnPause.onclick = () => sendControl('pause', { reason: 'operator requested' });
+      controls.appendChild(btnPause);
+
+      const btnResume = el('button', 'btn', 'Resume');
+      btnResume.onclick = () => sendControl('resume', {});
+      controls.appendChild(btnResume);
+
+      ctrlSec.appendChild(controls);
+      body.appendChild(ctrlSec);
+    }
+
+    async function sendControl(action, payload) {
+      const btn = event.target;
+      btn.disabled = true;
+      btn.textContent = '...';
+      try {
+        const result = await apiPost(`/api/control/${action}`, payload);
+        if (!result.ok) {
+          alert(`Control failed (${result.status}): ` + JSON.stringify(result.data));
+        }
+        // Trigger refresh after mutation
+        await refreshAll();
+      } catch (err) {
+        alert('Network error: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = btn.textContent.replace('...', '');
+        // Reset button text based on action
+        if (action === 'idle') btn.textContent = 'Mark idle';
+        else if (action === 'done') btn.textContent = 'Mark done';
+        else if (action === 'recommend') btn.textContent = 'Recommend';
+        else if (action === 'pause') btn.textContent = 'Pause';
+        else if (action === 'resume') btn.textContent = 'Resume';
+      }
+    }
+
+    // ── Render ──
+    function renderLayout() {
+      const layout = document.getElementById('workbench-layout');
+      // Keep architect pane, remove old agent panes
+      const architect = document.getElementById('architect-pane');
+      layout.innerHTML = '';
+
+      const roster = state.roster || { agents: [] };
+      const agentIds = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6'];
+
+      for (const id of agentIds) {
+        const agent = roster.agents.find(a => a.agent_id === id) || {
+          agent_id: id,
+          status: 'unknown',
+          task: null,
+          updated_at: null,
+        };
+        const pane = buildAgentPane(agent);
+        layout.appendChild(pane);
+      }
+
+      layout.appendChild(architect);
+      buildArchitectPane();
+    }
+
+    // ── Data fetching ──
+    async function refreshAll() {
+      setStatus(false, 'Refreshing...');
+      lastError = null;
+      try {
+        const [rosterRes, tasksRes, assignmentsRes, reviewsRes, policyRes, auditRes, principalsRes, graphRes] = await Promise.all([
+          apiGet('/api/roster').catch(e => { console.warn('roster', e); return null; }),
+          apiGet('/api/tasks').catch(e => { console.warn('tasks', e); return { tasks: [] }; }),
+          apiGet('/api/assignments').catch(e => { console.warn('assignments', e); return { assignments: [] }; }),
+          apiGet('/api/reviews').catch(e => { console.warn('reviews', e); return { reviews: [] }; }),
+          apiGet('/api/policy').catch(e => { console.warn('policy', e); return null; }),
+          apiGet('/api/audit').catch(e => { console.warn('audit', e); return { audit: [] }; }),
+          apiGet('/api/principals').catch(e => { console.warn('principals', e); return { principals: [] }; }),
+          apiGet('/api/graph').catch(e => { console.warn('graph', e); return { nodes: [], edges: [] }; }),
+        ]);
+
+        if (rosterRes) state.roster = rosterRes.roster;
+        state.tasks = tasksRes.tasks || [];
+        state.assignments = assignmentsRes.assignments || [];
+        state.reviews = reviewsRes.reviews || [];
+        if (policyRes) state.policy = policyRes.policy;
+        state.audit = auditRes.audit || [];
+        state.principals = principalsRes.principals || [];
+        state.graph = graphRes || { nodes: [], edges: [] };
+
+        renderLayout();
+        setStatus(true, `Updated ${new Date().toLocaleTimeString()}`);
+      } catch (err) {
+        lastError = err.message;
+        setStatus(false, 'Error: ' + err.message);
+        renderLayout(); // Re-render to show error in architect pane
+      }
+    }
+
+    async function refreshSlow() {
+      try {
+        const recRes = await apiGet('/api/recommendations').catch(e => {
+          console.warn('recommendations', e);
+          return null;
+        });
+        if (recRes) {
+          state.recommendations = recRes;
+        }
+        const planRes = await apiGet('/api/plan').catch(e => {
+          console.warn('plan', e);
+          return null;
+        });
+        if (planRes) {
+          state.plan = planRes.plan;
+        }
+        renderLayout();
+      } catch (err) {
+        console.warn('Slow refresh error', err);
+      }
+    }
+
+    // ── Startup ──
+    async function init() {
+      await refreshAll();
+      await refreshSlow();
+      pollTimer = setInterval(refreshAll, POLL_INTERVAL);
+      slowPollTimer = setInterval(refreshSlow, SLOW_POLL_INTERVAL);
+    }
+
+    init();
+
+    // Cleanup on page hide
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        clearInterval(pollTimer);
+        clearInterval(slowPollTimer);
+      } else {
+        refreshAll();
+        pollTimer = setInterval(refreshAll, POLL_INTERVAL);
+        slowPollTimer = setInterval(refreshSlow, SLOW_POLL_INTERVAL);
+      }
+    });
+  </script>
+</body>
+</html>

@@ -17,12 +17,14 @@ import {
   writeTaskFile,
   isValidTransition,
   checkDependencies,
+  resolveTaskStatus,
   loadAssignment,
   getActiveAssignment,
   saveAssignment,
   type AgentRoster,
   type TaskFrontMatter,
 } from '../lib/task-governance.js';
+import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import {
   recallAcceptedLearning,
@@ -145,38 +147,52 @@ export async function taskRosterAssignCommand(
   }
 
   const { frontMatter, body } = await readTaskFile(taskFile.path);
-  const currentStatus = frontMatter.status;
 
-  // ── Phase 3: Determine claim intent and validate ──
-  const canClaim = currentStatus === 'opened' || currentStatus === 'needs_continuation';
-  const shouldClaim = !options.noClaim && canClaim;
+  // Prefer SQLite-backed lifecycle status
+  let store;
+  try {
+    store = openTaskLifecycleStore(cwd);
+  } catch {
+    // Store may not exist yet
+  }
 
-  const claimWarnings: string[] = [];
+    const { status: currentStatus } = await resolveTaskStatus(
+      cwd,
+      taskNumber,
+      store,
+    );
 
-  if (shouldClaim) {
-    // Validate state-machine transition
-    if (!isValidTransition(currentStatus, 'claimed')) {
-      return {
-        exitCode: ExitCode.GENERAL_ERROR,
-        result: {
-          status: 'error',
-          error: `Transition from '${currentStatus}' to 'claimed' is not allowed by the state machine`,
-        },
-      };
-    }
+    // ── Phase 3: Determine claim intent and validate ──
+    const canClaim = currentStatus === 'opened' || currentStatus === 'needs_continuation';
+    const shouldClaim = !options.noClaim && canClaim;
 
-    // Validate dependencies
-    const dependsOn = frontMatter.depends_on as number[] | undefined;
-    const { blockedBy } = await checkDependencies(cwd, dependsOn);
-    if (blockedBy.length > 0) {
-      return {
-        exitCode: ExitCode.GENERAL_ERROR,
-        result: {
-          status: 'error',
-          error: `Task ${taskFile.taskId} has unmet dependencies: ${blockedBy.join(', ')}`,
-        },
-      };
-    }
+    const claimWarnings: string[] = [];
+
+    if (shouldClaim) {
+      // Validate state-machine transition
+      if (!isValidTransition(currentStatus, 'claimed')) {
+        return {
+          exitCode: ExitCode.GENERAL_ERROR,
+          result: {
+            status: 'error',
+            error: `Transition from '${currentStatus}' to 'claimed' is not allowed by the state machine`,
+          },
+        };
+      }
+
+      // Validate dependencies
+      const dependsOn = frontMatter.depends_on as number[] | undefined;
+      const { blockedBy, details } = await checkDependencies(cwd, dependsOn, store);
+      if (blockedBy.length > 0) {
+        const detailMessages = details.map((d) => `${d.taskId}: ${d.reason}`).join('; ');
+        return {
+          exitCode: ExitCode.GENERAL_ERROR,
+          result: {
+            status: 'error',
+            error: `Task ${taskFile.taskId} has unmet dependencies: ${blockedBy.join(', ')}. ${detailMessages}`,
+          },
+        };
+      }
 
     // Validate no active assignment
     const existingAssignment = await loadAssignment(cwd, taskFile.taskId);
@@ -273,6 +289,8 @@ export async function taskRosterAssignCommand(
       exitCode: ExitCode.GENERAL_ERROR,
       result: { status: 'error', error: msg },
     };
+  } finally {
+    if (store) store.db.close();
   }
 }
 

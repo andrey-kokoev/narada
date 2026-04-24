@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { Command, Option } from 'commander';
+import { Command, Option, Help } from 'commander';
+import { GroupedHelp } from './lib/grouped-help.js';
 import { loadEnvFile } from '@narada2/control-plane';
 
 loadEnvFile('./.env');
@@ -26,6 +27,7 @@ import {
   consoleControlCommand,
 } from './commands/console.js';
 import { createConsoleServer } from './commands/console-server.js';
+import { createWorkbenchServer } from './commands/workbench-server.js';
 import { backupCommand } from './commands/backup.js';
 import { restoreCommand } from './commands/restore.js';
 import { verifyBackupCommand } from './commands/verify-backup.js';
@@ -70,10 +72,13 @@ import {
   postureCheckCommand,
 } from './commands/posture.js';
 import { taskAllocateCommand } from './commands/task-allocate.js';
+import { taskCreateCommand } from './commands/task-create.js';
 import { taskDeriveFromFindingCommand } from './commands/task-derive-from-finding.js';
 import { taskPromoteRecommendationCommand } from './commands/task-promote-recommendation.js';
 import { taskLintCommand } from './commands/task-lint.js';
 import { taskCloseCommand } from './commands/task-close.js';
+import { taskDispatchCommand } from './commands/task-dispatch.js';
+import { openTaskLifecycleStore } from './lib/task-lifecycle-store.js';
 import { taskReopenCommand } from './commands/task-reopen.js';
 import { chapterCloseCommand } from './commands/chapter-close.js';
 import { chapterInitCommand } from './commands/chapter-init.js';
@@ -128,10 +133,28 @@ program
   .name('narada')
   .description('Narada CLI — deterministic state compiler and operation control')
   .version('1.0.0')
+  .configureHelp({ sortSubcommands: false })
   .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
   .option('--log-level <level>', 'Log level: debug, info, warn, error', 'info')
   .option('--log-format <format>', 'Log format: pretty, json, or auto', 'auto')
   .option('--metrics-output <file>', 'Write metrics to file on exit')
+  .addHelpText(
+    'before',
+    `
+Command Groups:
+  [Runtime]        sync, cycle, integrity, status
+  [Task Gov]       task, chapter, posture, construction-loop, verify
+  [Site/Console]   sites, console, workbench
+  [Operator]       ops, doctor, audit
+  [Setup]          init, init-repo, setup, preflight, inspect, explain, activate, want-*
+  [Maintenance]    rebuild-projections, backup, restore, cleanup, derive-work, preview-work, confirm-replay, recover
+  [Draft/Outbound] drafts, show-draft, approve-draft-for-send, reject-draft, mark-reviewed, handled-externally
+  [Inspection]     show, select, crossing
+
+Deprecated: rebuild-views (use rebuild-projections)
+Use narada <command> --help for subcommand details.
+`,
+  )
   .hook('preAction', (thisCommand) => {
     // Store format in environment for commands to access
     const opts = thisCommand.opts();
@@ -494,6 +517,33 @@ consoleCmd
     });
   });
 
+// ── Workbench commands ──
+
+const workbenchCmd = program
+  .command('workbench')
+  .description('Self-build workbench HTTP server and controls');
+
+workbenchCmd
+  .command('serve')
+  .description('Start the Workbench HTTP API for browser UI')
+  .option('--host <host>', 'Host to bind to', '127.0.0.1')
+  .option('--port <port>', 'Port to bind to (0 for ephemeral)', '0')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .action(async (opts: Record<string, unknown>) => {
+    const host = (opts.host as string) ?? '127.0.0.1';
+    const port = opts.port ? parseInt(String(opts.port), 10) : 0;
+    const cwd = (opts.cwd as string) ?? '.';
+    const server = await createWorkbenchServer({ host, port, cwd, verbose: !!opts.verbose });
+    const url = await server.start();
+    console.log(`Workbench HTTP API listening at ${url}`);
+    console.log('Press Ctrl+C to stop');
+    process.on('SIGINT', async () => {
+      await server.stop();
+      process.exit(0);
+    });
+  });
+
 program
   .command('status')
   .description('Show sync status and health')
@@ -702,7 +752,7 @@ program
 // Task governance commands
 const taskCmd = program
   .command('task')
-  .description('Task governance operators (claim, release, report, review, list)');
+  .description('Task governance — create, claim, report, review, close, observe, lint, dispatch, roster, evidence');
 
 taskCmd
   .command('claim <task-number>')
@@ -861,7 +911,23 @@ taskCmd
       verbose: opts.verbose as boolean | undefined,
     });
     if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Recommendation failed');
+      const resultObj = result.result as Record<string, unknown>;
+      if (resultObj.error) {
+        // Actual runtime error
+        console.error(resultObj.error);
+        process.exit(result.exitCode);
+      }
+      // Valid empty recommendation (no primary) — not a failure
+      if (resultObj.primary === null) {
+        const fmt = process.env.OUTPUT_FORMAT as string | undefined;
+        const isJson = fmt === 'json' || (fmt !== 'human' && !process.stdout.isTTY);
+        if (isJson) {
+          console.log(JSON.stringify(result.result, null, 2));
+        }
+        // Human mode already printed "No recommendations available." in the command
+        process.exit(result.exitCode);
+      }
+      console.error('Recommendation failed');
       process.exit(result.exitCode);
     }
     console.log(result.result);
@@ -877,21 +943,28 @@ taskCmd
   .option('--principal-state-dir <path>', 'Directory containing PrincipalRuntime state file')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    const result = await taskReviewCommand({
-      taskNumber,
-      agent: opts.agent as string,
-      verdict: opts.verdict as 'accepted' | 'accepted_with_notes' | 'rejected',
-      findings: opts.findings as string | undefined,
-      report: opts.report as string | undefined,
-      cwd: opts.cwd as string | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-      principalStateDir: opts.principalStateDir as string | undefined,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Review failed');
-      process.exit(result.exitCode);
+    const cwd = opts.cwd as string | undefined;
+    const store = openTaskLifecycleStore(cwd || process.cwd());
+    try {
+      const result = await taskReviewCommand({
+        taskNumber,
+        agent: opts.agent as string,
+        verdict: opts.verdict as 'accepted' | 'accepted_with_notes' | 'rejected',
+        findings: opts.findings as string | undefined,
+        report: opts.report as string | undefined,
+        cwd,
+        format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+        principalStateDir: opts.principalStateDir as string | undefined,
+        store,
+      });
+      if (result.exitCode !== 0) {
+        console.error((result.result as { error?: string }).error ?? 'Review failed');
+        process.exit(result.exitCode);
+      }
+      console.log(result.result);
+    } finally {
+      store.db.close();
     }
-    console.log(result.result);
   });
 
 taskCmd
@@ -911,6 +984,47 @@ taskCmd
       process.exit(result.exitCode);
     }
     console.log(result.result);
+  });
+
+taskCmd
+  .command('create')
+  .description('Create a standalone task (allocate number + write spec + init lifecycle)')
+  .requiredOption('--title <title>', 'Task title')
+  .option('--goal <text>', 'Task goal (defaults to title)')
+  .option('--chapter <name>', 'Chapter name for task grouping')
+  .option('--depends-on <numbers>', 'Comma-separated dependency task numbers')
+  .option('--criteria <csv>', 'Comma-separated acceptance criteria')
+  .option('--number <n>', 'Use a pre-allocated task number (skips allocation)')
+  .option('--from-file <path>', 'Read task body from a file instead of generating scaffold')
+  .option('--dry-run', 'Preview task without creating files', false)
+  .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const cwd = opts.cwd as string | undefined;
+    const store = opts.number ? undefined : openTaskLifecycleStore(cwd || process.cwd());
+    try {
+      const result = await taskCreateCommand({
+        title: opts.title as string,
+        goal: opts.goal as string | undefined,
+        chapter: opts.chapter as string | undefined,
+        dependsOn: opts.dependsOn as string | undefined,
+        criteria: opts.criteria ? String(opts.criteria).split(',').map((s: string) => s.trim()).filter(Boolean) : undefined,
+        number: opts.number ? Number(opts.number) : undefined,
+        dryRun: opts.dryRun as boolean,
+        fromFile: opts.fromFile as string | undefined,
+        format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+        cwd,
+      });
+      if (result.exitCode !== 0) {
+        console.error((result.result as { error?: string }).error ?? 'Create failed');
+        process.exit(result.exitCode);
+      }
+      console.log(result.result);
+    } finally {
+      if (store) {
+        store.db.close();
+      }
+    }
   });
 
 taskCmd
@@ -1002,6 +1116,8 @@ taskCmd
   .option('--range <start-end>', 'Filter tasks to a number range (e.g. 429-454)')
   .option('--status <csv>', 'Filter by status (comma-separated)')
   .option('--include-closed', 'Include closed/confirmed tasks', false)
+  .option('--view', 'Create HTML render artifacts and open browser', false)
+  .option('--open', 'Open browser after creating artifacts (default true with --view)', true)
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (opts: Record<string, unknown>) => {
     const result = await taskGraphCommand({
@@ -1010,6 +1126,8 @@ taskCmd
       range: opts.range as string | undefined,
       status: opts.status as string | undefined,
       includeClosed: opts.includeClosed as boolean | undefined,
+      view: opts.view as boolean | undefined,
+      open: opts.open as boolean | undefined,
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Graph failed');
@@ -1152,17 +1270,56 @@ taskCmd
   .option('--format <fmt>', 'Output format: json or human', 'human')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    const result = await taskCloseCommand({
-      taskNumber,
-      by: opts.by as string | undefined,
-      cwd: opts.cwd as string | undefined,
-      format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Close failed');
-      process.exit(result.exitCode);
+    const cwd = opts.cwd as string | undefined;
+    const store = openTaskLifecycleStore(cwd || process.cwd());
+    try {
+      const result = await taskCloseCommand({
+        taskNumber,
+        by: opts.by as string | undefined,
+        cwd,
+        format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+        store,
+      });
+      if (result.exitCode !== 0) {
+        console.error((result.result as { error?: string }).error ?? 'Close failed');
+        process.exit(result.exitCode);
+      }
+      console.log(result.result);
+    } finally {
+      store.db.close();
     }
-    console.log(result.result);
+  });
+
+taskCmd
+  .command('dispatch <action>')
+  .description('Dispatch surface: queue, pickup, status, start')
+  .argument('<action>', 'Action: queue, pickup, status, start')
+  .option('--task-number <num>', 'Task number (for pickup/status)')
+  .option('--agent <id>', 'Agent ID')
+  .option('--exec', 'Actually spawn the execution session (start action only)')
+  .option('--format <fmt>', 'Output format: json or human', 'human')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (action: string, opts: Record<string, unknown>) => {
+    const cwd = opts.cwd as string | undefined;
+    const store = openTaskLifecycleStore(cwd || process.cwd());
+    try {
+      const result = await taskDispatchCommand({
+        action: action as 'queue' | 'pickup' | 'status' | 'start',
+        taskNumber: opts.taskNumber as string | undefined,
+        agent: opts.agent as string | undefined,
+        exec: opts.exec as boolean | undefined,
+        cwd,
+        format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+        store,
+      });
+      if (result.exitCode !== 0) {
+        console.error((result.result as { error?: string }).error ?? 'Dispatch failed');
+        process.exit(result.exitCode);
+      }
+      console.log(result.result);
+    } finally {
+      store.db.close();
+    }
   });
 
 taskCmd

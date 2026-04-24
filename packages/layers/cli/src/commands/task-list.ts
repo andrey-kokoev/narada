@@ -7,6 +7,7 @@
 
 import { resolve } from 'node:path';
 import { listRunnableTasks } from '../lib/task-governance.js';
+import { listRunnableTasksWithProjection } from '../lib/task-projection.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 
@@ -23,7 +24,14 @@ export async function taskListCommand(
 
   let tasks;
   try {
-    tasks = await listRunnableTasks(cwd);
+    // Try projection-backed listing first (SQLite lifecycle + markdown spec)
+    const projected = await listRunnableTasksWithProjection(cwd);
+    if (projected) {
+      tasks = projected;
+    } else {
+      // Fall back to pure markdown listing when SQLite is unavailable
+      tasks = await listRunnableTasks(cwd);
+    }
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     return {

@@ -5,6 +5,8 @@ vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskListCommand } from '../../src/commands/task-list.js';
+import { Database } from '@narada2/control-plane';
+import { SqliteTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -73,5 +75,62 @@ describe('task list operator', () => {
     expect(r.tasks[1].affinity.strength).toBe(1);
     expect(r.tasks[2].task_number).toBe(262);
     expect(r.tasks[2].affinity.strength).toBe(0);
+  });
+
+  it('uses SQLite projection when DB exists (SQLite status wins)', async () => {
+    // Markdown says opened, SQLite says closed → task should not appear
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-270-test.md'),
+      '---\ntask_id: 270\nstatus: opened\n---\n\n# Task 270\n',
+    );
+    // Markdown says closed, SQLite says opened → task should appear as opened
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-271-test.md'),
+      '---\ntask_id: 271\nstatus: closed\n---\n\n# Task 271\n',
+    );
+
+    // Create SQLite DB at the expected path
+    const dbPath = join(tempDir, '.ai', 'task-lifecycle.db');
+    const db = new Database(dbPath);
+    const store = new SqliteTaskLifecycleStore({ db });
+    store.initSchema();
+
+    store.upsertLifecycle({
+      task_id: '20260420-270-test',
+      task_number: 270,
+      status: 'closed',
+      governed_by: 'operator',
+      closed_at: new Date().toISOString(),
+      closed_by: 'operator',
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: new Date().toISOString(),
+    });
+
+    store.upsertLifecycle({
+      task_id: '20260420-271-test',
+      task_number: 271,
+      status: 'opened',
+      governed_by: null,
+      closed_at: null,
+      closed_by: null,
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: new Date().toISOString(),
+    });
+
+    db.close();
+
+    const result = await taskListCommand({ cwd: tempDir, format: 'json' });
+    expect(result.exitCode).toBe(0);
+    const r = result.result as { count: number; tasks: Array<{ task_number: number; status: string }> };
+
+    // Only task 271 should appear, with SQLite-authoritative status 'opened'
+    expect(r.count).toBe(1);
+    expect(r.tasks).toHaveLength(1);
+    expect(r.tasks[0].task_number).toBe(271);
+    expect(r.tasks[0].status).toBe('opened');
   });
 });

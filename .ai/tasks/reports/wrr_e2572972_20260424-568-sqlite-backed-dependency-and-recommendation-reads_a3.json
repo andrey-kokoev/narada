@@ -1,0 +1,60 @@
+{
+  "report_id": "wrr_e2572972_20260424-568-sqlite-backed-dependency-and-recommendation-reads_a3",
+  "task_number": "568",
+  "task_id": "20260424-568-sqlite-backed-dependency-and-recommendation-reads",
+  "agent_id": "a3",
+  "assignment_id": "20260424-568-sqlite-backed-dependency-and-recommendation-reads-2026-04-24T13:51:40.794Z",
+  "reported_at": "2026-04-24T15:51:30.844Z",
+  "summary": "Moved dependency validation and recommendation lifecycle reads onto SQLite-backed task state, wired authority-bearing callers, and added focused coverage.",
+  "changed_files": [
+    "packages/layers/cli/src/lib/task-governance.ts",
+    "packages/layers/cli/src/lib/task-recommender.ts",
+    "packages/layers/cli/src/commands/task-dispatch.ts",
+    "packages/layers/cli/src/commands/task-claim.ts",
+    "packages/layers/cli/src/commands/task-recommend.ts",
+    "packages/layers/cli/src/commands/task-promote-recommendation.ts",
+    "packages/layers/cli/src/commands/task-roster.ts",
+    "packages/layers/cli/test/lib/task-governance.test.ts",
+    "packages/layers/cli/test/lib/task-recommender.test.ts",
+    "packages/layers/cli/src/lib/task-lifecycle-store.ts"
+  ],
+  "verification": [
+    {
+      "command": "pnpm verify",
+      "result": "pass"
+    },
+    {
+      "command": "pnpm --filter @narada2/cli exec vitest run test/lib/task-governance.test.ts",
+      "result": "pass"
+    },
+    {
+      "command": "pnpm --filter @narada2/cli exec vitest run test/lib/task-recommender.test.ts",
+      "result": "pass"
+    },
+    {
+      "command": "pnpm --filter @narada2/cli exec vitest run test/commands/task-dispatch.test.ts",
+      "result": "pass"
+    },
+    {
+      "command": "pnpm --filter @narada2/cli exec vitest run test/commands/task-recommend.test.ts",
+      "result": "pass"
+    },
+    {
+      "command": "pnpm --filter @narada2/cli exec vitest run test/commands/task-promote-recommendation.test.ts",
+      "result": "pass"
+    },
+    {
+      "command": "pnpm --filter @narada2/cli exec vitest run test/commands/task-roster.test.ts",
+      "result": "pass"
+    },
+    {
+      "command": "pnpm --filter @narada2/cli exec vitest run test/lib/task-lifecycle-store.test.ts",
+      "result": "pass"
+    }
+  ],
+  "known_residuals": [
+    "listRunnableTasks(..., store) has no explicit SQLite-backed filtering test yet; fallback behavior remains correct."
+  ],
+  "ready_for_review": true,
+  "report_status": "accepted"
+}

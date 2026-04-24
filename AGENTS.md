@@ -64,6 +64,19 @@ When describing higher-order architecture, deployment, or design:
 - Do not call a user's configured work setup a **Narada instance**. Use **operation** for the configured unit of work, **operation specification** for its written/configured definition, and **runtime / daemon / Site** for deployed machinery.
 - Do not rename CLI flags, database columns, or package APIs as part of this vocabulary shift.
 
+## User Constraint Handling
+
+- Do not interpret, narrow, relax, or silently carve exceptions into operator-set constraints.
+- Treat an operator prohibition as still active until the operator explicitly lifts or changes it.
+- If an operator constraint appears ambiguous, ask instead of inferring a narrower allowable path.
+
+## Operator Input Format
+
+- When asking for operator input, number the question and letter the options.
+- Mark the recommended option with `(*)`.
+- If more than one question is needed, ask them one at a time in order of decreasing entropy gain.
+- Do not add editorial comments around the questions.
+
 ---
 
 ## Documentation Index

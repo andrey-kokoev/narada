@@ -9,6 +9,8 @@ import { ExitCode } from '../../src/lib/exit-codes.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Database } from '@narada2/control-plane';
+import { SqliteTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
@@ -329,5 +331,177 @@ describe('task close operator', () => {
     expect(r.status).toBe('error');
     expect(r.valid).toBe(false);
     expect(r.violations).toContain('terminal_without_governed_provenance');
+  });
+
+  describe('with SQLite store (Task 564)', () => {
+    let store: SqliteTaskLifecycleStore;
+
+    beforeEach(() => {
+      const db = new Database(':memory:');
+      store = new SqliteTaskLifecycleStore({ db });
+      store.initSchema();
+    });
+
+    afterEach(() => {
+      store.db.close();
+    });
+
+    it('writes authoritative lifecycle state to SQLite on close', async () => {
+      writeTask(
+        tempDir,
+        200,
+        'in_review',
+        '## Execution Notes\nDid the work.\n\n## Verification\nTests pass.\n',
+      );
+
+      const result = await taskCloseCommand({
+        taskNumber: '200',
+        by: 'operator-sqlite',
+        cwd: tempDir,
+        format: 'json',
+        store,
+      });
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+
+      // SQLite is authoritative
+      const lifecycle = store.getLifecycle('20260420-200-test');
+      expect(lifecycle).toBeDefined();
+      expect(lifecycle!.status).toBe('closed');
+      expect(lifecycle!.closed_by).toBe('operator-sqlite');
+      expect(lifecycle!.governed_by).toBe('task_close:operator-sqlite');
+      expect(lifecycle!.closed_at).toBeTruthy();
+
+      // Markdown is preserved as compatibility projection
+      const content = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-200-test.md'), 'utf8');
+      expect(content).toContain('status: closed');
+      expect(content).toContain('closed_by: operator-sqlite');
+    });
+
+    it('backfills markdown-only task into SQLite before closing', async () => {
+      writeTask(
+        tempDir,
+        201,
+        'opened',
+        '## Execution Notes\nDone.\n\n## Verification\nOK.\n',
+      );
+
+      // No lifecycle row exists yet
+      expect(store.getLifecycle('20260420-201-test')).toBeUndefined();
+
+      const result = await taskCloseCommand({
+        taskNumber: '201',
+        by: 'operator-backfill',
+        cwd: tempDir,
+        format: 'json',
+        store,
+      });
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+
+      // SQLite backfilled and then closed
+      const lifecycle = store.getLifecycle('20260420-201-test');
+      expect(lifecycle).toBeDefined();
+      expect(lifecycle!.status).toBe('closed');
+      expect(lifecycle!.task_number).toBe(201);
+    });
+
+    it('uses SQLite status over markdown status when both exist', async () => {
+      // Markdown says opened, SQLite says in_review
+      writeTask(
+        tempDir,
+        202,
+        'opened',
+        '## Execution Notes\nDone.\n\n## Verification\nOK.\n',
+      );
+      store.upsertLifecycle({
+        task_id: '20260420-202-test',
+        task_number: 202,
+        status: 'in_review',
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: '2026-04-24T10:00:00.000Z',
+      });
+
+      const result = await taskCloseCommand({
+        taskNumber: '202',
+        by: 'operator-sqlite',
+        cwd: tempDir,
+        format: 'json',
+        store,
+      });
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+
+      // SQLite status (in_review → closed) was used, not markdown (opened → closed)
+      const lifecycle = store.getLifecycle('20260420-202-test');
+      expect(lifecycle!.status).toBe('closed');
+    });
+
+    it('blocks close when SQLite status is already terminal', async () => {
+      writeFileSync(
+        join(tempDir, '.ai', 'tasks', '20260420-203-test.md'),
+        `---\ntask_id: 203\nstatus: closed\ngoverned_by: task_close:prior\nclosed_by: prior-operator\nclosed_at: 2026-04-24T10:00:00.000Z\n---\n\n# Task 203: Test\n\n## Acceptance Criteria\n- [x] Criterion A\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
+      );
+      store.upsertLifecycle({
+        task_id: '20260420-203-test',
+        task_number: 203,
+        status: 'closed',
+        governed_by: 'task_close:prior',
+        closed_at: '2026-04-24T10:00:00.000Z',
+        closed_by: 'prior-operator',
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: '2026-04-24T10:00:00.000Z',
+      });
+
+      const result = await taskCloseCommand({
+        taskNumber: '203',
+        by: 'operator-2',
+        cwd: tempDir,
+        format: 'json',
+        store,
+      });
+
+      // Should validate the already-closed task, not attempt re-close
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      const r = result.result as { status: string; valid: boolean };
+      expect(r.status).toBe('ok');
+      expect(r.valid).toBe(true);
+
+      // Original provenance preserved in SQLite
+      const lifecycle = store.getLifecycle('20260420-203-test');
+      expect(lifecycle!.closed_by).toBe('prior-operator');
+      expect(lifecycle!.governed_by).toBe('task_close:prior');
+    });
+
+    it('preserves governed provenance in SQLite on closure', async () => {
+      writeTask(
+        tempDir,
+        204,
+        'in_review',
+        '## Execution Notes\nDone.\n\n## Verification\nOK.\n',
+      );
+
+      const result = await taskCloseCommand({
+        taskNumber: '204',
+        by: 'provenance-test',
+        cwd: tempDir,
+        format: 'json',
+        store,
+      });
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+
+      const lifecycle = store.getLifecycle('20260420-204-test');
+      expect(lifecycle!.governed_by).toBe('task_close:provenance-test');
+      expect(lifecycle!.closed_by).toBe('provenance-test');
+      expect(lifecycle!.closed_at).toMatch(/^\d{4}-/);
+    });
   });
 });

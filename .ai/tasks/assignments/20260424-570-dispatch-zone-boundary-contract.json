@@ -1,0 +1,13 @@
+{
+  "task_id": "20260424-570-dispatch-zone-boundary-contract",
+  "assignments": [
+    {
+      "agent_id": "a3",
+      "claimed_at": "2026-04-24T13:57:35.623Z",
+      "claim_context": null,
+      "released_at": null,
+      "release_reason": null,
+      "intent": "primary"
+    }
+  ]
+}

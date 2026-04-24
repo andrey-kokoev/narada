@@ -1,0 +1,13 @@
+{
+  "task_id": "20260424-562-sqlite-task-lifecycle-store",
+  "assignments": [
+    {
+      "agent_id": "a3",
+      "claimed_at": "2026-04-24T13:18:00.000Z",
+      "claim_context": "Completed and reconciled after unrecorded execution",
+      "released_at": null,
+      "release_reason": null,
+      "intent": "primary"
+    }
+  ]
+}

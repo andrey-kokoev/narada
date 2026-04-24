@@ -19,12 +19,14 @@ import {
 } from '../lib/task-governance.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import type { TaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 
 export interface TaskCloseOptions {
   taskNumber: string;
   by?: string;
   format?: 'json' | 'human' | 'auto';
   cwd?: string;
+  store?: TaskLifecycleStore;
 }
 
 export async function taskCloseCommand(
@@ -62,7 +64,41 @@ export async function taskCloseCommand(
   }
 
   const { frontMatter, body } = await readTaskFile(taskFile.path);
-  const currentStatus = frontMatter.status as string | undefined;
+
+  // --- SQLite-backed lifecycle path (Task 564) ---
+  // SQLite is the authoritative source for lifecycle state.
+  // Markdown front matter is preserved as a compatibility projection.
+  const store = options.store;
+  let sqliteStatus: string | undefined;
+  if (store) {
+    let lifecycle = store.getLifecycle(taskFile.taskId);
+    if (!lifecycle) {
+      // Backfill: task exists in markdown but not yet in SQLite
+      const taskNum = Number(taskNumber);
+      if (!Number.isFinite(taskNum)) {
+        return {
+          exitCode: ExitCode.GENERAL_ERROR,
+          result: { status: 'error', error: 'Cannot determine task number for SQLite backfill' },
+        };
+      }
+      store.upsertLifecycle({
+        task_id: taskFile.taskId,
+        task_number: taskNum,
+        status: (frontMatter.status as import('../lib/task-lifecycle-store.js').TaskStatus) ?? 'opened',
+        governed_by: (frontMatter.governed_by as string) || null,
+        closed_at: (frontMatter.closed_at as string) || null,
+        closed_by: (frontMatter.closed_by as string) || null,
+        reopened_at: (frontMatter.reopened_at as string) || null,
+        reopened_by: (frontMatter.reopened_by as string) || null,
+        continuation_packet_json: null,
+        updated_at: new Date().toISOString(),
+      });
+      lifecycle = store.getLifecycle(taskFile.taskId)!;
+    }
+    sqliteStatus = lifecycle.status;
+  }
+
+  const currentStatus = sqliteStatus ?? (frontMatter.status as string | undefined);
 
   // Inspect evidence
   const evidence = await inspectTaskEvidence(cwd, taskNumber);
@@ -193,8 +229,20 @@ export async function taskCloseCommand(
   }
 
   // All gates passed — mutate
+  const now = new Date().toISOString();
+
+  // Write authoritative lifecycle state to SQLite
+  if (store) {
+    store.updateStatus(taskFile.taskId, 'closed', closedBy, {
+      closed_at: now,
+      closed_by: closedBy,
+      governed_by: `task_close:${closedBy}`,
+    });
+  }
+
+  // Preserve markdown front matter as compatibility projection
   frontMatter.status = 'closed';
-  frontMatter.closed_at = new Date().toISOString();
+  frontMatter.closed_at = now;
   frontMatter.closed_by = closedBy;
   frontMatter.governed_by = `task_close:${closedBy}`;
 

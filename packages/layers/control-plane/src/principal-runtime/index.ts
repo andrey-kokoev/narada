@@ -36,3 +36,13 @@ export {
   InMemoryPrincipalRuntimeRegistry,
   JsonPrincipalRuntimeRegistry,
 } from "./registry.js";
+
+export type {
+  KimiSessionBinding,
+  PrincipalSessionBindingSnapshot,
+} from "./session-binding.js";
+
+export {
+  InMemoryPrincipalSessionBindingRegistry,
+  JsonPrincipalSessionBindingRegistry,
+} from "./session-binding.js";

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "narada:install-shim": "bash scripts/install-narada-shim.sh",
     "test": "tsx scripts/test-guard.ts",
     "verify": "tsx scripts/verify.ts",
     "test:unit": "tsx scripts/test-unit.ts",
@@ -28,6 +29,7 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.1",
+    "@narada2/cli": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.10.0",
     "tsx": "^4.7.0",

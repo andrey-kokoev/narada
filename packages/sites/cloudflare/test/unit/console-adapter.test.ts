@@ -152,18 +152,100 @@ describe("CloudflareSiteObservationApi", () => {
     });
   });
 
-  describe("detail observation methods", () => {
-    it("getStuckWorkItems returns empty array", async () => {
+  describe("getStuckWorkItems", () => {
+    it("returns stuck work items from Cloudflare endpoint", async () => {
+      process.env.NARADA_CLOUDFLARE_TOKEN_CF_SITE = "token";
+      vi.stubGlobal("fetch", vi.fn(async () =>
+        new Response(JSON.stringify({
+          stuck_work_items: [
+            { workItemId: "wi-1", scopeId: "s1", status: "failed_retryable", contextId: "ctx-1", lastUpdatedAt: "2026-04-20T10:00:00Z", summary: "Error" },
+          ],
+        }), { status: 200 })
+      ));
+
+      const api = new CloudflareSiteObservationApi(makeSite());
+      const items = await api.getStuckWorkItems();
+      expect(items).toHaveLength(1);
+      expect(items[0].work_item_id).toBe("wi-1");
+      expect(items[0].status).toBe("failed_retryable");
+    });
+
+    it("returns empty array on error response", async () => {
+      vi.stubGlobal("fetch", vi.fn(async () =>
+        new Response(JSON.stringify({ error: "Down" }), { status: 503 })
+      ));
+
       const api = new CloudflareSiteObservationApi(makeSite());
       expect(await api.getStuckWorkItems()).toEqual([]);
     });
 
-    it("getPendingOutboundCommands returns empty array", async () => {
+    it("includes Authorization header when token is set", async () => {
+      process.env.NARADA_CLOUDFLARE_TOKEN_CF_SITE = "secret-token";
+      const fetchMock = vi.fn(async () =>
+        new Response(JSON.stringify({ stuck_work_items: [] }), { status: 200 })
+      );
+      vi.stubGlobal("fetch", fetchMock);
+
+      const api = new CloudflareSiteObservationApi(makeSite());
+      await api.getStuckWorkItems();
+
+      expect(fetchMock).toHaveBeenCalledOnce();
+      const [, init] = fetchMock.mock.calls[0] as [string, { headers: Record<string, string> }];
+      expect(init.headers["Authorization"]).toBe("Bearer secret-token");
+    });
+  });
+
+  describe("getPendingOutboundCommands", () => {
+    it("returns pending outbounds from Cloudflare endpoint", async () => {
+      process.env.NARADA_CLOUDFLARE_TOKEN_CF_SITE = "token";
+      vi.stubGlobal("fetch", vi.fn(async () =>
+        new Response(JSON.stringify({
+          pending_outbound_commands: [
+            { outboundId: "ob-1", scopeId: "s1", contextId: "ctx-1", actionType: "send_reply", status: "pending", createdAt: "2026-04-20T10:00:00Z", summary: "send_reply — pending" },
+          ],
+        }), { status: 200 })
+      ));
+
+      const api = new CloudflareSiteObservationApi(makeSite());
+      const items = await api.getPendingOutboundCommands();
+      expect(items).toHaveLength(1);
+      expect(items[0].outbound_id).toBe("ob-1");
+      expect(items[0].action_type).toBe("send_reply");
+    });
+
+    it("returns empty array on error response", async () => {
+      vi.stubGlobal("fetch", vi.fn(async () =>
+        new Response(JSON.stringify({ error: "Down" }), { status: 503 })
+      ));
+
       const api = new CloudflareSiteObservationApi(makeSite());
       expect(await api.getPendingOutboundCommands()).toEqual([]);
     });
+  });
 
-    it("getPendingDrafts returns empty array", async () => {
+  describe("getPendingDrafts", () => {
+    it("returns pending drafts from Cloudflare endpoint", async () => {
+      process.env.NARADA_CLOUDFLARE_TOKEN_CF_SITE = "token";
+      vi.stubGlobal("fetch", vi.fn(async () =>
+        new Response(JSON.stringify({
+          pending_drafts: [
+            { draftId: "ob-1", scopeId: "s1", contextId: "ctx-1", status: "draft_ready", createdAt: "2026-04-20T10:00:00Z", summary: "send_reply draft" },
+          ],
+        }), { status: 200 })
+      ));
+
+      const api = new CloudflareSiteObservationApi(makeSite());
+      const items = await api.getPendingDrafts();
+      expect(items).toHaveLength(1);
+      expect(items[0].draft_id).toBe("ob-1");
+      expect(items[0].status).toBe("draft_ready");
+    });
+
+    it("returns empty array on error response", async () => {
+      vi.stubGlobal("fetch", vi.fn(async () =>
+        new Response(JSON.stringify({ error: "Down" }), { status: 503 })
+      ));
+
       const api = new CloudflareSiteObservationApi(makeSite());
       expect(await api.getPendingDrafts()).toEqual([]);
     });

@@ -6,7 +6,7 @@ vi.unmock('node:fs/promises');
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskGraphCommand } from '../../src/commands/task-graph.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -275,5 +275,116 @@ describe('task graph inspection operator', () => {
     // Edge from 523 should point to task 522, not chapter 522
     expect(mermaid).toContain('T522 --> T523');
     expect(mermaid).not.toContain('C522 --> T523');
+  });
+
+  // --view operator path tests
+  describe('operator viewing path (--view)', () => {
+    const withNoBrowser = async <T>(fn: () => Promise<T>): Promise<T> => {
+      const original = process.env.NARADA_NO_BROWSER;
+      process.env.NARADA_NO_BROWSER = '1';
+      try {
+        return await fn();
+      } finally {
+        if (original === undefined) delete process.env.NARADA_NO_BROWSER;
+        else process.env.NARADA_NO_BROWSER = original;
+      }
+    };
+
+    it('creates .mmd and .html artifacts with --view', async () => {
+      writeTask(tempDir, '20260420-100-alpha.md', 'task_id: 100\nstatus: opened\n', 'Task 100 — Alpha');
+
+      const result = await withNoBrowser(() => taskGraphCommand({ cwd: tempDir, view: true }));
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+
+      const r = result.result as {
+        status: string;
+        view: boolean;
+        opened: boolean;
+        artifact_dir: string;
+        mermaid_path: string;
+        html_path: string;
+      };
+      expect(r.status).toBe('success');
+      expect(r.view).toBe(true);
+      expect(r.opened).toBe(false);
+      expect(r.artifact_dir).toContain('narada-task-graph-');
+
+      expect(statSync(r.mermaid_path).isFile()).toBe(true);
+      expect(statSync(r.html_path).isFile()).toBe(true);
+
+      const mmd = readFileSync(r.mermaid_path, 'utf8');
+      expect(mmd).toContain('flowchart TD');
+      expect(mmd).toContain('T100[');
+
+      const html = readFileSync(r.html_path, 'utf8');
+      expect(html).toContain('<!DOCTYPE html>');
+      expect(html).toContain('mermaid@10');
+
+      rmSync(r.artifact_dir, { recursive: true, force: true });
+    });
+
+    it('creates artifacts without opening when open=false', async () => {
+      writeTask(tempDir, '20260420-100-alpha.md', 'task_id: 100\nstatus: opened\n', 'Task 100 — Alpha');
+
+      const result = await taskGraphCommand({ cwd: tempDir, view: true, open: false });
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+
+      const r = result.result as {
+        status: string;
+        view: boolean;
+        opened: boolean;
+        artifact_dir: string;
+      };
+      expect(r.view).toBe(true);
+      expect(r.opened).toBe(false);
+      expect(r.message).toContain('Artifacts written to');
+
+      rmSync(r.artifact_dir, { recursive: true, force: true });
+    });
+
+    it('still allows raw mermaid output when --view is not set', async () => {
+      writeTask(tempDir, '20260420-100-alpha.md', 'task_id: 100\nstatus: opened\n', 'Task 100 — Alpha');
+
+      const result = await taskGraphCommand({ cwd: tempDir, format: 'mermaid' });
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+
+      const r = result.result as { status: string; mermaid: string };
+      expect(r.status).toBe('success');
+      expect(r.mermaid).toContain('flowchart TD');
+      expect(r.mermaid).toContain('T100[');
+      // No artifact fields when not using --view
+      expect(r).not.toHaveProperty('artifact_dir');
+    });
+
+    it('still allows json output when --view is not set', async () => {
+      writeTask(tempDir, '20260420-100-alpha.md', 'task_id: 100\nstatus: opened\n', 'Task 100 — Alpha');
+
+      const result = await taskGraphCommand({ cwd: tempDir, format: 'json' });
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+
+      const r = result.result as { status: string; nodes: unknown[] };
+      expect(r.status).toBe('success');
+      expect(r.nodes).toHaveLength(1);
+      expect(r).not.toHaveProperty('artifact_dir');
+    });
+
+    it('returns empty artifacts for empty graph with --view', async () => {
+      writeTask(tempDir, '20260420-100-alpha.md', 'task_id: 100\nstatus: closed\n', 'Task 100 — Alpha');
+
+      const result = await withNoBrowser(() => taskGraphCommand({ cwd: tempDir, view: true }));
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+
+      const r = result.result as {
+        status: string;
+        view: boolean;
+        opened: boolean;
+        artifact_dir: string;
+      };
+      expect(r.view).toBe(true);
+      expect(r.opened).toBe(false);
+      expect(statSync(r.artifact_dir).isDirectory()).toBe(true);
+
+      rmSync(r.artifact_dir, { recursive: true, force: true });
+    });
   });
 });

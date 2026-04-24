@@ -1,0 +1,13 @@
+{
+  "task_id": "20260423-534-mail-vs-adjacent-source-family-boundary",
+  "assignments": [
+    {
+      "agent_id": "a4",
+      "claimed_at": "2026-04-24T00:07:14.444Z",
+      "claim_context": null,
+      "released_at": "2026-04-24T00:18:00.000Z",
+      "release_reason": "completed",
+      "intent": "primary"
+    }
+  ]
+}

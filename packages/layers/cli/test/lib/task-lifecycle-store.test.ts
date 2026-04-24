@@ -1,0 +1,355 @@
+import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { Database } from '@narada2/control-plane';
+import {
+  SqliteTaskLifecycleStore,
+  type TaskLifecycleRow,
+  type TaskAssignmentRow,
+  type TaskReportRow,
+  type TaskReviewRow,
+} from '../../src/lib/task-lifecycle-store.js';
+
+describe('SqliteTaskLifecycleStore', () => {
+  let db: Database;
+  let store: SqliteTaskLifecycleStore;
+
+  beforeEach(() => {
+    db = new Database(':memory:');
+    store = new SqliteTaskLifecycleStore({ db });
+    store.initSchema();
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  describe('schema initialization', () => {
+    it('creates all required tables', () => {
+      const tables = db
+        .prepare("select name from sqlite_master where type = 'table'")
+        .pluck()
+        .all() as string[];
+      expect(tables).toContain('task_lifecycle');
+      expect(tables).toContain('task_assignments');
+      expect(tables).toContain('task_reports');
+      expect(tables).toContain('task_reviews');
+      expect(tables).toContain('task_number_sequence');
+    });
+
+    it('initializes task_number_sequence with singleton row', () => {
+      const row = db
+        .prepare('select last_allocated from task_number_sequence where singleton = 1')
+        .get() as { last_allocated: number };
+      expect(row.last_allocated).toBe(0);
+    });
+
+    it('is idempotent', () => {
+      store.initSchema();
+      store.initSchema();
+      const tables = db
+        .prepare("select name from sqlite_master where type = 'table'")
+        .pluck()
+        .all() as string[];
+      expect(tables.filter((t) => t === 'task_lifecycle').length).toBe(1);
+    });
+  });
+
+  describe('task lifecycle', () => {
+    const baseLifecycle: TaskLifecycleRow = {
+      task_id: '20260424-562-test',
+      task_number: 562,
+      status: 'opened',
+      governed_by: null,
+      closed_at: null,
+      closed_by: null,
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: '2026-04-24T12:00:00.000Z',
+    };
+
+    it('inserts and reads lifecycle row', () => {
+      store.upsertLifecycle(baseLifecycle);
+      const read = store.getLifecycle('20260424-562-test');
+      expect(read).toEqual(baseLifecycle);
+    });
+
+    it('reads lifecycle by task number', () => {
+      store.upsertLifecycle(baseLifecycle);
+      const read = store.getLifecycleByNumber(562);
+      expect(read?.task_id).toBe('20260424-562-test');
+    });
+
+    it('returns undefined for missing task', () => {
+      expect(store.getLifecycle('nonexistent')).toBeUndefined();
+      expect(store.getLifecycleByNumber(99999)).toBeUndefined();
+    });
+
+    it('upserts update existing rows', () => {
+      store.upsertLifecycle(baseLifecycle);
+      store.upsertLifecycle({ ...baseLifecycle, status: 'claimed', updated_at: '2026-04-24T13:00:00.000Z' });
+      const read = store.getLifecycle('20260424-562-test');
+      expect(read?.status).toBe('claimed');
+      expect(read?.updated_at).toBe('2026-04-24T13:00:00.000Z');
+    });
+
+    it('enforces unique task_number', () => {
+      store.upsertLifecycle(baseLifecycle);
+      expect(() =>
+        store.upsertLifecycle({ ...baseLifecycle, task_id: 'different-id', task_number: 562 }),
+      ).toThrow();
+    });
+
+    describe('updateStatus', () => {
+      it('updates status and timestamp', () => {
+        store.upsertLifecycle(baseLifecycle);
+        store.updateStatus('20260424-562-test', 'claimed', 'agent-a');
+        const read = store.getLifecycle('20260424-562-test');
+        expect(read?.status).toBe('claimed');
+        expect(read?.updated_at).not.toBe(baseLifecycle.updated_at);
+      });
+
+      it('accepts optional provenance updates', () => {
+        store.upsertLifecycle(baseLifecycle);
+        store.updateStatus('20260424-562-test', 'closed', 'agent-a', {
+          governed_by: 'task_close:agent-a',
+          closed_at: '2026-04-24T14:00:00.000Z',
+          closed_by: 'agent-a',
+        });
+        const read = store.getLifecycle('20260424-562-test');
+        expect(read?.status).toBe('closed');
+        expect(read?.governed_by).toBe('task_close:agent-a');
+        expect(read?.closed_at).toBe('2026-04-24T14:00:00.000Z');
+        expect(read?.closed_by).toBe('agent-a');
+      });
+
+      it('throws for nonexistent task', () => {
+        expect(() => store.updateStatus('nonexistent', 'claimed', 'agent-a')).toThrow(
+          'not found in lifecycle store',
+        );
+      });
+    });
+  });
+
+  describe('assignments', () => {
+    const baseLifecycle: TaskLifecycleRow = {
+      task_id: 'task-562',
+      task_number: 562,
+      status: 'opened',
+      governed_by: null,
+      closed_at: null,
+      closed_by: null,
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: '2026-04-24T12:00:00.000Z',
+    };
+
+    const assignment: TaskAssignmentRow = {
+      assignment_id: 'assign-1',
+      task_id: 'task-562',
+      agent_id: 'agent-a',
+      claimed_at: '2026-04-24T12:00:00.000Z',
+      released_at: null,
+      release_reason: null,
+      intent: 'primary',
+    };
+
+    beforeEach(() => {
+      store.upsertLifecycle(baseLifecycle);
+    });
+
+    it('inserts and retrieves assignment', () => {
+      store.insertAssignment(assignment);
+      const active = store.getActiveAssignment('task-562');
+      expect(active).toEqual(assignment);
+    });
+
+    it('returns undefined when no active assignment', () => {
+      expect(store.getActiveAssignment('task-562')).toBeUndefined();
+    });
+
+    it('lists all assignments ordered by claimed_at desc', () => {
+      store.insertAssignment({
+        ...assignment,
+        assignment_id: 'assign-1',
+        claimed_at: '2026-04-24T10:00:00.000Z',
+      });
+      store.insertAssignment({
+        ...assignment,
+        assignment_id: 'assign-2',
+        claimed_at: '2026-04-24T12:00:00.000Z',
+      });
+      const list = store.getAssignments('task-562');
+      expect(list.length).toBe(2);
+      expect(list[0]!.assignment_id).toBe('assign-2');
+    });
+
+    it('releases an assignment', () => {
+      store.insertAssignment(assignment);
+      store.releaseAssignment('assign-1', 'completed');
+      const active = store.getActiveAssignment('task-562');
+      expect(active).toBeUndefined();
+      const all = store.getAssignments('task-562');
+      expect(all[0]!.released_at).not.toBeNull();
+      expect(all[0]!.release_reason).toBe('completed');
+    });
+
+    it('throws when releasing nonexistent assignment', () => {
+      expect(() => store.releaseAssignment('nonexistent', 'completed')).toThrow('not found');
+    });
+
+    it('returns most recent unreleased assignment as active', () => {
+      store.insertAssignment({
+        ...assignment,
+        assignment_id: 'assign-1',
+        claimed_at: '2026-04-24T10:00:00.000Z',
+        released_at: '2026-04-24T11:00:00.000Z',
+        release_reason: 'completed',
+      });
+      store.insertAssignment({
+        ...assignment,
+        assignment_id: 'assign-2',
+        claimed_at: '2026-04-24T12:00:00.000Z',
+      });
+      const active = store.getActiveAssignment('task-562');
+      expect(active?.assignment_id).toBe('assign-2');
+    });
+  });
+
+  describe('reports', () => {
+    const baseLifecycle: TaskLifecycleRow = {
+      task_id: 'task-562',
+      task_number: 562,
+      status: 'opened',
+      governed_by: null,
+      closed_at: null,
+      closed_by: null,
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: '2026-04-24T12:00:00.000Z',
+    };
+
+    const report: TaskReportRow = {
+      report_id: 'report-1',
+      task_id: 'task-562',
+      agent_id: 'agent-a',
+      summary: 'Implemented the store',
+      changed_files_json: JSON.stringify(['task-lifecycle-store.ts']),
+      verification_json: null,
+      submitted_at: '2026-04-24T13:00:00.000Z',
+    };
+
+    beforeEach(() => {
+      store.upsertLifecycle(baseLifecycle);
+    });
+
+    it('inserts and lists reports', () => {
+      store.insertReport(report);
+      const reports = store.listReports('task-562');
+      expect(reports.length).toBe(1);
+      expect(reports[0]!.summary).toBe('Implemented the store');
+    });
+
+    it('returns empty array when no reports', () => {
+      expect(store.listReports('task-562')).toEqual([]);
+    });
+
+    it('orders reports by submitted_at desc', () => {
+      store.insertReport({ ...report, report_id: 'report-1', submitted_at: '2026-04-24T10:00:00.000Z' });
+      store.insertReport({ ...report, report_id: 'report-2', submitted_at: '2026-04-24T13:00:00.000Z' });
+      const reports = store.listReports('task-562');
+      expect(reports[0]!.report_id).toBe('report-2');
+    });
+  });
+
+  describe('reviews', () => {
+    const baseLifecycle: TaskLifecycleRow = {
+      task_id: 'task-562',
+      task_number: 562,
+      status: 'in_review',
+      governed_by: null,
+      closed_at: null,
+      closed_by: null,
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: '2026-04-24T12:00:00.000Z',
+    };
+
+    const review: TaskReviewRow = {
+      review_id: 'review-1',
+      task_id: 'task-562',
+      reviewer_agent_id: 'agent-b',
+      verdict: 'accepted',
+      findings_json: null,
+      reviewed_at: '2026-04-24T14:00:00.000Z',
+    };
+
+    beforeEach(() => {
+      store.upsertLifecycle(baseLifecycle);
+    });
+
+    it('inserts and lists reviews', () => {
+      store.insertReview(review);
+      const reviews = store.listReviews('task-562');
+      expect(reviews.length).toBe(1);
+      expect(reviews[0]!.verdict).toBe('accepted');
+    });
+
+    it('returns empty array when no reviews', () => {
+      expect(store.listReviews('task-562')).toEqual([]);
+    });
+
+    it('orders reviews by reviewed_at desc', () => {
+      store.insertReview({ ...review, review_id: 'review-1', reviewed_at: '2026-04-24T10:00:00.000Z' });
+      store.insertReview({ ...review, review_id: 'review-2', reviewed_at: '2026-04-24T14:00:00.000Z' });
+      const reviews = store.listReviews('task-562');
+      expect(reviews[0]!.review_id).toBe('review-2');
+    });
+  });
+
+  describe('task number sequence', () => {
+    it('allocates sequential numbers', () => {
+      expect(store.allocateTaskNumber()).toBe(1);
+      expect(store.allocateTaskNumber()).toBe(2);
+      expect(store.allocateTaskNumber()).toBe(3);
+    });
+
+    it('tracks last allocated', () => {
+      expect(store.getLastAllocated()).toBe(0);
+      store.allocateTaskNumber();
+      expect(store.getLastAllocated()).toBe(1);
+      store.allocateTaskNumber();
+      expect(store.getLastAllocated()).toBe(2);
+    });
+
+    it('is safe under concurrent allocation simulation', () => {
+      // Simulate rapid allocations in a tight loop
+      const numbers: number[] = [];
+      for (let i = 0; i < 100; i++) {
+        numbers.push(store.allocateTaskNumber());
+      }
+      expect(numbers).toEqual(Array.from({ length: 100 }, (_, i) => i + 1));
+      expect(store.getLastAllocated()).toBe(100);
+    });
+  });
+
+  describe('foreign key enforcement', () => {
+    it('rejects assignment for nonexistent task', () => {
+      const assignment: TaskAssignmentRow = {
+        assignment_id: 'assign-bad',
+        task_id: 'nonexistent',
+        agent_id: 'agent-a',
+        claimed_at: '2026-04-24T12:00:00.000Z',
+        released_at: null,
+        release_reason: null,
+        intent: 'primary',
+      };
+      // Foreign key enforcement is on, but SQLite's default behavior for
+      // FK violations in a single statement is to abort the current statement
+      // and return an error. We expect this to throw.
+      expect(() => store.insertAssignment(assignment)).toThrow();
+    });
+  });
+});

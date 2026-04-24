@@ -61,10 +61,10 @@ function setupRepo(tempDir: string) {
     '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100 — Test task for promotion\n\n## Acceptance Criteria\n\n- [ ] Something\n',
   );
 
-  // Opened task with satisfied dependency
+  // Opened task with satisfied dependency (complete by evidence)
   writeFileSync(
     join(tempDir, '.ai', 'tasks', '20260422-050-dep-satisfied.md'),
-    '---\ntask_id: 50\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 50 — Completed dependency\n',
+    '---\ntask_id: 50\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 50 — Completed dependency\n\n## Acceptance Criteria\n\n- [x] Criterion 1\n\n## Execution Notes\n\nCompleted.\n\n## Verification\n\nVerified.\n',
   );
 
   writeFileSync(
@@ -76,6 +76,17 @@ function setupRepo(tempDir: string) {
   writeFileSync(
     join(tempDir, '.ai', 'tasks', '20260422-102-with-unsatisfied-dep.md'),
     '---\ntask_id: 102\nstatus: opened\ndepends_on: [9999]\n---\n\n# Task 102 — Task with missing dependency\n\n## Acceptance Criteria\n\n- [ ] Something\n',
+  );
+
+  // Opened task with closed-but-incomplete-evidence dependency
+  writeFileSync(
+    join(tempDir, '.ai', 'tasks', '20260422-104-dep-incomplete.md'),
+    '---\ntask_id: 104\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 104 — Incomplete dependency\n\n## Acceptance Criteria\n\n- [x] Criterion 1\n',
+  );
+
+  writeFileSync(
+    join(tempDir, '.ai', 'tasks', '20260422-105-with-incomplete-dep.md'),
+    '---\ntask_id: 105\nstatus: opened\ndepends_on: [104]\n---\n\n# Task 105 — Task with incomplete evidence dependency\n\n## Acceptance Criteria\n\n- [ ] Something\n',
   );
 
   // Claimed task
@@ -190,6 +201,28 @@ describe('task promote-recommendation operator', () => {
     );
     const depCheck = promo.validation_results.find((v: { check: string }) => v.check === 'dependencies');
     expect(depCheck.passed).toBe(false);
+  });
+
+  it('fails when dependency is closed but not complete by evidence', async () => {
+    const result = await taskPromoteRecommendationCommand({
+      cwd: tempDir,
+      format: 'json',
+      taskNumber: '105',
+      agent: 'a1',
+      by: 'operator-kimi',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({ status: 'rejected' });
+
+    const promoFiles = readdirSync(join(tempDir, '.ai', 'tasks', 'promotions'));
+    const promo = JSON.parse(
+      readFileSync(join(tempDir, '.ai', 'tasks', 'promotions', promoFiles[0]!), 'utf8'),
+    );
+    const depCheck = promo.validation_results.find((v: { check: string }) => v.check === 'dependencies');
+    expect(depCheck.passed).toBe(false);
+    expect(depCheck.detail).toContain('not complete by evidence');
+    expect(depCheck.detail).toContain('20260422-104-dep-incomplete');
   });
 
   it('fails when agent does not exist', async () => {

@@ -1,0 +1,13 @@
+{
+  "task_id": "20260424-585-command-mediated-task-authority-boundary-contract",
+  "assignments": [
+    {
+      "agent_id": "a1",
+      "claimed_at": "2026-04-24T18:44:24.100Z",
+      "claim_context": null,
+      "released_at": null,
+      "release_reason": null,
+      "intent": "primary"
+    }
+  ]
+}

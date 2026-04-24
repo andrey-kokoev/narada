@@ -27,8 +27,9 @@ import {
   getSiteHealth,
   resolveLinuxSiteMode,
 } from "./observability.js";
-import { resolveSiteRoot } from "./path-utils.js";
+import { resolveSiteRoot, siteDbPath } from "./path-utils.js";
 import type { LinuxSiteMode } from "./types.js";
+import { createLinuxSiteControlClient } from "./site-control.js";
 
 function isLinuxVariant(variant: string): variant is "linux-user" | "linux-system" {
   return variant === "linux-user" || variant === "linux-system";
@@ -78,18 +79,142 @@ export class LinuxSiteObservationApi implements SiteObservationApi {
   }
 
   async getStuckWorkItems(): Promise<StuckWorkItem[]> {
-    // v0 Linux Sites do not have a work_items table.
-    return [];
+    const { default: DatabaseCtor } = await import("better-sqlite3");
+    const db = new DatabaseCtor(siteDbPath(this.siteId, this.mode));
+    try {
+      const tableCheck = db.prepare(
+        `SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'work_items'`
+      ).get() as { "1": number } | undefined;
+      if (!tableCheck) return [];
+
+      const rows = db.prepare(
+        `SELECT
+           work_item_id,
+           scope_id,
+           status,
+           context_id,
+           updated_at AS last_updated_at,
+           COALESCE(error_message, status) AS summary
+         FROM work_items
+         WHERE status IN ('failed_retryable', 'leased', 'executing')
+           AND (
+             (status = 'leased' AND updated_at < datetime('now', '-120 minutes'))
+             OR (status = 'executing' AND updated_at < datetime('now', '-30 minutes'))
+             OR (status = 'failed_retryable')
+           )
+         ORDER BY priority DESC, updated_at ASC`
+      ).all() as Array<{
+        work_item_id: string;
+        scope_id: string;
+        status: string;
+        context_id: string;
+        last_updated_at: string;
+        summary: string;
+      }>;
+
+      return rows.map((r) => ({
+        work_item_id: r.work_item_id,
+        scope_id: r.scope_id,
+        status: r.status as StuckWorkItem["status"],
+        context_id: r.context_id,
+        last_updated_at: r.last_updated_at,
+        summary: r.summary,
+      }));
+    } finally {
+      db.close();
+    }
   }
 
   async getPendingOutboundCommands(): Promise<PendingOutboundCommand[]> {
-    // v0 Linux Sites do not have an outbound_handoffs table.
-    return [];
+    const { default: DatabaseCtor } = await import("better-sqlite3");
+    const db = new DatabaseCtor(siteDbPath(this.siteId, this.mode));
+    try {
+      const tableCheck = db.prepare(
+        `SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'outbound_handoffs'`
+      ).get() as { "1": number } | undefined;
+      if (!tableCheck) return [];
+
+      const rows = db.prepare(
+        `SELECT
+           outbound_id,
+           scope_id,
+           context_id,
+           action_type,
+           status,
+           created_at,
+           action_type || ' — ' || status AS summary
+         FROM outbound_handoffs
+         WHERE status IN ('pending', 'draft_creating', 'sending')
+           AND (
+             (status = 'pending' AND created_at < datetime('now', '-15 minutes'))
+             OR (status = 'draft_creating' AND created_at < datetime('now', '-10 minutes'))
+             OR (status = 'sending' AND created_at < datetime('now', '-5 minutes'))
+           )
+         ORDER BY created_at ASC`
+      ).all() as Array<{
+        outbound_id: string;
+        scope_id: string;
+        context_id: string;
+        action_type: string;
+        status: string;
+        created_at: string;
+        summary: string;
+      }>;
+
+      return rows.map((r) => ({
+        outbound_id: r.outbound_id,
+        scope_id: r.scope_id,
+        context_id: r.context_id,
+        action_type: r.action_type,
+        status: r.status,
+        created_at: r.created_at,
+        summary: r.summary,
+      }));
+    } finally {
+      db.close();
+    }
   }
 
   async getPendingDrafts(): Promise<PendingDraft[]> {
-    // v0 Linux Sites do not have an outbound_handoffs table.
-    return [];
+    const { default: DatabaseCtor } = await import("better-sqlite3");
+    const db = new DatabaseCtor(siteDbPath(this.siteId, this.mode));
+    try {
+      const tableCheck = db.prepare(
+        `SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'outbound_handoffs'`
+      ).get() as { "1": number } | undefined;
+      if (!tableCheck) return [];
+
+      const rows = db.prepare(
+        `SELECT
+           outbound_id AS draft_id,
+           scope_id,
+           context_id,
+           status,
+           created_at,
+           action_type || ' draft' AS summary
+         FROM outbound_handoffs
+         WHERE status = 'draft_ready'
+         ORDER BY created_at ASC`
+      ).all() as Array<{
+        draft_id: string;
+        scope_id: string;
+        context_id: string;
+        status: string;
+        created_at: string;
+        summary: string;
+      }>;
+
+      return rows.map((r) => ({
+        draft_id: r.draft_id,
+        scope_id: r.scope_id,
+        context_id: r.context_id,
+        status: r.status as PendingDraft["status"],
+        created_at: r.created_at,
+        summary: r.summary,
+      }));
+    } finally {
+      db.close();
+    }
   }
 
   async getCredentialRequirements(): Promise<CredentialRequirement[]> {
@@ -113,31 +238,12 @@ export class LinuxSiteObservationApi implements SiteObservationApi {
 }
 
 /**
- * Control client for Linux Sites.
+ * Re-export the canonical LinuxSiteControlClient from site-control.
  *
- * v0 Linux Sites do not yet implement operator actions. All control requests
- * return an explicit unsupported error.
+ * The implementation routes console actions through executeOperatorAction
+ * on the Site's local SQLite database, following the same pattern as Windows.
  */
-export class LinuxSiteControlClient implements SiteControlClient {
-  private _siteId: string;
-
-  constructor(siteId: string) {
-    this._siteId = siteId;
-  }
-
-  async executeControlRequest(
-    request: ConsoleControlRequest
-  ): Promise<ControlRequestResult> {
-    return {
-      success: false,
-      status: "error",
-      detail:
-        `Linux Site '${this._siteId}' control is not yet implemented in v0. ` +
-        `Action '${request.actionType}' on target '${request.targetId}' ` +
-        `cannot be executed. Linux Sites do not yet support operator actions.`,
-    };
-  }
-}
+export { LinuxSiteControlClient } from "./site-control.js";
 
 /**
  * Control client returned when a system-mode Linux Site is not readable
@@ -189,6 +295,12 @@ export const linuxSiteAdapter: ConsoleSiteAdapter = {
         return new UnauthorizedLinuxSiteControlClient(site.siteId);
       }
     }
-    return new LinuxSiteControlClient(site.siteId);
+    const client = createLinuxSiteControlClient(site.siteId, mode);
+    if (!client) {
+      throw new Error(
+        `LinuxSiteControlClient could not be created for site ${site.siteId}`
+      );
+    }
+    return client;
   },
 };

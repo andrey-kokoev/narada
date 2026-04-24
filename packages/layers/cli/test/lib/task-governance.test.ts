@@ -22,9 +22,12 @@ import {
   detectReportAnomalies,
   continuationReasonToIntent,
   getAssignmentIntent,
+  resolveTaskStatus,
+  checkDependencies,
   type AgentRoster,
   type TaskAssignment,
 } from '../../src/lib/task-governance.js';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -799,5 +802,164 @@ describe('detectReportAnomalies', () => {
 
     const anomalies = await detectReportAnomalies(tempDir);
     expect(anomalies.some((a) => a.type === 'filename_id_mismatch')).toBe(true);
+  });
+});
+
+describe('resolveTaskStatus', () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'narada-resolve-status-test-'));
+    mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('returns markdown status when no store is provided', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-260-test.md'),
+      '---\nstatus: closed\n---\n\n# Test\n',
+    );
+
+    const result = await resolveTaskStatus(tempDir, 260);
+    expect(result.status).toBe('closed');
+    expect(result.source).toBe('markdown');
+  });
+
+  it('prefers SQLite status when store has the task', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-260-test.md'),
+      '---\nstatus: opened\n---\n\n# Test\n',
+    );
+
+    const store = openTaskLifecycleStore(tempDir);
+    store.upsertLifecycle({
+      task_id: '20260420-260-test',
+      task_number: 260,
+      status: 'confirmed',
+      governed_by: null,
+      closed_at: null,
+      closed_by: null,
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      created_at: '2026-04-20T00:00:00Z',
+      updated_at: '2026-04-20T00:00:00Z',
+    });
+
+    const result = await resolveTaskStatus(tempDir, 260, store);
+    expect(result.status).toBe('confirmed');
+    expect(result.source).toBe('sqlite');
+
+    store.db.close();
+  });
+
+  it('falls back to markdown when store has no record', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-260-test.md'),
+      '---\nstatus: in_review\n---\n\n# Test\n',
+    );
+
+    const store = openTaskLifecycleStore(tempDir);
+    // No lifecycle row inserted for task 260
+
+    const result = await resolveTaskStatus(tempDir, 260, store);
+    expect(result.status).toBe('in_review');
+    expect(result.source).toBe('markdown');
+
+    store.db.close();
+  });
+
+  it('returns undefined when task file is missing', async () => {
+    const store = openTaskLifecycleStore(tempDir);
+
+    const result = await resolveTaskStatus(tempDir, 999, store);
+    expect(result.status).toBeUndefined();
+    expect(result.source).toBe('markdown');
+
+    store.db.close();
+  });
+});
+
+describe('checkDependencies', () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'narada-check-deps-test-'));
+    mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('allows dependencies that are closed with complete evidence', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-998-dep.md'),
+      '---\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 998: Dep\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Execution Notes\n\nDone.\n\n## Verification\n\nVerified.\n',
+    );
+
+    const result = await checkDependencies(tempDir, [998]);
+    expect(result.blockedBy).toEqual([]);
+    expect(result.details).toEqual([]);
+  });
+
+  it('blocks dependencies that are not terminal by SQLite status', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-998-dep.md'),
+      '---\nstatus: opened\n---\n\n# Task 998: Dep\n',
+    );
+
+    const store = openTaskLifecycleStore(tempDir);
+    // Override markdown status: SQLite says opened, markdown says closed
+    store.upsertLifecycle({
+      task_id: '20260420-998-dep',
+      task_number: 998,
+      status: 'opened',
+      governed_by: null,
+      closed_at: null,
+      closed_by: null,
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      created_at: '2026-04-20T00:00:00Z',
+      updated_at: '2026-04-20T00:00:00Z',
+    });
+
+    const result = await checkDependencies(tempDir, [998], store);
+    expect(result.blockedBy).toContain('20260420-998-dep');
+    expect(result.details[0]!.reason).toContain('not in a terminal status');
+
+    store.db.close();
+  });
+
+  it('allows dependencies that are confirmed in SQLite even when markdown says opened', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'tasks', '20260420-998-dep.md'),
+      '---\nstatus: opened\ngoverned_by: operator\n---\n\n# Task 998: Dep\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Execution Notes\n\nDone.\n\n## Verification\n\nVerified.\n',
+    );
+
+    const store = openTaskLifecycleStore(tempDir);
+    store.upsertLifecycle({
+      task_id: '20260420-998-dep',
+      task_number: 998,
+      status: 'confirmed',
+      governed_by: null,
+      closed_at: null,
+      closed_by: null,
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      created_at: '2026-04-20T00:00:00Z',
+      updated_at: '2026-04-20T00:00:00Z',
+    });
+
+    const result = await checkDependencies(tempDir, [998], store);
+    expect(result.blockedBy).toEqual([]);
+    expect(result.details).toEqual([]);
+
+    store.db.close();
   });
 });

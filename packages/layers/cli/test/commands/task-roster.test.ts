@@ -214,7 +214,7 @@ describe('task roster operator', () => {
     it('preserves depends_on through claim', async () => {
       writeFileSync(
         join(tempDir, '.ai', 'tasks', '20260420-998-dep.md'),
-        '---\ntask_id: 998\nstatus: closed\n---\n\n# Task 998\n',
+        '---\ntask_id: 998\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 998\n\n## Acceptance Criteria\n\n- [x] Criterion 1\n\n## Execution Notes\n\nCompleted.\n\n## Verification\n\nVerified.\n',
       );
       writeFileSync(
         join(tempDir, '.ai', 'tasks', '20260420-385-test.md'),

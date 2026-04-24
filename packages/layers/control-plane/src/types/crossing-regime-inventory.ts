@@ -239,6 +239,31 @@ export const CROSSING_REGIME_INVENTORY: readonly CrossingRegimeInventoryEntry[] 
     },
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Advisory crossings (task governance)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    {
+      name: "Recommendation → Assignment",
+      description:
+        "An advisory recommendation artifact crosses into an authoritative task assignment under operator validation.",
+      source_zone: "Recommendation",
+      destination_zone: "Task Assignment",
+      authority_owner: "Operator (claim) for normal promotion; Operator (admin) for override",
+      admissibility_regime:
+        "9 validation checks (task_exists, task_status, dependencies, agent_exists, agent_available, no_active_assignment, write_set_risk, recommendation_fresh, principal_unavailable) + 1-hour freshness window + policy gate",
+      crossing_artifact: "`AssignmentPromotionRequest` record",
+      confirmation_rule:
+        "Assignment record durably created in `.ai/tasks/assignments/` + task status transitioned to `claimed`",
+      anti_collapse_invariant:
+        "Prevents advisory scoring from becoming authoritative assignment without independent validation.",
+      documented_at: ".ai/decisions/20260423-555-recommendation-to-assignment-crossing-contract.md",
+      classification: "advisory",
+      classification_rationale:
+        "A real authority-changing boundary with durable artifact and explicit regime, but specific to task governance rather than the core control-plane pipeline.",
+      kind: "policy_governed",
+    },
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Deferred crossings (suspected but not yet crystallized)
     // ─────────────────────────────────────────────────────────────────────────
 
