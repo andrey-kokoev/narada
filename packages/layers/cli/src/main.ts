@@ -1517,16 +1517,11 @@ taskEvidenceCmd
   .description('Inspect task completion evidence (task-authority read-only; may admit observation output)')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    const result = await taskEvidenceCommand({
+    await runDirectCommand({ command: 'task evidence inspect', emit: emitCommandResult, invocation: () => taskEvidenceCommand({
       taskNumber,
       cwd: opts.cwd as string | undefined,
       format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Evidence inspection failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result);
+    }) });
   });
 
 taskEvidenceCmd
@@ -1539,7 +1534,7 @@ taskEvidenceCmd
   .option('--full', 'Return the complete list (explicitly opt into unbounded output)', false)
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (opts: Record<string, unknown>) => {
-    const result = await taskEvidenceListCommand({
+    await runDirectCommand({ command: 'task evidence list', emit: emitCommandResult, invocation: () => taskEvidenceListCommand({
       cwd: opts.cwd as string | undefined,
       format: resolveCommandFormat(),
       verdict: opts.verdict as string | undefined,
@@ -1547,12 +1542,7 @@ taskEvidenceCmd
       range: opts.range as string | undefined,
       limit: opts.limit as string | undefined,
       full: opts.full === true,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Evidence list failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result);
+    }) });
   });
 
 taskEvidenceCmd
@@ -1561,16 +1551,11 @@ taskEvidenceCmd
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (range: string, opts: Record<string, unknown>) => {
     const format = resolveCommandFormat(undefined, 'human');
-    const result = await taskEvidenceAssertCompleteCommand({
+    await runDirectCommand({ command: 'task evidence assert-complete', emit: emitCommandResult, format, invocation: () => taskEvidenceAssertCompleteCommand({
       range,
       cwd: opts.cwd as string | undefined,
       format,
-    });
-    if (result.exitCode !== 0) {
-      emitCommandResult(result.result, format);
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result, format);
+    }) });
   });
 
 taskEvidenceCmd
@@ -1582,19 +1567,14 @@ taskEvidenceCmd
   .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    const result = await taskEvidenceProveCriteriaCommand({
+    await runDirectCommand({ command: 'task evidence prove-criteria', emit: emitCommandResult, format: opts.format, invocation: () => taskEvidenceProveCriteriaCommand({
       taskNumber,
       by: opts.by as string,
       verificationRunId: opts.verificationRun as string | undefined,
       noRunRationale: opts.noRunRationale as string | undefined,
       cwd: opts.cwd as string | undefined,
       format: resolveCommandFormat(opts.format, 'auto'),
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Criteria proof failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result, opts.format);
+    }) });
   });
 
 taskEvidenceCmd
@@ -1604,17 +1584,12 @@ taskEvidenceCmd
   .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    const result = await taskEvidenceAdmitCommand({
+    await runDirectCommand({ command: 'task evidence admit', emit: emitCommandResult, format: opts.format, invocation: () => taskEvidenceAdmitCommand({
       taskNumber,
       by: opts.by as string,
       cwd: opts.cwd as string | undefined,
       format: resolveCommandFormat(opts.format, 'auto'),
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Evidence admission failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result, opts.format);
+    }) });
   });
 
 // Backward compatibility: `narada task evidence <task-number>` routes to inspect
@@ -1627,16 +1602,11 @@ taskEvidenceCmd
       taskEvidenceCmd.help();
       return;
     }
-    const result = await taskEvidenceCommand({
+    await runDirectCommand({ command: 'task evidence', emit: emitCommandResult, invocation: () => taskEvidenceCommand({
       taskNumber,
       cwd: opts.cwd as string | undefined,
       format: resolveCommandFormat(),
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Evidence inspection failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result);
+    }) });
   });
 
 const taskReconcileCmd = taskCmd
