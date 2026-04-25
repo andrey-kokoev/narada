@@ -1785,20 +1785,20 @@ chapterCmd
   .option('--format <format>', 'Output format: json, human, or auto', 'auto')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (range: string, opts: Record<string, unknown>) => {
-    const result = await chapterFinishRangeCommand({
-      range,
-      agent: opts.agent as string,
-      summaryPrefix: opts.summaryPrefix as string | undefined,
-      force: opts.force as boolean | undefined,
-      details: opts.details as boolean | undefined,
-      cwd: opts.cwd as string | undefined,
-      format: resolveCommandFormat(opts.format, 'human'),
+    await runDirectCommand({
+      command: 'chapter finish-range',
+      emit: emitCommandResult,
+      format: opts.format,
+      invocation: () => chapterFinishRangeCommand({
+        range,
+        agent: opts.agent as string,
+        summaryPrefix: opts.summaryPrefix as string | undefined,
+        force: opts.force as boolean | undefined,
+        details: opts.details as boolean | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'human'),
+      }),
     });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Chapter finish range failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result, opts.format);
   });
 
 chapterCmd
@@ -1809,16 +1809,16 @@ chapterCmd
   .action(async (range: string, opts: Record<string, unknown>) => {
     const localFormat = opts.format === 'auto' ? undefined : opts.format;
     const format = resolveCommandFormat(localFormat, 'human');
-    const result = await taskEvidenceAssertCompleteCommand({
-      range,
-      cwd: opts.cwd as string | undefined,
+    await runDirectCommand({
+      command: 'chapter assert-complete',
+      emit: emitCommandResult,
       format,
+      invocation: () => taskEvidenceAssertCompleteCommand({
+        range,
+        cwd: opts.cwd as string | undefined,
+        format,
+      }),
     });
-    if (result.exitCode !== 0) {
-      emitCommandResult(result.result, format);
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result, format);
   });
 
 chapterCmd
@@ -1861,17 +1861,17 @@ chapterCmd
   .option('--format <format>', 'Output format: json, human, or auto', 'auto')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (path: string, opts: Record<string, unknown>) => {
-    const result = await chapterValidateTasksFileCommand({
-      path,
-      count: opts.count ? Number(opts.count) : undefined,
-      cwd: opts.cwd as string | undefined,
-      format: resolveCommandFormat(opts.format, 'human'),
+    await runDirectCommand({
+      command: 'chapter validate-tasks-file',
+      emit: emitCommandResult,
+      format: opts.format,
+      invocation: () => chapterValidateTasksFileCommand({
+        path,
+        count: opts.count ? Number(opts.count) : undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'human'),
+      }),
     });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Tasks file validation failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result, opts.format);
   });
 
 chapterCmd
@@ -1880,16 +1880,17 @@ chapterCmd
   .option('--format <format>', 'Output format: json, human, or auto', 'auto')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (range: string, opts: Record<string, unknown>) => {
-    const result = await chapterStatusCommand({
-      range,
-      cwd: opts.cwd as string | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    const format = resolveCommandFormat(opts.format, 'auto');
+    await runDirectCommand({
+      command: 'chapter status',
+      emit: emitCommandResult,
+      format,
+      invocation: () => chapterStatusCommand({
+        range,
+        cwd: opts.cwd as string | undefined,
+        format,
+      }),
     });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Chapter status failed');
-      process.exit(result.exitCode);
-    }
-    console.log(result.result);
   });
 
 chapterCmd
