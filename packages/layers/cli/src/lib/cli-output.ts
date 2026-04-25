@@ -10,8 +10,9 @@ export function resolveCommandFormat(
   envFormat = process.env.OUTPUT_FORMAT,
 ): CliFormat {
   if (envFormat === 'json') return 'json';
-  if (format === 'json' || format === 'human' || format === 'auto') return format;
+  if (format === 'json' || format === 'human') return format;
   if (envFormat === 'human' || envFormat === 'auto') return envFormat;
+  if (format === 'auto') return format;
   return fallback;
 }
 
@@ -34,4 +35,12 @@ export function formatCommandResultForStdout(
 
 export function emitCommandResult(result: unknown, format?: unknown): void {
   console.log(formatCommandResultForStdout(result, format));
+}
+
+export function attachFormattedOutput<T extends Record<string, unknown>>(
+  result: T,
+  formatted: string,
+  format: CliFormat,
+): T | (T & { _formatted: string }) {
+  return format === 'json' ? result : { ...result, _formatted: formatted };
 }

@@ -24,6 +24,7 @@ import {
 } from '../lib/task-governance.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import { attachFormattedOutput } from '../lib/cli-output.js';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 
@@ -238,6 +239,72 @@ ${residualsSection}
 `;
 }
 
+function formatLegacyCloseDryRun(options: {
+  chapterName: string;
+  taskCount: number;
+  confirmed: number;
+  completed: number;
+  nonTerminal: ChapterTaskInfo[];
+  artifactPath: string;
+}): string {
+  const lines = [
+    `Dry run: ${options.taskCount} tasks in chapter "${options.chapterName}"`,
+    `Confirmed: ${options.confirmed}`,
+    `Closed: ${options.completed}`,
+    `Non-terminal: ${options.nonTerminal.length}`,
+  ];
+  if (options.nonTerminal.length > 0) {
+    lines.push(`Warning: ${options.nonTerminal.length} task(s) are not terminal`);
+    for (const task of options.nonTerminal) {
+      lines.push(`  - ${task.taskId} (${task.status})`);
+    }
+  }
+  lines.push(`Artifact would be written to: ${options.artifactPath}`);
+  return lines.join('\n');
+}
+
+function formatLegacyCloseSuccess(options: {
+  chapterName: string;
+  artifactPath: string;
+  taskCount: number;
+  transitionedCount: number;
+}): string {
+  return [
+    `Closed chapter "${options.chapterName}"`,
+    `Artifact: ${options.artifactPath}`,
+    `Tasks: ${options.taskCount}`,
+    `Transitioned to confirmed: ${options.transitionedCount}`,
+  ].join('\n');
+}
+
+function formatRangeCloseSummary(options: {
+  title: string;
+  primaryLabel: string;
+  primaryValue: string;
+  taskCount?: number;
+  transitionedCount?: number;
+  reason?: string;
+  note?: string;
+}): string {
+  const lines = [
+    options.title,
+    `${options.primaryLabel}: ${options.primaryValue}`,
+  ];
+  if (options.taskCount !== undefined) {
+    lines.push(`Tasks: ${options.taskCount}`);
+  }
+  if (options.transitionedCount !== undefined) {
+    lines.push(`Transitioned to confirmed: ${options.transitionedCount}`);
+  }
+  if (options.reason) {
+    lines.push(`Reason: ${options.reason}`);
+  }
+  if (options.note) {
+    lines.push(options.note);
+  }
+  return lines.join('\n');
+}
+
 // ── Legacy chapter-name mode ──
 
 async function runLegacyClose(
@@ -325,43 +392,29 @@ ${dryRun ? '**Dry run** — no mutations performed.' : 'Chapter closure artifact
 `;
 
   if (dryRun) {
-    if (fmt.getFormat() === 'json') {
-      return {
-        exitCode: ExitCode.SUCCESS,
-        result: {
-          status: 'dry_run',
-          chapter: chapterName,
-          tasks: tasks.length,
-          non_terminal: nonTerminal.map((t) => t.taskId),
-          completed: [...confirmed, ...completed].map((t) => t.taskId),
-          residuals: residuals.length,
-          artifact_would_be_written: artifactPath,
-        },
-      };
-    }
-
-    fmt.message(`Dry run: ${tasks.length} tasks in chapter "${chapterName}"`, 'info');
-    fmt.kv('Confirmed', String(confirmed.length));
-    fmt.kv('Closed', String(completed.length));
-    fmt.kv('Non-terminal', String(nonTerminal.length));
-    if (nonTerminal.length > 0) {
-      fmt.message(`Warning: ${nonTerminal.length} task(s) are not terminal`, 'warning');
-      for (const t of nonTerminal) {
-        fmt.message(`  - ${t.taskId} (${t.status})`, 'warning');
-      }
-    }
-    fmt.message(`Artifact would be written to: ${artifactPath}`, 'info');
+    const result = {
+      status: 'dry_run' as const,
+      chapter: chapterName,
+      tasks: tasks.length,
+      non_terminal: nonTerminal.map((t) => t.taskId),
+      completed: [...confirmed, ...completed].map((t) => t.taskId),
+      residuals: residuals.length,
+      artifact_would_be_written: artifactPath,
+    };
     return {
       exitCode: ExitCode.SUCCESS,
-      result: {
-        status: 'dry_run',
-        chapter: chapterName,
-        tasks: tasks.length,
-        non_terminal: nonTerminal.map((t) => t.taskId),
-        completed: [...confirmed, ...completed].map((t) => t.taskId),
-        residuals: residuals.length,
-        artifact_would_be_written: artifactPath,
-      },
+      result: attachFormattedOutput(
+        result,
+        formatLegacyCloseDryRun({
+          chapterName,
+          taskCount: tasks.length,
+          confirmed: confirmed.length,
+          completed: completed.length,
+          nonTerminal,
+          artifactPath,
+        }),
+        fmt.getFormat(),
+      ),
     };
   }
 
@@ -432,37 +485,28 @@ ${dryRun ? '**Dry run** — no mutations performed.' : 'Chapter closure artifact
     }
   }
 
-  if (fmt.getFormat() === 'json') {
-    return {
-      exitCode: ExitCode.SUCCESS,
-      result: {
-        status: 'success',
-        chapter: chapterName,
-        artifact_path: artifactPath,
-        tasks_in_chapter: tasks.length,
-        transitioned_to_confirmed: transitioned,
-        non_terminal_remaining: nonTerminal.map((t) => t.taskId),
-        residuals: residuals.length,
-      },
-    };
-  }
-
-  fmt.message(`Closed chapter "${chapterName}"`, 'success');
-  fmt.kv('Artifact', artifactPath);
-  fmt.kv('Tasks', String(tasks.length));
-  fmt.kv('Transitioned to confirmed', String(transitioned.length));
+  const result = {
+    status: 'success' as const,
+    chapter: chapterName,
+    artifact_path: artifactPath,
+    tasks_in_chapter: tasks.length,
+    transitioned_to_confirmed: transitioned,
+    non_terminal_remaining: nonTerminal.map((t) => t.taskId),
+    residuals: residuals.length,
+  };
 
   return {
     exitCode: ExitCode.SUCCESS,
-    result: {
-      status: 'success',
-      chapter: chapterName,
-      artifact_path: artifactPath,
-      tasks_in_chapter: tasks.length,
-      transitioned_to_confirmed: transitioned,
-      non_terminal_remaining: nonTerminal.map((t) => t.taskId),
-      residuals: residuals.length,
-    },
+    result: attachFormattedOutput(
+      result,
+      formatLegacyCloseSuccess({
+        chapterName,
+        artifactPath,
+        taskCount: tasks.length,
+        transitionedCount: transitioned.length,
+      }),
+      fmt.getFormat(),
+    ),
   };
 }
 
@@ -521,29 +565,24 @@ async function runRangeClose(
       };
     }
 
-    if (fmt.getFormat() === 'json') {
-      return {
-        exitCode: ExitCode.SUCCESS,
-        result: {
-          status: 'success',
-          range: rangeSlug,
-          draft_path: draftPath,
-          tasks_in_chapter: tasks.length,
-        },
-      };
-    }
-
-    fmt.message(`Closure draft written for ${rangeSlug}`, 'success');
-    fmt.kv('Draft', draftPath);
-    fmt.kv('Tasks', String(tasks.length));
+    const result = {
+      status: 'success' as const,
+      range: rangeSlug,
+      draft_path: draftPath,
+      tasks_in_chapter: tasks.length,
+    };
     return {
       exitCode: ExitCode.SUCCESS,
-      result: {
-        status: 'success',
-        range: rangeSlug,
-        draft_path: draftPath,
-        tasks_in_chapter: tasks.length,
-      },
+      result: attachFormattedOutput(
+        result,
+        formatRangeCloseSummary({
+          title: `Closure draft written for ${rangeSlug}`,
+          primaryLabel: 'Draft',
+          primaryValue: draftPath,
+          taskCount: tasks.length,
+        }),
+        fmt.getFormat(),
+      ),
     };
   }
 
@@ -660,32 +699,26 @@ async function runRangeClose(
       }
     }
 
-    if (fmt.getFormat() === 'json') {
-      return {
-        exitCode: ExitCode.SUCCESS,
-        result: {
-          status: 'success',
-          range: rangeSlug,
-          decision_path: acceptedPath,
-          tasks_in_chapter: tasks.length,
-          transitioned_to_confirmed: transitioned,
-        },
-      };
-    }
-
-    fmt.message(`Closure accepted for ${rangeSlug}`, 'success');
-    fmt.kv('Decision', acceptedPath);
-    fmt.kv('Tasks', String(tasks.length));
-    fmt.kv('Transitioned to confirmed', String(transitioned.length));
+    const result = {
+      status: 'success' as const,
+      range: rangeSlug,
+      decision_path: acceptedPath,
+      tasks_in_chapter: tasks.length,
+      transitioned_to_confirmed: transitioned,
+    };
     return {
       exitCode: ExitCode.SUCCESS,
-      result: {
-        status: 'success',
-        range: rangeSlug,
-        decision_path: acceptedPath,
-        tasks_in_chapter: tasks.length,
-        transitioned_to_confirmed: transitioned,
-      },
+      result: attachFormattedOutput(
+        result,
+        formatRangeCloseSummary({
+          title: `Closure accepted for ${rangeSlug}`,
+          primaryLabel: 'Decision',
+          primaryValue: acceptedPath,
+          taskCount: tasks.length,
+          transitionedCount: transitioned.length,
+        }),
+        fmt.getFormat(),
+      ),
     };
   }
 
@@ -706,37 +739,27 @@ async function runRangeClose(
       };
     }
 
-    // Chapter returns to executing state
-    if (fmt.getFormat() === 'json') {
-      return {
-        exitCode: ExitCode.SUCCESS,
-        result: {
-          status: 'success',
-          range: rangeSlug,
-          previous_state: existingDecision ? 'closed' : 'closing',
-          new_state: 'executing',
-          reason: options.reason ?? null,
-          note: 'Create corrective tasks for any gaps found, then re-close when ready.',
-        },
-      };
-    }
-
-    fmt.message(`Reopened chapter ${rangeSlug}`, 'warning');
-    fmt.kv('Previous state', existingDecision ? 'closed' : 'closing');
-    fmt.kv('New state', 'executing');
-    if (options.reason) {
-      fmt.kv('Reason', options.reason);
-    }
-    fmt.message('Create corrective tasks for any gaps found, then re-close when ready.', 'info');
+    const result = {
+      status: 'success' as const,
+      range: rangeSlug,
+      previous_state: existingDecision ? 'closed' : 'closing',
+      new_state: 'executing',
+      reason: options.reason ?? null,
+      note: 'Create corrective tasks for any gaps found, then re-close when ready.',
+    };
     return {
       exitCode: ExitCode.SUCCESS,
-      result: {
-        status: 'success',
-        range: rangeSlug,
-        previous_state: existingDecision ? 'closed' : 'closing',
-        new_state: 'executing',
-        reason: options.reason ?? null,
-      },
+      result: attachFormattedOutput(
+        result,
+        formatRangeCloseSummary({
+          title: `Reopened chapter ${rangeSlug}`,
+          primaryLabel: 'New state',
+          primaryValue: 'executing',
+          reason: options.reason,
+          note: result.note,
+        }),
+        fmt.getFormat(),
+      ),
     };
   }
 

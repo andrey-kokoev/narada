@@ -1830,28 +1830,26 @@ chapterCmd
   .option('--depends-on <numbers>', 'Comma-separated dependency task numbers')
   .option('--tasks-file <path>', 'JSON array of detailed child task specifications')
   .option('--dry-run', 'Preview files without writing', false)
+  .option('--format <format>', 'Output format: json, human, or auto', 'auto')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (slug: string, opts: Record<string, unknown>) => {
-    const result = await chapterInitCommand({
-      slug,
-      title: opts.title as string | undefined,
-      from: opts.from ? Number(opts.from) : undefined,
-      count: opts.count ? Number(opts.count) : undefined,
-      dependsOn: opts.dependsOn as string | undefined,
-      tasksFile: opts.tasksFile as string | undefined,
-      dryRun: opts.dryRun as boolean | undefined,
-      cwd: opts.cwd as string | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    const format = resolveCommandFormat(opts.format, 'auto');
+    await runDirectCommand({
+      command: 'chapter init',
+      emit: emitCommandResult,
+      format,
+      invocation: () => chapterInitCommand({
+        slug,
+        title: opts.title as string | undefined,
+        from: opts.from ? Number(opts.from) : undefined,
+        count: opts.count ? Number(opts.count) : undefined,
+        dependsOn: opts.dependsOn as string | undefined,
+        tasksFile: opts.tasksFile as string | undefined,
+        dryRun: opts.dryRun as boolean | undefined,
+        cwd: opts.cwd as string | undefined,
+        format,
+      }),
     });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Chapter init failed');
-      process.exit(result.exitCode);
-    }
-    if ((opts.format as string) !== 'json' && process.env.OUTPUT_FORMAT !== 'json') {
-      // human output already printed by formatter
-    } else {
-      console.log(JSON.stringify(result.result, null, 2));
-    }
   });
 
 chapterCmd
@@ -1902,26 +1900,28 @@ chapterCmd
   .option('--reopen', 'Reopen a closing/closed chapter (range mode)', false)
   .option('--by <operator-id>', 'Operator ID for closure decision')
   .option('--reason <text>', 'Reason for reopen')
+  .option('--format <format>', 'Output format: json, human, or auto', 'auto')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (identifier: string, opts: Record<string, unknown>) => {
     const isRange = /^\d+(?:-\d+)?$/.test(identifier);
-    const result = await chapterCloseCommand({
-      chapterName: isRange && !opts.start && !opts.finish && !opts.reopen ? undefined : (isRange ? undefined : identifier),
-      range: isRange && (opts.start || opts.finish || opts.reopen) ? identifier : undefined,
-      start: opts.start as boolean | undefined,
-      finish: opts.finish as boolean | undefined,
-      reopen: opts.reopen as boolean | undefined,
-      by: opts.by as string | undefined,
-      reason: opts.reason as string | undefined,
-      dryRun: opts.dryRun as boolean | undefined,
-      cwd: opts.cwd as string | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    const format = resolveCommandFormat(opts.format, 'auto');
+    await runDirectCommand({
+      command: 'chapter close',
+      emit: emitCommandResult,
+      format,
+      invocation: () => chapterCloseCommand({
+        chapterName: isRange && !opts.start && !opts.finish && !opts.reopen ? undefined : (isRange ? undefined : identifier),
+        range: isRange && (opts.start || opts.finish || opts.reopen) ? identifier : undefined,
+        start: opts.start as boolean | undefined,
+        finish: opts.finish as boolean | undefined,
+        reopen: opts.reopen as boolean | undefined,
+        by: opts.by as string | undefined,
+        reason: opts.reason as string | undefined,
+        dryRun: opts.dryRun as boolean | undefined,
+        cwd: opts.cwd as string | undefined,
+        format,
+      }),
     });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Chapter close failed');
-      process.exit(result.exitCode);
-    }
-    console.log(result.result);
   });
 
 // ── Construction loop commands ──

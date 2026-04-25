@@ -10,6 +10,7 @@ import { readdir, access, readFile } from 'node:fs/promises';
 import { atomicWriteFile } from '../lib/task-governance.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import { attachFormattedOutput } from '../lib/cli-output.js';
 
 export interface ChapterInitOptions {
   slug: string;
@@ -97,6 +98,27 @@ function bulletBlock(value: string[] | string | undefined, fallback: string): st
 function criteriaBlock(value: string[] | undefined): string {
   if (!value || value.length === 0) return '- [ ] TBD';
   return value.map((line) => `- [ ] ${line}`).join('\n');
+}
+
+function formatChapterInitSummary(options: {
+  status: 'success' | 'dry_run';
+  title: string;
+  slug: string;
+  from: number;
+  to: number;
+  count: number;
+  files: Array<{ path: string; label: string }>;
+}): string {
+  const { status, title, slug, from, to, count, files } = options;
+  const lines = status === 'dry_run'
+    ? [`Dry run: would create ${files.length} file(s) for chapter "${title}"`]
+    : [`Created chapter "${title}"`];
+  lines.push(`Slug: ${slug}`);
+  lines.push(`Tasks: ${from}-${to} (${count})`);
+  for (const f of files) {
+    lines.push(`  [${f.label}] ${f.path}`);
+  }
+  return lines.join('\n');
 }
 
 function normalizeTaskSpecs(input: unknown, count: number): ChapterTaskSpec[] | null {
@@ -441,40 +463,24 @@ export async function chapterInitCommand(
   }
 
   if (dryRun) {
-    if (fmt.getFormat() === 'json') {
-      return {
-        exitCode: ExitCode.SUCCESS,
-        result: {
-          status: 'dry_run',
-          slug,
-          title,
-          from,
-          to,
-          count,
-          depends_on: dependsOn,
-          task_specs: taskSpecs ? taskSpecs.length : 0,
-          files: files.map((f) => f.path),
-        },
-      };
-    }
-
-    fmt.message(`Dry run: would create ${files.length} file(s) for chapter "${title}"`, 'info');
-    for (const f of files) {
-      fmt.message(`  [${f.label}] ${f.path}`, 'info');
-    }
+    const result = {
+      status: 'dry_run' as const,
+      slug,
+      title,
+      from,
+      to,
+      count,
+      depends_on: dependsOn,
+      task_specs: taskSpecs ? taskSpecs.length : 0,
+      files: files.map((f) => f.path),
+    };
     return {
       exitCode: ExitCode.SUCCESS,
-      result: {
-        status: 'dry_run',
-        slug,
-        title,
-        from,
-        to,
-        count,
-        depends_on: dependsOn,
-        task_specs: taskSpecs ? taskSpecs.length : 0,
-        files: files.map((f) => f.path),
-      },
+      result: attachFormattedOutput(
+        result,
+        formatChapterInitSummary({ status: 'dry_run', title, slug, from, to, count, files }),
+        fmt.getFormat(),
+      ),
     };
   }
 
@@ -498,43 +504,25 @@ export async function chapterInitCommand(
     await atomicWriteFile(childTaskPaths[i]!, childBody);
   }
 
-  if (fmt.getFormat() === 'json') {
-    return {
-      exitCode: ExitCode.SUCCESS,
-      result: {
-        status: 'success',
-        slug,
-        title,
-        from,
-        to,
-        count,
-        depends_on: dependsOn,
-        task_specs: taskSpecs ? taskSpecs.length : 0,
-        files: files.map((f) => f.path),
-      },
-    };
-  }
-
-  fmt.message(`Created chapter "${title}"`, 'success');
-  fmt.kv('Slug', slug);
-  fmt.kv('Tasks', `${from}–${to} (${count})`);
-  for (const f of files) {
-    fmt.message(`  [${f.label}] ${f.path}`, 'info');
-  }
+  const result = {
+    status: 'success' as const,
+    slug,
+    title,
+    from,
+    to,
+    count,
+    depends_on: dependsOn,
+    task_specs: taskSpecs ? taskSpecs.length : 0,
+    files: files.map((f) => f.path),
+  };
 
   return {
     exitCode: ExitCode.SUCCESS,
-    result: {
-      status: 'success',
-      slug,
-      title,
-      from,
-      to,
-      count,
-      depends_on: dependsOn,
-      task_specs: taskSpecs ? taskSpecs.length : 0,
-      files: files.map((f) => f.path),
-    },
+    result: attachFormattedOutput(
+      result,
+      formatChapterInitSummary({ status: 'success', title, slug, from, to, count, files }),
+      fmt.getFormat(),
+    ),
   };
 }
 
