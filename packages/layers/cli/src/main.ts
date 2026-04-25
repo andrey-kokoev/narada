@@ -1293,16 +1293,11 @@ rosterCmd
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
   .action(async (opts: Record<string, unknown>) => {
-    const result = await taskRosterShowCommand({
+    await runDirectCommand({ command: 'task roster show', emit: emitCommandResult, invocation: () => taskRosterShowCommand({
       cwd: opts.cwd as string | undefined,
       format: resolveCommandFormat(),
       verbose: opts.verbose as boolean | undefined,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Roster show failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result);
+    }) });
   });
 
 rosterCmd
@@ -1313,19 +1308,14 @@ rosterCmd
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    const result = await taskRosterAssignCommand({
+    await runDirectCommand({ command: 'task roster assign', emit: emitCommandResult, invocation: () => taskRosterAssignCommand({
       taskNumber,
       agent: opts.agent as string,
       noClaim: opts.noClaim as boolean | undefined,
       cwd: opts.cwd as string | undefined,
       format: resolveCommandFormat(),
       verbose: opts.verbose as boolean | undefined,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Roster assign failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result);
+    }) });
   });
 
 rosterCmd
@@ -1335,18 +1325,13 @@ rosterCmd
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    const result = await taskRosterReviewCommand({
+    await runDirectCommand({ command: 'task roster review', emit: emitCommandResult, invocation: () => taskRosterReviewCommand({
       taskNumber,
       agent: opts.agent as string,
       cwd: opts.cwd as string | undefined,
       format: resolveCommandFormat(),
       verbose: opts.verbose as boolean | undefined,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Roster review failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result);
+    }) });
   });
 
 taskCmd
@@ -1789,7 +1774,7 @@ rosterCmd
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    const result = await taskRosterDoneCommand({
+    await runDirectCommand({ command: 'task roster done', emit: emitCommandResult, invocation: () => taskRosterDoneCommand({
       taskNumber,
       agent: opts.agent as string,
       strict: opts.strict as boolean | undefined,
@@ -1797,12 +1782,7 @@ rosterCmd
       cwd: opts.cwd as string | undefined,
       format: resolveCommandFormat(),
       verbose: opts.verbose as boolean | undefined,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Roster done failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result);
+    }) });
   });
 
 rosterCmd
@@ -1812,17 +1792,12 @@ rosterCmd
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
   .action(async (opts: Record<string, unknown>) => {
-    const result = await taskRosterIdleCommand({
+    await runDirectCommand({ command: 'task roster idle', emit: emitCommandResult, invocation: () => taskRosterIdleCommand({
       agent: opts.agent as string,
       cwd: opts.cwd as string | undefined,
       format: resolveCommandFormat(),
       verbose: opts.verbose as boolean | undefined,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Roster idle failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result);
+    }) });
   });
 
 // Chapter governance commands
