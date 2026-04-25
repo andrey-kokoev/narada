@@ -2,6 +2,8 @@ export * as assignmentIntent from './assignment-intent.js';
 export * as evidenceAdmission from './evidence-admission.js';
 export * as taskGovernance from './task-governance.js';
 export * as taskCloseService from './task-close-service.js';
+export * as taskAllocateService from './task-allocate-service.js';
+export * as taskSearchService from './task-search-service.js';
 export * as taskGraph from './task-graph.js';
 export * as taskLifecycleStore from './task-lifecycle-store.js';
 export * as taskProjection from './task-projection.js';

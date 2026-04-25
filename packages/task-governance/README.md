@@ -40,6 +40,9 @@ Task transition logic, evidence admission decisions, recommendation scoring, lif
 
 Compatibility shims currently remain in `packages/layers/cli/src/lib/task-*.ts` so existing command/test imports can migrate incrementally. New task-domain code should import this package directly.
 
+The service extraction queue is tracked in
+[`docs/concepts/task-cli-service-extraction-rails.md`](../../docs/concepts/task-cli-service-extraction-rails.md).
+
 ## CEIZ / TIZ Boundary
 
 Command Execution Intent Zone and Testing Intent Zone contracts are owned by `@narada2/intent-zones`. Task governance persists references and row projections needed for task evidence, but the authority grammar of command execution and test execution is not task-owned.
