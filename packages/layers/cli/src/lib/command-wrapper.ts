@@ -21,6 +21,31 @@ export type CommandHandler<T extends Record<string, unknown>> = (
   context: CommandContext,
 ) => Promise<ExitCode | { exitCode: ExitCode; result: unknown }>;
 
+export interface NormalizedCommandError {
+  status: 'error';
+  command: string;
+  error: string;
+  retryable: boolean;
+}
+
+export function normalizeCommandError(command: string, error: unknown): NormalizedCommandError | undefined {
+  const err = error instanceof Error ? error : new Error(String(error));
+  const code = (error as { code?: unknown } | null)?.code;
+  const isBusy =
+    code === 'SQLITE_BUSY'
+    || /\bdatabase is (locked|busy)\b/i.test(err.message)
+    || /\bSQLITE_BUSY\b/i.test(err.message);
+
+  if (!isBusy) return undefined;
+
+  return {
+    status: 'error',
+    command,
+    error: 'Task lifecycle database is busy. Retry the command, or avoid parallel task lifecycle writes.',
+    retryable: true,
+  };
+}
+
 export function wrapCommand<T extends { config?: string; verbose?: boolean; format?: string }>(
   name: string,
   handler: CommandHandler<T>,
@@ -79,7 +104,7 @@ export function wrapCommand<T extends { config?: string; verbose?: boolean; form
         }
       }
       
-      logger.result({
+      logger.result(normalizeCommandError(name, error) ?? {
         status: 'error',
         command: name,
         error: err.message,

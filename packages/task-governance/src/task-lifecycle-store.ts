@@ -621,6 +621,9 @@ export interface SqliteTaskLifecycleStoreOptions {
   db: Db;
 }
 
+export const TASK_LIFECYCLE_BUSY_TIMEOUT_MS = 30000;
+export const TASK_LIFECYCLE_SYNCHRONOUS_MODE = 'normal';
+
 const initializedLifecycleDbPaths = new Set<string>();
 
 function hasCurrentLifecycleSchema(db: Db): boolean {
@@ -638,7 +641,9 @@ function hasCurrentLifecycleSchema(db: Db): boolean {
 export function openTaskLifecycleStore(cwd: string): SqliteTaskLifecycleStore {
   const dbPath = join(cwd, ".ai", "task-lifecycle.db");
   const db = new Database(dbPath);
-  db.pragma('busy_timeout = 5000');
+  db.pragma(`busy_timeout = ${TASK_LIFECYCLE_BUSY_TIMEOUT_MS}`);
+  db.pragma('journal_mode = WAL');
+  db.pragma(`synchronous = ${TASK_LIFECYCLE_SYNCHRONOUS_MODE}`);
   const store = new SqliteTaskLifecycleStore({ db });
   if (!initializedLifecycleDbPaths.has(dbPath)) {
     if (!hasCurrentLifecycleSchema(db)) {

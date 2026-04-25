@@ -1,7 +1,13 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { Database } from '@narada2/control-plane';
+import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import {
+  openTaskLifecycleStore,
   SqliteTaskLifecycleStore,
+  TASK_LIFECYCLE_BUSY_TIMEOUT_MS,
+  TASK_LIFECYCLE_SYNCHRONOUS_MODE,
   type TaskLifecycleRow,
   type TaskAssignmentRow,
   type AssignmentIntentRow,
@@ -61,6 +67,36 @@ describe('SqliteTaskLifecycleStore', () => {
         .pluck()
         .all() as string[];
       expect(tables.filter((t) => t === 'task_lifecycle').length).toBe(1);
+    });
+  });
+
+  describe('connection posture', () => {
+    let tempDir: string | null = null;
+
+    afterEach(async () => {
+      if (tempDir) {
+        await rm(tempDir, { recursive: true, force: true });
+        tempDir = null;
+      }
+    });
+
+    it('opens file-backed lifecycle stores with command-safe SQLite pragmas', async () => {
+      tempDir = await mkdtemp(join(tmpdir(), 'narada-lifecycle-store-'));
+      await mkdir(join(tempDir, '.ai'), { recursive: true });
+
+      const opened = openTaskLifecycleStore(tempDir);
+      try {
+        const busyTimeout = opened.db.pragma('busy_timeout', { simple: true });
+        const journalMode = opened.db.pragma('journal_mode', { simple: true });
+        const synchronous = opened.db.pragma('synchronous', { simple: true });
+
+        expect(busyTimeout).toBe(TASK_LIFECYCLE_BUSY_TIMEOUT_MS);
+        expect(String(journalMode).toLowerCase()).toBe('wal');
+        expect(synchronous).toBe(1);
+        expect(TASK_LIFECYCLE_SYNCHRONOUS_MODE).toBe('normal');
+      } finally {
+        opened.db.close();
+      }
     });
   });
 

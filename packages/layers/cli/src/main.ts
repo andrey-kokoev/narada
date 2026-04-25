@@ -139,7 +139,7 @@ import {
   observationListCommand,
   observationOpenCommand,
 } from './commands/observation.js';
-import { wrapCommand, type CommandContext } from './lib/command-wrapper.js';
+import { normalizeCommandError, wrapCommand, type CommandContext } from './lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from './lib/cli-output.js';
 import {
   wantMailbox,
@@ -814,6 +814,16 @@ const taskCmd = program
   .command('task')
   .description('Task governance — create, claim, report, review, close, observe, lint, dispatch, roster, evidence');
 
+function emitDirectCommandError(command: string, error: unknown): never {
+  const normalized = normalizeCommandError(command, error);
+  if (normalized) {
+    emitCommandResult(normalized, resolveCommandFormat());
+  } else {
+    throw error;
+  }
+  process.exit(1);
+}
+
 taskCmd
   .command('claim <task-number>')
   .description('Lifecycle/assignment transition: claim a task for an agent')
@@ -831,7 +841,7 @@ taskCmd
       format: resolveCommandFormat(),
       updatePrincipalRuntime: opts.updatePrincipalRuntime as boolean | undefined,
       principalStateDir: opts.principalStateDir as string | undefined,
-    });
+    }).catch((error: unknown) => emitDirectCommandError('task claim', error));
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Claim failed');
       process.exit(result.exitCode);
