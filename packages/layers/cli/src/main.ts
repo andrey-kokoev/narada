@@ -1047,9 +1047,7 @@ taskCmd
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (opts: Record<string, unknown>) => {
     const cwd = opts.cwd as string | undefined;
-    const store = opts.number ? undefined : openTaskLifecycleStore(cwd || process.cwd());
-    try {
-      const result = await taskCreateCommand({
+    await runDirectCommand({ command: 'task create', emit: emitCommandResult, format: opts.format, invocation: () => taskCreateCommand({
         title: opts.title as string,
         goal: opts.goal as string | undefined,
         chapter: opts.chapter as string | undefined,
@@ -1060,17 +1058,7 @@ taskCmd
         fromFile: opts.fromFile as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
         cwd,
-      });
-      if (result.exitCode !== 0) {
-        console.error((result.result as { error?: string }).error ?? 'Create failed');
-        process.exit(result.exitCode);
-      }
-      emitCommandResult(result.result, opts.format);
-    } finally {
-      if (store) {
-        store.db.close();
-      }
-    }
+      }) });
   });
 
 taskCmd
@@ -1120,7 +1108,7 @@ taskCmd
   .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (opts: Record<string, unknown>) => {
-    const result = await taskPromoteRecommendationCommand({
+    await runDirectCommand({ command: 'task promote-recommendation', emit: emitCommandResult, format: opts.format, invocation: () => taskPromoteRecommendationCommand({
       cwd: opts.cwd as string | undefined,
       format: opts.format as 'json' | 'human' | 'auto',
       taskNumber: opts.task as string | undefined,
@@ -1129,12 +1117,7 @@ taskCmd
       recommendationId: opts.recommendationId as string | undefined,
       overrideRisk: opts.overrideRisk as string | undefined,
       dryRun: opts.dryRun as boolean,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Promotion failed');
-      process.exit(result.exitCode);
-    }
-    console.log(result.result);
+    }) });
   });
 
 taskCmd
@@ -1226,7 +1209,7 @@ taskCmd
   .option('--open', 'Open browser after creating artifacts (default true with --view)', true)
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (opts: Record<string, unknown>) => {
-    const result = await taskGraphCommand({
+    await runDirectCommand({ command: 'task graph', emit: emitCommandResult, format: opts.format, invocation: () => taskGraphCommand({
       cwd: opts.cwd as string | undefined,
       format: opts.format as 'mermaid' | 'json' | 'auto' | undefined,
       range: opts.range as string | undefined,
@@ -1236,12 +1219,7 @@ taskCmd
       bounded: true,
       view: opts.view as boolean | undefined,
       open: opts.open as boolean | undefined,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Graph failed');
-      process.exit(result.exitCode);
-    }
-    console.log(result.result);
+    }) });
   });
 
 // Posture commands (Task 467)
@@ -1521,18 +1499,13 @@ taskCmd
   .option('--format <fmt>', 'Output format: json or human', 'human')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    const result = await taskReopenCommand({
+    await runDirectCommand({ command: 'task reopen', emit: emitCommandResult, format: opts.format, invocation: () => taskReopenCommand({
       taskNumber,
       by: opts.by as string | undefined,
       force: opts.force as boolean | undefined,
       cwd: opts.cwd as string | undefined,
       format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Reopen failed');
-      process.exit(result.exitCode);
-    }
-    console.log(result.result);
+    }) });
   });
 
 taskCmd
@@ -1542,21 +1515,12 @@ taskCmd
   .option('--format <fmt>', 'Output format: json or human', 'human')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    const result = await taskConfirmCommand({
+    await runDirectCommand({ command: 'task confirm', emit: emitCommandResult, format: opts.format, invocation: () => taskConfirmCommand({
       taskNumber,
       by: opts.by as string | undefined,
       format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
       cwd: opts.cwd as string | undefined,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Confirm failed');
-      process.exit(result.exitCode);
-    }
-    if (opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json') {
-      console.log(JSON.stringify(result.result, null, 2));
-    } else {
-      console.log(result.result);
-    }
+    }) });
   });
 
 const taskEvidenceCmd = taskCmd
