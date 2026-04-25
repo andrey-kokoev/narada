@@ -824,6 +824,23 @@ function emitDirectCommandError(command: string, error: unknown): never {
   process.exit(1);
 }
 
+async function runDirectCommand(
+  command: string,
+  invocation: () => Promise<{ exitCode: number; result: unknown }>,
+  format: unknown = resolveCommandFormat(),
+): Promise<void> {
+  let result: { exitCode: number; result: unknown };
+  try {
+    result = await invocation();
+  } catch (error) {
+    emitDirectCommandError(command, error);
+  }
+  emitCommandResult(result.result, format);
+  if (result.exitCode !== 0) {
+    process.exit(result.exitCode);
+  }
+}
+
 taskCmd
   .command('claim <task-number>')
   .description('Lifecycle/assignment transition: claim a task for an agent')
@@ -833,7 +850,7 @@ taskCmd
   .option('--principal-state-dir <path>', 'Directory containing PrincipalRuntime state file')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    const result = await taskClaimCommand({
+    await runDirectCommand('task claim', () => taskClaimCommand({
       taskNumber,
       agent: opts.agent as string,
       reason: opts.reason as string | undefined,
@@ -841,12 +858,7 @@ taskCmd
       format: resolveCommandFormat(),
       updatePrincipalRuntime: opts.updatePrincipalRuntime as boolean | undefined,
       principalStateDir: opts.principalStateDir as string | undefined,
-    }).catch((error: unknown) => emitDirectCommandError('task claim', error));
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Claim failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result);
+    }));
   });
 
 taskCmd
@@ -857,19 +869,14 @@ taskCmd
   .option('--principal-state-dir <path>', 'Directory containing PrincipalRuntime state file')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    const result = await taskReleaseCommand({
+    await runDirectCommand('task release', () => taskReleaseCommand({
       taskNumber,
       reason: opts.reason as 'completed' | 'abandoned' | 'superseded' | 'transferred' | 'budget_exhausted',
       continuation: opts.continuation as string | undefined,
       cwd: opts.cwd as string | undefined,
       format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
       principalStateDir: opts.principalStateDir as string | undefined,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Release failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result);
+    }));
   });
 
 taskCmd
@@ -884,7 +891,7 @@ taskCmd
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    const result = await taskReportCommand({
+    await runDirectCommand('task report', () => taskReportCommand({
       taskNumber,
       agent: opts.agent as string,
       summary: opts.summary as string | undefined,
@@ -895,12 +902,7 @@ taskCmd
       format: resolveCommandFormat(),
       principalStateDir: opts.principalStateDir as string | undefined,
       verbose: opts.verbose as boolean | undefined,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Report failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result);
+    }));
   });
 
 taskCmd
@@ -910,18 +912,13 @@ taskCmd
   .requiredOption('--reason <reason>', 'Continuation reason: evidence_repair, review_fix, handoff, blocked_agent, operator_override')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    const result = await taskContinueCommand({
+    await runDirectCommand('task continue', () => taskContinueCommand({
       taskNumber,
       agent: opts.agent as string,
       reason: opts.reason as 'evidence_repair' | 'review_fix' | 'handoff' | 'blocked_agent' | 'operator_override',
       cwd: opts.cwd as string | undefined,
       format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Continue failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result);
+    }));
   });
 
 taskCmd
@@ -941,7 +938,7 @@ taskCmd
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    const result = await taskFinishCommand({
+    await runDirectCommand('task finish', () => taskFinishCommand({
       taskNumber,
       agent: opts.agent as string,
       summary: opts.summary as string | undefined,
@@ -957,12 +954,7 @@ taskCmd
       cwd: opts.cwd as string | undefined,
       format: resolveCommandFormat(),
       verbose: opts.verbose as boolean | undefined,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Finish failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result);
+    }));
   });
 
 taskCmd
