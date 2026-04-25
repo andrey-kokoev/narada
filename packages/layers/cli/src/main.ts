@@ -139,7 +139,7 @@ import {
   observationListCommand,
   observationOpenCommand,
 } from './commands/observation.js';
-import { runDirectCommand, runDirectCommandWithResource, wrapCommand, type CommandContext } from './lib/command-wrapper.js';
+import { directCommandAction, runDirectCommand, runDirectCommandWithResource, wrapCommand, type CommandContext } from './lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from './lib/cli-output.js';
 import {
   wantMailbox,
@@ -1023,14 +1023,17 @@ taskCmd
   .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
   .option('--count <n>', 'Allocate N sequential task numbers atomically', (value) => Number(value), 1)
   .option('--dry-run', 'Preview next number without mutating registry', false)
-  .action(async (opts: Record<string, unknown>) => {
-    await runDirectCommand({ command: 'task allocate', emit: emitCommandResult, format: opts.format, invocation: () => taskAllocateCommand({
+  .action(directCommandAction<[Record<string, unknown>]>({
+    command: 'task allocate',
+    emit: emitCommandResult,
+    format: (opts: Record<string, unknown>) => opts.format,
+    invocation: (opts) => taskAllocateCommand({
       cwd: opts.cwd as string | undefined,
       format: opts.format as 'json' | 'human' | 'auto',
       dryRun: opts.dryRun as boolean,
       count: opts.count as number,
-    }) });
-  });
+    }),
+  }));
 
 taskCmd
   .command('create')
@@ -1045,9 +1048,13 @@ taskCmd
   .option('--dry-run', 'Preview task without creating files', false)
   .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (opts: Record<string, unknown>) => {
-    const cwd = opts.cwd as string | undefined;
-    await runDirectCommand({ command: 'task create', emit: emitCommandResult, format: opts.format, invocation: () => taskCreateCommand({
+  .action(directCommandAction<[Record<string, unknown>]>({
+    command: 'task create',
+    emit: emitCommandResult,
+    format: (opts: Record<string, unknown>) => opts.format,
+    invocation: (opts) => {
+      const cwd = opts.cwd as string | undefined;
+      return taskCreateCommand({
         title: opts.title as string,
         goal: opts.goal as string | undefined,
         chapter: opts.chapter as string | undefined,
@@ -1058,8 +1065,9 @@ taskCmd
         fromFile: opts.fromFile as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
         cwd,
-      }) });
-  });
+      });
+    },
+  }));
 
 taskCmd
   .command('amend <task-number>')
@@ -1077,8 +1085,11 @@ taskCmd
   .option('--from-file <path>', 'Replace entire body from file')
   .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    await runDirectCommand({ command: 'task amend', emit: emitCommandResult, format: opts.format, invocation: () => taskAmendCommand({
+  .action(directCommandAction<[string, Record<string, unknown>]>({
+    command: 'task amend',
+    emit: emitCommandResult,
+    format: (_taskNumber: string, opts: Record<string, unknown>) => opts.format,
+    invocation: (taskNumber, opts) => taskAmendCommand({
       taskNumber,
       by: opts.by as string,
       title: opts.title as string | undefined,
@@ -1093,8 +1104,8 @@ taskCmd
       fromFile: opts.fromFile as string | undefined,
       format: resolveCommandFormat(opts.format, 'auto'),
       cwd: opts.cwd as string | undefined,
-    }) });
-  });
+    }),
+  }));
 
 taskCmd
   .command('promote-recommendation')
@@ -1107,8 +1118,11 @@ taskCmd
   .option('--dry-run', 'Validate only; do not mutate', false)
   .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (opts: Record<string, unknown>) => {
-    await runDirectCommand({ command: 'task promote-recommendation', emit: emitCommandResult, format: opts.format, invocation: () => taskPromoteRecommendationCommand({
+  .action(directCommandAction<[Record<string, unknown>]>({
+    command: 'task promote-recommendation',
+    emit: emitCommandResult,
+    format: (opts: Record<string, unknown>) => opts.format,
+    invocation: (opts) => taskPromoteRecommendationCommand({
       cwd: opts.cwd as string | undefined,
       format: opts.format as 'json' | 'human' | 'auto',
       taskNumber: opts.task as string | undefined,
@@ -1117,8 +1131,8 @@ taskCmd
       recommendationId: opts.recommendationId as string | undefined,
       overrideRisk: opts.overrideRisk as string | undefined,
       dryRun: opts.dryRun as boolean,
-    }) });
-  });
+    }),
+  }));
 
 taskCmd
   .command('derive-from-finding <finding-id>')

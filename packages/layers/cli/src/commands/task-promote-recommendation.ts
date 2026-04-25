@@ -259,7 +259,9 @@ export async function taskPromoteRecommendationCommand(
 
   // Check 6: No active assignment
   const existingAssignment = await loadAssignment(cwd, taskFile.taskId);
-  const activeAssignment = existingAssignment ? getActiveAssignment(existingAssignment) : null;
+  const activeAssignment = existingAssignment
+    ? getActiveAssignment(existingAssignment)
+    : store?.getActiveAssignment(taskFile.taskId) ?? null;
   validationResults.push({
     check: 'no_active_assignment',
     passed: !activeAssignment,

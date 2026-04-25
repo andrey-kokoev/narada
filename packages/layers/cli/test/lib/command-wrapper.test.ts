@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeCommandError, runDirectCommand, runDirectCommandWithResource } from '../../src/lib/command-wrapper.js';
+import { directCommandAction, normalizeCommandError, runDirectCommand, runDirectCommandWithResource } from '../../src/lib/command-wrapper.js';
 
 describe('command error normalization', () => {
   it('normalizes SQLITE_BUSY into a terse retryable operator error', () => {
@@ -89,6 +89,50 @@ describe('direct command runner', () => {
         throw new Error(`unexpected exit ${code}`);
       },
     })).rejects.toThrow('boom');
+  });
+});
+
+describe('direct command action helper', () => {
+  it('adapts action arguments to a direct command invocation', async () => {
+    const emitted: Array<{ result: unknown; format?: unknown }> = [];
+    const action = directCommandAction<[string, { format: string }]>({
+      command: 'task action',
+      invocation: async (taskNumber, opts) => ({
+        exitCode: 0,
+        result: { status: 'success', taskNumber, optionFormat: opts.format },
+      }),
+      emit: (result, format) => emitted.push({ result, format }),
+      format: (_taskNumber, opts) => opts.format,
+      exit: (code): never => {
+        throw new Error(`unexpected exit ${code}`);
+      },
+    });
+
+    await action('123', { format: 'json' });
+
+    expect(emitted).toEqual([{
+      result: { status: 'success', taskNumber: '123', optionFormat: 'json' },
+      format: 'json',
+    }]);
+  });
+
+  it('preserves nonzero command exit behavior', async () => {
+    const emitted: unknown[] = [];
+    let exitCode: number | null = null;
+    const action = directCommandAction<[Record<string, unknown>]>({
+      command: 'task action',
+      invocation: async () => ({ exitCode: 2, result: { status: 'error', error: 'bad' } }),
+      emit: (result) => emitted.push(result),
+      exit: (code): never => {
+        exitCode = code;
+        throw new Error('exit');
+      },
+    });
+
+    await expect(action({})).rejects.toThrow('exit');
+
+    expect(emitted).toEqual([{ status: 'error', error: 'bad' }]);
+    expect(exitCode).toBe(2);
   });
 });
 

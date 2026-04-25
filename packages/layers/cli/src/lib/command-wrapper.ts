@@ -41,6 +41,14 @@ export interface DirectCommandRunnerOptions {
   exit?: (code: number) => never;
 }
 
+export interface DirectCommandActionOptions<TArgs extends unknown[]> {
+  command: string;
+  invocation: (...args: TArgs) => Promise<CommandResultEnvelope>;
+  emit: (result: unknown, format?: unknown) => void;
+  format?: unknown | ((...args: TArgs) => unknown);
+  exit?: (code: number) => never;
+}
+
 export interface ResourceScopedDirectCommandRunnerOptions<TResource> {
   command: string;
   open: () => TResource;
@@ -88,6 +96,21 @@ export async function runDirectCommand(options: DirectCommandRunnerOptions): Pro
   if (result.exitCode !== 0) {
     exit(result.exitCode);
   }
+}
+
+export function directCommandAction<TArgs extends unknown[]>(
+  options: DirectCommandActionOptions<TArgs>,
+): (...args: TArgs) => Promise<void> {
+  return async (...args: TArgs): Promise<void> => {
+    const format = typeof options.format === 'function' ? options.format(...args) : options.format;
+    await runDirectCommand({
+      command: options.command,
+      invocation: () => options.invocation(...args),
+      emit: options.emit,
+      format,
+      exit: options.exit,
+    });
+  };
 }
 
 export async function runDirectCommandWithResource<TResource>(
