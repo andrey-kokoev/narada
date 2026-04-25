@@ -139,7 +139,7 @@ import {
   observationListCommand,
   observationOpenCommand,
 } from './commands/observation.js';
-import { normalizeCommandError, wrapCommand, type CommandContext } from './lib/command-wrapper.js';
+import { runDirectCommand, wrapCommand, type CommandContext } from './lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from './lib/cli-output.js';
 import {
   wantMailbox,
@@ -814,33 +814,6 @@ const taskCmd = program
   .command('task')
   .description('Task governance — create, claim, report, review, close, observe, lint, dispatch, roster, evidence');
 
-function emitDirectCommandError(command: string, error: unknown): never {
-  const normalized = normalizeCommandError(command, error);
-  if (normalized) {
-    emitCommandResult(normalized, resolveCommandFormat());
-  } else {
-    throw error;
-  }
-  process.exit(1);
-}
-
-async function runDirectCommand(
-  command: string,
-  invocation: () => Promise<{ exitCode: number; result: unknown }>,
-  format: unknown = resolveCommandFormat(),
-): Promise<void> {
-  let result: { exitCode: number; result: unknown };
-  try {
-    result = await invocation();
-  } catch (error) {
-    emitDirectCommandError(command, error);
-  }
-  emitCommandResult(result.result, format);
-  if (result.exitCode !== 0) {
-    process.exit(result.exitCode);
-  }
-}
-
 taskCmd
   .command('claim <task-number>')
   .description('Lifecycle/assignment transition: claim a task for an agent')
@@ -850,7 +823,7 @@ taskCmd
   .option('--principal-state-dir <path>', 'Directory containing PrincipalRuntime state file')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    await runDirectCommand('task claim', () => taskClaimCommand({
+    await runDirectCommand({ command: 'task claim', emit: emitCommandResult, invocation: () => taskClaimCommand({
       taskNumber,
       agent: opts.agent as string,
       reason: opts.reason as string | undefined,
@@ -858,7 +831,7 @@ taskCmd
       format: resolveCommandFormat(),
       updatePrincipalRuntime: opts.updatePrincipalRuntime as boolean | undefined,
       principalStateDir: opts.principalStateDir as string | undefined,
-    }));
+    }) });
   });
 
 taskCmd
@@ -869,14 +842,14 @@ taskCmd
   .option('--principal-state-dir <path>', 'Directory containing PrincipalRuntime state file')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    await runDirectCommand('task release', () => taskReleaseCommand({
+    await runDirectCommand({ command: 'task release', emit: emitCommandResult, invocation: () => taskReleaseCommand({
       taskNumber,
       reason: opts.reason as 'completed' | 'abandoned' | 'superseded' | 'transferred' | 'budget_exhausted',
       continuation: opts.continuation as string | undefined,
       cwd: opts.cwd as string | undefined,
       format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
       principalStateDir: opts.principalStateDir as string | undefined,
-    }));
+    }) });
   });
 
 taskCmd
@@ -891,7 +864,7 @@ taskCmd
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    await runDirectCommand('task report', () => taskReportCommand({
+    await runDirectCommand({ command: 'task report', emit: emitCommandResult, invocation: () => taskReportCommand({
       taskNumber,
       agent: opts.agent as string,
       summary: opts.summary as string | undefined,
@@ -902,7 +875,7 @@ taskCmd
       format: resolveCommandFormat(),
       principalStateDir: opts.principalStateDir as string | undefined,
       verbose: opts.verbose as boolean | undefined,
-    }));
+    }) });
   });
 
 taskCmd
@@ -912,13 +885,13 @@ taskCmd
   .requiredOption('--reason <reason>', 'Continuation reason: evidence_repair, review_fix, handoff, blocked_agent, operator_override')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    await runDirectCommand('task continue', () => taskContinueCommand({
+    await runDirectCommand({ command: 'task continue', emit: emitCommandResult, invocation: () => taskContinueCommand({
       taskNumber,
       agent: opts.agent as string,
       reason: opts.reason as 'evidence_repair' | 'review_fix' | 'handoff' | 'blocked_agent' | 'operator_override',
       cwd: opts.cwd as string | undefined,
       format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-    }));
+    }) });
   });
 
 taskCmd
@@ -938,7 +911,7 @@ taskCmd
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    await runDirectCommand('task finish', () => taskFinishCommand({
+    await runDirectCommand({ command: 'task finish', emit: emitCommandResult, invocation: () => taskFinishCommand({
       taskNumber,
       agent: opts.agent as string,
       summary: opts.summary as string | undefined,
@@ -954,7 +927,7 @@ taskCmd
       cwd: opts.cwd as string | undefined,
       format: resolveCommandFormat(),
       verbose: opts.verbose as boolean | undefined,
-    }));
+    }) });
   });
 
 taskCmd
@@ -1053,17 +1026,12 @@ taskCmd
   .option('--count <n>', 'Allocate N sequential task numbers atomically', (value) => Number(value), 1)
   .option('--dry-run', 'Preview next number without mutating registry', false)
   .action(async (opts: Record<string, unknown>) => {
-    const result = await taskAllocateCommand({
+    await runDirectCommand({ command: 'task allocate', emit: emitCommandResult, format: opts.format, invocation: () => taskAllocateCommand({
       cwd: opts.cwd as string | undefined,
       format: opts.format as 'json' | 'human' | 'auto',
       dryRun: opts.dryRun as boolean,
       count: opts.count as number,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Allocate failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result);
+    }) });
   });
 
 taskCmd
@@ -1124,7 +1092,7 @@ taskCmd
   .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    const result = await taskAmendCommand({
+    await runDirectCommand({ command: 'task amend', emit: emitCommandResult, format: opts.format, invocation: () => taskAmendCommand({
       taskNumber,
       by: opts.by as string,
       title: opts.title as string | undefined,
@@ -1139,12 +1107,7 @@ taskCmd
       fromFile: opts.fromFile as string | undefined,
       format: resolveCommandFormat(opts.format, 'auto'),
       cwd: opts.cwd as string | undefined,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Amend failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result, opts.format);
+    }) });
   });
 
 taskCmd
@@ -1182,17 +1145,12 @@ taskCmd
   .requiredOption('--review <review-id>', 'Review ID containing the finding')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (findingId: string, opts: Record<string, unknown>) => {
-    const result = await taskDeriveFromFindingCommand({
+    await runDirectCommand({ command: 'task derive-from-finding', emit: emitCommandResult, invocation: () => taskDeriveFromFindingCommand({
       findingId,
       review: opts.review as string,
       cwd: opts.cwd as string | undefined,
       format: resolveCommandFormat(),
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Derive failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result);
+    }) });
   });
 
 taskCmd

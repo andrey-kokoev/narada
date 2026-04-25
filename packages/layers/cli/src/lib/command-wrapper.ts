@@ -28,6 +28,19 @@ export interface NormalizedCommandError {
   retryable: boolean;
 }
 
+export interface CommandResultEnvelope {
+  exitCode: number;
+  result: unknown;
+}
+
+export interface DirectCommandRunnerOptions {
+  command: string;
+  invocation: () => Promise<CommandResultEnvelope>;
+  emit: (result: unknown, format?: unknown) => void;
+  format?: unknown;
+  exit?: (code: number) => never;
+}
+
 export function normalizeCommandError(command: string, error: unknown): NormalizedCommandError | undefined {
   const err = error instanceof Error ? error : new Error(String(error));
   const code = (error as { code?: unknown } | null)?.code;
@@ -44,6 +57,27 @@ export function normalizeCommandError(command: string, error: unknown): Normaliz
     error: 'Task lifecycle database is busy. Retry the command, or avoid parallel task lifecycle writes.',
     retryable: true,
   };
+}
+
+export async function runDirectCommand(options: DirectCommandRunnerOptions): Promise<void> {
+  const exit = options.exit ?? ((code: number): never => process.exit(code));
+  let result: CommandResultEnvelope;
+  try {
+    result = await options.invocation();
+  } catch (error) {
+    const normalized = normalizeCommandError(options.command, error);
+    if (!normalized) {
+      throw error;
+    }
+    options.emit(normalized, options.format);
+    exit(ExitCode.GENERAL_ERROR);
+    return;
+  }
+
+  options.emit(result.result, options.format);
+  if (result.exitCode !== 0) {
+    exit(result.exitCode);
+  }
 }
 
 export function wrapCommand<T extends { config?: string; verbose?: boolean; format?: string }>(
