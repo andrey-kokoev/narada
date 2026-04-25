@@ -3,7 +3,7 @@
  *
  * Implements the 7 foreman validation rules for tool requests.
  *
- * Spec: .ai/tasks/20260414-007-assignment-agent-c-tool-binding-runtime.md
+ * Spec: .ai/do-not-open/tasks/20260414-007-assignment-agent-c-tool-binding-runtime.md
  */
 
 import type { ToolInvocationRequest, ToolCatalogEntry } from "../runtime/envelope.js";

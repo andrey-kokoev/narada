@@ -14,7 +14,7 @@
 |------------|----------|----------|
 | Task state machine (7 statuses, transitions, dependency enforcement) | `task-governance.ts`, `task-claim.ts`, `task-release.ts`, `task-review.ts` | **Mature** |
 | Atomic task number allocation with file lock | `task-governance.ts` | **Mature** |
-| Assignment records (file-based) | `.ai/tasks/assignments/{task-id}.json` | **Mature** |
+| Assignment records (file-based) | `.ai/do-not-open/tasks/tasks/assignments/{task-id}.json` | **Mature** |
 | Agent roster (operational tracking) | `.ai/agents/roster.json`, `task-roster.ts` | **Mature** |
 | Review records with structured findings | `.ai/reviews/{review-id}.json`, `task-review.ts` | **Mature** |
 | Review-to-corrective-task derivation | `task-derive-from-finding.ts` | **Mature** |
@@ -128,7 +128,7 @@ The following must **never** be automated in this chapter:
 
 | Dimension | Evidenced | Projected | Pressure Path | Evidence Required |
 |-----------|-----------|-----------|---------------|-------------------|
-| **Graph generality** | `+1` — task graph works for any repo with `.ai/tasks/` | `+1` — recommendation works for any task graph | Task 411 | Algorithm is task-content-agnostic |
+| **Graph generality** | `+1` — task graph works for any repo with `.ai/do-not-open/tasks/` | `+1` — recommendation works for any task graph | Task 411 | Algorithm is task-content-agnostic |
 | **Principal generality** | `+1` — PrincipalRuntime covers operator/agent/worker/external | `+1` — recommendation handles all principal types | Task 412 | Integration contract covers all types |
 | **Vertical neutrality** | `+1` — task governance is vertical-neutral | `+1` — recommendation is vertical-neutral | Task 410 | Boundary contract confirms no vertical leakage |
 

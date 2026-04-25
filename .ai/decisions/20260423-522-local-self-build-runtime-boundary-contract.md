@@ -30,7 +30,7 @@ The runtime does not create new durable state. It reads from and writes to exist
 
 | Object | Durable Store | Authority | Mutable By Runtime? |
 |--------|-------------|-----------|---------------------|
-| **Task** | Task markdown file (`.ai/tasks/*.md`) | Task governance operators | No — runtime reads only |
+| **Task** | Task markdown file (`.ai/do-not-open/tasks/*.md`) | Task governance operators | No — runtime reads only |
 | **Assignment** | `.ai/assignments/<task-id>.json` | `task-roster assign/claim/release` | Yes — via governed operators |
 | **Roster** | `.ai/roster.json` | `task-roster` commands | Yes — via governed operators |
 | **Recommendation** | `TaskRecommendation` (ephemeral, derived) | `task-recommend` | Yes — runtime triggers `recommend` |

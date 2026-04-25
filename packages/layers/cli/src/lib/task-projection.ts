@@ -31,6 +31,7 @@ import {
   isExecutableTaskFile,
   parseFrontMatter,
   computeTaskAffinity,
+  resolveExecutableTaskNumberOwnership,
   type TaskCompletionEvidence,
   type AssignmentIntent,
   type ChapterTaskInfo,
@@ -122,7 +123,9 @@ export async function inspectTaskEvidenceWithProjection(
   const { frontMatter, body } = await readTaskFile(taskFile.path);
   const criteria = countUncheckedCriteria(body);
   const hasExecutionNotes = /##\s*Execution Notes\s*\n/i.test(body);
-  const hasVerification = /##\s*Verification\s*\n/i.test(body);
+  const hasMarkdownVerification = /##\s*Verification\s*\n/i.test(body);
+  const hasGovernedVerificationRuns = lifecycleStore.hasVerificationRunsForTask(taskFile.taskId);
+  const hasVerification = hasMarkdownVerification || hasGovernedVerificationRuns;
 
   // Read durable state from SQLite (authoritative)
   const assignments = lifecycleStore.getAssignments(taskFile.taskId);
@@ -280,6 +283,9 @@ export async function inspectTaskEvidenceWithProjection(
 export async function listRunnableTasksWithProjection(
   cwd: string,
   store?: TaskLifecycleStore,
+  options?: {
+    rangeFilter?: { start: number; end: number };
+  },
 ): Promise<RunnableTask[] | null> {
   const lifecycleStore = store ?? (await openTaskLifecycleStore(cwd));
   if (!lifecycleStore) {
@@ -287,7 +293,7 @@ export async function listRunnableTasksWithProjection(
   }
 
   const resolvedCwd = resolve(cwd);
-  const tasksDir = join(resolvedCwd, '.ai', 'tasks');
+  const tasksDir = join(resolvedCwd, '.ai', 'do-not-open', 'tasks');
 
   // 1. Query SQLite for all tasks (not just runnable) so we can suppress
   // markdown entries when SQLite has a non-runnable status.
@@ -303,6 +309,7 @@ export async function listRunnableTasksWithProjection(
     string,
     { task_id: string; task_number: number; status: TaskStatus }
   >();
+  const sqliteSpecByTaskId = new Map<string, { title: string; dependencies: number[] }>();
   for (const row of allSqliteRows) {
     const taskId = String(row.task_id);
     const entry = {
@@ -315,6 +322,15 @@ export async function listRunnableTasksWithProjection(
       sqliteRunnable.set(taskId, entry);
     }
   }
+  const specRows = lifecycleStore.db
+    .prepare('select task_id, title, dependencies_json from task_specs')
+    .all() as Array<Record<string, unknown>>;
+  for (const row of specRows) {
+    sqliteSpecByTaskId.set(String(row.task_id), {
+      title: String(row.title),
+      dependencies: JSON.parse(String(row.dependencies_json)) as number[],
+    });
+  }
 
   // 2. Scan markdown for executable tasks
   let files: string[] = [];
@@ -325,6 +341,7 @@ export async function listRunnableTasksWithProjection(
   }
 
   const mdFiles = files.filter(isExecutableTaskFile);
+  const ownership = await resolveExecutableTaskNumberOwnership(cwd, lifecycleStore);
 
   // 3. Build merged task list
   const allTaskInfos = new Map<number, ChapterTaskInfo>();
@@ -332,17 +349,29 @@ export async function listRunnableTasksWithProjection(
 
   // Process SQLite tasks first (authoritative status)
   for (const [taskId, lifecycle] of sqliteRunnable) {
+    if (ownership.conflictedNumbers.has(lifecycle.task_number)) continue;
+    const ownerTaskId = ownership.ownerByNumber.get(lifecycle.task_number);
+    if (ownerTaskId && ownerTaskId !== taskId) continue;
+    if (options?.rangeFilter) {
+      if (
+        lifecycle.task_number < options.rangeFilter.start ||
+        lifecycle.task_number > options.rangeFilter.end
+      ) {
+        continue;
+      }
+    }
+
     const filePath = join(tasksDir, `${taskId}.md`);
     let frontMatter: import('./task-governance.js').TaskFrontMatter = {};
     let body = '';
-    let title: string | null = null;
+    const spec = sqliteSpecByTaskId.get(taskId);
+    let title: string | null = spec?.title ?? null;
 
     try {
       const parsed = await readTaskFile(filePath);
       frontMatter = parsed.frontMatter;
       body = parsed.body;
-      const titleMatch = body.match(/^#\s+(.+)$/m);
-      title = titleMatch ? titleMatch[1].trim() : null;
+      title = title ?? null;
     } catch {
       // Markdown file missing — include task with null title
     }
@@ -357,7 +386,7 @@ export async function listRunnableTasksWithProjection(
       taskNumber: Number.isFinite(taskNumber) ? taskNumber : null,
       status: lifecycle.status,
       fileName: `${taskId}.md`,
-      dependsOn: frontMatter.depends_on as number[] | undefined,
+      dependsOn: spec?.dependencies ?? [],
       continuationAffinity: frontMatter.continuation_affinity as
         | TaskContinuationAffinity
         | undefined,
@@ -384,14 +413,25 @@ export async function listRunnableTasksWithProjection(
     const taskNumber = numMatch
       ? Number(numMatch[1])
       : (typeof frontMatter.task_id === 'number' ? frontMatter.task_id : null);
-    const titleMatch = body.match(/^#\s+(.+)$/m);
+    if (taskNumber !== null) {
+      if (ownership.conflictedNumbers.has(taskNumber)) continue;
+      const ownerTaskId = ownership.ownerByNumber.get(taskNumber);
+      if (ownerTaskId && ownerTaskId !== base) continue;
+      if (options?.rangeFilter) {
+        if (taskNumber < options.rangeFilter.start || taskNumber > options.rangeFilter.end) {
+          continue;
+        }
+      }
+    }
+    const spec = sqliteSpecByTaskId.get(base);
+    const title = spec?.title ?? null;
 
     const info: ChapterTaskInfo = {
       taskId: base,
       taskNumber: Number.isFinite(taskNumber) ? taskNumber : null,
       status,
       fileName: f,
-      dependsOn: frontMatter.depends_on as number[] | undefined,
+      dependsOn: spec?.dependencies ?? [],
       continuationAffinity: frontMatter.continuation_affinity as
         | TaskContinuationAffinity
         | undefined,
@@ -400,7 +440,7 @@ export async function listRunnableTasksWithProjection(
     if (info.taskNumber !== null) {
       allTaskInfos.set(info.taskNumber, info);
     }
-    rawTasks.push({ info, title: titleMatch ? titleMatch[1].trim() : null });
+    rawTasks.push({ info, title });
   }
 
   // Compute affinity for each task

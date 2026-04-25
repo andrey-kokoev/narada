@@ -19,13 +19,14 @@ import {
   isExecutableTaskFile,
   extractChapter,
   extractTaskNumberFromFileName,
+  resolveExecutableTaskNumberOwnership,
   type AgentRoster,
   type AgentRosterEntry,
   type ChapterTaskInfo,
   type ComputedAffinity,
   type WorkResultReport,
 } from './task-governance.js';
-import type { TaskLifecycleStore } from './task-lifecycle-store.js';
+import { openTaskLifecycleStore, type TaskLifecycleStore } from './task-lifecycle-store.js';
 
 // ── Types ──
 
@@ -78,6 +79,8 @@ export interface AbstainedTask {
   task_id: string;
   task_number: number | null;
   reason: string;
+  blocked_by?: number[];
+  blocked_by_agents?: Array<{ task_number: number; agent_id: string }>;
 }
 
 export interface RecommendationOptions {
@@ -434,12 +437,13 @@ export async function generateRecommendations(
   const cwd = resolve(options.cwd);
   const weights = DEFAULT_WEIGHTS;
   const now = new Date().toISOString();
-  const store = options.store;
+  const store = options.store ?? openTaskLifecycleStore(cwd);
 
   // 1. Load task graph directly (need dependsOn which listRunnableTasks omits)
-  const tasksDir = join(cwd, '.ai', 'tasks');
+  const tasksDir = join(cwd, '.ai', 'do-not-open', 'tasks');
   const allMdFiles = (await readdir(tasksDir).catch(() => [] as string[])).filter((f) => f.endsWith('.md'));
   const taskFiles = allMdFiles.filter(isExecutableTaskFile);
+  const ownership = await resolveExecutableTaskNumberOwnership(cwd, store);
 
   // Build chapter map for all tasks (needed for warm-context affinity)
   const taskChapterMap = new Map<string, string | null>();
@@ -456,9 +460,19 @@ export async function generateRecommendations(
 
   // Pre-load all SQLite statuses for efficiency
   const sqliteStatusMap = new Map<number, string>();
+  const sqliteSpecMap = new Map<number, { title: string; dependencies: number[] }>();
   if (store) {
     for (const row of store.getAllLifecycle()) {
       sqliteStatusMap.set(row.task_number, row.status);
+    }
+    const specRows = store.db
+      .prepare('select task_number, title, dependencies_json from task_specs')
+      .all() as Array<{ task_number: number; title: string; dependencies_json: string }>;
+    for (const row of specRows) {
+      sqliteSpecMap.set(Number(row.task_number), {
+        title: String(row.title),
+        dependencies: JSON.parse(String(row.dependencies_json)) as number[],
+      });
     }
   }
 
@@ -466,10 +480,16 @@ export async function generateRecommendations(
 
   for (const f of taskFiles) {
     try {
+      const taskId = f.replace(/\.md$/, '');
+      const taskNumber = extractTaskNumberFromFileName(f);
+      if (taskNumber !== null) {
+        if (ownership.conflictedNumbers.has(taskNumber)) continue;
+        const ownerTaskId = ownership.ownerByNumber.get(taskNumber);
+        if (ownerTaskId && ownerTaskId !== taskId) continue;
+      }
+
       const content = await readFile(join(tasksDir, f), 'utf8');
       const { frontMatter, body } = parseFrontMatter(content);
-      const numMatch = f.match(/-(\d+)-/);
-      const taskNumber = numMatch ? Number(numMatch[1]) : (typeof frontMatter.task_id === 'number' ? frontMatter.task_id : null);
 
       // Prefer SQLite status if available
       let status: string | undefined;
@@ -479,14 +499,14 @@ export async function generateRecommendations(
         status = frontMatter.status as string | undefined;
       }
 
-      const titleMatch = body.match(/^#\s+(.+)$/m);
+      const spec = taskNumber !== null ? sqliteSpecMap.get(taskNumber) : undefined;
       allTasks.push({
-        taskId: f.replace(/\.md$/, ''),
+        taskId,
         taskNumber,
         status: status ?? '',
-        title: titleMatch ? titleMatch[1].trim() : null,
+        title: spec?.title ?? null,
         fileName: f,
-        dependsOn: frontMatter.depends_on as number[] | undefined,
+        dependsOn: spec?.dependencies ?? [],
         continuationAffinity: (frontMatter.continuation_affinity as ComputedAffinity) ?? { preferred_agent_id: null, affinity_strength: 0, affinity_reason: null, source: 'none' },
         body,
       });
@@ -496,20 +516,24 @@ export async function generateRecommendations(
   }
 
   // Filter to runnable tasks with satisfied dependencies (evidence-valid)
-  const dependencyBlocked: TaskInfo[] = [];
-  const inReviewTasks: TaskInfo[] = [];
+  const dependencyBlocked: Array<{ task: TaskInfo; blockedBy: number[] }> = [];
   const runnableTasks: TaskInfo[] = [];
 
   for (const task of allTasks) {
     if (task.status === 'in_review') {
-      inReviewTasks.push(task);
+      runnableTasks.push(task);
       continue;
     }
     if (task.status !== 'opened' && task.status !== 'needs_continuation') continue;
 
     const { blockedBy } = await checkDependencies(cwd, task.dependsOn, store);
     if (blockedBy.length > 0) {
-      dependencyBlocked.push(task);
+      dependencyBlocked.push({
+        task,
+        blockedBy: blockedBy
+          .map((id) => extractTaskNumberFromFileName(id))
+          .filter((n): n is number => n !== null),
+      });
       continue;
     }
 
@@ -518,30 +542,50 @@ export async function generateRecommendations(
 
   // 2. Load roster
   const roster = await loadRoster(cwd);
+  const rosterByTask = new Map<number, string>();
+  for (const agent of roster.agents) {
+    if (typeof agent.task === 'number' && agent.status === 'working') {
+      rosterByTask.set(agent.task, agent.agent_id);
+    }
+  }
 
   // 3. Load PrincipalRuntime (advisory, degrades gracefully)
   const runtimeSnapshots = await loadPrincipalRuntimeSnapshots(cwd);
 
   // 4. Load assignment history and build last-worker map + warm-context records
   const lastWorkerMap = new Map<string, string | null>();
-  const assignmentDir = join(cwd, '.ai', 'tasks', 'assignments');
   const completionCounts = new Map<string, { completed: number; abandoned: number }>();
   const agentWarmContexts = new Map<string, WarmContextRecord[]>();
-
-  let assignmentFiles: string[] = [];
-  try {
-    assignmentFiles = (await readdir(assignmentDir)).filter((f) => f.endsWith('.json'));
-  } catch {
-    // No assignments yet
+  const assignmentRows = store
+    ? (store.db.prepare(
+      `select task_id, agent_id, claimed_at, released_at, release_reason
+       from task_assignments
+       order by claimed_at asc`,
+    ).all() as Array<{
+      task_id: string;
+      agent_id: string;
+      claimed_at: string;
+      released_at: string | null;
+      release_reason: string | null;
+    }>)
+    : [];
+  const assignmentsByTaskId = new Map<string, typeof assignmentRows>();
+  for (const row of assignmentRows) {
+    const existing = assignmentsByTaskId.get(row.task_id) ?? [];
+    existing.push(row);
+    assignmentsByTaskId.set(row.task_id, existing);
   }
 
-  for (const f of assignmentFiles) {
-    const taskId = f.replace(/\.json$/, '');
-    const record = await loadAssignment(cwd, taskId);
-    if (!record) continue;
+  for (const [taskId, assignments] of assignmentsByTaskId) {
+    const taskNumber = extractTaskNumberFromFileName(`${taskId}.md`);
+    if (taskNumber !== null) {
+      if (ownership.conflictedNumbers.has(taskNumber)) continue;
+      const ownerTaskId = ownership.ownerByNumber.get(taskNumber);
+      if (ownerTaskId && ownerTaskId !== taskId) continue;
+    }
 
     // Find last completed worker
-    const completed = record.assignments
+    const completed = assignments
       .filter((a) => a.release_reason === 'completed')
       .sort((a, b) => (b.released_at ?? '').localeCompare(a.released_at ?? ''));
     if (completed.length > 0) {
@@ -549,7 +593,7 @@ export async function generateRecommendations(
     }
 
     // Count per-agent completion/abandonment + build warm-context records
-    for (const a of record.assignments) {
+    for (const a of assignments) {
       const counts = completionCounts.get(a.agent_id) ?? { completed: 0, abandoned: 0 };
       if (a.release_reason === 'completed') counts.completed++;
       else if (a.release_reason === 'abandoned') counts.abandoned++;
@@ -562,7 +606,7 @@ export async function generateRecommendations(
         chapter: taskChapterMap.get(taskId) ?? null,
         claimed_at: a.claimed_at,
         released_at: a.released_at,
-        release_reason: a.release_reason,
+        release_reason: a.release_reason as WarmContextRecord['release_reason'],
       });
       agentWarmContexts.set(a.agent_id, contexts);
     }
@@ -570,11 +614,8 @@ export async function generateRecommendations(
 
   // Build active assignment map for write-set risk
   const activeAssignments = new Map<string, string[]>();
-  for (const f of assignmentFiles) {
-    const taskId = f.replace(/\.json$/, '');
-    const record = await loadAssignment(cwd, taskId);
-    if (!record) continue;
-    const active = record.assignments.find((a) => a.released_at === null);
+  for (const [taskId, assignments] of assignmentsByTaskId) {
+    const active = assignments.find((a) => a.released_at === null);
     if (active) {
       const agents = activeAssignments.get(taskId) ?? [];
       agents.push(active.agent_id);
@@ -602,20 +643,19 @@ export async function generateRecommendations(
   const abstained: AbstainedTask[] = [];
 
   // Add dependency-blocked tasks to abstained
-  for (const task of dependencyBlocked) {
+  for (const { task, blockedBy } of dependencyBlocked) {
+    const blockedByAgents = blockedBy
+      .map((taskNumber) => {
+        const agentId = rosterByTask.get(taskNumber);
+        return agentId ? { task_number: taskNumber, agent_id: agentId } : null;
+      })
+      .filter((entry): entry is { task_number: number; agent_id: string } => entry !== null);
     abstained.push({
       task_id: task.taskId,
       task_number: task.taskNumber,
       reason: 'Blocked by unmet dependencies',
-    });
-  }
-
-  // Add in-review tasks to abstained (need review/closure, not ordinary open work)
-  for (const task of inReviewTasks) {
-    abstained.push({
-      task_id: task.taskId,
-      task_number: task.taskNumber,
-      reason: 'Completed, awaiting review or closure',
+      blocked_by: blockedBy,
+      blocked_by_agents: blockedByAgents.length > 0 ? blockedByAgents : undefined,
     });
   }
 
@@ -840,20 +880,27 @@ export async function buildInputSnapshot(
   options: RecommendationOptions,
 ): Promise<RecommendationInputSnapshot> {
   const cwd = resolve(options.cwd);
-  const tasksDir = join(cwd, '.ai', 'tasks');
+  const tasksDir = join(cwd, '.ai', 'do-not-open', 'tasks');
   const taskFiles = (await readdir(tasksDir).catch(() => [] as string[])).filter((f) => f.endsWith('.md'));
 
   const roster = await loadRoster(cwd).catch(() => ({ version: 1, updated_at: new Date().toISOString(), agents: [] }) as AgentRoster);
   const runtimeSnapshots = await loadPrincipalRuntimeSnapshots(cwd);
 
-  const assignmentDir = join(cwd, '.ai', 'tasks', 'assignments');
-  const assignmentFiles = (await readdir(assignmentDir).catch(() => [] as string[])).filter((f) => f.endsWith('.json'));
-
-  const reportsDir = join(cwd, '.ai', 'tasks', 'reports');
-  const reportFiles = (await readdir(reportsDir).catch(() => [] as string[])).filter((f) => f.endsWith('.json'));
-
-  const reviewsDir = join(cwd, '.ai', 'reviews');
-  const reviewFiles = (await readdir(reviewsDir).catch(() => [] as string[])).filter((f) => f.endsWith('.json'));
+  let assignmentCount = 0;
+  let reportCount = 0;
+  let reviewCount = 0;
+  try {
+    const store = openTaskLifecycleStore(cwd);
+    try {
+      assignmentCount = Number((store.db.prepare('select count(*) as count from task_assignment_records').get() as { count: number } | undefined)?.count ?? 0);
+      reportCount = Number((store.db.prepare('select count(*) as count from task_report_records').get() as { count: number } | undefined)?.count ?? 0);
+      reviewCount = store.listAllReviews().length;
+    } finally {
+      store.db.close();
+    }
+  } catch {
+    // Snapshot remains best-effort.
+  }
 
   let runnableCount = 0;
   for (const f of taskFiles) {
@@ -876,8 +923,8 @@ export async function buildInputSnapshot(
     runnable_task_count: runnableCount,
     agent_count: roster.agents.length,
     principal_runtime_available: runtimeSnapshots.size > 0,
-    assignment_count: assignmentFiles.length,
-    report_count: reportFiles.length,
-    review_count: reviewFiles.length,
+    assignment_count: assignmentCount,
+    report_count: reportCount,
+    review_count: reviewCount,
   };
 }

@@ -16,6 +16,11 @@ import {
   inspectTaskEvidence,
   isValidTransition,
   hasDerivativeFiles,
+  loadRoster,
+  updateAgentRosterEntry,
+  loadAssignment,
+  getActiveAssignment,
+  saveAssignment,
 } from '../lib/task-governance.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
@@ -248,6 +253,45 @@ export async function taskCloseCommand(
 
   await writeTaskFile(taskFile.path, frontMatter, body);
 
+  // ── Release active assignment (Task 597) ──
+  let assignmentReleased = false;
+  try {
+    const assignmentRecord = await loadAssignment(cwd, taskFile.taskId);
+    if (assignmentRecord) {
+      const active = getActiveAssignment(assignmentRecord);
+      if (active) {
+        active.released_at = now;
+        active.release_reason = 'completed';
+        await saveAssignment(cwd, assignmentRecord);
+        assignmentReleased = true;
+      }
+    }
+  } catch {
+    // Best-effort: do not fail the close if assignment release fails
+  }
+
+  // ── Roster reconciliation (Task 605) ──
+  // Clear active roster assignment so task state and roster state cannot drift.
+  // Scans the roster directly for any agent whose task field matches the closed
+  // task number — does not depend on filesystem assignment records.
+  let rosterReconciled = false;
+  let reconciledAgentId: string | null = null;
+  try {
+    const roster = await loadRoster(cwd);
+    const assignedAgent = roster.agents.find((a) => a.task === num);
+    if (assignedAgent) {
+      await updateAgentRosterEntry(cwd, assignedAgent.agent_id, {
+        status: 'done',
+        task: null,
+        last_done: num,
+      });
+      rosterReconciled = true;
+      reconciledAgentId = assignedAgent.agent_id;
+    }
+  } catch {
+    // Roster reconciliation is best-effort; do not fail the close if roster is unavailable
+  }
+
   if (fmt.getFormat() === 'json') {
     return {
       exitCode: ExitCode.SUCCESS,
@@ -258,6 +302,9 @@ export async function taskCloseCommand(
         new_status: 'closed',
         closed_by: closedBy,
         closed_at: frontMatter.closed_at,
+        assignment_released: assignmentReleased,
+        roster_reconciled: rosterReconciled,
+        ...(reconciledAgentId ? { reconciled_agent_id: reconciledAgentId } : {}),
       },
     };
   }
@@ -265,6 +312,12 @@ export async function taskCloseCommand(
   fmt.message(`Closed task ${taskFile.taskId}`, 'success');
   fmt.kv('Closed by', closedBy);
   fmt.kv('Closed at', String(frontMatter.closed_at));
+  if (assignmentReleased) {
+    fmt.message('Released active assignment', 'success');
+  }
+  if (rosterReconciled && reconciledAgentId) {
+    fmt.message(`Reconciled roster: cleared assignment for ${reconciledAgentId}`, 'success');
+  }
 
   return {
     exitCode: ExitCode.SUCCESS,
@@ -275,6 +328,9 @@ export async function taskCloseCommand(
       new_status: 'closed',
       closed_by: closedBy,
       closed_at: frontMatter.closed_at,
+      assignment_released: assignmentReleased,
+      roster_reconciled: rosterReconciled,
+      ...(reconciledAgentId ? { reconciled_agent_id: reconciledAgentId } : {}),
     },
   };
 }

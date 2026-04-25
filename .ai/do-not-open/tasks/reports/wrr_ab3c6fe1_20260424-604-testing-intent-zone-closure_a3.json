@@ -1,0 +1,38 @@
+{
+  "report_id": "wrr_ab3c6fe1_20260424-604-testing-intent-zone-closure_a3",
+  "task_number": "604",
+  "task_id": "20260424-604-testing-intent-zone-closure",
+  "agent_id": "a3",
+  "assignment_id": "20260424-604-testing-intent-zone-closure-2026-04-24T20:52:09.779Z",
+  "reported_at": "2026-04-24T20:52:27.496Z",
+  "summary": "Closed testing intent zone chapter with closure artifact, deferred risks catalogued, and first implementation line named",
+  "changed_files": [
+    ".ai/decisions/20260424-604-testing-intent-zone-closure.md",
+    ".ai/do-not-open/tasks/20260424-600-604-testing-intent-zone-and-verification-result-regime.md"
+  ],
+  "verification": [
+    {
+      "command": "pnpm verify",
+      "result": "passed"
+    },
+    {
+      "command": "task close 600",
+      "result": "closed"
+    },
+    {
+      "command": "task close 601",
+      "result": "closed"
+    },
+    {
+      "command": "task close 602",
+      "result": "closed"
+    },
+    {
+      "command": "task close 603",
+      "result": "closed"
+    }
+  ],
+  "known_residuals": [],
+  "ready_for_review": true,
+  "report_status": "accepted"
+}

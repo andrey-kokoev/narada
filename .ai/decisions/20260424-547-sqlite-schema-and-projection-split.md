@@ -117,7 +117,7 @@ CREATE TABLE task_number_sequence (
 ```
 
 Purpose:
-- replace `.ai/tasks/.registry.json` as authoritative allocator state
+- replace `.ai/do-not-open/tasks/tasks/.registry.json` as authoritative allocator state
 
 ### 2. Markdown-Authored Task Spec
 

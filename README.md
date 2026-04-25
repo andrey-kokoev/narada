@@ -212,7 +212,7 @@ Root `pnpm test` is disabled to prevent accidental full-suite runs. Use `pnpm ve
 - **[TERMINOLOGY.md](TERMINOLOGY.md)** — User-facing words for talking about Narada
 - **[AGENTS.md](AGENTS.md)** — Navigation hub for contributors and agents
 - **[RELEASE.md](RELEASE.md)** — Local and CI publishing flow for `@narada2/*` packages
-- **[.ai/tasks/](.ai/tasks/)** — Design tasks and specifications
+- **[.ai/do-not-open/tasks/](.ai/do-not-open/tasks/)** — Design tasks and specifications
 
 ## Review Checklist for Future Architecture Changes
 

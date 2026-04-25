@@ -11,11 +11,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 function setupRepo(tempDir: string) {
-  mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'reviews'), { recursive: true });
 
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-100-target.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-target.md'),
     '---\ntask_id: 100\nstatus: closed\n---\n\n# Task 100: Target\n',
   );
 
@@ -69,7 +69,7 @@ describe('task derive-from-finding operator', () => {
     });
 
     const taskFile = (result.result as { task_file: string }).task_file;
-    const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', taskFile), 'utf8');
+    const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', taskFile), 'utf8');
     expect(taskContent).toContain('status: opened');
     expect(taskContent).toContain('depends_on: [100]');
     expect(taskContent).toContain('Missing edge case test');
@@ -125,7 +125,7 @@ describe('task derive-from-finding operator', () => {
   it('fails when target task has no parseable front matter or number', async () => {
     // Create a target task with no front matter and no number in filename
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', 'untitled-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', 'untitled-task.md'),
       '# Untitled Task\n\nNo front matter.',
     );
 

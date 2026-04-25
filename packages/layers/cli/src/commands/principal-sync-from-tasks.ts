@@ -130,7 +130,7 @@ export async function principalSyncFromTasksCommand(
   }
 
   // Scan task files
-  const tasksDir = resolve(cwd, ".ai", "tasks");
+  const tasksDir = resolve(cwd, ".ai", "do-not-open", "tasks");
   let taskFiles: string[] = [];
   try {
     const entries = await readdir(tasksDir);

@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 function setupRepo(tempDir: string) {
-  mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
 }
 
 describe('task lint tool', () => {
@@ -28,7 +28,7 @@ describe('task lint tool', () => {
 
   it('passes with no issues', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-100-alpha.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-alpha.md'),
       '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n',
     );
 
@@ -40,7 +40,7 @@ describe('task lint tool', () => {
 
   it('detects broken depends_on', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-100-alpha.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-alpha.md'),
       '---\ntask_id: 100\nstatus: opened\ndepends_on: [999]\n---\n\n# Task 100\n',
     );
 
@@ -53,11 +53,11 @@ describe('task lint tool', () => {
 
   it('detects duplicate numbers', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-100-alpha.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-alpha.md'),
       '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n',
     );
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-100-beta.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-beta.md'),
       '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100 dup\n',
     );
 
@@ -70,7 +70,7 @@ describe('task lint tool', () => {
 
   it('detects task_id mismatch', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-100-alpha.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-alpha.md'),
       '---\ntask_id: 999\nstatus: opened\n---\n\n# Task 100\n',
     );
 
@@ -83,11 +83,11 @@ describe('task lint tool', () => {
 
   it('detects duplicate filename numbers without front matter', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-100-alpha.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-alpha.md'),
       '# Task 100\n\nNo front matter here.',
     );
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-100-beta.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-beta.md'),
       '# Task 100 dup\n\nAlso no front matter.',
     );
 
@@ -100,7 +100,7 @@ describe('task lint tool', () => {
 
   it('detects terminal task with unchecked criteria', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-105-closed-bad.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-105-closed-bad.md'),
       `---\ntask_id: 105\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 105\n\n## Acceptance Criteria\n- [ ] Unchecked\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
     );
 
@@ -113,7 +113,7 @@ describe('task lint tool', () => {
 
   it('detects terminal task without execution notes', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-106-closed-no-notes.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-106-closed-no-notes.md'),
       `---\ntask_id: 106\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 106\n\n## Acceptance Criteria\n- [x] Checked\n\n## Verification\nOK.\n`,
     );
 
@@ -126,7 +126,7 @@ describe('task lint tool', () => {
 
   it('detects terminal task without verification', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-107-closed-no-verif.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-107-closed-no-verif.md'),
       `---\ntask_id: 107\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 107\n\n## Acceptance Criteria\n- [x] Checked\n\n## Execution Notes\nDone.\n`,
     );
 
@@ -139,7 +139,7 @@ describe('task lint tool', () => {
 
   it('detects raw terminal mutation without governed provenance', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-108-raw-closed.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-108-raw-closed.md'),
       `---\ntask_id: 108\nstatus: closed\n---\n\n# Task 108\n\n## Acceptance Criteria\n- [x] Checked\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
     );
 

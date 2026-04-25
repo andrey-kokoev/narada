@@ -16,7 +16,7 @@ import {
   readTaskFile,
   writeTaskFile,
   findTaskFile,
-  loadReview,
+  listReviewsForTask,
   atomicWriteFile,
   extractChapter,
   inspectTaskEvidence,
@@ -100,32 +100,21 @@ async function gatherReviewFindings(cwd: string, tasks: ChapterTaskInfo[]) {
     findings: Array<{ severity: string; description: string; resolved: boolean }>;
   }> = [];
 
-  const reviewsDir = join(cwd, '.ai', 'reviews');
-  let reviewFiles: string[] = [];
-  try {
-    reviewFiles = await readdir(reviewsDir);
-  } catch {
-    // Directory may not exist
-  }
-
   const terminalTasks = tasks.filter((t) => isTerminalStatus(t.status));
 
   for (const task of terminalTasks) {
-    const taskReviews = reviewFiles.filter((f) => f.includes(task.taskId));
-    for (const reviewFile of taskReviews) {
-      const review = await loadReview(cwd, reviewFile.replace(/\.json$/, ''));
-      if (review) {
-        findings.push({
-          taskId: task.taskId,
-          reviewId: review.review_id,
-          verdict: review.verdict,
-          findings: review.findings.map((f) => ({
-            severity: f.severity,
-            description: f.description,
-            resolved: f.recommended_action !== 'defer' && f.recommended_action !== 'wontfix',
-          })),
-        });
-      }
+    const taskReviews = await listReviewsForTask(cwd, task.taskId);
+    for (const review of taskReviews) {
+      findings.push({
+        taskId: task.taskId,
+        reviewId: review.review_id,
+        verdict: review.verdict,
+        findings: review.findings.map((f) => ({
+          severity: f.severity,
+          description: f.description,
+          resolved: f.recommended_action !== 'defer' && f.recommended_action !== 'wontfix',
+        })),
+      });
     }
   }
 

@@ -4,7 +4,7 @@
  * Stand-alone stale lease recovery for use on scheduler startup
  * or as a background maintenance task.
  *
- * Spec: .ai/tasks/20260414-015-impl-scheduler-and-leases.md
+ * Spec: .ai/do-not-open/tasks/20260414-015-impl-scheduler-and-leases.md
  */
 
 import type { CoordinatorStore } from "../coordinator/types.js";

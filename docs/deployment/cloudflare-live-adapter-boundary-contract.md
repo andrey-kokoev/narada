@@ -208,5 +208,5 @@ The chapter's goal is **live-safe executability**: a bounded Cloudflare Site can
 | [`docs/deployment/cloudflare-site-materialization.md`](cloudflare-site-materialization.md) | Cloudflare resource mapping, Cycle steps, v0/v1 boundary |
 | [`docs/deployment/cloudflare-site-manifest.md`](cloudflare-site-manifest.md) | Site manifest schema (sources, policy, Cloudflare bindings) |
 | [`docs/deployment/cloudflare-effect-execution-authority-contract.md`](cloudflare-effect-execution-authority-contract.md) | Effect-execution authority contract for Tasks 358–364 — state transitions, eligibility, confirmation separation |
-| [`.ai/tasks/20260421-351-357-cloudflare-live-adapter-spine.md`](../../.ai/tasks/20260421-351-357-cloudflare-live-adapter-spine.md) | Chapter DAG and closure criteria |
+| [`.ai/do-not-open/tasks/20260421-351-357-cloudflare-live-adapter-spine.md`](../../.ai/do-not-open/tasks/20260421-351-357-cloudflare-live-adapter-spine.md) | Chapter DAG and closure criteria |
 | [`.ai/decisions/20260421-350-cloudflare-kernel-spine-closure.md`](../../.ai/decisions/20260421-350-cloudflare-kernel-spine-closure.md) | Closure of the fixture-backed kernel spine (Tasks 345–350) |

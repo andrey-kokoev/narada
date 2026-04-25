@@ -32,7 +32,7 @@ Decision 547 defined the SQLite schema and projection split. Decision 548 planne
 ### 1. `task-lifecycle-store.ts` — Store Factory
 
 Added `openTaskLifecycleStore(cwd: string)` helper:
-- Opens `.ai/tasks/task-lifecycle.db`
+- Opens `.ai/do-not-open/tasks/task-lifecycle.db`
 - Initializes schema if not present
 - Returns ready-to-use `SqliteTaskLifecycleStore`
 

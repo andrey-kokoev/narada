@@ -4,7 +4,7 @@
  * Deterministic runner for integration tests. Validates the invocation envelope
  * and returns a predictable CharterOutputEnvelope based on envelope content.
  *
- * Spec: .ai/tasks/20260414-006-assignment-agent-b-charter-invocation-v2.md
+ * Spec: .ai/do-not-open/tasks/20260414-006-assignment-agent-b-charter-invocation-v2.md
  */
 
 import type { CharterInvocationEnvelope, CharterOutputEnvelope } from "./envelope.js";

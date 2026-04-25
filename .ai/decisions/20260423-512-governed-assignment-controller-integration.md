@@ -23,8 +23,8 @@ This is the smallest real command surface that consumes the promotion contract. 
 | Stage | Surface | Artifact |
 |-------|---------|----------|
 | 1. Recommendation | `buildPlan()` → `generateRecommendations()` | `TaskRecommendation` (in-memory) |
-| 2. Promotion Request | `taskPromoteRecommendationCommand({ by: 'construction-loop', ... })` | `AssignmentPromotionRequest` in `.ai/tasks/promotions/` |
-| 3. Assignment | `taskClaimCommand()` (delegated by promotion command) | `AssignmentRecord` in `.ai/tasks/assignments/` + roster update |
+| 2. Promotion Request | `taskPromoteRecommendationCommand({ by: 'construction-loop', ... })` | `AssignmentPromotionRequest` in `.ai/do-not-open/tasks/tasks/promotions/` |
+| 3. Assignment | `taskClaimCommand()` (delegated by promotion command) | `AssignmentRecord` in `.ai/do-not-open/tasks/tasks/assignments/` + roster update |
 
 The construction loop **never bypasses** `taskPromoteRecommendationCommand`. All live promotions route through the same 9 validation checks, durable promotion request writes, and assignment delegation that operator-confirmed promotions use.
 

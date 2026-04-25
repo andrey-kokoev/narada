@@ -1,0 +1,23 @@
+{
+  "report_id": "wrr_39035d0c_20260424-608-task-verification-consumes-testing-intent-results_a3",
+  "task_number": "608",
+  "task_id": "20260424-608-task-verification-consumes-testing-intent-results",
+  "agent_id": "a3",
+  "assignment_id": "20260424-608-task-verification-consumes-testing-intent-results-2026-04-24T21:22:34.756Z",
+  "reported_at": "2026-04-24T21:25:10.383Z",
+  "summary": "Wired task verification to consume testing-intent results from SQLite store",
+  "changed_files": [
+    "packages/layers/cli/src/lib/task-governance.ts",
+    "packages/layers/cli/src/lib/task-projection.ts",
+    "packages/layers/cli/test/commands/task-evidence.test.ts"
+  ],
+  "verification": [
+    {
+      "command": "pnpm verify",
+      "result": "passed"
+    }
+  ],
+  "known_residuals": [],
+  "ready_for_review": true,
+  "report_status": "accepted"
+}

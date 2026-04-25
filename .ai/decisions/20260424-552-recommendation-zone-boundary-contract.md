@@ -55,10 +55,10 @@ Without a clear zone boundary, operators and agents cannot distinguish:
 
 | Input | Source | Trust |
 |-------|--------|-------|
-| Task graph | `.ai/tasks/*.md` | authoritative |
+| Task graph | `.ai/do-not-open/tasks/*.md` | authoritative |
 | Agent roster | `.ai/agents/roster.json` | authoritative |
-| Assignment history | `.ai/tasks/assignments/*.json` | authoritative |
-| Work result reports | `.ai/tasks/reports/*.json` | authoritative |
+| Assignment history | `.ai/do-not-open/tasks/tasks/assignments/*.json` | authoritative |
+| Work result reports | `.ai/do-not-open/tasks/tasks/reports/*.json` | authoritative |
 | PrincipalRuntime snapshots | `JsonPrincipalRuntimeRegistry` | advisory (degrades gracefully) |
 | CCC Posture | `.ai/construction-loop/posture.json` | advisory |
 
@@ -133,7 +133,7 @@ However, the **promotion crossing** (which sits at the boundary between the Reco
 
 | Property | Value |
 |----------|-------|
-| **Location** | `.ai/tasks/promotions/{promotion_id}.json` |
+| **Location** | `.ai/do-not-open/tasks/tasks/promotions/{promotion_id}.json` |
 | **Durability** | Append-only, immutable after write |
 | **Owner** | Promotion operator (`propose` + `claim`) |
 | **Contents** | `task_id`, `agent_id`, `operator_id`, `recommendation_snapshot`, `validation_results`, `status` (`executed` / `rejected` / `failed`), `overrides` |
@@ -210,7 +210,7 @@ This artifact preserves the basis for the promotion decision so it remains inspe
 - `task-recommend.ts` returns ephemeral output; no side effects ✅
 - `task-promote-recommendation.ts` delegates mutation to `taskClaimCommand` ✅
 - 9 validation checks documented (6 hard + 3 advisory) ✅
-- `AssignmentPromotionRequest` is append-only JSON in `.ai/tasks/promotions/` ✅
+- `AssignmentPromotionRequest` is append-only JSON in `.ai/do-not-open/tasks/tasks/promotions/` ✅
 - `pnpm typecheck`: all 11 packages pass ✅
 
 ---

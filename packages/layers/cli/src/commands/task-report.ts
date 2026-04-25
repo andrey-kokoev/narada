@@ -34,6 +34,7 @@ import {
   formatGuidanceForHumans,
   formatGuidanceForJson,
 } from '../lib/learning-recall.js';
+import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 
 export interface TaskReportOptions {
   taskNumber?: string;
@@ -357,6 +358,16 @@ export async function taskReportCommand(
     // Update task status
     frontMatter.status = 'in_review';
     await writeTaskFile(taskFile.path, frontMatter, body);
+    try {
+      const store = openTaskLifecycleStore(cwd);
+      try {
+        store.updateStatus(taskFile.taskId, 'in_review', agentId);
+      } finally {
+        store.db.close();
+      }
+    } catch {
+      // Markdown report path remains authoritative only when SQLite is unavailable.
+    }
   }
 
   // Update roster

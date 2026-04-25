@@ -4,8 +4,7 @@ vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { Database } from '@narada2/control-plane';
-import { SqliteTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { taskClaimCommand } from '../../src/commands/task-claim.js';
 import { taskReleaseCommand } from '../../src/commands/task-release.js';
 import { taskReportCommand } from '../../src/commands/task-report.js';
@@ -17,27 +16,54 @@ import { join } from 'node:path';
 
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'assignments'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'reviews'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'reports'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
 
   writeFileSync(
-    join(tempDir, '.ai', 'agents', 'roster.json'),
-    JSON.stringify({
-      version: 1,
-      updated_at: '2026-01-01T00:00:00Z',
-      agents: [
-        { agent_id: 'test-agent', role: 'implementer', capabilities: ['claim'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
-        { agent_id: 'reviewer', role: 'reviewer', capabilities: ['claim'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
-      ],
-    }, null, 2),
-  );
-
-  writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
     '---\ntask_id: 999\nstatus: opened\n---\n\n# Task 999: Test Task\n\n## Execution Notes\nCompleted.\n\n## Verification\nTests passed.\n',
   );
+
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    const now = '2026-01-01T00:00:00Z';
+    store.upsertLifecycle({
+      task_id: '20260420-999-test-task',
+      task_number: 999,
+      status: 'opened',
+      governed_by: null,
+      closed_at: null,
+      closed_by: null,
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: now,
+    });
+    store.upsertRosterEntry({
+      agent_id: 'test-agent',
+      role: 'implementer',
+      capabilities_json: JSON.stringify(['claim']),
+      first_seen_at: now,
+      last_active_at: now,
+      status: 'idle',
+      task_number: null,
+      last_done: null,
+      updated_at: now,
+    });
+    store.upsertRosterEntry({
+      agent_id: 'reviewer',
+      role: 'reviewer',
+      capabilities_json: JSON.stringify(['claim']),
+      first_seen_at: now,
+      last_active_at: now,
+      status: 'idle',
+      task_number: null,
+      last_done: null,
+      updated_at: now,
+    });
+  } finally {
+    store.db.close();
+  }
 }
 
 describe('task review operator', () => {
@@ -71,7 +97,7 @@ describe('task review operator', () => {
       new_status: 'closed',
     });
 
-    const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'), 'utf8');
+    const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
     expect(taskContent).toContain('status: closed');
     expect(taskContent).toContain('governed_by: task_review:reviewer');
     expect(taskContent).toContain('closed_by: reviewer');
@@ -97,7 +123,7 @@ describe('task review operator', () => {
       new_status: 'opened',
     });
 
-    const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'), 'utf8');
+    const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
     expect(taskContent).toContain('status: opened');
   });
 
@@ -257,8 +283,8 @@ describe('task review operator', () => {
     expect(review.report_id).toBe(reportId);
 
     // Report status updated to accepted
-    const reportFiles = readdirSync(join(tempDir, '.ai', 'tasks', 'reports')).filter((f) => f.endsWith('.json'));
-    const reportRaw = readFileSync(join(tempDir, '.ai', 'tasks', 'reports', reportFiles[0]!), 'utf8');
+    const reportFiles = readdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports')).filter((f) => f.endsWith('.json'));
+    const reportRaw = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', reportFiles[0]!), 'utf8');
     const report = JSON.parse(reportRaw);
     expect(report.report_status).toBe('accepted');
   });
@@ -286,8 +312,8 @@ describe('task review operator', () => {
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
 
     // Report status updated to rejected
-    const reportFiles = readdirSync(join(tempDir, '.ai', 'tasks', 'reports')).filter((f) => f.endsWith('.json'));
-    const reportRaw = readFileSync(join(tempDir, '.ai', 'tasks', 'reports', reportFiles[0]!), 'utf8');
+    const reportFiles = readdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports')).filter((f) => f.endsWith('.json'));
+    const reportRaw = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', reportFiles[0]!), 'utf8');
     const report = JSON.parse(reportRaw);
     expect(report.report_status).toBe('rejected');
   });
@@ -295,7 +321,7 @@ describe('task review operator', () => {
   it('fails when report belongs to different task', async () => {
     // Create a second task
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-998-other-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-other-task.md'),
       '---\ntask_id: 998\nstatus: opened\n---\n\n# Task 998: Other\n',
     );
 
@@ -346,7 +372,7 @@ describe('task review operator', () => {
   it('does not close task lacking evidence when verdict is accepted', async () => {
     // Create a task without execution notes or report
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-995-no-evidence.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-995-no-evidence.md'),
       '---\ntask_id: 995\nstatus: opened\n---\n\n# Task 995: No Evidence\n\n## Verification\nN/A.\n',
     );
 
@@ -367,14 +393,14 @@ describe('task review operator', () => {
     expect(parsed.evidence_blocked).toBe(true);
     expect(parsed.evidence_reason).toContain('lacks execution evidence');
 
-    const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-995-no-evidence.md'), 'utf8');
+    const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-995-no-evidence.md'), 'utf8');
     expect(taskContent).toContain('status: in_review');
   });
 
   it('does not close task lacking verification when verdict is accepted', async () => {
     // Create a task with execution notes but no verification
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-994-no-verif.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-994-no-verif.md'),
       '---\ntask_id: 994\nstatus: opened\n---\n\n# Task 994: No Verification\n\n## Acceptance Criteria\n- [x] Criterion A\n\n## Execution Notes\nDone.\n',
     );
 
@@ -395,7 +421,7 @@ describe('task review operator', () => {
     expect(parsed.evidence_blocked).toBe(true);
     expect(parsed.evidence_reason).toContain('verification');
 
-    const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-994-no-verif.md'), 'utf8');
+    const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-994-no-verif.md'), 'utf8');
     expect(taskContent).toContain('status: in_review');
   });
 

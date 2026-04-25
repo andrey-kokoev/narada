@@ -29,6 +29,7 @@ import { readAllAuditLogs } from '../lib/construction-loop-audit.js';
 import { buildPlan } from '../lib/construction-loop-plan.js';
 import { generateRecommendations } from '../lib/task-recommender.js';
 import { readTaskGraph, renderJson } from '../lib/task-graph.js';
+import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 import {
   taskRosterAssignCommand,
   taskRosterDoneCommand,
@@ -116,7 +117,7 @@ async function listAllTasks(cwd: string): Promise<
     depends_on: number[] | undefined;
   }>
 > {
-  const dir = join(cwd, '.ai', 'tasks');
+  const dir = join(cwd, '.ai', 'do-not-open', 'tasks');
   let files: string[];
   try {
     files = await readdir(dir);
@@ -155,25 +156,23 @@ async function listAllTasks(cwd: string): Promise<
 }
 
 async function listAllAssignments(cwd: string): Promise<TaskAssignmentRecord[]> {
-  const dir = join(cwd, '.ai', 'tasks', 'assignments');
-  let files: string[];
+  const store = openTaskLifecycleStore(cwd);
   try {
-    files = await readdir(dir);
-  } catch {
-    return [];
-  }
-
-  const assignments: TaskAssignmentRecord[] = [];
-  for (const f of files) {
-    if (!f.endsWith('.json')) continue;
-    try {
-      const raw = await readFile(join(dir, f), 'utf8');
-      assignments.push(JSON.parse(raw) as TaskAssignmentRecord);
-    } catch {
-      // Skip malformed assignment files
+    const rows = store.db
+      .prepare(`select record_json from task_assignment_records order by updated_at desc`)
+      .all() as Array<{ record_json: string }>;
+    const assignments: TaskAssignmentRecord[] = [];
+    for (const row of rows) {
+      try {
+        assignments.push(JSON.parse(row.record_json) as TaskAssignmentRecord);
+      } catch {
+        // Skip malformed assignment records
+      }
     }
+    return assignments;
+  } finally {
+    try { store.db.close(); } catch { /* ignore */ }
   }
-  return assignments;
 }
 
 async function listAllReviews(cwd: string): Promise<ReviewRecord[]> {

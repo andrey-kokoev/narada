@@ -21,7 +21,7 @@ All 6 tasks (410–415) are confirmed terminal. No non-terminal tasks remain. No
 **Decision artifact**: `.ai/decisions/20260422-410-construction-operation-boundary-contract.md`
 
 - **Aim statement**: "Advance a software system through governed, task-graph execution while preserving long-horizon coherence."
-- **Site definition**: Local filesystem Site with `.ai/tasks/`, `.ai/agents/roster.json`, assignment records, review records, and registry.
+- **Site definition**: Local filesystem Site with `.ai/do-not-open/tasks/`, `.ai/agents/roster.json`, assignment records, review records, and registry.
 - **Cycle definition**: One bounded pass through scan → recommend → claim → execute → review → confirm.
 - **Act taxonomy**: 12 governed actions with authority classes (`claim`, `resolve`, `execute`, `propose`, `confirm`, `admin`, `derive`).
 - **Trace taxonomy**: 10 trace types with durability, retention, and readership rules.

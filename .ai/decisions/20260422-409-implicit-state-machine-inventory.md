@@ -35,7 +35,7 @@ Before evaluating candidates, acknowledge the existing explicit state machines t
 | `OutboundCommand` | `outbound/types.ts` | 12 (`pending` → `draft_creating` → `draft_ready` → `approved_for_send` → `sending` → `submitted` → `confirmed`, plus `retry_wait`, `blocked_policy`, `failed_terminal`, `cancelled`, `superseded`) | SQLite `outbound_handoffs` + `outbound_versions` | Outbound workers |
 | `ExecutionAttempt` | `coordinator/types.ts` | 5 (`started` → `active` → `succeeded`/`crashed`/`abandoned`) | SQLite `execution_attempts` | Scheduler + executor |
 | `AgentSession` | `coordinator/types.ts` | 6 (`opened` → `active` → `idle`/`completed`/`abandoned`/`superseded`) | SQLite `agent_sessions` | Foreman (trace) |
-| `Task` (construction) | `cli/src/lib/task-governance.ts` | 7 (`draft` → `opened` → `claimed` → `in_review`/`needs_continuation` → `closed` → `confirmed`) | Markdown front-matter + `.ai/tasks/` | Task governance operators |
+| `Task` (construction) | `cli/src/lib/task-governance.ts` | 7 (`draft` → `opened` → `claimed` → `in_review`/`needs_continuation` → `closed` → `confirmed`) | Markdown front-matter + `.ai/do-not-open/tasks/` | Task governance operators |
 | `Health` / `Cycle` | `health.ts`, `health-multi.ts` | 7 (`healthy`, `degraded`, `critical`, `auth_failed`, `stale`, `error`, `stopped`) | `.health.json`, `.multi-health.json` | Sync runner |
 | `PrincipalRuntime` | `principal-runtime/` | 11 (`unavailable` → `available` → `attached_observe`/`attached_interact` → `claiming` → `executing` → `waiting_review`, plus `detached`, `stale`, `budget_exhausted`, `failed`) | Ephemeral JSON / memory | Principal runtime (self) |
 
@@ -142,7 +142,7 @@ These are not the problem. The problem is the concepts that traverse implicit or
 | Attribute | Value |
 |-----------|-------|
 | **Current implicit states** | Tasks have explicit states; chapters are derived aggregations (`scanTasksByChapter` + `chapter-close.ts` computes `confirmed`/`closed`/`in_review`/`in_progress`/`runnable`/`not_started` from constituent tasks) |
-| **Current storage** | Task front-matter in `.ai/tasks/*.md`; chapter closure is a generated decision file, not a state record |
+| **Current storage** | Task front-matter in `.ai/do-not-open/tasks/*.md`; chapter closure is a generated decision file, not a state record |
 | **Authoritative / advisory / derived** | Derived |
 | **Consequences of leaving implicit** | Chapter "state" is recomputed on demand; no durable chapter status; closure is gated on task states but not recorded |
 | **Consequences of making explicit** | Would duplicate task state at a higher level; risk of drift between task state and chapter state; adds write dependency between task transitions and chapter record |

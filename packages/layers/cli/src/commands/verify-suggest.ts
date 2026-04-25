@@ -50,7 +50,7 @@ export async function verifySuggestCommand(
     mapped_files: suggestion.mappedFiles,
     next_steps: [
       ...(policy.allowed
-        ? [`Run: narada verify run --cmd "${suggestion.command}"`]
+        ? [`Run: narada test-run run --cmd "${suggestion.command}"`]
         : [`Policy blocks this command: ${policy.reason}`, 'Add override env vars or use a narrower command.']),
     ],
   };

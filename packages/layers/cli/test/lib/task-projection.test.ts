@@ -19,8 +19,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 function setupRepo(tempDir: string) {
-  mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'reports'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'reviews'), { recursive: true });
 }
 
@@ -31,7 +31,7 @@ function createTask(
   bodyExtra = '',
 ) {
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', `20260420-${num}-test.md`),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', `20260420-${num}-test.md`),
     `---\ntask_id: ${num}\nstatus: ${status}\n---\n\n# Task ${num}: Test\n\n## Acceptance Criteria\n- [ ] Do thing A\n- [x] Do thing B\n\n${bodyExtra}`,
   );
 }
@@ -100,7 +100,7 @@ describe('task projection layer', () => {
   it('uses SQLite status over markdown frontmatter status', async () => {
     // Markdown says 'opened', SQLite says 'closed'
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-103-test.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-103-test.md'),
       `---\ntask_id: 103\nstatus: opened\n---\n\n# Task 103: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n- [x] Do thing B\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
     );
 
@@ -261,11 +261,11 @@ describe('task projection layer', () => {
 
     it('returns runnable tasks from SQLite with markdown title/affinity', async () => {
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-201-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-201-test.md'),
         `---\ntask_id: 201\nstatus: opened\ncontinuation_affinity:\n  preferred_agent_id: agent-a\n  affinity_strength: 2\n---\n\n# Task 201: SQLite Backed\n`,
       );
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-202-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-202-test.md'),
         `---\ntask_id: 202\nstatus: opened\n---\n\n# Task 202: Markdown Only\n`,
       );
 
@@ -310,7 +310,7 @@ describe('task projection layer', () => {
 
     it('SQLite closed status excludes task even if markdown says opened', async () => {
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-203-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-203-test.md'),
         `---\ntask_id: 203\nstatus: opened\n---\n\n# Task 203: Ambiguous\n`,
       );
 
@@ -340,7 +340,7 @@ describe('task projection layer', () => {
 
     it('SQLite opened status includes task even if markdown says closed', async () => {
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-204-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-204-test.md'),
         `---\ntask_id: 204\nstatus: closed\n---\n\n# Task 204: Reopened\n`,
       );
 
@@ -372,15 +372,15 @@ describe('task projection layer', () => {
 
     it('sorts by affinity strength descending', async () => {
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-205-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-205-test.md'),
         `---\ntask_id: 205\nstatus: opened\ncontinuation_affinity:\n  preferred_agent_id: agent-a\n  affinity_strength: 3\n---\n\n# Task 205\n`,
       );
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-206-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-206-test.md'),
         `---\ntask_id: 206\nstatus: opened\ncontinuation_affinity:\n  preferred_agent_id: agent-b\n  affinity_strength: 1\n---\n\n# Task 206\n`,
       );
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-207-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-207-test.md'),
         `---\ntask_id: 207\nstatus: opened\n---\n\n# Task 207\n`,
       );
 

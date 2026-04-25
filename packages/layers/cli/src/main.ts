@@ -74,13 +74,20 @@ import {
 } from './commands/posture.js';
 import { taskAllocateCommand } from './commands/task-allocate.js';
 import { taskCreateCommand } from './commands/task-create.js';
+import { taskAmendCommand } from './commands/task-amend.js';
 import { taskDeriveFromFindingCommand } from './commands/task-derive-from-finding.js';
 import { taskPromoteRecommendationCommand } from './commands/task-promote-recommendation.js';
 import { taskLintCommand } from './commands/task-lint.js';
 import { taskCloseCommand } from './commands/task-close.js';
 import { taskDispatchCommand } from './commands/task-dispatch.js';
+import {
+  taskPeekNextCommand,
+  taskPullNextCommand,
+  taskWorkNextCommand,
+} from './commands/task-next.js';
 import { openTaskLifecycleStore } from './lib/task-lifecycle-store.js';
 import { taskReopenCommand } from './commands/task-reopen.js';
+import { taskConfirmCommand } from './commands/task-confirm.js';
 import { chapterCloseCommand } from './commands/chapter-close.js';
 import { chapterInitCommand } from './commands/chapter-init.js';
 import { chapterStatusCommand } from './commands/chapter-status.js';
@@ -96,7 +103,9 @@ import {
 } from './commands/construction-loop.js';
 import { taskListCommand } from './commands/task-list.js';
 import { taskGraphCommand } from './commands/task-graph.js';
+import { taskSearchCommand } from './commands/task-search.js';
 import { taskEvidenceCommand } from './commands/task-evidence.js';
+import { taskReadCommand } from './commands/task-read.js';
 import { taskEvidenceListCommand } from './commands/task-evidence-list.js';
 import {
   taskRosterShowCommand,
@@ -113,6 +122,11 @@ import {
 import { verifySuggestCommand } from './commands/verify-suggest.js';
 import { verifyExplainCommand } from './commands/verify-explain.js';
 import { verifyRunCommand } from './commands/verify-run.js';
+import {
+  testRunCommand,
+  testRunInspectCommand,
+  testRunListCommand,
+} from './commands/test-run.js';
 import { wrapCommand, type CommandContext } from './lib/command-wrapper.js';
 import {
   wantMailbox,
@@ -129,33 +143,17 @@ import {
 import type { PosturePreset } from '@narada2/ops-kit';
 
 const program = new Command();
+program.createHelp = () => new GroupedHelp();
 
 program
   .name('narada')
   .description('Narada CLI — deterministic state compiler and operation control')
   .version('1.0.0')
-  .configureHelp({ sortSubcommands: false })
+  .configureHelp({ sortSubcommands: false, helpWidth: 100 })
   .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
   .option('--log-level <level>', 'Log level: debug, info, warn, error', 'info')
   .option('--log-format <format>', 'Log format: pretty, json, or auto', 'auto')
   .option('--metrics-output <file>', 'Write metrics to file on exit')
-  .addHelpText(
-    'before',
-    `
-Command Groups:
-  [Runtime]        sync, cycle, integrity, status
-  [Task Gov]       task, chapter, posture, construction-loop, verify
-  [Site/Console]   sites, console, workbench
-  [Operator]       ops, doctor, audit
-  [Setup]          init, init-repo, setup, preflight, inspect, explain, activate, want-*
-  [Maintenance]    rebuild-projections, backup, restore, cleanup, derive-work, preview-work, confirm-replay, recover
-  [Draft/Outbound] drafts, show-draft, approve-draft-for-send, reject-draft, mark-reviewed, handled-externally
-  [Inspection]     show, select, crossing
-
-Deprecated: rebuild-views (use rebuild-projections)
-Use narada <command> --help for subcommand details.
-`,
-  )
   .hook('preAction', (thisCommand) => {
     // Store format in environment for commands to access
     const opts = thisCommand.opts();
@@ -1059,6 +1057,46 @@ taskCmd
   });
 
 taskCmd
+  .command('amend <task-number>')
+  .description('Amend task specification without direct markdown editing')
+  .requiredOption('--by <id>', 'Operator or agent ID performing the amendment')
+  .option('--title <title>', 'New task title')
+  .option('--goal <text>', 'New goal text')
+  .option('--context <text>', 'New context text')
+  .option('--required-work <text>', 'New required work text')
+  .option('--non-goals <text>', 'New non-goals text')
+  .option('--criteria <csv>', 'Replace acceptance criteria (comma-separated)')
+  .option('--append-criteria <csv>', 'Append acceptance criteria (comma-separated)')
+  .option('--from-file <path>', 'Replace entire body from file')
+  .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (taskNumber: string, opts: Record<string, unknown>) => {
+    const result = await taskAmendCommand({
+      taskNumber,
+      by: opts.by as string,
+      title: opts.title as string | undefined,
+      goal: opts.goal as string | undefined,
+      context: opts.context as string | undefined,
+      requiredWork: opts.requiredWork as string | undefined,
+      nonGoals: opts.nonGoals as string | undefined,
+      criteria: opts.criteria ? String(opts.criteria).split(',').map((s: string) => s.trim()).filter(Boolean) : undefined,
+      appendCriteria: opts.appendCriteria ? String(opts.appendCriteria).split(',').map((s: string) => s.trim()).filter(Boolean) : undefined,
+      fromFile: opts.fromFile as string | undefined,
+      format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      cwd: opts.cwd as string | undefined,
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Amend failed');
+      process.exit(result.exitCode);
+    }
+    if (opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json') {
+      console.log(JSON.stringify(result.result, null, 2));
+    } else {
+      console.log(result.result);
+    }
+  });
+
+taskCmd
   .command('promote-recommendation')
   .description('Promote an advisory recommendation to a durable assignment')
   .requiredOption('--task <task-number>', 'Task number to promote')
@@ -1127,17 +1165,65 @@ taskCmd
 taskCmd
   .command('list')
   .description('List runnable tasks sorted by continuation affinity')
+  .option('--range <start-end>', 'Filter tasks to a number range (e.g. 501-999)')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (opts: Record<string, unknown>) => {
     const result = await taskListCommand({
       cwd: opts.cwd as string | undefined,
       format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      range: opts.range as string | undefined,
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'List failed');
       process.exit(result.exitCode);
     }
     console.log(result.result);
+  });
+
+taskCmd
+  .command('search <query>')
+  .description('Search task files by content (front matter + body)')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+  .action(async (query: string, opts: Record<string, unknown>) => {
+    const result = await taskSearchCommand({
+      query,
+      cwd: opts.cwd as string | undefined,
+      format: opts.format as 'json' | 'human' | 'auto' | undefined,
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Search failed');
+      process.exit(result.exitCode);
+    }
+    if (typeof result.result === 'string') {
+      console.log(result.result);
+    } else if (opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json') {
+      console.log(JSON.stringify(result.result, null, 2));
+    }
+  });
+
+taskCmd
+  .command('read <task-number>')
+  .description('Read a single task — canonical observation operator')
+  .option('--format <fmt>', 'Output format: json or human', 'human')
+  .option('--verbose', 'Show full sections (human mode only)', false)
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (taskNumber: string, opts: Record<string, unknown>) => {
+    const result = await taskReadCommand({
+      taskNumber,
+      format: opts.format as 'json' | 'human' | 'auto' | undefined,
+      verbose: opts.verbose as boolean | undefined,
+      cwd: opts.cwd as string | undefined,
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Read failed');
+      process.exit(result.exitCode);
+    }
+    if (opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json') {
+      console.log(JSON.stringify(result.result, null, 2));
+    } else {
+      console.log(result.result);
+    }
   });
 
 taskCmd
@@ -1322,9 +1408,77 @@ taskCmd
   });
 
 taskCmd
+  .command('peek-next')
+  .description('Non-mutating next-task inspection for an agent')
+  .requiredOption('--agent <id>', 'Agent ID')
+  .option('--format <fmt>', 'Output format: json or human', 'human')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await taskPeekNextCommand({
+      agent: opts.agent as string,
+      format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      cwd: opts.cwd as string | undefined,
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Peek-next failed');
+      process.exit(result.exitCode);
+    }
+    if (opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json') {
+      console.log(JSON.stringify(result.result, null, 2));
+    } else {
+      console.log(result.result);
+    }
+  });
+
+taskCmd
+  .command('pull-next')
+  .description('Mutating next-task pull: claim the best admissible task')
+  .requiredOption('--agent <id>', 'Agent ID')
+  .option('--format <fmt>', 'Output format: json or human', 'human')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await taskPullNextCommand({
+      agent: opts.agent as string,
+      format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      cwd: opts.cwd as string | undefined,
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Pull-next failed');
+      process.exit(result.exitCode);
+    }
+    if (opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json') {
+      console.log(JSON.stringify(result.result, null, 2));
+    } else {
+      console.log(result.result);
+    }
+  });
+
+taskCmd
+  .command('work-next')
+  .description('Execution packet for current task, or pull-next then packet')
+  .requiredOption('--agent <id>', 'Agent ID')
+  .option('--format <fmt>', 'Output format: json or human', 'human')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await taskWorkNextCommand({
+      agent: opts.agent as string,
+      format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      cwd: opts.cwd as string | undefined,
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Work-next failed');
+      process.exit(result.exitCode);
+    }
+    if (opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json') {
+      console.log(JSON.stringify(result.result, null, 2));
+    } else {
+      console.log(result.result);
+    }
+  });
+
+taskCmd
   .command('dispatch <action>')
   .description('Dispatch surface: queue, pickup, status, start')
-  .argument('<action>', 'Action: queue, pickup, status, start')
   .option('--task-number <num>', 'Task number (for pickup/status)')
   .option('--agent <id>', 'Agent ID')
   .option('--exec', 'Actually spawn the execution session (start action only)')
@@ -1375,6 +1529,30 @@ taskCmd
     console.log(result.result);
   });
 
+taskCmd
+  .command('confirm <task-number>')
+  .description('Confirm a closed task as complete (terminal step)')
+  .requiredOption('--by <id>', 'Operator or agent ID performing the confirmation')
+  .option('--format <fmt>', 'Output format: json or human', 'human')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (taskNumber: string, opts: Record<string, unknown>) => {
+    const result = await taskConfirmCommand({
+      taskNumber,
+      by: opts.by as string | undefined,
+      format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      cwd: opts.cwd as string | undefined,
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Confirm failed');
+      process.exit(result.exitCode);
+    }
+    if (opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json') {
+      console.log(JSON.stringify(result.result, null, 2));
+    } else {
+      console.log(result.result);
+    }
+  });
+
 const taskEvidenceCmd = taskCmd
   .command('evidence')
   .description('Task evidence operators (inspect, list)');
@@ -1406,6 +1584,8 @@ taskEvidenceCmd
   .option('--verdict <csv>', 'Filter by verdict (comma-separated: complete,attempt_complete,needs_review,needs_closure,incomplete,unknown)')
   .option('--status <csv>', 'Filter by front-matter status (comma-separated)')
   .option('--range <start-end>', 'Filter tasks to a number range (e.g. 480-490)')
+  .option('--limit <n>', 'Maximum tasks to return/show without --full', '25')
+  .option('--full', 'Return the complete list (explicitly opt into unbounded output)', false)
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (opts: Record<string, unknown>) => {
     const result = await taskEvidenceListCommand({
@@ -1414,6 +1594,8 @@ taskEvidenceCmd
       verdict: opts.verdict as string | undefined,
       status: opts.status as string | undefined,
       range: opts.range as string | undefined,
+      limit: opts.limit as string | undefined,
+      full: opts.full === true,
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Evidence list failed');
@@ -1768,10 +1950,10 @@ constructionLoopCmd
     }
   });
 
-// Verification commands
+// Verification commands (diagnostic / non-canonical)
 const verifyCmd = program
   .command('verify')
-  .description('Verification state, suggestion, and run operators');
+  .description('Diagnostic verification operators — does not create durable test-run records. For canonical task verification, use `test-run`.');
 
 verifyCmd
   .command('status')
@@ -1850,6 +2032,77 @@ verifyCmd
     );
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Run failed');
+      process.exit(result.exitCode);
+    }
+    console.log(JSON.stringify(result.result, null, 2));
+  });
+
+// Testing Intent Zone commands (sanctioned test-run path)
+const testRunCmd = program
+  .command('test-run')
+  .description('Testing Intent Zone — governed test execution');
+
+testRunCmd
+  .command('run')
+  .description('Request and execute a governed test run')
+  .requiredOption('--cmd <command>', 'Test command to run')
+  .option('--task <number>', 'Link to a task number')
+  .option('--timeout <seconds>', 'Timeout in seconds')
+  .option('--scope <scope>', 'Scope: focused or full')
+  .option('--requester <identity>', 'Requester identity', 'operator')
+  .option('--rationale <text>', 'Why this run is being requested')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await testRunCommand({
+      cmd: opts.cmd as string | undefined,
+      taskNumber: opts.task ? Number(opts.task) : undefined,
+      timeout: opts.timeout ? Number(opts.timeout) : undefined,
+      scope: opts.scope as 'focused' | 'full' | undefined,
+      requester: opts.requester as string | undefined,
+      rationale: opts.rationale as string | undefined,
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Test run failed');
+      process.exit(result.exitCode);
+    }
+    console.log(JSON.stringify(result.result, null, 2));
+  });
+
+testRunCmd
+  .command('inspect')
+  .description('Inspect a test run result by ID')
+  .requiredOption('--run-id <id>', 'Run ID to inspect')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await testRunInspectCommand({
+      runId: opts.runId as string | undefined,
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Inspect failed');
+      process.exit(result.exitCode);
+    }
+    console.log(JSON.stringify(result.result, null, 2));
+  });
+
+testRunCmd
+  .command('list')
+  .description('List recent test runs')
+  .option('--task <number>', 'Filter to a specific task number')
+  .option('--limit <n>', 'Maximum number of runs to show', '20')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await testRunListCommand({
+      taskNumber: opts.task ? Number(opts.task) : undefined,
+      limit: opts.limit ? Number(opts.limit) : undefined,
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'List failed');
       process.exit(result.exitCode);
     }
     console.log(JSON.stringify(result.result, null, 2));

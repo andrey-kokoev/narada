@@ -18,6 +18,12 @@ import {
 import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import { parseFrontMatter } from '../lib/task-governance.js';
+import {
+  parseTaskSpecFromMarkdown,
+  renderTaskBodyFromSpec,
+  type TaskSpecRecord,
+} from '../lib/task-spec.js';
 
 export interface TaskCreateOptions {
   title: string;
@@ -44,67 +50,42 @@ function formatDatePrefix(): string {
   return new Date().toISOString().slice(0, 10).replace(/-/g, '');
 }
 
-function buildTaskBody(options: {
+function buildTaskSpec(options: {
+  taskId: string;
+  taskNumber: number;
   title: string;
   goal?: string;
   chapter?: string;
   criteria?: string[];
-}): string {
-  const { title, goal, chapter, criteria } = options;
+  dependsOn?: number[];
+}): TaskSpecRecord {
+  const { taskId, taskNumber, title, goal, chapter, criteria, dependsOn } = options;
 
-  const lines: string[] = [];
+  return {
+    task_id: taskId,
+    task_number: taskNumber,
+    title,
+    chapter: chapter ?? null,
+    goal: goal || title,
+    context: null,
+    required_work: '1. TBD',
+    non_goals: [
+      '- Do not expand scope beyond this task.',
+      '- Do not create derivative task-status files.',
+      '- Do not mutate live external systems unless explicitly authorized.',
+    ].join('\n'),
+    acceptance_criteria: criteria && criteria.length > 0 ? criteria : ['TBD'],
+    dependencies: dependsOn ?? [],
+    updated_at: new Date().toISOString(),
+  };
+}
 
-  if (chapter) {
-    lines.push('## Chapter');
-    lines.push('');
-    lines.push(chapter);
-    lines.push('');
-  }
-
-  lines.push('## Goal');
-  lines.push('');
-  lines.push(goal || title);
-  lines.push('');
-
-  lines.push('## Context');
-  lines.push('');
-  lines.push('<!-- Context placeholder -->');
-  lines.push('');
-
-  lines.push('## Required Work');
-  lines.push('');
-  lines.push('1. TBD');
-  lines.push('');
-
-  lines.push('## Non-Goals');
-  lines.push('');
-  lines.push('- Do not expand scope beyond this task.');
-  lines.push('- Do not create derivative task-status files.');
-  lines.push('- Do not mutate live external systems unless explicitly authorized.');
-  lines.push('');
-
-  lines.push('## Execution Notes');
-  lines.push('');
-  lines.push('<!-- Record what was done, decisions made, and files changed during execution. -->');
-  lines.push('');
-
-  lines.push('## Verification');
-  lines.push('');
-  lines.push('<!-- Record commands run, results observed, and how correctness was checked. -->');
-  lines.push('');
-
-  lines.push('## Acceptance Criteria');
-  lines.push('');
-  if (criteria && criteria.length > 0) {
-    for (const c of criteria) {
-      lines.push(`- [ ] ${c}`);
-    }
-  } else {
-    lines.push('- [ ] TBD');
-  }
-  lines.push('');
-
-  return lines.join('\n');
+function buildTaskBody(spec: TaskSpecRecord): string {
+  return renderTaskBodyFromSpec({
+    spec,
+    executionNotes: null,
+    verification: null,
+  });
 }
 
 function parseDependsOn(input: string | undefined): number[] | undefined {
@@ -150,7 +131,7 @@ export async function taskCreateCommand(
   const slug = slugifyTitle(title);
   const taskId = `${datePrefix}-${taskNumber}-${slug}`;
   const fileName = `${taskId}.md`;
-  const tasksDir = join(cwd, '.ai', 'tasks');
+  const tasksDir = join(cwd, '.ai', 'do-not-open', 'tasks');
   const filePath = join(tasksDir, fileName);
 
   // ── Collision check ──
@@ -168,9 +149,17 @@ export async function taskCreateCommand(
   // ── Build body ──
 
   let body: string;
+  let spec: TaskSpecRecord;
   if (options.fromFile) {
     try {
       body = await readFile(resolve(cwd, options.fromFile), 'utf8');
+      const parsed = parseFrontMatter(body);
+      spec = parseTaskSpecFromMarkdown({
+        taskId,
+        taskNumber,
+        frontMatter: parsed.frontMatter,
+        body: parsed.body,
+      });
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       return {
@@ -179,12 +168,16 @@ export async function taskCreateCommand(
       };
     }
   } else {
-    body = buildTaskBody({
+    spec = buildTaskSpec({
+      taskId,
+      taskNumber,
       title,
       goal: options.goal,
       chapter: options.chapter,
       criteria: options.criteria,
+      dependsOn,
     });
+    body = buildTaskBody(spec);
   }
 
   // ── Build front matter ──
@@ -247,6 +240,19 @@ export async function taskCreateCommand(
       reopened_by: null,
       continuation_packet_json: null,
       updated_at: new Date().toISOString(),
+    });
+    store.upsertTaskSpec({
+      task_id: spec.task_id,
+      task_number: spec.task_number,
+      title: spec.title,
+      chapter_markdown: spec.chapter,
+      goal_markdown: spec.goal,
+      context_markdown: spec.context,
+      required_work_markdown: spec.required_work,
+      non_goals_markdown: spec.non_goals,
+      acceptance_criteria_json: JSON.stringify(spec.acceptance_criteria),
+      dependencies_json: JSON.stringify(spec.dependencies),
+      updated_at: spec.updated_at,
     });
   } finally {
     store.db.close();

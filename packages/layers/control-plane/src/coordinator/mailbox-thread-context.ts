@@ -4,7 +4,7 @@
  * Reads the compiler's filesystem views for a given conversation and revision,
  * returning a NormalizedThreadContext suitable for the foreman.
  *
- * Spec: .ai/tasks/20260414-013-impl-conversation-records-and-revisions.md
+ * Spec: .ai/do-not-open/tasks/20260414-013-impl-conversation-records-and-revisions.md
  */
 
 import { readFile, readdir, readlink } from "node:fs/promises";

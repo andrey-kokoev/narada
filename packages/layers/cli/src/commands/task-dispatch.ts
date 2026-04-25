@@ -154,7 +154,7 @@ async function doQueue(
   // For v0, scan filesystem for tasks with active assignments
   const { readdir } = await import('node:fs/promises');
   const { join } = await import('node:path');
-  const tasksDir = join(cwd, '.ai', 'tasks');
+  const tasksDir = join(cwd, '.ai', 'do-not-open', 'tasks');
   let files: string[] = [];
   try {
     files = await readdir(tasksDir);

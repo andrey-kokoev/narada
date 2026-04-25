@@ -2,7 +2,7 @@
 
 > **Package Guide**: This file covers conventions specific to the `control-plane` package. For the canonical kernel lawbook, see [`docs/00-kernel.md`](docs/00-kernel.md). For project overview and navigation, see the [root AGENTS.md](../../AGENTS.md).
 >
-> **Control Plane Architecture**: For the integrated end-to-end control-plane v2 model, see [`20260414-011-chief-integration-control-plane-v2.md`](../../.ai/tasks/20260414-011-chief-integration-control-plane-v2.md).
+> **Control Plane Architecture**: For the integrated end-to-end control-plane v2 model, see [`20260414-011-chief-integration-control-plane-v2.md`](../../.ai/do-not-open/tasks/20260414-011-chief-integration-control-plane-v2.md).
 
 ---
 
@@ -129,7 +129,7 @@ packages/layers/control-plane/
 
 The control plane sits above the deterministic inbound compiler and manages first-class work objects.
 
-- **Integration Spec**: [`20260414-011-chief-integration-control-plane-v2.md`](../../.ai/tasks/20260414-011-chief-integration-control-plane-v2.md)
+- **Integration Spec**: [`20260414-011-chief-integration-control-plane-v2.md`](../../.ai/do-not-open/tasks/20260414-011-chief-integration-control-plane-v2.md)
 - **Coordinator Store**: [`src/coordinator/store.ts`](src/coordinator/store.ts)
 - **Scheduler**: [`src/scheduler/scheduler.ts`](src/scheduler/scheduler.ts)
 - **Foreman Facade**: [`src/foreman/facade.ts`](src/foreman/facade.ts)

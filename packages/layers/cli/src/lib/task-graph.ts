@@ -2,14 +2,21 @@
  * Task graph read model and Mermaid renderer.
  *
  * Inspection operator: read-only, non-authoritative.
- * Turns `.ai/tasks` into a human-observable graph.
+ * Turns `.ai/do-not-open/tasks` into a human-observable graph.
  */
 
 import { readFile, readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { parseFrontMatter, loadRoster, type TaskFrontMatter } from './task-governance.js';
+import {
+  parseFrontMatter,
+  loadRoster,
+  isExecutableTaskFile,
+  resolveExecutableTaskNumberOwnership,
+  type TaskFrontMatter,
+} from './task-governance.js';
+import { openTaskLifecycleStore } from './task-lifecycle-store.js';
 
-const TASKS_DIR = '.ai/tasks';
+const TASKS_DIR = '.ai/do-not-open/tasks';
 
 export interface TaskGraphNode {
   taskNumber: number;
@@ -57,6 +64,22 @@ export async function readTaskGraph(options: ReadTaskGraphOptions): Promise<Task
   const dir = join(cwd, TASKS_DIR);
   const files = await readdir(dir).catch(() => [] as string[]);
   const mdFiles = files.filter((f) => f.endsWith('.md'));
+  const store = openTaskLifecycleStore(cwd);
+  const ownership = await resolveExecutableTaskNumberOwnership(cwd, store);
+  const specByNumber = new Map<number, { title: string; dependencies: number[] }>();
+  try {
+    const rows = store.db
+      .prepare('select task_number, title, dependencies_json from task_specs')
+      .all() as Array<{ task_number: number; title: string; dependencies_json: string }>;
+    for (const row of rows) {
+      specByNumber.set(Number(row.task_number), {
+        title: String(row.title),
+        dependencies: JSON.parse(String(row.dependencies_json)) as number[],
+      });
+    }
+  } finally {
+    store.db.close();
+  }
 
   const entries: RawTaskEntry[] = [];
 
@@ -74,11 +97,16 @@ export async function readTaskGraph(options: ReadTaskGraphOptions): Promise<Task
 
     // Detect chapter files by range pattern: DATE-START-END-...
     const isChapter = /^[0-9]{8}-[0-9]+-[0-9]+/.test(base);
+    if (!isChapter && isExecutableTaskFile(file)) {
+      if (ownership.conflictedNumbers.has(taskNumber)) continue;
+      const ownerTaskId = ownership.ownerByNumber.get(taskNumber);
+      if (ownerTaskId && ownerTaskId !== base) continue;
+    }
 
-    const titleMatch = body.match(/^#\s+(.+)$/m);
-    const title = titleMatch ? titleMatch[1].trim() : base;
+    const spec = specByNumber.get(taskNumber);
+    const title = spec?.title ?? base;
 
-    const dependsOn = normalizeNumberArray(frontMatter.depends_on);
+    const dependsOn = spec?.dependencies ?? normalizeNumberArray(frontMatter.depends_on);
     const blockedBy = normalizeNumberArray(frontMatter.blocked_by);
 
     entries.push({

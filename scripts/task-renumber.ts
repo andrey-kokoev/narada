@@ -17,26 +17,27 @@
 
 import { readdirSync, readFileSync, writeFileSync, renameSync, existsSync } from "node:fs";
 import { join, basename, dirname, resolve } from "node:path";
+import { Database } from "@narada2/control-plane";
 
 const ROOT = process.cwd();
-const TASKS_DIR = join(ROOT, ".ai", "tasks");
-const REVIEWS_DIR = join(ROOT, ".ai", "reviews");
+const TASKS_DIR = join(ROOT, ".ai", "do-not-open", "tasks");
 const DECISIONS_DIR = join(ROOT, ".ai", "decisions");
-const AGENTS_DIR = join(ROOT, ".ai", "agents");
 const LEARNING_DIR = join(ROOT, ".ai", "learning", "accepted");
+const TASK_LIFECYCLE_DB = join(ROOT, ".ai", "task-lifecycle.db");
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 interface Patch {
-  type: "rename" | "edit";
+  type: "rename" | "edit" | "sqlite_review_update";
   file: string;
   description: string;
   oldContent?: string;
   newContent?: string;
   oldPath?: string;
   newPath?: string;
+  reviewId?: string;
 }
 
 interface TaskMatch {
@@ -342,71 +343,39 @@ function buildDecisionPatches(from: number, to: number): Patch[] {
 
 function buildReviewPatches(from: number, to: number): Patch[] {
   const patches: Patch[] = [];
-  const files = readDirSafe(REVIEWS_DIR, (n) => n.endsWith(".md"));
-  for (const filename of files) {
-    const filepath = join(REVIEWS_DIR, filename);
-    const content = readFileSafe(filepath);
-    if (content === null) continue;
-
-    let newContent = content;
-    newContent = newContent.replace(
-      new RegExp(`\\bTask\\s+${from}\\b`, "g"),
-      `Task ${to}`,
-    );
-
-    if (newContent !== content) {
-      patches.push({
-        type: "edit",
-        file: filepath,
-        description: `Update review references to Task ${from} -> ${to}`,
-        oldContent: content,
-        newContent: newContent,
-      });
+  if (!existsSync(TASK_LIFECYCLE_DB)) return patches;
+  try {
+    const db = new Database(TASK_LIFECYCLE_DB);
+    try {
+      const rows = db
+        .prepare("select review_id, task_id, findings_json from task_reviews")
+        .all() as Array<{ review_id: string; task_id: string; findings_json: string | null }>;
+      for (const row of rows) {
+        const newTaskId = row.task_id.replace(new RegExp(`-${from}-`, "g"), `-${to}-`);
+        const oldFindings = row.findings_json ?? "";
+        const newFindings = oldFindings.replace(new RegExp(`\\bTask\\s+${from}\\b`, "g"), `Task ${to}`);
+        if (newTaskId !== row.task_id || newFindings !== oldFindings) {
+          patches.push({
+            type: "sqlite_review_update",
+            file: `${TASK_LIFECYCLE_DB}#review:${row.review_id}`,
+            description: `Update SQLite review references to Task ${from} -> ${to}`,
+            reviewId: row.review_id,
+            oldContent: JSON.stringify({ task_id: row.task_id, findings_json: row.findings_json }),
+            newContent: JSON.stringify({ task_id: newTaskId, findings_json: newFindings }),
+          });
+        }
+      }
+    } finally {
+      db.close();
     }
+  } catch {
+    return patches;
   }
   return patches;
 }
 
 function buildRosterPatch(from: number, to: number): Patch[] {
-  const patches: Patch[] = [];
-  const rosterPath = join(AGENTS_DIR, "roster.json");
-  const content = readFileSafe(rosterPath);
-  if (content === null) return patches;
-
-  try {
-    const roster = JSON.parse(content);
-    let changed = false;
-
-    if (Array.isArray(roster.agents)) {
-      for (const agent of roster.agents) {
-        if (agent && typeof agent === "object") {
-          if (agent.task === from) {
-            agent.task = to;
-            changed = true;
-          }
-          if (agent.last_done === from) {
-            agent.last_done = to;
-            changed = true;
-          }
-        }
-      }
-    }
-
-    if (changed) {
-      const newContent = JSON.stringify(roster, null, 2) + "\n";
-      patches.push({
-        type: "edit",
-        file: rosterPath,
-        description: `Update roster references to Task ${from} -> ${to}`,
-        oldContent: content,
-        newContent: newContent,
-      });
-    }
-  } catch {
-    // If JSON parse fails, fall back to no patch (roster is malformed)
-  }
-
-  return patches;
+  return [];
 }
 
 function buildLearningPatches(from: number, to: number): Patch[] {
@@ -496,6 +465,8 @@ function printPatches(patches: Patch[]): void {
   for (const p of patches) {
     if (p.type === "rename") {
       console.log(`[RENAME] ${p.oldPath} -> ${p.newPath}`);
+    } else if (p.type === "sqlite_review_update") {
+      console.log(`[SQLITE] ${p.file}: ${p.description}`);
     } else {
       console.log(`[EDIT]   ${p.file}: ${p.description}`);
     }
@@ -506,10 +477,13 @@ function applyPatches(patches: Patch[]): void {
   // Group edits by file to apply only the final content
   const editsByFile = new Map<string, { description: string; newContent: string }[]>();
   const renames: Patch[] = [];
+  const sqliteReviewUpdates: Patch[] = [];
 
   for (const p of patches) {
     if (p.type === "rename") {
       renames.push(p);
+    } else if (p.type === "sqlite_review_update") {
+      sqliteReviewUpdates.push(p);
     } else if (p.newContent !== undefined) {
       const arr = editsByFile.get(p.file) ?? [];
       arr.push({ description: p.description, newContent: p.newContent });
@@ -522,6 +496,20 @@ function applyPatches(patches: Patch[]): void {
     const finalContent = edits[edits.length - 1].newContent;
     writeFileSync(file, finalContent, "utf-8");
     console.log(`[WRITTEN] ${file}`);
+  }
+
+  if (sqliteReviewUpdates.length > 0) {
+    const db = new Database(TASK_LIFECYCLE_DB);
+    try {
+      const stmt = db.prepare("update task_reviews set task_id = ?, findings_json = ? where review_id = ?");
+      for (const p of sqliteReviewUpdates) {
+        const payload = JSON.parse(p.newContent!) as { task_id: string; findings_json: string };
+        stmt.run(payload.task_id, payload.findings_json || null, p.reviewId!);
+        console.log(`[UPDATED] ${p.file}`);
+      }
+    } finally {
+      db.close();
+    }
   }
 
   // Apply renames

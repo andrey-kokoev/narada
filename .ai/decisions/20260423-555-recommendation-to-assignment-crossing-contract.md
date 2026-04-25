@@ -151,12 +151,12 @@ interface AssignmentPromotionRequest {
 }
 ```
 
-**Storage**: `.ai/tasks/promotions/${promotion_id}.json` — atomic write.
+**Storage**: `.ai/do-not-open/tasks/tasks/promotions/${promotion_id}.json` — atomic write.
 
 ### Confirmation Artifact: Task Assignment Record
 
 On successful promotion, `taskClaimCommand` produces:
-- Assignment record in `.ai/tasks/assignments/${task_id}.json`
+- Assignment record in `.ai/do-not-open/tasks/tasks/assignments/${task_id}.json`
 - Task status transitioned to `claimed`
 - Roster updated with agent assignment (if applicable)
 
@@ -173,7 +173,7 @@ The `assignment_id` field in the promotion request links the crossing artifact t
 | `narada task promote-recommendation --dry-run` | All 9 validation results with pass/fail and detail |
 | `narada task promote-recommendation` | Promotion result + validation results + assignment ID on success |
 | `narada workbench` | Promotion queue with status, override indicators, failure reasons |
-| `.ai/tasks/promotions/*.json` | Full durable promotion request including snapshot and override reason |
+| `.ai/do-not-open/tasks/tasks/promotions/*.json` | Full durable promotion request including snapshot and override reason |
 
 ### Override Posture
 

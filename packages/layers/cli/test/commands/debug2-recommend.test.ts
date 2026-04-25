@@ -12,10 +12,10 @@ import { join } from 'node:path';
 
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'assignments'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'reports'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'reviews'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
 
   writeFileSync(
     join(tempDir, '.ai', 'agents', 'roster.json'),
@@ -31,15 +31,15 @@ function setupRepo(tempDir: string) {
   );
 
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-998-typescript-task.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-typescript-task.md'),
     '---\ntask_id: 998\nstatus: opened\n---\n\n# Task 998: TypeScript CLI Feature\n',
   );
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-999-database-task.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-database-task.md'),
     '---\ntask_id: 999\nstatus: opened\n---\n\n# Task 999: Database Schema Update\n',
   );
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-997-blocked-task.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-997-blocked-task.md'),
     '---\ntask_id: 997\nstatus: opened\ndepends_on: [998]\n---\n\n# Task 997: Blocked Task\n',
   );
 }
@@ -65,11 +65,11 @@ describe('debug2', () => {
 
   it('all claimed', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-998-typescript-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-typescript-task.md'),
       '---\ntask_id: 998\nstatus: claimed\n---\n\n# Task 998\n',
     );
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-999-database-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-database-task.md'),
       '---\ntask_id: 999\nstatus: claimed\n---\n\n# Task 999\n',
     );
     const result = await taskRecommendCommand({ cwd: tempDir, format: 'json' });

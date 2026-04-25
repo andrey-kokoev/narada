@@ -53,7 +53,7 @@ Derived from `PrincipalRuntimeSnapshot` (Decision 406).
 
 ### 1.4 Assignment History (`AssignmentHistory`)
 
-Derived from `.ai/tasks/assignments/{task-id}.json`.
+Derived from `.ai/do-not-open/tasks/tasks/assignments/{task-id}.json`.
 
 | Field | Type | Relevance |
 |-------|------|-----------|
@@ -362,7 +362,7 @@ OUTPUT: AssignmentRecommendation
    b. Reason: "no available principal" or "no capability match" or "all principals excluded"
 
 8. RECORD recommendation
-   a. Write to .ai/tasks/recommendations/{rec-id}.json (if durable recording enabled)
+   a. Write to .ai/do-not-open/tasks/recommendations/{rec-id}.json (if durable recording enabled)
    b. Return AssignmentRecommendation object
 ```
 
@@ -430,7 +430,7 @@ narada task recommend \
 **Behavior:**
 - Computes recommendations for all runnable tasks (or the specified task)
 - Prints primary recommendation + alternatives + abstained
-- Writes recommendation record to `.ai/tasks/recommendations/{rec-id}.json` unless `--dry-run`
+- Writes recommendation record to `.ai/do-not-open/tasks/recommendations/{rec-id}.json` unless `--dry-run`
 - Returns exit code 0 if at least one recommendation is made; 1 if all tasks abstained
 
 ### 7.2 Command: `narada task claim` Extension
@@ -493,4 +493,4 @@ Shows the full score breakdown for a specific pair, useful for debugging why a r
 | Write-set overlap scoring | Task 413 design | Overlap detection is not yet designed |
 | Cost estimation integration | Post-415 chapter | No cost data exists yet |
 | `narada task recommend --explain` | Future enhancement | Debugging surface; not critical for v0 |
-| Durable recommendation storage format | Implementation task | Schema is defined; storage path is `.ai/tasks/recommendations/` |
+| Durable recommendation storage format | Implementation task | Schema is defined; storage path is `.ai/do-not-open/tasks/recommendations/` |

@@ -20,8 +20,8 @@ It is paired with `.ai/task-contracts/question-escalation.md`. If a task becomes
   ```bash
   pnpm exec tsx scripts/task-reserve.ts --range START-END --purpose "..." --agent <name>
   ```
-- If the reservation script does not exist yet, compute the next available number by scanning all `# Task NNN` headings in `.ai/tasks/*.md` (not by filename sorting) and record the reservation manually in `.ai/tasks/.registry.json`.
-- If `.ai/tasks/.registry.json` exists, check it for active reservations and the `last_allocated` value before creating tasks.
+- If the reservation script does not exist yet, compute the next available number by scanning all `# Task NNN` headings in `.ai/do-not-open/tasks/*.md` (not by filename sorting) and record the reservation manually in `.ai/do-not-open/tasks/tasks/.registry.json`.
+- If `.ai/do-not-open/tasks/tasks/.registry.json` exists, check it for active reservations and the `last_allocated` value before creating tasks.
 - If a collision is detected (a task number already claimed by another file), **stop** and invoke the correction path:
   - Record the collision in `.ai/feedback/governance.md` or the affected task file.
   - If `scripts/task-renumber.ts` (Task 446) exists, use it to resolve the collision.

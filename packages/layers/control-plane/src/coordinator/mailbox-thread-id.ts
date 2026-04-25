@@ -3,7 +3,7 @@
  *
  * Rule: thread_id === conversation_id (Exchange conversationId).
  *
- * Spec: .ai/tasks/20260413-012-coordinator-state-and-foreman-handoff.md
+ * Spec: .ai/do-not-open/tasks/20260413-012-coordinator-state-and-foreman-handoff.md
  */
 
 import type { NormalizedMessage } from "../types/normalized.js";

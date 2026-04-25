@@ -293,5 +293,5 @@ Documents, tests, and comments in Tasks 358–364 must use bounded language:
 | [`SEMANTICS.md §2.14`](../../SEMANTICS.md) | Canonical definitions of Aim, Site, Cycle, Act, Trace |
 | [`docs/deployment/cloudflare-live-adapter-boundary-contract.md`](cloudflare-live-adapter-boundary-contract.md) | Prior adapter taxonomy; effect-execution was out of scope there, in scope here |
 | [`docs/deployment/cloudflare-site-materialization.md`](cloudflare-site-materialization.md) | Cloudflare resource mapping, v0/v1 boundary |
-| [`.ai/tasks/20260421-358-364-cloudflare-effect-execution-boundary.md`](../../.ai/tasks/20260421-358-364-cloudflare-effect-execution-boundary.md) | Chapter DAG and closure criteria |
+| [`.ai/do-not-open/tasks/20260421-358-364-cloudflare-effect-execution-boundary.md`](../../.ai/do-not-open/tasks/20260421-358-364-cloudflare-effect-execution-boundary.md) | Chapter DAG and closure criteria |
 | [`.ai/decisions/20260421-357-cloudflare-live-adapter-spine-closure.md`](../../.ai/decisions/20260421-357-cloudflare-live-adapter-spine-closure.md) | Closure of prior chapter; recommended effect execution as next work |

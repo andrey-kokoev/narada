@@ -9,7 +9,7 @@
  * - All other references (`context_id`, `work_item_id`, `session_id`, `reference_outbound_id`)
  *   are navigational only and non-authoritative.
  *
- * Spec: .ai/tasks/20260415-027-trace-system-reanchored-on-canonical-identity.md
+ * Spec: .ai/do-not-open/tasks/20260415-027-trace-system-reanchored-on-canonical-identity.md
  */
 
 export type TraceType =

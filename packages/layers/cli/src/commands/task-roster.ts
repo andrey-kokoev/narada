@@ -155,44 +155,65 @@ export async function taskRosterAssignCommand(
   } catch {
     // Store may not exist yet
   }
+  let currentStatus: string | undefined;
+  let blockedBy: string[] = [];
+  let dependencyDetails: Array<{ taskId: string; reason: string }> = [];
+  try {
+    if (store && !store.getLifecycle(taskFile.taskId)) {
+      store.upsertLifecycle({
+        task_id: taskFile.taskId,
+        task_number: taskNumber,
+        status: ((frontMatter.status as string | undefined) ?? 'opened') as import('../lib/task-lifecycle-store.js').TaskStatus,
+        governed_by: (frontMatter.governed_by as string) || null,
+        closed_at: (frontMatter.closed_at as string) || null,
+        closed_by: (frontMatter.closed_by as string) || null,
+        reopened_at: (frontMatter.reopened_at as string) || null,
+        reopened_by: (frontMatter.reopened_by as string) || null,
+        continuation_packet_json: null,
+        updated_at: new Date().toISOString(),
+      });
+    }
+    const resolved = await resolveTaskStatus(cwd, taskNumber, store);
+    currentStatus = resolved.status;
 
-    const { status: currentStatus } = await resolveTaskStatus(
-      cwd,
-      taskNumber,
-      store,
-    );
+    const dependsOn = frontMatter.depends_on as number[] | undefined;
+    const dependencyCheck = await checkDependencies(cwd, dependsOn, store);
+    blockedBy = dependencyCheck.blockedBy;
+    dependencyDetails = dependencyCheck.details;
+  } finally {
+    if (store) store.db.close();
+  }
 
-    // ── Phase 3: Determine claim intent and validate ──
-    const canClaim = currentStatus === 'opened' || currentStatus === 'needs_continuation';
-    const shouldClaim = !options.noClaim && canClaim;
+  // ── Phase 3: Determine claim intent and validate ──
+  const canClaim = currentStatus === 'opened' || currentStatus === 'needs_continuation';
+  const shouldClaim = !options.noClaim && canClaim;
+  let shouldBackfillClaimAssignment = false;
 
-    const claimWarnings: string[] = [];
+  const claimWarnings: string[] = [];
 
-    if (shouldClaim) {
-      // Validate state-machine transition
-      if (!isValidTransition(currentStatus, 'claimed')) {
-        return {
-          exitCode: ExitCode.GENERAL_ERROR,
-          result: {
-            status: 'error',
-            error: `Transition from '${currentStatus}' to 'claimed' is not allowed by the state machine`,
-          },
-        };
-      }
+  if (shouldClaim) {
+    // Validate state-machine transition
+    if (!isValidTransition(currentStatus, 'claimed')) {
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: {
+          status: 'error',
+          error: `Transition from '${currentStatus}' to 'claimed' is not allowed by the state machine`,
+        },
+      };
+    }
 
-      // Validate dependencies
-      const dependsOn = frontMatter.depends_on as number[] | undefined;
-      const { blockedBy, details } = await checkDependencies(cwd, dependsOn, store);
-      if (blockedBy.length > 0) {
-        const detailMessages = details.map((d) => `${d.taskId}: ${d.reason}`).join('; ');
-        return {
-          exitCode: ExitCode.GENERAL_ERROR,
-          result: {
-            status: 'error',
-            error: `Task ${taskFile.taskId} has unmet dependencies: ${blockedBy.join(', ')}. ${detailMessages}`,
-          },
-        };
-      }
+    // Validate dependencies
+    if (blockedBy.length > 0) {
+      const detailMessages = dependencyDetails.map((d) => `${d.taskId}: ${d.reason}`).join('; ');
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: {
+          status: 'error',
+          error: `Task ${taskFile.taskId} has unmet dependencies: ${blockedBy.join(', ')}. ${detailMessages}`,
+        },
+      };
+    }
 
     // Validate no active assignment
     const existingAssignment = await loadAssignment(cwd, taskFile.taskId);
@@ -209,7 +230,14 @@ export async function taskRosterAssignCommand(
       }
     }
   } else if (currentStatus === 'claimed') {
-    claimWarnings.push(`Task ${taskFile.taskId} is already claimed; roster updated without re-claiming`);
+    const existingAssignment = await loadAssignment(cwd, taskFile.taskId);
+    const active = existingAssignment ? getActiveAssignment(existingAssignment) : null;
+    if (!active && !options.noClaim) {
+      shouldBackfillClaimAssignment = true;
+      claimWarnings.push(`Task ${taskFile.taskId} is already claimed but has no active assignment; assignment record backfilled`);
+    } else {
+      claimWarnings.push(`Task ${taskFile.taskId} is already claimed; roster updated without re-claiming`);
+    }
   } else if (options.noClaim) {
     claimWarnings.push('Claim skipped due to --no-claim flag');
   }
@@ -225,7 +253,8 @@ export async function taskRosterAssignCommand(
     });
 
     let claimed = false;
-    if (shouldClaim) {
+    let assignmentBackfilled = false;
+    if (shouldClaim || shouldBackfillClaimAssignment) {
       const now = new Date().toISOString();
       const record = (await loadAssignment(cwd, taskFile.taskId)) ?? {
         task_id: taskFile.taskId,
@@ -240,10 +269,35 @@ export async function taskRosterAssignCommand(
         intent: 'primary',
       });
       await saveAssignment(cwd, record);
+      assignmentBackfilled = shouldBackfillClaimAssignment;
 
-      const updatedFrontMatter: TaskFrontMatter = { ...frontMatter, status: 'claimed' };
-      await writeTaskFile(taskFile.path, updatedFrontMatter, body);
-      claimed = true;
+      if (shouldClaim) {
+        try {
+          const lifecycleStore = openTaskLifecycleStore(cwd);
+          try {
+            lifecycleStore.updateStatus(taskFile.taskId, 'claimed', options.agent);
+          } finally {
+            lifecycleStore.db.close();
+          }
+        } catch {
+          // Lifecycle store may be unavailable; markdown claim still stands.
+        }
+
+        const updatedFrontMatter: TaskFrontMatter = { ...frontMatter, status: 'claimed' };
+        await writeTaskFile(taskFile.path, updatedFrontMatter, body);
+        claimed = true;
+      } else {
+        try {
+          const lifecycleStore = openTaskLifecycleStore(cwd);
+          try {
+            lifecycleStore.updateStatus(taskFile.taskId, 'claimed', options.agent);
+          } finally {
+            lifecycleStore.db.close();
+          }
+        } catch {
+          // Preserve already-claimed markdown; only refresh lifecycle provenance.
+        }
+      }
     }
 
     const { guidance } = await recallAcceptedLearning({
@@ -260,6 +314,7 @@ export async function taskRosterAssignCommand(
           agent_status: 'working',
           task: taskNumber,
           claimed,
+          assignment_backfilled: assignmentBackfilled || undefined,
           roster: updatedRoster,
           warnings: claimWarnings.length > 0 ? claimWarnings : undefined,
           guidance: formatGuidanceForJson(guidance),
@@ -289,8 +344,6 @@ export async function taskRosterAssignCommand(
       exitCode: ExitCode.GENERAL_ERROR,
       result: { status: 'error', error: msg },
     };
-  } finally {
-    if (store) store.db.close();
   }
 }
 
@@ -316,6 +369,26 @@ export async function taskRosterReviewCommand(
     const taskFile = await findTaskFile(cwd, options.taskNumber);
     if (taskFile) {
       const now = new Date().toISOString();
+      const lifecycleStore = openTaskLifecycleStore(cwd);
+      try {
+        const existingLifecycle = lifecycleStore.getLifecycle(taskFile.taskId);
+        if (!existingLifecycle) {
+          lifecycleStore.upsertLifecycle({
+            task_id: taskFile.taskId,
+            task_number: taskNumber,
+            status: 'in_review',
+            governed_by: null,
+            closed_at: null,
+            closed_by: null,
+            reopened_at: null,
+            reopened_by: null,
+            continuation_packet_json: null,
+            updated_at: now,
+          });
+        }
+      } finally {
+        lifecycleStore.db.close();
+      }
       // Record review intent as a released assignment (review is parallel, not an active claim)
       const assignmentRecord = (await loadAssignment(cwd, taskFile.taskId)) ?? {
         task_id: taskFile.taskId,

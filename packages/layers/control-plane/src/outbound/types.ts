@@ -4,7 +4,7 @@
  * Canonical command model, state machine, and persistence types for
  * durable outbound execution on top of the Narada kernel.
  *
- * Spec: .ai/tasks/20260413-001-outbound-draft-worker-spec.md
+ * Spec: .ai/do-not-open/tasks/20260413-001-outbound-draft-worker-spec.md
  */
 
 export type OutboundActionType =

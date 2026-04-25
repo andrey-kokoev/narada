@@ -8,8 +8,6 @@
  */
 
 import { resolve } from 'node:path';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import {
   loadRoster,
   findTaskFile,
@@ -18,7 +16,6 @@ import {
   getActiveAssignment,
   checkDependencies,
   resolveTaskStatus,
-  atomicWriteFile,
   type TaskFrontMatter,
 } from '../lib/task-governance.js';
 import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
@@ -73,25 +70,28 @@ export interface AssignmentPromotionRequest {
   assignment_id?: string;
 }
 
-const PROMOTIONS_DIR = '.ai/tasks/promotions';
 const RECOMMENDATION_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 function generatePromotionId(): string {
   return `promotion-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function getPromotionPath(cwd: string, promotionId: string): string {
-  return join(resolve(cwd), PROMOTIONS_DIR, `${promotionId}.json`);
-}
-
-async function ensurePromotionsDir(cwd: string): Promise<void> {
-  await mkdir(join(resolve(cwd), PROMOTIONS_DIR), { recursive: true });
-}
-
 async function savePromotionRequest(cwd: string, request: AssignmentPromotionRequest): Promise<void> {
-  await ensurePromotionsDir(cwd);
-  const path = getPromotionPath(cwd, request.promotion_id);
-  await atomicWriteFile(path, JSON.stringify(request, null, 2) + '\n');
+  const store = openTaskLifecycleStore(cwd);
+  try {
+    store.upsertPromotionRecord({
+      promotion_id: request.promotion_id,
+      task_id: request.task_id,
+      task_number: request.task_number,
+      agent_id: request.agent_id,
+      requested_by: request.requested_by,
+      requested_at: request.requested_at,
+      status: request.status,
+      promotion_json: JSON.stringify(request),
+    });
+  } finally {
+    store.db.close();
+  }
 }
 
 function findCandidateInRecommendation(

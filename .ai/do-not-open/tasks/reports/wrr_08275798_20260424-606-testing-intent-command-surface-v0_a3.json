@@ -1,0 +1,29 @@
+{
+  "report_id": "wrr_08275798_20260424-606-testing-intent-command-surface-v0_a3",
+  "task_number": "606",
+  "task_id": "20260424-606-testing-intent-command-surface-v0",
+  "agent_id": "a3",
+  "assignment_id": "20260424-606-testing-intent-command-surface-v0-2026-04-24T21:07:21.272Z",
+  "reported_at": "2026-04-24T21:21:35.153Z",
+  "summary": "Implemented testing intent command surface v0 with test-run run/inspect/list commands, durable run IDs, and 12 focused tests",
+  "changed_files": [
+    "packages/layers/cli/src/lib/testing-intent.ts",
+    "packages/layers/cli/src/commands/test-run.ts",
+    "packages/layers/cli/test/commands/test-run.test.ts",
+    "packages/layers/cli/src/lib/task-lifecycle-store.ts",
+    "packages/layers/cli/src/main.ts"
+  ],
+  "verification": [
+    {
+      "command": "pnpm verify",
+      "result": "passed"
+    },
+    {
+      "command": "vitest run test/commands/test-run.test.ts",
+      "result": "12 passed, ~16s per test from spawn overhead"
+    }
+  ],
+  "known_residuals": [],
+  "ready_for_review": true,
+  "report_status": "accepted"
+}

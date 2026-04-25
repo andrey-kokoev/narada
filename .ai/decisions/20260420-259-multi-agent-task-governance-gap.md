@@ -10,7 +10,7 @@
 
 This inventory was produced by structured audit of:
 
-1. `.ai/tasks/` — task file conventions, numbering, and lifecycle state
+1. `.ai/do-not-open/tasks/` — task file conventions, numbering, and lifecycle state
 2. `.ai/decisions/` — decision artifacts and their relationship to tasks
 3. `.ai/reviews/` — review findings storage (currently empty/unstructured)
 4. `.ai/feedback/` — governance feedback channel (rolling Markdown inbox)
@@ -49,7 +49,7 @@ And by **current state**, **desired state**, and **chapter fit**.
 
 ## Gap 2: Task Lifecycle is Manual and File-Based
 
-**Current state**: Tasks live as Markdown files in `.ai/tasks/`. Claiming a task means an agent reads the file. Closing a task means editing the file to add execution notes and checking acceptance criteria. There is no mechanical lifecycle — a task can be "claimed" by multiple agents simultaneously, and there is no canonical `status` field enforced by the system.
+**Current state**: Tasks live as Markdown files in `.ai/do-not-open/tasks/`. Claiming a task means an agent reads the file. Closing a task means editing the file to add execution notes and checking acceptance criteria. There is no mechanical lifecycle — a task can be "claimed" by multiple agents simultaneously, and there is no canonical `status` field enforced by the system.
 
 **Desired state**: A task has a mechanical lifecycle: `draft` → `opened` → `claimed` → `in_review` → `closed` → `confirmed`. Transitions should be explicit and auditable. The file-based representation should remain the durable boundary, but a lightweight state machine should govern transitions.
 
@@ -103,9 +103,9 @@ And by **current state**, **desired state**, and **chapter fit**.
 
 ## Gap 5: Task Number Allocation is Manual and Collision-Prone
 
-**Current state**: Task numbers are chosen by agents by scanning `.ai/tasks/` and picking the next integer. This is manual, error-prone, and has no collision detection. There is no registry or allocator.
+**Current state**: Task numbers are chosen by agents by scanning `.ai/do-not-open/tasks/` and picking the next integer. This is manual, error-prone, and has no collision detection. There is no registry or allocator.
 
-**Desired state**: A lightweight task number allocator — either a simple registry file (`.ai/tasks/.registry.json`) or a CLI command (`narada task allocate`) that atomically reserves the next number. This should be optional for manual use but required for automated task creation.
+**Desired state**: A lightweight task number allocator — either a simple registry file (`.ai/do-not-open/tasks/tasks/.registry.json`) or a CLI command (`narada task allocate`) that atomically reserves the next number. This should be optional for manual use but required for automated task creation.
 
 **Ownership**:
 - `static schema`: task number format and registry file shape.

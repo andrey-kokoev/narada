@@ -275,7 +275,7 @@ export async function chapterInitCommand(
 
   const to = from + count - 1;
   const datePrefix = formatDatePrefix();
-  const tasksDir = join(cwd, '.ai', 'tasks');
+  const tasksDir = join(cwd, '.ai', 'do-not-open', 'tasks');
 
   // ── Range file existence check ──
 

@@ -2,6 +2,29 @@ import { vi } from 'vitest';
 
 vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
+vi.mock('../../src/lib/learning-recall.js', () => ({
+  recallAcceptedLearning: async () => ({
+    guidance: [
+      {
+        artifact_id: '20260422-003',
+        title: 'Recommended assignments are operative unless rejected',
+        principle: 'When the architect/operator recommends a target assignment and the human operator does not disagree or correct it, the recommendation is operative and must be recorded in the roster immediately.',
+        source_path: '/mock/accepted/20260422-003-roster.json',
+        not_applicable_when: [],
+      },
+    ],
+    warnings: [],
+  }),
+  formatGuidanceForHumans: (guidance: Array<{ title: string; principle: string }>) =>
+    guidance.map((g) => `• ${g.title}: ${g.principle}`),
+  formatGuidanceForJson: (guidance: Array<{ artifact_id: string; title: string; principle: string; not_applicable_when: string[] }>) =>
+    guidance.map((g) => ({
+      artifact_id: g.artifact_id,
+      title: g.title,
+      principle: g.principle,
+      not_applicable_when: g.not_applicable_when,
+    })),
+}));
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import {
@@ -16,57 +39,79 @@ import {
   updateAgentRosterEntry,
   formatRoster,
   readTaskFile,
+  loadAssignment,
+  saveReport,
 } from '../../src/lib/task-governance.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
+import { Database } from '@narada2/control-plane';
+import { SqliteTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 function setupRepo(tempDir: string, roster?: unknown) {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'assignments'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'learning', 'accepted'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
 
-  writeFileSync(
-    join(tempDir, '.ai', 'agents', 'roster.json'),
-    JSON.stringify(roster ?? {
-      version: 2,
-      updated_at: '2026-01-01T00:00:00Z',
-      agents: [
-        {
-          agent_id: 'test-agent',
-          role: 'implementer',
-          capabilities: ['claim'],
-          first_seen_at: '2026-01-01T00:00:00Z',
-          last_active_at: '2026-01-01T00:00:00Z',
-        },
-        {
-          agent_id: 'reviewer-agent',
-          role: 'reviewer',
-          capabilities: ['derive', 'propose'],
-          first_seen_at: '2026-01-01T00:00:00Z',
-          last_active_at: '2026-01-01T00:00:00Z',
-          status: 'idle',
-          task: null,
-          last_done: null,
-          updated_at: '2026-01-01T00:00:00Z',
-        },
-      ],
-    }, null, 2),
-  );
-
-  writeFileSync(
-    join(tempDir, '.ai', 'learning', 'accepted', '20260422-003-roster.json'),
-    JSON.stringify({
-      artifact_id: '20260422-003',
-      state: 'accepted',
-      title: 'Recommended assignments are operative unless rejected',
-      content: {
-        principle: 'When the architect/operator recommends a target assignment and the human operator does not disagree or correct it, the recommendation is operative and must be recorded in the roster immediately.',
+  const fixture = (roster ?? {
+    version: 2,
+    updated_at: '2026-01-01T00:00:00Z',
+    agents: [
+      {
+        agent_id: 'test-agent',
+        role: 'implementer',
+        capabilities: ['claim'],
+        first_seen_at: '2026-01-01T00:00:00Z',
+        last_active_at: '2026-01-01T00:00:00Z',
+        status: 'idle',
+        task: null,
+        last_done: null,
+        updated_at: '2026-01-01T00:00:00Z',
       },
-      scopes: ['roster', 'assignment', 'task-governance'],
-    }, null, 2),
-  );
+      {
+        agent_id: 'reviewer-agent',
+        role: 'reviewer',
+        capabilities: ['derive', 'propose'],
+        first_seen_at: '2026-01-01T00:00:00Z',
+        last_active_at: '2026-01-01T00:00:00Z',
+        status: 'idle',
+        task: null,
+        last_done: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ],
+  }) as {
+    updated_at: string;
+    agents: Array<{
+      agent_id: string;
+      role: string;
+      capabilities: string[];
+      first_seen_at: string;
+      last_active_at: string;
+      status?: string;
+      task?: number | null;
+      last_done?: number | null;
+      updated_at?: string;
+    }>;
+  };
+
+  const db = new Database(join(tempDir, '.ai', 'task-lifecycle.db'));
+  const store = new SqliteTaskLifecycleStore({ db });
+  store.initSchema();
+  for (const agent of fixture.agents) {
+    store.upsertRosterEntry({
+      agent_id: agent.agent_id,
+      role: agent.role,
+      capabilities_json: JSON.stringify(agent.capabilities),
+      first_seen_at: agent.first_seen_at,
+      last_active_at: agent.last_active_at,
+      status: agent.status ?? 'idle',
+      task_number: agent.task ?? null,
+      last_done: agent.last_done ?? null,
+      updated_at: agent.updated_at ?? fixture.updated_at,
+    });
+  }
+  db.close();
 }
 
 describe('task roster operator', () => {
@@ -126,7 +171,7 @@ describe('task roster operator', () => {
   describe('assign', () => {
     it('records status working and task number', async () => {
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-385-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-385-test.md'),
         '---\ntask_id: 385\nstatus: opened\n---\n\n# Task 385\n',
       );
 
@@ -181,7 +226,7 @@ describe('task roster operator', () => {
 
     it('claims an opened task by default', async () => {
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-385-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-385-test.md'),
         '---\ntask_id: 385\nstatus: opened\n---\n\n# Task 385\n',
       );
 
@@ -197,15 +242,12 @@ describe('task roster operator', () => {
       expect(parsed.claimed).toBe(true);
 
       // Task file updated to claimed
-      const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-385-test.md'), 'utf8');
+      const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-385-test.md'), 'utf8');
       expect(taskContent).toContain('status: claimed');
 
-      // Assignment record created
-      const assignmentRaw = readFileSync(
-        join(tempDir, '.ai', 'tasks', 'assignments', '20260420-385-test.json'),
-        'utf8',
-      );
-      const assignment = JSON.parse(assignmentRaw);
+      // Assignment record created in SQLite authority
+      const assignment = await loadAssignment(tempDir, '20260420-385-test');
+      expect(assignment).not.toBeNull();
       expect(assignment.task_id).toBe('20260420-385-test');
       expect(assignment.assignments).toHaveLength(1);
       expect(assignment.assignments[0].agent_id).toBe('test-agent');
@@ -213,11 +255,11 @@ describe('task roster operator', () => {
 
     it('preserves depends_on through claim', async () => {
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-998-dep.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-dep.md'),
         '---\ntask_id: 998\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 998\n\n## Acceptance Criteria\n\n- [x] Criterion 1\n\n## Execution Notes\n\nCompleted.\n\n## Verification\n\nVerified.\n',
       );
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-385-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-385-test.md'),
         '---\ntask_id: 385\nstatus: opened\ndepends_on:\n  - 998\nextra: preserved\n---\n\n# Task 385\n',
       );
 
@@ -230,7 +272,7 @@ describe('task roster operator', () => {
 
       expect(result.exitCode).toBe(ExitCode.SUCCESS);
 
-      const { frontMatter } = await readTaskFile(join(tempDir, '.ai', 'tasks', '20260420-385-test.md'));
+      const { frontMatter } = await readTaskFile(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-385-test.md'));
       expect(frontMatter.status).toBe('claimed');
       expect(frontMatter.depends_on).toEqual([998]);
       expect(frontMatter.extra).toBe('preserved');
@@ -257,11 +299,11 @@ describe('task roster operator', () => {
 
     it('fails when dependencies are unmet and leaves roster unchanged', async () => {
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-998-dep.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-dep.md'),
         '---\ntask_id: 998\nstatus: opened\n---\n\n# Task 998\n',
       );
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-385-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-385-test.md'),
         '---\ntask_id: 385\nstatus: opened\ndepends_on:\n  - 998\n---\n\n# Task 385\n',
       );
 
@@ -283,7 +325,7 @@ describe('task roster operator', () => {
 
     it('is explicit and non-destructive for already-claimed tasks', async () => {
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-385-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-385-test.md'),
         '---\ntask_id: 385\nstatus: claimed\n---\n\n# Task 385\n',
       );
 
@@ -307,7 +349,7 @@ describe('task roster operator', () => {
 
     it('supports --no-claim to skip claiming', async () => {
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-385-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-385-test.md'),
         '---\ntask_id: 385\nstatus: opened\n---\n\n# Task 385\n',
       );
 
@@ -325,7 +367,7 @@ describe('task roster operator', () => {
       expect(parsed.warnings?.some((w) => w.includes('--no-claim'))).toBe(true);
 
       // Task file unchanged
-      const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-385-test.md'), 'utf8');
+      const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-385-test.md'), 'utf8');
       expect(taskContent).toContain('status: opened');
 
       // Roster updated
@@ -337,7 +379,7 @@ describe('task roster operator', () => {
   describe('review', () => {
     it('records status reviewing and task number', async () => {
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-370-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-370-test.md'),
         '---\ntask_id: 370\nstatus: in_review\n---\n\n# Task 370\n',
       );
 
@@ -362,11 +404,8 @@ describe('task roster operator', () => {
       expect(entry?.task).toBe(370);
 
       // Assignment record created with review intent (released immediately)
-      const assignmentRaw = readFileSync(
-        join(tempDir, '.ai', 'tasks', 'assignments', '20260420-370-test.json'),
-        'utf8',
-      );
-      const assignment = JSON.parse(assignmentRaw);
+      const assignment = await loadAssignment(tempDir, '20260420-370-test');
+      expect(assignment).not.toBeNull();
       expect(assignment.assignments).toHaveLength(1);
       expect(assignment.assignments[0].intent).toBe('review');
       expect(assignment.assignments[0].released_at).not.toBeNull();
@@ -408,9 +447,9 @@ describe('task roster operator', () => {
 
     it('fails by default when no WorkResultReport exists for the task', async () => {
       // Create a task file so findTaskFile can resolve it
-      mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+      mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-385-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-385-test.md'),
         '---\ntask_id: 385\nstatus: claimed\n---\n\n# Task 385\n',
       );
 
@@ -435,15 +474,12 @@ describe('task roster operator', () => {
     });
 
     it('records done with warnings only when incomplete evidence is explicitly allowed', async () => {
-      mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+      mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-386-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-386-test.md'),
         '---\ntask_id: 386\nstatus: claimed\n---\n\n# Task 386\n\n## Acceptance Criteria\n- [ ] Unchecked item\n',
       );
-      mkdirSync(join(tempDir, '.ai', 'tasks', 'reports'), { recursive: true });
-      writeFileSync(
-        join(tempDir, '.ai', 'tasks', 'reports', 'wrr_1234567890_20260420-386-test_other-agent.json'),
-        JSON.stringify({
+      await saveReport(tempDir, {
           report_id: 'wrr_1234567890_20260420-386-test_other-agent',
           task_number: 386,
           task_id: '20260420-386-test',
@@ -456,8 +492,7 @@ describe('task roster operator', () => {
           known_residuals: [],
           ready_for_review: true,
           report_status: 'submitted',
-        }),
-      );
+      });
 
       const result = await taskRosterDoneCommand({
         taskNumber: '386',
@@ -473,9 +508,9 @@ describe('task roster operator', () => {
     });
 
     it('fails in strict mode when evidence is missing', async () => {
-      mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+      mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-387-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-387-test.md'),
         '---\ntask_id: 387\nstatus: claimed\n---\n\n# Task 387\n',
       );
 
@@ -494,15 +529,12 @@ describe('task roster operator', () => {
     });
 
     it('succeeds in strict mode when evidence is complete', async () => {
-      mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+      mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-388-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-388-test.md'),
         '---\ntask_id: 388\nstatus: claimed\n---\n\n# Task 388\n\n## Acceptance Criteria\n- [x] Done\n\n## Execution Notes\nCompleted.\n\n## Verification\nChecked.\n',
       );
-      mkdirSync(join(tempDir, '.ai', 'tasks', 'reports'), { recursive: true });
-      writeFileSync(
-        join(tempDir, '.ai', 'tasks', 'reports', 'wrr_1234567890_20260420-388-test_test-agent.json'),
-        JSON.stringify({
+      await saveReport(tempDir, {
           report_id: 'wrr_1234567890_20260420-388-test_test-agent',
           task_number: 388,
           task_id: '20260420-388-test',
@@ -515,8 +547,7 @@ describe('task roster operator', () => {
           known_residuals: [],
           ready_for_review: true,
           report_status: 'submitted',
-        }),
-      );
+      });
 
       const result = await taskRosterDoneCommand({
         taskNumber: '388',
@@ -533,9 +564,9 @@ describe('task roster operator', () => {
     });
 
     it('does not block done for a complete task just because no review artifact exists', async () => {
-      mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+      mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-389-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-389-test.md'),
         '---\ntask_id: 389\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 389\n\n## Acceptance Criteria\n- [x] Done\n\n## Execution Notes\nCompleted.\n\n## Verification\nChecked.\n',
       );
 
@@ -656,11 +687,11 @@ describe('task roster operator', () => {
   describe('race safety', () => {
     it('concurrent assign to different agents both persist', async () => {
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-100-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-test.md'),
         '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n',
       );
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-200-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-200-test.md'),
         '---\ntask_id: 200\nstatus: opened\n---\n\n# Task 200\n',
       );
 
@@ -691,11 +722,11 @@ describe('task roster operator', () => {
 
     it('rapid sequential mutations do not lose updates', async () => {
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-100-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-test.md'),
         '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n',
       );
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-200-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-200-test.md'),
         '---\ntask_id: 200\nstatus: opened\n---\n\n# Task 200\n',
       );
 
@@ -713,7 +744,7 @@ describe('task roster operator', () => {
 
     it('lock is released after a failed mutation', async () => {
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', '20260420-100-test.md'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-test.md'),
         '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n',
       );
 

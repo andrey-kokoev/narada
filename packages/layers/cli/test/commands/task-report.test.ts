@@ -13,8 +13,8 @@ import { join } from 'node:path';
 
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'assignments'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'reports'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'reviews'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'learning', 'accepted'), { recursive: true });
 
@@ -31,7 +31,7 @@ function setupRepo(tempDir: string) {
   );
 
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
     '---\ntask_id: 999\nstatus: opened\n---\n\n# Task 999: Test Task\n',
   );
 
@@ -90,11 +90,11 @@ describe('task report operator', () => {
     });
 
     // Task file updated to in_review
-    const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'), 'utf8');
+    const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
     expect(taskContent).toContain('status: in_review');
 
     // Report file created
-    const reportsDir = join(tempDir, '.ai', 'tasks', 'reports');
+    const reportsDir = join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports');
     const reportFiles = readdirSync(reportsDir).filter((f) => f.endsWith('.json'));
     expect(reportFiles).toHaveLength(1);
 
@@ -109,7 +109,7 @@ describe('task report operator', () => {
     expect(report.report_status).toBe('submitted');
 
     // Assignment released
-    const assignmentRaw = readFileSync(join(tempDir, '.ai', 'tasks', 'assignments', '20260420-999-test-task.json'), 'utf8');
+    const assignmentRaw = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-999-test-task.json'), 'utf8');
     const assignment = JSON.parse(assignmentRaw);
     expect(assignment.assignments[0].release_reason).toBe('completed');
     expect(assignment.assignments[0].released_at).not.toBeNull();
@@ -226,22 +226,22 @@ describe('task report operator', () => {
     expect(firstResult.exitCode).toBe(ExitCode.SUCCESS);
     const firstReportId = (firstResult.result as { report_id: string }).report_id;
 
-    const reportsDir = join(tempDir, '.ai', 'tasks', 'reports');
+    const reportsDir = join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports');
     const reportFilesAfterFirst = readdirSync(reportsDir).filter((f) => f.endsWith('.json'));
     expect(reportFilesAfterFirst).toHaveLength(1);
 
     // Reset task to claimed and assignment to active (same claimed_at)
     // to simulate an accidental re-invocation before the first report finished
-    const assignmentRaw = readFileSync(join(tempDir, '.ai', 'tasks', 'assignments', '20260420-999-test-task.json'), 'utf8');
+    const assignmentRaw = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-999-test-task.json'), 'utf8');
     const assignment = JSON.parse(assignmentRaw);
     assignment.assignments[0].released_at = null;
     assignment.assignments[0].release_reason = null;
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', 'assignments', '20260420-999-test-task.json'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-999-test-task.json'),
       JSON.stringify(assignment, null, 2),
     );
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
       '---\ntask_id: 999\nstatus: claimed\n---\n\n# Task 999: Test Task\n',
     );
 
@@ -279,14 +279,14 @@ describe('task report operator', () => {
 
     // Reset task to claimed (simulate re-claim after review rejection)
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
       '---\ntask_id: 999\nstatus: claimed\n---\n\n# Task 999: Test Task\n',
     );
 
     // Clear assignment released state for re-claim simulation with NEW claimed_at
     const newClaimedAt = new Date().toISOString();
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', 'assignments', '20260420-999-test-task.json'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-999-test-task.json'),
       JSON.stringify({
         task_id: '20260420-999-test-task',
         assignments: [{
@@ -309,7 +309,7 @@ describe('task report operator', () => {
     });
 
     expect(secondResult.exitCode).toBe(ExitCode.SUCCESS);
-    const reportsDir = join(tempDir, '.ai', 'tasks', 'reports');
+    const reportsDir = join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports');
     const reportFiles = readdirSync(reportsDir).filter((f) => f.endsWith('.json'));
     expect(reportFiles).toHaveLength(2);
   });
@@ -327,7 +327,7 @@ describe('task report operator', () => {
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
 
-    const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'), 'utf8');
+    const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
     expect(taskContent).toContain('## Execution Notes');
     expect(taskContent).toContain('<!-- Record what was done, decisions made, and files changed. -->');
     expect(taskContent).toContain('## Verification');
@@ -336,7 +336,7 @@ describe('task report operator', () => {
 
   it('does not duplicate sections if they already exist', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
       '---\ntask_id: 999\nstatus: opened\n---\n\n# Task 999: Test Task\n\n## Execution Notes\nAlready present.\n\n## Verification\nAlready present.\n',
     );
 
@@ -352,7 +352,7 @@ describe('task report operator', () => {
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
 
-    const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'), 'utf8');
+    const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
     const executionNotesCount = (taskContent.match(/## Execution Notes/g) || []).length;
     const verificationCount = (taskContent.match(/## Verification/g) || []).length;
     expect(executionNotesCount).toBe(1);

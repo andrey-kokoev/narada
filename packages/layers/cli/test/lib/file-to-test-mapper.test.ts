@@ -27,7 +27,7 @@ describe('file-to-test-mapper', () => {
   });
 
   it('suggests verify for task file changes', () => {
-    const suggestion = suggestVerification(['.ai/tasks/20260420-999-test.md'], tempDir);
+    const suggestion = suggestVerification(['.ai/do-not-open/tasks/20260420-999-test.md'], tempDir);
     expect(suggestion.command).toBe('pnpm verify');
     expect(suggestion.scope).toBe('verify');
   });

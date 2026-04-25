@@ -14,6 +14,17 @@ import { createFormatter } from '../lib/formatter.js';
 export interface TaskListOptions {
   format?: 'json' | 'human' | 'auto';
   cwd?: string;
+  range?: string;
+}
+
+function parseRangeFilter(input: string | undefined): { start: number; end: number } | undefined {
+  if (!input) return undefined;
+  const match = input.match(/^(\d+)-(\d+)$/);
+  if (!match) return undefined;
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  if (start > end) return undefined;
+  return { start, end };
 }
 
 export async function taskListCommand(
@@ -21,16 +32,17 @@ export async function taskListCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const fmt = createFormatter({ format: options.format || 'auto', verbose: false });
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
+  const rangeFilter = parseRangeFilter(options.range);
 
   let tasks;
   try {
     // Try projection-backed listing first (SQLite lifecycle + markdown spec)
-    const projected = await listRunnableTasksWithProjection(cwd);
+    const projected = await listRunnableTasksWithProjection(cwd, undefined, { rangeFilter });
     if (projected) {
       tasks = projected;
     } else {
       // Fall back to pure markdown listing when SQLite is unavailable
-      tasks = await listRunnableTasks(cwd);
+      tasks = await listRunnableTasks(cwd, undefined, { rangeFilter });
     }
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

@@ -12,7 +12,7 @@ Multi-Agent Task Governance
 
 ### Task 260 — Agent Roster and Assignment State (corrected by Task 268)
 - `.ai/agents/roster.json` with `agent_id`, `role`, `capabilities`, `first_seen_at`, `last_active_at`
-- `.ai/tasks/assignments/` directory with atomic assignment record writes
+- `.ai/do-not-open/tasks/tasks/assignments/` directory with atomic assignment record writes
 - `narada task claim <number>` — checks `opened` status, dependency satisfaction, no active assignment; writes assignment record; updates task status to `claimed`
 - `narada task release <number>` — validates release reason at runtime; requires `--continuation` for `budget_exhausted`; writes release timestamp and reason; transitions task status
 - Claim and release are atomic file operations with clear error surfaces

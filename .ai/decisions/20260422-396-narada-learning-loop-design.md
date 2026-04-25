@@ -215,7 +215,7 @@ Each artifact is a single JSON file with this canonical shape:
   "source": {
     "kind": "task",
     "task_number": 380,
-    "task_file": ".ai/tasks/20260421-380-site-registry-storage-discovery.md"
+    "task_file": ".ai/do-not-open/tasks/20260421-380-site-registry-storage-discovery.md"
   },
   "title": "SQLite-backed store implementation pattern",
   "content": {
@@ -326,7 +326,7 @@ Every artifact must be traceable to its origin.
 
 | Source Kind | Required Fields | Example |
 |-------------|-----------------|---------|
-| `task` | `task_number`, `task_file` | `{ "kind": "task", "task_number": 380, "task_file": ".ai/tasks/20260421-380-site-registry-storage-discovery.md" }` |
+| `task` | `task_number`, `task_file` | `{ "kind": "task", "task_number": 380, "task_file": ".ai/do-not-open/tasks/20260421-380-site-registry-storage-discovery.md" }` |
 | `chapter` | `chapter_range`, `closure_decision` | `{ "kind": "chapter", "chapter_range": "378-384", "closure_decision": ".ai/decisions/20260421-384-operator-console-site-registry-closure.md" }` |
 | `decision` | `decision_file` | `{ "kind": "decision", "decision_file": ".ai/decisions/20260422-396-narada-learning-loop-design.md" }` |
 | `contract` | `contract_file`, `evidence_tasks` | `{ "kind": "contract", "contract_file": ".ai/task-contracts/agent-task-execution.md", "evidence_tasks": [385, 396] }` |
@@ -340,7 +340,7 @@ Where possible, artifacts should reference specific sections of source documents
   "source": {
     "kind": "task",
     "task_number": 380,
-    "task_file": ".ai/tasks/20260421-380-site-registry-storage-discovery.md",
+    "task_file": ".ai/do-not-open/tasks/20260421-380-site-registry-storage-discovery.md",
     "section": "Execution Notes"
   }
 }
@@ -477,7 +477,7 @@ Before committing a candidate, the extraction operator should validate that no s
 
 | Existing Surface | Learning Loop Relationship |
 |-----------------|---------------------------|
-| **Task files** (`.ai/tasks/`) | Primary source material; read-only for extraction |
+| **Task files** (`.ai/do-not-open/tasks/`) | Primary source material; read-only for extraction |
 | **Decisions** (`.ai/decisions/`) | Source material and eventual destination for accepted doctrine |
 | **Contracts** (`.ai/task-contracts/`) | Source material and destination for accepted contract patches |
 | **AGENTS.md** | Destination for accepted skills and doctrines (reference section) |

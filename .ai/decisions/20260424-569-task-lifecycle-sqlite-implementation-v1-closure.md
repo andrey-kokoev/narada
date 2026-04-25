@@ -18,7 +18,7 @@ Chapter 566–569 is closed. The second slice of SQLite-backed task governance i
 
 ### Task 566 — Second Projection-Backed Read Surface
 
-**Artifact:** `.ai/tasks/20260424-566-second-projection-backed-read-surface.md`
+**Artifact:** `.ai/do-not-open/tasks/20260424-566-second-projection-backed-read-surface.md`
 
 **Files:**
 - `packages/layers/cli/src/lib/task-projection.ts` — `listRunnableTasksWithProjection(cwd, store?)`
@@ -37,7 +37,7 @@ Chapter 566–569 is closed. The second slice of SQLite-backed task governance i
 
 ### Task 567 — Second Governed Writer Migration
 
-**Artifact:** `.ai/tasks/20260424-567-second-governed-writer-migration.md`
+**Artifact:** `.ai/do-not-open/tasks/20260424-567-second-governed-writer-migration.md`
 
 **Files:**
 - `packages/layers/cli/src/commands/task-review.ts` — SQLite-backed review and status transition
@@ -57,7 +57,7 @@ Chapter 566–569 is closed. The second slice of SQLite-backed task governance i
 
 ### Task 568 — SQLite-Backed Dependency And Recommendation Reads
 
-**Artifact:** `.ai/tasks/20260424-568-sqlite-backed-dependency-and-recommendation-reads.md`
+**Artifact:** `.ai/do-not-open/tasks/20260424-568-sqlite-backed-dependency-and-recommendation-reads.md`
 
 **Files:**
 - `packages/layers/cli/src/lib/task-governance.ts` — `resolveTaskStatus()`, `checkDependencies(store?)`, `listRunnableTasks(store?)`, `inspectTaskEvidence(store?)`, `hasGovernedProvenance(resolvedStatus?)`

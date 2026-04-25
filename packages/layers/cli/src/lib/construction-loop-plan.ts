@@ -219,7 +219,7 @@ export async function buildPlan(options: BuildPlanOptions): Promise<Construction
     /\b(crossing\s+regime|SEMANTICS\.md\s+§2\.15|Task\s+49[567])\b/i;
   for (const task of openTasks) {
     try {
-      const content = await readFile(resolve(cwd, '.ai', 'tasks', task.file), 'utf8');
+      const content = await readFile(resolve(cwd, '.ai', 'do-not-open', 'tasks', task.file), 'utf8');
       if (crossingKeywords.test(content) && !regimeReferences.test(content)) {
         warnings.push(
           `Task ${task.taskNumber} appears to introduce a durable boundary but lacks a crossing regime declaration reference (SEMANTICS.md §2.15).`,

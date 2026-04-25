@@ -28,7 +28,7 @@ The design is biased toward **simplification and closure**. It composes existing
 
 | Primitive | Status | Friction It Creates |
 |-----------|--------|--------------------|
-| Task files (`.ai/tasks/*.md`) | Mature | None — durable, inspectable, versioned |
+| Task files (`.ai/do-not-open/tasks/*.md`) | Mature | None — durable, inspectable, versioned |
 | WorkResultReport | Implemented | None — agents submit reports, reviewers inspect them |
 | Review records | Implemented | None — acceptance/rejection is explicit |
 | Roster (`.ai/agents/roster.json`) | Implemented | Minor — manual tracking of who is working on what |
@@ -432,7 +432,7 @@ Implements the governed promotion path from Task 427 design.
 - `packages/layers/cli/src/commands/task-promote-recommendation.ts`
 - Atomic validation: task exists, task `opened`, dependencies satisfied, agent assignable, no active assignment
 - Atomic write: assignment record + task status `claimed` + roster `working`
-- Audit: promotion record in `.ai/tasks/promotions/`
+- Audit: promotion record in `.ai/do-not-open/tasks/tasks/promotions/`
 - `--dry-run`, `--override-risk`, `--by <operator-id>`
 
 **Depends on:** 427 (design already closed)

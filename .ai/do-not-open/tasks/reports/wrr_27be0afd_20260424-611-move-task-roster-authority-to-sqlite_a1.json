@@ -1,0 +1,14 @@
+{
+  "report_id": "wrr_27be0afd_20260424-611-move-task-roster-authority-to-sqlite_a1",
+  "task_number": "611",
+  "task_id": "20260424-611-move-task-roster-authority-to-sqlite",
+  "agent_id": "a1",
+  "assignment_id": "20260424-611-move-task-roster-authority-to-sqlite-2026-04-24T21:09:21.840Z",
+  "reported_at": "2026-04-24T21:20:49.207Z",
+  "summary": "SQLite roster authority migration implemented. Typecheck clean. Single focused test passed. Full suite blocked by pathological slowness (separate blocker).",
+  "changed_files": [],
+  "verification": [],
+  "known_residuals": [],
+  "ready_for_review": true,
+  "report_status": "accepted"
+}

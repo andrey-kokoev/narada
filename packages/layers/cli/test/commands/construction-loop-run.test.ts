@@ -17,14 +17,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 function setupRepo(tempDir: string) {
-  mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'decisions'), { recursive: true });
 }
 
 function writeTask(tempDir: string, filename: string, frontMatter: string, title: string, extraBody = '') {
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', filename),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', filename),
     `---\n${frontMatter}---\n\n# ${title}\n${extraBody}`,
   );
 }

@@ -13,7 +13,7 @@ import { Database, JsonPrincipalSessionBindingRegistry } from '@narada2/control-
 import { SqliteTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 
 function setupRepo(tempDir: string) {
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'assignments'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
 
   writeFileSync(
@@ -44,14 +44,14 @@ function setupRepo(tempDir: string) {
 
 function writeTask(tempDir: string, num: number, status: string, extra = '') {
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', `20260420-${num}-test.md`),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', `20260420-${num}-test.md`),
     `---\ntask_id: ${num}\nstatus: ${status}\n---\n\n# Task ${num}: Test\n\n## Acceptance Criteria\n- [x] Criterion A\n- [x] Criterion B\n\n${extra}`,
   );
 }
 
 function writeAssignment(tempDir: string, fileTaskId: string, agentId: string) {
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', 'assignments', `${fileTaskId}.json`),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', `${fileTaskId}.json`),
     JSON.stringify(
       {
         task_id: fileTaskId,

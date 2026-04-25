@@ -281,7 +281,7 @@ async scheduled(event: ScheduledEvent, env: CloudflareEnv, _ctx: ExecutionContex
 | [`SEMANTICS.md §2.14`](../../SEMANTICS.md) | Canonical definitions of Aim, Site, Cycle, Act, Trace |
 | [`docs/deployment/cloudflare-live-adapter-boundary-contract.md`](cloudflare-live-adapter-boundary-contract.md) | Adapter taxonomy from Tasks 351–357 |
 | [`docs/deployment/cloudflare-effect-execution-authority-contract.md`](cloudflare-effect-execution-authority-contract.md) | Effect execution authority, state machine, and forbidden shortcuts from Tasks 358–364 |
-| [`.ai/tasks/20260421-365-370-cloudflare-site-v1-productionization.md`](../../.ai/tasks/20260421-365-370-cloudflare-site-v1-productionization.md) | Chapter DAG and closure criteria |
+| [`.ai/do-not-open/tasks/20260421-365-370-cloudflare-site-v1-productionization.md`](../../.ai/do-not-open/tasks/20260421-365-370-cloudflare-site-v1-productionization.md) | Chapter DAG and closure criteria |
 | [`.ai/decisions/20260421-364-cloudflare-effect-execution-boundary-closure.md`](../../.ai/decisions/20260421-364-cloudflare-effect-execution-boundary-closure.md) | Closure of prior chapter; recommended effect execution as next work |
 
 ---

@@ -13,13 +13,13 @@
 
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join, basename } from "node:path";
+import { Database } from "@narada2/control-plane";
 
 const ROOT = process.cwd();
-const TASKS_DIR = join(ROOT, ".ai", "tasks");
-const REVIEWS_DIR = join(ROOT, ".ai", "reviews");
+const TASKS_DIR = join(ROOT, ".ai", "do-not-open", "tasks");
 const DECISIONS_DIR = join(ROOT, ".ai", "decisions");
-const AGENTS_DIR = join(ROOT, ".ai", "agents");
 const LEARNING_DIR = join(ROOT, ".ai", "learning", "accepted");
+const TASK_LIFECYCLE_DB = join(ROOT, ".ai", "task-lifecycle.db");
 
 // ---------------------------------------------------------------------------
 // Types
@@ -517,45 +517,36 @@ function scanReviews(
   taskByNumber: Map<number, TaskFile>,
 ): Finding[] {
   const findings: Finding[] = [];
-  const files = readDirSafe(REVIEWS_DIR, (n) => n.endsWith(".md"));
-
   // Track which tasks have reviews (by task number)
   const tasksWithReviews = new Set<number>();
-
-  for (const filename of files) {
-    const filepath = join(REVIEWS_DIR, filename);
-    const content = readFileSafe(filepath);
-    if (content === null) continue;
-
-    // Check front matter review_of first
-    const { frontMatter } = parseFrontMatter(content);
-    const reviewOf = frontMatter["review_of"];
-    if (typeof reviewOf === "number") {
-      if (!allTaskNumbers.has(reviewOf)) {
-        findings.push({
-          severity: "warning",
-          checkId: "stale-review-reference",
-          file: filepath,
-          message: `Review front matter references non-existent task ${reviewOf}`,
-        });
-      } else {
-        tasksWithReviews.add(reviewOf);
+  if (existsSync(TASK_LIFECYCLE_DB)) {
+    try {
+      const db = new Database(TASK_LIFECYCLE_DB);
+      try {
+        const rows = db
+          .prepare("select review_id, task_id from task_reviews")
+          .all() as Array<{ review_id: string; task_id: string }>;
+        for (const row of rows) {
+          const match = String(row.task_id).match(/-(\d+)-/);
+          const reviewOf = match ? parseInt(match[1]!, 10) : null;
+          if (reviewOf !== null) {
+            if (!allTaskNumbers.has(reviewOf)) {
+              findings.push({
+                severity: "warning",
+                checkId: "stale-review-reference",
+                file: `${TASK_LIFECYCLE_DB}#review:${row.review_id}`,
+                message: `Review references non-existent task ${reviewOf}`,
+              });
+            } else {
+              tasksWithReviews.add(reviewOf);
+            }
+          }
+        }
+      } finally {
+        db.close();
       }
-    }
-
-    // Also check body text references
-    const nums = extractTaskRefsFromBody(content);
-    for (const num of nums) {
-      if (!allTaskNumbers.has(num)) {
-        findings.push({
-          severity: "warning",
-          checkId: "stale-review-reference",
-          file: filepath,
-          message: `Review references non-existent task ${num}`,
-        });
-      } else {
-        tasksWithReviews.add(num);
-      }
+    } catch {
+      // Ignore unreadable review store
     }
   }
 
@@ -645,45 +636,28 @@ function scanDecisions(
 
 function scanRoster(allTaskNumbers: Set<number>): Finding[] {
   const findings: Finding[] = [];
-  const rosterPath = join(AGENTS_DIR, "roster.json");
-  const content = readFileSafe(rosterPath);
-  if (content === null) {
-    findings.push({
-      severity: "warning",
-      checkId: "stale-assignment",
-      file: rosterPath,
-      message: "roster.json not found",
-    });
-    return findings;
-  }
-  let roster: unknown;
+  if (!existsSync(TASK_LIFECYCLE_DB)) return findings;
+  let rows: Array<{ agent_id: string; task_number: number | null }> = [];
   try {
-    roster = JSON.parse(content);
+    const db = new Database(TASK_LIFECYCLE_DB);
+    try {
+      rows = db
+        .prepare("select agent_id, task_number from agent_roster where task_number is not null")
+        .all() as Array<{ agent_id: string; task_number: number | null }>;
+    } finally {
+      db.close();
+    }
   } catch {
-    findings.push({
-      severity: "error",
-      checkId: "stale-assignment",
-      file: rosterPath,
-      message: "roster.json is invalid JSON",
-    });
     return findings;
   }
-  if (typeof roster !== "object" || roster === null || !("agents" in roster)) {
-    return findings;
-  }
-  const agents = (roster as Record<string, unknown>).agents;
-  if (!Array.isArray(agents)) return findings;
-  for (const agent of agents) {
-    if (typeof agent !== "object" || agent === null) continue;
-    const task = (agent as Record<string, unknown>).task;
-    if (task === null || task === undefined) continue;
-    const taskNum = typeof task === "number" ? task : typeof task === "string" ? parseInt(task, 10) : null;
+  for (const row of rows) {
+    const taskNum = typeof row.task_number === "number" ? row.task_number : null;
     if (taskNum !== null && !allTaskNumbers.has(taskNum)) {
       findings.push({
         severity: "warning",
         checkId: "stale-assignment",
-        file: rosterPath,
-        message: `Roster entry references non-existent task ${taskNum}`,
+        file: TASK_LIFECYCLE_DB,
+        message: `SQLite roster references non-existent task ${taskNum} for ${row.agent_id}`,
       });
     }
   }

@@ -73,19 +73,19 @@ Each agent pane (`a1`–`a6`) exposes the following read surfaces, derived from 
 | Field | Source | Trust |
 |-------|--------|-------|
 | Task number | `roster.json` → `agents[].assigned_task` | authoritative |
-| Task title | `.ai/tasks/<file>` → front matter title | authoritative |
-| Task status | `.ai/tasks/<file>` → front matter `status` | authoritative |
+| Task title | `.ai/do-not-open/tasks/<file>` → front matter title | authoritative |
+| Task status | `.ai/do-not-open/tasks/<file>` → front matter `status` | authoritative |
 | Claimed at | `.ai/assignments/<task-id>.json` → `assignments[].claimed_at` | authoritative |
-| Dependencies | `.ai/tasks/<file>` → front matter `depends_on` | authoritative |
+| Dependencies | `.ai/do-not-open/tasks/<file>` → front matter `depends_on` | authoritative |
 
 ### 4.3 Evidence Panel
 
 | Field | Source | Trust |
 |-------|--------|-------|
-| Has execution notes | `.ai/tasks/<file>` → body contains `## Execution Notes` | derived |
-| Has verification | `.ai/tasks/<file>` → body contains `## Verification` | derived |
-| Unchecked criteria count | `.ai/tasks/<file>` → unchecked `- [ ]` items | derived |
-| Last report | `.ai/tasks/<file>` → `## Execution Notes` timestamp or file mtime | derived |
+| Has execution notes | `.ai/do-not-open/tasks/<file>` → body contains `## Execution Notes` | derived |
+| Has verification | `.ai/do-not-open/tasks/<file>` → body contains `## Verification` | derived |
+| Unchecked criteria count | `.ai/do-not-open/tasks/<file>` → unchecked `- [ ]` items | derived |
+| Last report | `.ai/do-not-open/tasks/<file>` → `## Execution Notes` timestamp or file mtime | derived |
 
 ### 4.4 Blockers Panel
 
@@ -93,7 +93,7 @@ Each agent pane (`a1`–`a6`) exposes the following read surfaces, derived from 
 |-------|--------|-------|
 | Unmet dependencies | `task-governance.ts` → `checkDependencies()` | derived |
 | Stale status | `roster.json` → `updated_at` vs. stale threshold | derived |
-| Review needed | `.ai/tasks/<file>` → `verdict: needs_review` or review records | derived |
+| Review needed | `.ai/do-not-open/tasks/<file>` → `verdict: needs_review` or review records | derived |
 | Evidence gaps | `task-governance.ts` → `inspectTaskEvidence()` | derived |
 
 ### 4.5 Last Governed Action
@@ -128,8 +128,8 @@ The architect pane (top-right, 2× width) exposes the following:
 
 | Field | Source | Trust |
 |-------|--------|-------|
-| Active chapters | `.ai/tasks/*.md` → chapter reservation files | authoritative |
-| Chapter state | `.ai/tasks/*.md` → front matter `status` aggregation | derived |
+| Active chapters | `.ai/do-not-open/tasks/*.md` → chapter reservation files | authoritative |
+| Chapter state | `.ai/do-not-open/tasks/*.md` → front matter `status` aggregation | derived |
 | Open tasks by chapter | `task graph` → DAG analysis | derived |
 | Blocked tasks | `task graph` → dependency analysis | derived |
 
@@ -200,13 +200,13 @@ The workbench read model is **grounded in existing governed state**. No new stor
 | Data | File/Store | Reader | Refresh |
 |------|-----------|--------|---------|
 | Agent roster | `.ai/roster.json` | `loadRoster()` | Polling or file watcher |
-| Task files | `.ai/tasks/*.md` | `readTaskFile()` | Polling or file watcher |
+| Task files | `.ai/do-not-open/tasks/*.md` | `readTaskFile()` | Polling or file watcher |
 | Assignments | `.ai/assignments/*.json` | `loadAssignment()` | Polling or file watcher |
 | Reviews | `.ai/reviews/*.md` | `readTaskFile()` | Polling or file watcher |
 | Construction policy | `.ai/construction-loop/policy.json` | `loadPolicy()` | Polling or file watcher |
 | Audit log | `.ai/construction-loop/audit.jsonl` | `readAuditLog()` | Polling or file watcher |
 | Principal runtime | `config.json`-adjacent registry | `JsonPrincipalRuntimeRegistry` | Polling or registry watcher |
-| Task graph | `.ai/tasks/*.md` → DAG | `task graph` | On demand |
+| Task graph | `.ai/do-not-open/tasks/*.md` → DAG | `task graph` | On demand |
 | Recommendations | Ephemeral (computed) | `task-recommend` | On demand |
 
 ### 6.2 Read Model Invariants

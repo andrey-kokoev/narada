@@ -16,7 +16,7 @@ The promotion path involves five distinct objects. Each has a clear durability m
 |--------|------------|-------|-----------|------|
 | `TaskRecommendation` | Ephemeral / optionally recorded | Recommender (Task 426) | `inspect` (read-only) | Advisory source; scored, ranked candidate assignments |
 | `AssignmentPromotionRequest` | Durable (append-only file) | Promotion operator | `claim` | Operator-selected intent to promote one recommendation candidate |
-| `TaskAssignmentRecord` | Durable (JSON in `.ai/tasks/assignments/`) | Task governance | `claim` | Authoritative claim history for a task |
+| `TaskAssignmentRecord` | Durable (JSON in `.ai/do-not-open/tasks/tasks/assignments/`) | Task governance | `claim` | Authoritative claim history for a task |
 | Task front matter | Durable (Markdown file) | Task governance | `claim` | Authoritative task status (`opened` → `claimed`) |
 | Roster entry | Durable (JSON in `.ai/agents/roster.json`) | Operator / task governance | `claim` + `resolve` | Agent tracking state (`idle` → `working`) |
 
@@ -394,7 +394,7 @@ The promotion implementation must not:
 - Re-implement roster updating (use `task claim`)
 - Re-implement front matter mutation (use `writeTaskFile` via `task claim`)
 
-The only **new** mutation is writing the `AssignmentPromotionRequest` record to `.ai/tasks/promotions/`.
+The only **new** mutation is writing the `AssignmentPromotionRequest` record to `.ai/do-not-open/tasks/tasks/promotions/`.
 
 ---
 
@@ -465,7 +465,7 @@ The promotion record is written **after** the outcome is known, so the record al
 - `packages/layers/cli/src/main.ts` — CLI wiring
 - `packages/layers/cli/src/lib/task-governance.ts` — fixed `checkDependencies` numeric matching for zero-padded filenames
 - `packages/layers/cli/test/commands/task-promote-recommendation.test.ts` — new (14 tests)
-- `.ai/tasks/promotions/README.md` — schema documentation
+- `.ai/do-not-open/tasks/tasks/promotions/README.md` — schema documentation
 - `.ai/task-contracts/agent-task-execution.md` — promotion path guidance
 
 ### 8.6 Deferred Items
@@ -477,7 +477,7 @@ The promotion record is written **after** the outcome is known, so the record al
 
 If this design is accepted, the implementation task should:
 
-1. Create `.ai/tasks/promotions/` directory in `init-repo.ts`
+1. Create `.ai/do-not-open/tasks/tasks/promotions/` directory in `init-repo.ts`
 2. Implement `promoteRecommendationCommand()` in `packages/layers/cli/src/commands/task-promote-recommendation.ts`
 3. Add CLI wiring in `main.ts`
 4. Add tests in `test/commands/task-promote-recommendation.test.ts`

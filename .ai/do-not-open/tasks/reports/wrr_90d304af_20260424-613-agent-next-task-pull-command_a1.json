@@ -1,0 +1,14 @@
+{
+  "report_id": "wrr_90d304af_20260424-613-agent-next-task-pull-command_a1",
+  "task_number": "613",
+  "task_id": "20260424-613-agent-next-task-pull-command",
+  "agent_id": "a1",
+  "assignment_id": "20260424-613-agent-next-task-pull-command-2026-04-24T21:37:01.342Z",
+  "reported_at": "2026-04-24T21:37:09.562Z",
+  "summary": "Implemented task pull-next command. Mutating claim of next admissible task with dependency gating and idempotency. Focused tests pass. Typecheck clean.",
+  "changed_files": [],
+  "verification": [],
+  "known_residuals": [],
+  "ready_for_review": true,
+  "report_status": "submitted"
+}

@@ -10,8 +10,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 function setupRepo(tempDir: string) {
-  mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'assignments'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'reviews'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'construction-loop'), { recursive: true });
@@ -19,7 +19,7 @@ function setupRepo(tempDir: string) {
 
 function writeTask(tempDir: string, filename: string, frontMatter: string, title: string, extraBody = '') {
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', filename),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', filename),
     `---\n${frontMatter}---\n\n# ${title}\n${extraBody}`,
   );
 }
@@ -204,7 +204,7 @@ describe('workbench server', () => {
   describe('GET /api/assignments', () => {
     it('returns all assignments', async () => {
       writeFileSync(
-        join(tempDir, '.ai', 'tasks', 'assignments', 'task-526.json'),
+        join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', 'task-526.json'),
         JSON.stringify({ task_id: 'task-526', assignments: [{ agent_id: 'a1', claimed_at: '2026-04-24T10:00:00Z' }] }),
       );
 
@@ -412,6 +412,7 @@ describe('workbench server', () => {
       const server = await createWorkbenchServer({ port: 0, host: '127.0.0.1', cwd: tempDir });
       const url = await server.start();
       const { status, body } = await httpPost(`${url}/api/control/assign`, { agent: 'a1', task: '526' });
+      console.log('ASSIGN DEBUG:', status, JSON.stringify(body));
       expect(status).toBe(200);
       expect((body as { status: string }).status).toBe('ok');
       await server.stop();

@@ -4,7 +4,7 @@
  * Resolves the effective runtime capability envelope for a charter
  * execution attempt from coordinator configuration.
  *
- * Spec: .ai/tasks/20260414-007-assignment-agent-c-tool-binding-runtime.md
+ * Spec: .ai/do-not-open/tasks/20260414-007-assignment-agent-c-tool-binding-runtime.md
  */
 
 import type { CoordinatorConfig, ToolBinding, AuthorityClass } from "../types/coordinator.js";

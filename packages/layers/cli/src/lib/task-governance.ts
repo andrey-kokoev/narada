@@ -7,7 +7,8 @@
 
 import { readFile, writeFile, readdir, rename, open, unlink } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
-import type { TaskLifecycleStore } from './task-lifecycle-store.js';
+import type { TaskLifecycleStore, AgentRosterRow } from './task-lifecycle-store.js';
+import { openTaskLifecycleStore } from './task-lifecycle-store.js';
 
 export interface AgentRosterEntry {
   agent_id: string;
@@ -78,14 +79,10 @@ export interface TaskFrontMatter {
   [key: string]: unknown;
 }
 
-const ROSTER_PATH = '.ai/agents/roster.json';
 const ROSTER_LOCK_PATH = '.ai/agents/roster.lock';
-const ASSIGNMENTS_DIR = '.ai/tasks/assignments';
-const TASKS_DIR = '.ai/tasks';
-const REVIEWS_DIR = '.ai/reviews';
-const REPORTS_DIR = '.ai/tasks/reports';
-const REGISTRY_PATH = '.ai/tasks/.registry.json';
-const REGISTRY_LOCK_PATH = '.ai/tasks/.registry.lock';
+const ROSTER_JSON_PATH = '.ai/agents/roster.json';
+const TASKS_DIR = '.ai/do-not-open/tasks';
+const REGISTRY_LOCK_PATH = '.ai/do-not-open/tasks/.registry.lock';
 
 export interface TaskRegistry {
   version: number;
@@ -180,23 +177,32 @@ export async function findReportByAssignmentId(
   cwd: string,
   assignmentId: string,
 ): Promise<WorkResultReport | null> {
-  const dir = join(resolveRepoPath(cwd), REPORTS_DIR);
   try {
-    const files = await readdir(dir);
-    for (const f of files) {
-      if (!f.endsWith('.json')) continue;
-      try {
-        const raw = await readFile(join(dir, f), 'utf8');
-        const report = JSON.parse(raw) as WorkResultReport;
-        if (report.assignment_id === assignmentId && report.report_status === 'submitted') {
-          return report;
+    const store = openTaskLifecycleStore(cwd);
+    try {
+      const rows = store.db
+        .prepare(
+          `select report_json
+           from task_report_records
+           where assignment_id = ?
+           order by reported_at desc`,
+        )
+        .all(assignmentId) as Array<{ report_json: string }>;
+      for (const row of rows) {
+        try {
+          const report = JSON.parse(row.report_json) as WorkResultReport;
+          if (report.assignment_id === assignmentId && report.report_status === 'submitted') {
+            return report;
+          }
+        } catch {
+          // Skip malformed
         }
-      } catch {
-        // Skip malformed report files
       }
+    } finally {
+      store.db.close();
     }
   } catch {
-    // Directory may not exist
+    // Store unavailable
   }
   return null;
 }
@@ -212,46 +218,34 @@ export interface ReportAnomaly {
  * Scan all reports and detect integrity anomalies.
  */
 export async function detectReportAnomalies(cwd: string): Promise<ReportAnomaly[]> {
-  const dir = join(resolveRepoPath(cwd), REPORTS_DIR);
   const anomalies: ReportAnomaly[] = [];
   const byReportId = new Map<string, WorkResultReport[]>();
   const byAssignment = new Map<string, WorkResultReport[]>();
-
-  let files: string[] = [];
   try {
-    files = await readdir(dir);
+    const store = openTaskLifecycleStore(cwd);
+    try {
+      const rows = store.db
+        .prepare(`select report_json from task_report_records`)
+        .all() as Array<{ report_json: string }>;
+      for (const row of rows) {
+        try {
+          const report = JSON.parse(row.report_json) as WorkResultReport;
+          const idList = byReportId.get(report.report_id) ?? [];
+          idList.push(report);
+          byReportId.set(report.report_id, idList);
+
+          const assignList = byAssignment.get(report.assignment_id) ?? [];
+          assignList.push(report);
+          byAssignment.set(report.assignment_id, assignList);
+        } catch {
+          // Skip malformed
+        }
+      }
+    } finally {
+      store.db.close();
+    }
   } catch {
     return [];
-  }
-
-  for (const f of files) {
-    if (!f.endsWith('.json')) continue;
-    try {
-      const raw = await readFile(join(dir, f), 'utf8');
-      const report = JSON.parse(raw) as WorkResultReport;
-
-      // filename / report_id mismatch
-      const expectedFilename = `${report.report_id}.json`;
-      if (f !== expectedFilename) {
-        anomalies.push({
-          type: 'filename_id_mismatch',
-          report_id: report.report_id,
-          detail: `File ${f} contains report_id ${report.report_id}`,
-        });
-      }
-
-      // group by report_id
-      const idList = byReportId.get(report.report_id) ?? [];
-      idList.push(report);
-      byReportId.set(report.report_id, idList);
-
-      // group by assignment_id
-      const assignList = byAssignment.get(report.assignment_id) ?? [];
-      assignList.push(report);
-      byAssignment.set(report.assignment_id, assignList);
-    } catch {
-      // Skip malformed
-    }
   }
 
   for (const [reportId, list] of byReportId) {
@@ -280,40 +274,72 @@ export async function detectReportAnomalies(cwd: string): Promise<ReportAnomaly[
 }
 
 export function getReportPath(cwd: string, reportId: string): string {
-  return join(resolveRepoPath(cwd), REPORTS_DIR, `${reportId}.json`);
+  return join(resolveRepoPath(cwd), '.ai', 'task-lifecycle.db', `#report:${reportId}`);
 }
 
 export async function saveReport(cwd: string, report: WorkResultReport): Promise<void> {
-  const path = getReportPath(cwd, report.report_id);
-  await atomicWriteFile(path, JSON.stringify(report, null, 2) + '\n');
+  const store = openTaskLifecycleStore(cwd);
+  try {
+    const existingLifecycle = store.getLifecycle(report.task_id);
+    if (!existingLifecycle) {
+      const taskNumber = Number(report.task_number);
+      if (!Number.isFinite(taskNumber)) {
+        throw new Error(`Cannot backfill lifecycle for report ${report.report_id}: invalid task number`);
+      }
+      store.upsertLifecycle({
+        task_id: report.task_id,
+        task_number: taskNumber,
+        status: 'claimed',
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: report.reported_at,
+      });
+    }
+    store.upsertReportRecord({
+      report_id: report.report_id,
+      task_id: report.task_id,
+      assignment_id: report.assignment_id,
+      agent_id: report.agent_id,
+      reported_at: report.reported_at,
+      report_json: JSON.stringify(report),
+    });
+  } finally {
+    store.db.close();
+  }
 }
 
 export async function loadReport(cwd: string, reportId: string): Promise<WorkResultReport | null> {
-  const path = getReportPath(cwd, reportId);
   try {
-    const raw = await readFile(path, 'utf8');
-    return JSON.parse(raw) as WorkResultReport;
+    const store = openTaskLifecycleStore(cwd);
+    try {
+      const record = store.getReportRecord(reportId);
+      return record ? JSON.parse(record.report_json) as WorkResultReport : null;
+    } finally {
+      store.db.close();
+    }
   } catch {
     return null;
   }
 }
 
 export async function listReportsForTask(cwd: string, taskId: string): Promise<WorkResultReport[]> {
-  const dir = join(resolveRepoPath(cwd), REPORTS_DIR);
   try {
-    const files = await readdir(dir);
+    const store = openTaskLifecycleStore(cwd);
     const reports: WorkResultReport[] = [];
-    for (const f of files) {
-      if (!f.endsWith('.json')) continue;
-      try {
-        const raw = await readFile(join(dir, f), 'utf8');
-        const report = JSON.parse(raw) as WorkResultReport;
-        if (report.task_id === taskId) {
-          reports.push(report);
+    try {
+      for (const record of store.listReportRecords(taskId)) {
+        try {
+          reports.push(JSON.parse(record.report_json) as WorkResultReport);
+        } catch {
+          // Skip malformed
         }
-      } catch {
-        // Skip malformed report files
       }
+    } finally {
+      store.db.close();
     }
     reports.sort((a, b) => a.reported_at.localeCompare(b.reported_at));
     return reports;
@@ -323,26 +349,21 @@ export async function listReportsForTask(cwd: string, taskId: string): Promise<W
 }
 
 export async function listReviewsForTask(cwd: string, taskId: string): Promise<ReviewRecord[]> {
-  const dir = join(resolveRepoPath(cwd), REVIEWS_DIR);
+  const store = openTaskLifecycleStore(cwd);
   try {
-    const files = await readdir(dir);
-    const reviews: ReviewRecord[] = [];
-    for (const f of files) {
-      if (!f.endsWith('.json')) continue;
-      try {
-        const raw = await readFile(join(dir, f), 'utf8');
-        const review = JSON.parse(raw) as ReviewRecord;
-        if (review.task_id === taskId) {
-          reviews.push(review);
-        }
-      } catch {
-        // Skip malformed review files
-      }
-    }
+    const reviews = store.listReviews(taskId).map((review) => ({
+      review_id: review.review_id,
+      reviewer_agent_id: review.reviewer_agent_id,
+      task_id: review.task_id,
+      findings: review.findings_json ? JSON.parse(review.findings_json) as ReviewFinding[] : [],
+      verdict: review.verdict === 'needs_changes' ? 'rejected' : review.verdict,
+      reviewed_at: review.reviewed_at,
+      report_id: null,
+    }) as ReviewRecord);
     reviews.sort((a, b) => a.reviewed_at.localeCompare(b.reviewed_at));
     return reviews;
-  } catch {
-    return [];
+  } finally {
+    store.db.close();
   }
 }
 
@@ -417,7 +438,7 @@ function countUncheckedCriteria(body: string): { allChecked: boolean | null; unc
 const DERIVATIVE_SUFFIXES = ['-EXECUTED.md', '-DONE.md', '-RESULT.md', '-FINAL.md', '-SUPERSEDED.md'];
 
 /**
- * Determine whether a file in `.ai/tasks/` is an executable task file.
+ * Determine whether a file in `.ai/do-not-open/tasks/` is an executable task file.
  *
  * Excludes:
  * - Derivative status files (-EXECUTED, -DONE, -RESULT, -FINAL, -SUPERSEDED)
@@ -443,6 +464,66 @@ export function isExecutableTaskFile(fileName: string): boolean {
   if (base.endsWith('-closure')) return false;
 
   return true;
+}
+
+export async function resolveExecutableTaskNumberOwnership(
+  cwd: string,
+  store?: TaskLifecycleStore,
+): Promise<{
+  ownerByNumber: Map<number, string>;
+  conflictedNumbers: Set<number>;
+}> {
+  const dir = join(resolveRepoPath(cwd), TASKS_DIR);
+  const files = await readdir(dir).catch(() => [] as string[]);
+  const executableFiles = files.filter(isExecutableTaskFile);
+  const taskIdsByNumber = new Map<number, string[]>();
+
+  for (const file of executableFiles) {
+    const taskNumber = extractTaskNumberFromFileName(file);
+    if (taskNumber === null) continue;
+    const taskId = file.replace(/\.md$/, '');
+    const existing = taskIdsByNumber.get(taskNumber) ?? [];
+    existing.push(taskId);
+    taskIdsByNumber.set(taskNumber, existing);
+  }
+
+  const lifecycleStore = store ?? (() => {
+    try {
+      return openTaskLifecycleStore(cwd);
+    } catch {
+      return null;
+    }
+  })();
+
+  const ownerByNumber = new Map<number, string>();
+  const conflictedNumbers = new Set<number>();
+
+  try {
+    for (const [taskNumber, taskIds] of taskIdsByNumber) {
+      if (taskIds.length === 1) {
+        ownerByNumber.set(taskNumber, taskIds[0]!);
+        continue;
+      }
+
+      const preferredTaskId =
+        lifecycleStore?.getTaskSpecByNumber(taskNumber)?.task_id
+        ?? lifecycleStore?.getLifecycleByNumber(taskNumber)?.task_id
+        ?? null;
+
+      if (preferredTaskId && taskIds.includes(preferredTaskId)) {
+        ownerByNumber.set(taskNumber, preferredTaskId);
+        continue;
+      }
+
+      conflictedNumbers.add(taskNumber);
+    }
+  } finally {
+    if (!store && lifecycleStore) {
+      lifecycleStore.db.close();
+    }
+  }
+
+  return { ownerByNumber, conflictedNumbers };
 }
 
 /**
@@ -573,7 +654,11 @@ export async function inspectTaskEvidence(
 
   const criteria = countUncheckedCriteria(body);
   const hasExecutionNotes = /##\s*Execution Notes\s*\n/i.test(body);
-  const hasVerification = /##\s*Verification\s*\n/i.test(body);
+  const hasMarkdownVerification = /##\s*Verification\s*\n/i.test(body);
+  const hasGovernedVerificationRuns = store && taskFile?.taskId
+    ? store.hasVerificationRunsForTask(taskFile.taskId)
+    : false;
+  const hasVerification = hasMarkdownVerification || hasGovernedVerificationRuns;
 
   const reports = await listReportsForTask(cwd, taskFile.taskId);
   const hasReport = reports.length > 0;
@@ -693,16 +778,119 @@ function resolveRepoPath(cwd: string): string {
   return resolve(cwd);
 }
 
+function rosterRowToEntry(row: AgentRosterRow): AgentRosterEntry {
+  return {
+    agent_id: row.agent_id,
+    role: row.role,
+    capabilities: JSON.parse(row.capabilities_json) as string[],
+    first_seen_at: row.first_seen_at,
+    last_active_at: row.last_active_at,
+    status: row.status as AgentRosterEntry['status'],
+    task: row.task_number,
+    last_done: row.last_done,
+    updated_at: row.updated_at,
+  };
+}
+
+function rosterEntryToRow(entry: AgentRosterEntry): AgentRosterRow {
+  return {
+    agent_id: entry.agent_id,
+    role: entry.role,
+    capabilities_json: JSON.stringify(entry.capabilities),
+    first_seen_at: entry.first_seen_at,
+    last_active_at: entry.last_active_at,
+    status: entry.status ?? 'idle',
+    task_number: entry.task ?? null,
+    last_done: entry.last_done ?? null,
+    updated_at: entry.updated_at ?? entry.last_active_at,
+  };
+}
+
+function buildRosterFromRows(rows: AgentRosterRow[]): AgentRoster {
+  return {
+    version: 2,
+    schema: 'https://narada.dev/schemas/agent-roster/v2',
+    updated_at: rows.length > 0
+      ? rows.map((r) => r.updated_at).sort().reverse()[0]!
+      : new Date().toISOString(),
+    agents: rows.map(rosterRowToEntry),
+  };
+}
+
 export async function loadRoster(cwd: string): Promise<AgentRoster> {
-  const path = join(resolveRepoPath(cwd), ROSTER_PATH);
-  const raw = await readFile(path, 'utf8');
-  return JSON.parse(raw) as AgentRoster;
+  // Prefer SQLite authority
+  let store;
+  try {
+    store = openTaskLifecycleStore(cwd);
+  } catch {
+    store = null;
+  }
+
+  if (store) {
+    try {
+      const rows = store.getRoster();
+      if (rows.length > 0) {
+        return buildRosterFromRows(rows);
+      }
+      // SQLite exists but is empty — fall through to JSON fallback
+    } finally {
+      try { store.db.close(); } catch { /* ignore */ }
+    }
+  }
+
+  // Fallback: read JSON projection and backfill to SQLite
+  const jsonPath = join(resolveRepoPath(cwd), ROSTER_JSON_PATH);
+  try {
+    const raw = await readFile(jsonPath, 'utf8');
+    const roster = JSON.parse(raw) as AgentRoster;
+    if (!roster.agents || !Array.isArray(roster.agents)) {
+      throw new Error('Invalid roster JSON shape');
+    }
+    // Backfill to SQLite if available
+    try {
+      await saveRoster(cwd, roster);
+    } catch {
+      // Ignore backfill failures — JSON is still valid
+    }
+    return roster;
+  } catch (err) {
+    const code = (err as { code?: string }).code;
+    if (code === 'ENOENT') {
+      throw new Error(`Roster not found in SQLite or JSON (${ROSTER_JSON_PATH})`);
+    }
+    throw new Error(`Failed to load roster: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 export async function saveRoster(cwd: string, roster: AgentRoster): Promise<void> {
-  const path = join(resolveRepoPath(cwd), ROSTER_PATH);
-  roster.updated_at = new Date().toISOString();
-  await atomicWriteFile(path, JSON.stringify(roster, null, 2) + '\n');
+  const now = new Date().toISOString();
+  roster.updated_at = now;
+
+  // Write SQLite authority first
+  try {
+    const store = openTaskLifecycleStore(cwd);
+    try {
+      for (const agent of roster.agents) {
+        const row = rosterEntryToRow(agent);
+        row.updated_at = now;
+        store.upsertRosterEntry(row);
+      }
+    } finally {
+      try { store.db.close(); } catch { /* ignore */ }
+    }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to save roster to SQLite authority: ${msg}`);
+  }
+
+  // Write JSON projection for compatibility
+  try {
+    const jsonPath = join(resolveRepoPath(cwd), ROSTER_JSON_PATH);
+    await atomicWriteFile(jsonPath, JSON.stringify(roster, null, 2));
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to write roster JSON projection: ${msg}`);
+  }
 }
 
 // ── Roster mutation lock ──
@@ -842,28 +1030,52 @@ export function formatRoster(roster: AgentRoster, format: 'json' | 'human' = 'hu
 }
 
 export async function loadAssignment(cwd: string, taskId: string): Promise<TaskAssignmentRecord | null> {
-  const path = join(resolveRepoPath(cwd), ASSIGNMENTS_DIR, `${taskId}.json`);
   try {
-    const raw = await readFile(path, 'utf8');
-    return JSON.parse(raw) as TaskAssignmentRecord;
+    const store = openTaskLifecycleStore(cwd);
+    try {
+      const record = store.getAssignmentRecord(taskId);
+      return record ? JSON.parse(record.record_json) as TaskAssignmentRecord : null;
+    } finally {
+      store.db.close();
+    }
   } catch {
     return null;
   }
 }
 
 export async function loadReview(cwd: string, reviewId: string): Promise<ReviewRecord | null> {
-  const path = join(resolveRepoPath(cwd), REVIEWS_DIR, `${reviewId}.json`);
+  const store = openTaskLifecycleStore(cwd);
   try {
-    const raw = await readFile(path, 'utf8');
-    return JSON.parse(raw) as ReviewRecord;
-  } catch {
-    return null;
+    const row = store.listAllReviews().find((review) => review.review_id === reviewId);
+    if (!row) return null;
+    return {
+      review_id: row.review_id,
+      reviewer_agent_id: row.reviewer_agent_id,
+      task_id: row.task_id,
+      findings: row.findings_json ? JSON.parse(row.findings_json) as ReviewFinding[] : [],
+      verdict: row.verdict === 'needs_changes' ? 'rejected' : row.verdict,
+      reviewed_at: row.reviewed_at,
+      report_id: null,
+    };
+  } finally {
+    store.db.close();
   }
 }
 
 export async function saveReview(cwd: string, record: ReviewRecord): Promise<void> {
-  const path = join(resolveRepoPath(cwd), REVIEWS_DIR, `${record.review_id}.json`);
-  await atomicWriteFile(path, JSON.stringify(record, null, 2) + '\n');
+  const store = openTaskLifecycleStore(cwd);
+  try {
+    store.insertReview({
+      review_id: record.review_id,
+      task_id: record.task_id,
+      reviewer_agent_id: record.reviewer_agent_id,
+      verdict: record.verdict === 'accepted_with_notes' ? 'accepted' : record.verdict === 'rejected' ? 'needs_changes' : 'accepted',
+      findings_json: record.findings.length > 0 ? JSON.stringify(record.findings) : null,
+      reviewed_at: record.reviewed_at,
+    });
+  } finally {
+    store.db.close();
+  }
 }
 
 /**
@@ -878,13 +1090,23 @@ export async function atomicWriteFile(targetPath: string, data: string): Promise
 }
 
 export async function saveAssignment(cwd: string, record: TaskAssignmentRecord): Promise<void> {
-  const path = join(resolveRepoPath(cwd), ASSIGNMENTS_DIR, `${record.task_id}.json`);
-  await atomicWriteFile(path, JSON.stringify(record, null, 2) + '\n');
+  const store = openTaskLifecycleStore(cwd);
+  try {
+    store.upsertAssignmentRecord({
+      task_id: record.task_id,
+      record_json: JSON.stringify(record),
+      updated_at: new Date().toISOString(),
+    });
+  } finally {
+    store.db.close();
+  }
 }
 
 export async function findTaskFile(cwd: string, taskNumber: string): Promise<{ path: string; taskId: string } | null> {
   const dir = join(resolveRepoPath(cwd), TASKS_DIR);
   const files = await readdir(dir);
+  const ownership = await resolveExecutableTaskNumberOwnership(cwd);
+  const numericTaskNumber = Number(taskNumber);
 
   // Try exact match first (full task ID like 20260420-260-...)
   const exactMatch = files.find((f) => f === `${taskNumber}.md` || f === taskNumber);
@@ -928,6 +1150,13 @@ export async function findTaskFile(cwd: string, taskNumber: string): Promise<{ p
   }
 
   if (executableCandidates.length > 1) {
+    const ownerTaskId = ownership.ownerByNumber.get(numericTaskNumber);
+    if (ownerTaskId) {
+      const ownerCandidate = executableCandidates.find((candidate) => candidate.replace(/\.md$/, '') === ownerTaskId);
+      if (ownerCandidate) {
+        return { path: join(dir, ownerCandidate), taskId: ownerTaskId };
+      }
+    }
     throw new Error(`Ambiguous task number ${taskNumber}: matches ${executableCandidates.join(', ')}`);
   }
 
@@ -936,6 +1165,13 @@ export async function findTaskFile(cwd: string, taskNumber: string): Promise<{ p
   }
 
   if (candidates.length > 1) {
+    const ownerTaskId = ownership.ownerByNumber.get(numericTaskNumber);
+    if (ownerTaskId) {
+      const ownerCandidate = candidates.find((candidate) => candidate.replace(/\.md$/, '') === ownerTaskId);
+      if (ownerCandidate) {
+        return { path: join(dir, ownerCandidate), taskId: ownerTaskId };
+      }
+    }
     throw new Error(`Ambiguous task number ${taskNumber}: matches ${candidates.join(', ')}`);
   }
 
@@ -1277,68 +1513,46 @@ export async function scanMaxTaskNumber(cwd: string): Promise<number> {
  * from the reservations array so allocateTaskNumber can operate normally.
  */
 export async function loadRegistry(cwd: string): Promise<TaskRegistry> {
-  const path = join(resolveRepoPath(cwd), REGISTRY_PATH);
+  const store = openTaskLifecycleStore(cwd);
   try {
-    const raw = await readFile(path, 'utf8');
-    const data = JSON.parse(raw) as TaskRegistry;
-
-    // Defensive: ensure arrays exist even on malformed files
-    const reserved = Array.isArray(data.reserved) ? data.reserved : [];
-    const released = Array.isArray(data.released) ? data.released : [];
-
-    // If we have reservations but no direct reserved/released, derive them.
-    // Reservation-era "released" status means the reservation was closed,
-    // NOT that the number should be reused. Only active (non-released)
-    // reservations map to the allocator's reserved list.
-    if (data.reservations && data.reservations.length > 0 && reserved.length === 0 && released.length === 0) {
-      const derivedReserved: number[] = [];
-      for (const r of data.reservations) {
-        if (r.status !== 'released') {
-          for (let n = r.range_start; n <= r.range_end; n++) {
-            derivedReserved.push(n);
-          }
-        }
-      }
-      return {
-        version: data.version,
-        last_allocated: data.last_allocated,
-        reserved: derivedReserved,
-        released: [],
-        reservations: data.reservations,
-      };
-    }
-
+    const lastAllocated = Math.max(store.getLastAllocated(), await scanMaxTaskNumber(cwd));
+    const reservations = store.listTaskNumberReservations();
+    const reserved = reservations
+      .filter((r) => r.status === 'active')
+      .flatMap((r) => Array.from({ length: r.range_end - r.range_start + 1 }, (_, i) => r.range_start + i));
     return {
-      version: data.version,
-      last_allocated: data.last_allocated,
+      version: 1,
+      last_allocated: lastAllocated,
       reserved,
-      released,
-      reservations: data.reservations,
+      released: [],
+      reservations,
     };
-  } catch {
-    const max = await scanMaxTaskNumber(cwd);
-    return { version: 1, last_allocated: max, reserved: [], released: [] };
+  } finally {
+    store.db.close();
   }
 }
 
 export async function saveRegistry(cwd: string, registry: TaskRegistry): Promise<void> {
-  const path = join(resolveRepoPath(cwd), REGISTRY_PATH);
-  await atomicWriteFile(path, JSON.stringify(registry, null, 2) + '\n');
+  const store = openTaskLifecycleStore(cwd);
+  try {
+    store.ensureTaskNumberFloor(registry.last_allocated);
+  } finally {
+    store.db.close();
+  }
 }
 
 /**
  * Preview the next allocatable number without mutating the registry.
  */
 export async function previewNextTaskNumber(cwd: string): Promise<number> {
-  const registry = await loadRegistry(cwd);
   const currentMax = await scanMaxTaskNumber(cwd);
-  const baseline = Math.max(registry.last_allocated, currentMax);
-
-  if (registry.released.length > 0) {
-    return registry.released.sort((a, b) => a - b)[0]!;
+  const store = openTaskLifecycleStore(cwd);
+  try {
+    const baseline = Math.max(store.getLastAllocated(), currentMax);
+    return baseline + 1;
+  } finally {
+    store.db.close();
   }
-
-  return baseline + 1;
 }
 
 /**
@@ -1385,28 +1599,14 @@ export async function allocateTaskNumber(cwd: string): Promise<number> {
   const lockPath = await acquireRegistryLock(cwd);
 
   try {
-    const registry = await loadRegistry(cwd);
-
-    // Reconcile: ensure last_allocated never falls behind current max
     const currentMax = await scanMaxTaskNumber(cwd);
-    if (currentMax > registry.last_allocated) {
-      registry.last_allocated = currentMax;
+    const store = openTaskLifecycleStore(cwd);
+    try {
+      store.ensureTaskNumberFloor(currentMax);
+      return store.allocateTaskNumber();
+    } finally {
+      store.db.close();
     }
-
-    // Reuse released numbers if any
-    if (registry.released.length > 0) {
-      const num = registry.released.sort((a, b) => a - b)[0]!;
-      registry.released = registry.released.filter((n) => n !== num);
-      registry.reserved.push(num);
-      await saveRegistry(cwd, registry);
-      return num;
-    }
-
-    const next = registry.last_allocated + 1;
-    registry.last_allocated = next;
-    registry.reserved.push(next);
-    await saveRegistry(cwd, registry);
-    return next;
   } finally {
     await releaseRegistryLock(lockPath);
   }
@@ -1508,48 +1708,32 @@ export async function lintTaskFiles(cwd: string): Promise<{
 
   // ── Review / closure checks ──
   const repoPath = resolveRepoPath(cwd);
-  const reviewsDir = join(repoPath, '.ai', 'reviews');
   const decisionsDir = join(repoPath, '.ai', 'decisions');
 
   const tasksWithReviews = new Set<number>();
   const tasksWithClosures = new Set<number>();
 
-  // Scan reviews
   try {
-    const reviewFiles = (await readdir(reviewsDir)).filter((f) => f.endsWith('.md'));
-    for (const rf of reviewFiles) {
-      const rcontent = await readFile(join(reviewsDir, rf), 'utf8');
-      const { frontMatter: rfm } = parseFrontMatter(rcontent);
-
-      // Front matter review_of
-      if (typeof rfm.review_of === 'number') {
-        if (!taskByNumber.has(rfm.review_of)) {
+    const store = openTaskLifecycleStore(cwd);
+    try {
+      for (const review of store.listAllReviews()) {
+        const taskNum = extractTaskNumberFromFileName(review.task_id);
+        if (taskNum === null) continue;
+        if (!taskByNumber.has(taskNum)) {
           issues.push({
             type: 'stale_review_reference',
-            file: rf,
-            detail: `Review references non-existent task ${rfm.review_of}`,
+            file: review.review_id,
+            detail: `Review references non-existent task ${taskNum}`,
           });
         } else {
-          tasksWithReviews.add(rfm.review_of);
+          tasksWithReviews.add(taskNum);
         }
       }
-
-      // Body text fallback
-      const bodyRefs = extractTaskRefsFromBody(rcontent);
-      for (const num of bodyRefs) {
-        if (!taskByNumber.has(num)) {
-          issues.push({
-            type: 'stale_review_reference',
-            file: rf,
-            detail: `Review references non-existent task ${num}`,
-          });
-        } else {
-          tasksWithReviews.add(num);
-        }
-      }
+    } finally {
+      store.db.close();
     }
   } catch {
-    // Reviews dir may not exist
+    // Review store may not exist
   }
 
   // Scan decisions/closures
@@ -1680,27 +1864,24 @@ export async function lintTaskFilesForRange(
 
   // Scan reviews and closures for governed-provenance checks
   const repoPath = resolveRepoPath(cwd);
-  const reviewsDir = join(repoPath, '.ai', 'reviews');
   const decisionsDir = join(repoPath, '.ai', 'decisions');
   const tasksWithReviews = new Set<number>();
   const tasksWithClosures = new Set<number>();
 
   try {
-    const reviewFiles = (await readdir(reviewsDir)).filter((f) => f.endsWith('.json'));
-    for (const rf of reviewFiles) {
-      try {
-        const raw = await readFile(join(reviewsDir, rf), 'utf8');
-        const review = JSON.parse(raw) as { task_id?: string };
-        const taskNum = extractTaskNumberFromFileName(review.task_id ?? rf);
+    const store = openTaskLifecycleStore(cwd);
+    try {
+      for (const review of store.listAllReviews()) {
+        const taskNum = extractTaskNumberFromFileName(review.task_id);
         if (taskNum !== null && rangeNumbers.has(taskNum)) {
           tasksWithReviews.add(taskNum);
         }
-      } catch {
-        // Skip malformed
       }
+    } finally {
+      store.db.close();
     }
   } catch {
-    // Reviews dir may not exist
+    // Review store may not exist
   }
 
   try {
@@ -1913,6 +2094,7 @@ export async function scanTasksByChapter(
   const dir = join(resolveRepoPath(cwd), TASKS_DIR);
   const files = await readdir(dir);
   const mdFiles = files.filter((f) => f.endsWith('.md'));
+  const ownership = await resolveExecutableTaskNumberOwnership(cwd);
   const tasks: ChapterTaskInfo[] = [];
 
   for (const f of mdFiles) {
@@ -1922,9 +2104,15 @@ export async function scanTasksByChapter(
     if (chapter === chapterName) {
       const base = f.replace(/\.md$/, '');
       const numMatch = base.match(/-(\d+)-/);
+      const taskNumber = numMatch ? Number(numMatch[1]) : (typeof frontMatter.task_id === 'number' ? frontMatter.task_id : null);
+      if (isExecutableTaskFile(f) && taskNumber !== null) {
+        if (ownership.conflictedNumbers.has(taskNumber)) continue;
+        const ownerTaskId = ownership.ownerByNumber.get(taskNumber);
+        if (ownerTaskId && ownerTaskId !== base) continue;
+      }
       tasks.push({
         taskId: base,
-        taskNumber: numMatch ? Number(numMatch[1]) : (typeof frontMatter.task_id === 'number' ? frontMatter.task_id : null),
+        taskNumber,
         status: frontMatter.status as string | undefined,
         fileName: f,
         dependsOn: frontMatter.depends_on as number[] | undefined,
@@ -1960,12 +2148,18 @@ export async function scanTasksByRange(
   const dir = join(resolveRepoPath(cwd), TASKS_DIR);
   const files = await readdir(dir).catch(() => [] as string[]);
   const mdFiles = files.filter((f) => f.endsWith('.md'));
+  const ownership = await resolveExecutableTaskNumberOwnership(cwd);
   const tasks: ChapterTaskInfo[] = [];
 
   for (const f of mdFiles) {
     const taskNumber = extractTaskNumberFromFileName(f);
     if (taskNumber === null) continue;
     if (taskNumber < rangeStart || taskNumber > rangeEnd) continue;
+    if (isExecutableTaskFile(f)) {
+      if (ownership.conflictedNumbers.has(taskNumber)) continue;
+      const ownerTaskId = ownership.ownerByNumber.get(taskNumber);
+      if (ownerTaskId && ownerTaskId !== f.replace(/\.md$/, '')) continue;
+    }
 
     const content = await readFile(join(dir, f), 'utf8');
     const { frontMatter, body } = parseFrontMatter(content);
@@ -2115,6 +2309,7 @@ export async function listEvidenceBasedTasks(
   const dir = join(resolveRepoPath(cwd), TASKS_DIR);
   const files = await readdir(dir).catch(() => [] as string[]);
   const mdFiles = files.filter((f) => f.endsWith('.md'));
+  const ownership = await resolveExecutableTaskNumberOwnership(cwd);
 
   // Load roster once for assignment lookup
   let roster: AgentRoster | null = null;
@@ -2122,6 +2317,27 @@ export async function listEvidenceBasedTasks(
     roster = await loadRoster(cwd);
   } catch {
     // Roster may not exist
+  }
+
+  let specByNumber = new Map<number, { title: string; dependencies: number[] }>();
+  try {
+    const store = openTaskLifecycleStore(cwd);
+    try {
+      const rows = store.db
+        .prepare('select task_number, title, dependencies_json from task_specs')
+        .all() as Array<{ task_number: number; title: string; dependencies_json: string }>;
+      specByNumber = new Map(rows.map((row) => [
+        Number(row.task_number),
+        {
+          title: String(row.title),
+          dependencies: JSON.parse(String(row.dependencies_json)) as number[],
+        },
+      ]));
+    } finally {
+      store.db.close();
+    }
+  } catch {
+    // Spec store may be unavailable
   }
 
   const entries: EvidenceBasedTaskEntry[] = [];
@@ -2135,6 +2351,11 @@ export async function listEvidenceBasedTasks(
       base.includes(suffix.replace(/\.md$/, '')),
     );
     if (isDerivative) continue;
+    if (isExecutableTaskFile(f) && taskNumber !== null) {
+      if (ownership.conflictedNumbers.has(taskNumber)) continue;
+      const ownerTaskId = ownership.ownerByNumber.get(taskNumber);
+      if (ownerTaskId && ownerTaskId !== base) continue;
+    }
 
     // Range filter
     if (options?.rangeFilter && taskNumber !== null) {
@@ -2161,11 +2382,7 @@ export async function listEvidenceBasedTasks(
       if (agent) assignedAgent = agent.agent_id;
     }
 
-    // Extract title from body
-    const content = await readFile(join(dir, f), 'utf8');
-    const { body } = parseFrontMatter(content);
-    const titleMatch = body.match(/^#\s+(.+)$/m);
-    const title = titleMatch ? titleMatch[1].trim() : null;
+    const title = taskNumber !== null ? (specByNumber.get(taskNumber)?.title ?? null) : null;
 
     entries.push({
       task_number: evidence.task_number,
@@ -2210,21 +2427,47 @@ export interface RunnableTask {
 export async function listRunnableTasks(
   cwd: string,
   store?: TaskLifecycleStore,
+  options?: {
+    rangeFilter?: { start: number; end: number };
+  },
 ): Promise<RunnableTask[]> {
   const dir = join(resolveRepoPath(cwd), TASKS_DIR);
   const files = await readdir(dir);
   const mdFiles = files.filter(isExecutableTaskFile);
+  const ownership = await resolveExecutableTaskNumberOwnership(cwd, store);
+  const specByNumber = new Map<number, { title: string; dependencies: number[] }>();
+  if (store) {
+    const rows = store.db
+      .prepare('select task_number, title, dependencies_json from task_specs')
+      .all() as Array<{ task_number: number; title: string; dependencies_json: string }>;
+    for (const row of rows) {
+      specByNumber.set(Number(row.task_number), {
+        title: String(row.title),
+        dependencies: JSON.parse(String(row.dependencies_json)) as number[],
+      });
+    }
+  }
 
   // First pass: collect all task info
   const allTaskInfos = new Map<number, ChapterTaskInfo>();
   const rawTasks: Array<{ info: ChapterTaskInfo; title: string | null }> = [];
 
   for (const f of mdFiles) {
+    const base = f.replace(/\.md$/, '');
+    const taskNumber = extractTaskNumberFromFileName(f);
+    if (taskNumber !== null) {
+      if (ownership.conflictedNumbers.has(taskNumber)) continue;
+      const ownerTaskId = ownership.ownerByNumber.get(taskNumber);
+      if (ownerTaskId && ownerTaskId !== base) continue;
+      if (options?.rangeFilter) {
+        if (taskNumber < options.rangeFilter.start || taskNumber > options.rangeFilter.end) {
+          continue;
+        }
+      }
+    }
+
     const content = await readFile(join(dir, f), 'utf8');
     const { frontMatter, body } = parseFrontMatter(content);
-    const base = f.replace(/\.md$/, '');
-    const numMatch = base.match(/-(\d+)-/);
-    const taskNumber = numMatch ? Number(numMatch[1]) : (typeof frontMatter.task_id === 'number' ? frontMatter.task_id : null);
 
     // Prefer SQLite status if available
     let status: string | undefined;
@@ -2237,21 +2480,22 @@ export async function listRunnableTasks(
 
     if (status !== 'opened' && status !== 'needs_continuation') continue;
 
-    const titleMatch = body.match(/^#\s+(.+)$/m);
-
     const info: ChapterTaskInfo = {
       taskId: base,
       taskNumber,
       status,
       fileName: f,
-      dependsOn: frontMatter.depends_on as number[] | undefined,
+      dependsOn: (taskNumber !== null ? specByNumber.get(taskNumber)?.dependencies : undefined) ?? [],
       continuationAffinity: frontMatter.continuation_affinity as TaskContinuationAffinity | undefined,
     };
 
     if (taskNumber !== null) {
       allTaskInfos.set(taskNumber, info);
     }
-    rawTasks.push({ info, title: titleMatch ? titleMatch[1].trim() : null });
+    rawTasks.push({
+      info,
+      title: taskNumber !== null ? (specByNumber.get(taskNumber)?.title ?? null) : null,
+    });
   }
 
   // Second pass: compute affinity for each
@@ -2276,4 +2520,73 @@ export async function listRunnableTasks(
   });
 
   return result;
+}
+
+export interface NextTaskCandidate {
+  taskId: string;
+  taskNumber: number | null;
+  title: string | null;
+  status: string;
+  affinity: ComputedAffinity;
+  dependenciesMet: boolean;
+  alreadyClaimed: boolean;
+  claimedBy: string | null;
+}
+
+/**
+ * Find the next admissible task for an agent.
+ *
+ * Non-mutating. Returns the best candidate or null if none exists.
+ * A candidate is admissible when:
+ * - status is `opened` or `needs_continuation`
+ * - all dependencies are satisfied (closed/confirmed)
+ * - not already claimed by another agent
+ * - agent exists in roster
+ */
+export async function findNextTaskForAgent(
+  cwd: string,
+  agentId: string,
+  store?: TaskLifecycleStore,
+): Promise<NextTaskCandidate | null> {
+  // Verify agent exists
+  let roster: AgentRoster;
+  try {
+    roster = await loadRoster(cwd);
+  } catch {
+    return null;
+  }
+  const agent = roster.agents.find((a) => a.agent_id === agentId);
+  if (!agent) return null;
+
+  const runnable = await listRunnableTasks(cwd, store);
+
+  for (const task of runnable) {
+    if (task.taskNumber === null) continue;
+
+    // Check dependencies
+    const taskFile = await findTaskFile(cwd, String(task.taskNumber));
+    if (!taskFile) continue;
+    const { frontMatter } = await readTaskFile(taskFile.path);
+    const dependsOn = frontMatter.depends_on as number[] | undefined;
+    const { blockedBy } = await checkDependencies(cwd, dependsOn, store);
+    if (blockedBy.length > 0) continue;
+
+    // Check not already claimed by another agent
+    const assignmentRecord = await loadAssignment(cwd, task.taskId);
+    const active = assignmentRecord ? getActiveAssignment(assignmentRecord) : null;
+    if (active && active.agent_id !== agentId) continue;
+
+    return {
+      taskId: task.taskId,
+      taskNumber: task.taskNumber,
+      title: task.title,
+      status: task.status,
+      affinity: task.affinity,
+      dependenciesMet: true,
+      alreadyClaimed: active !== null,
+      claimedBy: active?.agent_id ?? null,
+    };
+  }
+
+  return null;
 }

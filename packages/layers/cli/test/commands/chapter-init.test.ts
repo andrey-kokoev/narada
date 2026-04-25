@@ -15,7 +15,7 @@ describe('chapter init operator', () => {
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'narada-chapter-init-'));
-    mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+    mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
   });
 
   afterEach(() => {
@@ -157,7 +157,7 @@ describe('chapter init operator', () => {
   it('refuses task number collisions', async () => {
     // Seed an existing task with number 600
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-600-existing.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-600-existing.md'),
       '---\ntask_id: 600\nstatus: opened\n---\n\n# Task 600\n',
     );
 
@@ -178,7 +178,7 @@ describe('chapter init operator', () => {
   });
 
   it('dry-run writes nothing', async () => {
-    const beforeFiles = readdirSync(join(tempDir, '.ai', 'tasks'));
+    const beforeFiles = readdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'));
 
     const result = await chapterInitCommand({
       slug: 'dry-run-test',
@@ -195,7 +195,7 @@ describe('chapter init operator', () => {
     expect(r.status).toBe('dry_run');
     expect(r.files).toHaveLength(3);
 
-    const afterFiles = readdirSync(join(tempDir, '.ai', 'tasks'));
+    const afterFiles = readdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'));
     expect(afterFiles).toEqual(beforeFiles);
   });
 
@@ -258,7 +258,7 @@ describe('chapter init operator', () => {
   it('refuses when range file already exists', async () => {
     const datePrefix = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const rangeFileName = `${datePrefix}-1000-1002-exists-test.md`;
-    writeFileSync(join(tempDir, '.ai', 'tasks', rangeFileName), '---\nstatus: opened\n---\n');
+    writeFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', rangeFileName), '---\nstatus: opened\n---\n');
 
     const result = await chapterInitCommand({
       slug: 'exists-test',

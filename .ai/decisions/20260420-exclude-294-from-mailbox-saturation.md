@@ -34,7 +34,7 @@ Task 294 was subsequently completed as part of the Mailbox Saturation chapter. T
 
 ## Corrected Artifacts
 
-- `.ai/tasks/20260420-290-create-mailbox-saturation-chapter-task-graph.md` — execution notes corrected.
-- `.ai/tasks/20260420-291-296.md` — DAG includes Task 294.
-- `.ai/tasks/20260420-294-mailbox-scenario-library-expansion.md` — completed as a chapter task.
+- `.ai/do-not-open/tasks/20260420-290-create-mailbox-saturation-chapter-task-graph.md` — execution notes corrected.
+- `.ai/do-not-open/tasks/20260420-291-296.md` — DAG includes Task 294.
+- `.ai/do-not-open/tasks/20260420-294-mailbox-scenario-library-expansion.md` — completed as a chapter task.
 - `.ai/decisions/20260420-mailbox-saturation-closure.md` — closure artifact updated to show Task 294 as satisfied.

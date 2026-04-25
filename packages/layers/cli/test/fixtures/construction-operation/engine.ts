@@ -14,6 +14,7 @@ import {
   parseFrontMatter,
   type TaskFrontMatter,
 } from '../../../src/lib/task-governance.js';
+import { openTaskLifecycleStore } from '../../../src/lib/task-lifecycle-store.js';
 import type {
   FixtureTask,
   FixtureAgent,
@@ -43,7 +44,7 @@ const DEFAULT_WEIGHTS = {
 // ── Data loading ──
 
 export async function loadFixtureTasks(cwd: string): Promise<FixtureTask[]> {
-  const tasksDir = join(cwd, '.ai', 'tasks');
+  const tasksDir = join(cwd, '.ai', 'do-not-open', 'tasks');
   const files = await readdir(tasksDir).catch(() => []);
   const mdFiles = files.filter((f) => f.endsWith('.md'));
   const tasks: FixtureTask[] = [];
@@ -95,26 +96,47 @@ function extractCapabilities(body: string, title: string = ''): string[] {
 }
 
 export async function loadFixtureRoster(cwd: string): Promise<FixtureAgent[]> {
-  const path = join(cwd, '.ai', 'agents', 'roster.json');
   try {
-    const raw = await readFile(path, 'utf8');
-    const roster = JSON.parse(raw) as { agents: FixtureAgent[] };
-    return roster.agents;
+    const store = openTaskLifecycleStore(cwd);
+    try {
+      return store.getRoster().map((row) => ({
+        agent_id: row.agent_id,
+        role: row.role,
+        capabilities: JSON.parse(row.capabilities_json),
+        first_seen_at: row.first_seen_at,
+        last_active_at: row.last_active_at,
+        status: row.status as FixtureAgent['status'],
+        task: row.task_number,
+        last_done: row.last_done,
+        updated_at: row.updated_at,
+      }));
+    } finally {
+      store.db.close();
+    }
   } catch {
     return [];
   }
 }
 
 export async function loadFixtureAssignments(cwd: string): Promise<FixtureAssignment[]> {
-  const dir = join(cwd, '.ai', 'tasks', 'assignments');
-  const files = await readdir(dir).catch(() => []);
   const assignments: FixtureAssignment[] = [];
-  for (const f of files.filter((x) => x.endsWith('.json'))) {
-    const raw = await readFile(join(dir, f), 'utf8');
-    const record = JSON.parse(raw) as { task_id: string; assignments: FixtureAssignment[] };
-    for (const a of record.assignments) {
-      assignments.push({ ...a, task_id: record.task_id });
+  try {
+    const store = openTaskLifecycleStore(cwd);
+    try {
+      const rows = store.db
+        .prepare('select task_id, record_json from task_assignment_records')
+        .all() as Array<{ task_id: string; record_json: string }>;
+      for (const row of rows) {
+        const record = JSON.parse(row.record_json) as { task_id: string; assignments: FixtureAssignment[] };
+        for (const a of record.assignments) {
+          assignments.push({ ...a, task_id: record.task_id });
+        }
+      }
+    } finally {
+      store.db.close();
     }
+  } catch {
+    return [];
   }
   return assignments;
 }
@@ -134,7 +156,7 @@ export async function loadFixturePrincipalRuntimes(
 export async function loadFixtureWriteSetManifests(
   cwd: string,
 ): Promise<Map<string, FixtureWriteSetManifest>> {
-  const dir = join(cwd, '.ai', 'tasks', 'assignments');
+  const dir = join(cwd, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments');
   const files = await readdir(dir).catch(() => []);
   const manifests = new Map<string, FixtureWriteSetManifest>();
   for (const f of files.filter((x) => x.endsWith('.json'))) {
@@ -706,9 +728,9 @@ export const GROUND_TRUTH = new Map<number, string>([
 // ── Data setup helpers ──
 
 export async function setupFixtureData(cwd: string): Promise<void> {
-  const tasksDir = join(cwd, '.ai', 'tasks');
+  const tasksDir = join(cwd, '.ai', 'do-not-open', 'tasks');
   const agentsDir = join(cwd, '.ai', 'agents');
-  const assignmentsDir = join(cwd, '.ai', 'tasks', 'assignments');
+  const assignmentsDir = join(cwd, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments');
   const reviewsDir = join(cwd, '.ai', 'reviews');
 
   await mkdir(tasksDir, { recursive: true });
@@ -749,11 +771,27 @@ export async function setupFixtureData(cwd: string): Promise<void> {
     await writeFile(join(tasksDir, `${task.taskId}.md`), lines.join('\n') + '\n');
   }
 
-  // Write roster
-  await writeFile(
-    join(agentsDir, 'roster.json'),
-    JSON.stringify({ version: 1, updated_at: new Date().toISOString(), agents: SYNTHETIC_ROSTER }, null, 2) + '\n',
-  );
+  // Write roster authority to SQLite
+  {
+    const store = openTaskLifecycleStore(cwd);
+    try {
+      for (const agent of SYNTHETIC_ROSTER) {
+        store.upsertRosterEntry({
+          agent_id: agent.agent_id,
+          role: agent.role,
+          capabilities_json: JSON.stringify(agent.capabilities ?? []),
+          first_seen_at: agent.first_seen_at,
+          last_active_at: agent.last_active_at,
+          status: agent.status ?? 'idle',
+          task_number: agent.task ?? null,
+          last_done: agent.last_done ?? null,
+          updated_at: agent.updated_at ?? agent.last_active_at,
+        });
+      }
+    } finally {
+      store.db.close();
+    }
+  }
 
   // Write principal runtimes
   await writeFile(
@@ -767,6 +805,20 @@ export async function setupFixtureData(cwd: string): Promise<void> {
     const list = byTask.get(a.task_id) ?? [];
     list.push(a);
     byTask.set(a.task_id, list);
+  }
+  {
+    const store = openTaskLifecycleStore(cwd);
+    try {
+      for (const [taskId, assignmentsForTask] of byTask) {
+        store.upsertAssignmentRecord({
+          task_id: taskId,
+          record_json: JSON.stringify({ task_id: taskId, assignments: assignmentsForTask }),
+          updated_at: new Date().toISOString(),
+        });
+      }
+    } finally {
+      store.db.close();
+    }
   }
   for (const [taskId, list] of byTask) {
     const record = { task_id: taskId, assignments: list };

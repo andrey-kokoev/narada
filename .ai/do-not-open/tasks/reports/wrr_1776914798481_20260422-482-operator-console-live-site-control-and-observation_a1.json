@@ -1,0 +1,42 @@
+{
+  "report_id": "wrr_1776914798481_20260422-482-operator-console-live-site-control-and-observation_a1",
+  "task_number": "482",
+  "task_id": "20260422-482-operator-console-live-site-control-and-observation",
+  "agent_id": "a1",
+  "assignment_id": "20260422-482-operator-console-live-site-control-and-observation-2026-04-23T03:26:22.247Z",
+  "reported_at": "2026-04-23T03:26:38.481Z",
+  "summary": "Implemented live Windows Site binding for the Operator Console: console control now uses WindowsSiteControlClient, console attention reads real Site observation data, focused tests were added, and operator-console documentation now records current live support boundaries.",
+  "changed_files": [
+    "packages/layers/cli/src/commands/console.ts",
+    "packages/layers/cli/test/commands/console.test.ts",
+    "packages/sites/windows/src/index.ts",
+    "packages/sites/windows/src/observability.ts",
+    "packages/sites/windows/src/site-control.ts",
+    "packages/sites/windows/test/unit/observability.test.ts",
+    "packages/sites/windows/test/unit/site-control.test.ts",
+    "packages/sites/windows/vitest.config.ts",
+    "docs/product/operator-console-site-registry.md",
+    ".ai/do-not-open/tasks/20260422-482-operator-console-live-site-control-and-observation.md"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --filter @narada2/windows-site exec vitest run test/unit/router.test.ts test/unit/aggregation.test.ts test/unit/observability.test.ts",
+      "result": "passed: 44 tests"
+    },
+    {
+      "command": "pnpm --filter @narada2/cli exec vitest run test/commands/console.test.ts",
+      "result": "passed: 8 tests"
+    },
+    {
+      "command": "pnpm verify",
+      "result": "passed: all 5 verification steps"
+    }
+  ],
+  "known_residuals": [
+    "Multi-scope resolution uses the first scope from config; future work should search all scopes for the target.",
+    "Cloudflare Site live binding remains deferred to an HTTP-based control client and endpoint discovery task.",
+    "Credential requirements are currently derived from auth_failed health status; a richer credential-requirements table may be needed later."
+  ],
+  "ready_for_review": true,
+  "report_status": "submitted"
+}

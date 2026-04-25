@@ -1,7 +1,7 @@
 /**
  * Task graph inspection operator.
  *
- * Read-only rendering of `.ai/tasks` as Mermaid or JSON.
+ * Read-only rendering of `.ai/do-not-open/tasks` as Mermaid or JSON.
  * Pure inspection — no mutations to task files, roster, reports, reviews, or registry.
  *
  * Operator viewing path:

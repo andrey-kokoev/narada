@@ -3,7 +3,7 @@
 -- Canonical persistence for durable outbound handoffs, versions,
 -- managed drafts, and audit transitions.
 --
--- Spec: .ai/tasks/20260413-001-outbound-draft-worker-spec.md
+-- Spec: .ai/do-not-open/tasks/20260413-001-outbound-draft-worker-spec.md
 
 -- ---------------------------------------------------------------------------
 -- outbound_handoffs

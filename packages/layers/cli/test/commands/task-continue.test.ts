@@ -13,10 +13,10 @@ import { join } from 'node:path';
 
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'assignments'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'reports'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'reviews'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'learning', 'accepted'), { recursive: true });
 
   writeFileSync(
@@ -34,25 +34,25 @@ function setupRepo(tempDir: string) {
 
   // Task 100: claimed by alpha
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-100-claimed-task.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-claimed-task.md'),
     '---\ntask_id: 100\nstatus: claimed\n---\n\n# Task 100: Claimed Task\n\nSome implementation work.\n',
   );
 
   // Task 101: needs_continuation
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-101-needs-continuation.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-101-needs-continuation.md'),
     '---\ntask_id: 101\nstatus: needs_continuation\n---\n\n# Task 101: Needs Continuation\n\nPartial work done.\n',
   );
 
   // Task 102: opened
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-102-opened-task.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-102-opened-task.md'),
     '---\ntask_id: 102\nstatus: opened\n---\n\n# Task 102: Opened Task\n\nNew task.\n',
   );
 
   // Pre-seed assignment for task 100 (alpha claimed it)
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', 'assignments', '20260420-100-claimed-task.json'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-100-claimed-task.json'),
     JSON.stringify({
       task_id: '20260420-100-claimed-task',
       assignments: [
@@ -69,7 +69,7 @@ function setupRepo(tempDir: string) {
 
   // Pre-seed assignment for task 101 (alpha completed first phase)
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', 'assignments', '20260420-101-needs-continuation.json'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-101-needs-continuation.json'),
     JSON.stringify({
       task_id: '20260420-101-needs-continuation',
       assignments: [
@@ -112,7 +112,7 @@ describe('task continue operator', () => {
     expect(rec.previous_agent_id).toBe('alpha');
 
     // Assignment record should show alpha still active + beta as continuation
-    const assignment = JSON.parse(readFileSync(join(tempDir, '.ai', 'tasks', 'assignments', '20260420-100-claimed-task.json'), 'utf8'));
+    const assignment = JSON.parse(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-100-claimed-task.json'), 'utf8'));
     expect(assignment.assignments).toHaveLength(1);
     expect(assignment.assignments[0].agent_id).toBe('alpha');
     expect(assignment.assignments[0].released_at).toBeNull();
@@ -135,7 +135,7 @@ describe('task continue operator', () => {
     expect(rec.supersedes).toBe(true);
     expect(rec.previous_agent_id).toBe('alpha');
 
-    const assignment = JSON.parse(readFileSync(join(tempDir, '.ai', 'tasks', 'assignments', '20260420-100-claimed-task.json'), 'utf8'));
+    const assignment = JSON.parse(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-100-claimed-task.json'), 'utf8'));
     expect(assignment.assignments).toHaveLength(2);
     expect(assignment.assignments[0].agent_id).toBe('alpha');
     expect(assignment.assignments[0].released_at).not.toBeNull();
@@ -149,7 +149,7 @@ describe('task continue operator', () => {
   it('transitions needs_continuation to claimed on takeover', async () => {
     // First claim task 101 for alpha (needs_continuation)
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', 'assignments', '20260420-101-needs-continuation.json'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-101-needs-continuation.json'),
       JSON.stringify({
         task_id: '20260420-101-needs-continuation',
         assignments: [
@@ -175,7 +175,7 @@ describe('task continue operator', () => {
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
 
     // Task status should now be claimed
-    const taskBody = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-101-needs-continuation.md'), 'utf8');
+    const taskBody = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-101-needs-continuation.md'), 'utf8');
     expect(taskBody).toContain('status: claimed');
   });
 
@@ -231,7 +231,7 @@ describe('task continue operator', () => {
       format: 'json',
     });
 
-    const assignment = JSON.parse(readFileSync(join(tempDir, '.ai', 'tasks', 'assignments', '20260420-100-claimed-task.json'), 'utf8'));
+    const assignment = JSON.parse(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-100-claimed-task.json'), 'utf8'));
     expect(assignment.assignments).toHaveLength(2);
     expect(assignment.assignments[0].agent_id).toBe('alpha');
     expect(assignment.assignments[0].claimed_at).toBe('2026-04-20T10:00:00Z');
@@ -247,7 +247,7 @@ describe('task continue operator', () => {
     });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    const assignment = JSON.parse(readFileSync(join(tempDir, '.ai', 'tasks', 'assignments', '20260420-100-claimed-task.json'), 'utf8'));
+    const assignment = JSON.parse(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-100-claimed-task.json'), 'utf8'));
     expect(assignment.assignments[1].intent).toBe('takeover');
   });
 
@@ -261,7 +261,7 @@ describe('task continue operator', () => {
     });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    const assignment = JSON.parse(readFileSync(join(tempDir, '.ai', 'tasks', 'assignments', '20260420-100-claimed-task.json'), 'utf8'));
+    const assignment = JSON.parse(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-100-claimed-task.json'), 'utf8'));
     expect(assignment.continuations[0].intent).toBeUndefined();
     // Continuations do not carry intent; intent is assignment-level only
   });
@@ -305,7 +305,7 @@ describe('task continue operator', () => {
     expect(rec.report_id).toBeDefined();
 
     // Primary assignment (alpha) should still be active
-    const assignment = JSON.parse(readFileSync(join(tempDir, '.ai', 'tasks', 'assignments', '20260420-100-claimed-task.json'), 'utf8'));
+    const assignment = JSON.parse(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-100-claimed-task.json'), 'utf8'));
     expect(assignment.assignments[0].agent_id).toBe('alpha');
     expect(assignment.assignments[0].released_at).toBeNull();
 
@@ -313,7 +313,7 @@ describe('task continue operator', () => {
     expect(assignment.continuations[0].completed_at).toBeDefined();
 
     // Task status should still be claimed (not in_review)
-    const taskBody = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-100-claimed-task.md'), 'utf8');
+    const taskBody = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-claimed-task.md'), 'utf8');
     expect(taskBody).toContain('status: claimed');
   });
 
@@ -339,7 +339,7 @@ describe('task continue operator', () => {
     expect(reportResult.exitCode).toBe(ExitCode.SUCCESS);
 
     // Task should be in_review
-    const taskBody = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-100-claimed-task.md'), 'utf8');
+    const taskBody = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-claimed-task.md'), 'utf8');
     expect(taskBody).toContain('status: in_review');
   });
 });

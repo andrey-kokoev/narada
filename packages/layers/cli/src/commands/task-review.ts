@@ -16,6 +16,7 @@ import {
   isValidTransition,
   loadReport,
   saveReport,
+  updateAgentRosterEntry,
   type ReviewFinding,
 } from '../lib/task-governance.js';
 import { ExitCode } from '../lib/exit-codes.js';
@@ -150,7 +151,15 @@ export async function taskReviewCommand(
     sqliteStatus = lifecycle.status;
   }
 
-  const currentStatus = sqliteStatus ?? (frontMatter.status as string | undefined);
+  let currentStatus = sqliteStatus ?? (frontMatter.status as string | undefined);
+  if (
+    store
+    && sqliteStatus === 'claimed'
+    && frontMatter.status === 'in_review'
+  ) {
+    store.updateStatus(taskFile.taskId, 'in_review', agentId);
+    currentStatus = 'in_review';
+  }
 
   // Task must be in_review to be reviewed
   if (currentStatus !== 'in_review') {
@@ -289,15 +298,6 @@ export async function taskReviewCommand(
 
   // Write authoritative review and lifecycle state to SQLite
   if (store) {
-    store.insertReview({
-      review_id: reviewId,
-      task_id: taskFile.taskId,
-      reviewer_agent_id: agentId,
-      verdict: verdict === 'accepted_with_notes' ? 'accepted' : verdict,
-      findings_json: findings.length > 0 ? JSON.stringify(findings) : null,
-      reviewed_at: now,
-    });
-
     if (newStatus === 'closed') {
       store.updateStatus(taskFile.taskId, 'closed', agentId, {
         closed_at: now,
@@ -340,11 +340,8 @@ export async function taskReviewCommand(
     // Best-effort advisory update — never fail the command
   }
 
-  // Update roster last_active_at
-  agent.last_active_at = now;
-  const { join } = await import('node:path');
-  const { atomicWriteFile } = await import('../lib/task-governance.js');
-  await atomicWriteFile(join(cwd, '.ai/agents/roster.json'), JSON.stringify(roster, null, 2) + '\n');
+  // Update roster last_active_at via canonical mutation path
+  await updateAgentRosterEntry(cwd, agentId, {});
 
   if (fmt.getFormat() === 'json') {
     const result: Record<string, unknown> = {

@@ -13,7 +13,7 @@ describe('verify-explain command', () => {
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'narada-verify-explain-test-'));
-    mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+    mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
   });
 
   afterEach(() => {
@@ -41,7 +41,7 @@ describe('verify-explain command', () => {
 
   it('reports no inference when task has no file paths', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
       '---\ntask_id: 999\nstatus: opened\n---\n\n# Task 999\n\nJust words, no file paths.\n',
     );
 
@@ -57,7 +57,7 @@ describe('verify-explain command', () => {
 
   it('infers files and suggests verification from task content', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-998-test-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-test-task.md'),
       '---\ntask_id: 998\nstatus: opened\n---\n\n# Task 998\n\nModify `packages/layers/cli/src/commands/foo.ts` and `packages/layers/cli/src/lib/bar.ts`.\n',
     );
 

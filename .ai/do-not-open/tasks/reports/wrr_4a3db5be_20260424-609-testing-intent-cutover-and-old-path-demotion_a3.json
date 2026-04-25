@@ -1,0 +1,23 @@
+{
+  "report_id": "wrr_4a3db5be_20260424-609-testing-intent-cutover-and-old-path-demotion_a3",
+  "task_number": "609",
+  "task_id": "20260424-609-testing-intent-cutover-and-old-path-demotion",
+  "agent_id": "a3",
+  "assignment_id": "20260424-609-testing-intent-cutover-and-old-path-demotion-2026-04-24T21:25:24.301Z",
+  "reported_at": "2026-04-24T21:26:19.818Z",
+  "summary": "Demoted old verify path and elevated test-run as canonical for task verification",
+  "changed_files": [
+    "packages/layers/cli/src/commands/verify-run.ts",
+    "packages/layers/cli/src/commands/verify-suggest.ts",
+    "packages/layers/cli/src/main.ts"
+  ],
+  "verification": [
+    {
+      "command": "pnpm verify",
+      "result": "passed"
+    }
+  ],
+  "known_residuals": [],
+  "ready_for_review": true,
+  "report_status": "accepted"
+}

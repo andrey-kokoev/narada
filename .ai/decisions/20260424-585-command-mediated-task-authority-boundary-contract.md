@@ -32,7 +32,7 @@ In the command-mediated regime:
 
 ### 1. Task Specification Authority
 
-- **Owner:** Markdown (`.ai/tasks/NNN-slug.md`)
+- **Owner:** Markdown (`.ai/do-not-open/tasks/NNN-slug.md`)
 - **Content:** Goal, required work, acceptance criteria, execution notes, verification, dependencies, continuation affinity
 - **Access rule:** Read via projection; written once at creation; body sections appended by sanctioned report operators
 - **Posture:** **Authored spec only** (Model A from Decision 546). Markdown is the human-readable container for specification intent. It is not a working surface for lifecycle edits.
@@ -86,7 +86,7 @@ In the command-mediated regime:
 | Markdown as spec container | Could theoretically be a different format (JSON, TOML), but markdown is human-legible |
 | SQLite as lifecycle substrate | Could theoretically be another durable store (PostgreSQL, KV store), but SQLite is local-first |
 | 19 specific CLI commands | The command family may be refactored, merged, or renamed; the boundary matters more than the exact surface |
-| `.ai/tasks/` directory path | A convention, not a law |
+| `.ai/do-not-open/tasks/` directory path | A convention, not a law |
 
 ### Projected (may remain for human legibility)
 
@@ -122,7 +122,7 @@ Specifically:
 
 - SQLite **must** be the source of truth for all lifecycle queries
 - SQLite **must** be written only by sanctioned command operators
-- Direct SQLite access (e.g., `sqlite3 .ai/tasks/task-lifecycle.db` then `UPDATE task_lifecycle SET status = 'closed'...`) is classified as **non-normal maintenance/repair**, not ordinary task work
+- Direct SQLite access (e.g., `sqlite3 .ai/do-not-open/tasks/task-lifecycle.db` then `UPDATE task_lifecycle SET status = 'closed'...`) is classified as **non-normal maintenance/repair**, not ordinary task work
 - The only legitimate exceptions for direct SQLite access:
   - Disaster recovery (coordinator loss, corruption)
   - Schema migration during controlled upgrades
@@ -150,7 +150,7 @@ No durable task mutation may be performed by editing a markdown file, running ra
 
 Without this boundary, the following collapse is possible:
 
-1. An agent edits `.ai/tasks/260.md` front matter to set `status: closed`
+1. An agent edits `.ai/do-not-open/tasks/260.md` front matter to set `status: closed`
 2. The SQLite `task_lifecycle` table still shows `status: claimed`
 3. The projection layer shows conflicting states depending on which source it queries
 4. Governance is meaningless because any filesystem edit bypasses `governed_by`, `closed_by`, and audit trails

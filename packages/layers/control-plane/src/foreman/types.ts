@@ -4,11 +4,11 @@
  * Control-plane contracts for daemon dispatch, work opening, charter invocation,
  * evaluation validation, and outbound handoff.
  *
- * Spec: .ai/tasks/20260414-014-impl-foreman-core.md
- * Spec: .ai/tasks/20260414-006-assignment-agent-b-charter-invocation-v2.md
- * Spec: .ai/tasks/20260414-008-assignment-agent-d-outbound-handoff-v2.md
- * Spec: .ai/tasks/20260414-010-assignment-agent-f-daemon-foreman-dispatch.md
- * Spec: .ai/tasks/20260415-054-de-mailbox-charter-envelope.md
+ * Spec: .ai/do-not-open/tasks/20260414-014-impl-foreman-core.md
+ * Spec: .ai/do-not-open/tasks/20260414-006-assignment-agent-b-charter-invocation-v2.md
+ * Spec: .ai/do-not-open/tasks/20260414-008-assignment-agent-d-outbound-handoff-v2.md
+ * Spec: .ai/do-not-open/tasks/20260414-010-assignment-agent-f-daemon-foreman-dispatch.md
+ * Spec: .ai/do-not-open/tasks/20260415-054-de-mailbox-charter-envelope.md
  */
 
 import type {

@@ -3,8 +3,8 @@
  *
  * TypeScript types and Zod schemas for charter invocation and output.
  *
- * Spec: .ai/tasks/20260414-006-assignment-agent-b-charter-invocation-v2.md
- * Spec: .ai/tasks/20260415-054-de-mailbox-charter-envelope.md
+ * Spec: .ai/do-not-open/tasks/20260414-006-assignment-agent-b-charter-invocation-v2.md
+ * Spec: .ai/do-not-open/tasks/20260415-054-de-mailbox-charter-envelope.md
  */
 
 import { z } from "zod";

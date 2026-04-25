@@ -1,0 +1,14 @@
+{
+  "report_id": "wrr_5e033e62_20260424-612-agent-next-task-peek-contract_a1",
+  "task_number": "612",
+  "task_id": "20260424-612-agent-next-task-peek-contract",
+  "agent_id": "a1",
+  "assignment_id": "20260424-612-agent-next-task-peek-contract-2026-04-24T21:27:04.671Z",
+  "reported_at": "2026-04-24T21:36:48.443Z",
+  "summary": "Implemented task peek-next command. Non-mutating next-task inspection with findNextTaskForAgent helper. Focused tests pass. Typecheck clean.",
+  "changed_files": [],
+  "verification": [],
+  "known_residuals": [],
+  "ready_for_review": true,
+  "report_status": "submitted"
+}

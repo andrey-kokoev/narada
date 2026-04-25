@@ -154,10 +154,10 @@ IF transition is invalid per state machine:
 
 | Store | Current Path | Owner | Durability |
 |-------|-------------|-------|------------|
-| Task files | `<cwd>/.ai/tasks/*.md` | Task governance | Durable |
-| Assignments | `<cwd>/.ai/tasks/assignments/*.json` | Task governance | Durable |
+| Task files | `<cwd>/.ai/do-not-open/tasks/*.md` | Task governance | Durable |
+| Assignments | `<cwd>/.ai/do-not-open/tasks/tasks/assignments/*.json` | Task governance | Durable |
 | Roster | `<cwd>/.ai/agents/roster.json` | Task governance | Durable |
-| Reports | `<cwd>/.ai/tasks/reports/*.json` | Task governance | Durable |
+| Reports | `<cwd>/.ai/do-not-open/tasks/tasks/reports/*.json` | Task governance | Durable |
 | Reviews | `<cwd>/.ai/reviews/*.json` | Task governance | Durable |
 | PrincipalRuntime | `<config-dir>/.principal-runtimes.json` | Console / agent runtime | Ephemeral |
 

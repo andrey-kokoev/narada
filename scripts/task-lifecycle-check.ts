@@ -12,11 +12,12 @@
 
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join, basename } from "node:path";
+import { Database } from "@narada2/control-plane";
 
 const ROOT = process.cwd();
-const TASKS_DIR = join(ROOT, ".ai", "tasks");
-const REVIEWS_DIR = join(ROOT, ".ai", "reviews");
+const TASKS_DIR = join(ROOT, ".ai", "do-not-open", "tasks");
 const DECISIONS_DIR = join(ROOT, ".ai", "decisions");
+const TASK_LIFECYCLE_DB = join(ROOT, ".ai", "task-lifecycle.db");
 
 // ---------------------------------------------------------------------------
 // Types
@@ -190,34 +191,30 @@ function scanTasks(): { tasks: TaskFile[]; inconsistencies: Inconsistency[] } {
 
 function scanReviews(): ReviewFile[] {
   const reviews: ReviewFile[] = [];
-  const files = readDirSafe(REVIEWS_DIR, (n) => n.endsWith(".md"));
-
-  for (const filename of files) {
-    const filepath = join(REVIEWS_DIR, filename);
-    const content = readFileSafe(filepath);
-    if (content === null) continue;
-    const { frontMatter, body } = parseFrontMatter(content);
-
-    const reviewOf =
-      typeof frontMatter["review_of"] === "number"
-        ? frontMatter["review_of"]
-        : null;
-
-    const verdict =
-      typeof frontMatter["verdict"] === "string"
-        ? frontMatter["verdict"]
-        : null;
-
-    reviews.push({
-      filepath,
-      filename,
-      frontMatter,
-      body,
-      reviewOf,
-      verdict,
-    });
+  if (!existsSync(TASK_LIFECYCLE_DB)) return reviews;
+  try {
+    const db = new Database(TASK_LIFECYCLE_DB);
+    try {
+      const rows = db
+        .prepare("select review_id, task_id, verdict, findings_json from task_reviews order by reviewed_at desc")
+        .all() as Array<{ review_id: string; task_id: string; verdict: string; findings_json: string | null }>;
+      for (const row of rows) {
+        const match = String(row.task_id).match(/-(\d+)-/);
+        reviews.push({
+          filepath: `${TASK_LIFECYCLE_DB}#review:${row.review_id}`,
+          filename: row.review_id,
+          frontMatter: {},
+          body: row.findings_json ?? "",
+          reviewOf: match ? parseInt(match[1]!, 10) : null,
+          verdict: row.verdict,
+        });
+      }
+    } finally {
+      db.close();
+    }
+  } catch {
+    return reviews;
   }
-
   return reviews;
 }
 

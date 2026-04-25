@@ -162,7 +162,7 @@ In the target regime, the following patterns are **prohibited as normal task wor
 | Prohibited Pattern | Why Prohibited | Sanctioned Replacement |
 |-------------------|----------------|----------------------|
 | Editing task markdown front matter to change `status` | Bypasses SQLite authority and state machine | `task claim`, `task release`, `task report`, `task close`, `task reopen` |
-| Hand-writing a new `.ai/tasks/*.md` file | Bypasses number allocator; risks collisions | `task allocate` + future `task create` or `chapter init` |
+| Hand-writing a new `.ai/do-not-open/tasks/*.md` file | Bypasses number allocator; risks collisions | `task allocate` + future `task create` or `chapter init` |
 | Editing `depends_on` in front matter directly | No validation that dependencies exist or are terminal | Future: `task amend --depends-on` |
 | Manually editing acceptance criteria checkboxes | No audit trail; may bypass review | Future: `task check-criterion` |
 | Hand-writing execution notes or verification | No association with report/assignment | Future: `task report --append-notes` |

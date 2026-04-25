@@ -6,7 +6,7 @@
   "source": {
     "kind": "task",
     "task_number": 380,
-    "task_file": ".ai/tasks/20260421-380-site-registry-storage-discovery.md",
+    "task_file": ".ai/do-not-open/tasks/20260421-380-site-registry-storage-discovery.md",
     "section": "Execution Notes"
   },
   "title": "SQLite-backed store atomic write pattern",

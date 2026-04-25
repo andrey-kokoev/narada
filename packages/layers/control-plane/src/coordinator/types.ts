@@ -3,8 +3,8 @@
  *
  * Durable state for foreman, charter outputs, context records, and policy overrides.
  *
- * Spec: .ai/tasks/20260413-012-coordinator-state-and-foreman-handoff.md
- * Spec: .ai/tasks/20260414-004-coordinator-durable-state-v2.md
+ * Spec: .ai/do-not-open/tasks/20260413-012-coordinator-state-and-foreman-handoff.md
+ * Spec: .ai/do-not-open/tasks/20260414-004-coordinator-durable-state-v2.md
  */
 
 /** Neutral observation-facing context record (Task 084). */

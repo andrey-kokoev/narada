@@ -16,6 +16,7 @@ import {
   getActiveAssignment,
   isValidTransition,
   checkDependencies,
+  updateAgentRosterEntry,
   type TaskAssignmentRecord,
 } from '../lib/task-governance.js';
 import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
@@ -101,9 +102,52 @@ export async function taskClaimCommand(
   // Read task file front-matter
   const { frontMatter, body } = await readTaskFile(taskFile.path);
 
+  // --- SQLite-backed lifecycle path ---
+  let store;
+  try {
+    store = openTaskLifecycleStore(cwd);
+  } catch {
+    // Store may not exist yet; fallback to markdown-only
+  }
+
+  let sqliteStatus: string | undefined;
+  if (store) {
+    let lifecycle = store.getLifecycle(taskFile.taskId);
+    if (!lifecycle) {
+      // Backfill: task exists in markdown but not yet in SQLite
+      const taskNum = Number(taskNumber);
+      if (!Number.isFinite(taskNum)) {
+        store.db.close();
+        return {
+          exitCode: ExitCode.GENERAL_ERROR,
+          result: { status: 'error', error: 'Cannot determine task number for SQLite backfill' },
+        };
+      }
+      const markdownStatus = frontMatter.status as string | undefined;
+      if (typeof markdownStatus === 'string') {
+        store.upsertLifecycle({
+          task_id: taskFile.taskId,
+          task_number: taskNum,
+          status: markdownStatus as import('../lib/task-lifecycle-store.js').TaskStatus,
+          governed_by: (frontMatter.governed_by as string) || null,
+          closed_at: (frontMatter.closed_at as string) || null,
+          closed_by: (frontMatter.closed_by as string) || null,
+          reopened_at: (frontMatter.reopened_at as string) || null,
+          reopened_by: (frontMatter.reopened_by as string) || null,
+          continuation_packet_json: null,
+          updated_at: new Date().toISOString(),
+        });
+        lifecycle = store.getLifecycle(taskFile.taskId);
+      }
+    }
+    sqliteStatus = lifecycle?.status;
+  }
+
+  const currentStatus = sqliteStatus ?? (frontMatter.status as string | undefined);
+
   // Check task status allows claiming — must be explicitly 'opened' or 'needs_continuation'
-  const currentStatus = frontMatter.status;
   if (currentStatus !== 'opened' && currentStatus !== 'needs_continuation') {
+    if (store) store.db.close();
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: {
@@ -115,6 +159,7 @@ export async function taskClaimCommand(
 
   // Validate transition
   if (!isValidTransition(currentStatus, 'claimed')) {
+    if (store) store.db.close();
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: {
@@ -126,15 +171,9 @@ export async function taskClaimCommand(
 
   // Enforce dependencies at claim time (prefer SQLite-backed status)
   const dependsOn = frontMatter.depends_on as number[] | undefined;
-  let store;
-  try {
-    store = openTaskLifecycleStore(cwd);
-  } catch {
-    // Store may not exist yet; fallback to markdown-only checkDependencies
-  }
   const { blockedBy, details } = await checkDependencies(cwd, dependsOn, store);
-  if (store) store.db.close();
   if (blockedBy.length > 0) {
+    if (store) store.db.close();
     const detailMessages = details.map((d) => `${d.taskId}: ${d.reason}`).join('; ');
     return {
       exitCode: ExitCode.GENERAL_ERROR,
@@ -150,6 +189,7 @@ export async function taskClaimCommand(
   if (existing) {
     const active = getActiveAssignment(existing);
     if (active) {
+      if (store) store.db.close();
       return {
         exitCode: ExitCode.GENERAL_ERROR,
         result: {
@@ -178,11 +218,34 @@ export async function taskClaimCommand(
   frontMatter.status = 'claimed';
   await writeTaskFile(taskFile.path, frontMatter, body);
 
-  // Update roster last_active_at
-  agent.last_active_at = now;
-  const { join } = await import('node:path');
-  const { atomicWriteFile } = await import('../lib/task-governance.js');
-  await atomicWriteFile(join(cwd, '.ai/agents/roster.json'), JSON.stringify(roster, null, 2) + '\n');
+  // Write authoritative lifecycle and assignment state to SQLite
+  if (store) {
+    store.updateStatus(taskFile.taskId, 'claimed', agentId);
+    store.insertAssignment({
+      assignment_id: `assign-${taskFile.taskId}-${agentId}-${Date.now()}`,
+      task_id: taskFile.taskId,
+      agent_id: agentId,
+      claimed_at: now,
+      released_at: null,
+      release_reason: null,
+      intent: 'primary',
+    });
+  }
+
+  // Update roster to reflect active working assignment
+  try {
+    await updateAgentRosterEntry(cwd, agentId, {
+      status: 'working',
+      task: Number(taskNumber),
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (store) store.db.close();
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: { status: 'error', error: `Failed to update roster: ${msg}` },
+    };
+  }
 
   // Post-commit advisory PrincipalRuntime update
   if (options.updatePrincipalRuntime && agentId) {
@@ -200,6 +263,8 @@ export async function taskClaimCommand(
       // Best-effort advisory update — never fail the command
     }
   }
+
+  if (store) store.db.close();
 
   if (fmt.getFormat() === 'json') {
     return {

@@ -12,8 +12,8 @@ import { join } from 'node:path';
 
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'assignments'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'assignments'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
 
   writeFileSync(
     join(tempDir, '.ai', 'agents', 'roster.json'),
@@ -27,7 +27,7 @@ function setupRepo(tempDir: string) {
   );
 
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
     '---\ntask_id: 999\nstatus: opened\n---\n\n# Task 999: Test Task\n',
   );
 }
@@ -60,11 +60,11 @@ describe('task claim operator', () => {
     });
 
     // Task file updated
-    const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'), 'utf8');
+    const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
     expect(taskContent).toContain('status: claimed');
 
     // Assignment record created
-    const assignmentRaw = readFileSync(join(tempDir, '.ai', 'tasks', 'assignments', '20260420-999-test-task.json'), 'utf8');
+    const assignmentRaw = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'assignments', '20260420-999-test-task.json'), 'utf8');
     const assignment = JSON.parse(assignmentRaw);
     expect(assignment.task_id).toBe('20260420-999-test-task');
     expect(assignment.assignments).toHaveLength(1);
@@ -122,7 +122,7 @@ describe('task claim operator', () => {
 
   it('fails when task status is not opened', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
       '---\ntask_id: 999\nstatus: in_review\n---\n\n# Task 999: Test Task\n',
     );
 
@@ -139,7 +139,7 @@ describe('task claim operator', () => {
 
   it('fails when task has no front matter or status', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
       '# Task 999: Test Task\n\nNo front matter here.\n',
     );
 
@@ -180,13 +180,13 @@ describe('task claim operator', () => {
   it('fails when dependencies are not closed or confirmed', async () => {
     // Create dependency task 998 (opened, not closed)
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-998-dep-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-dep-task.md'),
       '---\ntask_id: 998\nstatus: opened\n---\n\n# Task 998: Dependency\n',
     );
 
     // Create main task with depends_on: [998]
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
       '---\ntask_id: 999\nstatus: opened\ndepends_on: [998]\n---\n\n# Task 999: Test Task\n',
     );
 
@@ -205,13 +205,13 @@ describe('task claim operator', () => {
   it('succeeds when dependencies are closed and complete by evidence', async () => {
     // Create dependency task 998 (closed, complete by evidence)
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-998-dep-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-dep-task.md'),
       '---\ntask_id: 998\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 998: Dependency\n\n## Acceptance Criteria\n\n- [x] Criterion 1\n\n## Execution Notes\n\nCompleted.\n\n## Verification\n\nVerified.\n',
     );
 
     // Create main task with depends_on: [998]
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
       '---\ntask_id: 999\nstatus: opened\ndepends_on: [998]\n---\n\n# Task 999: Test Task\n',
     );
 
@@ -228,13 +228,13 @@ describe('task claim operator', () => {
   it('fails when dependency is closed but not complete by evidence', async () => {
     // Create dependency task 998 (closed, but missing execution notes and verification)
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-998-dep-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-dep-task.md'),
       '---\ntask_id: 998\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 998: Dependency\n\n## Acceptance Criteria\n\n- [x] Criterion 1\n',
     );
 
     // Create main task with depends_on: [998]
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
       '---\ntask_id: 999\nstatus: opened\ndepends_on: [998]\n---\n\n# Task 999: Test Task\n',
     );
 
@@ -254,15 +254,15 @@ describe('task claim operator', () => {
 
   it('treats an executable dependency as satisfied even when a chapter range file shares its number', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260423-998-1000-synthetic-chapter.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260423-998-1000-synthetic-chapter.md'),
       '---\nstatus: opened\n---\n\n# Synthetic Chapter\n',
     );
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-998-dep-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-dep-task.md'),
       '---\ntask_id: 998\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 998: Dependency\n\n## Acceptance Criteria\n\n- [x] Criterion 1\n\n## Execution Notes\n\nCompleted.\n\n## Verification\n\nVerified.\n',
     );
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
       '---\ntask_id: 999\nstatus: opened\ndepends_on: [998]\n---\n\n# Task 999: Test Task\n',
     );
 
@@ -278,7 +278,7 @@ describe('task claim operator', () => {
 
   it('claims a needs_continuation task', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
       '---\ntask_id: 999\nstatus: needs_continuation\n---\n\n# Task 999: Test Task\n',
     );
 
@@ -292,20 +292,20 @@ describe('task claim operator', () => {
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({ status: 'success' });
 
-    const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'), 'utf8');
+    const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
     expect(taskContent).toContain('status: claimed');
   });
 
   it('preserves depends_on YAML list syntax when claiming', async () => {
     // Create closed dependency (complete by evidence)
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-998-dep-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-dep-task.md'),
       '---\ntask_id: 998\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 998: Dependency\n\n## Acceptance Criteria\n\n- [x] Criterion 1\n\n## Execution Notes\n\nCompleted.\n\n## Verification\n\nVerified.\n',
     );
 
     // Create task with YAML list depends_on
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
       '---\ntask_id: 999\nstatus: opened\ndepends_on:\n  - 998\nextra_field: preserved\n---\n\n# Task 999: Test Task\n',
     );
 
@@ -318,13 +318,32 @@ describe('task claim operator', () => {
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
 
-    const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'), 'utf8');
+    const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
     expect(taskContent).toContain('status: claimed');
 
     // Re-parse and verify depends_on survived
     const { readTaskFile } = await import('../../src/lib/task-governance.js');
-    const { frontMatter } = await readTaskFile(join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'));
+    const { frontMatter } = await readTaskFile(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'));
     expect(frontMatter.depends_on).toEqual([998]);
     expect(frontMatter.extra_field).toBe('preserved');
+  });
+
+  it('updates roster to working assignment on claim', async () => {
+    const result = await taskClaimCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      reason: 'Testing roster update',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+
+    const rosterRaw = readFileSync(join(tempDir, '.ai', 'agents', 'roster.json'), 'utf8');
+    const roster = JSON.parse(rosterRaw) as { agents: Array<{ agent_id: string; status: string; task: number | null }> };
+    const agent = roster.agents.find((a) => a.agent_id === 'test-agent');
+    expect(agent).toBeDefined();
+    expect(agent!.status).toBe('working');
+    expect(agent!.task).toBe(999);
   });
 });

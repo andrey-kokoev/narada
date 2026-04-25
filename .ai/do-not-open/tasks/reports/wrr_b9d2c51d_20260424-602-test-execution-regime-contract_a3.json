@@ -1,0 +1,21 @@
+{
+  "report_id": "wrr_b9d2c51d_20260424-602-test-execution-regime-contract_a3",
+  "task_number": "602",
+  "task_id": "20260424-602-test-execution-regime-contract",
+  "agent_id": "a3",
+  "assignment_id": "20260424-602-test-execution-regime-contract-2026-04-24T20:51:15.599Z",
+  "reported_at": "2026-04-24T20:51:32.339Z",
+  "summary": "Defined test execution regime contract with admissibility, scope classes, timeout, retry, environment, and terminal classifications",
+  "changed_files": [
+    ".ai/decisions/20260424-602-test-execution-regime-contract.md"
+  ],
+  "verification": [
+    {
+      "command": "pnpm verify",
+      "result": "passed"
+    }
+  ],
+  "known_residuals": [],
+  "ready_for_review": true,
+  "report_status": "accepted"
+}

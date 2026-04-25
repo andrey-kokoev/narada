@@ -2,7 +2,7 @@
 /**
  * Task File Guard
  *
- * Scans .ai/tasks/ and fails if forbidden derivative filename patterns are present.
+ * Scans .ai/do-not-open/tasks/ and fails if forbidden derivative filename patterns are present.
  * Forbidden patterns: *-EXECUTED.md, *-DONE.md, *-RESULT.md, *-FINAL.md, *-SUPERSEDED.md
  *
  * Task files are durable artifacts. Execution evidence belongs in the original file.
@@ -12,7 +12,7 @@
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 
-const TASKS_DIR = join(process.cwd(), ".ai", "tasks");
+const TASKS_DIR = join(process.cwd(), ".ai", "do-not-open", "tasks");
 
 const FORBIDDEN_PATTERNS = [
   { pattern: /-EXECUTED\.md$/i, name: "-EXECUTED.md" },
@@ -50,7 +50,7 @@ const violations = scan();
 if (violations.length > 0) {
   console.error("Task File Guard failed.");
   console.error("");
-  console.error("Forbidden derivative task filenames found in .ai/tasks/:");
+  console.error("Forbidden derivative task filenames found in .ai/do-not-open/tasks/:");
   for (const v of violations) {
     console.error(`  - ${v}`);
   }

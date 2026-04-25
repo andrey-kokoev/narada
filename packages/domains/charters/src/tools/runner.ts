@@ -4,7 +4,7 @@
  * Executes validated tool requests against their definitions,
  * enforces timeouts, and produces durable tool call records.
  *
- * Spec: .ai/tasks/20260414-007-assignment-agent-c-tool-binding-runtime.md
+ * Spec: .ai/do-not-open/tasks/20260414-007-assignment-agent-c-tool-binding-runtime.md
  */
 
 import { spawn } from "node:child_process";

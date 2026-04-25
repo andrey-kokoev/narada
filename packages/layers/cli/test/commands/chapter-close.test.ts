@@ -11,14 +11,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 function setupRepo(tempDir: string) {
-  mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'decisions'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'reviews'), { recursive: true });
 }
 
 function writeTask(tempDir: string, filename: string, frontMatter: string, title: string, extraBody = '') {
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', filename),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', filename),
     `---\n${frontMatter}---\n\n# ${title}\n\n## Acceptance Criteria\n- [x] Criterion A\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n${extraBody}`,
   );
 }
@@ -69,7 +69,7 @@ describe('chapter close operator — legacy chapter-name mode', () => {
     expect(r.non_terminal).toHaveLength(1);
     expect(r.completed).toHaveLength(1);
 
-    const content = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-260-a.md'), 'utf8');
+    const content = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-260-a.md'), 'utf8');
     expect(content).toContain('status: closed');
   });
 
@@ -94,7 +94,7 @@ describe('chapter close operator — legacy chapter-name mode', () => {
     expect(r.transitioned_to_confirmed).toHaveLength(1);
     expect(existsSync(r.artifact_path)).toBe(true);
 
-    const content = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-260-a.md'), 'utf8');
+    const content = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-260-a.md'), 'utf8');
     expect(content).toContain('status: confirmed');
   });
 
@@ -119,7 +119,7 @@ describe('chapter close operator — legacy chapter-name mode', () => {
     const artifacts = require('node:fs').readdirSync(decisionsDir);
     expect(artifacts).toHaveLength(0);
 
-    const content = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-260-a.md'), 'utf8');
+    const content = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-260-a.md'), 'utf8');
     expect(content).toContain('status: closed');
   });
 
@@ -251,7 +251,7 @@ describe('chapter close operator — range-based mode', () => {
     const decision = readFileSync(r.decision_path, 'utf8');
     expect(decision).toContain('status: accepted');
 
-    const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-100-a.md'), 'utf8');
+    const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-a.md'), 'utf8');
     expect(taskContent).toContain('status: confirmed');
   });
 
@@ -391,7 +391,7 @@ describe('chapter close operator — range-based mode', () => {
 
   it('--finish rejects terminal tasks with unchecked criteria', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-100-a.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-a.md'),
       `---\ntask_id: 100\nstatus: closed\n---\n\n# Task 100 — A\n\n## Acceptance Criteria\n- [ ] Unchecked\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
     );
     writeTask(tempDir, '20260420-101-b.md', 'task_id: 101\nstatus: confirmed\n', 'Task 101 — B');
@@ -418,7 +418,7 @@ describe('chapter close operator — range-based mode', () => {
     expect(r.error).toContain('terminal_with_unchecked_criteria');
 
     // No transitions should have occurred
-    const content = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-100-a.md'), 'utf8');
+    const content = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-a.md'), 'utf8');
     expect(content).toContain('status: closed');
   });
 });

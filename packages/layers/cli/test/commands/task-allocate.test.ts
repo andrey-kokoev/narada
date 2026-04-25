@@ -6,18 +6,19 @@ vi.unmock('node:fs/promises');
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskAllocateCommand } from '../../src/commands/task-allocate.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 function setupRepo(tempDir: string) {
-  mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-100-alpha.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-alpha.md'),
     '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n',
   );
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-200-beta.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-200-beta.md'),
     '---\ntask_id: 200\nstatus: opened\n---\n\n# Task 200\n',
   );
 }
@@ -40,10 +41,12 @@ describe('task allocate operator', () => {
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({ status: 'success', allocated_number: 201 });
 
-    const registryRaw = readFileSync(join(tempDir, '.ai', 'tasks', '.registry.json'), 'utf8');
-    const registry = JSON.parse(registryRaw);
-    expect(registry.last_allocated).toBe(201);
-    expect(registry.reserved).toContain(201);
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      expect(store.getLastAllocated()).toBe(201);
+    } finally {
+      store.db.close();
+    }
   });
 
   it('allocates sequentially', async () => {
@@ -57,7 +60,7 @@ describe('task allocate operator', () => {
   it('reconciles stale registry with current max', async () => {
     // Create a registry that lags behind the actual task files
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '.registry.json'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '.registry.json'),
       JSON.stringify({ version: 1, last_allocated: 50, reserved: [], released: [] }, null, 2),
     );
 
@@ -66,15 +69,18 @@ describe('task allocate operator', () => {
     // Should allocate 201 (max from files is 200), not 51
     expect(result.result).toMatchObject({ allocated_number: 201 });
 
-    const registryRaw = readFileSync(join(tempDir, '.ai', 'tasks', '.registry.json'), 'utf8');
-    const registry = JSON.parse(registryRaw);
-    expect(registry.last_allocated).toBe(201);
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      expect(store.getLastAllocated()).toBe(201);
+    } finally {
+      store.db.close();
+    }
   });
 
   it('allocates from a registry with reservations field (all released)', async () => {
     // Simulate reservation-era registry where all reservations are released
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '.registry.json'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '.registry.json'),
       JSON.stringify(
         {
           version: 1,
@@ -101,15 +107,17 @@ describe('task allocate operator', () => {
     // Should allocate 201 (max from files is 200), not reuse 150
     expect(result.result).toMatchObject({ allocated_number: 201 });
 
-    const registryRaw = readFileSync(join(tempDir, '.ai', 'tasks', '.registry.json'), 'utf8');
-    const registry = JSON.parse(registryRaw);
-    expect(registry.last_allocated).toBe(201);
-    expect(registry.reserved).toContain(201);
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      expect(store.getLastAllocated()).toBe(201);
+    } finally {
+      store.db.close();
+    }
   });
 
   it('allocates from a registry with empty reservations array', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '.registry.json'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '.registry.json'),
       JSON.stringify(
         {
           version: 1,
@@ -126,9 +134,9 @@ describe('task allocate operator', () => {
     expect(result.result).toMatchObject({ allocated_number: 201 });
   });
 
-  it('reuses released numbers from legacy registry', async () => {
+  it('does not reuse released numbers from legacy registry once SQLite is authoritative', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '.registry.json'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '.registry.json'),
       JSON.stringify(
         {
           version: 1,
@@ -143,13 +151,13 @@ describe('task allocate operator', () => {
 
     const result = await taskAllocateCommand({ cwd: tempDir, format: 'json' });
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    // Should reuse the smallest released number
-    expect(result.result).toMatchObject({ allocated_number: 198 });
+    // SQLite authority is monotonic; projection-era released numbers are ignored.
+    expect(result.result).toMatchObject({ allocated_number: 201 });
 
-    const registryRaw = readFileSync(join(tempDir, '.ai', 'tasks', '.registry.json'), 'utf8');
+    const registryRaw = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '.registry.json'), 'utf8');
     const registry = JSON.parse(registryRaw);
-    expect(registry.released).not.toContain(198);
-    expect(registry.reserved).toContain(198);
+    expect(registry.last_allocated).toBe(201);
+    expect(registry.reserved).toContain(201);
   });
 
   it('emits structured JSON output', async () => {
@@ -172,30 +180,31 @@ describe('task allocate operator', () => {
   it('does not leave temp files behind after allocation', async () => {
     await taskAllocateCommand({ cwd: tempDir, format: 'json' });
 
-    const files = readdirSync(join(tempDir, '.ai', 'tasks'));
+    const files = readdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'));
     const tempFiles = files.filter((f) => f.startsWith('.tmp-'));
     expect(tempFiles).toHaveLength(0);
   });
 
   it('dry-run reports next number without mutating registry', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '.registry.json'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '.registry.json'),
       JSON.stringify({ version: 1, last_allocated: 200, reserved: [], released: [] }, null, 2),
     );
-
-    const beforeRaw = readFileSync(join(tempDir, '.ai', 'tasks', '.registry.json'), 'utf8');
 
     const result = await taskAllocateCommand({ cwd: tempDir, format: 'json', dryRun: true });
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({ status: 'dry_run', next_number: 201 });
-
-    const afterRaw = readFileSync(join(tempDir, '.ai', 'tasks', '.registry.json'), 'utf8');
-    expect(afterRaw).toBe(beforeRaw);
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      expect(store.getLastAllocated()).toBe(0);
+    } finally {
+      store.db.close();
+    }
   });
 
   it('dry-run previews next number from reservation-era registry', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '.registry.json'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '.registry.json'),
       JSON.stringify(
         {
           version: 1,

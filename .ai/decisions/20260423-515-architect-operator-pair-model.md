@@ -126,7 +126,7 @@ An artifact is **promotable** when it crosses from advisory to durable through a
 | `TaskRecommendation` | `task promote-recommendation` | Assignment + claimed task | `resolve` (operator approves) |
 | `ConstructionLoopPlan` | Operator executes plan steps | Completed tasks, merged code | `resolve` + `execute` |
 | `Review draft` | `task review --verdict accepted` | Review artifact + closed task | `confirm` |
-| `Design document` | Task creation + assignment | Task file in `.ai/tasks/` | `admin` |
+| `Design document` | Task creation + assignment | Task file in `.ai/do-not-open/tasks/` | `admin` |
 
 **Key invariant:** Promotion is always explicit. The architect cannot auto-promote its own recommendations. Even under `bounded_auto` policy, the promotion is performed by the construction loop controller acting as a delegated operator surrogate, not by the architect directly.
 

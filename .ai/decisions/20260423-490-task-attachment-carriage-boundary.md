@@ -104,7 +104,7 @@ Reasons are free-text-adjacent and may expand. Intents are the stable semantic e
 
 ## Assignment Record Shape (Target)
 
-The current assignment record in `.ai/tasks/assignments/README.md` should be extended to include `intent`:
+The current assignment record in `.ai/do-not-open/tasks/tasks/assignments/README.md` should be extended to include `intent`:
 
 ```json
 {

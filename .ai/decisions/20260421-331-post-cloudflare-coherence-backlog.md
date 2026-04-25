@@ -4,7 +4,7 @@
 >
 > Closure inputs: Task 329 (operational prototype closure), Task 330 (ontology closure review), SEMANTICS.md §2.14, docs/deployment/cloudflare-site-materialization.md.
 >
-> Chapter file: [`.ai/tasks/20260421-332-337-post-cloudflare-coherence-chapter.md`](../tasks/20260421-332-337-post-cloudflare-coherence-chapter.md)
+> Chapter file: [`.ai/do-not-open/tasks/20260421-332-337-post-cloudflare-coherence-chapter.md`](../tasks/20260421-332-337-post-cloudflare-coherence-chapter.md)
 
 ---
 

@@ -253,7 +253,7 @@ export const CROSSING_REGIME_INVENTORY: readonly CrossingRegimeInventoryEntry[] 
         "9 validation checks (task_exists, task_status, dependencies, agent_exists, agent_available, no_active_assignment, write_set_risk, recommendation_fresh, principal_unavailable) + 1-hour freshness window + policy gate",
       crossing_artifact: "`AssignmentPromotionRequest` record",
       confirmation_rule:
-        "Assignment record durably created in `.ai/tasks/assignments/` + task status transitioned to `claimed`",
+        "Assignment record durably created in SQLite-backed task assignment authority + task status transitioned to `claimed`",
       anti_collapse_invariant:
         "Prevents advisory scoring from becoming authoritative assignment without independent validation.",
       documented_at: ".ai/decisions/20260423-555-recommendation-to-assignment-crossing-contract.md",

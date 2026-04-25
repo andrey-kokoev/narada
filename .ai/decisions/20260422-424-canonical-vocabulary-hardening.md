@@ -14,17 +14,17 @@
 | [`SEMANTICS.md §1`](../SEMANTICS.md) | User-facing vocabulary; `operation specification` definition |
 | [`SEMANTICS.md §2.14`](../SEMANTICS.md) | Current crystallized vocabulary (`Aim / Site / Cycle / Act / Trace`) |
 | [`AGENTS.md`](../AGENTS.md) | Agent semantic crystallization guidance |
-| [`.ai/tasks/20260420-307-semantic-crystallization-aim-site-cycle-act-trace.md`](../tasks/20260420-307-semantic-crystallization-aim-site-cycle-act-trace.md) | Original introduction of the tuple |
-| [`.ai/tasks/20260421-333-canonical-vocabulary-hardening.md`](../tasks/20260421-333-canonical-vocabulary-hardening.md) | Deferred hardening task |
+| [`.ai/do-not-open/tasks/20260420-307-semantic-crystallization-aim-site-cycle-act-trace.md`](../tasks/20260420-307-semantic-crystallization-aim-site-cycle-act-trace.md) | Original introduction of the tuple |
+| [`.ai/do-not-open/tasks/20260421-333-canonical-vocabulary-hardening.md`](../tasks/20260421-333-canonical-vocabulary-hardening.md) | Deferred hardening task |
 | [`.ai/decisions/20260421-330-cloudflare-site-ontology-closure.md`](20260421-330-cloudflare-site-ontology-closure.md) | Cloudflare ontology closure; confirmed tuple coherence |
 | [`.ai/decisions/20260421-331-post-cloudflare-coherence-backlog.md`](20260421-331-post-cloudflare-coherence-backlog.md) | Post-Cloudflare realization: "portable control grammar"; introduced sharper objects |
 | [`.ai/decisions/20260422-406-principal-runtime-state-machine.md`](20260422-406-principal-runtime-state-machine.md) | PrincipalRuntime design; six-layer separation; no tuple changes needed |
-| [`.ai/tasks/20260422-397-session-attachment-semantics-for-sites-and-agents.md`](../tasks/20260422-397-session-attachment-semantics-for-sites-and-agents.md) | Session attachment; uses tuple without smear |
-| [`.ai/tasks/20260422-398-email-marketing-live-dry-run-chapter-shaping.md`](../tasks/20260422-398-email-marketing-live-dry-run-chapter-shaping.md) | Live dry run; needs operation-refinement vocabulary |
-| [`.ai/tasks/20260422-419-windows-live-graph-sync-step.md`](../tasks/20260422-419-windows-live-graph-sync-step.md) | Live sync step; uses "Aim" for operation specification |
-| [`.ai/tasks/20260422-420-windows-campaign-context-derivation-step.md`](../tasks/20260422-420-windows-campaign-context-derivation-step.md) | Context derivation; tuple holds |
-| [`.ai/tasks/20260422-421-windows-charter-evaluation-step.md`](../tasks/20260422-421-windows-charter-evaluation-step.md) | Charter evaluation; tuple holds |
-| [`.ai/tasks/20260422-422-windows-foreman-handoff-step.md`](../tasks/20260422-422-windows-foreman-handoff-step.md) | Foreman handoff; tuple holds |
+| [`.ai/do-not-open/tasks/20260422-397-session-attachment-semantics-for-sites-and-agents.md`](../tasks/20260422-397-session-attachment-semantics-for-sites-and-agents.md) | Session attachment; uses tuple without smear |
+| [`.ai/do-not-open/tasks/20260422-398-email-marketing-live-dry-run-chapter-shaping.md`](../tasks/20260422-398-email-marketing-live-dry-run-chapter-shaping.md) | Live dry run; needs operation-refinement vocabulary |
+| [`.ai/do-not-open/tasks/20260422-419-windows-live-graph-sync-step.md`](../tasks/20260422-419-windows-live-graph-sync-step.md) | Live sync step; uses "Aim" for operation specification |
+| [`.ai/do-not-open/tasks/20260422-420-windows-campaign-context-derivation-step.md`](../tasks/20260422-420-windows-campaign-context-derivation-step.md) | Context derivation; tuple holds |
+| [`.ai/do-not-open/tasks/20260422-421-windows-charter-evaluation-step.md`](../tasks/20260422-421-windows-charter-evaluation-step.md) | Charter evaluation; tuple holds |
+| [`.ai/do-not-open/tasks/20260422-422-windows-foreman-handoff-step.md`](../tasks/20260422-422-windows-foreman-handoff-step.md) | Foreman handoff; tuple holds |
 
 ---
 
@@ -187,7 +187,7 @@ Per Task 424 non-goals:
 |------|--------|
 | [`SEMANTICS.md §2.14`](../SEMANTICS.md) | Redefined `Aim` as inspectable specification-bearing object. Added canonical expansion table. Added phase vocabulary for Control Cycle. Added operation refinement path. Updated forbidden smears. |
 | [`AGENTS.md`](../AGENTS.md) | Updated semantic crystallization guidance to reference canonical expansions and phase vocabulary. |
-| [`.ai/tasks/20260421-333-canonical-vocabulary-hardening.md`](../tasks/20260421-333-canonical-vocabulary-hardening.md) | Added forward reference to Task 424 as the reopening/hardening pass. |
+| [`.ai/do-not-open/tasks/20260421-333-canonical-vocabulary-hardening.md`](../tasks/20260421-333-canonical-vocabulary-hardening.md) | Added forward reference to Task 424 as the reopening/hardening pass. |
 | This file | Created decision record. |
 
 ---

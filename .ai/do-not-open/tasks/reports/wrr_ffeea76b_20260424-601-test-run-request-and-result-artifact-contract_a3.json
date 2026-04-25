@@ -1,0 +1,21 @@
+{
+  "report_id": "wrr_ffeea76b_20260424-601-test-run-request-and-result-artifact-contract_a3",
+  "task_number": "601",
+  "task_id": "20260424-601-test-run-request-and-result-artifact-contract",
+  "agent_id": "a3",
+  "assignment_id": "20260424-601-test-run-request-and-result-artifact-contract-2026-04-24T20:50:47.487Z",
+  "reported_at": "2026-04-24T20:51:04.095Z",
+  "summary": "Defined test run request and result artifact contracts with authoritative/advisory split and task-evidence linkage",
+  "changed_files": [
+    ".ai/decisions/20260424-601-test-run-request-and-result-artifact-contract.md"
+  ],
+  "verification": [
+    {
+      "command": "pnpm verify",
+      "result": "passed"
+    }
+  ],
+  "known_residuals": [],
+  "ready_for_review": true,
+  "report_status": "accepted"
+}

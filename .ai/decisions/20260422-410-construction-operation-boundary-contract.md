@@ -31,11 +31,11 @@ The Construction Operation runs at a **local filesystem Site** with the followin
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| Task graph | `.ai/tasks/*.md` | Durable work inventory and state machine |
+| Task graph | `.ai/do-not-open/tasks/*.md` | Durable work inventory and state machine |
 | Agent roster | `.ai/agents/roster.json` | Static identity + capability catalog |
-| Assignment records | `.ai/tasks/assignments/*.json` | Who claimed/released what and when |
+| Assignment records | `.ai/do-not-open/tasks/tasks/assignments/*.json` | Who claimed/released what and when |
 | Review records | `.ai/reviews/*.json` | Structured findings with severity and verdict |
-| Registry | `.ai/tasks/.registry.json` | Atomic task number allocation |
+| Registry | `.ai/do-not-open/tasks/tasks/.registry.json` | Atomic task number allocation |
 | Source code | Repository working tree | The system being constructed |
 | Coordinator (optional) | `packages/layers/control-plane` SQLite store | If the Site also runs mailbox/marketing verticals |
 

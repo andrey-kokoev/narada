@@ -6,7 +6,11 @@
  */
 
 import { resolve } from 'node:path';
-import { listEvidenceBasedTasks, type TaskCompletionEvidence } from '../lib/task-governance.js';
+import {
+  listEvidenceBasedTasks,
+  type TaskCompletionEvidence,
+  type EvidenceBasedTaskEntry,
+} from '../lib/task-governance.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 
@@ -18,7 +22,12 @@ export interface TaskEvidenceListOptions {
   verdict?: string;
   status?: string;
   range?: string;
+  limit?: string | number;
+  full?: boolean;
 }
+
+const DEFAULT_LIST_LIMIT = 25;
+const MAX_LIST_LIMIT = 100;
 
 const ALL_VERDICTS: EvidenceVerdict[] = [
   'complete',
@@ -58,6 +67,52 @@ function parseRangeFilter(input: string | undefined): { start: number; end: numb
   return { start, end };
 }
 
+function parseLimit(input: string | number | undefined): number {
+  if (typeof input === 'number' && Number.isInteger(input) && input > 0) {
+    return Math.min(input, MAX_LIST_LIMIT);
+  }
+  if (typeof input === 'string') {
+    const parsed = Number.parseInt(input, 10);
+    if (Number.isInteger(parsed) && parsed > 0) {
+      return Math.min(parsed, MAX_LIST_LIMIT);
+    }
+  }
+  return DEFAULT_LIST_LIMIT;
+}
+
+function buildVerdictSummary(tasks: Array<{ verdict: EvidenceVerdict }>): Record<EvidenceVerdict, number> {
+  const summary = Object.fromEntries(ALL_VERDICTS.map((verdict) => [verdict, 0])) as Record<
+    EvidenceVerdict,
+    number
+  >;
+  for (const task of tasks) {
+    summary[task.verdict] += 1;
+  }
+  return summary;
+}
+
+function serializeTaskEvidence(t: EvidenceBasedTaskEntry) {
+  return {
+    task_number: t.task_number,
+    task_id: t.task_id,
+    title: t.title,
+    status: t.status,
+    verdict: t.verdict,
+    missing: {
+      unchecked_criteria: t.unchecked_count,
+      execution_notes: !t.has_execution_notes,
+      verification: !t.has_verification,
+      report: !t.has_report,
+      review: !t.has_review,
+      closure: !t.has_closure,
+    },
+    warnings: t.warnings,
+    violations: t.violations,
+    assigned_agent: t.assigned_agent,
+    active_assignment_intent: t.active_assignment_intent,
+  };
+}
+
 export async function taskEvidenceListCommand(
   options: TaskEvidenceListOptions,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
@@ -83,36 +138,32 @@ export async function taskEvidenceListCommand(
     };
   }
 
+  const full = options.full === true;
+  const limit = full ? tasks.length : parseLimit(options.limit);
+  const visibleTasks = full ? tasks : tasks.slice(0, limit);
+  const truncated = visibleTasks.length < tasks.length;
+  const verdictSummary = buildVerdictSummary(tasks);
+  const filter = {
+    verdict: verdictFilter ?? NOT_COMPLETE_VERDICTS,
+    status: statusFilter ?? null,
+    range: rangeFilter ?? null,
+  };
+
   if (fmt.getFormat() === 'json') {
     return {
       exitCode: ExitCode.SUCCESS,
       result: {
         status: 'success',
         count: tasks.length,
-        filter: {
-          verdict: verdictFilter ?? NOT_COMPLETE_VERDICTS,
-          status: statusFilter ?? null,
-          range: rangeFilter ?? null,
+        returned_count: visibleTasks.length,
+        truncated,
+        limit: full ? null : limit,
+        full,
+        filter,
+        summary: {
+          verdicts: verdictSummary,
         },
-        tasks: tasks.map((t) => ({
-          task_number: t.task_number,
-          task_id: t.task_id,
-          title: t.title,
-          status: t.status,
-          verdict: t.verdict,
-          missing: {
-            unchecked_criteria: t.unchecked_count,
-            execution_notes: !t.has_execution_notes,
-            verification: !t.has_verification,
-            report: !t.has_report,
-            review: !t.has_review,
-            closure: !t.has_closure,
-          },
-          warnings: t.warnings,
-          violations: t.violations,
-          assigned_agent: t.assigned_agent,
-          active_assignment_intent: t.active_assignment_intent,
-        })),
+        tasks: visibleTasks.map(serializeTaskEvidence),
       },
     };
   }
@@ -121,16 +172,19 @@ export async function taskEvidenceListCommand(
     fmt.message('No tasks match the evidence filter', 'info');
     return {
       exitCode: ExitCode.SUCCESS,
-      result: { status: 'success', count: 0, tasks: [] },
+      result: { status: 'success', count: 0, returned_count: 0, truncated: false, tasks: [] },
     };
   }
 
   const filterDesc = options.verdict
     ? `verdict=${options.verdict}`
     : 'not-complete';
-  fmt.section(`Evidence-Based Task List (${tasks.length}) — ${filterDesc}`);
+  const title = truncated
+    ? `Evidence-Based Task List (${visibleTasks.length} of ${tasks.length}) — ${filterDesc}`
+    : `Evidence-Based Task List (${tasks.length}) — ${filterDesc}`;
+  fmt.section(title);
 
-  const rows = tasks.map((t) => {
+  const rows = visibleTasks.map((t) => {
     const missingFlags: string[] = [];
     if (t.unchecked_count > 0) missingFlags.push(`-${t.unchecked_count} criteria`);
     if (!t.has_execution_notes) missingFlags.push('no-notes');
@@ -170,8 +224,15 @@ export async function taskEvidenceListCommand(
     rows,
   );
 
+  if (truncated) {
+    fmt.message(
+      `Showing ${visibleTasks.length} of ${tasks.length} tasks. Use --full for the complete list or --limit <n> to adjust the preview.`,
+      'info',
+    );
+  }
+
   // Show warnings/violations summary if any
-  const tasksWithIssues = tasks.filter((t) => t.warnings.length > 0 || t.violations.length > 0);
+  const tasksWithIssues = visibleTasks.filter((t) => t.warnings.length > 0 || t.violations.length > 0);
   if (tasksWithIssues.length > 0) {
     console.log('');
     for (const t of tasksWithIssues) {
@@ -186,34 +247,19 @@ export async function taskEvidenceListCommand(
   }
 
   return {
-    exitCode: ExitCode.SUCCESS,
-    result: {
-      status: 'success',
-      count: tasks.length,
-      filter: {
-        verdict: verdictFilter ?? NOT_COMPLETE_VERDICTS,
-        status: statusFilter ?? null,
-        range: rangeFilter ?? null,
-      },
-      tasks: tasks.map((t) => ({
-        task_number: t.task_number,
-        task_id: t.task_id,
-        title: t.title,
-        status: t.status,
-        verdict: t.verdict,
-        missing: {
-          unchecked_criteria: t.unchecked_count,
-          execution_notes: !t.has_execution_notes,
-          verification: !t.has_verification,
-          report: !t.has_report,
-          review: !t.has_review,
-          closure: !t.has_closure,
+      exitCode: ExitCode.SUCCESS,
+      result: {
+        status: 'success',
+        count: tasks.length,
+        returned_count: visibleTasks.length,
+        truncated,
+        limit: full ? null : limit,
+        full,
+        filter,
+        summary: {
+          verdicts: verdictSummary,
         },
-        warnings: t.warnings,
-        violations: t.violations,
-        assigned_agent: t.assigned_agent,
-        active_assignment_intent: t.active_assignment_intent,
-      })),
-    },
+        tasks: visibleTasks.map(serializeTaskEvidence),
+      },
   };
 }

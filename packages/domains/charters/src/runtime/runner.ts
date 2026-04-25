@@ -6,7 +6,7 @@
  * CharterInvocationEnvelope, then parses and validates the response
  * into a CharterOutputEnvelope.
  *
- * Spec: .ai/tasks/20260414-006-assignment-agent-b-charter-invocation-v2.md
+ * Spec: .ai/do-not-open/tasks/20260414-006-assignment-agent-b-charter-invocation-v2.md
  */
 
 import type {

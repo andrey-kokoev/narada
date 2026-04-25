@@ -13,8 +13,8 @@ import { join } from 'node:path';
 
 function setupRepo(tempDir: string, roster?: unknown) {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'assignments'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'reports'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'reviews'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'learning', 'accepted'), { recursive: true });
 
@@ -47,7 +47,7 @@ function setupRepo(tempDir: string, roster?: unknown) {
   );
 
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
     '---\ntask_id: 999\nstatus: opened\n---\n\n# Task 999: Test Task\n\n## Acceptance Criteria\n\n- [x] Criterion A\n- [x] Criterion B\n',
   );
 
@@ -145,7 +145,7 @@ describe('task finish operator', () => {
       expect(data.roster_transition).toBe('done');
 
       // Only one report file should exist
-      const reportsDir = join(tempDir, '.ai', 'tasks', 'reports');
+      const reportsDir = join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports');
       const reportFiles = require('node:fs').readdirSync(reportsDir).filter((f: string) => f.endsWith('.json'));
       expect(reportFiles.length).toBe(1);
     });

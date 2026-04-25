@@ -12,10 +12,10 @@ import { join } from 'node:path';
 
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'assignments'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'reports'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'reviews'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'learning', 'accepted'), { recursive: true });
 
   writeFileSync(
@@ -31,29 +31,29 @@ function setupRepo(tempDir: string) {
 
   // Task 998: opened in markdown, will be overridden in SQLite
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-998-test-task.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-test-task.md'),
     '---\ntask_id: 998\nstatus: opened\n---\n\n# Task 998: Test Task\n\nA test task.\n',
   );
 
   // Task 999: opened in markdown
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-999-other-task.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-other-task.md'),
     '---\ntask_id: 999\nstatus: opened\n---\n\n# Task 999: Other Task\n\nAnother test task.\n',
   );
 
   // Task 997: needs_continuation in markdown, will be overridden to opened in SQLite
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-997-continuation-task.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-997-continuation-task.md'),
     '---\ntask_id: 997\nstatus: needs_continuation\n---\n\n# Task 997: Continuation Task\n\nNeeds continuation.\n',
   );
 }
 
 function setupWarmContextRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'assignments'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'reports'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'reviews'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
 
   // Two equivalent agents — same capabilities, both idle
   writeFileSync(
@@ -70,19 +70,19 @@ function setupWarmContextRepo(tempDir: string) {
 
   // Task 1000: in "Warm Chapter" — opened
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-1000-warm-ctx-task.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-1000-warm-ctx-task.md'),
     '---\ntask_id: 1000\nstatus: opened\n---\n\n# Task 1000: Warm Chapter Task\n\n## Chapter\nWarm Chapter\n\nDo something in warm chapter.\n',
   );
 
   // Task 1001: also in "Warm Chapter" — opened
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-1001-warm-ctx-task.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-1001-warm-ctx-task.md'),
     '---\ntask_id: 1001\nstatus: opened\n---\n\n# Task 1001: Another Warm Chapter Task\n\n## Chapter\nWarm Chapter\n\nDo something else.\n',
   );
 
   // Task 1002: in "Cold Chapter" — opened
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-1002-cold-ctx-task.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-1002-cold-ctx-task.md'),
     '---\ntask_id: 1002\nstatus: opened\n---\n\n# Task 1002: Cold Chapter Task\n\n## Chapter\nCold Chapter\n\nDo something in cold chapter.\n',
   );
 }
@@ -183,7 +183,7 @@ describe('generateRecommendations warm-context affinity', () => {
   it('prefers agent with recent same-chapter work over equivalent idle agent', async () => {
     // agent-warm completed task 1001 (in Warm Chapter) yesterday
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', 'assignments', '20260420-1001-warm-ctx-task.json'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-1001-warm-ctx-task.json'),
       JSON.stringify({
         task_id: '20260420-1001-warm-ctx-task',
         assignments: [
@@ -214,7 +214,7 @@ describe('generateRecommendations warm-context affinity', () => {
   it('stale warm context decays to near-zero after 14 days', async () => {
     // agent-warm completed task 1001 (in Warm Chapter) 14 days ago
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', 'assignments', '20260420-1001-warm-ctx-task.json'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-1001-warm-ctx-task.json'),
       JSON.stringify({
         task_id: '20260420-1001-warm-ctx-task',
         assignments: [
@@ -244,7 +244,7 @@ describe('generateRecommendations warm-context affinity', () => {
   it('hard blockers still skip agent even with strong warm context', async () => {
     // agent-warm completed task 1001 (in Warm Chapter) yesterday — strong warm context
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', 'assignments', '20260420-1001-warm-ctx-task.json'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-1001-warm-ctx-task.json'),
       JSON.stringify({
         task_id: '20260420-1001-warm-ctx-task',
         assignments: [
@@ -261,7 +261,7 @@ describe('generateRecommendations warm-context affinity', () => {
 
     // agent-warm has an active assignment on another task (at capacity)
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', 'assignments', '20260420-1002-cold-ctx-task.json'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-1002-cold-ctx-task.json'),
       JSON.stringify({
         task_id: '20260420-1002-cold-ctx-task',
         assignments: [

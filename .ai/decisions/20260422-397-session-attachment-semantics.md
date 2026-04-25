@@ -270,7 +270,7 @@ The roster at `.ai/agents/roster.json` tracks which agent is working which task.
 
 ### 6.2 Task Assignments
 
-Task assignment (from `.ai/tasks/`) is a governance concept. Session attachment is a runtime concept.
+Task assignment (from `.ai/do-not-open/tasks/`) is a governance concept. Session attachment is a runtime concept.
 
 - A task may be assigned to agent `a2` without `a2` being attached to any Site.
 - Agent `a2` may be attached to a Site without having any assigned tasks (e.g., monitoring).

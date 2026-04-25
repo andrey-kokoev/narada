@@ -5,7 +5,7 @@
  * the authority boundary that only the outbound worker executes
  * mailbox mutations.
  *
- * Spec: .ai/tasks/20260414-008-assignment-agent-d-outbound-handoff-v2.md
+ * Spec: .ai/do-not-open/tasks/20260414-008-assignment-agent-d-outbound-handoff-v2.md
  */
 
 import type { CoordinatorStore, ForemanDecisionRow } from "../coordinator/types.js";

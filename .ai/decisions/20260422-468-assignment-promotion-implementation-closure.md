@@ -18,7 +18,7 @@ Task 468 implemented the governed promotion operator designed in Task 427. The `
 - `main.ts` — CLI wiring for `--task`, `--agent`, `--by`, `--override-risk`, `--dry-run`, `--format`
 - `task-governance.ts` — fixed `checkDependencies` numeric matching for zero-padded task filenames
 - `test/commands/task-promote-recommendation.test.ts` — 14 tests covering success, all failure paths, dry-run, override, and atomicity
-- `.ai/tasks/promotions/README.md` — schema and invariant documentation
+- `.ai/do-not-open/tasks/tasks/promotions/README.md` — schema and invariant documentation
 - `.ai/task-contracts/agent-task-execution.md` — promotion path guidance
 - `.ai/decisions/20260422-427-governed-recommendation-promotion.md` — implementation notes added
 

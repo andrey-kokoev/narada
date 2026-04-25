@@ -15,10 +15,10 @@ import { join } from 'node:path';
 
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'assignments'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'reports'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'reviews'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'learning', 'accepted'), { recursive: true });
 
   writeFileSync(
@@ -36,19 +36,19 @@ function setupRepo(tempDir: string) {
 
   // Task 998: opened, TypeScript/CLI task
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-998-typescript-task.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-typescript-task.md'),
     '---\ntask_id: 998\nstatus: opened\n---\n\n# Task 998: TypeScript CLI Feature\n\nImplement a new CLI command in TypeScript.\n',
   );
 
   // Task 999: opened, database task
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-999-database-task.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-database-task.md'),
     '---\ntask_id: 999\nstatus: opened\n---\n\n# Task 999: Database Schema Update\n\nUpdate the SQLite schema for new tables.\n',
   );
 
   // Task 997: opened, blocked by dependency
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-997-blocked-task.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-997-blocked-task.md'),
     '---\ntask_id: 997\nstatus: opened\ndepends_on: [998]\n---\n\n# Task 997: Blocked Task\n\nDepends on task 998.\n',
   );
 
@@ -175,7 +175,7 @@ describe('task recommend operator', () => {
 
     // Reset task 998 to opened so it can be recommended again
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-998-typescript-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-typescript-task.md'),
       '---\ntask_id: 998\nstatus: opened\n---\n\n# Task 998: TypeScript CLI Feature\n',
     );
 
@@ -185,7 +185,7 @@ describe('task recommend operator', () => {
     // Manually write a report for task 999 with overlapping changed files
     // (simulating that the agent has declared intent to touch these files)
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', 'reports', 'wrr_999_20260420-999-database-task_agent-beta.json'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', 'wrr_999_20260420-999-database-task_agent-beta.json'),
       JSON.stringify({
         report_id: 'wrr_999_20260420-999-database-task_agent-beta',
         task_number: 999,
@@ -219,12 +219,12 @@ describe('task recommend operator', () => {
   });
 
   it('does not mutate any files', async () => {
-    const beforeTasks = readdirSync(join(tempDir, '.ai', 'tasks')).filter((f) => f.endsWith('.md'));
+    const beforeTasks = readdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks')).filter((f) => f.endsWith('.md'));
     const beforeRoster = readFileSync(join(tempDir, '.ai', 'agents', 'roster.json'), 'utf8');
 
     await taskRecommendCommand({ cwd: tempDir, format: 'json' });
 
-    const afterTasks = readdirSync(join(tempDir, '.ai', 'tasks')).filter((f) => f.endsWith('.md'));
+    const afterTasks = readdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks')).filter((f) => f.endsWith('.md'));
     const afterRoster = readFileSync(join(tempDir, '.ai', 'agents', 'roster.json'), 'utf8');
 
     expect(afterTasks).toEqual(beforeTasks);
@@ -255,11 +255,11 @@ describe('task recommend operator', () => {
   it('returns no primary when all tasks abstained', async () => {
     // Mark all tasks as claimed
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-998-typescript-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-typescript-task.md'),
       '---\ntask_id: 998\nstatus: claimed\n---\n\n# Task 998\n',
     );
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-999-database-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-database-task.md'),
       '---\ntask_id: 999\nstatus: claimed\n---\n\n# Task 999\n',
     );
 
@@ -274,7 +274,7 @@ describe('task recommend operator', () => {
   it('in_review task is not implementation-recommended', async () => {
     // Mark task 998 as in_review
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-998-typescript-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-typescript-task.md'),
       '---\ntask_id: 998\nstatus: in_review\n---\n\n# Task 998\n',
     );
 
@@ -289,7 +289,7 @@ describe('task recommend operator', () => {
 
   it('classifies in_review tasks as awaiting review in abstained list', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-996-review-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-996-review-task.md'),
       '---\ntask_id: 996\nstatus: in_review\n---\n\n# Task 996: Review Needed\n\nDone.\n',
     );
 
@@ -345,7 +345,7 @@ describe('task recommend operator', () => {
   it('boosts runnable-proof tasks when constructive_executability is low', async () => {
     // Add a task with "test" in the title
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-995-test-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-995-test-task.md'),
       '---\ntask_id: 995\nstatus: opened\n---\n\n# Task 995: Add Test Fixture\n\nImplement a test fixture.\n',
     );
 
@@ -390,7 +390,7 @@ describe('task recommend operator', () => {
   it('penalizes meta tasks when teleological_pressure is unfocused', async () => {
     // Add a meta task
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-994-meta-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-994-meta-task.md'),
       '---\ntask_id: 994\nstatus: opened\n---\n\n# Task 994: Governance Contract Update\n\nUpdate the governance contract.\n',
     );
 
@@ -480,7 +480,7 @@ describe('task recommend operator', () => {
   it('excludes chapter range files from recommendation candidates', async () => {
     // Create a chapter file that would appear as an opened task
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-995-999-chapter-artifact.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-995-999-chapter-artifact.md'),
       '---\nstatus: opened\n---\n\n# Chapter 995–999\n\nA chapter artifact.\n',
     );
 
@@ -499,7 +499,7 @@ describe('task recommend operator', () => {
   it('excludes derivative files from recommendation candidates', async () => {
     // Create a derivative file that would appear as an opened task
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-994-task-DONE.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-994-task-DONE.md'),
       '---\nstatus: opened\n---\n\n# Task 994 Done\n\nDerivative artifact.\n',
     );
 
@@ -518,12 +518,12 @@ describe('task recommend operator', () => {
   it('recommends executable task when chapter file shares overlapping numbers', async () => {
     // Create a chapter range that overlaps with an executable task number
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-990-995-chapter-range.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-990-995-chapter-range.md'),
       '---\nstatus: opened\n---\n\n# Chapter 990–995\n',
     );
     // Create executable task 991 inside the chapter range
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-991-executable-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-991-executable-task.md'),
       '---\ntask_id: 991\nstatus: opened\n---\n\n# Task 991: Executable Task Inside Range\n\nDo something.\n',
     );
 
@@ -545,7 +545,7 @@ describe('task recommend operator', () => {
   it('filters by specific executable task number despite chapter files', async () => {
     // Create a chapter range
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-980-985-chapter-range.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-980-985-chapter-range.md'),
       '---\nstatus: opened\n---\n\n# Chapter 980–985\n',
     );
 
@@ -566,7 +566,7 @@ describe('task recommend operator', () => {
   it('excludes chapter closure tasks from recommendation candidates', async () => {
     // Create a chapter closure file with opened status
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-975-mail-connectivity-chapter-closure.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-975-mail-connectivity-chapter-closure.md'),
       '---\nstatus: opened\ndepends_on: [998]\n---\n\n# Task 975 - Mail Connectivity Chapter Closure\n',
     );
 
@@ -585,7 +585,7 @@ describe('task recommend operator', () => {
   it('excludes completed (closed) executable tasks from recommendation candidates', async () => {
     // Create a closed executable task
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-970-completed-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-970-completed-task.md'),
       '---\ntask_id: 970\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 970: Completed Task\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Execution Notes\n\nCompleted.\n\n## Verification\n\nVerified.\n',
     );
 
@@ -618,11 +618,11 @@ describe('task recommend operator', () => {
   it('reports empty recommendation honestly in human mode', async () => {
     // Mark all tasks as claimed so no recommendations are available
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-998-typescript-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-typescript-task.md'),
       '---\ntask_id: 998\nstatus: claimed\n---\n\n# Task 998\n',
     );
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-999-database-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-database-task.md'),
       '---\ntask_id: 999\nstatus: claimed\n---\n\n# Task 999\n',
     );
 

@@ -44,7 +44,7 @@ From that primary shape, the familiar Narada readings follow:
 
 **Intent Boundary**: `Intent` is the universal durable effect boundary. All side effects (mail sends, process spawns, future automations) must be represented as an Intent before execution. Idempotency is enforced at `idempotency_key`.
 
-**Control Plane v2**: Above the compiler, a control plane manages first-class generalized work objects (`work_item`, `execution_attempt`, `outbound_command`). Work is derived from `PolicyContext` via `ContextFormationStrategy`, making mailbox one vertical among many (timer, process, etc.). For the integrated end-to-end model, see [`.ai/tasks/20260414-011-chief-integration-control-plane-v2.md`](.ai/tasks/20260414-011-chief-integration-control-plane-v2.md).
+**Control Plane v2**: Above the compiler, a control plane manages first-class generalized work objects (`work_item`, `execution_attempt`, `outbound_command`). Work is derived from `PolicyContext` via `ContextFormationStrategy`, making mailbox one vertical among many (timer, process, etc.). For the integrated end-to-end model, see [`.ai/do-not-open/tasks/20260414-011-chief-integration-control-plane-v2.md`](.ai/do-not-open/tasks/20260414-011-chief-integration-control-plane-v2.md).
 
 > **Note on physical packaging**: The control plane's logical layers (foreman, scheduler, outbound worker, charter runtime) currently all live inside `packages/layers/control-plane/`. They are decomposed by directory and interface, not by separate packages. Extraction will happen only when a layer meets the stability and deployability criteria documented in [`packages/layers/control-plane/docs/02-architecture.md`](packages/layers/control-plane/docs/02-architecture.md).
 
@@ -287,7 +287,7 @@ The CLI distinguishes four levels of completion. Agents and operators must not c
 | **Agent attempt done** | The agent's roster entry is `done` (`task roster done`). | `narada task roster show` |
 | **Task has evidence** | The task file contains execution notes, checked acceptance criteria, and ideally a WorkResultReport. | `narada task evidence <n>` |
 | **Tasks not complete by evidence** | Lists tasks that are incomplete, attempt-complete, needs-review, or needs-closure across the repo. | `narada task evidence list` |
-| **Task artifact closed** | The task file front matter says `status: closed` (or `confirmed`). | Read the task file |
+| **Task artifact closed** | The task file front matter says `status: closed` (or `confirmed`). | `narada task read <n>` |
 | **Chapter ready to advance** | All tasks in the chapter are `closed` or `confirmed`, with reviews/closure decisions where required. | `narada chapter close` |
 
 **Key rules:**
@@ -295,6 +295,35 @@ The CLI distinguishes four levels of completion. Agents and operators must not c
 - `task review accepted` does **not** transition a task to `closed` if acceptance criteria are unchecked or execution evidence is missing. The task stays `in_review` until evidence is provided.
 - `narada task evidence <n>` is read-only and classifies a single task as `complete`, `attempt_complete`, `needs_review`, `needs_closure`, or `incomplete`.
 - `narada task evidence list` is read-only and lists all tasks that are not complete by evidence (default filter). Use `--verdict` to filter, `--status` to scope by front-matter status, and `--range` for number ranges.
+
+### Task Lifecycle Transition Map
+
+All normal transitions are command-mediated. Direct status editing in markdown or SQLite is classified as debug/maintenance only.
+
+| From | To | Command | Path type |
+|------|-----|---------|-----------|
+| `opened` | `claimed` | `narada task claim <n> --agent <id>` | Normal |
+| `opened` | `closed` | `narada task close <n> --by <id>` | Normal (operator skip-review) |
+| `claimed` | `in_review` | `narada task report <n> --agent <id> --summary "..."` | Normal |
+| `claimed` | `opened` | `narada task release <n> --reason abandoned\|superseded\|transferred` | Normal |
+| `claimed` | `needs_continuation` | `narada task release <n> --reason budget_exhausted` | Normal |
+| `needs_continuation` | `claimed` | `narada task continue <n> --agent <id> --reason <r>` | Normal |
+| `in_review` | `closed` | `narada task review <n> --verdict accepted` | Normal (peer review) |
+| `in_review` | `opened` | `narada task review <n> --verdict rejected` | Normal |
+| `closed` | `confirmed` | `narada task confirm <n> --by <id>` | Normal (individual finalization) |
+| `closed` | `confirmed` | `narada chapter close` | Normal (batch finalization) |
+| `closed` | `opened` | `narada task reopen <n> --by <id>` | Exceptional (repair) |
+| `closed` | `in_review` | `narada task reopen <n> --by <id>` | Exceptional (repair, has review) |
+| `confirmed` | `opened` | `narada task reopen <n> --by <id> --force` | Exceptional (repair) |
+
+**Orchestrator, not transition:** `task finish` is a convenience orchestrator that calls `task report`, `task review`, and `task roster done` in sequence. It does not introduce new lifecycle transitions.
+
+**Redundancy resolved:** `task close` and `task review --verdict accepted` both can reach `closed` from `in_review`. This is intentional — operator closure and peer review closure are distinct authority paths.
+
+**Bounded exceptional paths:**
+- `needs_continuation → opened`: No direct command. Use `task continue` → `task release --reason abandoned`. Classified as exceptional.
+- `draft → opened`: `task create` produces `opened` directly. `draft` is a pre-creation placeholder, not a normal lifecycle state.
+- `confirmed → in_review`: Use `task reopen --force`. Classified as exceptional.
 
 ### Task Assignment and Claim Semantics
 
@@ -844,7 +873,7 @@ The full suite and control-plane unit tests can produce a **harmless V8 fatal er
 
 ## Task File Policy (Hard Rule)
 
-Files in `.ai/tasks/*.md` are **durable task artifacts**, not execution-log variants. The original task file is the single canonical source of truth for a task.
+Files in `.ai/do-not-open/tasks/*.md` are **durable task artifacts**, not execution-log variants. The original task file is the single canonical source of truth for a task.
 
 Reusable task contracts live in `.ai/task-contracts/`:
 
@@ -888,7 +917,7 @@ Agents **must not** create derivative status files unless the user explicitly as
 
 ### Enforcement
 
-The guard script `scripts/task-file-guard.ts` runs as part of `pnpm verify`. It fails the build if any forbidden derivative filename is present in `.ai/tasks/`.
+The guard script `scripts/task-file-guard.ts` runs as part of `pnpm verify`. It fails the build if any forbidden derivative filename is present in `.ai/do-not-open/tasks/`.
 
 ---
 

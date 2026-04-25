@@ -1,0 +1,14 @@
+{
+  "report_id": "wrr_bdbc8ae5_20260424-614-agent-work-next-execution-packet-surface_a1",
+  "task_number": "614",
+  "task_id": "20260424-614-agent-work-next-execution-packet-surface",
+  "agent_id": "a1",
+  "assignment_id": "20260424-614-agent-work-next-execution-packet-surface-2026-04-24T21:37:24.291Z",
+  "reported_at": "2026-04-24T21:37:29.885Z",
+  "summary": "Implemented task work-next command. Returns execution packet for current task or pulls next then returns packet. Explicit pulled flag shows whether assignment happened. Does not auto-close. Focused tests pass. Typecheck clean.",
+  "changed_files": [],
+  "verification": [],
+  "known_residuals": [],
+  "ready_for_review": true,
+  "report_status": "submitted"
+}

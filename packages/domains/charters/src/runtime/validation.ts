@@ -3,7 +3,7 @@
  *
  * Implements the 10 validation rules from the charter invocation v2 spec.
  *
- * Spec: .ai/tasks/20260414-006-assignment-agent-b-charter-invocation-v2.md
+ * Spec: .ai/do-not-open/tasks/20260414-006-assignment-agent-b-charter-invocation-v2.md
  */
 
 import type {

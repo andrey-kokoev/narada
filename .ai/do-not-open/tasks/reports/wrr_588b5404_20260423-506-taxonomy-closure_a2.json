@@ -1,0 +1,18 @@
+{
+  "report_id": "wrr_588b5404_20260423-506-taxonomy-closure_a2",
+  "task_number": "506",
+  "task_id": "20260423-506-taxonomy-closure",
+  "agent_id": "a2",
+  "assignment_id": "20260423-506-taxonomy-closure-2026-04-23T19:36:16.020Z",
+  "reported_at": "2026-04-23T19:37:38.375Z",
+  "summary": "Created taxonomy chapter closure artifact (.ai/decisions/20260423-506-taxonomy-chapter-closure.md) that states what zone templates and regime kinds explain, what remains descriptive only, and why runtime derivation and provenance-by-construction are deferred. Updated chapter file with closure criteria satisfied. No runtime code changes.",
+  "changed_files": [
+    ".ai/decisions/20260423-506-taxonomy-chapter-closure.md",
+    ".ai/do-not-open/tasks/20260423-503-506-zone-template-and-regime-kind-taxonomy-chapter.md",
+    ".ai/do-not-open/tasks/20260423-506-taxonomy-closure.md"
+  ],
+  "verification": [],
+  "known_residuals": [],
+  "ready_for_review": true,
+  "report_status": "submitted"
+}

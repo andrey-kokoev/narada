@@ -22,13 +22,13 @@ The recommendation zone consumes exactly **six input families**. No other inputs
 
 | Property | Source | Field |
 |----------|--------|-------|
-| Task identity | `.ai/tasks/*.md` filename | `task_id` |
-| Task number | `.ai/tasks/*.md` front matter / filename | `task_id` or filename extract |
-| Status | `.ai/tasks/*.md` front matter | `status` |
-| Title | `.ai/tasks/*.md` body H1 | `# Title` |
-| Dependencies | `.ai/tasks/*.md` front matter | `depends_on` |
-| Continuation affinity | `.ai/tasks/*.md` front matter | `continuation_affinity` |
-| Body text | `.ai/tasks/*.md` body | Full text (for capability extraction) |
+| Task identity | `.ai/do-not-open/tasks/*.md` filename | `task_id` |
+| Task number | `.ai/do-not-open/tasks/*.md` front matter / filename | `task_id` or filename extract |
+| Status | `.ai/do-not-open/tasks/*.md` front matter | `status` |
+| Title | `.ai/do-not-open/tasks/*.md` body H1 | `# Title` |
+| Dependencies | `.ai/do-not-open/tasks/*.md` front matter | `depends_on` |
+| Continuation affinity | `.ai/do-not-open/tasks/*.md` front matter | `continuation_affinity` |
+| Body text | `.ai/do-not-open/tasks/*.md` body | Full text (for capability extraction) |
 
 ### 2. Agent State
 
@@ -54,19 +54,19 @@ The recommendation zone consumes exactly **six input families**. No other inputs
 
 | Property | Source | Field |
 |----------|--------|-------|
-| Claim history | `.ai/tasks/assignments/{task_id}.json` | `assignments[]` |
-| Release reason | `.ai/tasks/assignments/{task_id}.json` | `assignments[].release_reason` |
-| Last completed worker | `.ai/tasks/assignments/{task_id}.json` | Latest `completed` assignment |
-| Per-agent completion counts | `.ai/tasks/assignments/*.json` | Aggregated across all tasks |
+| Claim history | `.ai/do-not-open/tasks/tasks/assignments/{task_id}.json` | `assignments[]` |
+| Release reason | `.ai/do-not-open/tasks/tasks/assignments/{task_id}.json` | `assignments[].release_reason` |
+| Last completed worker | `.ai/do-not-open/tasks/tasks/assignments/{task_id}.json` | Latest `completed` assignment |
+| Per-agent completion counts | `.ai/do-not-open/tasks/tasks/assignments/*.json` | Aggregated across all tasks |
 
 ### 5. Work Result Reports
 
 | Property | Source | Field |
 |----------|--------|-------|
-| Changed files | `.ai/tasks/reports/{task_id}-{timestamp}.json` | `changed_files` |
-| Work type | `.ai/tasks/reports/{task_id}-{timestamp}.json` | `work_type` |
-| Status | `.ai/tasks/reports/{task_id}-{timestamp}.json` | `status` |
-| Quality | `.ai/tasks/reports/{task_id}-{timestamp}.json` | `quality` |
+| Changed files | `.ai/do-not-open/tasks/tasks/reports/{task_id}-{timestamp}.json` | `changed_files` |
+| Work type | `.ai/do-not-open/tasks/tasks/reports/{task_id}-{timestamp}.json` | `work_type` |
+| Status | `.ai/do-not-open/tasks/tasks/reports/{task_id}-{timestamp}.json` | `status` |
+| Quality | `.ai/do-not-open/tasks/tasks/reports/{task_id}-{timestamp}.json` | `quality` |
 
 **Usage:** Write-set risk heuristic checks file overlap between the candidate task and other active assignments.
 

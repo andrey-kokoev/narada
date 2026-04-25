@@ -4,8 +4,8 @@
  * Implements runnable work scanning, lease acquisition, execution lifecycle,
  * retry/backoff, and stale lease recovery.
  *
- * Spec: .ai/tasks/20260414-015-impl-scheduler-and-leases.md
- * Spec: .ai/tasks/20260414-005-assignment-agent-a-scheduler-and-leases.md
+ * Spec: .ai/do-not-open/tasks/20260414-015-impl-scheduler-and-leases.md
+ * Spec: .ai/do-not-open/tasks/20260414-005-assignment-agent-a-scheduler-and-leases.md
  *
  * ## Recovery Model
  *

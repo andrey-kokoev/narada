@@ -205,4 +205,4 @@ See [`docs/product/site-bootstrap-contract.md`](docs/product/site-bootstrap-cont
 - Read [`docs/bootstrap-contract.md`](docs/bootstrap-contract.md) for the canonical artifact and validation reference
 - Read the [kernel lawbook](packages/layers/control-plane/docs/00-kernel.md) to understand the generalized architecture
 - Browse [AGENTS.md](AGENTS.md) for contributor navigation
-- Explore `.ai/tasks/` for design specs and future work
+- Explore `.ai/do-not-open/tasks/` for design specs and future work

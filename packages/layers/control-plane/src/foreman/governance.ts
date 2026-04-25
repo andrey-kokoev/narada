@@ -3,7 +3,7 @@
  *
  * Semantic safety layer between charter output and outbound effects.
  *
- * Spec: .ai/tasks/20260415-030-foreman-arbitration-and-action-governance.md
+ * Spec: .ai/do-not-open/tasks/20260415-030-foreman-arbitration-and-action-governance.md
  */
 
 import type {

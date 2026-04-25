@@ -1,8 +1,10 @@
 /**
  * narada verify run --cmd "<command>"
  *
- * Runs a verification command through existing guarded scripts.
- * Validates policy before executing.
+ * Diagnostic path: runs a verification command directly without creating
+ * a durable Testing Intent Zone record.
+ *
+ * For canonical task verification, use `narada test-run run` instead.
  */
 
 import { execSync } from 'node:child_process';

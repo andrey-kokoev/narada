@@ -4,7 +4,7 @@
  * Defines how mailbox-specific knowledge is declared, normalized, and
  * passed into charter invocation context.
  *
- * Spec: .ai/tasks/20260413-008-mailbox-charter-knowledge-sources.md
+ * Spec: .ai/do-not-open/tasks/20260413-008-mailbox-charter-knowledge-sources.md
  */
 
 export type KnowledgeSourceType = "url" | "local_path" | "sqlite";

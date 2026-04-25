@@ -139,9 +139,9 @@ The full promotion path leaves a durable trace:
 ```
 TaskRecommendation (ephemeral)
     ↓
-AssignmentPromotionRequest (durable, .ai/tasks/promotions/{id}.json)
+AssignmentPromotionRequest (durable, .ai/do-not-open/tasks/tasks/promotions/{id}.json)
     ↓
-TaskAssignmentRecord (durable, .ai/tasks/assignments/{task_id}.json)
+TaskAssignmentRecord (durable, .ai/do-not-open/tasks/tasks/assignments/{task_id}.json)
     ↓
 Task front matter update (status: claimed, claimed_by)
     ↓

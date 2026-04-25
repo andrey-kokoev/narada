@@ -28,7 +28,7 @@ Define the prohibition regime that removes direct markdown and SQLite access fro
 - Modifying `depends_on` or `continuation_affinity`
 
 **Not prohibited (incidental contact):**
-- Reading a task file to understand narrative context (though `task evidence inspect` is preferred)
+- Reading a task file to understand narrative context (though `narada task read` is preferred)
 - Grepping task files during development of new observation commands
 - Automated projection regeneration (command-mediated, not hand-editing)
 
@@ -37,14 +37,14 @@ Define the prohibition regime that removes direct markdown and SQLite access fro
 **Prohibited:** Using filesystem access as a substitute for sanctioned observation commands to determine task state, status, assignment, or evidence.
 
 **Specifically prohibited:**
-- `cat .ai/tasks/NNN.md` to check task status
-- `ls .ai/tasks/` to enumerate tasks
-- `grep 'status: claimed' .ai/tasks/*.md` to find claimed tasks
-- `sqlite3 .ai/tasks/task-lifecycle.db "SELECT ..."` to query lifecycle state
-- Reading `.ai/tasks/assignments/*.json` directly to check who claimed what
+- `cat .ai/do-not-open/tasks/NNN.md` to check task status — use `narada task read <n>` instead
+- `ls .ai/do-not-open/tasks/` to enumerate tasks — use `narada task list` instead
+- `grep 'status: claimed' .ai/do-not-open/tasks/*.md` to find claimed tasks — use `narada task list` instead
+- `sqlite3 .ai/do-not-open/tasks/task-lifecycle.db "SELECT ..."` to query lifecycle state — use `narada task read` or `narada task evidence` instead
+- Reading `.ai/do-not-open/tasks/tasks/assignments/*.json` directly to check who claimed what — use `narada task read` instead
 
 **Not prohibited:**
-- Using observation commands (`task list`, `task evidence inspect`, `task graph`, etc.)
+- Using observation commands (`narada task read`, `narada task list`, `narada task evidence`, `narada task graph`, etc.)
 - Reading markdown for narrative context when observation commands are insufficient
 - Automated tools that read substrates to build projections (implementing new commands)
 
@@ -53,7 +53,7 @@ Define the prohibition regime that removes direct markdown and SQLite access fro
 **Prohibited:** Creating a new task file by hand-writing markdown, copying an existing file, or using a text editor/template tool outside the sanctioned command surface.
 
 **Specifically prohibited:**
-- `touch .ai/tasks/20260424-999-my-task.md`
+- `touch .ai/do-not-open/tasks/20260424-999-my-task.md`
 - Copying an existing task file and editing it
 - Using an IDE template or snippet to create task files
 - Any creation path that bypasses the task number allocator
@@ -69,7 +69,7 @@ Define the prohibition regime that removes direct markdown and SQLite access fro
 **Prohibited:** Using raw SQL, database browsers, or programmatic SQLite access to mutate or query task lifecycle state as a substitute for sanctioned commands.
 
 **Specifically prohibited:**
-- `sqlite3 .ai/tasks/task-lifecycle.db "UPDATE task_lifecycle SET status = 'closed' WHERE task_number = 585"`
+- `sqlite3 .ai/do-not-open/tasks/task-lifecycle.db "UPDATE task_lifecycle SET status = 'closed' WHERE task_number = 585"`
 - `UPDATE task_assignments SET released_at = '...' WHERE ...`
 - Direct INSERT into `task_reports`, `task_reviews`, or `task_lifecycle`
 - Using a GUI database tool to edit task tables
@@ -240,7 +240,7 @@ Sanctioned commands validate preconditions before mutation:
 **Current reality:** Filesystem permissions are not enforced (all repo users can edit). This is a future hardening layer.
 
 **Recommended future posture:**
-- `.ai/tasks/task-lifecycle.db` owned by a dedicated service account
+- `.ai/do-not-open/tasks/task-lifecycle.db` owned by a dedicated service account
 - Markdown files group-writable but lint-gated
 - JSON artifacts (`assignments/`, `reports/`, `reviews/`, `promotions/`) owned by service account
 
@@ -257,9 +257,10 @@ The CLI help, documentation, and agent onboarding emphasize:
 ### Layer 5: Command Payload Restrictions
 
 Sanctioned observation commands must not expose raw substrate payloads as their default output:
-- `task evidence inspect` returns a projection, not raw markdown front matter
-- `task list` returns merged task views, not SQLite rows
-- `task graph` returns Mermaid/JSON graph, not raw `depends_on` arrays
+- `narada task read` returns a merged projection, never raw markdown front matter or SQLite rows
+- `narada task evidence` returns evidence inspection, not raw file contents
+- `narada task list` returns merged task views, not SQLite rows
+- `narada task graph` returns Mermaid/JSON graph, not raw `depends_on` arrays
 
 **Exception:** A `--debug` or `--raw` flag may expose substrate form for forensic use, but:
 - The flag must be explicit

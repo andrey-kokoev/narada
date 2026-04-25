@@ -248,7 +248,13 @@ export async function taskRecommendCommand(
     if (recommendation.abstained.length > 0) {
       fmt.message(`\nAbstained (${recommendation.abstained.length}):`, 'warning');
       for (const abs of recommendation.abstained.slice(0, limit)) {
-        fmt.message(`  ${abs.task_id}: ${abs.reason}`, 'warning');
+        const blockedDetail = abs.blocked_by && abs.blocked_by.length > 0
+          ? `: ${abs.blocked_by.join(', ')}`
+          : '';
+        const agentDetail = abs.blocked_by_agents && abs.blocked_by_agents.length > 0
+          ? ` [${abs.blocked_by_agents.map((b) => `${b.task_number}→${b.agent_id}`).join(', ')}]`
+          : '';
+        fmt.message(`  ${abs.task_id}: ${abs.reason}${blockedDetail}${agentDetail}`, 'warning');
       }
     }
 

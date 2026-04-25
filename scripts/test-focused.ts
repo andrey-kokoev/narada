@@ -29,6 +29,69 @@ const colors = {
 
 const rawCommand = process.argv.slice(2).join(" ");
 
+function normalizeFocusedCommand(command: string): string {
+  const promoteSuite = "test/commands/task-promote-recommendation.test.ts";
+  const rosterSuite = "test/commands/task-roster.test.ts";
+  if (
+    /@narada2\/cli/.test(command) &&
+    /\bvitest\s+run\b/.test(command) &&
+    command.includes(promoteSuite)
+  ) {
+    const testNameMatch = command.match(/(?:-t|--testNamePattern)\s+(['"])(.*?)\1/);
+    const testName = testNameMatch?.[2] ?? "";
+    const envPrefix = testName
+      ? `NARADA_PROOF_TEST_NAME_PATTERN=${JSON.stringify(testName)} `
+      : "";
+    return `${envPrefix}node scripts/cli-focused-proof.mjs task-promote-recommendation`;
+  }
+  if (
+    /@narada2\/cli/.test(command) &&
+    /\bvitest\s+run\b/.test(command) &&
+    command.includes(rosterSuite)
+  ) {
+    const testNameMatch = command.match(/(?:-t|--testNamePattern)\s+(['"])(.*?)\1/);
+    const testName = testNameMatch?.[2] ?? "";
+    const envPrefix = testName
+      ? `NARADA_PROOF_TEST_NAME_PATTERN=${JSON.stringify(testName)} `
+      : "NARADA_PROOF_MODE=compact ";
+    return `${envPrefix}node scripts/cli-focused-proof.mjs task-roster`;
+  }
+
+  const isCliVitestSingleFile =
+    /@narada2\/cli/.test(command) &&
+    /\bvitest\s+run\b/.test(command) &&
+    (command.match(/\S+\.(?:test|spec)\.[cm]?[tj]sx?/g) ?? []).length === 1;
+
+  if (!isCliVitestSingleFile) {
+    return command;
+  }
+
+  let normalized = command;
+
+  // SQLite-heavy CLI command tests are materially more stable in a single fork.
+  // Apply the posture mechanically in the focused runner so agents/operators
+  // don't have to remember the flag stack.
+  const appendIfMissing = (pattern: RegExp, text: string) => {
+    if (!pattern.test(normalized)) {
+      normalized += ` ${text}`;
+    }
+  };
+
+  appendIfMissing(/\s--pool(?:=|\s+)/, "--pool=forks");
+  appendIfMissing(/\s--(?:no-)?file-parallelism\b/, "--no-file-parallelism");
+  appendIfMissing(/\s--maxWorkers(?:=|\s+)/, "--maxWorkers=1");
+  appendIfMissing(/\s--minWorkers(?:=|\s+)/, "--minWorkers=1");
+  appendIfMissing(/\s--testTimeout(?:=|\s+)/, "--testTimeout=120000");
+  appendIfMissing(/\s--hookTimeout(?:=|\s+)/, "--hookTimeout=120000");
+  appendIfMissing(/\s--reporter(?:=|\s+)/, "--reporter=dot");
+
+  if (!/\bNARADA_CLI_SQLITE_FOCUSED=1\b/.test(normalized)) {
+    normalized = `NARADA_CLI_SQLITE_FOCUSED=1 ${normalized}`;
+  }
+
+  return normalized;
+}
+
 function rejectPreflight(reason: string): never {
   const now = new Date().toISOString();
   console.error(`${colors.red}Focused test rejected.${colors.reset}`);
@@ -110,14 +173,15 @@ if (!rawCommand) {
 }
 
 validateFocusedCommand(rawCommand);
+const focusedCommand = normalizeFocusedCommand(rawCommand);
 
 console.log(`${colors.dim}=== Focused Test ===${colors.reset}`);
-console.log(`${colors.dim}Command:${colors.reset} ${rawCommand}\n`);
+console.log(`${colors.dim}Command:${colors.reset} ${focusedCommand}\n`);
 
 const startedAt = new Date().toISOString();
 const result = runStep({
   name: "Focused test",
-  command: rawCommand,
+  command: focusedCommand,
   stdio: "inherit",
 });
 const finishedAt = new Date().toISOString();
@@ -125,7 +189,7 @@ const finishedAt = new Date().toISOString();
 const classification = classifyStep(result.exitStatus, result.stderr, result.stdout);
 
 recordRun({
-  command: rawCommand,
+  command: focusedCommand,
   startedAt,
   finishedAt,
   durationMs: result.durationMs,

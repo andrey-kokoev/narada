@@ -20,8 +20,8 @@ import { join } from 'node:path';
 
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'assignments'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'reports'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'reviews'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'learning', 'accepted'), { recursive: true });
 
@@ -38,7 +38,7 @@ function setupRepo(tempDir: string) {
   );
 
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
     '---\ntask_id: 999\nstatus: opened\n---\n\n# Task 999: Test Task\n\n## Verification\nTests pass.\n',
   );
 }
@@ -365,14 +365,14 @@ describe('principal sync-from-tasks', () => {
 
   function createTaskFile(taskId: string, status: string) {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', `20260420-${taskId}-test.md`),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', `20260420-${taskId}-test.md`),
       `---\ntask_id: ${taskId}\nstatus: ${status}\n---\n\n# Task ${taskId}\n`,
     );
   }
 
   function createAssignment(taskId: string, agentId: string, claimedAt = '2026-01-01T00:00:00Z') {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', 'assignments', `${taskId}.json`),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', `${taskId}.json`),
       JSON.stringify({
         task_id: taskId,
         assignments: [

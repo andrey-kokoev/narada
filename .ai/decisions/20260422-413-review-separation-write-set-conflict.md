@@ -140,7 +140,7 @@ If the agent does not declare a manifest, the system may infer one from:
 | Task title contains "CLI" | `packages/layers/cli/src/**/*` |
 | Task title contains "test" | `**/test/**/*.test.ts` |
 | Task references specific file in body | Extracted from `Required Reading` or `Write Set` sections |
-| Task is a chapter-planning task | `.ai/tasks/*.md`, `.ai/decisions/*.md` |
+| Task is a chapter-planning task | `.ai/do-not-open/tasks/*.md`, `.ai/decisions/*.md` |
 
 These heuristics are **advisory** and produce broad globs. They are sufficient for coarse overlap detection.
 

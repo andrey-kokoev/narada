@@ -1,0 +1,21 @@
+{
+  "report_id": "wrr_b2f8f471_20260424-600-testing-intent-zone-boundary-contract_a3",
+  "task_number": "600",
+  "task_id": "20260424-600-testing-intent-zone-boundary-contract",
+  "agent_id": "a3",
+  "assignment_id": "20260424-600-testing-intent-zone-boundary-contract-2026-04-24T20:49:30.074Z",
+  "reported_at": "2026-04-24T20:49:48.502Z",
+  "summary": "Defined testing intent zone boundary contract with irreducible objects, zones, admissibility regime, and anti-collapse invariant",
+  "changed_files": [
+    ".ai/decisions/20260424-600-testing-intent-zone-boundary-contract.md"
+  ],
+  "verification": [
+    {
+      "command": "test task file guard and typecheck",
+      "result": "passed"
+    }
+  ],
+  "known_residuals": [],
+  "ready_for_review": true,
+  "report_status": "accepted"
+}

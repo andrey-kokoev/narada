@@ -13,8 +13,8 @@ import { join } from 'node:path';
 
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'assignments'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
 
   writeFileSync(
     join(tempDir, '.ai', 'agents', 'roster.json'),
@@ -28,7 +28,7 @@ function setupRepo(tempDir: string) {
   );
 
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
     '---\ntask_id: 999\nstatus: opened\n---\n\n# Task 999: Test Task\n',
   );
 }
@@ -62,10 +62,10 @@ describe('task release operator', () => {
       new_status: 'in_review',
     });
 
-    const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'), 'utf8');
+    const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
     expect(taskContent).toContain('status: in_review');
 
-    const assignmentRaw = readFileSync(join(tempDir, '.ai', 'tasks', 'assignments', '20260420-999-test-task.json'), 'utf8');
+    const assignmentRaw = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-999-test-task.json'), 'utf8');
     const assignment = JSON.parse(assignmentRaw);
     expect(assignment.assignments[0].release_reason).toBe('completed');
     expect(assignment.assignments[0].released_at).not.toBeNull();
@@ -88,7 +88,7 @@ describe('task release operator', () => {
       new_status: 'opened',
     });
 
-    const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'), 'utf8');
+    const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
     expect(taskContent).toContain('status: opened');
   });
 
@@ -158,7 +158,7 @@ describe('task release operator', () => {
       new_status: 'needs_continuation',
     });
 
-    const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'), 'utf8');
+    const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
     expect(taskContent).toContain('status: needs_continuation');
   });
 
@@ -181,7 +181,7 @@ describe('task release operator', () => {
 
     // Corrupt the task file status behind the operator's back
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
       '---\ntask_id: 999\nstatus: opened\n---\n\n# Task 999: Test Task\n',
     );
 
@@ -221,13 +221,13 @@ describe('task release operator', () => {
     expect((result.result as { error: string }).error).toContain('--continuation');
 
     // Assignment must still be active (failure-atomic)
-    const assignmentRaw = readFileSync(join(tempDir, '.ai', 'tasks', 'assignments', '20260420-999-test-task.json'), 'utf8');
+    const assignmentRaw = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-999-test-task.json'), 'utf8');
     const assignment = JSON.parse(assignmentRaw);
     const active = assignment.assignments.find((a: { released_at: string | null }) => a.released_at === null);
     expect(active).toBeDefined();
 
     // Task status must still be claimed
-    const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'), 'utf8');
+    const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
     expect(taskContent).toContain('status: claimed');
   });
 
@@ -258,7 +258,7 @@ describe('task release operator', () => {
       new_status: 'needs_continuation',
     });
 
-    const taskContent = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-999-test-task.md'), 'utf8');
+    const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
     expect(taskContent).toContain('status: needs_continuation');
     expect(taskContent).toContain('continuation_packet');
   });

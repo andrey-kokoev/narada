@@ -11,13 +11,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 function setupRepo(tempDir: string) {
-  mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'decisions'), { recursive: true });
 }
 
 function writeTask(tempDir: string, filename: string, frontMatter: string, title: string, extraBody = '') {
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', filename),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', filename),
     `---\n${frontMatter}---\n\n# ${title}\n${extraBody}`,
   );
 }
@@ -155,7 +155,7 @@ describe('chapter status operator', () => {
   });
 
   it('does not mutate task files', async () => {
-    const path = join(tempDir, '.ai', 'tasks', '20260420-100-a.md');
+    const path = join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-a.md');
     writeFileSync(path, '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n');
     const before = require('node:fs').readFileSync(path, 'utf8');
 

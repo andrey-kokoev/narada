@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 function setupRepo(tempDir: string) {
-  mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
 }
 
 describe('task reopen operator', () => {
@@ -28,7 +28,7 @@ describe('task reopen operator', () => {
 
   it('reopens a raw-closed task with governance violations', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-100-test.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-test.md'),
       `---\ntask_id: 100\nstatus: closed\n---\n\n# Task 100: Test\n\n## Acceptance Criteria\n- [x] Criterion A\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
     );
 
@@ -46,7 +46,7 @@ describe('task reopen operator', () => {
     expect(r.new_status).toBe('opened');
     expect(r.violations_cleared).toContain('terminal_without_governed_provenance');
 
-    const content = readFileSync(join(tempDir, '.ai', 'tasks', '20260420-100-test.md'), 'utf8');
+    const content = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-test.md'), 'utf8');
     expect(content).toContain('status: opened');
     expect(content).toContain('reopened_by: operator-1');
     expect(content).toContain('reopened_at:');
@@ -55,7 +55,7 @@ describe('task reopen operator', () => {
 
   it('refuses to reopen a valid terminal task without --force', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-101-test.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-101-test.md'),
       `---\ntask_id: 101\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 101: Test\n\n## Acceptance Criteria\n- [x] Criterion A\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
     );
 
@@ -74,7 +74,7 @@ describe('task reopen operator', () => {
 
   it('reopens a valid terminal task with --force', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-102-test.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-102-test.md'),
       `---\ntask_id: 102\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 102: Test\n\n## Acceptance Criteria\n- [x] Criterion A\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
     );
 
@@ -96,7 +96,7 @@ describe('task reopen operator', () => {
   it('returns to in_review when the task has a review record', async () => {
     mkdirSync(join(tempDir, '.ai', 'reviews'), { recursive: true });
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-103-test.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-103-test.md'),
       `---\ntask_id: 103\nstatus: closed\n---\n\n# Task 103: Test\n\n## Acceptance Criteria\n- [x] Criterion A\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
     );
     writeFileSync(
@@ -127,7 +127,7 @@ describe('task reopen operator', () => {
 
   it('fails when task is not terminal', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-104-test.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-104-test.md'),
       `---\ntask_id: 104\nstatus: opened\n---\n\n# Task 104: Test\n`,
     );
 
@@ -161,7 +161,7 @@ describe('task reopen operator', () => {
   it('stale closed_by/closed_at after reopen does not count as valid provenance', async () => {
     // Create a pre-501-style closed task (closed_by + closed_at, no governed_by)
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-105-test.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-105-test.md'),
       `---\ntask_id: 105\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 105: Test\n\n## Acceptance Criteria\n- [x] Criterion A\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
     );
 
@@ -178,7 +178,7 @@ describe('task reopen operator', () => {
     // Now simulate a raw bypass: someone edits the file back to closed
     // WITHOUT governed_by, but the old closed_by/closed_at are still there
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-105-test.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-105-test.md'),
       `---\ntask_id: 105\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\nreopened_at: 2026-04-23T00:00:00Z\nreopened_by: operator-1\n---\n\n# Task 105: Test\n\n## Acceptance Criteria\n- [x] Criterion A\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
     );
 

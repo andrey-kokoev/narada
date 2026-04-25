@@ -1,6 +1,6 @@
 # Task Graph Evolution Boundary
 
-> **Governance contract for `.ai/tasks` as a controlled task-graph substrate.**
+> **Governance contract for `.ai/do-not-open` as a controlled task-graph substrate.**
 >
 > This document defines the rules that govern how tasks may be created, numbered, renumbered, linked, reviewed, and evolved. It is the canonical boundary contract for task-graph correctness.
 >
@@ -10,7 +10,7 @@
 
 ## 1. Task Identity
 
-A **task** is a self-standing Markdown file in `.ai/tasks/` that carries a unique task number and enough execution context for an agent to act from `execute <task-number>` alone.
+A **task** is a self-standing Markdown file in `.ai/do-not-open/tasks/` that carries a unique task number and enough execution context for an agent to act from `execute <task-number>` alone.
 
 ### 1.1 Filename Format
 
@@ -46,7 +46,7 @@ The heading task number MUST match the filename task number.
 
 A **chapter DAG file** is a non-executable planning artifact that defines a range of related tasks. It:
 
-- MAY live in `.ai/tasks/` alongside executable tasks;
+- MAY live in `.ai/do-not-open/tasks/` alongside executable tasks;
 - MUST NOT claim a `# Task NNN` heading (it is not executable);
 - MUST use a range in its filename (e.g., `YYYYMMDD-NNN-MMM-chapter-name.md`);
 - MUST declare its task-number range explicitly in the front matter or body;
@@ -149,7 +149,7 @@ Task numbers are allocated **sequentially from a shared namespace**. The next av
 
 Agents MUST NOT:
 
-- Allocate task numbers by `ls .ai/tasks | tail` or similar shell patterns;
+- Allocate task numbers by `ls .ai/do-not-open | tail` or similar shell patterns;
 - Reuse a task number that already has a `# Task NNN` heading;
 - Guess the next number from filename ordering alone;
 - Create a task without checking for collisions.
@@ -160,7 +160,7 @@ Before creating a chapter DAG or a batch of related tasks, an agent or operator 
 
 #### Reservation Record
 
-Reservations are stored in `.ai/tasks/.registry.json`:
+Reservations are stored in `.ai/do-not-open/tasks/tasks/.registry.json`:
 
 ```json
 {
@@ -345,7 +345,7 @@ A task graph lint command MUST detect:
 | `stale-blocker` | warning | `blocked_by` references a non-existent task number. |
 | `range-collision` | error | Chapter DAG range overlaps with executable task numbers. |
 | `derivative-file` | error | Forbidden suffix found (`-EXECUTED`, `-DONE`, `-RESULT`, `-FINAL`, `-SUPERSEDED`). |
-| `missing-heading` | warning | Markdown file in `.ai/tasks/` lacks `# Task NNN` heading and is not a declared chapter DAG. |
+| `missing-heading` | warning | Markdown file in `.ai/do-not-open/tasks/` lacks `# Task NNN` heading and is not a declared chapter DAG. |
 | `missing-self-standing-context` | warning | Task file lacks required sections (Context, Goal, Acceptance Criteria). |
 | `stale-report-reference` | warning | WorkResultReport references a missing task number. |
 | `stale-review-reference` | warning | Review file references a missing task number. |
@@ -365,7 +365,7 @@ scripts/task-graph-lint.ts
 ```
 
 The lint must:
-- scan `.ai/tasks/`, `.ai/reviews/`, `.ai/decisions/`, `.ai/agents/roster.json`, `.ai/learning/accepted/`;
+- scan `.ai/do-not-open/tasks/`, `.ai/reviews/`, `.ai/decisions/`, `.ai/agents/roster.json`, `.ai/learning/accepted/`;
 - return non-zero exit code on any `error`-severity finding;
 - report `warning`-severity findings but not fail;
 - support `--fix` for renumbering operations (see Task 451).
@@ -380,7 +380,7 @@ narada task graph --format json --range 429-454 --status opened,claimed
 This is a **read-only inspection operator**:
 
 - **Read-only**: It does not mutate task files, roster files, reports, reviews, or registry state.
-- **Non-authoritative**: It renders the current state of `.ai/tasks` for human observability; it does not enforce rules or transition states.
+- **Non-authoritative**: It renders the current state of `.ai/do-not-open` for human observability; it does not enforce rules or transition states.
 - **Safe for humans and agents**: Safe to use before assignment, during planning, or when reviewing chapter progress.
 - **Not a replacement** for `task lint`, `task claim`, `task roster`, or `chapter close`.
 
@@ -401,7 +401,7 @@ Behavior:
 Agents MUST:
 
 1. **Never allocate task numbers by inspecting `ls | tail`.** Always use the reservation/allocation protocol.
-2. **Check `.ai/tasks/.registry.json`** before creating tasks. If the registry does not exist, compute the next available number by scanning all task headings.
+2. **Check `.ai/do-not-open/tasks/tasks/.registry.json`** before creating tasks. If the registry does not exist, compute the next available number by scanning all task headings.
 3. **Stop and invoke the correction path** if a collision is detected.
 4. **Record the collision** in the task file or `.ai/feedback/governance.md` if no implementation exists yet.
 5. **Respect range reservations.** Do not create tasks inside an active reserved range belonging to another agent or chapter.

@@ -20,7 +20,7 @@ The macOS Site Materialization chapter made macOS an explicit, self-standing Sit
 
 **Delivered:**
 - `docs/deployment/macos-site-materialization.md` — comprehensive design document (417 lines).
-- Boundary contract embedded in chapter DAG file (`.ai/tasks/20260422-431-436-macos-site-materialization.md`) with authority table and reuse inventory.
+- Boundary contract embedded in chapter DAG file (`.ai/do-not-open/tasks/20260422-431-436-macos-site-materialization.md`) with authority table and reuse inventory.
 - Sibling substrate comparison table (Cloudflare vs Windows Native vs Windows WSL vs macOS).
 - macOS-specific concerns: sleep/wake, TCC, path-with-spaces, LaunchAgent environment mismatch.
 

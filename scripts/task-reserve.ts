@@ -12,10 +12,10 @@
  *   pnpm exec tsx scripts/task-reserve.ts --extend 444-448 --hours 24
  */
 
-import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { openTaskLifecycleStore } from "../packages/layers/cli/src/lib/task-lifecycle-store.js";
 
-const REGISTRY_PATH = resolve(process.cwd(), ".ai", "tasks", ".registry.json");
 const MAX_RANGE_SIZE = 20;
 const DEFAULT_EXPIRY_HOURS = 24;
 
@@ -51,30 +51,39 @@ function isExpired(r: Reservation): boolean {
 }
 
 function loadRegistry(): TaskRegistry {
-  if (!existsSync(REGISTRY_PATH)) {
-    // Seed from current task graph
-    const maxNum = computeMaxTaskNumber();
-    return { version: 1, last_allocated: maxNum, reservations: [] };
-  }
-  const raw = readFileSync(REGISTRY_PATH, "utf8");
-  const parsed = JSON.parse(raw) as TaskRegistry;
-  validateRegistry(parsed);
-  // Auto-mark expired
-  let changed = false;
-  for (const r of parsed.reservations) {
-    if (isExpired(r)) {
-      r.status = "expired";
-      changed = true;
+  const store = openTaskLifecycleStore(process.cwd());
+  try {
+    const parsed: TaskRegistry = {
+      version: 1,
+      last_allocated: Math.max(store.getLastAllocated(), computeMaxTaskNumber()),
+      reservations: store.listTaskNumberReservations(),
+    };
+    let changed = false;
+    for (const r of parsed.reservations) {
+      if (isExpired(r)) {
+        r.status = "expired";
+        changed = true;
+      }
     }
+    if (changed) {
+      saveRegistry(parsed);
+    }
+    return parsed;
+  } finally {
+    store.db.close();
   }
-  if (changed) {
-    saveRegistry(parsed);
-  }
-  return parsed;
 }
 
 function saveRegistry(registry: TaskRegistry): void {
-  writeFileSync(REGISTRY_PATH, JSON.stringify(registry, null, 2) + "\n");
+  const store = openTaskLifecycleStore(process.cwd());
+  try {
+    store.ensureTaskNumberFloor(registry.last_allocated);
+    for (const reservation of registry.reservations) {
+      store.upsertTaskNumberReservation(reservation);
+    }
+  } finally {
+    store.db.close();
+  }
 }
 
 function validateRegistry(r: unknown): asserts r is TaskRegistry {
@@ -97,7 +106,7 @@ function validateRegistry(r: unknown): asserts r is TaskRegistry {
 }
 
 function computeMaxTaskNumber(): number {
-  const tasksDir = join(process.cwd(), ".ai", "tasks");
+  const tasksDir = join(process.cwd(), ".ai", "do-not-open", "tasks");
   let maxNum = 0;
   if (!existsSync(tasksDir)) return maxNum;
   const files = readdirSync(tasksDir).filter((f: string) => f.endsWith(".md"));

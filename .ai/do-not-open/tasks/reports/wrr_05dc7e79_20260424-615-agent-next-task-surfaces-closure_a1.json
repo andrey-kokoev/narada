@@ -1,0 +1,14 @@
+{
+  "report_id": "wrr_05dc7e79_20260424-615-agent-next-task-surfaces-closure_a1",
+  "task_number": "615",
+  "task_id": "20260424-615-agent-next-task-surfaces-closure",
+  "agent_id": "a1",
+  "assignment_id": "20260424-615-agent-next-task-surfaces-closure-2026-04-24T21:37:43.870Z",
+  "reported_at": "2026-04-24T21:37:48.946Z",
+  "summary": "Closure artifact for agent next-task surfaces chapter. Canonical workflow: peek-next (inspect) → pull-next (claim) → work-next (packet). Semantics are not smeared. 612-614 complete by evidence.",
+  "changed_files": [],
+  "verification": [],
+  "known_residuals": [],
+  "ready_for_review": true,
+  "report_status": "submitted"
+}

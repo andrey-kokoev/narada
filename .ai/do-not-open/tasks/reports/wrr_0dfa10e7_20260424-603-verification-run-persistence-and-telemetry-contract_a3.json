@@ -1,0 +1,21 @@
+{
+  "report_id": "wrr_0dfa10e7_20260424-603-verification-run-persistence-and-telemetry-contract_a3",
+  "task_number": "603",
+  "task_id": "20260424-603-verification-run-persistence-and-telemetry-contract",
+  "agent_id": "a3",
+  "assignment_id": "20260424-603-verification-run-persistence-and-telemetry-contract-2026-04-24T20:51:43.932Z",
+  "reported_at": "2026-04-24T20:51:58.290Z",
+  "summary": "Defined verification run persistence and telemetry contract with SQLite schema, retention policy, and task-verification consumption posture",
+  "changed_files": [
+    ".ai/decisions/20260424-603-verification-run-persistence-and-telemetry-contract.md"
+  ],
+  "verification": [
+    {
+      "command": "pnpm verify",
+      "result": "passed"
+    }
+  ],
+  "known_residuals": [],
+  "ready_for_review": true,
+  "report_status": "accepted"
+}

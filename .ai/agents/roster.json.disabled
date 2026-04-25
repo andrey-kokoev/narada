@@ -1,0 +1,115 @@
+{
+  "version": 2,
+  "schema": "https://narada.dev/schemas/agent-roster/v2",
+  "updated_at": "2026-04-24T21:41:55.055Z",
+  "agents": [
+    {
+      "agent_id": "a1",
+      "role": "implementer",
+      "capabilities": [
+        "derive",
+        "propose",
+        "claim",
+        "execute",
+        "resolve",
+        "confirm"
+      ],
+      "first_seen_at": "2026-04-21T00:00:00.000Z",
+      "last_active_at": "2026-04-24T21:43:24.907Z",
+      "status": "working",
+      "task": 617,
+      "last_done": 598,
+      "updated_at": "2026-04-24T21:43:24.907Z"
+    },
+    {
+      "agent_id": "a2",
+      "role": "reviewer",
+      "capabilities": [
+        "derive",
+        "propose",
+        "claim",
+        "execute",
+        "resolve",
+        "confirm"
+      ],
+      "first_seen_at": "2026-04-21T00:00:00.000Z",
+      "last_active_at": "2026-04-24T21:18:13.421Z",
+      "status": "done",
+      "task": null,
+      "last_done": 581,
+      "updated_at": "2026-04-24T21:41:55.055Z"
+    },
+    {
+      "agent_id": "a3",
+      "role": "reviewer",
+      "capabilities": [
+        "derive",
+        "propose",
+        "claim",
+        "execute",
+        "resolve",
+        "confirm"
+      ],
+      "first_seen_at": "2026-04-21T00:00:00.000Z",
+      "last_active_at": "2026-04-24T21:27:21.353Z",
+      "status": "done",
+      "task": null,
+      "last_done": 610,
+      "updated_at": "2026-04-24T21:41:55.055Z"
+    },
+    {
+      "agent_id": "a4",
+      "role": "implementer",
+      "capabilities": [
+        "derive",
+        "propose",
+        "claim",
+        "execute",
+        "resolve",
+        "confirm"
+      ],
+      "first_seen_at": "2026-04-21T00:00:00.000Z",
+      "last_active_at": "2026-04-24T14:45:40.475Z",
+      "status": "done",
+      "task": null,
+      "last_done": 574,
+      "updated_at": "2026-04-24T21:41:55.055Z"
+    },
+    {
+      "agent_id": "a5",
+      "role": "implementer",
+      "capabilities": [
+        "derive",
+        "propose",
+        "claim",
+        "execute",
+        "resolve",
+        "confirm"
+      ],
+      "first_seen_at": "2026-04-21T00:00:00.000Z",
+      "last_active_at": "2026-04-24T01:10:17.372Z",
+      "status": "done",
+      "task": null,
+      "last_done": 551,
+      "updated_at": "2026-04-24T21:41:55.055Z"
+    },
+    {
+      "agent_id": "a6",
+      "role": "reviewer",
+      "capabilities": [
+        "derive",
+        "propose",
+        "claim",
+        "execute",
+        "resolve",
+        "confirm"
+      ],
+      "first_seen_at": "2026-04-21T00:00:00.000Z",
+      "last_active_at": "2026-04-24T00:56:52.654Z",
+      "status": "done",
+      "task": null,
+      "last_done": 545,
+      "updated_at": "2026-04-24T21:41:55.055Z"
+    }
+  ]
+}

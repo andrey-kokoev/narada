@@ -301,4 +301,4 @@ Each step of the Nine-Layer Pipeline may read, accumulate, or transform knowledg
 
 - [`docs/product/first-operation-proof.md`](../product/first-operation-proof.md) — Canonical product proof; see "Proof vs Knowledge" section
 - [`docs/product/bootstrap-contract.md`](../product/bootstrap-contract.md) — `init-repo` and `want-mailbox` create the `knowledge/` directory
-- [`.ai/tasks/20260413-008-mailbox-charter-knowledge-sources.md`](../../.ai/tasks/20260413-008-mailbox-charter-knowledge-sources.md) — Original knowledge source type spec
+- [`.ai/do-not-open/tasks/20260413-008-mailbox-charter-knowledge-sources.md`](../../.ai/do-not-open/tasks/20260413-008-mailbox-charter-knowledge-sources.md) — Original knowledge source type spec

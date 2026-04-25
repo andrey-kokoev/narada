@@ -9,11 +9,12 @@ import { ExitCode } from '../../src/lib/exit-codes.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'reports'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'reviews'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'decisions'), { recursive: true });
 
@@ -31,7 +32,7 @@ function setupRepo(tempDir: string) {
 
 function createTask(tempDir: string, num: number, status: string, bodyExtra = '') {
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', `20260420-${num}-test.md`),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', `20260420-${num}-test.md`),
     `---\ntask_id: ${num}\nstatus: ${status}\n---\n\n# Task ${num}: Test\n\n## Acceptance Criteria\n- [ ] Do thing A\n- [x] Do thing B\n\n${bodyExtra}`,
   );
 }
@@ -39,7 +40,7 @@ function createTask(tempDir: string, num: number, status: string, bodyExtra = ''
 function createReport(tempDir: string, taskId: string, agentId: string) {
   const reportId = `wrr_1234567890_${taskId}_${agentId}`;
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', 'reports', `${reportId}.json`),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', `${reportId}.json`),
     JSON.stringify({
       report_id: reportId,
       task_number: 999,
@@ -116,7 +117,7 @@ describe('task evidence operator', () => {
 
   it('classifies complete closed task with evidence and review', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-102-test.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-102-test.md'),
       `---\ntask_id: 102\nstatus: closed\n---\n\n# Task 102: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n- [x] Do thing B\n\n## Execution Notes\nDone.\n\n## Verification\nTests passed.\n`,
     );
     createReport(tempDir, '20260420-102-test', 'test-agent');
@@ -130,7 +131,7 @@ describe('task evidence operator', () => {
 
   it('classifies direct closed task with execution notes and verification as complete', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-108-test.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-108-test.md'),
       `---\ntask_id: 108\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 108: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n- [x] Do thing B\n\n## Execution Notes\nDone directly by operator.\n\n## Verification\nFocused check passed.\n`,
     );
     const result = await taskEvidenceCommand({ taskNumber: '108', cwd: tempDir, format: 'json' });
@@ -143,7 +144,7 @@ describe('task evidence operator', () => {
 
   it('classifies direct closed task without verification as needs_closure', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-109-test.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-109-test.md'),
       `---\ntask_id: 109\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 109: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n- [x] Do thing B\n\n## Execution Notes\nDone directly by operator.\n`,
     );
     const result = await taskEvidenceCommand({ taskNumber: '109', cwd: tempDir, format: 'json' });
@@ -165,7 +166,7 @@ describe('task evidence operator', () => {
 
   it('detects raw terminal mutation without governed provenance', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-110-test.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-110-test.md'),
       `---\ntask_id: 110\nstatus: closed\n---\n\n# Task 110: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
     );
     const result = await taskEvidenceCommand({ taskNumber: '110', cwd: tempDir, format: 'json' });
@@ -193,9 +194,59 @@ describe('task evidence operator', () => {
     expect(parsed.evidence.has_verification).toBe(true);
   });
 
+  it('detects governed verification runs from SQLite as verification', async () => {
+    // Create task WITHOUT markdown verification section
+    createTask(tempDir, 111, 'claimed', '## Execution Notes\nDid the work.\n');
+    createReport(tempDir, '20260420-111-test', 'test-agent');
+
+    // Seed the task in SQLite lifecycle store
+    const store = openTaskLifecycleStore(tempDir);
+    store.upsertLifecycle({
+      task_id: '20260420-111-test',
+      task_number: 111,
+      status: 'claimed',
+      governed_by: null,
+      closed_at: null,
+      closed_by: null,
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: new Date().toISOString(),
+    });
+
+    // Insert a verification run for this task
+    store.insertVerificationRun({
+      run_id: 'run_111',
+      request_id: 'req_111',
+      task_id: '20260420-111-test',
+      target_command: 'echo test',
+      scope: 'focused',
+      timeout_seconds: 60,
+      requester_identity: 'a3',
+      requested_at: new Date().toISOString(),
+      status: 'passed',
+      exit_code: 0,
+      duration_ms: 42,
+      metrics_json: null,
+      stdout_digest: null,
+      stderr_digest: null,
+      stdout_excerpt: null,
+      stderr_excerpt: null,
+      completed_at: new Date().toISOString(),
+    });
+    store.db.close();
+
+    const result = await taskEvidenceCommand({ taskNumber: '111', cwd: tempDir, format: 'json' });
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const parsed = result.result as { evidence: { has_verification: boolean; verdict: string } };
+    expect(parsed.evidence.has_verification).toBe(true);
+    // With execution notes + verification + report, should be attempt_complete
+    expect(parsed.evidence.verdict).toBe('attempt_complete');
+  });
+
   it('classifies in_review with accepted review as needs_closure', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-106-test.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-106-test.md'),
       `---\ntask_id: 106\nstatus: in_review\n---\n\n# Task 106: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n- [x] Do thing B\n\n## Execution Notes\nDone.\n`,
     );
     createReport(tempDir, '20260420-106-test', 'test-agent');

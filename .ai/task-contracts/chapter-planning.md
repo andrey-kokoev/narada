@@ -18,7 +18,7 @@ Chapter-planning tasks define the next coherent body of work. They do not implem
 - Include a CCC posture table with evidenced state, projected state, pressure path, and evidence required.
 - Create a minimal non-overlapping follow-up task set.
 - Use monotonically increasing task numbers.
-- Put the reduced DAG in a separate task-range file, e.g. `.ai/tasks/YYYYMMDD-NNN-MMM.md`.
+- Put the reduced DAG in a separate task-range file, e.g. `.ai/do-not-open/tasks/YYYYMMDD-NNN-MMM.md`.
 - Keep Mermaid graphs plain. Do not add Mermaid styling/classes.
 
 ## CCC Posture Table
@@ -104,7 +104,7 @@ Before creating a chapter, the task-number range MUST be reserved.
   ```
   This automatically computes the next available range, creates the chapter DAG file, creates stub task files, and updates `.registry.json`.
 
-- **Manual**: Compute the next available number, add a reservation entry to `.ai/tasks/.registry.json`, then create files by hand.
+- **Manual**: Compute the next available number, add a reservation entry to `.ai/do-not-open/tasks/tasks/.registry.json`, then create files by hand.
 
 ### Rules
 
@@ -119,7 +119,7 @@ If a chapter is partially created (some tasks missing):
 
 1. Run `scripts/task-graph-lint.ts` to identify missing task files.
 2. Create the missing task files.
-3. Update `.ai/tasks/.registry.json` to mark the reservation as `released`.
+3. Update `.ai/do-not-open/tasks/tasks/.registry.json` to mark the reservation as `released`.
 
 ## Completion Evidence
 

@@ -19,15 +19,13 @@
 
 import {
   readdirSync,
-  readFileSync,
   writeFileSync,
-  existsSync,
 } from "node:fs";
 import { join } from "node:path";
+import { openTaskLifecycleStore } from "../packages/layers/cli/src/lib/task-lifecycle-store.js";
 
 const ROOT = process.cwd();
-const TASKS_DIR = join(ROOT, ".ai", "tasks");
-const REGISTRY_PATH = join(TASKS_DIR, ".registry.json");
+const TASKS_DIR = join(ROOT, ".ai", "do-not-open", "tasks");
 
 // ---------------------------------------------------------------------------
 // Types
@@ -97,18 +95,28 @@ function today(): string {
 }
 
 function readRegistry(): Registry {
-  if (!existsSync(REGISTRY_PATH)) {
-    return { version: 1, last_allocated: 0, reservations: [] };
-  }
+  const store = openTaskLifecycleStore(ROOT);
   try {
-    return JSON.parse(readFileSync(REGISTRY_PATH, "utf-8")) as Registry;
-  } catch {
-    return { version: 1, last_allocated: 0, reservations: [] };
+    return {
+      version: 1,
+      last_allocated: store.getLastAllocated(),
+      reservations: store.listTaskNumberReservations(),
+    };
+  } finally {
+    store.db.close();
   }
 }
 
 function writeRegistry(registry: Registry): void {
-  writeFileSync(REGISTRY_PATH, JSON.stringify(registry, null, 2) + "\n", "utf-8");
+  const store = openTaskLifecycleStore(ROOT);
+  try {
+    store.ensureTaskNumberFloor(registry.last_allocated);
+    for (const reservation of registry.reservations) {
+      store.upsertTaskNumberReservation(reservation);
+    }
+  } finally {
+    store.db.close();
+  }
 }
 
 function findAllTaskNumbers(): Set<number> {
@@ -273,7 +281,7 @@ function main(): number {
       status: "active",
     });
     writeRegistry(registry);
-    console.log(`[REGISTRY] Updated ${REGISTRY_PATH}`);
+    console.log(`[SQLITE] Updated task number reservations`);
 
     console.log("");
     console.log("Chapter creation complete.");

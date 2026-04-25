@@ -168,10 +168,10 @@ In the target regime, the following habits are **prohibited as normal task work*
 
 | Prohibited Habit | Why Prohibited | Sanctioned Replacement |
 |------------------|----------------|----------------------|
-| Opening `.ai/tasks/NNN.md` to check task status | Bypasses SQLite authority; may see stale front matter | `narada task evidence inspect NNN` |
-| Running `sqlite3 .ai/tasks/task-lifecycle.db "SELECT * FROM task_lifecycle"` to list tasks | Bypasses projection layer; returns raw rows | `narada task list` or `narada task evidence list` |
-| Using `find .ai/tasks -name '*.md'` or `ls .ai/tasks/` to see what tasks exist | Filesystem search is not queryable, filterable, or authoritative | `narada task list` or `narada task evidence list --status ...` |
-| Reading `.ai/tasks/assignments/*.json` directly to check who claimed what | Bypasses SQLite assignment table | `narada task dispatch status` or `narada task roster show` |
+| Opening `.ai/do-not-open/tasks/NNN.md` to check task status | Bypasses SQLite authority; may see stale front matter | `narada task evidence inspect NNN` |
+| Running `sqlite3 .ai/do-not-open/tasks/task-lifecycle.db "SELECT * FROM task_lifecycle"` to list tasks | Bypasses projection layer; returns raw rows | `narada task list` or `narada task evidence list` |
+| Using `find .ai/do-not-open -name '*.md'` or `ls .ai/do-not-open/tasks/` to see what tasks exist | Filesystem search is not queryable, filterable, or authoritative | `narada task list` or `narada task evidence list --status ...` |
+| Reading `.ai/do-not-open/tasks/tasks/assignments/*.json` directly to check who claimed what | Bypasses SQLite assignment table | `narada task dispatch status` or `narada task roster show` |
 | Grepping markdown files for `status: closed` to count closed tasks | Fragile, may miss SQLite-only records, may find stale front matter | `narada task evidence list --status closed` |
 | Opening `.ai/reviews/*.json` to read review findings | Bypasses SQLite review table | Future: `narada task review show <review-id>` |
 

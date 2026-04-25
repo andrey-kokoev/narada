@@ -91,7 +91,7 @@ export async function taskDeriveFromFindingCommand(
   // Generate task file
   const datePrefix = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   const taskFileName = `${datePrefix}-${taskNumber}-corrective-${finding.category ?? 'fix'}-${targetTaskId}.md`;
-  const taskPath = join(cwd, '.ai', 'tasks', taskFileName);
+  const taskPath = join(cwd, '.ai', 'do-not-open', 'tasks', taskFileName);
 
   const frontMatter = {
     task_id: taskNumber,

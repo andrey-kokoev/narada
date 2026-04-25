@@ -284,7 +284,7 @@ describe('findTaskFile', () => {
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'narada-find-task-file-test-'));
-    mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+    mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
   });
 
   afterEach(() => {
@@ -293,11 +293,11 @@ describe('findTaskFile', () => {
 
   it('prefers an executable task file over a chapter range file with the same number', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260423-495-500-crossing-regime-first-class-chapter.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260423-495-500-crossing-regime-first-class-chapter.md'),
       '---\nstatus: opened\n---\n\n# Crossing Regime First-Class Chapter\n',
     );
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260423-495-crossing-regime-declaration-contract.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260423-495-crossing-regime-declaration-contract.md'),
       '---\nstatus: opened\n---\n\n# Task 495 - Crossing Regime Declaration Contract\n',
     );
 
@@ -311,7 +311,7 @@ describe('lintTaskFiles', () => {
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'narada-lint-test-'));
-    mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+    mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
     mkdirSync(join(tempDir, '.ai', 'reviews'), { recursive: true });
     mkdirSync(join(tempDir, '.ai', 'decisions'), { recursive: true });
   });
@@ -325,7 +325,7 @@ describe('lintTaskFiles', () => {
     if (deps) fm.push(`depends_on: [${deps.join(', ')}]`);
     fm.push(`---\n\n# Task ${taskNum}\n\nTest task.\n`);
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', `20260420-${taskNum}-test.md`),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', `20260420-${taskNum}-test.md`),
       fm.join('\n'),
     );
   }
@@ -502,7 +502,7 @@ describe('writeTaskFile front-matter preservation', () => {
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'narada-fm-preservation-test-'));
-    mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+    mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
   });
 
   afterEach(() => {
@@ -510,7 +510,7 @@ describe('writeTaskFile front-matter preservation', () => {
   });
 
   it('preserves depends_on YAML list through read/write cycle', async () => {
-    const path = join(tempDir, '.ai', 'tasks', '20260420-999-test.md');
+    const path = join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test.md');
     const original = `---\nstatus: opened\ndepends_on:\n  - 998\n  - 997\nextra_field: preserved\n---\n\n# Task 999\n\nBody.\n`;
     writeFileSync(path, original);
 
@@ -554,7 +554,7 @@ describe('findReportByAssignmentId', () => {
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'narada-report-find-test-'));
-    mkdirSync(join(tempDir, '.ai', 'tasks', 'reports'), { recursive: true });
+    mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports'), { recursive: true });
   });
 
   afterEach(() => {
@@ -577,7 +577,7 @@ describe('findReportByAssignmentId', () => {
       report_status: 'submitted',
     };
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', 'reports', 'wrr_abc123_task-1_agent-a.json'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', 'wrr_abc123_task-1_agent-a.json'),
       JSON.stringify(report, null, 2),
     );
 
@@ -607,7 +607,7 @@ describe('findReportByAssignmentId', () => {
       report_status: 'superseded',
     };
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', 'reports', 'wrr_abc123_task-1_agent-a.json'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', 'wrr_abc123_task-1_agent-a.json'),
       JSON.stringify(report, null, 2),
     );
 
@@ -685,7 +685,7 @@ describe('detectReportAnomalies', () => {
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'narada-report-anomalies-test-'));
-    mkdirSync(join(tempDir, '.ai', 'tasks', 'reports'), { recursive: true });
+    mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports'), { recursive: true });
   });
 
   afterEach(() => {
@@ -708,7 +708,7 @@ describe('detectReportAnomalies', () => {
       report_status: 'submitted',
     };
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', 'reports', 'wrr_abc123_task-1_agent-a.json'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', 'wrr_abc123_task-1_agent-a.json'),
       JSON.stringify(report, null, 2),
     );
 
@@ -732,11 +732,11 @@ describe('detectReportAnomalies', () => {
       report_status: 'submitted',
     };
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', 'reports', 'wrr_dup_task-1_agent-a.json'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', 'wrr_dup_task-1_agent-a.json'),
       JSON.stringify(report, null, 2),
     );
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', 'reports', 'wrr_dup_task-1_agent-a_copy.json'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', 'wrr_dup_task-1_agent-a_copy.json'),
       JSON.stringify(report, null, 2),
     );
 
@@ -773,8 +773,8 @@ describe('detectReportAnomalies', () => {
       ready_for_review: true,
       report_status: 'submitted',
     };
-    writeFileSync(join(tempDir, '.ai', 'tasks', 'reports', 'wrr_aaa_task-1_agent-a.json'), JSON.stringify(report1, null, 2));
-    writeFileSync(join(tempDir, '.ai', 'tasks', 'reports', 'wrr_bbb_task-1_agent-a.json'), JSON.stringify(report2, null, 2));
+    writeFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', 'wrr_aaa_task-1_agent-a.json'), JSON.stringify(report1, null, 2));
+    writeFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', 'wrr_bbb_task-1_agent-a.json'), JSON.stringify(report2, null, 2));
 
     const anomalies = await detectReportAnomalies(tempDir);
     expect(anomalies.some((a) => a.type === 'multiple_reports_per_assignment')).toBe(true);
@@ -796,7 +796,7 @@ describe('detectReportAnomalies', () => {
       report_status: 'submitted',
     };
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', 'reports', 'wrong_name.json'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', 'wrong_name.json'),
       JSON.stringify(report, null, 2),
     );
 
@@ -810,7 +810,7 @@ describe('resolveTaskStatus', () => {
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'narada-resolve-status-test-'));
-    mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+    mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
   });
 
   afterEach(() => {
@@ -819,7 +819,7 @@ describe('resolveTaskStatus', () => {
 
   it('returns markdown status when no store is provided', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-260-test.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-260-test.md'),
       '---\nstatus: closed\n---\n\n# Test\n',
     );
 
@@ -830,7 +830,7 @@ describe('resolveTaskStatus', () => {
 
   it('prefers SQLite status when store has the task', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-260-test.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-260-test.md'),
       '---\nstatus: opened\n---\n\n# Test\n',
     );
 
@@ -858,7 +858,7 @@ describe('resolveTaskStatus', () => {
 
   it('falls back to markdown when store has no record', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-260-test.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-260-test.md'),
       '---\nstatus: in_review\n---\n\n# Test\n',
     );
 
@@ -888,7 +888,7 @@ describe('checkDependencies', () => {
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'narada-check-deps-test-'));
-    mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
+    mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
   });
 
   afterEach(() => {
@@ -897,7 +897,7 @@ describe('checkDependencies', () => {
 
   it('allows dependencies that are closed with complete evidence', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-998-dep.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-dep.md'),
       '---\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 998: Dep\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Execution Notes\n\nDone.\n\n## Verification\n\nVerified.\n',
     );
 
@@ -908,7 +908,7 @@ describe('checkDependencies', () => {
 
   it('blocks dependencies that are not terminal by SQLite status', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-998-dep.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-dep.md'),
       '---\nstatus: opened\n---\n\n# Task 998: Dep\n',
     );
 
@@ -937,7 +937,7 @@ describe('checkDependencies', () => {
 
   it('allows dependencies that are confirmed in SQLite even when markdown says opened', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-998-dep.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-dep.md'),
       '---\nstatus: opened\ngoverned_by: operator\n---\n\n# Task 998: Dep\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Execution Notes\n\nDone.\n\n## Verification\n\nVerified.\n',
     );
 

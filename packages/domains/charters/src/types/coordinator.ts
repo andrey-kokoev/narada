@@ -4,10 +4,10 @@
  * Mailbox-to-charter attachments, invocation policies, knowledge sources,
  * tool bindings, and top-level coordinator configuration.
  *
- * Spec: .ai/tasks/20260413-007-foreman-and-charters-architecture.md
- * Spec: .ai/tasks/20260413-008-mailbox-charter-knowledge-sources.md
- * Spec: .ai/tasks/20260413-011-charter-tool-bindings.md
- * Spec: .ai/tasks/20260413-012-coordinator-state-and-foreman-handoff.md
+ * Spec: .ai/do-not-open/tasks/20260413-007-foreman-and-charters-architecture.md
+ * Spec: .ai/do-not-open/tasks/20260413-008-mailbox-charter-knowledge-sources.md
+ * Spec: .ai/do-not-open/tasks/20260413-011-charter-tool-bindings.md
+ * Spec: .ai/do-not-open/tasks/20260413-012-coordinator-state-and-foreman-handoff.md
  */
 
 import type { KnowledgeSourceRef } from "./knowledge.js";

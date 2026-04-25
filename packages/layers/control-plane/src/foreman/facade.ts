@@ -4,7 +4,7 @@
  * Implements work opening, supersession, evaluation validation,
  * arbitration, and atomic outbound handoff.
  *
- * Spec: .ai/tasks/20260414-014-impl-foreman-core.md
+ * Spec: .ai/do-not-open/tasks/20260414-014-impl-foreman-core.md
  */
 
 import { randomUUID } from "node:crypto";

@@ -12,8 +12,8 @@ import { join } from 'node:path';
 
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'tasks', 'reports'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'reviews'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'decisions'), { recursive: true });
 
@@ -32,7 +32,7 @@ function setupRepo(tempDir: string) {
 
 function createTask(tempDir: string, num: number, status: string, bodyExtra = '') {
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', `20260420-${num}-test.md`),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', `20260420-${num}-test.md`),
     `---\ntask_id: ${num}\nstatus: ${status}\n---\n\n# Task ${num}: Test\n\n## Acceptance Criteria\n- [ ] Do thing A\n- [x] Do thing B\n\n${bodyExtra}`,
   );
 }
@@ -40,7 +40,7 @@ function createTask(tempDir: string, num: number, status: string, bodyExtra = ''
 function createReport(tempDir: string, taskId: string, agentId: string) {
   const reportId = `wrr_1234567890_${taskId}_${agentId}`;
   writeFileSync(
-    join(tempDir, '.ai', 'tasks', 'reports', `${reportId}.json`),
+    join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', `${reportId}.json`),
     JSON.stringify({
       report_id: reportId,
       task_number: 999,
@@ -90,7 +90,7 @@ describe('task evidence list operator', () => {
   it('returns empty when no tasks match default not-complete filter', async () => {
     // Create only a complete closed task
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-100-test.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-test.md'),
       `---\ntask_id: 100\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 100: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n\n## Execution Notes\nDone.\n\n## Verification\nTests passed.\n`,
     );
     const result = await taskEvidenceListCommand({ cwd: tempDir, format: 'json' });
@@ -122,7 +122,7 @@ describe('task evidence list operator', () => {
 
   it('lists closed-but-invalid tasks', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-103-test.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-103-test.md'),
       `---\ntask_id: 103\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 103: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n\n## Execution Notes\nDone.\n`,
     );
     const result = await taskEvidenceListCommand({ cwd: tempDir, format: 'json' });
@@ -189,7 +189,7 @@ describe('task evidence list operator', () => {
 
   it('shows complete tasks when verdict filter includes complete', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'tasks', '20260420-112-test.md'),
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-112-test.md'),
       `---\ntask_id: 112\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 112: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n\n## Execution Notes\nDone.\n\n## Verification\nTests passed.\n`,
     );
     const result = await taskEvidenceListCommand({
@@ -220,7 +220,14 @@ describe('task evidence list operator', () => {
     const r = result.result as {
       status: string;
       count: number;
+      returned_count: number;
+      truncated: boolean;
+      limit: number | null;
+      full: boolean;
       filter: { verdict: string[]; status: null; range: null };
+      summary: {
+        verdicts: Record<string, number>;
+      };
       tasks: Array<{
         task_number: number;
         task_id: string;
@@ -242,11 +249,62 @@ describe('task evidence list operator', () => {
     };
     expect(r.status).toBe('success');
     expect(typeof r.count).toBe('number');
+    expect(typeof r.returned_count).toBe('number');
+    expect(typeof r.truncated).toBe('boolean');
+    expect(r.limit).toBe(25);
+    expect(r.full).toBe(false);
     expect(Array.isArray(r.filter.verdict)).toBe(true);
+    expect(r.summary).toHaveProperty('verdicts');
     expect(r.tasks[0]).toHaveProperty('task_number');
     expect(r.tasks[0]).toHaveProperty('missing');
     expect(r.tasks[0]).toHaveProperty('violations');
     expect(r.tasks[0]).toHaveProperty('assigned_agent');
+  });
+
+  it('truncates JSON output by default when many tasks match', async () => {
+    for (let i = 200; i < 230; i += 1) {
+      createTask(tempDir, i, 'opened');
+    }
+
+    const result = await taskEvidenceListCommand({ cwd: tempDir, format: 'json' });
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const r = result.result as {
+      count: number;
+      returned_count: number;
+      truncated: boolean;
+      limit: number | null;
+      tasks: Array<{ task_number: number }>;
+    };
+    expect(r.count).toBe(30);
+    expect(r.returned_count).toBe(25);
+    expect(r.truncated).toBe(true);
+    expect(r.limit).toBe(25);
+    expect(r.tasks).toHaveLength(25);
+    expect(r.tasks[0].task_number).toBe(200);
+    expect(r.tasks.at(-1)?.task_number).toBe(224);
+  });
+
+  it('returns the complete JSON list only with full opt-in', async () => {
+    for (let i = 300; i < 330; i += 1) {
+      createTask(tempDir, i, 'opened');
+    }
+
+    const result = await taskEvidenceListCommand({ cwd: tempDir, format: 'json', full: true });
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const r = result.result as {
+      count: number;
+      returned_count: number;
+      truncated: boolean;
+      limit: number | null;
+      full: boolean;
+      tasks: Array<{ task_number: number }>;
+    };
+    expect(r.count).toBe(30);
+    expect(r.returned_count).toBe(30);
+    expect(r.truncated).toBe(false);
+    expect(r.limit).toBeNull();
+    expect(r.full).toBe(true);
+    expect(r.tasks).toHaveLength(30);
   });
 
   it('is read-only and does not mutate task files', async () => {
@@ -254,7 +312,7 @@ describe('task evidence list operator', () => {
     const before = writeFileSync;
     let writeCount = 0;
     // We verify no writes happen by checking the task file mtime is unchanged
-    const path = join(tempDir, '.ai', 'tasks', '20260420-114-test.md');
+    const path = join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-114-test.md');
     const { mtimeMs: beforeMtime } = await import('node:fs/promises').then((m) => m.stat(path));
 
     await taskEvidenceListCommand({ cwd: tempDir, format: 'json' });
