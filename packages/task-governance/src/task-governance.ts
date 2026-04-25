@@ -1069,7 +1069,7 @@ export async function saveReview(cwd: string, record: ReviewRecord): Promise<voi
       review_id: record.review_id,
       task_id: record.task_id,
       reviewer_agent_id: record.reviewer_agent_id,
-      verdict: record.verdict === 'accepted_with_notes' ? 'accepted' : record.verdict === 'rejected' ? 'needs_changes' : 'accepted',
+      verdict: record.verdict === 'accepted_with_notes' ? 'accepted' : record.verdict,
       findings_json: record.findings.length > 0 ? JSON.stringify(record.findings) : null,
       reviewed_at: record.reviewed_at,
     });

@@ -20,6 +20,7 @@ import {
   createReportId,
   findReportByAssignmentId,
   detectReportAnomalies,
+  loadReview,
   saveReport,
   saveReview,
   continuationReasonToIntent,
@@ -395,6 +396,76 @@ describe('lintTaskFiles', () => {
     await writeStoredReview('review-100', 100);
     const result = await lintTaskFiles(tempDir);
     expect(result.issues.some((i) => i.type === 'orphan_review')).toBe(false);
+  });
+
+  it('stores rejected reviews with the canonical rejected verdict', async () => {
+    writeTask(100, 'in_review');
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.upsertLifecycle({
+        task_id: '20260420-100-test',
+        task_number: 100,
+        status: 'in_review',
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        closure_mode: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+    } finally {
+      store.db.close();
+    }
+
+    await saveReview(tempDir, {
+      review_id: 'review-rejected',
+      reviewer_agent_id: 'reviewer',
+      task_id: '20260420-100-test',
+      findings: [],
+      verdict: 'rejected',
+      reviewed_at: '2026-01-01T00:00:00Z',
+    });
+
+    const verify = openTaskLifecycleStore(tempDir);
+    try {
+      expect(verify.listReviews('20260420-100-test')[0]?.verdict).toBe('rejected');
+    } finally {
+      verify.db.close();
+    }
+  });
+
+  it('normalizes legacy needs_changes review rows to rejected on read', async () => {
+    writeTask(100, 'in_review');
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.upsertLifecycle({
+        task_id: '20260420-100-test',
+        task_number: 100,
+        status: 'in_review',
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        closure_mode: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+      store.db
+        .prepare(
+          `insert into task_reviews (
+            review_id, task_id, reviewer_agent_id, verdict, findings_json, reviewed_at
+          ) values (?, ?, ?, ?, ?, ?)`,
+        )
+        .run('legacy-review', '20260420-100-test', 'reviewer', 'needs_changes', null, '2026-01-01T00:00:00Z');
+    } finally {
+      store.db.close();
+    }
+
+    const review = await loadReview(tempDir, 'legacy-review');
+    expect(review?.verdict).toBe('rejected');
   });
 
   it('detects stale closure reference from front matter', async () => {

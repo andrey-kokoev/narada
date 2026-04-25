@@ -7,6 +7,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskFinishCommand } from '../../src/commands/task-finish.js';
 import { taskClaimCommand } from '../../src/commands/task-claim.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -195,9 +196,13 @@ describe('task finish operator', () => {
       expect(data.roster_transition).toBe('done');
 
       // Only one report file should exist
-      const reportsDir = join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports');
-      const reportFiles = require('node:fs').readdirSync(reportsDir).filter((f: string) => f.endsWith('.json'));
-      expect(reportFiles.length).toBe(1);
+      const store = openTaskLifecycleStore(tempDir);
+      try {
+        const reportRecords = store.listReportRecords('20260420-999-test-task');
+        expect(reportRecords.length).toBe(1);
+      } finally {
+        store.db.close();
+      }
     });
 
     it('--allow-incomplete clears roster but reports incomplete evidence', async () => {
@@ -315,9 +320,13 @@ describe('task finish operator', () => {
       expect(data.review_action).toBe('reused');
 
       // Only one review file
-      const reviewsDir = join(tempDir, '.ai', 'reviews');
-      const reviewFiles = require('node:fs').readdirSync(reviewsDir).filter((f: string) => f.endsWith('.json'));
-      expect(reviewFiles.length).toBe(1);
+      const store = openTaskLifecycleStore(tempDir);
+      try {
+        const reviewRecords = store.listReviews('20260420-999-test-task');
+        expect(reviewRecords.length).toBe(1);
+      } finally {
+        store.db.close();
+      }
     });
   });
 

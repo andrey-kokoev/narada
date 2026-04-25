@@ -26,6 +26,18 @@
       "types": "./dist/task-close-service.d.ts",
       "import": "./dist/task-close-service.js"
     },
+    "./task-report-service": {
+      "types": "./dist/task-report-service.d.ts",
+      "import": "./dist/task-report-service.js"
+    },
+    "./task-review-service": {
+      "types": "./dist/task-review-service.d.ts",
+      "import": "./dist/task-review-service.js"
+    },
+    "./task-finish-service": {
+      "types": "./dist/task-finish-service.d.ts",
+      "import": "./dist/task-finish-service.js"
+    },
     "./task-allocate-service": {
       "types": "./dist/task-allocate-service.d.ts",
       "import": "./dist/task-allocate-service.js"

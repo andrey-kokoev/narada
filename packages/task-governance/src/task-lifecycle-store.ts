@@ -77,7 +77,9 @@ export interface TaskReportRow {
   submitted_at: string;
 }
 
-export type ReviewVerdict = "accepted" | "rejected" | "needs_changes";
+export type CanonicalReviewVerdict = "accepted" | "rejected";
+export type LegacyReviewVerdict = "needs_changes";
+export type ReviewVerdict = CanonicalReviewVerdict | LegacyReviewVerdict;
 
 export type DispatchPacketStatus =
   | "picked_up"
@@ -113,6 +115,10 @@ export interface TaskReviewRow {
   verdict: ReviewVerdict;
   findings_json: string | null;
   reviewed_at: string;
+}
+
+export interface NewTaskReviewRow extends Omit<TaskReviewRow, "verdict"> {
+  verdict: CanonicalReviewVerdict;
 }
 
 export interface AssignmentRecordRow {
@@ -324,7 +330,7 @@ export interface TaskLifecycleStore {
   upsertPromotionRecord(record: PromotionRecordRow): void;
   getPromotionRecord(promotionId: string): PromotionRecordRow | undefined;
   listPromotionRecords(taskId?: string): PromotionRecordRow[];
-  insertReview(review: TaskReviewRow): void;
+  insertReview(review: NewTaskReviewRow): void;
   listReviews(taskId: string): TaskReviewRow[];
   listAllReviews(): TaskReviewRow[];
   insertDispatchPacket(packet: DispatchPacketRow): void;
@@ -1734,7 +1740,7 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
     return rows.map(rowToPromotionRecord);
   }
 
-  insertReview(review: TaskReviewRow): void {
+  insertReview(review: NewTaskReviewRow): void {
     const stmt = this.db.prepare(`
       insert into task_reviews (
         review_id, task_id, reviewer_agent_id, verdict, findings_json, reviewed_at

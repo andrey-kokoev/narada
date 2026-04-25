@@ -4,7 +4,7 @@ vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
+import { openTaskLifecycleStore, SqliteTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { taskClaimCommand } from '../../src/commands/task-claim.js';
 import { taskReleaseCommand } from '../../src/commands/task-release.js';
 import { taskReportCommand } from '../../src/commands/task-report.js';
@@ -13,6 +13,7 @@ import { ExitCode } from '../../src/lib/exit-codes.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Database } from '@narada2/control-plane';
 
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
@@ -109,7 +110,7 @@ describe('task review operator', () => {
       format: 'json',
     });
 
-    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
       status: 'success',
       verdict: 'accepted',
@@ -464,9 +465,8 @@ describe('task review operator', () => {
         store,
       });
 
-      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
 
-      // Verify SQLite has the review
       const reviews = store.listReviews('20260420-999-test-task');
       expect(reviews.length).toBe(1);
       expect(reviews[0]!.verdict).toBe('accepted');
