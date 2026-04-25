@@ -4,9 +4,14 @@ import {
   SqliteTaskLifecycleStore,
   type TaskLifecycleRow,
   type TaskAssignmentRow,
+  type AssignmentIntentRow,
+  type EvidenceAdmissionResultRow,
+  type EvidenceBundleRow,
+  type ObservationArtifactRow,
+  type ReconciliationFindingRow,
   type TaskReportRow,
   type TaskReviewRow,
-} from '../../src/lib/task-lifecycle-store.js';
+} from '../../src/task-lifecycle-store.js';
 
 describe('SqliteTaskLifecycleStore', () => {
   let db: Database;
@@ -30,6 +35,12 @@ describe('SqliteTaskLifecycleStore', () => {
         .all() as string[];
       expect(tables).toContain('task_lifecycle');
       expect(tables).toContain('task_assignments');
+      expect(tables).toContain('assignment_intents');
+      expect(tables).toContain('evidence_bundles');
+      expect(tables).toContain('evidence_admission_results');
+      expect(tables).toContain('observation_artifacts');
+      expect(tables).toContain('reconciliation_findings');
+      expect(tables).toContain('reconciliation_repairs');
       expect(tables).toContain('task_reports');
       expect(tables).toContain('task_reviews');
       expect(tables).toContain('task_number_sequence');
@@ -61,6 +72,7 @@ describe('SqliteTaskLifecycleStore', () => {
       governed_by: null,
       closed_at: null,
       closed_by: null,
+      closure_mode: null,
       reopened_at: null,
       reopened_by: null,
       continuation_packet_json: null,
@@ -213,6 +225,170 @@ describe('SqliteTaskLifecycleStore', () => {
       });
       const active = store.getActiveAssignment('task-562');
       expect(active?.assignment_id).toBe('assign-2');
+    });
+  });
+
+  describe('assignment intents', () => {
+    const intent: AssignmentIntentRow = {
+      request_id: 'air-1',
+      kind: 'claim',
+      task_id: 'task-562',
+      task_number: 562,
+      agent_id: 'agent-a',
+      requested_by: 'agent-a',
+      requested_at: '2026-04-24T12:00:00.000Z',
+      reason: 'test',
+      no_claim: 0,
+      status: 'accepted',
+      rejection_reason: null,
+      assignment_id: 'assign-1',
+      previous_agent_id: null,
+      lifecycle_status_before: 'opened',
+      lifecycle_status_after: null,
+      roster_status_after: null,
+      confirmation_json: null,
+      warnings_json: null,
+      updated_at: '2026-04-24T12:00:00.000Z',
+    };
+
+    it('upserts and reads an assignment intent result', () => {
+      store.upsertAssignmentIntent(intent);
+      store.upsertAssignmentIntent({
+        ...intent,
+        status: 'applied',
+        lifecycle_status_after: 'claimed',
+        roster_status_after: 'working',
+        confirmation_json: JSON.stringify({ task_id: 'task-562' }),
+      });
+
+      const read = store.getAssignmentIntent('air-1');
+      expect(read?.status).toBe('applied');
+      expect(read?.lifecycle_status_after).toBe('claimed');
+      expect(read?.confirmation_json).toContain('task-562');
+    });
+
+    it('lists assignment intents for a task', () => {
+      store.upsertAssignmentIntent(intent);
+      store.upsertAssignmentIntent({
+        ...intent,
+        request_id: 'air-2',
+        kind: 'roster_assign',
+        requested_at: '2026-04-24T13:00:00.000Z',
+        updated_at: '2026-04-24T13:00:00.000Z',
+      });
+
+      const rows = store.listAssignmentIntentsForTask('task-562');
+      expect(rows.map((row) => row.request_id)).toEqual(['air-2', 'air-1']);
+    });
+  });
+
+  describe('evidence admission', () => {
+    const lifecycle: TaskLifecycleRow = {
+      task_id: 'task-653',
+      task_number: 653,
+      status: 'in_review',
+      governed_by: null,
+      closed_at: null,
+      closed_by: null,
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: '2026-04-25T12:00:00.000Z',
+    };
+    const bundle: EvidenceBundleRow = {
+      bundle_id: 'evb-1',
+      task_id: 'task-653',
+      task_number: 653,
+      report_ids_json: JSON.stringify(['r1']),
+      verification_run_ids_json: JSON.stringify(['v1']),
+      acceptance_criteria_json: JSON.stringify({ all_checked: true, unchecked_count: 0 }),
+      review_ids_json: JSON.stringify(['review-1']),
+      changed_files_json: JSON.stringify(['a.ts']),
+      residuals_json: JSON.stringify([]),
+      assembled_at: '2026-04-25T12:00:00.000Z',
+      assembled_by: 'a2',
+    };
+    const result: EvidenceAdmissionResultRow = {
+      admission_id: 'ear-1',
+      bundle_id: 'evb-1',
+      task_id: 'task-653',
+      task_number: 653,
+      verdict: 'admitted',
+      methods_json: JSON.stringify(['review']),
+      blockers_json: JSON.stringify([]),
+      lifecycle_eligible_status: 'closed',
+      admitted_at: '2026-04-25T12:01:00.000Z',
+      admitted_by: 'a2',
+      confirmation_json: JSON.stringify({ observation_output_counted: false }),
+    };
+
+    beforeEach(() => {
+      store.upsertLifecycle(lifecycle);
+    });
+
+    it('stores evidence bundles and admission results durably', () => {
+      store.upsertEvidenceBundle(bundle);
+      store.upsertEvidenceAdmissionResult(result);
+
+      expect(store.getEvidenceBundle('evb-1')?.task_id).toBe('task-653');
+      expect(store.getEvidenceAdmissionResult('ear-1')?.verdict).toBe('admitted');
+      expect(store.getLatestEvidenceAdmissionResult('task-653')?.admission_id).toBe('ear-1');
+      expect(store.listEvidenceBundlesForTask('task-653')).toHaveLength(1);
+    });
+  });
+
+  describe('observation artifacts', () => {
+    const artifact: ObservationArtifactRow = {
+      artifact_id: 'obs-1',
+      artifact_type: 'task_graph_mermaid',
+      source_operator: 'task_graph',
+      task_id: null,
+      task_number: null,
+      agent_id: null,
+      artifact_uri: '.ai/observations/obs-1.mmd',
+      digest: 'sha256',
+      admitted_view_json: JSON.stringify({ node_count: 2 }),
+      created_at: '2026-04-25T12:00:00.000Z',
+    };
+
+    it('stores bounded observation artifact metadata', () => {
+      store.upsertObservationArtifact(artifact);
+      expect(store.getObservationArtifact('obs-1')?.artifact_uri).toBe('.ai/observations/obs-1.mmd');
+      expect(store.listObservationArtifacts(10)).toHaveLength(1);
+    });
+  });
+
+  describe('reconciliation', () => {
+    const finding: ReconciliationFindingRow = {
+      finding_id: 'rf-1',
+      task_id: 'task-1',
+      task_number: 1,
+      surfaces_json: JSON.stringify(['a', 'b']),
+      expected_authority: 'task_lifecycle',
+      observed_mismatch_json: JSON.stringify({ a: 'x', b: 'y' }),
+      severity: 'warning',
+      proposed_repair_json: JSON.stringify({ action: 'project_sqlite_status_to_frontmatter' }),
+      status: 'open',
+      detected_at: '2026-04-25T12:00:00.000Z',
+    };
+
+    it('stores reconciliation findings and repairs', () => {
+      store.upsertReconciliationFinding(finding);
+      store.upsertReconciliationRepair({
+        repair_id: 'rr-1',
+        finding_id: 'rf-1',
+        applied: 1,
+        changed_surfaces_json: JSON.stringify(['b']),
+        before_json: JSON.stringify({ b: 'y' }),
+        after_json: JSON.stringify({ b: 'x' }),
+        verification_json: JSON.stringify({ ok: true }),
+        repaired_at: '2026-04-25T12:01:00.000Z',
+        repaired_by: 'a2',
+      });
+
+      expect(store.getReconciliationFinding('rf-1')?.status).toBe('open');
+      expect(store.listReconciliationFindings('open')).toHaveLength(1);
+      expect(store.getReconciliationRepair('rr-1')?.applied).toBe(1);
     });
   });
 

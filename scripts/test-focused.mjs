@@ -22,6 +22,7 @@ const rawCommand = process.argv.slice(2).join(" ");
 function normalizeFocusedCommand(command) {
   const promoteSuite = "test/commands/task-promote-recommendation.test.ts";
   const rosterSuite = "test/commands/task-roster.test.ts";
+  const taskCloseSuite = "test/commands/task-close.test.ts";
   if (
     /@narada2\/cli/.test(command) &&
     /\bvitest\s+run\b/.test(command) &&
@@ -45,6 +46,13 @@ function normalizeFocusedCommand(command) {
       ? `NARADA_PROOF_TEST_NAME_PATTERN=${JSON.stringify(testName)} `
       : "NARADA_PROOF_MODE=compact ";
     return `${envPrefix}node scripts/cli-focused-proof.mjs task-roster`;
+  }
+  if (
+    /@narada2\/cli/.test(command) &&
+    /\bvitest\s+run\b/.test(command) &&
+    command.includes(taskCloseSuite)
+  ) {
+    return "node scripts/cli-focused-proof.mjs task-close";
   }
 
   const isCliVitestSingleFile =
@@ -166,6 +174,15 @@ const result = runStep({
   stdio: "inherit",
 });
 const finishedAt = new Date().toISOString();
+const slowThresholdMs = Number(process.env.NARADA_FOCUSED_SLOW_MS ?? "30000");
+if (result.durationMs > slowThresholdMs) {
+  console.log(
+    `\n${colors.yellow}Slow focused test: ${result.durationMs}ms > ${slowThresholdMs}ms.${colors.reset}`,
+  );
+  console.log(
+    `${colors.dim}Convert this path to a focused proof harness or reduce SQLite/temp-repo setup.${colors.reset}`,
+  );
+}
 
 const classification = classifyStep(result.exitStatus, result.stderr, result.stdout);
 
@@ -188,6 +205,8 @@ recordRun({
   summary:
     classification === "known-teardown-noise"
       ? "Tests passed; known better-sqlite3 teardown noise"
+      : result.durationMs > slowThresholdMs
+        ? `Focused test passed but was slow (${result.durationMs}ms > ${slowThresholdMs}ms)`
       : classification === "success"
         ? "Focused test passed"
         : "Focused test failed",

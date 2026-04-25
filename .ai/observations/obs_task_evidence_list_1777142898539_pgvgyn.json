@@ -1,0 +1,28 @@
+{
+  "status": "success",
+  "count": 0,
+  "filter": {
+    "verdict": [
+      "incomplete",
+      "attempt_complete",
+      "needs_review",
+      "needs_closure"
+    ],
+    "status": null,
+    "range": {
+      "start": 686,
+      "end": 695
+    }
+  },
+  "summary": {
+    "verdicts": {
+      "complete": 0,
+      "attempt_complete": 0,
+      "needs_review": 0,
+      "needs_closure": 0,
+      "incomplete": 0,
+      "unknown": 0
+    }
+  },
+  "tasks": []
+}

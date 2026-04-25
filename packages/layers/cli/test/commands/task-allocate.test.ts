@@ -57,6 +57,25 @@ describe('task allocate operator', () => {
     expect(r2.result).toMatchObject({ allocated_number: 202 });
   });
 
+  it('allocates a sequential range with --count', async () => {
+    const result = await taskAllocateCommand({ cwd: tempDir, format: 'json', count: 3 });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      allocated_number: 201,
+      allocated_numbers: [201, 202, 203],
+      count: 3,
+    });
+
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      expect(store.getLastAllocated()).toBe(203);
+    } finally {
+      store.db.close();
+    }
+  });
+
   it('reconciles stale registry with current max', async () => {
     // Create a registry that lags behind the actual task files
     writeFileSync(
@@ -154,10 +173,12 @@ describe('task allocate operator', () => {
     // SQLite authority is monotonic; projection-era released numbers are ignored.
     expect(result.result).toMatchObject({ allocated_number: 201 });
 
-    const registryRaw = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '.registry.json'), 'utf8');
-    const registry = JSON.parse(registryRaw);
-    expect(registry.last_allocated).toBe(201);
-    expect(registry.reserved).toContain(201);
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      expect(store.getLastAllocated()).toBe(201);
+    } finally {
+      store.db.close();
+    }
   });
 
   it('emits structured JSON output', async () => {
@@ -200,6 +221,29 @@ describe('task allocate operator', () => {
     } finally {
       store.db.close();
     }
+  });
+
+  it('dry-run previews a sequential range with --count', async () => {
+    const result = await taskAllocateCommand({ cwd: tempDir, format: 'json', dryRun: true, count: 3 });
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'dry_run',
+      next_number: 201,
+      next_numbers: [201, 202, 203],
+      count: 3,
+    });
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      expect(store.getLastAllocated()).toBe(0);
+    } finally {
+      store.db.close();
+    }
+  });
+
+  it('rejects invalid count', async () => {
+    const result = await taskAllocateCommand({ cwd: tempDir, format: 'json', count: 0 });
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({ status: 'error', error: '--count must be a positive integer' });
   });
 
   it('dry-run previews next number from reservation-era registry', async () => {

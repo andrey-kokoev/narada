@@ -46,6 +46,18 @@ importers:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@20.19.39)
 
+  packages/intent-zones:
+    devDependencies:
+      '@types/node':
+        specifier: ^20.10.0
+        version: 20.19.39
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+      vitest:
+        specifier: ^1.0.0
+        version: 1.6.1(@types/node@20.19.39)
+
   packages/layers/cli:
     dependencies:
       '@clack/prompts':
@@ -60,6 +72,9 @@ importers:
       '@narada2/control-plane':
         specifier: workspace:*
         version: link:../control-plane
+      '@narada2/intent-zones':
+        specifier: workspace:*
+        version: link:../../intent-zones
       '@narada2/linux-site':
         specifier: workspace:*
         version: link:../../sites/linux
@@ -72,6 +87,9 @@ importers:
       '@narada2/search':
         specifier: workspace:*
         version: link:../../verticals/search
+      '@narada2/task-governance':
+        specifier: workspace:*
+        version: link:../../task-governance
       '@narada2/windows-site':
         specifier: workspace:*
         version: link:../../sites/windows
@@ -257,6 +275,25 @@ importers:
       better-sqlite3:
         specifier: ^12.9.0
         version: 12.9.0
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+      vitest:
+        specifier: ^1.0.0
+        version: 1.6.1(@types/node@20.19.39)
+
+  packages/task-governance:
+    dependencies:
+      '@narada2/control-plane':
+        specifier: workspace:*
+        version: link:../layers/control-plane
+      '@narada2/intent-zones':
+        specifier: workspace:*
+        version: link:../intent-zones
+    devDependencies:
+      '@types/node':
+        specifier: ^20.10.0
+        version: 20.19.39
       typescript:
         specifier: ^5.3.0
         version: 5.9.3

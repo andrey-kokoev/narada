@@ -5,6 +5,7 @@ vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskEvidenceListCommand } from '../../src/commands/task-evidence-list.js';
+import { observationInspectCommand } from '../../src/commands/observation.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -104,10 +105,22 @@ describe('task evidence list operator', () => {
     createTask(tempDir, 101, 'claimed');
     const result = await taskEvidenceListCommand({ cwd: tempDir, format: 'json' });
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    const r = result.result as { count: number; tasks: Array<{ task_number: number; verdict: string }> };
+    const r = result.result as {
+      count: number;
+      observation: { artifact_id: string };
+      tasks: Array<{ task_number: number; verdict: string }>;
+    };
     expect(r.count).toBe(2);
     expect(r.tasks.map((t) => t.task_number)).toEqual([100, 101]);
     expect(r.tasks.every((t) => t.verdict === 'incomplete')).toBe(true);
+    const inspected = await observationInspectCommand({
+      artifactId: r.observation.artifact_id,
+      cwd: tempDir,
+      content: true,
+      format: 'json',
+    });
+    expect(inspected.exitCode).toBe(ExitCode.SUCCESS);
+    expect((inspected.result as { artifact: { content: string } }).artifact.content).toContain('"count": 2');
   });
 
   it('lists attempt-complete tasks', async () => {

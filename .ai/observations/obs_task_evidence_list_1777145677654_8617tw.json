@@ -1,0 +1,113 @@
+{
+  "status": "success",
+  "count": 4,
+  "filter": {
+    "verdict": [
+      "incomplete",
+      "attempt_complete",
+      "needs_review",
+      "needs_closure"
+    ],
+    "status": null,
+    "range": {
+      "start": 707,
+      "end": 711
+    }
+  },
+  "summary": {
+    "verdicts": {
+      "complete": 0,
+      "attempt_complete": 4,
+      "needs_review": 0,
+      "needs_closure": 0,
+      "incomplete": 0,
+      "unknown": 0
+    }
+  },
+  "tasks": [
+    {
+      "task_number": 708,
+      "task_id": "20260425-708-task-governance-package-tracks-2",
+      "title": null,
+      "status": "opened",
+      "verdict": "attempt_complete",
+      "missing": {
+        "unchecked_criteria": 4,
+        "execution_notes": false,
+        "verification": false,
+        "report": true,
+        "review": true,
+        "closure": true
+      },
+      "warnings": [
+        "4 acceptance criteria remain unchecked"
+      ],
+      "violations": [],
+      "assigned_agent": null,
+      "active_assignment_intent": null
+    },
+    {
+      "task_number": 709,
+      "task_id": "20260425-709-task-governance-package-tracks-3",
+      "title": null,
+      "status": "opened",
+      "verdict": "attempt_complete",
+      "missing": {
+        "unchecked_criteria": 4,
+        "execution_notes": false,
+        "verification": false,
+        "report": true,
+        "review": true,
+        "closure": true
+      },
+      "warnings": [
+        "4 acceptance criteria remain unchecked"
+      ],
+      "violations": [],
+      "assigned_agent": null,
+      "active_assignment_intent": null
+    },
+    {
+      "task_number": 710,
+      "task_id": "20260425-710-task-governance-package-tracks-4",
+      "title": null,
+      "status": "opened",
+      "verdict": "attempt_complete",
+      "missing": {
+        "unchecked_criteria": 4,
+        "execution_notes": false,
+        "verification": false,
+        "report": true,
+        "review": true,
+        "closure": true
+      },
+      "warnings": [
+        "4 acceptance criteria remain unchecked"
+      ],
+      "violations": [],
+      "assigned_agent": null,
+      "active_assignment_intent": null
+    },
+    {
+      "task_number": 711,
+      "task_id": "20260425-711-task-governance-package-tracks-5",
+      "title": null,
+      "status": "opened",
+      "verdict": "attempt_complete",
+      "missing": {
+        "unchecked_criteria": 4,
+        "execution_notes": false,
+        "verification": false,
+        "report": true,
+        "review": true,
+        "closure": true
+      },
+      "warnings": [
+        "4 acceptance criteria remain unchecked"
+      ],
+      "violations": [],
+      "assigned_agent": null,
+      "active_assignment_intent": null
+    }
+  ]
+}

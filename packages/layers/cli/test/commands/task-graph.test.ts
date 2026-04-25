@@ -5,6 +5,7 @@ vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskGraphCommand } from '../../src/commands/task-graph.js';
+import { observationInspectCommand } from '../../src/commands/observation.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -52,6 +53,25 @@ describe('task graph inspection operator', () => {
     expect(mermaid).toContain('T100[');
     expect(mermaid).toContain('T101[');
     expect(mermaid).toContain('T100 --> T101');
+  });
+
+  it('bounded graph output creates an observation artifact instead of dumping mermaid', async () => {
+    writeTask(tempDir, '20260420-100-alpha.md', 'task_id: 100\nstatus: opened\n', 'Task 100 — Alpha');
+    const result = await taskGraphCommand({ cwd: tempDir, format: 'mermaid', bounded: true });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const r = result.result as { mermaid?: string; observation: { artifact_id: string; artifact_uri: string; summary: { node_count: number } } };
+    expect(r.mermaid).toBeUndefined();
+    expect(r.observation.summary.node_count).toBe(1);
+    expect(statSync(join(tempDir, r.observation.artifact_uri)).isFile()).toBe(true);
+    const inspected = await observationInspectCommand({
+      artifactId: r.observation.artifact_id,
+      cwd: tempDir,
+      content: true,
+      format: 'json',
+    });
+    expect(inspected.exitCode).toBe(ExitCode.SUCCESS);
+    expect((inspected.result as { artifact: { content: string } }).artifact.content).toContain('flowchart TD');
   });
 
   it('emits json with explicit nodes and edges', async () => {

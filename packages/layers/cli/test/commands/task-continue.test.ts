@@ -7,6 +7,8 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskContinueCommand } from '../../src/commands/task-continue.js';
 import { taskReportCommand } from '../../src/commands/task-report.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
+import { loadAssignment } from '../../src/lib/task-governance.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -83,6 +85,71 @@ function setupRepo(tempDir: string) {
       ],
     }, null, 2),
   );
+
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    for (const [task_id, task_number, status] of [
+      ['20260420-100-claimed-task', 100, 'claimed'],
+      ['20260420-101-needs-continuation', 101, 'needs_continuation'],
+      ['20260420-102-opened-task', 102, 'opened'],
+    ] as const) {
+      store.upsertLifecycle({
+        task_id,
+        task_number,
+        status,
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: '2026-04-20T10:00:00.000Z',
+      });
+    }
+    store.upsertAssignmentRecord({
+      task_id: '20260420-100-claimed-task',
+      record_json: JSON.stringify({
+        task_id: '20260420-100-claimed-task',
+        assignments: [
+          {
+            agent_id: 'alpha',
+            claimed_at: '2026-04-20T10:00:00Z',
+            claim_context: null,
+            released_at: null,
+            release_reason: null,
+          },
+        ],
+      }),
+      updated_at: '2026-04-20T10:00:00.000Z',
+    });
+    store.insertAssignment({
+      assignment_id: 'assign-100-alpha',
+      task_id: '20260420-100-claimed-task',
+      agent_id: 'alpha',
+      claimed_at: '2026-04-20T10:00:00Z',
+      released_at: null,
+      release_reason: null,
+      intent: 'primary',
+    });
+    store.upsertAssignmentRecord({
+      task_id: '20260420-101-needs-continuation',
+      record_json: JSON.stringify({
+        task_id: '20260420-101-needs-continuation',
+        assignments: [
+          {
+            agent_id: 'alpha',
+            claimed_at: '2026-04-20T10:00:00Z',
+            claim_context: null,
+            released_at: '2026-04-20T12:00:00Z',
+            release_reason: 'completed',
+          },
+        ],
+      }),
+      updated_at: '2026-04-20T12:00:00.000Z',
+    });
+  } finally {
+    store.db.close();
+  }
 }
 
 describe('task continue operator', () => {
@@ -112,13 +179,13 @@ describe('task continue operator', () => {
     expect(rec.previous_agent_id).toBe('alpha');
 
     // Assignment record should show alpha still active + beta as continuation
-    const assignment = JSON.parse(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-100-claimed-task.json'), 'utf8'));
-    expect(assignment.assignments).toHaveLength(1);
-    expect(assignment.assignments[0].agent_id).toBe('alpha');
-    expect(assignment.assignments[0].released_at).toBeNull();
-    expect(assignment.continuations).toHaveLength(1);
-    expect(assignment.continuations[0].agent_id).toBe('beta');
-    expect(assignment.continuations[0].reason).toBe('evidence_repair');
+    const assignment = await loadAssignment(tempDir, '20260420-100-claimed-task');
+    expect(assignment?.assignments).toHaveLength(1);
+    expect(assignment?.assignments[0].agent_id).toBe('alpha');
+    expect(assignment?.assignments[0].released_at).toBeNull();
+    expect(assignment?.continuations).toHaveLength(1);
+    expect(assignment?.continuations?.[0].agent_id).toBe('beta');
+    expect(assignment?.continuations?.[0].reason).toBe('evidence_repair');
   });
 
   it('takeover (handoff) releases prior active assignment and creates new primary', async () => {
@@ -135,15 +202,27 @@ describe('task continue operator', () => {
     expect(rec.supersedes).toBe(true);
     expect(rec.previous_agent_id).toBe('alpha');
 
-    const assignment = JSON.parse(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-100-claimed-task.json'), 'utf8'));
-    expect(assignment.assignments).toHaveLength(2);
-    expect(assignment.assignments[0].agent_id).toBe('alpha');
-    expect(assignment.assignments[0].released_at).not.toBeNull();
-    expect(assignment.assignments[0].release_reason).toBe('continued');
-    expect(assignment.assignments[1].agent_id).toBe('beta');
-    expect(assignment.assignments[1].released_at).toBeNull();
-    expect(assignment.assignments[1].continuation_reason).toBe('handoff');
-    expect(assignment.assignments[1].previous_agent_id).toBe('alpha');
+    const assignment = await loadAssignment(tempDir, '20260420-100-claimed-task');
+    expect(assignment?.assignments).toHaveLength(2);
+    expect(assignment?.assignments[0].agent_id).toBe('alpha');
+    expect(assignment?.assignments[0].released_at).not.toBeNull();
+    expect(assignment?.assignments[0].release_reason).toBe('continued');
+    expect(assignment?.assignments[1].agent_id).toBe('beta');
+    expect(assignment?.assignments[1].released_at).toBeNull();
+    expect(assignment?.assignments[1].continuation_reason).toBe('handoff');
+    expect(assignment?.assignments[1].previous_agent_id).toBe('alpha');
+
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      const parsed = result.result as { assignment_intent_id: string };
+      const intent = store.getAssignmentIntent(parsed.assignment_intent_id);
+      expect(intent?.status).toBe('applied');
+      expect(intent?.kind).toBe('continue');
+      expect(intent?.previous_agent_id).toBe('alpha');
+      expect(intent?.roster_status_after).toBe('working');
+    } finally {
+      store.db.close();
+    }
   });
 
   it('transitions needs_continuation to claimed on takeover', async () => {
@@ -163,6 +242,36 @@ describe('task continue operator', () => {
         ],
       }, null, 2),
     );
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.upsertAssignmentRecord({
+        task_id: '20260420-101-needs-continuation',
+        record_json: JSON.stringify({
+          task_id: '20260420-101-needs-continuation',
+          assignments: [
+            {
+              agent_id: 'alpha',
+              claimed_at: '2026-04-20T10:00:00Z',
+              claim_context: null,
+              released_at: null,
+              release_reason: null,
+            },
+          ],
+        }),
+        updated_at: '2026-04-20T10:00:00.000Z',
+      });
+      store.insertAssignment({
+        assignment_id: 'assign-101-alpha-active',
+        task_id: '20260420-101-needs-continuation',
+        agent_id: 'alpha',
+        claimed_at: '2026-04-20T10:00:00Z',
+        released_at: null,
+        release_reason: null,
+        intent: 'primary',
+      });
+    } finally {
+      store.db.close();
+    }
 
     const result = await taskContinueCommand({
       taskNumber: '101',
@@ -231,10 +340,10 @@ describe('task continue operator', () => {
       format: 'json',
     });
 
-    const assignment = JSON.parse(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-100-claimed-task.json'), 'utf8'));
-    expect(assignment.assignments).toHaveLength(2);
-    expect(assignment.assignments[0].agent_id).toBe('alpha');
-    expect(assignment.assignments[0].claimed_at).toBe('2026-04-20T10:00:00Z');
+    const assignment = await loadAssignment(tempDir, '20260420-100-claimed-task');
+    expect(assignment?.assignments).toHaveLength(2);
+    expect(assignment?.assignments[0].agent_id).toBe('alpha');
+    expect(assignment?.assignments[0].claimed_at).toBe('2026-04-20T10:00:00Z');
   });
 
   it('sets intent to takeover on handoff', async () => {
@@ -247,8 +356,8 @@ describe('task continue operator', () => {
     });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    const assignment = JSON.parse(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-100-claimed-task.json'), 'utf8'));
-    expect(assignment.assignments[1].intent).toBe('takeover');
+    const assignment = await loadAssignment(tempDir, '20260420-100-claimed-task');
+    expect(assignment?.assignments[1].intent).toBe('takeover');
   });
 
   it('sets intent to repair on evidence_repair', async () => {
@@ -261,8 +370,8 @@ describe('task continue operator', () => {
     });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    const assignment = JSON.parse(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-100-claimed-task.json'), 'utf8'));
-    expect(assignment.continuations[0].intent).toBeUndefined();
+    const assignment = await loadAssignment(tempDir, '20260420-100-claimed-task');
+    expect(assignment?.continuations?.[0].intent).toBeUndefined();
     // Continuations do not carry intent; intent is assignment-level only
   });
 
@@ -305,12 +414,12 @@ describe('task continue operator', () => {
     expect(rec.report_id).toBeDefined();
 
     // Primary assignment (alpha) should still be active
-    const assignment = JSON.parse(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-100-claimed-task.json'), 'utf8'));
-    expect(assignment.assignments[0].agent_id).toBe('alpha');
-    expect(assignment.assignments[0].released_at).toBeNull();
+    const assignment = await loadAssignment(tempDir, '20260420-100-claimed-task');
+    expect(assignment?.assignments[0].agent_id).toBe('alpha');
+    expect(assignment?.assignments[0].released_at).toBeNull();
 
     // Continuation should be marked completed
-    expect(assignment.continuations[0].completed_at).toBeDefined();
+    expect(assignment?.continuations?.[0].completed_at).toBeDefined();
 
     // Task status should still be claimed (not in_review)
     const taskBody = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-claimed-task.md'), 'utf8');

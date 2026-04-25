@@ -2,25 +2,38 @@
 
 This document is a user-facing quick reference. For the complete canonical ontology — including identity lattice, core abstractions, invariant derivations, and all first-class runtime terms — see [`SEMANTICS.md`](SEMANTICS.md).
 
-## Primary User-Facing Term: `operation`
+## Primary User-Facing Term: Operation
 
-An **operation** is the live configured thing a user sets up and runs.
+An **Operation** is the live configured thing a user sets up and runs.
 
-Users create, configure, preflight, activate, and run **operations**. Each operation maps to exactly one internal `scope`.
+Users create, configure, preflight, activate, and run **Operations**. Each Operation maps to exactly one internal `scope`.
+
+More precisely: an **Operation** is a configured Zone topology whose external boundary is itself zone-like. Internally, it is composed of authority-homogeneous Zones connected by governed crossings. Externally, enclosing topologies interact with it only through declared governed crossings.
+
+The CLI may continue to use lowercase `operation` as user-facing command language. In canonical ontology prose, use **Operation** for the defined Narada concept.
 
 See [`SEMANTICS.md#operation`](SEMANTICS.md#operation) for the full definition, typed variants, and relationship to `scope`.
 
 ## Internal Technical Term: `scope`
 
-A **scope** is the internal runtime/config representation of an operation.
+A **scope** is the internal runtime/config representation of an Operation.
 
 Users should not need to know the word "scope" to use Narada successfully.
 
 See [`SEMANTICS.md#scope`](SEMANTICS.md#scope) for the full definition.
 
+## Common Distinctions
+
+| Pair | Distinction |
+| --- | --- |
+| **Evidence / Observation** | Evidence is admitted, durable, and authority-bearing. Observation is a read-only view such as CLI output, dashboard rows, graphs, or bounded excerpts. |
+| **Task / WorkItem** | A task is repo-local construction governance for Narada buildout. A `work_item` is a runtime control-plane schedulable unit inside an Operation. |
+| **Zone / Crossing Regime / Admission Method** | A Zone has stable authority grammar. A crossing regime is the law on an edge between Zones. An admission method is a concrete check used by a regime, such as review, tests, validation, or operator approval. |
+| **Review / Evidence** | Review is an admission method. A review record becomes authority-bearing only when linked to an admissible evidence bundle and accepted by the lifecycle regime. |
+
 ## Repo Term: `ops repo`
 
-An **ops repo** (or **operations repo**) is a private repository that contains one or more operations, plus their knowledge, scenarios, and local configuration.
+An **ops repo** (or **operations repo**) is a private repository that contains one or more Operations, plus their knowledge, scenarios, and local configuration.
 
 Created with:
 

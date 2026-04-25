@@ -6,6 +6,8 @@ vi.unmock('node:fs/promises');
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskClaimCommand } from '../../src/commands/task-claim.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
+import { loadAssignment } from '../../src/lib/task-governance.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -63,15 +65,65 @@ describe('task claim operator', () => {
     const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
     expect(taskContent).toContain('status: claimed');
 
-    // Assignment record created
-    const assignmentRaw = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'assignments', '20260420-999-test-task.json'), 'utf8');
-    const assignment = JSON.parse(assignmentRaw);
+    // Assignment record created in SQLite authority
+    const assignment = await loadAssignment(tempDir, '20260420-999-test-task');
+    expect(assignment).not.toBeNull();
     expect(assignment.task_id).toBe('20260420-999-test-task');
     expect(assignment.assignments).toHaveLength(1);
     expect(assignment.assignments[0].agent_id).toBe('test-agent');
     expect(assignment.assignments[0].claim_context).toBe('Testing claim');
     expect(assignment.assignments[0].released_at).toBeNull();
     expect(assignment.assignments[0].intent).toBe('primary');
+
+    const parsed = result.result as { assignment_intent_id: string };
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      const intent = store.getAssignmentIntent(parsed.assignment_intent_id);
+      expect(intent?.status).toBe('applied');
+      expect(intent?.kind).toBe('claim');
+      expect(intent?.lifecycle_status_before).toBe('opened');
+      expect(intent?.lifecycle_status_after).toBe('claimed');
+      expect(intent?.roster_status_after).toBe('working');
+    } finally {
+      store.db.close();
+    }
+  });
+
+  it('records a rejected assignment intent without mutating lifecycle, roster, or assignments', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-blocker.md'),
+      '---\ntask_id: 998\nstatus: opened\n---\n\n# Task 998\n',
+    );
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
+      '---\ntask_id: 999\nstatus: opened\ndepends_on:\n  - 998\n---\n\n# Task 999: Test Task\n',
+    );
+
+    const result = await taskClaimCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    const parsed = result.result as { assignment_intent_id: string; error: string };
+    expect(parsed.error).toContain('unmet dependencies');
+    expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8')).toContain('status: opened');
+    expect(() => readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'assignments', '20260420-999-test-task.json'), 'utf8')).toThrow();
+    const roster = JSON.parse(readFileSync(join(tempDir, '.ai', 'agents', 'roster.json'), 'utf8')) as { agents: Array<{ status?: string; task?: number | null }> };
+    expect(roster.agents[0]?.status).not.toBe('working');
+
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      const intent = store.getAssignmentIntent(parsed.assignment_intent_id);
+      expect(intent?.status).toBe('rejected');
+      expect(intent?.task_id).toBe('20260420-999-test-task');
+      expect(store.getLifecycle('20260420-999-test-task')).toBeUndefined();
+      expect(store.getAssignmentRecord('20260420-999-test-task')).toBeUndefined();
+    } finally {
+      store.db.close();
+    }
   });
 
   it('fails when task is already claimed', async () => {

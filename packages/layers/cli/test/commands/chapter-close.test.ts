@@ -6,6 +6,8 @@ vi.unmock('node:fs/promises');
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { chapterCloseCommand } from '../../src/commands/chapter-close.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
+import { saveReview } from '../../src/lib/task-governance.js';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -125,20 +127,32 @@ describe('chapter close operator — legacy chapter-name mode', () => {
 
   it('includes review findings in closure artifact', async () => {
     writeTask(tempDir, '20260420-260-a.md', 'task_id: 260\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n', 'Task 260', '\n## Chapter\n\nTest Chapter\n');
-    writeFileSync(
-      join(tempDir, '.ai', 'reviews', 'review-20260420-260-a-123.json'),
-      JSON.stringify({
-        review_id: 'review-20260420-260-a-123',
-        reviewer_agent_id: 'reviewer-1',
-        task_id: '20260420-260-a',
-        findings: [
-          { severity: 'major', description: 'Missing test coverage', recommended_action: 'defer' },
-          { severity: 'minor', description: 'Typo in docs', recommended_action: 'fix' },
-        ],
-        verdict: 'accepted_with_notes',
-        reviewed_at: '2026-04-20T00:00:00Z',
-      }),
-    );
+    const store = openTaskLifecycleStore(tempDir);
+    store.upsertLifecycle({
+      task_id: '20260420-260-a',
+      task_number: 260,
+      status: 'closed',
+      governed_by: 'test',
+      closed_at: '2026-04-20T00:00:00Z',
+      closed_by: 'operator',
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: '2026-04-20T00:00:00Z',
+    });
+    store.db.close();
+    await saveReview(tempDir, {
+      review_id: 'review-20260420-260-a-123',
+      reviewer_agent_id: 'reviewer-1',
+      task_id: '20260420-260-a',
+      findings: [
+        { severity: 'major', description: 'Missing test coverage', recommended_action: 'defer' },
+        { severity: 'minor', description: 'Typo in docs', recommended_action: 'fix' },
+      ],
+      verdict: 'accepted_with_notes',
+      reviewed_at: '2026-04-20T00:00:00Z',
+      report_id: null,
+    });
 
     const result = await chapterCloseCommand({
       chapterName: 'Test Chapter',
@@ -196,6 +210,23 @@ describe('chapter close operator — range-based mode', () => {
     expect(draft).toContain('Closure Action');
   });
 
+  it('--start ignores the chapter range artifact itself', async () => {
+    writeTask(tempDir, '20260420-100-101-range.md', 'status: opened\n', 'Chapter Range');
+    writeTask(tempDir, '20260420-100-a.md', 'task_id: 100\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n', 'Task 100 — A');
+    writeTask(tempDir, '20260420-101-b.md', 'task_id: 101\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n', 'Task 101 — B');
+
+    const result = await chapterCloseCommand({
+      range: '100-101',
+      start: true,
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(0);
+    const r = result.result as { tasks_in_chapter: number };
+    expect(r.tasks_in_chapter).toBe(2);
+  });
+
   it('--start fails if tasks not terminal', async () => {
     writeTask(tempDir, '20260420-100-a.md', 'task_id: 100\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n', 'Task 100 — A');
     writeTask(tempDir, '20260420-101-b.md', 'task_id: 101\nstatus: opened\n', 'Task 101 — B');
@@ -221,6 +252,20 @@ describe('chapter close operator — range-based mode', () => {
     writeTask(tempDir, '20260420-100-a.md', 'task_id: 100\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n', 'Task 100 — A');
     writeTask(tempDir, '20260420-101-b.md', 'task_id: 101\nstatus: confirmed\n', 'Task 101 — B');
     // confirmed task was already validated when transitioned; no re-check needed for it
+    const store = openTaskLifecycleStore(tempDir);
+    store.upsertLifecycle({
+      task_id: '20260420-100-a',
+      task_number: 100,
+      status: 'closed',
+      governed_by: 'test',
+      closed_at: '2026-04-20T00:00:00Z',
+      closed_by: 'operator',
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: '2026-04-20T00:00:00Z',
+    });
+    store.db.close();
 
     // First create the draft
     const startResult = await chapterCloseCommand({
@@ -253,6 +298,48 @@ describe('chapter close operator — range-based mode', () => {
 
     const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-a.md'), 'utf8');
     expect(taskContent).toContain('status: confirmed');
+    const reopened = openTaskLifecycleStore(tempDir);
+    expect(reopened.getLifecycleByNumber(100)?.status).toBe('confirmed');
+    reopened.db.close();
+  });
+
+  it('--finish reconciles SQLite when files are already confirmed', async () => {
+    writeTask(tempDir, '20260420-100-a.md', 'task_id: 100\nstatus: confirmed\ngoverned_by: chapter_close:a2\n', 'Task 100 — A');
+    const store = openTaskLifecycleStore(tempDir);
+    store.upsertLifecycle({
+      task_id: '20260420-100-a',
+      task_number: 100,
+      status: 'closed',
+      governed_by: 'test',
+      closed_at: '2026-04-20T00:00:00Z',
+      closed_by: 'operator',
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: '2026-04-20T00:00:00Z',
+    });
+    store.db.close();
+
+    const startResult = await chapterCloseCommand({
+      range: '100',
+      start: true,
+      cwd: tempDir,
+      format: 'json',
+    });
+    expect(startResult.exitCode).toBe(0);
+
+    const finishResult = await chapterCloseCommand({
+      range: '100',
+      finish: true,
+      by: 'a2',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(finishResult.exitCode).toBe(0);
+    const reopened = openTaskLifecycleStore(tempDir);
+    expect(reopened.getLifecycleByNumber(100)?.status).toBe('confirmed');
+    reopened.db.close();
   });
 
   it('--finish fails if no draft exists', async () => {

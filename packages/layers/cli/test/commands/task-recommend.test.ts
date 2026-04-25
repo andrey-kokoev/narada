@@ -3,13 +3,15 @@ import { vi } from 'vitest';
 vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
 
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 import { taskRecommendCommand } from '../../src/commands/task-recommend.js';
 import { taskClaimCommand } from '../../src/commands/task-claim.js';
 import { taskReportCommand } from '../../src/commands/task-report.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
+import { openTaskLifecycleStore, type TaskStatus } from '../../src/lib/task-lifecycle-store.js';
+import { saveReport } from '../../src/lib/task-governance.js';
 import * as taskRecommender from '../../src/lib/task-recommender.js';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, readdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, readdirSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -49,7 +51,7 @@ function setupRepo(tempDir: string) {
   // Task 997: opened, blocked by dependency
   writeFileSync(
     join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-997-blocked-task.md'),
-    '---\ntask_id: 997\nstatus: opened\ndepends_on: [998]\n---\n\n# Task 997: Blocked Task\n\nDepends on task 998.\n',
+    '---\ntask_id: 997\nstatus: opened\ndepends_on:\n  - 998\n---\n\n# Task 997: Blocked Task\n\nDepends on task 998.\n',
   );
 
   writeFileSync(
@@ -64,22 +66,121 @@ function setupRepo(tempDir: string) {
       scopes: ['recommendation', 'assignment', 'task-governance'],
     }, null, 2),
   );
+
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    for (const agent of [
+      { agent_id: 'agent-alpha', role: 'implementer', capabilities: ['typescript', 'testing', 'cli'] },
+      { agent_id: 'agent-beta', role: 'implementer', capabilities: ['database', 'architecture'] },
+      { agent_id: 'agent-gamma', role: 'reviewer', capabilities: ['typescript', 'testing'] },
+    ]) {
+      store.upsertRosterEntry({
+        agent_id: agent.agent_id,
+        role: agent.role,
+        capabilities_json: JSON.stringify(agent.capabilities),
+        first_seen_at: '2026-01-01T00:00:00Z',
+        last_active_at: '2026-01-01T00:00:00Z',
+        status: 'idle',
+        task_number: null,
+        last_done: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+    }
+    for (const taskNumber of [997, 998, 999]) {
+      seedLifecycle(store, taskNumber, 'opened');
+    }
+    seedSpec(store, 997, 'Blocked Task', [998]);
+    seedSpec(store, 998, 'TypeScript CLI Feature', []);
+    seedSpec(store, 999, 'Database Schema Update', []);
+  } finally {
+    store.db.close();
+  }
+}
+
+function seedLifecycle(store: ReturnType<typeof openTaskLifecycleStore>, taskNumber: number, status: TaskStatus): void {
+  const taskIdByNumber: Record<number, string> = {
+    996: '20260420-996-review-task',
+    997: '20260420-997-blocked-task',
+    998: '20260420-998-typescript-task',
+    999: '20260420-999-database-task',
+  };
+  store.upsertLifecycle({
+    task_id: taskIdByNumber[taskNumber] ?? `20260420-${taskNumber}-task`,
+    task_number: taskNumber,
+    status,
+    governed_by: null,
+    closed_at: null,
+    closed_by: null,
+    reopened_at: null,
+    reopened_by: null,
+    continuation_packet_json: null,
+    updated_at: new Date().toISOString(),
+  });
+}
+
+function setLifecycleStatus(tempDir: string, taskNumber: number, status: TaskStatus): void {
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    seedLifecycle(store, taskNumber, status);
+    if (!store.getTaskSpecByNumber(taskNumber)) {
+      seedSpec(store, taskNumber, `Task ${taskNumber}`, []);
+    }
+  } finally {
+    store.db.close();
+  }
+}
+
+function seedSpec(
+  store: ReturnType<typeof openTaskLifecycleStore>,
+  taskNumber: number,
+  title: string,
+  dependencies: number[],
+): void {
+  const taskIdByNumber: Record<number, string> = {
+    996: '20260420-996-review-task',
+    997: '20260420-997-blocked-task',
+    998: '20260420-998-typescript-task',
+    999: '20260420-999-database-task',
+  };
+  store.upsertTaskSpec({
+    task_id: taskIdByNumber[taskNumber] ?? `20260420-${taskNumber}-task`,
+    task_number: taskNumber,
+    title,
+    chapter_markdown: null,
+    goal_markdown: null,
+    context_markdown: null,
+    required_work_markdown: null,
+    non_goals_markdown: null,
+    acceptance_criteria_json: JSON.stringify([]),
+    dependencies_json: JSON.stringify(dependencies),
+    updated_at: new Date().toISOString(),
+  });
 }
 
 describe('task recommend operator', () => {
   let tempDir: string;
+  let baselineDir: string;
+
+  beforeAll(() => {
+    baselineDir = mkdtempSync(join(tmpdir(), 'narada-task-recommend-baseline-'));
+    setupRepo(baselineDir);
+  });
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'narada-task-recommend-test-'));
-    setupRepo(tempDir);
+    cpSync(baselineDir, tempDir, { recursive: true });
   });
 
   afterEach(() => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
+  afterAll(() => {
+    rmSync(baselineDir, { recursive: true, force: true });
+  });
+
   it('recommends idle capable agent for unblocked opened task', async () => {
-    const result = await taskRecommendCommand({ cwd: tempDir, format: 'json' });
+    const result = await taskRecommendCommand({ cwd: tempDir, format: 'json', full: true });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     const rec = result.result as {
@@ -97,7 +198,7 @@ describe('task recommend operator', () => {
   });
 
   it('does not recommend blocked task', async () => {
-    const result = await taskRecommendCommand({ cwd: tempDir, format: 'json' });
+    const result = await taskRecommendCommand({ cwd: tempDir, format: 'json', full: true });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     const rec = result.result as { abstained: Array<{ task_id: string; reason: string }> };
@@ -115,7 +216,7 @@ describe('task recommend operator', () => {
   });
 
   it('defaults recommender_id to system when no architect is provided', async () => {
-    const result = await taskRecommendCommand({ cwd: tempDir, format: 'json' });
+    const result = await taskRecommendCommand({ cwd: tempDir, format: 'json', full: true });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     const rec = result.result as { recommender_id: string };
@@ -148,6 +249,103 @@ describe('task recommend operator', () => {
     expect(rec.primary!.principal_id).toBe('agent-beta');
   });
 
+  it('returns structured agent_not_found for unknown agent filters', async () => {
+    const result = await taskRecommendCommand({
+      cwd: tempDir,
+      agent: 'architect',
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      reason: 'agent_not_found',
+      agent: 'architect',
+      action: 'recommend',
+    });
+  });
+
+  it('bounds abstained JSON output by default', async () => {
+    const abstained = Array.from({ length: 20 }, (_, i) => ({
+      task_id: `task-${i + 1}`,
+      task_number: i + 1,
+      reason: 'Blocked by unmet dependencies',
+      blocked_by: [1],
+      blocked_by_agents: [{ task_number: 1, agent_id: 'agent-alpha' }],
+    }));
+    const spy = vi.spyOn(taskRecommender, 'generateRecommendations').mockResolvedValue({
+      recommendation_id: 'rec-test',
+      generated_at: '2026-01-01T00:00:00Z',
+      recommender_id: 'system',
+      primary: null,
+      alternatives: [],
+      abstained,
+      summary: '0 recommendations, 0 alternatives, 20 abstained.',
+    });
+
+    const result = await taskRecommendCommand({
+      cwd: tempDir,
+      format: 'json',
+      limit: 1,
+      ignorePosture: true,
+    });
+
+    spy.mockRestore();
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    const rec = result.result as {
+      abstained: unknown[];
+      abstained_total: number;
+      abstained_returned: number;
+      abstained_truncated: boolean;
+      abstained_limit: number;
+    };
+    expect(rec.abstained).toHaveLength(1);
+    expect(rec.abstained_total).toBe(20);
+    expect(rec.abstained_returned).toBe(1);
+    expect(rec.abstained_truncated).toBe(true);
+    expect(rec.abstained_limit).toBe(1);
+  });
+
+  it('returns full abstained JSON output only with explicit full opt-in', async () => {
+    const abstained = Array.from({ length: 20 }, (_, i) => ({
+      task_id: `task-${i + 1}`,
+      task_number: i + 1,
+      reason: 'Blocked by unmet dependencies',
+    }));
+    const spy = vi.spyOn(taskRecommender, 'generateRecommendations').mockResolvedValue({
+      recommendation_id: 'rec-test',
+      generated_at: '2026-01-01T00:00:00Z',
+      recommender_id: 'system',
+      primary: null,
+      alternatives: [],
+      abstained,
+      summary: '0 recommendations, 0 alternatives, 20 abstained.',
+    });
+
+    const result = await taskRecommendCommand({
+      cwd: tempDir,
+      format: 'json',
+      limit: 1,
+      full: true,
+      ignorePosture: true,
+    });
+
+    spy.mockRestore();
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    const rec = result.result as {
+      abstained: unknown[];
+      abstained_total: number;
+      abstained_returned: number;
+      abstained_truncated: boolean;
+      abstained_limit: null;
+    };
+    expect(rec.abstained).toHaveLength(20);
+    expect(rec.abstained_total).toBe(20);
+    expect(rec.abstained_returned).toBe(20);
+    expect(rec.abstained_truncated).toBe(false);
+    expect(rec.abstained_limit).toBeNull();
+  });
+
   it('filters by --task', async () => {
     const result = await taskRecommendCommand({
       cwd: tempDir,
@@ -178,29 +376,27 @@ describe('task recommend operator', () => {
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-typescript-task.md'),
       '---\ntask_id: 998\nstatus: opened\n---\n\n# Task 998: TypeScript CLI Feature\n',
     );
+    setLifecycleStatus(tempDir, 998, 'opened');
 
     // Claim task 999 for agent-beta and KEEP it claimed (don't report/release)
     await taskClaimCommand({ taskNumber: '999', agent: 'agent-beta', cwd: tempDir, format: 'json' });
 
-    // Manually write a report for task 999 with overlapping changed files
+    // Persist a report for task 999 with overlapping changed files
     // (simulating that the agent has declared intent to touch these files)
-    writeFileSync(
-      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', 'wrr_999_20260420-999-database-task_agent-beta.json'),
-      JSON.stringify({
-        report_id: 'wrr_999_20260420-999-database-task_agent-beta',
-        task_number: 999,
-        task_id: '20260420-999-database-task',
-        agent_id: 'agent-beta',
-        assignment_id: 'test',
-        reported_at: new Date().toISOString(),
-        summary: 'In progress',
-        changed_files: ['src/shared.ts'],
-        verification: [],
-        known_residuals: [],
-        ready_for_review: false,
-        report_status: 'submitted',
-      }, null, 2),
-    );
+    await saveReport(tempDir, {
+      report_id: 'wrr_999_20260420-999-database-task_agent-beta',
+      task_number: 999,
+      task_id: '20260420-999-database-task',
+      agent_id: 'agent-beta',
+      assignment_id: 'test',
+      reported_at: new Date().toISOString(),
+      summary: 'In progress',
+      changed_files: ['src/shared.ts'],
+      verification: [],
+      known_residuals: [],
+      ready_for_review: false,
+      report_status: 'submitted',
+    });
 
     const result = await taskRecommendCommand({ cwd: tempDir, format: 'json' });
 
@@ -258,10 +454,12 @@ describe('task recommend operator', () => {
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-typescript-task.md'),
       '---\ntask_id: 998\nstatus: claimed\n---\n\n# Task 998\n',
     );
+    setLifecycleStatus(tempDir, 998, 'claimed');
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-database-task.md'),
       '---\ntask_id: 999\nstatus: claimed\n---\n\n# Task 999\n',
     );
+    setLifecycleStatus(tempDir, 999, 'claimed');
 
     const result = await taskRecommendCommand({ cwd: tempDir, format: 'json' });
 
@@ -277,6 +475,7 @@ describe('task recommend operator', () => {
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-typescript-task.md'),
       '---\ntask_id: 998\nstatus: in_review\n---\n\n# Task 998\n',
     );
+    setLifecycleStatus(tempDir, 998, 'in_review');
 
     const result = await taskRecommendCommand({ cwd: tempDir, format: 'json' });
 
@@ -292,6 +491,7 @@ describe('task recommend operator', () => {
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-996-review-task.md'),
       '---\ntask_id: 996\nstatus: in_review\n---\n\n# Task 996: Review Needed\n\nDone.\n',
     );
+    setLifecycleStatus(tempDir, 996, 'in_review');
 
     const result = await taskRecommendCommand({ cwd: tempDir, format: 'json' });
 
@@ -601,6 +801,31 @@ describe('task recommend operator', () => {
     expect(allTaskIds).not.toContain('20260420-970-completed-task');
   });
 
+  it('excludes legacy markdown notes without canonical front matter even when SQLite has opened lifecycle rows', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-969-legacy-note.md'),
+      '# Legacy Note\n\nOld planning note without task front matter.\n',
+    );
+    setLifecycleStatus(tempDir, 969, 'opened');
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      seedSpec(store, 969, 'Legacy Note', []);
+    } finally {
+      store.db.close();
+    }
+
+    const result = await taskRecommendCommand({ cwd: tempDir, format: 'json', full: true });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const rec = result.result as { primary: { task_id: string } | null; alternatives: Array<{ task_id: string }>; abstained: Array<{ task_id: string }> };
+    const allTaskIds = [
+      rec.primary?.task_id,
+      ...rec.alternatives.map((a) => a.task_id),
+      ...rec.abstained.map((a) => a.task_id),
+    ].filter(Boolean);
+    expect(allTaskIds).not.toContain('20260420-969-legacy-note');
+  });
+
   it('includes clean executable opened tasks in recommendation candidates', async () => {
     // Task 998 is already set up as an opened executable task in setupRepo
     const result = await taskRecommendCommand({ cwd: tempDir, format: 'json' });
@@ -621,10 +846,12 @@ describe('task recommend operator', () => {
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-typescript-task.md'),
       '---\ntask_id: 998\nstatus: claimed\n---\n\n# Task 998\n',
     );
+    setLifecycleStatus(tempDir, 998, 'claimed');
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-database-task.md'),
       '---\ntask_id: 999\nstatus: claimed\n---\n\n# Task 999\n',
     );
+    setLifecycleStatus(tempDir, 999, 'claimed');
 
     const logs: string[] = [];
     const logSpy = vi.spyOn(console, 'log').mockImplementation((msg: string) => { logs.push(msg); });

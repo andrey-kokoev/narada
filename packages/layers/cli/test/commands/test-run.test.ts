@@ -75,6 +75,11 @@ describe('test-run command', () => {
     expect(run!.status).toBe('passed');
     expect(run!.exit_code).toBe(0);
     expect(run!.duration_ms).toBeGreaterThanOrEqual(0);
+    const metrics = JSON.parse(run!.metrics_json ?? '{}') as { command_run_id?: string };
+    expect(metrics.command_run_id).toMatch(/^run_/);
+    const commandRun = store.getCommandRun(metrics.command_run_id!);
+    expect(commandRun).toBeDefined();
+    expect(commandRun!.status).toBe('succeeded');
   });
 
   it('links run to task when taskNumber is provided', async () => {
@@ -121,6 +126,10 @@ describe('test-run command', () => {
     expect(run!.stderr_excerpt).toContain('stderr-content');
     expect(run!.stdout_digest).toMatch(/^[a-f0-9]{64}$/);
     expect(run!.stderr_digest).toMatch(/^[a-f0-9]{64}$/);
+    const metrics = JSON.parse(run!.metrics_json ?? '{}') as { command_run_id?: string };
+    const commandRun = store.getCommandRun(metrics.command_run_id!);
+    expect(commandRun!.stdout_admitted_excerpt).toContain('stdout-content');
+    expect(commandRun!.stderr_admitted_excerpt).toContain('stderr-content');
   });
 
   it('caps timeout at max for scope', async () => {

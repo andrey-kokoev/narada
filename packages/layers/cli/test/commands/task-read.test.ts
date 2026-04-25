@@ -77,6 +77,29 @@ function seedTaskFromRaw(tempDir: string, taskId: string, num: number, raw: stri
   db.close();
 }
 
+function seedTaskFileOnly(tempDir: string, taskId: string, raw: string) {
+  writeFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', `${taskId}.md`), raw);
+}
+
+function seedLifecycleOnly(tempDir: string, taskId: string, num: number, status: 'opened' | 'claimed' | 'in_review' | 'closed' | 'confirmed' = 'opened') {
+  const db = new Database(join(tempDir, '.ai', 'task-lifecycle.db'));
+  const store = new SqliteTaskLifecycleStore({ db });
+  store.initSchema();
+  store.upsertLifecycle({
+    task_id: taskId,
+    task_number: num,
+    status,
+    governed_by: null,
+    closed_at: null,
+    closed_by: null,
+    reopened_at: null,
+    reopened_by: null,
+    continuation_packet_json: null,
+    updated_at: new Date().toISOString(),
+  });
+  db.close();
+}
+
 describe('task read operator', () => {
   let tempDir: string;
 
@@ -135,6 +158,76 @@ describe('task read operator', () => {
     expect(evidence.has_closure).toBe(false);
     expect(evidence.all_criteria_checked).toBe(false);
     expect(evidence.unchecked_count).toBe(1);
+  });
+
+  it('backfills missing task spec from an existing markdown projection', async () => {
+    const taskId = '20260420-209-test';
+    seedTaskFileOnly(
+      tempDir,
+      taskId,
+      `---\ntask_id: 209\nstatus: opened\ndepends_on: [108]\n---\n
+# Task 209: Projection Only
+
+## Goal
+Read through sanctioned command.
+
+## Required Work
+1. Backfill task spec.
+
+## Acceptance Criteria
+- [ ] Read succeeds
+`,
+    );
+    seedLifecycleOnly(tempDir, taskId, 209);
+
+    const result = await taskReadCommand({ taskNumber: '209', cwd: tempDir, format: 'json' });
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const parsed = result.result as { task: { title: string; goal: string; dependencies: number[] } };
+    expect(parsed.task.title).toBe('Task 209: Projection Only');
+    expect(parsed.task.goal).toBe('Read through sanctioned command.');
+    expect(parsed.task.dependencies).toEqual([108]);
+
+    const db = new Database(join(tempDir, '.ai', 'task-lifecycle.db'));
+    const store = new SqliteTaskLifecycleStore({ db });
+    store.initSchema();
+    const spec = store.getTaskSpecByNumber(209);
+    expect(spec?.title).toBe('Task 209: Projection Only');
+    db.close();
+  });
+
+  it('backfills lifecycle and task spec for markdown-only task projections', async () => {
+    const taskId = '20260420-210-test';
+    seedTaskFileOnly(
+      tempDir,
+      taskId,
+      `---\ntask_id: 210\nstatus: claimed\n---\n
+# Task 210: Markdown Only
+
+## Goal
+Repair missing authority rows.
+
+## Acceptance Criteria
+- [x] Read succeeds
+`,
+    );
+
+    const db = new Database(join(tempDir, '.ai', 'task-lifecycle.db'));
+    const store = new SqliteTaskLifecycleStore({ db });
+    store.initSchema();
+    db.close();
+
+    const result = await taskReadCommand({ taskNumber: '210', cwd: tempDir, format: 'json' });
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const parsed = result.result as { task: { status: string; title: string } };
+    expect(parsed.task.status).toBe('claimed');
+    expect(parsed.task.title).toBe('Task 210: Markdown Only');
+
+    const verifyDb = new Database(join(tempDir, '.ai', 'task-lifecycle.db'));
+    const verifyStore = new SqliteTaskLifecycleStore({ db: verifyDb });
+    verifyStore.initSchema();
+    expect(verifyStore.getLifecycleByNumber(210)?.status).toBe('claimed');
+    expect(verifyStore.getTaskSpecByNumber(210)?.title).toBe('Task 210: Markdown Only');
+    verifyDb.close();
   });
 
   it('includes execution notes and verification when present', async () => {

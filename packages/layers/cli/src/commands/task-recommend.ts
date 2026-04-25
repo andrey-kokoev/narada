@@ -15,6 +15,7 @@ import {
   formatGuidanceForHumans,
   formatGuidanceForJson,
 } from '../lib/learning-recall.js';
+import { loadRoster } from '../lib/task-governance.js';
 import { loadPosture, type CCCPosture } from './posture.js';
 
 export interface TaskRecommendOptions {
@@ -23,6 +24,8 @@ export interface TaskRecommendOptions {
   agent?: string;
   limit?: number;
   ignorePosture?: boolean;
+  full?: boolean;
+  abstainedLimit?: number;
   cwd?: string;
   verbose?: boolean;
   /** Architect principal ID that produced this recommendation. */
@@ -141,6 +144,49 @@ function applyPostureAdjustment(
   return { adjusted, reasons };
 }
 
+function agentNotFoundResult(agent: string): {
+  status: 'error';
+  reason: 'agent_not_found';
+  agent: string;
+  action: 'recommend';
+  error: string;
+  next_step: string;
+} {
+  return {
+    status: 'error',
+    reason: 'agent_not_found',
+    agent,
+    action: 'recommend',
+    error: `Agent ${agent} not found in roster`,
+    next_step: 'Ask the operator to admit this agent to the roster before claiming work.',
+  };
+}
+
+function boundRecommendationOutput(
+  recommendation: TaskRecommendation,
+  options: { limit: number; abstainedLimit?: number; full?: boolean },
+): TaskRecommendation {
+  const abstainedTotal = recommendation.abstained.length;
+  const abstainedBound = options.full ? abstainedTotal : Math.max(0, options.abstainedLimit ?? options.limit);
+  const returnedAbstained = options.full ? recommendation.abstained : recommendation.abstained.slice(0, abstainedBound);
+  const alternativesTotal = recommendation.alternatives.length;
+  const alternativesBound = options.full ? alternativesTotal : Math.max(0, options.limit - (recommendation.primary ? 1 : 0));
+  const returnedAlternatives = options.full ? recommendation.alternatives : recommendation.alternatives.slice(0, alternativesBound);
+  return {
+    ...recommendation,
+    alternatives: returnedAlternatives,
+    alternatives_total: alternativesTotal,
+    alternatives_returned: returnedAlternatives.length,
+    alternatives_truncated: returnedAlternatives.length < alternativesTotal,
+    alternatives_limit: options.full ? null : alternativesBound,
+    abstained: returnedAbstained,
+    abstained_total: abstainedTotal,
+    abstained_returned: returnedAbstained.length,
+    abstained_truncated: returnedAbstained.length < abstainedTotal,
+    abstained_limit: options.full ? null : abstainedBound,
+  };
+}
+
 export async function taskRecommendCommand(
   options: TaskRecommendOptions,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
@@ -150,6 +196,29 @@ export async function taskRecommendCommand(
     const agentFilter = options.agent;
     const taskFilter = options.taskNumber;
     const limit = options.limit ?? 10;
+
+    if (agentFilter) {
+      try {
+        const roster = await loadRoster(cwd);
+        if (!roster.agents.some((agent) => agent.agent_id === agentFilter)) {
+          return {
+            exitCode: ExitCode.GENERAL_ERROR,
+            result: agentNotFoundResult(agentFilter),
+          };
+        }
+      } catch (error) {
+        return {
+          exitCode: ExitCode.GENERAL_ERROR,
+          result: {
+            status: 'error',
+            reason: 'roster_unavailable',
+            agent: agentFilter,
+            action: 'recommend',
+            error: `Failed to load roster: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        };
+      }
+    }
 
     let store;
     try {
@@ -205,15 +274,21 @@ export async function taskRecommendCommand(
       }
     }
 
+    const outputRecommendation = boundRecommendationOutput(recommendation, {
+      limit,
+      abstainedLimit: options.abstainedLimit,
+      full: options.full,
+    });
+
     if (fmt.getFormat() === 'json') {
       const result: Record<string, unknown> = {
-        ...recommendation,
+        ...outputRecommendation,
         guidance: formatGuidanceForJson(guidance),
       };
       if (postureWarning) result.posture_warning = postureWarning;
       if (postureReasons.length > 0) result.posture_adjustments = postureReasons;
       return {
-        exitCode: recommendation.primary ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
+        exitCode: outputRecommendation.primary ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
         result,
       };
     }
@@ -223,10 +298,10 @@ export async function taskRecommendCommand(
       fmt.message(postureWarning, 'warning');
     }
 
-    if (recommendation.primary) {
-      fmt.message(`Top recommendation: ${recommendation.primary.task_id} → ${recommendation.primary.principal_id}`, 'success');
-      fmt.message(`  Score: ${recommendation.primary.score} (confidence: ${recommendation.primary.confidence})`, 'info');
-      fmt.message(`  ${recommendation.primary.rationale}`, 'info');
+    if (outputRecommendation.primary) {
+      fmt.message(`Top recommendation: ${outputRecommendation.primary.task_id} → ${outputRecommendation.primary.principal_id}`, 'success');
+      fmt.message(`  Score: ${outputRecommendation.primary.score} (confidence: ${outputRecommendation.primary.confidence})`, 'info');
+      fmt.message(`  ${outputRecommendation.primary.rationale}`, 'info');
     } else {
       fmt.message('No recommendations available.', 'warning');
     }
@@ -238,16 +313,20 @@ export async function taskRecommendCommand(
       }
     }
 
-    if (recommendation.alternatives.length > 0) {
-      fmt.message(`\nAlternatives (${recommendation.alternatives.length}):`, 'info');
-      for (const alt of recommendation.alternatives.slice(0, limit)) {
+    if (outputRecommendation.alternatives.length > 0) {
+      fmt.message(`\nAlternatives (${outputRecommendation.alternatives.length}):`, 'info');
+      for (const alt of outputRecommendation.alternatives.slice(0, limit)) {
         fmt.message(`  ${alt.task_id} → ${alt.principal_id} (score: ${alt.score}, ${alt.confidence})`, 'info');
+      }
+      if (outputRecommendation.alternatives_truncated) {
+        fmt.message('  Alternatives truncated; pass --full for the complete diagnostic list.', 'info');
       }
     }
 
-    if (recommendation.abstained.length > 0) {
-      fmt.message(`\nAbstained (${recommendation.abstained.length}):`, 'warning');
-      for (const abs of recommendation.abstained.slice(0, limit)) {
+    if (outputRecommendation.abstained.length > 0) {
+      const total = outputRecommendation.abstained_total ?? outputRecommendation.abstained.length;
+      fmt.message(`\nAbstained (${outputRecommendation.abstained.length}/${total} shown):`, 'warning');
+      for (const abs of outputRecommendation.abstained) {
         const blockedDetail = abs.blocked_by && abs.blocked_by.length > 0
           ? `: ${abs.blocked_by.join(', ')}`
           : '';
@@ -255,6 +334,9 @@ export async function taskRecommendCommand(
           ? ` [${abs.blocked_by_agents.map((b) => `${b.task_number}→${b.agent_id}`).join(', ')}]`
           : '';
         fmt.message(`  ${abs.task_id}: ${abs.reason}${blockedDetail}${agentDetail}`, 'warning');
+      }
+      if (outputRecommendation.abstained_truncated) {
+        fmt.message('  Abstentions truncated; pass --full for the complete diagnostic list.', 'warning');
       }
     }
 
@@ -266,8 +348,8 @@ export async function taskRecommendCommand(
     }
 
     return {
-      exitCode: recommendation.primary ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
-      result: recommendation,
+      exitCode: outputRecommendation.primary ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
+      result: outputRecommendation,
     };
   } catch (err) {
     return {

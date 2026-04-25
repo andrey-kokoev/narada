@@ -11,21 +11,19 @@
  * as the canonical task-verification path.
  */
 
-import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { openTaskLifecycleStore, type TaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 import {
   generateRunId,
-  digestText,
-  excerptText,
   classifyCommandScope,
   defaultTimeout,
   maxTimeout,
   type TestRunScope,
   type VerificationRunRow,
 } from '../lib/testing-intent.js';
+import { commandRunCommand } from './command-run.js';
 
 export interface TestRunOptions {
   cmd?: string;
@@ -67,62 +65,6 @@ function resolveTaskId(cwd: string, taskNumber: number | undefined, store: TaskL
   if (taskNumber === undefined) return null;
   const lifecycle = store.getLifecycleByNumber(taskNumber);
   return lifecycle?.task_id ?? null;
-}
-
-/**
- * Execute a test command with timeout and capture output.
- */
-function executeCommand(
-  command: string,
-  cwd: string,
-  timeoutMs: number,
-): Promise<{
-  exitCode: number | null;
-  stdout: string;
-  stderr: string;
-  durationMs: number;
-  timedOut: boolean;
-}> {
-  return new Promise((resolve) => {
-    const start = Date.now();
-    const [cmd, ...args] = command.split(' ');
-    const child = spawn(cmd, args, {
-      cwd,
-      shell: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-
-    let stdout = '';
-    let stderr = '';
-    let timedOut = false;
-
-    const timeoutId = setTimeout(() => {
-      timedOut = true;
-      child.kill('SIGTERM');
-      // Force kill after grace period
-      setTimeout(() => child.kill('SIGKILL'), 5000);
-    }, timeoutMs);
-
-    child.stdout?.on('data', (data: Buffer) => {
-      stdout += data.toString('utf8');
-    });
-
-    child.stderr?.on('data', (data: Buffer) => {
-      stderr += data.toString('utf8');
-    });
-
-    child.on('close', (exitCode) => {
-      clearTimeout(timeoutId);
-      const durationMs = Date.now() - start;
-      resolve({ exitCode, stdout, stderr, durationMs, timedOut });
-    });
-
-    child.on('error', () => {
-      clearTimeout(timeoutId);
-      const durationMs = Date.now() - start;
-      resolve({ exitCode: 1, stdout, stderr, durationMs, timedOut });
-    });
-  });
 }
 
 export async function testRunCommand(
@@ -184,40 +126,74 @@ export async function testRunCommand(
   };
   store.insertVerificationRun(run);
 
-  // Execute
-  const { exitCode, stdout, stderr, durationMs, timedOut } = await executeCommand(
-    command,
+  // Execute through CEIZ. TIZ keeps VerificationRun as the evidence artifact.
+  const commandRun = await commandRunCommand({
+    cmd: command,
+    shell: true,
+    taskNumber: options.taskNumber,
+    requester,
+    requesterKind: requester === 'operator' ? 'operator' : 'agent',
+    sideEffect: 'workspace_write',
+    timeout: cappedTimeout,
+    outputProfile: 'bounded_excerpt',
+    rationale: options.rationale ?? `TIZ ${scope} verification run`,
     cwd,
-    cappedTimeout * 1000,
-  );
+    store,
+    format: 'json',
+  });
+  const commandRunResult = commandRun.result as {
+    run?: {
+      run_id: string;
+      status: string;
+      exit_code: number | null;
+      duration_ms: number | null;
+      stdout_digest: string | null;
+      stderr_digest: string | null;
+      stdout_admitted_excerpt: string | null;
+      stderr_admitted_excerpt: string | null;
+    };
+    error?: string;
+  };
+  const ceizRun = commandRunResult.run;
+  if (!ceizRun) {
+    store.updateVerificationRun(runId, {
+      status: 'invalid_request',
+      exit_code: 1,
+      duration_ms: 0,
+      metrics_json: JSON.stringify({ ceiz_error: commandRunResult.error ?? 'command_run_failed' }),
+      completed_at: nowIso(),
+    });
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: { status: 'error', run_id: runId, error: commandRunResult.error ?? 'CEIZ command run failed' },
+    };
+  }
 
-  // Compute digests and excerpts
-  const [stdoutDigest, stderrDigest] = await Promise.all([
-    digestText(stdout),
-    digestText(stderr),
-  ]);
-
+  const timedOut = ceizRun.status === 'timed_out';
   const status: VerificationRunRow['status'] = timedOut
-    ? 'timed_out'
-    : exitCode === 0
+      ? 'timed_out'
+      : ceizRun.exit_code === 0
       ? 'passed'
       : 'failed';
+  const exitCode = ceizRun.exit_code;
+  const durationMs = ceizRun.duration_ms ?? 0;
 
   // Update run record with result
   store.updateVerificationRun(runId, {
     status,
     exit_code: exitCode,
     duration_ms: durationMs,
-    stdout_digest: stdoutDigest,
-    stderr_digest: stderrDigest,
-    stdout_excerpt: excerptText(stdout),
-    stderr_excerpt: excerptText(stderr),
+    metrics_json: JSON.stringify({ command_run_id: ceizRun.run_id }),
+    stdout_digest: ceizRun.stdout_digest,
+    stderr_digest: ceizRun.stderr_digest,
+    stdout_excerpt: ceizRun.stdout_admitted_excerpt,
+    stderr_excerpt: ceizRun.stderr_admitted_excerpt,
     completed_at: nowIso(),
   });
 
   if (fmt.getFormat() === 'json') {
     return {
-      exitCode: ExitCode.SUCCESS,
+      exitCode: status === 'passed' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
       result: {
         status: 'success',
         run_id: runId,
@@ -226,6 +202,7 @@ export async function testRunCommand(
         scope,
         task_id: taskId,
         task_number: options.taskNumber ?? null,
+        command_run_id: ceizRun.run_id,
         result: {
           status,
           exit_code: exitCode,

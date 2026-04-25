@@ -20,14 +20,17 @@ import {
   createReportId,
   findReportByAssignmentId,
   detectReportAnomalies,
+  saveReport,
+  saveReview,
   continuationReasonToIntent,
   getAssignmentIntent,
   resolveTaskStatus,
   checkDependencies,
   type AgentRoster,
   type TaskAssignment,
-} from '../../src/lib/task-governance.js';
-import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
+  type WorkResultReport,
+} from '../../src/task-governance.js';
+import { openTaskLifecycleStore } from '../../src/task-lifecycle-store.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -330,11 +333,33 @@ describe('lintTaskFiles', () => {
     );
   }
 
-  function writeReview(name: string, reviewOf: number | null, body?: string) {
-    const fm = ['---'];
-    if (reviewOf !== null) fm.push(`review_of: ${reviewOf}`);
-    fm.push(`---\n\n${body ?? '# Review\n\nReview of Task ' + reviewOf}\n`);
-    writeFileSync(join(tempDir, '.ai', 'reviews', `${name}.md`), fm.join('\n'));
+  async function writeStoredReview(name: string, reviewOf: number) {
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.upsertLifecycle({
+        task_id: `20260420-${reviewOf}-test`,
+        task_number: reviewOf,
+        status: 'in_review',
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        closure_mode: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+    } finally {
+      store.db.close();
+    }
+    await saveReview(tempDir, {
+      review_id: name,
+      reviewer_agent_id: 'reviewer',
+      task_id: `20260420-${reviewOf}-test`,
+      findings: [],
+      verdict: 'accepted',
+      reviewed_at: '2026-01-01T00:00:00Z',
+    });
   }
 
   function writeDecision(name: string, closesTasks: number[], body?: string) {
@@ -352,22 +377,6 @@ describe('lintTaskFiles', () => {
     expect(result.issues).toHaveLength(0);
   });
 
-  it('detects stale review reference from front matter', async () => {
-    writeTask(100, 'opened');
-    writeReview('review-999', 999);
-    const result = await lintTaskFiles(tempDir);
-    expect(result.ok).toBe(false);
-    expect(result.issues.some((i) => i.type === 'stale_review_reference')).toBe(true);
-  });
-
-  it('detects stale review reference from body text', async () => {
-    writeTask(100, 'opened');
-    writeReview('review-body', null, '# Review\n\nReview of Task 999.');
-    const result = await lintTaskFiles(tempDir);
-    expect(result.ok).toBe(false);
-    expect(result.issues.some((i) => i.type === 'stale_review_reference')).toBe(true);
-  });
-
   it('detects orphan review for in_review task', async () => {
     writeTask(100, 'in_review');
     const result = await lintTaskFiles(tempDir);
@@ -383,7 +392,7 @@ describe('lintTaskFiles', () => {
 
   it('matches review to task via front matter', async () => {
     writeTask(100, 'in_review');
-    writeReview('review-100', 100);
+    await writeStoredReview('review-100', 100);
     const result = await lintTaskFiles(tempDir);
     expect(result.issues.some((i) => i.type === 'orphan_review')).toBe(false);
   });
@@ -562,7 +571,7 @@ describe('findReportByAssignmentId', () => {
   });
 
   it('returns existing report matching assignment_id', async () => {
-    const report = {
+    const report: WorkResultReport = {
       report_id: 'wrr_abc123_task-1_agent-a',
       task_number: '1',
       task_id: 'task-1',
@@ -576,10 +585,7 @@ describe('findReportByAssignmentId', () => {
       ready_for_review: true,
       report_status: 'submitted',
     };
-    writeFileSync(
-      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', 'wrr_abc123_task-1_agent-a.json'),
-      JSON.stringify(report, null, 2),
-    );
+    await saveReport(tempDir, report);
 
     const found = await findReportByAssignmentId(tempDir, 'task-1-2026-01-01T00:00:00Z');
     expect(found).not.toBeNull();
@@ -592,7 +598,7 @@ describe('findReportByAssignmentId', () => {
   });
 
   it('ignores non-submitted reports', async () => {
-    const report = {
+    const report: WorkResultReport = {
       report_id: 'wrr_abc123_task-1_agent-a',
       task_number: '1',
       task_id: 'task-1',
@@ -606,10 +612,7 @@ describe('findReportByAssignmentId', () => {
       ready_for_review: true,
       report_status: 'superseded',
     };
-    writeFileSync(
-      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', 'wrr_abc123_task-1_agent-a.json'),
-      JSON.stringify(report, null, 2),
-    );
+    await saveReport(tempDir, report);
 
     const found = await findReportByAssignmentId(tempDir, 'task-1-2026-01-01T00:00:00Z');
     expect(found).toBeNull();
@@ -693,7 +696,7 @@ describe('detectReportAnomalies', () => {
   });
 
   it('returns empty array for clean reports', async () => {
-    const report = {
+    const report: WorkResultReport = {
       report_id: 'wrr_abc123_task-1_agent-a',
       task_number: '1',
       task_id: 'task-1',
@@ -707,45 +710,14 @@ describe('detectReportAnomalies', () => {
       ready_for_review: true,
       report_status: 'submitted',
     };
-    writeFileSync(
-      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', 'wrr_abc123_task-1_agent-a.json'),
-      JSON.stringify(report, null, 2),
-    );
+    await saveReport(tempDir, report);
 
     const anomalies = await detectReportAnomalies(tempDir);
     expect(anomalies).toHaveLength(0);
   });
 
-  it('detects duplicate report_id', async () => {
-    const report = {
-      report_id: 'wrr_dup_task-1_agent-a',
-      task_number: '1',
-      task_id: 'task-1',
-      agent_id: 'agent-a',
-      assignment_id: 'task-1-2026-01-01T00:00:00Z',
-      reported_at: '2026-01-01T00:00:00Z',
-      summary: 'Test',
-      changed_files: [],
-      verification: [],
-      known_residuals: [],
-      ready_for_review: true,
-      report_status: 'submitted',
-    };
-    writeFileSync(
-      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', 'wrr_dup_task-1_agent-a.json'),
-      JSON.stringify(report, null, 2),
-    );
-    writeFileSync(
-      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', 'wrr_dup_task-1_agent-a_copy.json'),
-      JSON.stringify(report, null, 2),
-    );
-
-    const anomalies = await detectReportAnomalies(tempDir);
-    expect(anomalies.some((a) => a.type === 'duplicate_report_id')).toBe(true);
-  });
-
   it('detects multiple reports per assignment', async () => {
-    const report1 = {
+    const report1: WorkResultReport = {
       report_id: 'wrr_aaa_task-1_agent-a',
       task_number: '1',
       task_id: 'task-1',
@@ -759,7 +731,7 @@ describe('detectReportAnomalies', () => {
       ready_for_review: true,
       report_status: 'submitted',
     };
-    const report2 = {
+    const report2: WorkResultReport = {
       report_id: 'wrr_bbb_task-1_agent-a',
       task_number: '1',
       task_id: 'task-1',
@@ -773,36 +745,13 @@ describe('detectReportAnomalies', () => {
       ready_for_review: true,
       report_status: 'submitted',
     };
-    writeFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', 'wrr_aaa_task-1_agent-a.json'), JSON.stringify(report1, null, 2));
-    writeFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', 'wrr_bbb_task-1_agent-a.json'), JSON.stringify(report2, null, 2));
+    await saveReport(tempDir, report1);
+    await saveReport(tempDir, report2);
 
     const anomalies = await detectReportAnomalies(tempDir);
     expect(anomalies.some((a) => a.type === 'multiple_reports_per_assignment')).toBe(true);
   });
 
-  it('detects filename / report_id mismatch', async () => {
-    const report = {
-      report_id: 'wrr_real_task-1_agent-a',
-      task_number: '1',
-      task_id: 'task-1',
-      agent_id: 'agent-a',
-      assignment_id: 'task-1-2026-01-01T00:00:00Z',
-      reported_at: '2026-01-01T00:00:00Z',
-      summary: 'Test',
-      changed_files: [],
-      verification: [],
-      known_residuals: [],
-      ready_for_review: true,
-      report_status: 'submitted',
-    };
-    writeFileSync(
-      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', 'wrong_name.json'),
-      JSON.stringify(report, null, 2),
-    );
-
-    const anomalies = await detectReportAnomalies(tempDir);
-    expect(anomalies.some((a) => a.type === 'filename_id_mismatch')).toBe(true);
-  });
 });
 
 describe('resolveTaskStatus', () => {

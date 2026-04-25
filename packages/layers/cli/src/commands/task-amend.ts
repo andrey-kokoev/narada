@@ -33,6 +33,8 @@ export interface TaskAmendOptions {
   nonGoals?: string;
   criteria?: string[];
   appendCriteria?: string[];
+  checkAllCriteria?: boolean;
+  dependsOn?: number[];
   fromFile?: string;
   by: string;
   format?: 'json' | 'human' | 'auto';
@@ -67,6 +69,15 @@ export async function taskAmendCommand(
       result: { status: 'error', error: '--by is required (operator or agent ID)' },
     };
   }
+  if (options.checkAllCriteria) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: {
+        status: 'error',
+        error: '--check-all-criteria is deprecated; use `narada task evidence prove-criteria <task-number> --by <id>`',
+      },
+    };
+  }
 
   const num = Number(taskNumber);
 
@@ -98,11 +109,47 @@ export async function taskAmendCommand(
 
   let specRow = existingSpecByNumber ?? store.getTaskSpec(taskId);
   if (!specRow) {
-    store.db.close();
-    return {
-      exitCode: ExitCode.GENERAL_ERROR,
-      result: { status: 'error', error: `Task ${taskNumber} has no SQLite task spec` },
+    if (!taskFile) {
+      store.db.close();
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: { status: 'error', error: `Task ${taskNumber} has no SQLite task spec` },
+      };
+    }
+    const parsed = parseTaskSpecFromMarkdown({
+      taskId,
+      taskNumber: num,
+      frontMatter,
+      body,
+    });
+    specRow = {
+      task_id: parsed.task_id,
+      task_number: parsed.task_number,
+      title: parsed.title,
+      chapter_markdown: parsed.chapter,
+      goal_markdown: parsed.goal,
+      context_markdown: parsed.context,
+      required_work_markdown: parsed.required_work,
+      non_goals_markdown: parsed.non_goals,
+      acceptance_criteria_json: JSON.stringify(parsed.acceptance_criteria),
+      dependencies_json: JSON.stringify(parsed.dependencies),
+      updated_at: parsed.updated_at,
     };
+    if (!store.getLifecycle(taskId)) {
+      store.upsertLifecycle({
+        task_id: taskId,
+        task_number: num,
+        status: String(frontMatter.status ?? 'opened') as import('../lib/task-lifecycle-store.js').TaskStatus,
+        governed_by: typeof frontMatter.governed_by === 'string' ? frontMatter.governed_by : null,
+        closed_at: typeof frontMatter.closed_at === 'string' ? frontMatter.closed_at : null,
+        closed_by: typeof frontMatter.closed_by === 'string' ? frontMatter.closed_by : null,
+        reopened_at: typeof frontMatter.reopened_at === 'string' ? frontMatter.reopened_at : null,
+        reopened_by: typeof frontMatter.reopened_by === 'string' ? frontMatter.reopened_by : null,
+        continuation_packet_json: null,
+        updated_at: parsed.updated_at,
+      });
+    }
+    store.upsertTaskSpec(specRow);
   }
 
   const status = String(lifecycle?.status ?? frontMatter.status ?? 'unknown');
@@ -194,12 +241,16 @@ export async function taskAmendCommand(
       changes.push('appended criteria');
     }
   }
+  if (options.dependsOn !== undefined) {
+    updatedSpec.dependencies_json = JSON.stringify(options.dependsOn);
+    changes.push('dependencies');
+  }
 
   if (changes.length === 0 && !options.fromFile) {
     store.db.close();
     return {
       exitCode: ExitCode.GENERAL_ERROR,
-      result: { status: 'error', error: 'No amendments specified. Use --title, --goal, --context, --required-work, --non-goals, --criteria, --append-criteria, or --from-file.' },
+      result: { status: 'error', error: 'No amendments specified. Use --title, --goal, --context, --required-work, --non-goals, --criteria, --append-criteria, --depends-on, or --from-file.' },
     };
   }
 

@@ -6,7 +6,7 @@
  */
 
 import { resolve, join } from 'node:path';
-import { readdir, access } from 'node:fs/promises';
+import { readdir, access, readFile } from 'node:fs/promises';
 import { atomicWriteFile } from '../lib/task-governance.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
@@ -17,9 +17,31 @@ export interface ChapterInitOptions {
   from?: number;
   count?: number;
   dependsOn?: string | number[];
+  tasksFile?: string;
   dryRun?: boolean;
   cwd?: string;
   format?: 'json' | 'human' | 'auto';
+}
+
+export interface ChapterValidateTasksFileOptions {
+  path: string;
+  count?: number;
+  cwd?: string;
+  format?: 'json' | 'human' | 'auto';
+}
+
+interface ChapterTaskSpec {
+  title: string;
+  goal: string;
+  context?: string;
+  required_work?: string[] | string;
+  requiredWork?: string[] | string;
+  acceptance_criteria?: string[];
+  acceptanceCriteria?: string[];
+  non_goals?: string[] | string;
+  nonGoals?: string[] | string;
+  required_reading?: string[];
+  requiredReading?: string[];
 }
 
 function isFilesystemSafeSlug(slug: string): boolean {
@@ -56,6 +78,62 @@ function formatDatePrefix(): string {
   return new Date().toISOString().slice(0, 10).replace(/-/g, '');
 }
 
+function listBlock(value: string[] | string | undefined, fallback: string): string {
+  if (Array.isArray(value)) {
+    return value.length > 0 ? value.map((line, idx) => `${idx + 1}. ${line}`).join('\n') : fallback;
+  }
+  if (typeof value === 'string' && value.trim().length > 0) return value.trim();
+  return fallback;
+}
+
+function bulletBlock(value: string[] | string | undefined, fallback: string): string {
+  if (Array.isArray(value)) {
+    return value.length > 0 ? value.map((line) => `- ${line}`).join('\n') : fallback;
+  }
+  if (typeof value === 'string' && value.trim().length > 0) return value.trim();
+  return fallback;
+}
+
+function criteriaBlock(value: string[] | undefined): string {
+  if (!value || value.length === 0) return '- [ ] TBD';
+  return value.map((line) => `- [ ] ${line}`).join('\n');
+}
+
+function normalizeTaskSpecs(input: unknown, count: number): ChapterTaskSpec[] | null {
+  if (input === undefined || input === null) return null;
+  if (!Array.isArray(input)) {
+    throw new Error('--tasks-file must contain a JSON array of task specifications.');
+  }
+  if (input.length !== count) {
+    throw new Error(`--tasks-file contains ${input.length} task spec(s), but --count is ${count}.`);
+  }
+  return input.map((item, idx) => {
+    if (typeof item !== 'object' || item === null) {
+      throw new Error(`tasks[${idx}] must be an object.`);
+    }
+    const spec = item as Record<string, unknown>;
+    if (typeof spec.title !== 'string' || spec.title.trim().length === 0) {
+      throw new Error(`tasks[${idx}].title is required.`);
+    }
+    if (typeof spec.goal !== 'string' || spec.goal.trim().length === 0) {
+      throw new Error(`tasks[${idx}].goal is required.`);
+    }
+    const acceptanceCriteria = spec.acceptance_criteria ?? spec.acceptanceCriteria;
+    if (acceptanceCriteria !== undefined && (!Array.isArray(acceptanceCriteria) || acceptanceCriteria.some((v) => typeof v !== 'string'))) {
+      throw new Error(`tasks[${idx}].acceptance_criteria must be an array of strings.`);
+    }
+    return {
+      title: spec.title.trim(),
+      goal: spec.goal.trim(),
+      context: typeof spec.context === 'string' ? spec.context.trim() : undefined,
+      required_work: (spec.required_work ?? spec.requiredWork) as string[] | string | undefined,
+      acceptance_criteria: acceptanceCriteria as string[] | undefined,
+      non_goals: (spec.non_goals ?? spec.nonGoals) as string[] | string | undefined,
+      required_reading: (spec.required_reading ?? spec.requiredReading) as string[] | undefined,
+    };
+  });
+}
+
 function extractTaskNumbersFromFileName(fileName: string): number[] {
   const base = fileName.replace(/\.md$/, '');
   const numbers: number[] = [];
@@ -76,11 +154,12 @@ function buildRangeFileBody(options: {
   from: number;
   to: number;
   dependsOn: number[];
+  taskSpecs?: ChapterTaskSpec[] | null;
 }): string {
-  const { title, slug, from, to, dependsOn } = options;
+  const { title, slug, from, to, dependsOn, taskSpecs } = options;
   const tasks: Array<{ num: number; name: string }> = [];
   for (let i = 0; i < to - from + 1; i++) {
-    tasks.push({ num: from + i, name: `${slug}-${i + 1}` });
+    tasks.push({ num: from + i, name: taskSpecs?.[i]?.title ?? `${slug}-${i + 1}` });
   }
 
   const mermaidNodes = tasks
@@ -93,7 +172,7 @@ function buildRangeFileBody(options: {
   }
 
   const taskTableRows = tasks
-    .map((t, idx) => `| ${idx + 1} | ${t.num} | ${t.name} | TBD |`)
+    .map((t, idx) => `| ${idx + 1} | ${t.num} | ${t.name} | ${taskSpecs?.[idx]?.goal ?? 'TBD'} |`)
     .join('\n');
 
   const cccCoordinates = [
@@ -162,16 +241,26 @@ function buildChildTaskBody(options: {
   slug: string;
   index: number;
   dependsOn: number[];
+  taskSpec?: ChapterTaskSpec;
 }): string {
-  const { num, title, dependsOn } = options;
+  const { num, title, dependsOn, taskSpec } = options;
   const deps = dependsOn.length > 0 ? `[${dependsOn.join(', ')}]` : '[]';
+  const resolvedTitle = taskSpec?.title ?? title;
+  const requiredReading = bulletBlock(taskSpec?.required_reading ?? taskSpec?.requiredReading, '- TBD');
+  const context = taskSpec?.context ?? '<!-- Context placeholder -->';
+  const requiredWork = listBlock(taskSpec?.required_work, '1. TBD');
+  const nonGoals = bulletBlock(
+    taskSpec?.non_goals ?? taskSpec?.nonGoals,
+    '- Do not expand scope beyond this task.\n- Do not create derivative task-status files.\n- Do not mutate live external systems unless explicitly authorized.',
+  );
+  const acceptanceCriteria = criteriaBlock(taskSpec?.acceptance_criteria ?? taskSpec?.acceptanceCriteria);
 
   return `---
 status: opened
 depends_on: ${deps}
 ---
 
-# Task ${num} — ${title}
+# Task ${num} — ${resolvedTitle}
 
 ## Execution Mode
 
@@ -183,21 +272,23 @@ Proceed directly. This is a narrow corrective task; use focused edits only.
 
 ## Required Reading
 
-- TBD
+${requiredReading}
 
 ## Context
 
-<!-- Context placeholder -->
+${context}
+
+## Goal
+
+${taskSpec?.goal ?? '<!-- Goal placeholder -->'}
 
 ## Required Work
 
-1. TBD
+${requiredWork}
 
 ## Non-Goals
 
-- Do not expand scope beyond this task.
-- Do not create derivative task-status files.
-- Do not mutate live external systems unless explicitly authorized.
+${nonGoals}
 
 ## Crossing Regime
 
@@ -227,7 +318,7 @@ See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
 
 ## Acceptance Criteria
 
-- [ ] TBD
+${acceptanceCriteria}
 `;
 }
 
@@ -276,6 +367,19 @@ export async function chapterInitCommand(
   const to = from + count - 1;
   const datePrefix = formatDatePrefix();
   const tasksDir = join(cwd, '.ai', 'do-not-open', 'tasks');
+  let taskSpecs: ChapterTaskSpec[] | null = null;
+  if (options.tasksFile) {
+    try {
+      const raw = await readFile(resolve(cwd, options.tasksFile), 'utf8');
+      taskSpecs = normalizeTaskSpecs(JSON.parse(raw), count);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: { status: 'error', error: `Failed to read --tasks-file: ${msg}` },
+      };
+    }
+  }
 
   // ── Range file existence check ──
 
@@ -348,6 +452,7 @@ export async function chapterInitCommand(
           to,
           count,
           depends_on: dependsOn,
+          task_specs: taskSpecs ? taskSpecs.length : 0,
           files: files.map((f) => f.path),
         },
       };
@@ -367,6 +472,7 @@ export async function chapterInitCommand(
         to,
         count,
         depends_on: dependsOn,
+        task_specs: taskSpecs ? taskSpecs.length : 0,
         files: files.map((f) => f.path),
       },
     };
@@ -383,12 +489,12 @@ export async function chapterInitCommand(
 
   // ── Write files ──
 
-  const rangeBody = buildRangeFileBody({ title, slug, from, to, dependsOn });
+  const rangeBody = buildRangeFileBody({ title, slug, from, to, dependsOn, taskSpecs });
   await atomicWriteFile(rangeFilePath, rangeBody);
 
   for (let i = 0; i < count; i++) {
     const num = from + i;
-    const childBody = buildChildTaskBody({ num, title: `${title} — Task ${i + 1}`, slug, index: i + 1, dependsOn });
+    const childBody = buildChildTaskBody({ num, title: `${title} — Task ${i + 1}`, slug, index: i + 1, dependsOn, taskSpec: taskSpecs?.[i] });
     await atomicWriteFile(childTaskPaths[i]!, childBody);
   }
 
@@ -403,6 +509,7 @@ export async function chapterInitCommand(
         to,
         count,
         depends_on: dependsOn,
+        task_specs: taskSpecs ? taskSpecs.length : 0,
         files: files.map((f) => f.path),
       },
     };
@@ -425,7 +532,49 @@ export async function chapterInitCommand(
       to,
       count,
       depends_on: dependsOn,
+      task_specs: taskSpecs ? taskSpecs.length : 0,
       files: files.map((f) => f.path),
     },
   };
+}
+
+export async function chapterValidateTasksFileCommand(
+  options: ChapterValidateTasksFileOptions,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
+  const fmt = createFormatter({ format: options.format || 'auto', verbose: false });
+  if (!options.count || !Number.isInteger(options.count) || options.count < 1) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: { status: 'error', error: '--count must be an integer >= 1.' },
+    };
+  }
+
+  try {
+    const raw = await readFile(resolve(cwd, options.path), 'utf8');
+    const specs = normalizeTaskSpecs(JSON.parse(raw), options.count) ?? [];
+    const summary = specs.map((spec, index) => ({
+      index: index + 1,
+      title: spec.title,
+      has_goal: spec.goal.trim().length > 0,
+      acceptance_criteria_count: (spec.acceptance_criteria ?? spec.acceptanceCriteria ?? []).length,
+    }));
+    const result = {
+      status: 'success',
+      path: resolve(cwd, options.path),
+      count: specs.length,
+      tasks: summary,
+    };
+    if (fmt.getFormat() !== 'json') {
+      fmt.message(`Valid chapter task-spec file: ${options.path}`, 'success');
+      fmt.kv('Tasks', String(specs.length));
+    }
+    return { exitCode: ExitCode.SUCCESS, result };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: { status: 'error', error: `Invalid tasks file: ${msg}` },
+    };
+  }
 }

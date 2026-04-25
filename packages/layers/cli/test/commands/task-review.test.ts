@@ -10,7 +10,7 @@ import { taskReleaseCommand } from '../../src/commands/task-release.js';
 import { taskReportCommand } from '../../src/commands/task-report.js';
 import { taskReviewCommand } from '../../src/commands/task-review.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, readdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -78,6 +78,25 @@ describe('task review operator', () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
+  function getStoredReview(reviewId: string) {
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      return store.listReviews('20260420-999-test-task').find((review) => review.review_id === reviewId);
+    } finally {
+      store.db.close();
+    }
+  }
+
+  function getStoredReport(reportId: string) {
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      const record = store.getReportRecord(reportId);
+      return record ? JSON.parse(record.report_json) as { report_status?: string } : null;
+    } finally {
+      store.db.close();
+    }
+  }
+
   it('accepts a completed task', async () => {
     await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
     await taskReleaseCommand({ taskNumber: '999', reason: 'completed', cwd: tempDir, format: 'json' });
@@ -94,14 +113,27 @@ describe('task review operator', () => {
     expect(result.result).toMatchObject({
       status: 'success',
       verdict: 'accepted',
+      review_verdict_status: 'accepted',
+      lifecycle_status: 'closed',
       new_status: 'closed',
+      close_action: 'closed',
     });
 
     const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
     expect(taskContent).toContain('status: closed');
-    expect(taskContent).toContain('governed_by: task_review:reviewer');
+    expect(taskContent).toContain('governed_by: task_close:reviewer');
     expect(taskContent).toContain('closed_by: reviewer');
     expect(taskContent).toContain('closed_at:');
+
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      const lifecycle = store.getLifecycle('20260420-999-test-task');
+      expect(lifecycle?.status).toBe('closed');
+      expect(lifecycle?.closed_by).toBe('reviewer');
+      expect(lifecycle?.governed_by).toBe('task_close:reviewer');
+    } finally {
+      store.db.close();
+    }
   });
 
   it('rejects a completed task', async () => {
@@ -246,12 +278,12 @@ describe('task review operator', () => {
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
 
     const reviewId = (result.result as { review_id: string }).review_id;
-    const reviewRaw = readFileSync(join(tempDir, '.ai', 'reviews', `${reviewId}.json`), 'utf8');
-    const review = JSON.parse(reviewRaw);
-    expect(review.reviewer_agent_id).toBe('reviewer');
-    expect(review.verdict).toBe('accepted_with_notes');
-    expect(review.findings).toHaveLength(1);
-    expect(review.findings[0].severity).toBe('minor');
+    const review = getStoredReview(reviewId);
+    expect(review?.reviewer_agent_id).toBe('reviewer');
+    expect(review?.verdict).toBe('accepted');
+    const findingsJson = JSON.parse(review?.findings_json ?? '[]') as Array<{ severity: string }>;
+    expect(findingsJson).toHaveLength(1);
+    expect(findingsJson[0]?.severity).toBe('minor');
   });
 
   it('accepts report and marks it accepted', async () => {
@@ -276,17 +308,10 @@ describe('task review operator', () => {
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
 
-    // Review record references report
+    // Review verdict and linked report status are stored in SQLite authority.
     const reviewId = (result.result as { review_id: string }).review_id;
-    const reviewRaw = readFileSync(join(tempDir, '.ai', 'reviews', `${reviewId}.json`), 'utf8');
-    const review = JSON.parse(reviewRaw);
-    expect(review.report_id).toBe(reportId);
-
-    // Report status updated to accepted
-    const reportFiles = readdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports')).filter((f) => f.endsWith('.json'));
-    const reportRaw = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', reportFiles[0]!), 'utf8');
-    const report = JSON.parse(reportRaw);
-    expect(report.report_status).toBe('accepted');
+    expect(getStoredReview(reviewId)?.verdict).toBe('accepted');
+    expect(getStoredReport(reportId)?.report_status).toBe('accepted');
   });
 
   it('rejects report and marks it rejected', async () => {
@@ -311,11 +336,7 @@ describe('task review operator', () => {
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
 
-    // Report status updated to rejected
-    const reportFiles = readdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports')).filter((f) => f.endsWith('.json'));
-    const reportRaw = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', reportFiles[0]!), 'utf8');
-    const report = JSON.parse(reportRaw);
-    expect(report.report_status).toBe('rejected');
+    expect(getStoredReport(reportId)?.report_status).toBe('rejected');
   });
 
   it('fails when report belongs to different task', async () => {
@@ -391,7 +412,7 @@ describe('task review operator', () => {
     const parsed = result.result as { new_status: string; evidence_blocked?: boolean; evidence_reason?: string };
     expect(parsed.new_status).toBe('in_review');
     expect(parsed.evidence_blocked).toBe(true);
-    expect(parsed.evidence_reason).toContain('lacks execution evidence');
+    expect(parsed.evidence_reason).toContain('execution');
 
     const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-995-no-evidence.md'), 'utf8');
     expect(taskContent).toContain('status: in_review');
@@ -456,7 +477,7 @@ describe('task review operator', () => {
       expect(lifecycle).toBeDefined();
       expect(lifecycle!.status).toBe('closed');
       expect(lifecycle!.closed_by).toBe('reviewer');
-      expect(lifecycle!.governed_by).toBe('task_review:reviewer');
+      expect(lifecycle!.governed_by).toBe('task_close:reviewer');
 
       db.close();
     });

@@ -22,8 +22,10 @@ import {
   type NextTaskCandidate,
 } from '../lib/task-governance.js';
 import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
+import type { TaskLifecycleStore, TaskStatus } from '../lib/task-lifecycle-store.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import { parseTaskSpecFromMarkdown } from '../lib/task-spec.js';
 
 export interface TaskPeekNextOptions {
   agent: string;
@@ -47,6 +49,125 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+type NextTaskAction = 'peek_next' | 'pull_next' | 'work_next';
+
+const VALID_TASK_STATUSES = new Set<TaskStatus>([
+  'draft',
+  'opened',
+  'claimed',
+  'needs_continuation',
+  'in_review',
+  'closed',
+  'confirmed',
+]);
+
+function normalizeTaskStatus(value: unknown): TaskStatus {
+  return typeof value === 'string' && VALID_TASK_STATUSES.has(value as TaskStatus)
+    ? value as TaskStatus
+    : 'opened';
+}
+
+function agentNotFoundResult(agent: string, action: NextTaskAction): { status: 'error'; reason: 'agent_not_found'; agent: string; agent_id: string; action: NextTaskAction; primary: null; error: string; next_step: string } {
+  return {
+    status: 'error',
+    reason: 'agent_not_found',
+    agent,
+    agent_id: agent,
+    action,
+    primary: null,
+    error: `Agent ${agent} not found in roster`,
+    next_step: 'Ask the operator to admit this agent to the roster before claiming work.',
+  };
+}
+
+async function requireRosterAgent(
+  cwd: string,
+  agentId: string,
+  action: NextTaskAction,
+): Promise<{ ok: true; roster: Awaited<ReturnType<typeof loadRoster>> } | { ok: false; result: ReturnType<typeof agentNotFoundResult> | { status: 'error'; reason: 'roster_unavailable'; agent: string; agent_id: string; action: NextTaskAction; primary: null; error: string } }> {
+  try {
+    const roster = await loadRoster(cwd);
+    const agent = roster.agents.find((a) => a.agent_id === agentId);
+    if (!agent) {
+      return { ok: false, result: agentNotFoundResult(agentId, action) };
+    }
+    return { ok: true, roster };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return {
+      ok: false,
+      result: {
+        status: 'error',
+        reason: 'roster_unavailable',
+        agent: agentId,
+        agent_id: agentId,
+        action,
+        primary: null,
+        error: `Failed to load roster: ${msg}`,
+      },
+    };
+  }
+}
+
+function ensureSqliteTaskRows(
+  store: TaskLifecycleStore,
+  taskFile: { taskId: string },
+  taskNumber: number,
+  frontMatter: Record<string, unknown>,
+  body: string,
+): void {
+  const updatedAt = nowIso();
+  if (!store.getLifecycle(taskFile.taskId)) {
+    store.upsertLifecycle({
+      task_id: taskFile.taskId,
+      task_number: taskNumber,
+      status: normalizeTaskStatus(frontMatter.status),
+      governed_by: typeof frontMatter.governed_by === 'string' ? frontMatter.governed_by : null,
+      closed_at: typeof frontMatter.closed_at === 'string' ? frontMatter.closed_at : null,
+      closed_by: typeof frontMatter.closed_by === 'string' ? frontMatter.closed_by : null,
+      reopened_at: typeof frontMatter.reopened_at === 'string' ? frontMatter.reopened_at : null,
+      reopened_by: typeof frontMatter.reopened_by === 'string' ? frontMatter.reopened_by : null,
+      continuation_packet_json: null,
+      updated_at: updatedAt,
+    });
+  }
+
+  if (!store.getTaskSpec(taskFile.taskId)) {
+    const parsed = parseTaskSpecFromMarkdown({
+      taskId: taskFile.taskId,
+      taskNumber,
+      frontMatter,
+      body,
+    });
+    store.upsertTaskSpec({
+      task_id: parsed.task_id,
+      task_number: parsed.task_number,
+      title: parsed.title,
+      chapter_markdown: parsed.chapter,
+      goal_markdown: parsed.goal,
+      context_markdown: parsed.context,
+      required_work_markdown: parsed.required_work,
+      non_goals_markdown: parsed.non_goals,
+      acceptance_criteria_json: JSON.stringify(parsed.acceptance_criteria),
+      dependencies_json: JSON.stringify(parsed.dependencies),
+      updated_at: updatedAt,
+    });
+  }
+}
+
+function emptyNextResult(agent: string, action: NextTaskAction, field: 'task' | 'packet'): Record<string, unknown> {
+  return {
+    status: 'empty',
+    reason: 'no_admissible_task',
+    agent,
+    agent_id: agent,
+    action,
+    primary: null,
+    [field]: null,
+    next_step: 'No claimable task is currently available for this agent.',
+  };
+}
+
 /**
  * Non-mutating next-task inspection.
  * Returns the best admissible task for the agent without claiming, assigning,
@@ -66,13 +187,21 @@ export async function taskPeekNextCommand(
   }
 
   try {
+    const agentCheck = await requireRosterAgent(cwd, options.agent, 'peek_next');
+    if (!agentCheck.ok) {
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: agentCheck.result,
+      };
+    }
+
     const candidate = await findNextTaskForAgent(cwd, options.agent, store);
 
     if (!candidate) {
       if (fmt.getFormat() === 'json') {
         return {
           exitCode: ExitCode.SUCCESS,
-          result: { status: 'empty', agent: options.agent, task: null },
+          result: emptyNextResult(options.agent, 'peek_next', 'task'),
         };
       }
       return {
@@ -82,20 +211,24 @@ export async function taskPeekNextCommand(
     }
 
     if (fmt.getFormat() === 'json') {
+      const task = {
+        task_id: candidate.taskId,
+        task_number: candidate.taskNumber,
+        title: candidate.title,
+        status: candidate.status,
+        affinity: candidate.affinity,
+        already_claimed: candidate.alreadyClaimed,
+        claimed_by: candidate.claimedBy,
+      };
       return {
         exitCode: ExitCode.SUCCESS,
         result: {
           status: 'ok',
           agent: options.agent,
-          task: {
-            task_id: candidate.taskId,
-            task_number: candidate.taskNumber,
-            title: candidate.title,
-            status: candidate.status,
-            affinity: candidate.affinity,
-            already_claimed: candidate.alreadyClaimed,
-            claimed_by: candidate.claimedBy,
-          },
+          agent_id: options.agent,
+          action: 'peek_next',
+          primary: task,
+          task,
         },
       };
     }
@@ -139,21 +272,11 @@ export async function taskPullNextCommand(
 
   try {
     // 1. Verify agent exists in roster
-    let roster: Awaited<ReturnType<typeof loadRoster>>;
-    try {
-      roster = await loadRoster(cwd);
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
+    const agentCheck = await requireRosterAgent(cwd, options.agent, 'pull_next');
+    if (!agentCheck.ok) {
       return {
         exitCode: ExitCode.GENERAL_ERROR,
-        result: { status: 'error', error: `Failed to load roster: ${msg}` },
-      };
-    }
-    const agent = roster.agents.find((a) => a.agent_id === options.agent);
-    if (!agent) {
-      return {
-        exitCode: ExitCode.GENERAL_ERROR,
-        result: { status: 'error', error: `Agent ${options.agent} not found in roster` },
+        result: agentCheck.result,
       };
     }
 
@@ -163,7 +286,7 @@ export async function taskPullNextCommand(
       if (fmt.getFormat() === 'json') {
         return {
           exitCode: ExitCode.SUCCESS,
-          result: { status: 'empty', agent: options.agent, task: null },
+          result: emptyNextResult(options.agent, 'pull_next', 'task'),
         };
       }
       return {
@@ -184,6 +307,12 @@ export async function taskPullNextCommand(
           result: {
             status: 'ok',
             agent: options.agent,
+            agent_id: options.agent,
+            action: 'pull_next',
+            primary: {
+              task_id: candidate.taskId,
+              task_number: candidate.taskNumber,
+            },
             task_id: candidate.taskId,
             task_number: candidate.taskNumber,
             pulled: false,
@@ -202,10 +331,13 @@ export async function taskPullNextCommand(
     if (!taskFile) {
       return {
         exitCode: ExitCode.GENERAL_ERROR,
-        result: { status: 'error', error: `Task file not found: ${candidate.taskId}` },
+        result: { status: 'error', agent_id: options.agent, action: 'pull_next', primary: null, error: `Task file not found: ${candidate.taskId}` },
       };
     }
     const { frontMatter, body } = await readTaskFile(taskFile.path);
+    if (store) {
+      ensureSqliteTaskRows(store, taskFile, candidate.taskNumber!, frontMatter, body);
+    }
 
     // Validate transition
     const currentStatus = frontMatter.status as string | undefined;
@@ -214,6 +346,9 @@ export async function taskPullNextCommand(
         exitCode: ExitCode.GENERAL_ERROR,
         result: {
           status: 'error',
+          agent_id: options.agent,
+          action: 'pull_next',
+          primary: null,
           error: `Transition from '${currentStatus}' to 'claimed' is not allowed`,
         },
       };
@@ -227,6 +362,9 @@ export async function taskPullNextCommand(
         exitCode: ExitCode.GENERAL_ERROR,
         result: {
           status: 'error',
+          agent_id: options.agent,
+          action: 'pull_next',
+          primary: null,
           error: `Dependencies unmet: ${blockedBy.join(', ')}`,
         },
       };
@@ -270,6 +408,12 @@ export async function taskPullNextCommand(
         result: {
           status: 'ok',
           agent: options.agent,
+          agent_id: options.agent,
+          action: 'pull_next',
+          primary: {
+            task_id: candidate.taskId,
+            task_number: candidate.taskNumber,
+          },
           task_id: candidate.taskId,
           task_number: candidate.taskNumber,
           pulled: true,
@@ -308,14 +452,16 @@ export async function taskWorkNextCommand(
 
   try {
     // 1. Check if agent already has a current task
-    const roster = await loadRoster(cwd);
-    const agent = roster.agents.find((a) => a.agent_id === options.agent);
-    if (!agent) {
+    const agentCheck = await requireRosterAgent(cwd, options.agent, 'work_next');
+    if (!agentCheck.ok) {
       return {
         exitCode: ExitCode.GENERAL_ERROR,
-        result: { status: 'error', error: `Agent ${options.agent} not found in roster` },
+        result: agentCheck.result,
       };
     }
+    const roster = agentCheck.roster;
+    const agent = roster.agents.find((a) => a.agent_id === options.agent);
+    if (!agent) throw new Error(`Agent ${options.agent} disappeared during work-next`);
 
     let taskNumber: number | null = agent.task ?? null;
     let pulled = false;
@@ -335,7 +481,7 @@ export async function taskWorkNextCommand(
         if (fmt.getFormat() === 'json') {
           return {
             exitCode: ExitCode.SUCCESS,
-            result: { status: 'empty', agent: options.agent, packet: null },
+            result: emptyNextResult(options.agent, 'work_next', 'packet'),
           };
         }
         return {
@@ -351,7 +497,7 @@ export async function taskWorkNextCommand(
       if (fmt.getFormat() === 'json') {
         return {
           exitCode: ExitCode.SUCCESS,
-          result: { status: 'empty', agent: options.agent, packet: null },
+          result: emptyNextResult(options.agent, 'work_next', 'packet'),
         };
       }
       return {
@@ -363,7 +509,7 @@ export async function taskWorkNextCommand(
     if (!store) {
       return {
         exitCode: ExitCode.GENERAL_ERROR,
-        result: { status: 'error', error: 'Task lifecycle store is unavailable' },
+        result: { status: 'error', agent_id: options.agent, action: 'work_next', primary: null, error: 'Task lifecycle store is unavailable' },
       };
     }
 
@@ -372,15 +518,16 @@ export async function taskWorkNextCommand(
     if (!taskFile) {
       return {
         exitCode: ExitCode.GENERAL_ERROR,
-        result: { status: 'error', error: `Task file not found: ${taskNumber}` },
+        result: { status: 'error', agent_id: options.agent, action: 'work_next', primary: null, error: `Task file not found: ${taskNumber}` },
       };
     }
     const { frontMatter, body } = await readTaskFile(taskFile.path);
+    ensureSqliteTaskRows(store, taskFile, taskNumber, frontMatter, body);
     let spec = store.getTaskSpec(taskFile.taskId);
     if (!spec) {
       return {
         exitCode: ExitCode.GENERAL_ERROR,
-        result: { status: 'error', error: `Task ${taskNumber} has no SQLite-backed task spec` },
+        result: { status: 'error', agent_id: options.agent, action: 'work_next', primary: null, error: `Task ${taskNumber} has no SQLite-backed task spec` },
       };
     }
 
@@ -416,6 +563,9 @@ export async function taskWorkNextCommand(
         result: {
           status: 'ok',
           agent: options.agent,
+          agent_id: options.agent,
+          action: 'work_next',
+          primary: packet,
           packet,
         },
       };

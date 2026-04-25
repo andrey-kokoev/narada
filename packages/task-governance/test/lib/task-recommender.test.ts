@@ -4,8 +4,8 @@ vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { generateRecommendations } from '../../src/lib/task-recommender.js';
-import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
+import { generateRecommendations } from '../../src/task-recommender.js';
+import { openTaskLifecycleStore } from '../../src/task-lifecycle-store.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -85,6 +85,45 @@ function setupWarmContextRepo(tempDir: string) {
     join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-1002-cold-ctx-task.md'),
     '---\ntask_id: 1002\nstatus: opened\n---\n\n# Task 1002: Cold Chapter Task\n\n## Chapter\nCold Chapter\n\nDo something in cold chapter.\n',
   );
+}
+
+function recordAssignment(
+  tempDir: string,
+  taskId: string,
+  agentId: string,
+  claimedAt: string,
+  releasedAt: string | null,
+  releaseReason: string | null,
+) {
+  const taskNumberMatch = taskId.match(/-(\d+)-/);
+  const taskNumber = taskNumberMatch ? Number(taskNumberMatch[1]) : 0;
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    store.upsertLifecycle({
+      task_id: taskId,
+      task_number: taskNumber,
+      status: releasedAt === null ? 'claimed' : 'closed',
+      governed_by: null,
+      closed_at: releasedAt,
+      closed_by: releasedAt ? agentId : null,
+      closure_mode: releasedAt ? 'agent_finish' : null,
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: releasedAt ?? claimedAt,
+    });
+    store.insertAssignment({
+      assignment_id: `assign-${taskId}-${agentId}-${claimedAt}`,
+      task_id: taskId,
+      agent_id: agentId,
+      claimed_at: claimedAt,
+      released_at: releasedAt,
+      release_reason: releaseReason,
+      intent: 'primary',
+    });
+  } finally {
+    store.db.close();
+  }
 }
 
 describe('generateRecommendations with store', () => {
@@ -182,20 +221,13 @@ describe('generateRecommendations warm-context affinity', () => {
 
   it('prefers agent with recent same-chapter work over equivalent idle agent', async () => {
     // agent-warm completed task 1001 (in Warm Chapter) yesterday
-    writeFileSync(
-      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-1001-warm-ctx-task.json'),
-      JSON.stringify({
-        task_id: '20260420-1001-warm-ctx-task',
-        assignments: [
-          {
-            agent_id: 'agent-warm',
-            claimed_at: '2026-04-19T00:00:00Z',
-            claim_context: null,
-            released_at: '2026-04-19T12:00:00Z',
-            release_reason: 'completed',
-          },
-        ],
-      }, null, 2),
+    recordAssignment(
+      tempDir,
+      '20260420-1001-warm-ctx-task',
+      'agent-warm',
+      '2026-04-19T00:00:00Z',
+      '2026-04-19T12:00:00Z',
+      'completed',
     );
 
     const result = await generateRecommendations({ cwd: tempDir });
@@ -213,20 +245,13 @@ describe('generateRecommendations warm-context affinity', () => {
 
   it('stale warm context decays to near-zero after 14 days', async () => {
     // agent-warm completed task 1001 (in Warm Chapter) 14 days ago
-    writeFileSync(
-      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-1001-warm-ctx-task.json'),
-      JSON.stringify({
-        task_id: '20260420-1001-warm-ctx-task',
-        assignments: [
-          {
-            agent_id: 'agent-warm',
-            claimed_at: '2026-04-06T00:00:00Z',
-            claim_context: null,
-            released_at: '2026-04-06T12:00:00Z',
-            release_reason: 'completed',
-          },
-        ],
-      }, null, 2),
+    recordAssignment(
+      tempDir,
+      '20260420-1001-warm-ctx-task',
+      'agent-warm',
+      '2026-04-06T00:00:00Z',
+      '2026-04-06T12:00:00Z',
+      'completed',
     );
 
     const result = await generateRecommendations({ cwd: tempDir });
@@ -243,37 +268,23 @@ describe('generateRecommendations warm-context affinity', () => {
 
   it('hard blockers still skip agent even with strong warm context', async () => {
     // agent-warm completed task 1001 (in Warm Chapter) yesterday — strong warm context
-    writeFileSync(
-      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-1001-warm-ctx-task.json'),
-      JSON.stringify({
-        task_id: '20260420-1001-warm-ctx-task',
-        assignments: [
-          {
-            agent_id: 'agent-warm',
-            claimed_at: '2026-04-19T00:00:00Z',
-            claim_context: null,
-            released_at: '2026-04-19T12:00:00Z',
-            release_reason: 'completed',
-          },
-        ],
-      }, null, 2),
+    recordAssignment(
+      tempDir,
+      '20260420-1001-warm-ctx-task',
+      'agent-warm',
+      '2026-04-19T00:00:00Z',
+      '2026-04-19T12:00:00Z',
+      'completed',
     );
 
     // agent-warm has an active assignment on another task (at capacity)
-    writeFileSync(
-      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-1002-cold-ctx-task.json'),
-      JSON.stringify({
-        task_id: '20260420-1002-cold-ctx-task',
-        assignments: [
-          {
-            agent_id: 'agent-warm',
-            claimed_at: '2026-04-20T00:00:00Z',
-            claim_context: null,
-            released_at: null,
-            release_reason: null,
-          },
-        ],
-      }, null, 2),
+    recordAssignment(
+      tempDir,
+      '20260420-1002-cold-ctx-task',
+      'agent-warm',
+      '2026-04-20T00:00:00Z',
+      null,
+      null,
     );
 
     // Also mark agent-warm as working in roster so load score drops

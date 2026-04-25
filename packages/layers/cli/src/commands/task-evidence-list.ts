@@ -13,6 +13,7 @@ import {
 } from '../lib/task-governance.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import { createObservationArtifact } from '../lib/observation-artifact.js';
 
 export type EvidenceVerdict = TaskCompletionEvidence['verdict'];
 
@@ -148,6 +149,28 @@ export async function taskEvidenceListCommand(
     status: statusFilter ?? null,
     range: rangeFilter ?? null,
   };
+  const fullPayload = {
+    status: 'success',
+    count: tasks.length,
+    filter,
+    summary: { verdicts: verdictSummary },
+    tasks: tasks.map(serializeTaskEvidence),
+  };
+  const observation = await createObservationArtifact({
+    cwd,
+    artifactType: 'task_evidence_list',
+    sourceOperator: 'task_evidence_list',
+    extension: 'json',
+    content: JSON.stringify(fullPayload, null, 2),
+    admittedView: {
+      count: tasks.length,
+      returned_count: visibleTasks.length,
+      truncated,
+      limit: full ? null : limit,
+      filter,
+      summary: { verdicts: verdictSummary },
+    },
+  });
 
   if (fmt.getFormat() === 'json') {
     return {
@@ -163,6 +186,7 @@ export async function taskEvidenceListCommand(
         summary: {
           verdicts: verdictSummary,
         },
+        observation: observation.view,
         tasks: visibleTasks.map(serializeTaskEvidence),
       },
     };
@@ -230,6 +254,7 @@ export async function taskEvidenceListCommand(
       'info',
     );
   }
+  fmt.kv('Observation artifact', observation.view.artifact_uri);
 
   // Show warnings/violations summary if any
   const tasksWithIssues = visibleTasks.filter((t) => t.warnings.length > 0 || t.violations.length > 0);
@@ -259,6 +284,7 @@ export async function taskEvidenceListCommand(
         summary: {
           verdicts: verdictSummary,
         },
+        observation: observation.view,
         tasks: visibleTasks.map(serializeTaskEvidence),
       },
   };

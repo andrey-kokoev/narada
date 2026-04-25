@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { parseFrontMatter, extractTaskNumberFromFileName } from '../lib/task-governance.js';
+import { openTaskLifecycleStore, type TaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 
 const TASKS_DIR = '.ai/do-not-open/tasks';
 const DERIVATIVE_SUFFIXES = ['-EXECUTED.md', '-DONE.md', '-RESULT.md', '-FINAL.md', '-SUPERSEDED.md'];
@@ -92,26 +93,53 @@ export async function taskSearchCommand(
 
   const mdFiles = files.filter((f) => f.endsWith('.md') && !isDerivative(f));
   const results: TaskSearchResult[] = [];
+  let store: TaskLifecycleStore | null = null;
+  const lifecycleByNumber = new Map<number, string>();
+  const specTitleByNumber = new Map<number, string>();
+  try {
+    store = openTaskLifecycleStore(cwd);
+    for (const row of store.getAllLifecycle()) {
+      lifecycleByNumber.set(row.task_number, row.status);
+    }
+    for (const row of store.db
+      .prepare('select task_number, title from task_specs')
+      .all() as Array<{ task_number: number; title: string }>) {
+      specTitleByNumber.set(Number(row.task_number), String(row.title));
+    }
+  } catch {
+    store = null;
+  }
 
-  for (const f of mdFiles) {
-    const content = await readFile(join(dir, f), 'utf8');
-    const { frontMatter, body } = parseFrontMatter(content);
+  try {
+    for (const f of mdFiles) {
+      const content = await readFile(join(dir, f), 'utf8');
+      const { frontMatter, body } = parseFrontMatter(content);
 
-    const fullText = content;
-    const lowerQuery = query.toLowerCase();
-    if (!fullText.toLowerCase().includes(lowerQuery)) continue;
+      const fullText = content;
+      const lowerQuery = query.toLowerCase();
+      if (!fullText.toLowerCase().includes(lowerQuery)) continue;
 
-    const taskNumber = extractTaskNumberFromFileName(f);
-    const title = extractTitle(body);
-    const matches = findMatches(fullText, query);
+      const taskNumber = extractTaskNumberFromFileName(f);
+      const title = taskNumber !== null
+        ? (specTitleByNumber.get(taskNumber) ?? extractTitle(body))
+        : extractTitle(body);
+      const status = taskNumber !== null
+        ? (lifecycleByNumber.get(taskNumber) ?? frontMatter.status as string | undefined)
+        : frontMatter.status as string | undefined;
+      const matches = findMatches(fullText, query);
 
-    results.push({
-      task_id: f.replace(/\.md$/, ''),
-      task_number: taskNumber,
-      status: frontMatter.status as string | undefined,
-      title,
-      matches,
-    });
+      results.push({
+        task_id: f.replace(/\.md$/, ''),
+        task_number: taskNumber,
+        status,
+        title,
+        matches,
+      });
+    }
+  } finally {
+    if (store) {
+      try { store.db.close(); } catch { /* ignore */ }
+    }
   }
 
   // Sort by task number descending (most recent first)

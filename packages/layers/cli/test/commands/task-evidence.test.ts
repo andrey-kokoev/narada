@@ -4,9 +4,9 @@ vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { taskEvidenceCommand } from '../../src/commands/task-evidence.js';
+import { taskEvidenceAdmitCommand, taskEvidenceCommand, taskEvidenceProveCriteriaCommand } from '../../src/commands/task-evidence.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
@@ -35,31 +35,82 @@ function createTask(tempDir: string, num: number, status: string, bodyExtra = ''
     join(tempDir, '.ai', 'do-not-open', 'tasks', `20260420-${num}-test.md`),
     `---\ntask_id: ${num}\nstatus: ${status}\n---\n\n# Task ${num}: Test\n\n## Acceptance Criteria\n- [ ] Do thing A\n- [x] Do thing B\n\n${bodyExtra}`,
   );
+  ensureLifecycle(tempDir, `20260420-${num}-test`);
+}
+
+function ensureLifecycle(tempDir: string, taskId: string) {
+  const numberMatch = taskId.match(/-(\d+)-/);
+  const taskNumber = numberMatch ? Number(numberMatch[1]) : 999;
+  const path = join(tempDir, '.ai', 'do-not-open', 'tasks', `${taskId}.md`);
+  const content = readFileSync(path, 'utf8');
+  const status = content.match(/^status:\s*(\w+)/m)?.[1] ?? 'opened';
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    store.upsertLifecycle({
+      task_id: taskId,
+      task_number: taskNumber,
+      status: status as never,
+      governed_by: content.match(/^governed_by:\s*(.+)$/m)?.[1] ?? null,
+      closed_at: content.match(/^closed_at:\s*(.+)$/m)?.[1] ?? null,
+      closed_by: content.match(/^closed_by:\s*(.+)$/m)?.[1] ?? null,
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: '2026-01-01T00:00:00Z',
+    });
+  } finally {
+    store.db.close();
+  }
 }
 
 function createReport(tempDir: string, taskId: string, agentId: string) {
+  ensureLifecycle(tempDir, taskId);
   const reportId = `wrr_1234567890_${taskId}_${agentId}`;
+  const report = {
+    report_id: reportId,
+    task_number: 999,
+    task_id: taskId,
+    agent_id: agentId,
+    assignment_id: `${taskId}-2026-01-01`,
+    reported_at: '2026-01-01T00:00:00Z',
+    summary: 'Done',
+    changed_files: [],
+    verification: [],
+    known_residuals: [],
+    ready_for_review: true,
+    report_status: 'submitted',
+  };
   writeFileSync(
     join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports', `${reportId}.json`),
-    JSON.stringify({
+    JSON.stringify(report, null, 2),
+  );
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    store.insertReport({
       report_id: reportId,
-      task_number: 999,
       task_id: taskId,
       agent_id: agentId,
-      assignment_id: `${taskId}-2026-01-01`,
-      reported_at: '2026-01-01T00:00:00Z',
       summary: 'Done',
-      changed_files: [],
-      verification: [],
-      known_residuals: [],
-      ready_for_review: true,
-      report_status: 'submitted',
-    }, null, 2),
-  );
+      changed_files_json: '[]',
+      verification_json: '[]',
+      submitted_at: '2026-01-01T00:00:00Z',
+    });
+    store.upsertReportRecord({
+      report_id: reportId,
+      task_id: taskId,
+      assignment_id: `${taskId}-2026-01-01`,
+      agent_id: agentId,
+      reported_at: '2026-01-01T00:00:00Z',
+      report_json: JSON.stringify(report),
+    });
+  } finally {
+    store.db.close();
+  }
   return reportId;
 }
 
 function createReview(tempDir: string, taskId: string, verdict: string) {
+  ensureLifecycle(tempDir, taskId);
   const reviewId = `review-${taskId}-1234567890`;
   writeFileSync(
     join(tempDir, '.ai', 'reviews', `${reviewId}.json`),
@@ -72,6 +123,19 @@ function createReview(tempDir: string, taskId: string, verdict: string) {
       reviewed_at: '2026-01-01T00:00:00Z',
     }, null, 2),
   );
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    store.insertReview({
+      review_id: reviewId,
+      task_id: taskId,
+      reviewer_agent_id: 'reviewer',
+      verdict: verdict as never,
+      findings_json: '[]',
+      reviewed_at: '2026-01-01T00:00:00Z',
+    });
+  } finally {
+    store.db.close();
+  }
   return reviewId;
 }
 
@@ -102,6 +166,66 @@ describe('task evidence operator', () => {
     expect(parsed.evidence.verdict).toBe('incomplete');
     expect(parsed.evidence.has_report).toBe(false);
     expect(parsed.evidence.unchecked_count).toBe(1);
+  });
+
+  it('inspects evidence without creating an admission row', async () => {
+    createTask(tempDir, 112, 'opened');
+    const result = await taskEvidenceCommand({ taskNumber: '112', cwd: tempDir, format: 'json' });
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      expect(store.getLatestEvidenceAdmissionResult('20260420-112-test')).toBeUndefined();
+    } finally {
+      store.db.close();
+    }
+  });
+
+  it('admits complete evidence explicitly for lifecycle close consumption', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-113-test.md'),
+      `---\ntask_id: 113\nstatus: in_review\n---\n\n# Task 113: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n\n## Execution Notes\nDone.\n\n## Verification\nTests passed.\n`,
+    );
+
+    const result = await taskEvidenceAdmitCommand({ taskNumber: '113', cwd: tempDir, by: 'test-agent', format: 'json' });
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const parsed = result.result as { admission_result: { verdict: string; lifecycle_eligible_status: string } };
+    expect(parsed.admission_result.verdict).toBe('admitted');
+    expect(parsed.admission_result.lifecycle_eligible_status).toBe('closed');
+  });
+
+  it('records criteria proof verification binding in output and projection', async () => {
+    createTask(tempDir, 114, 'claimed', '## Execution Notes\nDone.\n\n## Verification\nTests passed.\n');
+
+    const result = await taskEvidenceProveCriteriaCommand({
+      taskNumber: '114',
+      cwd: tempDir,
+      by: 'test-agent',
+      verificationRunId: 'vr_114',
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const parsed = result.result as { criteria_proof_verification: { state: string; verification_run_id?: string } };
+    expect(parsed.criteria_proof_verification.state).toBe('bound');
+    expect(parsed.criteria_proof_verification.verification_run_id).toBe('vr_114');
+    const content = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-114-test.md'), 'utf8');
+    expect(content).toContain('criteria_proof_verification:');
+    expect(content).toContain('verification_run_id: vr_114');
+  });
+
+  it('rejects criteria proof without verification posture', async () => {
+    createTask(tempDir, 115, 'claimed', '## Execution Notes\nDone.\n\n## Verification\nTests passed.\n');
+
+    const result = await taskEvidenceProveCriteriaCommand({
+      taskNumber: '115',
+      cwd: tempDir,
+      by: 'test-agent',
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect((result.result as { error: string }).error).toContain('--verification-run or --no-run-rationale');
   });
 
   it('classifies attempt-complete task with report but open status', async () => {

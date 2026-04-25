@@ -5,12 +5,14 @@ vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskCloseCommand } from '../../src/commands/task-close.js';
+import { taskEvidenceProveCriteriaCommand } from '../../src/commands/task-evidence.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Database } from '@narada2/control-plane';
-import { SqliteTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
+import { openTaskLifecycleStore, SqliteTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
+import { loadAssignment } from '../../src/lib/task-governance.js';
 
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
@@ -51,14 +53,16 @@ describe('task close operator', () => {
     });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    const r = result.result as { status: string; new_status: string; closed_by: string };
+    const r = result.result as { status: string; new_status: string; closed_by: string; closure_mode: string };
     expect(r.status).toBe('success');
     expect(r.new_status).toBe('closed');
     expect(r.closed_by).toBe('operator-1');
+    expect(r.closure_mode).toBe('operator_direct');
 
     const content = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-test.md'), 'utf8');
     expect(content).toContain('status: closed');
     expect(content).toContain('closed_by: operator-1');
+    expect(content).toContain('closure_mode: operator_direct');
     expect(content).toContain('closed_at:');
   });
 
@@ -109,6 +113,92 @@ describe('task close operator', () => {
 
     const content = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-101-test.md'), 'utf8');
     expect(content).toContain('status: in_review');
+  });
+
+  it('closes after criteria are proved through Evidence Admission', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-109-test.md'),
+      `---\ntask_id: 109\nstatus: in_review\n---\n\n# Task 109: Test\n\n## Acceptance Criteria\n- [ ] Unchecked A\n- [ ] Unchecked B\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
+    );
+
+    const proof = await taskEvidenceProveCriteriaCommand({
+      taskNumber: '109',
+      by: 'operator-1',
+      cwd: tempDir,
+      noRunRationale: 'Focused close test proof.',
+      format: 'json',
+    });
+    expect(proof.exitCode).toBe(ExitCode.SUCCESS);
+    const proofResult = proof.result as { status: string; checked_criteria: number; admission_result: { verdict: string } };
+    expect(proofResult.status).toBe('success');
+    expect(proofResult.checked_criteria).toBe(2);
+    expect(proofResult.admission_result.verdict).toBe('admitted');
+
+    const close = await taskCloseCommand({
+      taskNumber: '109',
+      by: 'operator-1',
+      cwd: tempDir,
+      format: 'json',
+    });
+    expect(close.exitCode).toBe(ExitCode.SUCCESS);
+    expect((close.result as { new_status: string }).new_status).toBe('closed');
+  });
+
+  it('uses durable criteria proof rows over unchecked markdown projection', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-1091-test.md'),
+      `---\ntask_id: 1091\nstatus: in_review\n---\n\n# Task 1091: Test\n\n## Acceptance Criteria\n- [ ] Markdown remains unchecked\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
+    );
+    const store = openTaskLifecycleStore(tempDir);
+    store.upsertLifecycle({
+      task_id: '20260420-1091-test',
+      task_number: 1091,
+      status: 'in_review',
+      governed_by: null,
+      closed_at: null,
+      closed_by: null,
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: '2026-04-25T00:00:00Z',
+    });
+    store.upsertEvidenceBundle({
+      bundle_id: 'evb-criteria-1091',
+      task_id: '20260420-1091-test',
+      task_number: 1091,
+      report_ids_json: '[]',
+      verification_run_ids_json: '[]',
+      acceptance_criteria_json: JSON.stringify({ all_checked: true, unchecked_count: 0 }),
+      review_ids_json: '[]',
+      changed_files_json: '[]',
+      residuals_json: '[]',
+      assembled_at: '2026-04-25T00:00:00Z',
+      assembled_by: 'operator-1',
+    });
+    store.upsertEvidenceAdmissionResult({
+      admission_id: 'ear-criteria-1091',
+      bundle_id: 'evb-criteria-1091',
+      task_id: '20260420-1091-test',
+      task_number: 1091,
+      verdict: 'admitted',
+      methods_json: JSON.stringify(['criteria_proof']),
+      blockers_json: '[]',
+      lifecycle_eligible_status: null,
+      admitted_at: '2026-04-25T00:00:01Z',
+      admitted_by: 'operator-1',
+      confirmation_json: '{}',
+    });
+    store.db.close();
+
+    const result = await taskCloseCommand({
+      taskNumber: '1091',
+      by: 'operator-1',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect((result.result as { new_status: string }).new_status).toBe('closed');
   });
 
   it('fails without execution notes', async () => {
@@ -576,23 +666,40 @@ describe('task close operator', () => {
       '## Execution Notes\nDone.\n\n## Verification\nOK.\n',
     );
 
-    mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments'), { recursive: true });
-    writeFileSync(
-      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-302-test.json'),
-      JSON.stringify({
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.upsertLifecycle({
         task_id: '20260420-302-test',
-        assignments: [
-          {
-            agent_id: 'agent-a',
-            claimed_at: '2026-01-01T00:00:00Z',
-            claim_context: null,
-            released_at: null,
-            release_reason: null,
-            intent: 'primary',
-          },
-        ],
-      }, null, 2),
-    );
+        task_number: 302,
+        status: 'in_review',
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: '2026-01-01T00:00:00.000Z',
+      });
+      store.upsertAssignmentRecord({
+        task_id: '20260420-302-test',
+        record_json: JSON.stringify({
+          task_id: '20260420-302-test',
+          assignments: [
+            {
+              agent_id: 'agent-a',
+              claimed_at: '2026-01-01T00:00:00Z',
+              claim_context: null,
+              released_at: null,
+              release_reason: null,
+              intent: 'primary',
+            },
+          ],
+        }),
+        updated_at: '2026-01-01T00:00:00.000Z',
+      });
+    } finally {
+      store.db.close();
+    }
 
     const result = await taskCloseCommand({
       taskNumber: '302',
@@ -605,9 +712,8 @@ describe('task close operator', () => {
     const r = result.result as { assignment_released: boolean };
     expect(r.assignment_released).toBe(true);
 
-    const assignmentRaw = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-302-test.json'), 'utf8');
-    const assignment = JSON.parse(assignmentRaw) as { assignments: Array<{ released_at: string | null; release_reason: string | null }> };
-    expect(assignment.assignments[0].released_at).not.toBeNull();
-    expect(assignment.assignments[0].release_reason).toBe('completed');
+    const assignment = await loadAssignment(tempDir, '20260420-302-test');
+    expect(assignment?.assignments[0].released_at).not.toBeNull();
+    expect(assignment?.assignments[0].release_reason).toBe('completed');
   });
 });

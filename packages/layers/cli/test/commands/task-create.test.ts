@@ -7,6 +7,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskCreateCommand } from '../../src/commands/task-create.js';
 import { taskListCommand } from '../../src/commands/task-list.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import {
   mkdtempSync,
   writeFileSync,
@@ -67,6 +68,38 @@ describe('task create operator', () => {
     const created = list.tasks.find((t) => t.task_id === r.task_id);
     expect(created).toBeDefined();
     expect(created!.status).toBe('opened');
+  });
+
+  it('initializes lifecycle and task spec authority rows together', async () => {
+    const result = await taskCreateCommand({
+      cwd: tempDir,
+      title: 'Authority row creation',
+      criteria: ['Spec row exists', 'Lifecycle row exists'],
+      dependsOn: '100',
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const r = result.result as { task_id: string; task_number: number };
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      const lifecycle = store.getLifecycle(r.task_id);
+      const spec = store.getTaskSpec(r.task_id);
+      expect(lifecycle).toMatchObject({
+        task_id: r.task_id,
+        task_number: r.task_number,
+        status: 'opened',
+      });
+      expect(spec).toMatchObject({
+        task_id: r.task_id,
+        task_number: r.task_number,
+        title: 'Authority row creation',
+      });
+      expect(JSON.parse(spec!.acceptance_criteria_json)).toEqual(['Spec row exists', 'Lifecycle row exists']);
+      expect(JSON.parse(spec!.dependencies_json)).toEqual([100]);
+    } finally {
+      store.db.close();
+    }
   });
 
   it('requires --title', async () => {
@@ -194,6 +227,52 @@ describe('task create operator', () => {
     const filePath = (result.result as Record<string, unknown>).file_path as string;
     const content = readFileSync(filePath, 'utf8');
     expect(content).toContain('This was loaded from a file.');
+  });
+
+  it('uses --from-file body without duplicating front matter and preserves dependencies', async () => {
+    const bodyContent = [
+      '---',
+      'status: draft',
+      'depends_on: [100]',
+      '---',
+      '',
+      '# Template Task',
+      '',
+      '## Goal',
+      '',
+      'Use the template.',
+      '',
+      '## Acceptance Criteria',
+      '',
+      '- [ ] Template criterion',
+      '',
+    ].join('\n');
+    const sourceFile = join(tempDir, 'source-with-frontmatter.md');
+    writeFileSync(sourceFile, bodyContent);
+
+    const result = await taskCreateCommand({
+      cwd: tempDir,
+      title: 'From file with front matter',
+      fromFile: 'source-with-frontmatter.md',
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const filePath = (result.result as Record<string, unknown>).file_path as string;
+    const content = readFileSync(filePath, 'utf8');
+    expect(content.match(/^---$/gm)).toHaveLength(2);
+    expect(content).toContain('status: opened');
+    expect(content).toContain('depends_on: [100]');
+    expect(content).toContain('# Template Task');
+
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      const spec = store.getTaskSpecByNumber((result.result as { task_number: number }).task_number);
+      expect(JSON.parse(spec!.dependencies_json)).toEqual([100]);
+      expect(JSON.parse(spec!.acceptance_criteria_json)).toEqual(['Template criterion']);
+    } finally {
+      store.db.close();
+    }
   });
 
   it('errors when --from-file does not exist', async () => {

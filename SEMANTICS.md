@@ -11,24 +11,28 @@
 Terms that appear in CLI output, configuration, documentation, and user communication.
 
 <a name="operation"></a>
-### 1.1 `operation` (Primary)
+### 1.1 Operation (Primary)
 
-An **operation** is the live configured thing a user sets up and runs.
+An **Operation** is the live configured thing a user sets up and runs.
 
-- A mailbox operation (syncing `help@company.com`)
-- A workflow operation (a timer-driven health check)
-- A webhook operation (an inbound HTTP-triggered automation)
-- A helpdesk operation (a single mailbox with a triage charter)
+- A mailbox Operation (syncing `help@company.com`)
+- A workflow Operation (a timer-driven health check)
+- A webhook Operation (an inbound HTTP-triggered automation)
+- A helpdesk Operation (a single mailbox with a triage charter)
 
-Users create, configure, preflight, activate, and run **operations**.
+Users create, configure, preflight, activate, and run **Operations**.
 
-Each operation maps to exactly one `scope`. An operation is the atomic unit of user intent; a scope is its internal representation. If Narada later needs to group or coordinate multiple operations, that will be introduced as a distinct composite concept (e.g. `suite` or `campaign`), not by redefining `operation`.
+In the primary topology reading, an **Operation** is a configured Zone topology whose external boundary is itself zone-like: enclosing topologies may interact only through declared governed crossings, never by depending on internal sub-zone structure. Internally, the Operation is a topology of authority-homogeneous Zones connected by governed crossings. Externally, it presents one coherent authority grammar to larger Operations, Sites, or supervisory control surfaces.
 
-Do **not** call a user's configured work setup a "Narada instance." Use **operation** for the user-owned configured unit of work. Use **runtime**, **daemon**, or **Site** for the deployed machinery that runs operations.
+Each Operation maps to exactly one `scope`. An Operation is the atomic unit of user intent; a scope is its internal representation. If Narada later needs to group or coordinate multiple Operations, that will be introduced as a distinct composite concept (e.g. `suite` or `campaign`), not by redefining Operation.
 
-#### `operation specification`
+Do **not** call a user's configured work setup a "Narada instance." Use **Operation** for the user-owned configured unit of work. Use **runtime**, **daemon**, or **Site** for the deployed machinery that runs Operations.
 
-An **operation specification** is the written or configured definition of an operation.
+The CLI and config surfaces may continue to use lowercase `operation` as user-facing command language. In canonical ontology prose, capitalize **Operation** when referring to the defined Narada concept.
+
+#### Operation Specification
+
+An **Operation Specification** is the written or configured definition of an Operation.
 
 It may include:
 
@@ -43,14 +47,14 @@ It may include:
 Example:
 
 ```text
-A mail-backed Klaviyo campaign operation admits inbound email facts from designated colleagues, interprets them as campaign-production requests, derives governed work, and routes that work through campaign-management charters. Klaviyo effects remain governed by Narada intents and operator approval.
+A mail-backed Klaviyo campaign Operation admits inbound email facts from designated colleagues, interprets them as campaign-production requests, derives governed work, and routes that work through campaign-management charters. Klaviyo effects remain governed by Narada intents and operator approval.
 ```
 
-#### `operation charter set`
+#### Operation Charter Set
 
-An **operation charter set** is the collection of charter instructions bound to an operation specification.
+An **Operation Charter Set** is the collection of charter instructions bound to an Operation Specification.
 
-It describes how judgment is organized inside the operation. It is not the operation itself, and it is not the runtime that executes it.
+It describes how judgment is organized inside the Operation. It is not the Operation itself, and it is not the runtime that executes it.
 
 <a name="ops-repo"></a>
 ### 1.2 `ops repo`
@@ -91,6 +95,10 @@ Narada's primary explanatory shape is:
 A **zone** is a region in which one authority grammar remains invariant: the same authority owner governs what counts as valid state, what transitions are admissible, what artifacts are authoritative, and what confirmations matter.
 
 A **governed crossing** is the admissible, durable transfer from one zone to another under an explicit crossing regime.
+
+A **crossing regime** is the law carried by a governed crossing: it states what may cross, in what form, under whose authority, and how the crossing is confirmed.
+
+An **admission method** is a concrete check used by a crossing regime. Review, tests, deterministic validation, operator approval, and reconciliation are admission methods. They are not zones unless they own a stable authority grammar and durable request/result lifecycle of their own.
 
 This is the deepest semantic lens. The other major Narada descriptions are derived views:
 
@@ -196,6 +204,21 @@ Properties:
 - Supersession replaces stale work with new work when a higher revision arrives
 - Work items are durable and survive crashes
 
+`work_item` is a runtime control-plane object. It is not the same thing as a repo-local construction task. Task governance may use tasks to organize Narada buildout work, but scheduler leases, runtime execution, and policy admission operate on `work_item`.
+
+#### Task Governance Task
+
+A **Task Governance Task** is a repo-local construction governance artifact used to coordinate Narada's own buildout.
+
+Task governance tasks may have task numbers, assignment records, reports, reviews, evidence checks, and lifecycle states such as `opened`, `claimed`, `in_review`, `closed`, and `confirmed`.
+
+They are not kernel `work_item`s:
+
+- `task claim` is task-governance assignment, not scheduler lease acquisition.
+- `task roster` is buildout coordination, not runtime Site scheduling.
+- `task evidence` is construction evidence, not automatically a control-plane Evidence Trace.
+- A task may describe work on Narada itself; a `work_item` is work opened by a running Operation's control cycle.
+
 #### `policy` / `foreman`
 
 The foreman performs three authorities:
@@ -254,6 +277,25 @@ Read-only, reconstructible views over durable state.
 - Non-authoritative: may be deleted and rebuilt without affecting correctness
 - No scheduler, lease, executor, or sync path may depend on observation artifacts
 - Operator visibility must not require terminal attachment
+
+Observation is not evidence by default. A CLI table, JSON response, dashboard card, Mermaid graph, or terminal transcript is an observation surface unless it is admitted through a governed Evidence Admission path.
+
+#### Evidence
+
+**Evidence** is an admitted, durable, authority-bearing record used to justify a decision, lifecycle transition, confirmation, or audit conclusion.
+
+Evidence differs from observation:
+
+| Aspect | Evidence | Observation |
+| --- | --- | --- |
+| Authority | Admitted under a regime | Read-only view |
+| Durability | Must survive audit/replay needs | Rebuildable or discardable |
+| Effect | Can justify transition or confirmation | Cannot mutate or justify by itself |
+| Examples | `Fact`, `decision`, `Intent`, `execution_attempt`, `VerificationRun`, accepted task evidence | CLI output, dashboard view, graph render, bounded excerpt |
+
+A bounded output excerpt is still observation until some regime admits it as evidence. A `CommandRunResult` can become verification evidence only after TIZ admits it as a `VerificationRun`.
+
+Review is an evidence admission method, not evidence by itself. A `ReviewRecord` becomes authority-bearing when it is linked to an admissible evidence bundle and accepted by the relevant lifecycle regime.
 
 ### 2.3 First-Class Runtime Terms
 
@@ -1188,6 +1230,8 @@ Zones are **not** implementation modules. A single codebase file may touch multi
 | Operator | Operator (`admin`) | `operator_action_request` |
 | Task | Task governance system (`claim`/`resolve`) | `TaskAssignment`, `TaskContinuation` |
 
+The Task zone is a construction-governance zone for Narada buildout. It is not the Work zone and its `TaskAssignment` records are not scheduler leases.
+
 #### Boundary
 
 A **boundary** is the interface between two adjacent zones. A boundary crossing is meaningful when it moves a durable artifact from one authority owner to another.
@@ -1200,6 +1244,14 @@ Not every function call is a boundary crossing. A boundary crossing requires:
 #### Crossing Regime
 
 A **crossing regime** is the explicit set of rules that determine what may cross a boundary, in what form, under what authority, and with what confirmation obligation.
+
+Crossing regimes are edge laws, not zones. A regime may use many admission methods.
+
+#### Admission Method
+
+An **admission method** is a specific way a crossing regime checks whether an artifact may cross. Examples: review, tests, deterministic schema validation, operator approval, challenge-confirmation, and reconciliation.
+
+Admission methods do not become zones merely because they are important. They become zones only if they own a stable authority grammar with durable request/result artifacts and confirmations.
 
 #### Crossing Artifact
 

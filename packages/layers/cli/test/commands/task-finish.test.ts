@@ -101,6 +101,56 @@ describe('task finish operator', () => {
       expect(data.evidence_verdict).toBe('needs_review');
     });
 
+    it('--close admits evidence and closes lifecycle through sanctioned crossings', async () => {
+      await taskClaimCommand({ taskNumber: '999', agent: 'impl-agent', cwd: tempDir, format: 'json' });
+
+      const result = await taskFinishCommand({
+        taskNumber: '999',
+        agent: 'impl-agent',
+        summary: 'Implemented feature X',
+        verification: JSON.stringify([{ command: 'pnpm test', result: 'passed' }]),
+        cwd: tempDir,
+        format: 'json',
+        close: true,
+      });
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      const data = result.result as Record<string, unknown>;
+      expect(data.report_action).toBe('submitted');
+      expect(data.admission_id).toBeTruthy();
+      expect(data.close_action).toBe('closed');
+      const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
+      expect(taskContent).toContain('status: closed');
+      expect(taskContent).toContain('governed_by: task_close:impl-agent');
+    });
+
+    it('--prove-criteria --close proves criteria before lifecycle close', async () => {
+      writeFileSync(
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
+        '---\ntask_id: 999\nstatus: opened\n---\n\n# Task 999: Test Task\n\n## Acceptance Criteria\n\n- [ ] Criterion A\n- [ ] Criterion B\n\n## Execution Notes\nCompleted.\n\n## Verification\nTests passed.\n',
+      );
+      await taskClaimCommand({ taskNumber: '999', agent: 'impl-agent', cwd: tempDir, format: 'json' });
+
+      const result = await taskFinishCommand({
+        taskNumber: '999',
+        agent: 'impl-agent',
+        summary: 'Implemented feature X',
+        verification: JSON.stringify([{ command: 'pnpm test', result: 'passed' }]),
+        cwd: tempDir,
+        format: 'json',
+        proveCriteria: true,
+        close: true,
+      });
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      const data = result.result as Record<string, unknown>;
+      expect(data.criteria_proof_action).toBe('proved');
+      expect(data.close_action).toBe('closed');
+      const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
+      expect(taskContent).toContain('- [x] Criterion A');
+      expect(taskContent).toContain('closure_mode: agent_finish');
+    });
+
     it('fails when no summary is provided for a claimed task without report', async () => {
       await taskClaimCommand({ taskNumber: '999', agent: 'impl-agent', cwd: tempDir, format: 'json' });
 

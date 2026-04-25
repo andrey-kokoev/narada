@@ -25,6 +25,7 @@ import {
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { readdir, readFile, stat } from 'node:fs/promises';
+import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 
 export interface ChapterCloseOptions {
   chapterName?: string;
@@ -417,6 +418,16 @@ ${dryRun ? '**Dry run** — no mutations performed.' : 'Chapter closure artifact
       frontMatter.status = 'confirmed';
       frontMatter.governed_by = `chapter_close:${options.by ?? 'operator'}`;
       await writeTaskFile(taskFile.path, frontMatter, body);
+      const store = openTaskLifecycleStore(cwd);
+      try {
+        if (store.getLifecycle(task.taskId)) {
+          store.updateStatus(task.taskId, 'confirmed', options.by ?? 'operator', {
+            governed_by: `chapter_close:${options.by ?? 'operator'}`,
+          });
+        }
+      } finally {
+        store.db.close();
+      }
       transitioned.push(task.taskId);
     }
   }
@@ -618,16 +629,33 @@ async function runRangeClose(
       };
     }
 
-    // Transition closed tasks to confirmed
+    // Transition closed tasks to confirmed and reconcile SQLite lifecycle for
+    // already-confirmed files from older chapter-close runs.
     const transitioned: string[] = [];
-    for (const task of tasks.filter((t) => t.status === 'closed')) {
+    for (const task of tasks.filter((t) => t.status === 'closed' || t.status === 'confirmed')) {
       const taskFile = await findTaskFile(cwd, task.taskId);
       if (!taskFile) continue;
       const { frontMatter, body } = await readTaskFile(taskFile.path);
+      let changed = false;
       if (frontMatter.status === 'closed') {
         frontMatter.status = 'confirmed';
         frontMatter.governed_by = `chapter_close:${options.by ?? 'operator'}`;
         await writeTaskFile(taskFile.path, frontMatter, body);
+        changed = true;
+      }
+      const store = openTaskLifecycleStore(cwd);
+      try {
+        const lifecycle = store.getLifecycle(task.taskId);
+        if (lifecycle && lifecycle.status !== 'confirmed') {
+          store.updateStatus(task.taskId, 'confirmed', options.by ?? 'operator', {
+            governed_by: `chapter_close:${options.by ?? 'operator'}`,
+          });
+          changed = true;
+        }
+      } finally {
+        store.db.close();
+      }
+      if (changed) {
         transitioned.push(task.taskId);
       }
     }

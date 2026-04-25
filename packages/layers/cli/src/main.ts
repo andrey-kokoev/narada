@@ -28,7 +28,7 @@ import {
   consoleControlCommand,
 } from './commands/console.js';
 import { createConsoleServer } from './commands/console-server.js';
-import { createWorkbenchServer } from './commands/workbench-server.js';
+import { createWorkbenchServer, workbenchDiagnoseCommand } from './commands/workbench-server.js';
 import { backupCommand } from './commands/backup.js';
 import { restoreCommand } from './commands/restore.js';
 import { verifyBackupCommand } from './commands/verify-backup.js';
@@ -89,7 +89,8 @@ import { openTaskLifecycleStore } from './lib/task-lifecycle-store.js';
 import { taskReopenCommand } from './commands/task-reopen.js';
 import { taskConfirmCommand } from './commands/task-confirm.js';
 import { chapterCloseCommand } from './commands/chapter-close.js';
-import { chapterInitCommand } from './commands/chapter-init.js';
+import { chapterFinishRangeCommand } from './commands/chapter-finish-range.js';
+import { chapterInitCommand, chapterValidateTasksFileCommand } from './commands/chapter-init.js';
 import { chapterStatusCommand } from './commands/chapter-status.js';
 import {
   constructionLoopPlanCommand,
@@ -104,9 +105,10 @@ import {
 import { taskListCommand } from './commands/task-list.js';
 import { taskGraphCommand } from './commands/task-graph.js';
 import { taskSearchCommand } from './commands/task-search.js';
-import { taskEvidenceCommand } from './commands/task-evidence.js';
+import { taskEvidenceAdmitCommand, taskEvidenceCommand, taskEvidenceProveCriteriaCommand } from './commands/task-evidence.js';
 import { taskReadCommand } from './commands/task-read.js';
 import { taskEvidenceListCommand } from './commands/task-evidence-list.js';
+import { taskReconcileInspectCommand, taskReconcileRecordCommand, taskReconcileRepairCommand } from './commands/task-reconcile.js';
 import {
   taskRosterShowCommand,
   taskRosterAssignCommand,
@@ -127,7 +129,18 @@ import {
   testRunInspectCommand,
   testRunListCommand,
 } from './commands/test-run.js';
+import {
+  commandRunCommand,
+  commandRunInspectCommand,
+  commandRunListCommand,
+} from './commands/command-run.js';
+import {
+  observationInspectCommand,
+  observationListCommand,
+  observationOpenCommand,
+} from './commands/observation.js';
 import { wrapCommand, type CommandContext } from './lib/command-wrapper.js';
+import { emitCommandResult, resolveCommandFormat } from './lib/cli-output.js';
 import {
   wantMailbox,
   wantWorkflow,
@@ -157,7 +170,7 @@ program
   .hook('preAction', (thisCommand) => {
     // Store format in environment for commands to access
     const opts = thisCommand.opts();
-    if (opts.format) {
+    if (opts.format && !(opts.format === 'auto' && process.env.OUTPUT_FORMAT)) {
       process.env.OUTPUT_FORMAT = opts.format;
     }
     if (opts.logLevel) {
@@ -197,7 +210,7 @@ program
       ...opts,
       ceilingMs: opts.ceilingMs ? parseInt(opts.ceilingMs, 10) : undefined,
       lockTtlMs: opts.lockTtlMs ? parseInt(opts.lockTtlMs, 10) : undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: resolveCommandFormat(),
     }, ctx)));
 
 program
@@ -326,7 +339,7 @@ sitesCmd
   .option('-v, --verbose', 'Enable verbose output', false)
   .action(async (siteId: string, opts: Record<string, unknown>) => {
     const result = await sitesShowCommand(siteId, {
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: resolveCommandFormat(),
       verbose: opts.verbose as boolean | undefined,
     }, { configPath: './config.json', verbose: !!opts.verbose, logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, trace: () => {} } as unknown as CommandContext['logger'] });
     if (result.exitCode !== 0) {
@@ -347,7 +360,7 @@ sitesCmd
   .option('-v, --verbose', 'Enable verbose output', false)
   .action(async (siteId: string, opts: Record<string, unknown>) => {
     const result = await sitesRemoveCommand(siteId, {
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: resolveCommandFormat(),
       verbose: opts.verbose as boolean | undefined,
     }, { configPath: './config.json', verbose: !!opts.verbose, logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, trace: () => {} } as unknown as CommandContext['logger'] });
     if (result.exitCode !== 0) {
@@ -406,7 +419,7 @@ sitesCmd
       authorityLocus: opts.authorityLocus as string | undefined,
       sync: opts.sync as string | undefined,
       dryRun: opts.dryRun as boolean | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: resolveCommandFormat(),
       verbose: opts.verbose as boolean | undefined,
     }, { configPath: './config.json', verbose: !!opts.verbose, logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, trace: () => {} } as unknown as CommandContext['logger'] });
     if (result.exitCode !== 0) {
@@ -431,7 +444,7 @@ sitesCmd
     const result = await sitesEnableCommand(siteId, {
       intervalMinutes: opts.intervalMinutes ? Number(opts.intervalMinutes) : undefined,
       dryRun: opts.dryRun as boolean | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: resolveCommandFormat(),
       verbose: opts.verbose as boolean | undefined,
     }, { configPath: './config.json', verbose: !!opts.verbose, logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, trace: () => {} } as unknown as CommandContext['logger'] });
     if (result.exitCode !== 0) {
@@ -473,7 +486,7 @@ consoleCmd
   .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
   .action(async (siteId: string, outboundId: string, opts: Record<string, unknown>) => {
     const result = await consoleControlCommand('approve', siteId, outboundId, {
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: resolveCommandFormat(),
       verbose: opts.verbose as boolean | undefined,
     }, { configPath: './config.json', verbose: !!opts.verbose, logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, trace: () => {} } as unknown as CommandContext['logger'] });
     if (result.exitCode !== 0) {
@@ -493,7 +506,7 @@ consoleCmd
   .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
   .action(async (siteId: string, outboundId: string, opts: Record<string, unknown>) => {
     const result = await consoleControlCommand('reject', siteId, outboundId, {
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: resolveCommandFormat(),
       verbose: opts.verbose as boolean | undefined,
     }, { configPath: './config.json', verbose: !!opts.verbose, logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, trace: () => {} } as unknown as CommandContext['logger'] });
     if (result.exitCode !== 0) {
@@ -551,6 +564,24 @@ consoleCmd
 const workbenchCmd = program
   .command('workbench')
   .description('Self-build workbench HTTP server and controls');
+
+workbenchCmd
+  .command('diagnose')
+  .description('Show bounded Workbench diagnostics')
+  .option('--format <format>', 'Output format: json, human, or auto', 'auto')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await workbenchDiagnoseCommand({
+      cwd: opts.cwd as string | undefined,
+      format: resolveCommandFormat(opts.format, 'human'),
+    });
+    if (opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json') {
+      console.log(JSON.stringify(result.result, null, 2));
+    } else {
+      console.log(result.result);
+    }
+    if (result.exitCode !== 0) process.exit(result.exitCode);
+  });
 
 workbenchCmd
   .command('serve')
@@ -742,7 +773,7 @@ principalCmd
       console.error((result.result as { error?: string }).error ?? 'Sync failed');
       process.exit(result.exitCode);
     }
-    console.log(result.result);
+    emitCommandResult(result.result);
   });
 
 program
@@ -785,7 +816,7 @@ const taskCmd = program
 
 taskCmd
   .command('claim <task-number>')
-  .description('Claim a task for an agent')
+  .description('Lifecycle/assignment transition: claim a task for an agent')
   .requiredOption('--agent <id>', 'Agent ID from roster')
   .option('--reason <text>', 'Claim justification')
   .option('--update-principal-runtime', 'Update PrincipalRuntime state after claim', false)
@@ -797,7 +828,7 @@ taskCmd
       agent: opts.agent as string,
       reason: opts.reason as string | undefined,
       cwd: opts.cwd as string | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: resolveCommandFormat(),
       updatePrincipalRuntime: opts.updatePrincipalRuntime as boolean | undefined,
       principalStateDir: opts.principalStateDir as string | undefined,
     });
@@ -805,7 +836,7 @@ taskCmd
       console.error((result.result as { error?: string }).error ?? 'Claim failed');
       process.exit(result.exitCode);
     }
-    console.log(result.result);
+    emitCommandResult(result.result);
   });
 
 taskCmd
@@ -828,12 +859,12 @@ taskCmd
       console.error((result.result as { error?: string }).error ?? 'Release failed');
       process.exit(result.exitCode);
     }
-    console.log(result.result);
+    emitCommandResult(result.result);
   });
 
 taskCmd
   .command('report <task-number>')
-  .description('Submit a WorkResultReport for a claimed task')
+  .description('Lifecycle handoff: submit a WorkResultReport and move a claimed task to in_review')
   .requiredOption('--agent <id>', 'Reporting agent ID from roster')
   .requiredOption('--summary <text>', 'Human-readable result summary')
   .option('--changed-files <csv>', 'Comma-separated list of changed file paths')
@@ -851,7 +882,7 @@ taskCmd
       verification: opts.verification as string | undefined,
       residuals: opts.residuals as string | undefined,
       cwd: opts.cwd as string | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: resolveCommandFormat(),
       principalStateDir: opts.principalStateDir as string | undefined,
       verbose: opts.verbose as boolean | undefined,
     });
@@ -859,7 +890,7 @@ taskCmd
       console.error((result.result as { error?: string }).error ?? 'Report failed');
       process.exit(result.exitCode);
     }
-    console.log(result.result);
+    emitCommandResult(result.result);
   });
 
 taskCmd
@@ -880,12 +911,12 @@ taskCmd
       console.error((result.result as { error?: string }).error ?? 'Continue failed');
       process.exit(result.exitCode);
     }
-    console.log(result.result);
+    emitCommandResult(result.result);
   });
 
 taskCmd
   .command('finish <task-number>')
-  .description('Canonical agent completion: report/review → evidence → roster done')
+  .description('Canonical agent completion: report/review → optional evidence admit/close → roster done')
   .requiredOption('--agent <id>', 'Agent ID from roster')
   .option('--summary <text>', 'Implementer: Work result summary')
   .option('--changed-files <csv>', 'Implementer: Comma-separated changed file paths')
@@ -895,6 +926,8 @@ taskCmd
   .option('--findings <json>', 'Reviewer: JSON array of review findings')
   .option('--report <id>', 'Reviewer: Link to a specific report ID')
   .option('--allow-incomplete', 'Record roster availability even when evidence is missing', false)
+  .option('--close', 'After report/review, admit evidence and close lifecycle if admissible', false)
+  .option('--prove-criteria', 'Before evidence admission, prove all acceptance criteria for this task', false)
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
@@ -909,15 +942,17 @@ taskCmd
       findings: opts.findings as string | undefined,
       report: opts.report as string | undefined,
       allowIncomplete: opts.allowIncomplete as boolean | undefined,
+      close: opts.close as boolean | undefined,
+      proveCriteria: opts.proveCriteria as boolean | undefined,
       cwd: opts.cwd as string | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: resolveCommandFormat(),
       verbose: opts.verbose as boolean | undefined,
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Finish failed');
       process.exit(result.exitCode);
     }
-    console.log(result.result);
+    emitCommandResult(result.result);
   });
 
 taskCmd
@@ -927,29 +962,39 @@ taskCmd
   .option('--task <number>', 'Recommend for a specific task only')
   .option('--limit <n>', 'Maximum recommendations to show', '10')
   .option('--ignore-posture', 'Disable CCC posture score adjustments', false)
+  .option('--abstained-limit <n>', 'Maximum abstained diagnostics to return by default')
+  .option('--full', 'Return full abstention diagnostics', false)
+  .option('--format <fmt>', 'Output format: json or human')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
   .action(async (opts: Record<string, unknown>) => {
+    const wantsJson = opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json';
     const result = await taskRecommendCommand({
       taskNumber: opts.task as string | undefined,
       agent: opts.agent as string | undefined,
       limit: opts.limit ? Number(opts.limit) : undefined,
       ignorePosture: opts.ignorePosture as boolean | undefined,
+      full: opts.full as boolean | undefined,
+      abstainedLimit: opts.abstainedLimit ? Number(opts.abstainedLimit) : undefined,
       cwd: opts.cwd as string | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
       verbose: opts.verbose as boolean | undefined,
     });
     if (result.exitCode !== 0) {
       const resultObj = result.result as Record<string, unknown>;
       if (resultObj.error) {
         // Actual runtime error
-        console.error(resultObj.error);
+        if (wantsJson) {
+          console.log(JSON.stringify(result.result, null, 2));
+        } else {
+          console.error(resultObj.error);
+        }
         process.exit(result.exitCode);
       }
       // Valid empty recommendation (no primary) — not a failure
       if (resultObj.primary === null) {
         const fmt = process.env.OUTPUT_FORMAT as string | undefined;
-        const isJson = fmt === 'json' || (fmt !== 'human' && !process.stdout.isTTY);
+        const isJson = wantsJson || (fmt !== 'human' && !process.stdout.isTTY);
         if (isJson) {
           console.log(JSON.stringify(result.result, null, 2));
         }
@@ -959,12 +1004,14 @@ taskCmd
       console.error('Recommendation failed');
       process.exit(result.exitCode);
     }
-    console.log(result.result);
+    if (wantsJson) {
+      console.log(JSON.stringify(result.result, null, 2));
+    }
   });
 
 taskCmd
   .command('review <task-number>')
-  .description('Review a completed task')
+  .description('Review admission: record verdict and admit/reject lifecycle closure')
   .requiredOption('--agent <id>', 'Reviewer agent ID from roster')
   .requiredOption('--verdict <verdict>', 'Review verdict: accepted, accepted_with_notes, rejected')
   .option('--findings <json>', 'JSON array of findings')
@@ -982,7 +1029,7 @@ taskCmd
         findings: opts.findings as string | undefined,
         report: opts.report as string | undefined,
         cwd,
-        format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+        format: resolveCommandFormat(),
         principalStateDir: opts.principalStateDir as string | undefined,
         store,
       });
@@ -990,7 +1037,7 @@ taskCmd
         console.error((result.result as { error?: string }).error ?? 'Review failed');
         process.exit(result.exitCode);
       }
-      console.log(result.result);
+      emitCommandResult(result.result);
     } finally {
       store.db.close();
     }
@@ -1001,18 +1048,20 @@ taskCmd
   .description('Allocate the next task number atomically')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+  .option('--count <n>', 'Allocate N sequential task numbers atomically', (value) => Number(value), 1)
   .option('--dry-run', 'Preview next number without mutating registry', false)
   .action(async (opts: Record<string, unknown>) => {
     const result = await taskAllocateCommand({
       cwd: opts.cwd as string | undefined,
       format: opts.format as 'json' | 'human' | 'auto',
       dryRun: opts.dryRun as boolean,
+      count: opts.count as number,
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Allocate failed');
       process.exit(result.exitCode);
     }
-    console.log(result.result);
+    emitCommandResult(result.result);
   });
 
 taskCmd
@@ -1041,14 +1090,14 @@ taskCmd
         number: opts.number ? Number(opts.number) : undefined,
         dryRun: opts.dryRun as boolean,
         fromFile: opts.fromFile as string | undefined,
-        format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+        format: resolveCommandFormat(opts.format, 'auto'),
         cwd,
       });
       if (result.exitCode !== 0) {
         console.error((result.result as { error?: string }).error ?? 'Create failed');
         process.exit(result.exitCode);
       }
-      console.log(result.result);
+      emitCommandResult(result.result, opts.format);
     } finally {
       if (store) {
         store.db.close();
@@ -1067,6 +1116,8 @@ taskCmd
   .option('--non-goals <text>', 'New non-goals text')
   .option('--criteria <csv>', 'Replace acceptance criteria (comma-separated)')
   .option('--append-criteria <csv>', 'Append acceptance criteria (comma-separated)')
+  .option('--check-all-criteria', 'Deprecated; use task evidence prove-criteria <task-number> --by <id>')
+  .option('--depends-on <csv>', 'Replace dependencies (comma-separated task numbers)')
   .option('--from-file <path>', 'Replace entire body from file')
   .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
@@ -1081,19 +1132,17 @@ taskCmd
       nonGoals: opts.nonGoals as string | undefined,
       criteria: opts.criteria ? String(opts.criteria).split(',').map((s: string) => s.trim()).filter(Boolean) : undefined,
       appendCriteria: opts.appendCriteria ? String(opts.appendCriteria).split(',').map((s: string) => s.trim()).filter(Boolean) : undefined,
+      checkAllCriteria: opts.checkAllCriteria as boolean | undefined,
+      dependsOn: opts.dependsOn ? String(opts.dependsOn).split(',').map((s: string) => Number(s.trim())).filter((n: number) => Number.isFinite(n)) : undefined,
       fromFile: opts.fromFile as string | undefined,
-      format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: resolveCommandFormat(opts.format, 'auto'),
       cwd: opts.cwd as string | undefined,
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Amend failed');
       process.exit(result.exitCode);
     }
-    if (opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json') {
-      console.log(JSON.stringify(result.result, null, 2));
-    } else {
-      console.log(result.result);
-    }
+    emitCommandResult(result.result, opts.format);
   });
 
 taskCmd
@@ -1135,13 +1184,13 @@ taskCmd
       findingId,
       review: opts.review as string,
       cwd: opts.cwd as string | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: resolveCommandFormat(),
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Derive failed');
       process.exit(result.exitCode);
     }
-    console.log(result.result);
+    emitCommandResult(result.result);
   });
 
 taskCmd
@@ -1152,14 +1201,14 @@ taskCmd
   .action(async (opts: Record<string, unknown>) => {
     const result = await taskLintCommand({
       cwd: opts.cwd as string | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: resolveCommandFormat(),
       chapter: opts.chapter as string | undefined,
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Lint found issues');
       process.exit(result.exitCode);
     }
-    console.log(result.result);
+    emitCommandResult(result.result);
   });
 
 taskCmd
@@ -1170,14 +1219,14 @@ taskCmd
   .action(async (opts: Record<string, unknown>) => {
     const result = await taskListCommand({
       cwd: opts.cwd as string | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: resolveCommandFormat(),
       range: opts.range as string | undefined,
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'List failed');
       process.exit(result.exitCode);
     }
-    console.log(result.result);
+    emitCommandResult(result.result);
   });
 
 taskCmd
@@ -1189,7 +1238,7 @@ taskCmd
     const result = await taskSearchCommand({
       query,
       cwd: opts.cwd as string | undefined,
-      format: opts.format as 'json' | 'human' | 'auto' | undefined,
+      format: resolveCommandFormat(opts.format, 'human'),
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Search failed');
@@ -1211,7 +1260,7 @@ taskCmd
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
     const result = await taskReadCommand({
       taskNumber,
-      format: opts.format as 'json' | 'human' | 'auto' | undefined,
+      format: resolveCommandFormat(opts.format, 'human'),
       verbose: opts.verbose as boolean | undefined,
       cwd: opts.cwd as string | undefined,
     });
@@ -1219,11 +1268,7 @@ taskCmd
       console.error((result.result as { error?: string }).error ?? 'Read failed');
       process.exit(result.exitCode);
     }
-    if (opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json') {
-      console.log(JSON.stringify(result.result, null, 2));
-    } else {
-      console.log(result.result);
-    }
+    emitCommandResult(result.result, opts.format);
   });
 
 taskCmd
@@ -1233,6 +1278,7 @@ taskCmd
   .option('--range <start-end>', 'Filter tasks to a number range (e.g. 429-454)')
   .option('--status <csv>', 'Filter by status (comma-separated)')
   .option('--include-closed', 'Include closed/confirmed tasks', false)
+  .option('--full', 'Print full graph output instead of bounded artifact pointer', false)
   .option('--view', 'Create HTML render artifacts and open browser', false)
   .option('--open', 'Open browser after creating artifacts (default true with --view)', true)
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
@@ -1243,6 +1289,8 @@ taskCmd
       range: opts.range as string | undefined,
       status: opts.status as string | undefined,
       includeClosed: opts.includeClosed as boolean | undefined,
+      full: opts.full as boolean | undefined,
+      bounded: true,
       view: opts.view as boolean | undefined,
       open: opts.open as boolean | undefined,
     });
@@ -1316,29 +1364,29 @@ postureCmd
 // Task roster tracking commands (Task 385)
 const rosterCmd = taskCmd
   .command('roster')
-  .description('Show and update agent operational roster state');
+  .description('Roster projection operators for agent operational state');
 
 rosterCmd
   .command('show')
-  .description('Show current agent roster')
+  .description('Observe current agent roster projection')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
   .action(async (opts: Record<string, unknown>) => {
     const result = await taskRosterShowCommand({
       cwd: opts.cwd as string | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: resolveCommandFormat(),
       verbose: opts.verbose as boolean | undefined,
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Roster show failed');
       process.exit(result.exitCode);
     }
-    console.log(result.result);
+    emitCommandResult(result.result);
   });
 
 rosterCmd
   .command('assign <task-number>')
-  .description('Mark agent as working on a task (claims the task by default)')
+  .description('Roster + assignment admission: mark agent working and claim by default')
   .requiredOption('--agent <id>', 'Agent ID from roster')
   .option('--no-claim', 'Skip claiming the task (exceptional: only for planning)')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
@@ -1349,19 +1397,19 @@ rosterCmd
       agent: opts.agent as string,
       noClaim: opts.noClaim as boolean | undefined,
       cwd: opts.cwd as string | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: resolveCommandFormat(),
       verbose: opts.verbose as boolean | undefined,
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Roster assign failed');
       process.exit(result.exitCode);
     }
-    console.log(result.result);
+    emitCommandResult(result.result);
   });
 
 rosterCmd
   .command('review <task-number>')
-  .description('Mark agent as reviewing a task')
+  .description('Roster projection: mark agent as reviewing a task')
   .requiredOption('--agent <id>', 'Agent ID from roster')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
@@ -1370,20 +1418,21 @@ rosterCmd
       taskNumber,
       agent: opts.agent as string,
       cwd: opts.cwd as string | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: resolveCommandFormat(),
       verbose: opts.verbose as boolean | undefined,
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Roster review failed');
       process.exit(result.exitCode);
     }
-    console.log(result.result);
+    emitCommandResult(result.result);
   });
 
 taskCmd
   .command('close <task-number>')
-  .description('Close a task after validating closure gates')
+  .description('Lifecycle transition: close by consuming latest admitted evidence')
   .requiredOption('--by <id>', 'Operator or agent ID performing the close')
+  .requiredOption('--mode <mode>', 'Closure mode: operator_direct, peer_reviewed, agent_finish, emergency')
   .option('--format <fmt>', 'Output format: json or human', 'human')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
@@ -1393,15 +1442,16 @@ taskCmd
       const result = await taskCloseCommand({
         taskNumber,
         by: opts.by as string | undefined,
+        mode: opts.mode as import('./lib/task-lifecycle-store.js').TaskClosureMode,
         cwd,
-        format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+        format: resolveCommandFormat(opts.format, 'human'),
         store,
       });
       if (result.exitCode !== 0) {
         console.error((result.result as { error?: string }).error ?? 'Close failed');
         process.exit(result.exitCode);
       }
-      console.log(result.result);
+      emitCommandResult(result.result, opts.format);
     } finally {
       store.db.close();
     }
@@ -1414,16 +1464,21 @@ taskCmd
   .option('--format <fmt>', 'Output format: json or human', 'human')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (opts: Record<string, unknown>) => {
+    const wantsJson = opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json';
     const result = await taskPeekNextCommand({
       agent: opts.agent as string,
       format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
       cwd: opts.cwd as string | undefined,
     });
     if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Peek-next failed');
+      if (wantsJson) {
+        console.log(JSON.stringify(result.result, null, 2));
+      } else {
+        console.error((result.result as { error?: string }).error ?? 'Peek-next failed');
+      }
       process.exit(result.exitCode);
     }
-    if (opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json') {
+    if (wantsJson) {
       console.log(JSON.stringify(result.result, null, 2));
     } else {
       console.log(result.result);
@@ -1437,16 +1492,21 @@ taskCmd
   .option('--format <fmt>', 'Output format: json or human', 'human')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (opts: Record<string, unknown>) => {
+    const wantsJson = opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json';
     const result = await taskPullNextCommand({
       agent: opts.agent as string,
       format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
       cwd: opts.cwd as string | undefined,
     });
     if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Pull-next failed');
+      if (wantsJson) {
+        console.log(JSON.stringify(result.result, null, 2));
+      } else {
+        console.error((result.result as { error?: string }).error ?? 'Pull-next failed');
+      }
       process.exit(result.exitCode);
     }
-    if (opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json') {
+    if (wantsJson) {
       console.log(JSON.stringify(result.result, null, 2));
     } else {
       console.log(result.result);
@@ -1460,16 +1520,21 @@ taskCmd
   .option('--format <fmt>', 'Output format: json or human', 'human')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (opts: Record<string, unknown>) => {
+    const wantsJson = opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json';
     const result = await taskWorkNextCommand({
       agent: opts.agent as string,
       format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
       cwd: opts.cwd as string | undefined,
     });
     if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Work-next failed');
+      if (wantsJson) {
+        console.log(JSON.stringify(result.result, null, 2));
+      } else {
+        console.error((result.result as { error?: string }).error ?? 'Work-next failed');
+      }
       process.exit(result.exitCode);
     }
-    if (opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json') {
+    if (wantsJson) {
       console.log(JSON.stringify(result.result, null, 2));
     } else {
       console.log(result.result);
@@ -1555,11 +1620,11 @@ taskCmd
 
 const taskEvidenceCmd = taskCmd
   .command('evidence')
-  .description('Task evidence operators (inspect, list)');
+  .description('Task evidence operators (inspect, admit, prove-criteria, list)');
 
 taskEvidenceCmd
   .command('inspect <task-number>')
-  .description('Inspect task completion evidence for a single task (read-only)')
+  .description('Inspect task completion evidence (task-authority read-only; may admit observation output)')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
     const result = await taskEvidenceCommand({
@@ -1571,16 +1636,12 @@ taskEvidenceCmd
       console.error((result.result as { error?: string }).error ?? 'Evidence inspection failed');
       process.exit(result.exitCode);
     }
-    if (typeof result.result === 'string') {
-      console.log(result.result);
-    } else {
-      console.log(JSON.stringify(result.result, null, 2));
-    }
+    emitCommandResult(result.result);
   });
 
 taskEvidenceCmd
   .command('list')
-  .description('List tasks by completion evidence (read-only)')
+  .description('List tasks by completion evidence (task-authority read-only; writes bounded observation artifact)')
   .option('--verdict <csv>', 'Filter by verdict (comma-separated: complete,attempt_complete,needs_review,needs_closure,incomplete,unknown)')
   .option('--status <csv>', 'Filter by front-matter status (comma-separated)')
   .option('--range <start-end>', 'Filter tasks to a number range (e.g. 480-490)')
@@ -1590,7 +1651,7 @@ taskEvidenceCmd
   .action(async (opts: Record<string, unknown>) => {
     const result = await taskEvidenceListCommand({
       cwd: opts.cwd as string | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: resolveCommandFormat(),
       verdict: opts.verdict as string | undefined,
       status: opts.status as string | undefined,
       range: opts.range as string | undefined,
@@ -1601,11 +1662,51 @@ taskEvidenceCmd
       console.error((result.result as { error?: string }).error ?? 'Evidence list failed');
       process.exit(result.exitCode);
     }
-    if (typeof result.result === 'string') {
-      console.log(result.result);
-    } else {
-      console.log(JSON.stringify(result.result, null, 2));
+    emitCommandResult(result.result);
+  });
+
+taskEvidenceCmd
+  .command('prove-criteria <task-number>')
+  .description('Prove acceptance criteria completion through Evidence Admission')
+  .requiredOption('--by <id>', 'Operator or agent ID proving criteria')
+  .option('--verification-run <id>', 'Verification run ID supporting this criteria proof')
+  .option('--no-run-rationale <text>', 'Explicit rationale when criteria proof has no verification run binding')
+  .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (taskNumber: string, opts: Record<string, unknown>) => {
+    const result = await taskEvidenceProveCriteriaCommand({
+      taskNumber,
+      by: opts.by as string,
+      verificationRunId: opts.verificationRun as string | undefined,
+      noRunRationale: opts.noRunRationale as string | undefined,
+      cwd: opts.cwd as string | undefined,
+      format: resolveCommandFormat(opts.format, 'auto'),
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Criteria proof failed');
+      process.exit(result.exitCode);
     }
+    emitCommandResult(result.result, opts.format);
+  });
+
+taskEvidenceCmd
+  .command('admit <task-number>')
+  .description('Admit task evidence for lifecycle transition consumption')
+  .requiredOption('--by <id>', 'Operator or agent ID admitting evidence')
+  .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (taskNumber: string, opts: Record<string, unknown>) => {
+    const result = await taskEvidenceAdmitCommand({
+      taskNumber,
+      by: opts.by as string,
+      cwd: opts.cwd as string | undefined,
+      format: resolveCommandFormat(opts.format, 'auto'),
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Evidence admission failed');
+      process.exit(result.exitCode);
+    }
+    emitCommandResult(result.result, opts.format);
   });
 
 // Backward compatibility: `narada task evidence <task-number>` routes to inspect
@@ -1621,17 +1722,139 @@ taskEvidenceCmd
     const result = await taskEvidenceCommand({
       taskNumber,
       cwd: opts.cwd as string | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: resolveCommandFormat(),
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Evidence inspection failed');
       process.exit(result.exitCode);
     }
-    if (typeof result.result === 'string') {
-      console.log(result.result);
-    } else {
-      console.log(JSON.stringify(result.result, null, 2));
+    emitCommandResult(result.result);
+  });
+
+const taskReconcileCmd = taskCmd
+  .command('reconcile')
+  .description('Task reconciliation operators (inspect, record, repair)');
+
+taskReconcileCmd
+  .command('inspect')
+  .description('Detect task authority drift without recording or repairing it')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .option('--range <start-end>', 'Restrict inspection to task number range')
+  .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await taskReconcileInspectCommand({
+      cwd: opts.cwd as string | undefined,
+      range: opts.range as string | undefined,
+      format: opts.format as 'json' | 'human' | 'auto' | undefined,
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Reconcile inspect failed');
+      process.exit(result.exitCode);
     }
+    console.log(JSON.stringify(result.result, null, 2));
+  });
+
+taskReconcileCmd
+  .command('record')
+  .description('Record reconciliation findings for later sanctioned repair')
+  .option('--by <id>', 'Operator or agent recording findings', 'operator')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .option('--range <start-end>', 'Restrict recording to task number range')
+  .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await taskReconcileRecordCommand({
+      by: opts.by as string | undefined,
+      cwd: opts.cwd as string | undefined,
+      range: opts.range as string | undefined,
+      format: opts.format as 'json' | 'human' | 'auto' | undefined,
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Reconcile record failed');
+      process.exit(result.exitCode);
+    }
+    console.log(JSON.stringify(result.result, null, 2));
+  });
+
+taskReconcileCmd
+  .command('repair')
+  .description('Apply a sanctioned reconciliation repair')
+  .requiredOption('--finding <id>', 'Finding ID to repair')
+  .requiredOption('--by <id>', 'Operator or agent performing repair')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await taskReconcileRepairCommand({
+      finding: opts.finding as string | undefined,
+      by: opts.by as string | undefined,
+      cwd: opts.cwd as string | undefined,
+      format: opts.format as 'json' | 'human' | 'auto' | undefined,
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Reconcile repair failed');
+      process.exit(result.exitCode);
+    }
+    console.log(JSON.stringify(result.result, null, 2));
+  });
+
+const observationCmd = program
+  .command('observation')
+  .description('Observation artifact operators');
+
+observationCmd
+  .command('list')
+  .description('List recent observation artifacts')
+  .option('--limit <n>', 'Maximum artifacts to list', '20')
+  .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await observationListCommand({
+      cwd: opts.cwd as string | undefined,
+      limit: opts.limit ? Number(opts.limit) : undefined,
+      format: resolveCommandFormat(opts.format, 'auto'),
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Observation list failed');
+      process.exit(result.exitCode);
+    }
+    emitCommandResult(result.result, opts.format);
+  });
+
+observationCmd
+  .command('inspect <artifact-id>')
+  .description('Inspect an observation artifact')
+  .option('--content', 'Include full artifact content', false)
+  .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (artifactId: string, opts: Record<string, unknown>) => {
+    const result = await observationInspectCommand({
+      artifactId,
+      cwd: opts.cwd as string | undefined,
+      content: opts.content as boolean | undefined,
+      format: resolveCommandFormat(opts.format, 'auto'),
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Observation inspect failed');
+      process.exit(result.exitCode);
+    }
+    emitCommandResult(result.result, opts.format);
+  });
+
+observationCmd
+  .command('open <artifact-id>')
+  .description('Return the path and shell open command for an observation artifact')
+  .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (artifactId: string, opts: Record<string, unknown>) => {
+    const result = await observationOpenCommand({
+      artifactId,
+      cwd: opts.cwd as string | undefined,
+      format: resolveCommandFormat(opts.format, 'auto'),
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Observation open failed');
+      process.exit(result.exitCode);
+    }
+    emitCommandResult(result.result, opts.format);
   });
 
 rosterCmd
@@ -1649,14 +1872,14 @@ rosterCmd
       strict: opts.strict as boolean | undefined,
       allowIncomplete: opts.allowIncomplete as boolean | undefined,
       cwd: opts.cwd as string | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: resolveCommandFormat(),
       verbose: opts.verbose as boolean | undefined,
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Roster done failed');
       process.exit(result.exitCode);
     }
-    console.log(result.result);
+    emitCommandResult(result.result);
   });
 
 rosterCmd
@@ -1669,14 +1892,14 @@ rosterCmd
     const result = await taskRosterIdleCommand({
       agent: opts.agent as string,
       cwd: opts.cwd as string | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      format: resolveCommandFormat(),
       verbose: opts.verbose as boolean | undefined,
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Roster idle failed');
       process.exit(result.exitCode);
     }
-    console.log(result.result);
+    emitCommandResult(result.result);
   });
 
 // Chapter governance commands
@@ -1685,12 +1908,39 @@ const chapterCmd = program
   .description('Chapter governance operators');
 
 chapterCmd
+  .command('finish-range <range>')
+  .description('Sanctioned chapter task completion orchestration for a numeric range')
+  .requiredOption('--agent <id>', 'Agent ID performing the finish path')
+  .option('--summary-prefix <text>', 'Summary prefix for each task report')
+  .option('--force', 'Continue after task-level failure', false)
+  .option('--details', 'Include full per-task command results', false)
+  .option('--format <format>', 'Output format: json, human, or auto', 'auto')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (range: string, opts: Record<string, unknown>) => {
+    const result = await chapterFinishRangeCommand({
+      range,
+      agent: opts.agent as string,
+      summaryPrefix: opts.summaryPrefix as string | undefined,
+      force: opts.force as boolean | undefined,
+      details: opts.details as boolean | undefined,
+      cwd: opts.cwd as string | undefined,
+      format: resolveCommandFormat(opts.format, 'human'),
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Chapter finish range failed');
+      process.exit(result.exitCode);
+    }
+    emitCommandResult(result.result, opts.format);
+  });
+
+chapterCmd
   .command('init <slug>')
   .description('Initialize a chapter skeleton with range file and child tasks')
   .requiredOption('--title <title>', 'Chapter title')
   .requiredOption('--from <number>', 'First task number (positive integer)')
   .requiredOption('--count <n>', 'Number of child tasks (>= 1)')
   .option('--depends-on <numbers>', 'Comma-separated dependency task numbers')
+  .option('--tasks-file <path>', 'JSON array of detailed child task specifications')
   .option('--dry-run', 'Preview files without writing', false)
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (slug: string, opts: Record<string, unknown>) => {
@@ -1700,6 +1950,7 @@ chapterCmd
       from: opts.from ? Number(opts.from) : undefined,
       count: opts.count ? Number(opts.count) : undefined,
       dependsOn: opts.dependsOn as string | undefined,
+      tasksFile: opts.tasksFile as string | undefined,
       dryRun: opts.dryRun as boolean | undefined,
       cwd: opts.cwd as string | undefined,
       format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
@@ -1713,6 +1964,26 @@ chapterCmd
     } else {
       console.log(JSON.stringify(result.result, null, 2));
     }
+  });
+
+chapterCmd
+  .command('validate-tasks-file <path>')
+  .description('Validate a chapter task-spec JSON file without writing tasks')
+  .requiredOption('--count <n>', 'Expected number of child task specs')
+  .option('--format <format>', 'Output format: json, human, or auto', 'auto')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (path: string, opts: Record<string, unknown>) => {
+    const result = await chapterValidateTasksFileCommand({
+      path,
+      count: opts.count ? Number(opts.count) : undefined,
+      cwd: opts.cwd as string | undefined,
+      format: resolveCommandFormat(opts.format, 'human'),
+    });
+    if (result.exitCode !== 0) {
+      console.error((result.result as { error?: string }).error ?? 'Tasks file validation failed');
+      process.exit(result.exitCode);
+    }
+    emitCommandResult(result.result, opts.format);
   });
 
 chapterCmd
@@ -2035,6 +2306,96 @@ verifyCmd
       process.exit(result.exitCode);
     }
     console.log(JSON.stringify(result.result, null, 2));
+  });
+
+// Command Execution Intent Zone commands (sanctioned command-run path)
+const commandRunCmd = program
+  .command('command-run')
+  .description('Command Execution Intent Zone — governed command execution');
+
+commandRunCmd
+  .command('run')
+  .description('Request and execute a governed command run')
+  .option('--cmd <command>', 'Command string to run; argv-first unless --shell is set')
+  .option('--argv <json>', 'Command argv JSON array')
+  .option('--preset <name>', 'Named diagnostic preset: cli-build, task-graph-json, workbench-diagnose')
+  .option('--shell', 'Run through shell mode after classification', false)
+  .option('--task <number>', 'Link to a task number')
+  .option('--agent <id>', 'Agent identity linkage')
+  .option('--requester <identity>', 'Requester identity')
+  .option('--requester-kind <kind>', 'Requester kind: operator, agent, or system')
+  .option('--side-effect <class>', 'Side-effect class')
+  .option('--timeout <seconds>', 'Timeout in seconds')
+  .option('--output-profile <profile>', 'Output admission profile', 'bounded_excerpt')
+  .option('--rationale <text>', 'Why this run is being requested')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await commandRunCommand({
+      cmd: opts.cmd as string | undefined,
+      argv: opts.argv as string | undefined,
+      preset: opts.preset as any,
+      shell: opts.shell as boolean | undefined,
+      taskNumber: opts.task ? Number(opts.task) : undefined,
+      agent: opts.agent as string | undefined,
+      requester: opts.requester as string | undefined,
+      requesterKind: opts.requesterKind as 'operator' | 'agent' | 'system' | undefined,
+      sideEffect: opts.sideEffect as any,
+      timeout: opts.timeout ? Number(opts.timeout) : undefined,
+      outputProfile: opts.outputProfile as any,
+      rationale: opts.rationale as string | undefined,
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (process.env.OUTPUT_FORMAT === 'json' || !process.stdout.isTTY) {
+      console.log(JSON.stringify(result.result, null, 2));
+    } else {
+      console.log(result.result);
+    }
+    if (result.exitCode !== 0) process.exit(result.exitCode);
+  });
+
+commandRunCmd
+  .command('inspect')
+  .description('Inspect a command run without raw unbounded output')
+  .requiredOption('--run-id <id>', 'Run ID to inspect')
+  .option('--full', 'Include full metadata and retained artifact pointer', false)
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await commandRunInspectCommand({
+      runId: opts.runId as string | undefined,
+      full: opts.full as boolean | undefined,
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (process.env.OUTPUT_FORMAT === 'json' || !process.stdout.isTTY) {
+      console.log(JSON.stringify(result.result, null, 2));
+    } else {
+      console.log(result.result);
+    }
+    if (result.exitCode !== 0) process.exit(result.exitCode);
+  });
+
+commandRunCmd
+  .command('list')
+  .description('List recent command runs with bounded output')
+  .option('--task <number>', 'Filter by task number')
+  .option('--agent <id>', 'Filter by agent ID')
+  .option('--limit <n>', 'Maximum rows', '20')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (opts: Record<string, unknown>) => {
+    const result = await commandRunListCommand({
+      taskNumber: opts.task ? Number(opts.task) : undefined,
+      agent: opts.agent as string | undefined,
+      limit: opts.limit ? Number(opts.limit) : undefined,
+      cwd: opts.cwd as string | undefined,
+      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+    });
+    if (process.env.OUTPUT_FORMAT === 'json' || !process.stdout.isTTY) {
+      console.log(JSON.stringify(result.result, null, 2));
+    } else {
+      console.log(result.result);
+    }
+    if (result.exitCode !== 0) process.exit(result.exitCode);
   });
 
 // Testing Intent Zone commands (sanctioned test-run path)

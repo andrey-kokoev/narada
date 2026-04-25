@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "narada:install-shim": "bash scripts/install-narada-shim.sh",
+    "narada:guard-task-db": "bash scripts/guard-task-lifecycle-db.sh",
     "test": "tsx scripts/test-guard.ts",
     "verify": "tsx scripts/verify.ts",
     "test:unit": "tsx scripts/test-unit.ts",

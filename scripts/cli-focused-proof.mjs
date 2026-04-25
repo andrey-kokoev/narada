@@ -518,6 +518,98 @@ async function runTaskRosterProof(selectedCase) {
   console.log(JSON.stringify({ suite: "task-roster", cases: selectedCases, durationMs: Date.now() - started, status: "ok" }, null, 2));
 }
 
+async function runTaskCloseProof() {
+  const { taskCloseCommand } = await import(resolve(ROOT, "packages/layers/cli/dist/commands/task-close.js"));
+  const { taskEvidenceAdmitCommand } = await import(resolve(ROOT, "packages/layers/cli/dist/commands/task-evidence.js"));
+  const { openTaskLifecycleStore } = await import(resolve(ROOT, "packages/layers/cli/dist/lib/task-lifecycle-store.js"));
+  const { ExitCode } = await import(resolve(ROOT, "packages/layers/cli/dist/lib/exit-codes.js"));
+  const tempDir = mkdtempSync(join(tmpdir(), "narada-close-proof-"));
+  const started = Date.now();
+  try {
+    mkdirSync(join(tempDir, ".ai", "do-not-open", "tasks"), { recursive: true });
+    writeFileSync(
+      join(tempDir, ".ai", "do-not-open", "tasks", "20260420-100-close-proof.md"),
+      "---\ntask_id: 100\nstatus: in_review\n---\n\n# Task 100\n\n## Acceptance Criteria\n- [x] Done\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n",
+    );
+    const admitResult = await taskEvidenceAdmitCommand({
+      taskNumber: "100",
+      by: "proof-agent",
+      cwd: tempDir,
+      format: "json",
+    });
+    assert(admitResult.exitCode === ExitCode.SUCCESS, `expected evidence admit success, got ${admitResult.exitCode}`);
+    const closeResult = await taskCloseCommand({
+      taskNumber: "100",
+      by: "proof-agent",
+      cwd: tempDir,
+      format: "json",
+      mode: "operator_direct",
+    });
+    assert(closeResult.exitCode === ExitCode.SUCCESS, `expected close success, got ${closeResult.exitCode}`);
+    assert(closeResult.result.new_status === "closed", `expected closed, got ${closeResult.result.new_status}`);
+
+    writeFileSync(
+      join(tempDir, ".ai", "do-not-open", "tasks", "20260420-101-row-proof.md"),
+      "---\ntask_id: 101\nstatus: in_review\n---\n\n# Task 101\n\n## Acceptance Criteria\n- [ ] Markdown unchecked\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n",
+    );
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.upsertLifecycle({
+        task_id: "20260420-101-row-proof",
+        task_number: 101,
+        status: "in_review",
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: "2026-04-25T00:00:00Z",
+      });
+      store.upsertEvidenceBundle({
+        bundle_id: "evb-close-proof-101",
+        task_id: "20260420-101-row-proof",
+        task_number: 101,
+        report_ids_json: "[]",
+        verification_run_ids_json: "[]",
+        acceptance_criteria_json: JSON.stringify({ all_checked: true, unchecked_count: 0 }),
+        review_ids_json: "[]",
+        changed_files_json: "[]",
+        residuals_json: "[]",
+        assembled_at: "2026-04-25T00:00:00Z",
+        assembled_by: "proof-agent",
+      });
+      store.upsertEvidenceAdmissionResult({
+        admission_id: "ear-close-proof-101",
+        bundle_id: "evb-close-proof-101",
+        task_id: "20260420-101-row-proof",
+        task_number: 101,
+        verdict: "admitted",
+        methods_json: JSON.stringify(["criteria_proof"]),
+        blockers_json: "[]",
+        lifecycle_eligible_status: "closed",
+        admitted_at: "2026-04-25T00:00:01Z",
+        admitted_by: "proof-agent",
+        confirmation_json: "{}",
+      });
+    } finally {
+      store.db.close();
+    }
+    const rowBackedResult = await taskCloseCommand({
+      taskNumber: "101",
+      by: "proof-agent",
+      cwd: tempDir,
+      format: "json",
+      mode: "operator_direct",
+    });
+    assert(rowBackedResult.exitCode === ExitCode.SUCCESS, `expected row-backed close success, got ${rowBackedResult.exitCode}`);
+    assert(rowBackedResult.result.new_status === "closed", `expected row-backed closed, got ${rowBackedResult.result.new_status}`);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+  console.log(JSON.stringify({ suite: "task-close", cases: ["complete_close", "row_backed_criteria_proof"], durationMs: Date.now() - started, status: "ok" }, null, 2));
+}
+
 async function main() {
   const inferredCase = parseCaseFromCommandLinePattern(process.env.NARADA_PROOF_TEST_NAME_PATTERN ?? "");
   const selected = caseName ?? inferredCase;
@@ -528,6 +620,10 @@ async function main() {
   }
   if (suite === "task-roster") {
     await runTaskRosterProof(selected);
+    return;
+  }
+  if (suite === "task-close") {
+    await runTaskCloseProof();
     return;
   }
 

@@ -16,6 +16,8 @@ import { resolve, join } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { createWorkbenchRoutes, type RouteHandler } from './workbench-server-routes.js';
 import { fileURLToPath } from 'node:url';
+import { ExitCode } from '../lib/exit-codes.js';
+import { readTaskGraph } from '../lib/task-graph.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
@@ -31,6 +33,41 @@ export interface WorkbenchServer {
   stop(): Promise<void>;
   isRunning(): boolean;
   getUrl(): string | null;
+}
+
+export interface WorkbenchDiagnoseOptions {
+  cwd?: string;
+  format?: 'json' | 'human' | 'auto';
+}
+
+export async function workbenchDiagnoseCommand(
+  options: WorkbenchDiagnoseOptions,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
+  const graph = await readTaskGraph({ cwd, includeClosed: true });
+  const routeCount = createWorkbenchRoutes({ cwd }).length;
+  const result = {
+    status: 'ok',
+    source: 'workbench',
+    cwd,
+    routes: {
+      count: routeCount,
+      health: '/api/health',
+      graph: '/api/graph',
+      recommendations: '/api/recommendations',
+    },
+    graph: {
+      nodes: graph.nodes.length,
+      edges: graph.edges.length,
+    },
+  };
+  if (options.format === 'json') {
+    return { exitCode: ExitCode.SUCCESS, result };
+  }
+  return {
+    exitCode: ExitCode.SUCCESS,
+    result: `Workbench ok: ${graph.nodes.length} graph nodes, ${graph.edges.length} edges, ${routeCount} routes`,
+  };
 }
 
 export async function createWorkbenchServer(config: WorkbenchServerConfig): Promise<WorkbenchServer> {

@@ -1,0 +1,50 @@
+{
+  "status": "success",
+  "count": 1,
+  "filter": {
+    "verdict": [
+      "incomplete",
+      "attempt_complete",
+      "needs_review",
+      "needs_closure"
+    ],
+    "status": null,
+    "range": {
+      "start": 686,
+      "end": 696
+    }
+  },
+  "summary": {
+    "verdicts": {
+      "complete": 0,
+      "attempt_complete": 1,
+      "needs_review": 0,
+      "needs_closure": 0,
+      "incomplete": 0,
+      "unknown": 0
+    }
+  },
+  "tasks": [
+    {
+      "task_number": 696,
+      "task_id": "20260425-696-repair-lifecycle-db-concurrent-schema-open-locking",
+      "title": "Repair lifecycle DB concurrent schema-open locking",
+      "status": "opened",
+      "verdict": "attempt_complete",
+      "missing": {
+        "unchecked_criteria": 4,
+        "execution_notes": false,
+        "verification": false,
+        "report": true,
+        "review": true,
+        "closure": true
+      },
+      "warnings": [
+        "4 acceptance criteria remain unchecked"
+      ],
+      "violations": [],
+      "assigned_agent": null,
+      "active_assignment_intent": null
+    }
+  ]
+}

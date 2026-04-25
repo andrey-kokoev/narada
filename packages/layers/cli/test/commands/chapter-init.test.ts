@@ -4,7 +4,7 @@ vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { chapterInitCommand } from '../../src/commands/chapter-init.js';
+import { chapterInitCommand, chapterValidateTasksFileCommand } from '../../src/commands/chapter-init.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -253,6 +253,85 @@ describe('chapter init operator', () => {
     expect(content).toContain('## Required Work');
     expect(content).toContain('## Non-Goals');
     expect(content).toContain('## Acceptance Criteria');
+  });
+
+  it('creates detailed pressure-intent child tasks from tasks file', async () => {
+    const specsPath = join(tempDir, 'chapter-specs.json');
+    writeFileSync(specsPath, JSON.stringify([
+      {
+        title: 'Repair authority split',
+        goal: 'Remove the hidden authority split.',
+        context: 'The current path has two authorities.',
+        required_work: ['Find the split', 'Route through one owner'],
+        acceptance_criteria: ['The split is gone', 'The owner is explicit'],
+      },
+    ]));
+
+    const result = await chapterInitCommand({
+      slug: 'pressure-test',
+      title: 'Pressure Test',
+      from: 950,
+      count: 1,
+      tasksFile: specsPath,
+      dryRun: false,
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const r = result.result as { files: string[]; task_specs: number };
+    expect(r.task_specs).toBe(1);
+    const childPath = r.files.find((f) => f.includes('950-pressure-test-1'));
+    expect(childPath).toBeDefined();
+    const content = readFileSync(childPath!, 'utf8');
+    expect(content).toContain('# Task 950 — Repair authority split');
+    expect(content).toContain('Remove the hidden authority split.');
+    expect(content).toContain('1. Find the split');
+    expect(content).toContain('- [ ] The owner is explicit');
+  });
+
+  it('refuses tasks file count mismatch before writing files', async () => {
+    const specsPath = join(tempDir, 'bad-chapter-specs.json');
+    writeFileSync(specsPath, JSON.stringify([
+      { title: 'Only one', goal: 'Mismatch.' },
+    ]));
+
+    const result = await chapterInitCommand({
+      slug: 'mismatch-test',
+      title: 'Mismatch Test',
+      from: 960,
+      count: 2,
+      tasksFile: specsPath,
+      dryRun: false,
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect((result.result as { error: string }).error).toContain('--tasks-file contains 1 task spec');
+    expect(readdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'))).toEqual([]);
+  });
+
+  it('validates a chapter tasks file without writing tasks', async () => {
+    const specsPath = join(tempDir, 'valid-chapter-specs.json');
+    writeFileSync(specsPath, JSON.stringify([
+      { title: 'One', goal: 'Do one.', acceptance_criteria: ['One done'] },
+      { title: 'Two', goal: 'Do two.', acceptance_criteria: ['Two done'] },
+    ]));
+
+    const result = await chapterValidateTasksFileCommand({
+      path: specsPath,
+      count: 2,
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const parsed = result.result as { count: number; tasks: Array<{ title: string; acceptance_criteria_count: number }> };
+    expect(parsed.count).toBe(2);
+    expect(parsed.tasks[0]?.title).toBe('One');
+    expect(parsed.tasks[1]?.acceptance_criteria_count).toBe(1);
+    expect(readdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'))).toEqual([]);
   });
 
   it('refuses when range file already exists', async () => {

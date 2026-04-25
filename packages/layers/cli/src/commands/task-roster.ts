@@ -13,18 +13,19 @@ import {
   listReportsForTask,
   listReviewsForTask,
   findTaskFile,
-  readTaskFile,
   writeTaskFile,
-  isValidTransition,
-  checkDependencies,
-  resolveTaskStatus,
   loadAssignment,
-  getActiveAssignment,
   saveAssignment,
   type AgentRoster,
   type TaskFrontMatter,
 } from '../lib/task-governance.js';
 import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
+import {
+  admitAssignmentIntent,
+  ensureLifecycleForAssignment,
+  recordAssignmentIntentApplied,
+  recordAssignmentIntentFailed,
+} from '../lib/assignment-intent.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import {
   recallAcceptedLearning,
@@ -107,145 +108,18 @@ export async function taskRosterAssignCommand(
     };
   }
 
-  // ── Phase 1: Load roster and validate agent ──
-  let roster: AgentRoster;
-  try {
-    roster = await loadRoster(cwd);
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    return {
-      exitCode: ExitCode.GENERAL_ERROR,
-      result: { status: 'error', error: `Failed to load roster: ${msg}` },
-    };
+  const admission = await admitAssignmentIntent(cwd, {
+    kind: 'roster_assign',
+    taskNumber,
+    agentId: options.agent,
+    requestedBy: options.agent,
+    noClaim: Boolean(options.noClaim),
+  });
+  if (!admission.ok) {
+    return { exitCode: ExitCode.GENERAL_ERROR, result: admission.result };
   }
 
-  const agent = roster.agents.find((a) => a.agent_id === options.agent);
-  if (!agent) {
-    return {
-      exitCode: ExitCode.GENERAL_ERROR,
-      result: { status: 'error', error: `Agent ${options.agent} not found in roster` },
-    };
-  }
-
-  // ── Phase 2: Find and read task file ──
-  let taskFile: { path: string; taskId: string } | null;
-  try {
-    taskFile = await findTaskFile(cwd, options.taskNumber);
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    return {
-      exitCode: ExitCode.GENERAL_ERROR,
-      result: { status: 'error', error: msg },
-    };
-  }
-
-  if (!taskFile) {
-    return {
-      exitCode: ExitCode.GENERAL_ERROR,
-      result: { status: 'error', error: `Task not found: ${options.taskNumber}` },
-    };
-  }
-
-  const { frontMatter, body } = await readTaskFile(taskFile.path);
-
-  // Prefer SQLite-backed lifecycle status
-  let store;
-  try {
-    store = openTaskLifecycleStore(cwd);
-  } catch {
-    // Store may not exist yet
-  }
-  let currentStatus: string | undefined;
-  let blockedBy: string[] = [];
-  let dependencyDetails: Array<{ taskId: string; reason: string }> = [];
-  try {
-    if (store && !store.getLifecycle(taskFile.taskId)) {
-      store.upsertLifecycle({
-        task_id: taskFile.taskId,
-        task_number: taskNumber,
-        status: ((frontMatter.status as string | undefined) ?? 'opened') as import('../lib/task-lifecycle-store.js').TaskStatus,
-        governed_by: (frontMatter.governed_by as string) || null,
-        closed_at: (frontMatter.closed_at as string) || null,
-        closed_by: (frontMatter.closed_by as string) || null,
-        reopened_at: (frontMatter.reopened_at as string) || null,
-        reopened_by: (frontMatter.reopened_by as string) || null,
-        continuation_packet_json: null,
-        updated_at: new Date().toISOString(),
-      });
-    }
-    const resolved = await resolveTaskStatus(cwd, taskNumber, store);
-    currentStatus = resolved.status;
-
-    const dependsOn = frontMatter.depends_on as number[] | undefined;
-    const dependencyCheck = await checkDependencies(cwd, dependsOn, store);
-    blockedBy = dependencyCheck.blockedBy;
-    dependencyDetails = dependencyCheck.details;
-  } finally {
-    if (store) store.db.close();
-  }
-
-  // ── Phase 3: Determine claim intent and validate ──
-  const canClaim = currentStatus === 'opened' || currentStatus === 'needs_continuation';
-  const shouldClaim = !options.noClaim && canClaim;
-  let shouldBackfillClaimAssignment = false;
-
-  const claimWarnings: string[] = [];
-
-  if (shouldClaim) {
-    // Validate state-machine transition
-    if (!isValidTransition(currentStatus, 'claimed')) {
-      return {
-        exitCode: ExitCode.GENERAL_ERROR,
-        result: {
-          status: 'error',
-          error: `Transition from '${currentStatus}' to 'claimed' is not allowed by the state machine`,
-        },
-      };
-    }
-
-    // Validate dependencies
-    if (blockedBy.length > 0) {
-      const detailMessages = dependencyDetails.map((d) => `${d.taskId}: ${d.reason}`).join('; ');
-      return {
-        exitCode: ExitCode.GENERAL_ERROR,
-        result: {
-          status: 'error',
-          error: `Task ${taskFile.taskId} has unmet dependencies: ${blockedBy.join(', ')}. ${detailMessages}`,
-        },
-      };
-    }
-
-    // Validate no active assignment
-    const existingAssignment = await loadAssignment(cwd, taskFile.taskId);
-    if (existingAssignment) {
-      const active = getActiveAssignment(existingAssignment);
-      if (active) {
-        return {
-          exitCode: ExitCode.GENERAL_ERROR,
-          result: {
-            status: 'error',
-            error: `Task ${taskFile.taskId} is already claimed by ${active.agent_id} at ${active.claimed_at}`,
-          },
-        };
-      }
-    }
-  } else if (currentStatus === 'claimed') {
-    const existingAssignment = await loadAssignment(cwd, taskFile.taskId);
-    const active = existingAssignment ? getActiveAssignment(existingAssignment) : null;
-    if (!active && !options.noClaim) {
-      shouldBackfillClaimAssignment = true;
-      claimWarnings.push(`Task ${taskFile.taskId} is already claimed but has no active assignment; assignment record backfilled`);
-    } else {
-      claimWarnings.push(`Task ${taskFile.taskId} is already claimed; roster updated without re-claiming`);
-    }
-  } else if (options.noClaim) {
-    claimWarnings.push('Claim skipped due to --no-claim flag');
-  }
-
-  // ── Phase 4: Commit — roster first, then task claim ──
-  // All validation passed; roster mutation is atomic (withRosterMutation).
-  // If task claim fails after roster update, the roster still reflects the
-  // assignment intent. In practice this cannot happen after validation.
+  const { taskFile, frontMatter, body } = admission;
   try {
     const updatedRoster = await updateAgentRosterEntry(cwd, options.agent, {
       status: 'working',
@@ -254,7 +128,7 @@ export async function taskRosterAssignCommand(
 
     let claimed = false;
     let assignmentBackfilled = false;
-    if (shouldClaim || shouldBackfillClaimAssignment) {
+    if (admission.shouldClaim || admission.shouldBackfillAssignment) {
       const now = new Date().toISOString();
       const record = (await loadAssignment(cwd, taskFile.taskId)) ?? {
         task_id: taskFile.taskId,
@@ -268,37 +142,53 @@ export async function taskRosterAssignCommand(
         release_reason: null,
         intent: 'primary',
       });
+      assignmentBackfilled = admission.shouldBackfillAssignment;
+
+      const lifecycleStore = openTaskLifecycleStore(cwd);
+      try {
+        ensureLifecycleForAssignment(lifecycleStore, taskFile.taskId, taskNumber, frontMatter);
+        lifecycleStore.updateStatus(taskFile.taskId, 'claimed', options.agent);
+      } finally {
+        lifecycleStore.db.close();
+      }
+
       await saveAssignment(cwd, record);
-      assignmentBackfilled = shouldBackfillClaimAssignment;
 
-      if (shouldClaim) {
-        try {
-          const lifecycleStore = openTaskLifecycleStore(cwd);
-          try {
-            lifecycleStore.updateStatus(taskFile.taskId, 'claimed', options.agent);
-          } finally {
-            lifecycleStore.db.close();
-          }
-        } catch {
-          // Lifecycle store may be unavailable; markdown claim still stands.
-        }
+      const assignmentStore = openTaskLifecycleStore(cwd);
+      try {
+        assignmentStore.insertAssignment({
+          assignment_id: admission.intent.assignment_id ?? `assign-${taskFile.taskId}-${options.agent}-${Date.now()}`,
+          task_id: taskFile.taskId,
+          agent_id: options.agent,
+          claimed_at: now,
+          released_at: null,
+          release_reason: null,
+          intent: 'primary',
+        });
+      } finally {
+        assignmentStore.db.close();
+      }
 
+      if (admission.shouldClaim) {
         const updatedFrontMatter: TaskFrontMatter = { ...frontMatter, status: 'claimed' };
         await writeTaskFile(taskFile.path, updatedFrontMatter, body);
         claimed = true;
-      } else {
-        try {
-          const lifecycleStore = openTaskLifecycleStore(cwd);
-          try {
-            lifecycleStore.updateStatus(taskFile.taskId, 'claimed', options.agent);
-          } finally {
-            lifecycleStore.db.close();
-          }
-        } catch {
-          // Preserve already-claimed markdown; only refresh lifecycle provenance.
-        }
       }
     }
+
+    recordAssignmentIntentApplied(cwd, admission.intent.request_id, {
+      lifecycleStatusAfter: claimed || assignmentBackfilled ? 'claimed' : (admission.currentStatus ?? null),
+      rosterStatusAfter: 'working',
+      assignmentId: admission.intent.assignment_id,
+      warnings: admission.warnings,
+      confirmation: {
+        task_id: taskFile.taskId,
+        task_number: taskNumber,
+        claimed,
+        assignment_backfilled: assignmentBackfilled,
+        roster_status: 'working',
+      },
+    });
 
     const { guidance } = await recallAcceptedLearning({
       cwd,
@@ -315,9 +205,10 @@ export async function taskRosterAssignCommand(
           task: taskNumber,
           claimed,
           assignment_backfilled: assignmentBackfilled || undefined,
-          roster: updatedRoster,
-          warnings: claimWarnings.length > 0 ? claimWarnings : undefined,
-          guidance: formatGuidanceForJson(guidance),
+          assignment_intent_id: admission.intent.request_id,
+          roster_updated_at: updatedRoster.updated_at,
+          warnings: admission.warnings.length > 0 ? admission.warnings : undefined,
+          ...(options.verbose && guidance.length > 0 ? { guidance: formatGuidanceForJson(guidance) } : {}),
         },
       };
     }
@@ -325,7 +216,7 @@ export async function taskRosterAssignCommand(
     const lines: string[] = [
       `Assigned ${options.agent} → task ${taskNumber} (status: working)${claimed ? ' and claimed' : ''}`,
     ];
-    for (const w of claimWarnings) {
+    for (const w of admission.warnings) {
       lines.push(`⚠ ${w}`);
     }
     if (options.verbose && guidance.length > 0) {
@@ -340,9 +231,10 @@ export async function taskRosterAssignCommand(
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
+    recordAssignmentIntentFailed(cwd, admission.intent.request_id, msg);
     return {
       exitCode: ExitCode.GENERAL_ERROR,
-      result: { status: 'error', error: msg },
+      result: { status: 'error', error: msg, assignment_intent_id: admission.intent.request_id },
     };
   }
 }
@@ -418,9 +310,9 @@ export async function taskRosterReviewCommand(
           agent: options.agent,
           agent_status: 'reviewing',
           task: taskNumber,
-          roster,
+          roster_updated_at: roster.updated_at,
           intent: 'review',
-          guidance: formatGuidanceForJson(guidance),
+          ...(options.verbose && guidance.length > 0 ? { guidance: formatGuidanceForJson(guidance) } : {}),
         },
       };
     }
@@ -552,10 +444,10 @@ export async function taskRosterDoneCommand(
           agent: options.agent,
           agent_status: 'done',
           last_done: taskNumber,
-          roster: updatedRoster,
+          roster_updated_at: updatedRoster.updated_at,
           warnings: warnings.length > 0 ? warnings : undefined,
           allow_incomplete: options.allowIncomplete || undefined,
-          guidance: formatGuidanceForJson(guidance),
+          ...(options.verbose && guidance.length > 0 ? { guidance: formatGuidanceForJson(guidance) } : {}),
         },
       };
     }
@@ -618,8 +510,8 @@ export async function taskRosterIdleCommand(
           status: 'ok',
           agent: options.agent,
           agent_status: 'idle',
-          roster,
-          guidance: formatGuidanceForJson(guidance),
+          roster_updated_at: roster.updated_at,
+          ...(options.verbose && guidance.length > 0 ? { guidance: formatGuidanceForJson(guidance) } : {}),
         },
       };
     }

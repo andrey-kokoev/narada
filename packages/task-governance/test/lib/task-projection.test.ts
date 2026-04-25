@@ -8,12 +8,12 @@ import { Database } from '@narada2/control-plane';
 import {
   SqliteTaskLifecycleStore,
   type TaskLifecycleRow,
-} from '../../src/lib/task-lifecycle-store.js';
+} from '../../src/task-lifecycle-store.js';
 import {
   inspectTaskEvidenceWithProjection,
   listRunnableTasksWithProjection,
   openTaskLifecycleStore,
-} from '../../src/lib/task-projection.js';
+} from '../../src/task-projection.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

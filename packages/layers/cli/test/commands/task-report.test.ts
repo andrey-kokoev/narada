@@ -7,7 +7,9 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskReportCommand } from '../../src/commands/task-report.js';
 import { taskClaimCommand } from '../../src/commands/task-claim.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, readdirSync } from 'node:fs';
+import type { TaskAssignmentRecord } from '../../src/lib/task-governance.js';
+import { openTaskLifecycleStore, type ReportRecordRow } from '../../src/lib/task-lifecycle-store.js';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -49,6 +51,39 @@ function setupRepo(tempDir: string) {
   );
 }
 
+function listReportRecords(tempDir: string): ReportRecordRow[] {
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    return store.listReportRecords('20260420-999-test-task');
+  } finally {
+    store.db.close();
+  }
+}
+
+function getAssignmentRecord(tempDir: string): TaskAssignmentRecord {
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    const record = store.getAssignmentRecord('20260420-999-test-task');
+    if (!record) throw new Error('missing assignment record');
+    return JSON.parse(record.record_json) as TaskAssignmentRecord;
+  } finally {
+    store.db.close();
+  }
+}
+
+function saveAssignmentRecord(tempDir: string, record: TaskAssignmentRecord): void {
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    store.upsertAssignmentRecord({
+      task_id: record.task_id,
+      record_json: JSON.stringify(record),
+      updated_at: new Date().toISOString(),
+    });
+  } finally {
+    store.db.close();
+  }
+}
+
 describe('task report operator', () => {
   let tempDir: string;
 
@@ -83,23 +118,17 @@ describe('task report operator', () => {
       new_status: 'in_review',
     });
 
-    const parsed = result.result as { guidance: unknown[] };
-    expect(parsed.guidance.length).toBeGreaterThan(0);
-    expect(parsed.guidance[0]).toMatchObject({
-      artifact_id: '20260422-004',
-    });
+    expect(result.result).not.toHaveProperty('guidance');
 
     // Task file updated to in_review
     const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
     expect(taskContent).toContain('status: in_review');
 
-    // Report file created
-    const reportsDir = join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports');
-    const reportFiles = readdirSync(reportsDir).filter((f) => f.endsWith('.json'));
-    expect(reportFiles).toHaveLength(1);
+    // Authoritative report record created
+    const reportRecords = listReportRecords(tempDir);
+    expect(reportRecords).toHaveLength(1);
 
-    const reportRaw = readFileSync(join(reportsDir, reportFiles[0]!), 'utf8');
-    const report = JSON.parse(reportRaw);
+    const report = JSON.parse(reportRecords[0]!.report_json);
     expect(report.task_id).toBe('20260420-999-test-task');
     expect(report.agent_id).toBe('test-agent');
     expect(report.summary).toBe('Implemented feature X');
@@ -109,8 +138,7 @@ describe('task report operator', () => {
     expect(report.report_status).toBe('submitted');
 
     // Assignment released
-    const assignmentRaw = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-999-test-task.json'), 'utf8');
-    const assignment = JSON.parse(assignmentRaw);
+    const assignment = getAssignmentRecord(tempDir);
     expect(assignment.assignments[0].release_reason).toBe('completed');
     expect(assignment.assignments[0].released_at).not.toBeNull();
 
@@ -121,6 +149,26 @@ describe('task report operator', () => {
     expect(agent.status).toBe('done');
     expect(agent.task).toBeNull();
     expect(agent.last_done).toBe(999);
+  });
+
+  it('includes guidance in JSON only when verbose is set', async () => {
+    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
+
+    const result = await taskReportCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      summary: 'Implemented feature X',
+      cwd: tempDir,
+      format: 'json',
+      verbose: true,
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const parsed = result.result as { guidance: unknown[] };
+    expect(parsed.guidance.length).toBeGreaterThan(0);
+    expect(parsed.guidance[0]).toMatchObject({
+      artifact_id: '20260422-004',
+    });
   });
 
   it('fails for unclaimed task', async () => {
@@ -226,20 +274,15 @@ describe('task report operator', () => {
     expect(firstResult.exitCode).toBe(ExitCode.SUCCESS);
     const firstReportId = (firstResult.result as { report_id: string }).report_id;
 
-    const reportsDir = join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports');
-    const reportFilesAfterFirst = readdirSync(reportsDir).filter((f) => f.endsWith('.json'));
-    expect(reportFilesAfterFirst).toHaveLength(1);
+    const reportRecordsAfterFirst = listReportRecords(tempDir);
+    expect(reportRecordsAfterFirst).toHaveLength(1);
 
     // Reset task to claimed and assignment to active (same claimed_at)
     // to simulate an accidental re-invocation before the first report finished
-    const assignmentRaw = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-999-test-task.json'), 'utf8');
-    const assignment = JSON.parse(assignmentRaw);
+    const assignment = getAssignmentRecord(tempDir);
     assignment.assignments[0].released_at = null;
     assignment.assignments[0].release_reason = null;
-    writeFileSync(
-      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-999-test-task.json'),
-      JSON.stringify(assignment, null, 2),
-    );
+    saveAssignmentRecord(tempDir, assignment);
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
       '---\ntask_id: 999\nstatus: claimed\n---\n\n# Task 999: Test Task\n',
@@ -258,8 +301,8 @@ describe('task report operator', () => {
     const secondReportId = (secondResult.result as { report_id: string }).report_id;
     expect(secondReportId).toBe(firstReportId);
 
-    const reportFilesAfterSecond = readdirSync(reportsDir).filter((f) => f.endsWith('.json'));
-    expect(reportFilesAfterSecond).toHaveLength(1);
+    const reportRecordsAfterSecond = listReportRecords(tempDir);
+    expect(reportRecordsAfterSecond).toHaveLength(1);
 
     const note = (secondResult.result as { note?: string }).note;
     expect(note).toContain('already exists');
@@ -285,19 +328,16 @@ describe('task report operator', () => {
 
     // Clear assignment released state for re-claim simulation with NEW claimed_at
     const newClaimedAt = new Date().toISOString();
-    writeFileSync(
-      join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-999-test-task.json'),
-      JSON.stringify({
-        task_id: '20260420-999-test-task',
-        assignments: [{
-          agent_id: 'test-agent',
-          claimed_at: newClaimedAt,
-          claim_context: null,
-          released_at: null,
-          release_reason: null,
-        }],
-      }, null, 2),
-    );
+    saveAssignmentRecord(tempDir, {
+      task_id: '20260420-999-test-task',
+      assignments: [{
+        agent_id: 'test-agent',
+        claimed_at: newClaimedAt,
+        claim_context: null,
+        released_at: null,
+        release_reason: null,
+      }],
+    });
 
     // Second report — different assignment_id due to new claimed_at
     const secondResult = await taskReportCommand({
@@ -309,9 +349,8 @@ describe('task report operator', () => {
     });
 
     expect(secondResult.exitCode).toBe(ExitCode.SUCCESS);
-    const reportsDir = join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'reports');
-    const reportFiles = readdirSync(reportsDir).filter((f) => f.endsWith('.json'));
-    expect(reportFiles).toHaveLength(2);
+    const reportRecords = listReportRecords(tempDir);
+    expect(reportRecords).toHaveLength(2);
   });
 
   it('scaffolds missing Execution Notes and Verification sections into task file', async () => {

@@ -150,16 +150,21 @@ export async function taskCreateCommand(
 
   let body: string;
   let spec: TaskSpecRecord;
+  let effectiveDependsOn = dependsOn;
   if (options.fromFile) {
     try {
-      body = await readFile(resolve(cwd, options.fromFile), 'utf8');
-      const parsed = parseFrontMatter(body);
+      const rawBody = await readFile(resolve(cwd, options.fromFile), 'utf8');
+      const parsed = parseFrontMatter(rawBody);
+      body = parsed.body;
       spec = parseTaskSpecFromMarkdown({
         taskId,
         taskNumber,
         frontMatter: parsed.frontMatter,
         body: parsed.body,
       });
+      if (!effectiveDependsOn && spec.dependencies.length > 0) {
+        effectiveDependsOn = spec.dependencies;
+      }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       return {
@@ -186,8 +191,9 @@ export async function taskCreateCommand(
     status: 'opened',
   };
 
-  if (dependsOn && dependsOn.length > 0) {
-    frontMatter.depends_on = dependsOn;
+  if (effectiveDependsOn && effectiveDependsOn.length > 0) {
+    frontMatter.depends_on = effectiveDependsOn;
+    spec = { ...spec, dependencies: effectiveDependsOn, updated_at: new Date().toISOString() };
   }
 
   // ── Dry run: preview only ──

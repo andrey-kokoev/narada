@@ -6,7 +6,8 @@
  * specification from markdown. The caller never needs to know which
  * substrate provided which field.
  *
- * Read-only: no mutations.
+ * The read operator may perform idempotent projection backfill so a
+ * sanctioned read surface does not fail just because SQLite projections lag.
  */
 
 import { resolve } from 'node:path';
@@ -28,7 +29,9 @@ import { ExitCode } from '../lib/exit-codes.js';
 import {
   extractProjectionSections,
   mergeAcceptanceCriteriaState,
+  parseTaskSpecFromMarkdown,
 } from '../lib/task-spec.js';
+import type { TaskStatus } from '../lib/task-lifecycle-store.js';
 
 export interface TaskReadOptions {
   taskNumber: string;
@@ -90,6 +93,22 @@ function truncate(text: string | null, maxLines: number): string | null {
   return lines.slice(0, maxLines).join('\n') + `\n… (${lines.length - maxLines} more lines)`;
 }
 
+function normalizeLifecycleStatus(value: unknown): TaskStatus {
+  const status = typeof value === 'string' ? value : 'opened';
+  if (
+    status === 'draft' ||
+    status === 'opened' ||
+    status === 'claimed' ||
+    status === 'needs_continuation' ||
+    status === 'in_review' ||
+    status === 'closed' ||
+    status === 'confirmed'
+  ) {
+    return status;
+  }
+  return 'opened';
+}
+
 export async function taskReadCommand(
   options: TaskReadOptions,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
@@ -107,10 +126,13 @@ export async function taskReadCommand(
   const taskFile = await findTaskFile(cwd, taskNumber);
 
   const store = await openTaskLifecycleStore(cwd);
-  const lifecycleByNumber = store ? store.getLifecycleByNumber(taskNum) : undefined;
-  const specByNumber = store ? store.getTaskSpecByNumber(taskNum) : undefined;
+  let lifecycleByNumber = store ? store.getLifecycleByNumber(taskNum) : undefined;
+  let specByNumber = store ? store.getTaskSpecByNumber(taskNum) : undefined;
 
   if (!taskFile && !lifecycleByNumber && !specByNumber) {
+    if (store) {
+      try { store.db.close(); } catch { /* ignore */ }
+    }
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: { status: 'error', error: `Task ${taskNumber} not found` },
@@ -127,7 +149,41 @@ export async function taskReadCommand(
     body = read.body;
   }
 
-  const specRow = specByNumber ?? (store ? store.getTaskSpec(taskId) : undefined);
+  let specRow = specByNumber ?? (store ? store.getTaskSpec(taskId) : undefined);
+  if (!specRow && store && taskFile) {
+    const spec = parseTaskSpecFromMarkdown({ taskId, taskNumber: taskNum, frontMatter, body });
+    const now = new Date().toISOString();
+    if (!lifecycleByNumber && !store.getLifecycle(taskId)) {
+      store.upsertLifecycle({
+        task_id: taskId,
+        task_number: taskNum,
+        status: normalizeLifecycleStatus(frontMatter.status),
+        governed_by: typeof frontMatter.governed_by === 'string' ? frontMatter.governed_by : null,
+        closed_at: typeof frontMatter.closed_at === 'string' ? frontMatter.closed_at : null,
+        closed_by: typeof frontMatter.closed_by === 'string' ? frontMatter.closed_by : null,
+        reopened_at: typeof frontMatter.reopened_at === 'string' ? frontMatter.reopened_at : null,
+        reopened_by: typeof frontMatter.reopened_by === 'string' ? frontMatter.reopened_by : null,
+        continuation_packet_json: null,
+        updated_at: now,
+      });
+      lifecycleByNumber = store.getLifecycleByNumber(taskNum);
+    }
+    store.upsertTaskSpec({
+      task_id: spec.task_id,
+      task_number: spec.task_number,
+      title: spec.title,
+      chapter_markdown: spec.chapter,
+      goal_markdown: spec.goal,
+      context_markdown: spec.context,
+      required_work_markdown: spec.required_work,
+      non_goals_markdown: spec.non_goals,
+      acceptance_criteria_json: JSON.stringify(spec.acceptance_criteria),
+      dependencies_json: JSON.stringify(spec.dependencies),
+      updated_at: now,
+    });
+    specByNumber = store.getTaskSpecByNumber(taskNum);
+    specRow = specByNumber ?? store.getTaskSpec(taskId);
+  }
   if (!specRow) {
     if (store) {
       try { store.db.close(); } catch { /* ignore */ }

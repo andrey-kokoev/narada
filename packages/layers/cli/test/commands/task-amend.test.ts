@@ -139,6 +139,24 @@ describe('task amend operator', () => {
     expect(result.result).toMatchObject({ status: 'error', error: expect.stringContaining('No amendments') });
   });
 
+  it('rejects deprecated criteria proof through amend', async () => {
+    createTask(tempDir, 202, 'opened');
+
+    const result = await taskAmendCommand({
+      taskNumber: '202',
+      by: 'operator-1',
+      checkAllCriteria: true,
+      format: 'json',
+      cwd: tempDir,
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      error: expect.stringContaining('task evidence prove-criteria'),
+    });
+  });
+
   it('rejects amendment of closed task', async () => {
     createTask(tempDir, 203, 'closed');
 

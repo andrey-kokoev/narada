@@ -19,6 +19,8 @@ import { createFormatter } from '../lib/formatter.js';
 import { taskReportCommand } from './task-report.js';
 import { taskReviewCommand } from './task-review.js';
 import { taskRosterDoneCommand } from './task-roster.js';
+import { taskEvidenceAdmitCommand, taskEvidenceProveCriteriaCommand } from './task-evidence.js';
+import { taskCloseCommand } from './task-close.js';
 
 export interface TaskFinishOptions {
   taskNumber?: string;
@@ -31,6 +33,8 @@ export interface TaskFinishOptions {
   findings?: string;
   report?: string;
   allowIncomplete?: boolean;
+  close?: boolean;
+  proveCriteria?: boolean;
   cwd?: string;
   format?: 'json' | 'human' | 'auto';
   verbose?: boolean;
@@ -200,7 +204,67 @@ export async function taskFinishCommand(
   }
 
   // ── Evidence inspection after report/review ──
-  const evidence = await inspectTaskEvidence(cwd, taskNumber);
+  let evidence = await inspectTaskEvidence(cwd, taskNumber);
+  let criteriaProofAction: 'proved' | 'skipped' | 'blocked' = 'skipped';
+  let criteriaProofBlockers: string[] = [];
+  if (options.proveCriteria) {
+    const proofResult = await taskEvidenceProveCriteriaCommand({
+      taskNumber,
+      by: agentId,
+      cwd,
+      format: 'json',
+      noRunRationale: 'Proved through task finish orchestration; verification evidence remains separately admitted.',
+    });
+    if (proofResult.exitCode === ExitCode.SUCCESS) {
+      criteriaProofAction = 'proved';
+      evidence = await inspectTaskEvidence(cwd, taskNumber);
+    } else {
+      criteriaProofAction = 'blocked';
+      const proofData = proofResult.result as { blockers?: string[]; error?: string };
+      criteriaProofBlockers = proofData.blockers ?? [proofData.error ?? 'Criteria proof failed'];
+    }
+  }
+  let admissionId: string | null = null;
+  let closeAction: 'closed' | 'blocked' | 'skipped' = 'skipped';
+  let closeBlockers: string[] = [];
+
+  if (options.close && criteriaProofAction === 'blocked') {
+    closeAction = 'blocked';
+    closeBlockers = ['Criteria proof failed before evidence admission'];
+  } else if (options.close) {
+    const admitResult = await taskEvidenceAdmitCommand({
+      taskNumber,
+      by: agentId,
+      cwd,
+      format: 'json',
+    });
+    const admitData = admitResult.result as {
+      blockers?: string[];
+      admission_result?: { admission_id?: string };
+    };
+    admissionId = admitData.admission_result?.admission_id ?? null;
+
+    if (admitResult.exitCode !== ExitCode.SUCCESS) {
+      closeAction = 'blocked';
+      closeBlockers = admitData.blockers ?? ['Evidence admission failed'];
+    } else {
+      const closeResult = await taskCloseCommand({
+        taskNumber,
+        by: agentId,
+        cwd,
+        format: 'json',
+        mode: 'agent_finish',
+      });
+      if (closeResult.exitCode === ExitCode.SUCCESS) {
+        closeAction = 'closed';
+        evidence = await inspectTaskEvidence(cwd, taskNumber);
+      } else {
+        closeAction = 'blocked';
+        const closeData = closeResult.result as { gate_failures?: string[]; error?: string };
+        closeBlockers = closeData.gate_failures ?? [closeData.error ?? 'Lifecycle close failed'];
+      }
+    }
+  }
 
   // ── Roster done ──
   const rosterResult = await taskRosterDoneCommand({
@@ -234,8 +298,19 @@ export async function taskFinishCommand(
     review_id: reviewId,
     evidence_verdict: evidence.verdict,
     roster_transition: rosterData?.status === 'ok' ? 'done' : 'blocked',
+    close_action: closeAction,
+    criteria_proof_action: criteriaProofAction,
   };
 
+  if (admissionId) {
+    output.admission_id = admissionId;
+  }
+  if (closeBlockers.length > 0) {
+    output.close_blockers = closeBlockers;
+  }
+  if (criteriaProofBlockers.length > 0) {
+    output.criteria_proof_blockers = criteriaProofBlockers;
+  }
   if (rosterData?.warnings && rosterData.warnings.length > 0) {
     output.warnings = rosterData.warnings;
   }

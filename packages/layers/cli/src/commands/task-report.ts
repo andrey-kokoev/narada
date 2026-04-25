@@ -12,7 +12,7 @@ import {
   loadAssignment,
   saveAssignment,
   readTaskFile,
-  writeTaskFile,
+  writeTaskProjection,
   getActiveAssignment,
   getActiveContinuation,
   getAssignmentIntent,
@@ -347,7 +347,7 @@ export async function taskReportCommand(
     activeContinuation!.completed_at = now;
     await saveAssignment(cwd, assignmentRecord);
     if (missingSections.length > 0) {
-      await writeTaskFile(taskFile.path, frontMatter, body);
+      await writeTaskProjection(taskFile.path, frontMatter, body);
     }
   } else {
     // Primary agent: normal release flow
@@ -357,7 +357,7 @@ export async function taskReportCommand(
 
     // Update task status
     frontMatter.status = 'in_review';
-    await writeTaskFile(taskFile.path, frontMatter, body);
+    await writeTaskProjection(taskFile.path, frontMatter, body);
     try {
       const store = openTaskLifecycleStore(cwd);
       try {
@@ -386,7 +386,7 @@ export async function taskReportCommand(
       task_id: taskFile.taskId,
       report_id: reportId,
     });
-    if (bridgeResult.warning) {
+    if (bridgeResult.warning && fmt.getFormat() !== 'json') {
       fmt.message(bridgeResult.warning, 'warning');
     }
   } catch {
@@ -407,7 +407,7 @@ export async function taskReportCommand(
         task_id: taskFile.taskId,
         agent_id: agentId,
         new_status: 'in_review',
-        guidance: formatGuidanceForJson(guidance),
+        ...(options.verbose && guidance.length > 0 ? { guidance: formatGuidanceForJson(guidance) } : {}),
       },
     };
   }

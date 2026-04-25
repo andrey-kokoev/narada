@@ -12,7 +12,7 @@ import {
   loadReview,
   saveReview,
   readTaskFile,
-  writeTaskFile,
+  writeTaskProjection,
   isValidTransition,
   loadReport,
   saveReport,
@@ -21,7 +21,9 @@ import {
 } from '../lib/task-governance.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
-import type { TaskLifecycleStore } from '../lib/task-lifecycle-store.js';
+import { openTaskLifecycleStore, type TaskLifecycleStore } from '../lib/task-lifecycle-store.js';
+import { admitTaskEvidence } from '../lib/evidence-admission.js';
+import { taskCloseCommand } from './task-close.js';
 import {
   resolvePrincipalStateDir,
   updatePrincipalRuntimeFromTaskEvent,
@@ -119,9 +121,13 @@ export async function taskReviewCommand(
 
   // Read task file
   const { frontMatter, body } = await readTaskFile(taskFile.path);
+  const ownStore = options.store ? null : openTaskLifecycleStore(cwd);
+  const closeOwnStore = () => {
+    if (ownStore) ownStore.db.close();
+  };
 
   // --- SQLite-backed lifecycle path (Task 567) ---
-  const store = options.store;
+  const store = options.store ?? ownStore ?? undefined;
   let sqliteStatus: string | undefined;
   if (store) {
     let lifecycle = store.getLifecycle(taskFile.taskId);
@@ -129,6 +135,7 @@ export async function taskReviewCommand(
       // Backfill: task exists in markdown but not yet in SQLite
       const taskNum = Number(taskNumber);
       if (!Number.isFinite(taskNum)) {
+        closeOwnStore();
         return {
           exitCode: ExitCode.GENERAL_ERROR,
           result: { status: 'error', error: 'Cannot determine task number for SQLite backfill' },
@@ -163,6 +170,7 @@ export async function taskReviewCommand(
 
   // Task must be in_review to be reviewed
   if (currentStatus !== 'in_review') {
+    closeOwnStore();
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: {
@@ -201,6 +209,7 @@ export async function taskReviewCommand(
 
   // Validate transition (allow same-status when evidence gate blocked)
   if (newStatus !== currentStatus && !isValidTransition(currentStatus, newStatus)) {
+    closeOwnStore();
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: {
@@ -216,6 +225,7 @@ export async function taskReviewCommand(
     try {
       const parsed = JSON.parse(findingsRaw) as unknown;
       if (!Array.isArray(parsed)) {
+        closeOwnStore();
         return {
           exitCode: ExitCode.GENERAL_ERROR,
           result: { status: 'error', error: 'Findings must be a JSON array' },
@@ -225,6 +235,7 @@ export async function taskReviewCommand(
       for (let i = 0; i < parsed.length; i++) {
         const item = parsed[i];
         if (typeof item !== 'object' || item === null) {
+          closeOwnStore();
           return {
             exitCode: ExitCode.GENERAL_ERROR,
             result: { status: 'error', error: `Findings[${i}] is not an object` },
@@ -232,18 +243,21 @@ export async function taskReviewCommand(
         }
         const f = item as Record<string, unknown>;
         if (!VALID_SEVERITIES.includes(f.severity as typeof VALID_SEVERITIES[number])) {
+          closeOwnStore();
           return {
             exitCode: ExitCode.GENERAL_ERROR,
             result: { status: 'error', error: `Findings[${i}].severity must be one of: ${VALID_SEVERITIES.join(', ')}` },
           };
         }
         if (typeof f.description !== 'string') {
+          closeOwnStore();
           return {
             exitCode: ExitCode.GENERAL_ERROR,
             result: { status: 'error', error: `Findings[${i}].description must be a string` },
           };
         }
         if (f.location !== undefined && f.location !== null && typeof f.location !== 'string') {
+          closeOwnStore();
           return {
             exitCode: ExitCode.GENERAL_ERROR,
             result: { status: 'error', error: `Findings[${i}].location must be a string or null` },
@@ -253,6 +267,7 @@ export async function taskReviewCommand(
       findings = parsed as ReviewFinding[];
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
+      closeOwnStore();
       return {
         exitCode: ExitCode.GENERAL_ERROR,
         result: { status: 'error', error: `Failed to parse findings: ${msg}` },
@@ -265,12 +280,14 @@ export async function taskReviewCommand(
   if (options.report) {
     linkedReport = await loadReport(cwd, options.report);
     if (!linkedReport) {
+      closeOwnStore();
       return {
         exitCode: ExitCode.INVALID_CONFIG,
         result: { status: 'error', error: `Report not found: ${options.report}` },
       };
     }
     if (linkedReport.task_id !== taskFile.taskId) {
+      closeOwnStore();
       return {
         exitCode: ExitCode.GENERAL_ERROR,
         result: {
@@ -296,15 +313,24 @@ export async function taskReviewCommand(
 
   await saveReview(cwd, reviewRecord);
 
-  // Write authoritative review and lifecycle state to SQLite
+  const admission = await admitTaskEvidence({
+    cwd,
+    taskNumber: Number(taskNumber),
+    admittedBy: agentId,
+    methods: ['review'],
+    requireReview: verdict !== 'rejected',
+    store,
+  });
+  if (verdict !== 'rejected' && admission.result.verdict === 'rejected') {
+    evidenceBlocked = true;
+    evidenceReason = admission.blockers.join('; ');
+    newStatus = 'in_review';
+  }
+
+  // Write authoritative review result. Accepted review does not own lifecycle
+  // closure; it admits evidence and then routes closure through task close.
   if (store) {
-    if (newStatus === 'closed') {
-      store.updateStatus(taskFile.taskId, 'closed', agentId, {
-        closed_at: now,
-        closed_by: agentId,
-        governed_by: `task_review:${agentId}`,
-      });
-    } else if (newStatus === 'opened') {
+    if (newStatus === 'opened') {
       store.updateStatus(taskFile.taskId, 'opened', agentId);
     }
   }
@@ -315,14 +341,32 @@ export async function taskReviewCommand(
     await saveReport(cwd, linkedReport);
   }
 
-  // Preserve markdown front matter as compatibility projection
-  frontMatter.status = newStatus;
+  let closeAction: 'closed' | 'blocked' | 'skipped' = 'skipped';
+  let closeBlockers: string[] = [];
   if (newStatus === 'closed') {
-    frontMatter.governed_by = `task_review:${agentId}`;
-    frontMatter.closed_at = now;
-    frontMatter.closed_by = agentId;
+    const closeResult = await taskCloseCommand({
+      taskNumber,
+      by: agentId,
+      cwd,
+      format: 'json',
+      store,
+      mode: 'peer_reviewed',
+    });
+    if (closeResult.exitCode === ExitCode.SUCCESS) {
+      closeAction = 'closed';
+    } else {
+      closeAction = 'blocked';
+      newStatus = 'in_review';
+      evidenceBlocked = true;
+      const closeData = closeResult.result as { gate_failures?: string[]; error?: string };
+      closeBlockers = closeData.gate_failures ?? [closeData.error ?? 'Lifecycle close failed'];
+      evidenceReason = closeBlockers.join('; ');
+    }
+  } else {
+    // Preserve markdown front matter as compatibility projection for non-close outcomes.
+    frontMatter.status = newStatus;
+    await writeTaskProjection(taskFile.path, frontMatter, body);
   }
-  await writeTaskFile(taskFile.path, frontMatter, body);
 
   // Post-commit advisory PrincipalRuntime update
   try {
@@ -333,7 +377,7 @@ export async function taskReviewCommand(
       task_id: taskFile.taskId,
       review_id: reviewId,
     });
-    if (bridgeResult.warning) {
+    if (bridgeResult.warning && fmt.getFormat() !== 'json') {
       fmt.message(bridgeResult.warning, 'warning');
     }
   } catch {
@@ -349,12 +393,20 @@ export async function taskReviewCommand(
       review_id: reviewId,
       task_id: taskFile.taskId,
       verdict,
+      review_verdict_status: verdict === 'rejected' ? 'rejected' : 'accepted',
+      lifecycle_status: newStatus,
       new_status: newStatus,
+      admission_id: admission.result.admission_id,
+      close_action: closeAction,
     };
+    if (closeBlockers.length > 0) {
+      result.close_blockers = closeBlockers;
+    }
     if (evidenceBlocked) {
       result.evidence_blocked = true;
       result.evidence_reason = evidenceReason;
     }
+    closeOwnStore();
     return {
       exitCode: ExitCode.SUCCESS,
       result,
@@ -366,6 +418,7 @@ export async function taskReviewCommand(
   } else {
     fmt.message(`Reviewed task ${taskFile.taskId}: ${verdict} → ${newStatus}`, 'success');
   }
+  closeOwnStore();
   return {
     exitCode: ExitCode.SUCCESS,
     result: {
@@ -373,7 +426,12 @@ export async function taskReviewCommand(
       review_id: reviewId,
       task_id: taskFile.taskId,
       verdict,
+      review_verdict_status: verdict === 'rejected' ? 'rejected' : 'accepted',
+      lifecycle_status: newStatus,
       new_status: newStatus,
+      admission_id: admission.result.admission_id,
+      close_action: closeAction,
+      ...(closeBlockers.length > 0 ? { close_blockers: closeBlockers } : {}),
       ...(evidenceBlocked ? { evidence_blocked: true, evidence_reason: evidenceReason } : {}),
     },
   };

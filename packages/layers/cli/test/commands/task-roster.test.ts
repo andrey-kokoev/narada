@@ -44,7 +44,7 @@ import {
 } from '../../src/lib/task-governance.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { Database } from '@narada2/control-plane';
-import { SqliteTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
+import { openTaskLifecycleStore, SqliteTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -189,17 +189,34 @@ describe('task roster operator', () => {
         task: 385,
       });
 
-      const parsed = result.result as { guidance: unknown[] };
-      expect(parsed.guidance.length).toBeGreaterThan(0);
-      expect(parsed.guidance[0]).toMatchObject({
-        artifact_id: '20260422-003',
-      });
+      expect(result.result).not.toHaveProperty('guidance');
 
       const roster = await loadRoster(tempDir);
       const entry = roster.agents.find((a) => a.agent_id === 'test-agent');
       expect(entry?.status).toBe('working');
       expect(entry?.task).toBe(385);
       expect(entry?.updated_at).toBeDefined();
+    });
+
+    it('includes guidance in JSON only when verbose is set', async () => {
+      writeFileSync(
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-385-test.md'),
+        '---\ntask_id: 385\nstatus: opened\n---\n\n# Task 385\n',
+      );
+
+      const result = await taskRosterAssignCommand({
+        taskNumber: '385',
+        agent: 'test-agent',
+        cwd: tempDir,
+        format: 'json',
+        verbose: true,
+      });
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      const parsed = result.result as { guidance: unknown[] };
+      expect(parsed.guidance.length).toBeGreaterThan(0);
+      expect(parsed.guidance[0]).toMatchObject({
+        artifact_id: '20260422-003',
+      });
     });
 
     it('fails when agent does not exist', async () => {
@@ -251,6 +268,18 @@ describe('task roster operator', () => {
       expect(assignment.task_id).toBe('20260420-385-test');
       expect(assignment.assignments).toHaveLength(1);
       expect(assignment.assignments[0].agent_id).toBe('test-agent');
+
+      const store = openTaskLifecycleStore(tempDir);
+      try {
+        const parsedWithIntent = result.result as { assignment_intent_id: string };
+        const intent = store.getAssignmentIntent(parsedWithIntent.assignment_intent_id);
+        expect(intent?.status).toBe('applied');
+        expect(intent?.kind).toBe('roster_assign');
+        expect(intent?.lifecycle_status_after).toBe('claimed');
+        expect(intent?.roster_status_after).toBe('working');
+      } finally {
+        store.db.close();
+      }
     });
 
     it('preserves depends_on through claim', async () => {
@@ -437,6 +466,9 @@ describe('task roster operator', () => {
         agent_status: 'done',
         last_done: 385,
       });
+      expect(result.result).toHaveProperty('roster_updated_at');
+      expect(result.result).not.toHaveProperty('roster');
+      expect(result.result).not.toHaveProperty('guidance');
 
       const roster = await loadRoster(tempDir);
       const entry = roster.agents.find((a) => a.agent_id === 'test-agent');

@@ -7,18 +7,21 @@
 
 import { resolve } from 'node:path';
 import {
-  loadRoster,
-  findTaskFile,
   loadAssignment,
   saveAssignment,
-  readTaskFile,
   writeTaskFile,
-  getActiveAssignment,
   continuationReasonToIntent,
   type TaskAssignmentRecord,
   type TaskAssignment,
   type TaskContinuation,
 } from '../lib/task-governance.js';
+import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
+import {
+  admitAssignmentIntent,
+  ensureLifecycleForAssignment,
+  recordAssignmentIntentApplied,
+  recordAssignmentIntentFailed,
+} from '../lib/assignment-intent.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 
@@ -36,9 +39,6 @@ const ALLOWED_REASONS: ContinuationReason[] = [
   'blocked_agent',
   'operator_override',
 ];
-
-/** Reasons that supersede the prior active assignment. */
-const SUPERSEDE_REASONS: ContinuationReason[] = ['handoff', 'blocked_agent', 'operator_override'];
 
 export interface TaskContinueOptions {
   taskNumber?: string;
@@ -88,89 +88,29 @@ export async function taskContinueCommand(
     };
   }
 
-  // ── Load and validate roster ──
-  let roster;
-  try {
-    roster = await loadRoster(cwd);
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    return {
-      exitCode: ExitCode.GENERAL_ERROR,
-      result: { status: 'error', error: `Failed to load agent roster: ${msg}` },
-    };
+  const admission = await admitAssignmentIntent(cwd, {
+    kind: 'continue',
+    taskNumber: Number(taskNumber),
+    agentId,
+    requestedBy: agentId,
+    reason,
+  });
+  if (!admission.ok) {
+    return { exitCode: admission.exitCode as ExitCode, result: admission.result };
   }
 
-  const agent = roster.agents.find((a) => a.agent_id === agentId);
-  if (!agent) {
-    return {
-      exitCode: ExitCode.INVALID_CONFIG,
-      result: { status: 'error', error: `Agent not found in roster: ${agentId}` },
-    };
-  }
-
-  // ── Find and read task file ──
-  let taskFile;
-  try {
-    taskFile = await findTaskFile(cwd, taskNumber);
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    return {
-      exitCode: ExitCode.GENERAL_ERROR,
-      result: { status: 'error', error: msg },
-    };
-  }
-
-  if (!taskFile) {
-    return {
-      exitCode: ExitCode.INVALID_CONFIG,
-      result: { status: 'error', error: `Task not found: ${taskNumber}` },
-    };
-  }
-
-  const { frontMatter, body } = await readTaskFile(taskFile.path);
-  const currentStatus = frontMatter.status;
-
-  // ── Validate task status ──
-  if (currentStatus === 'opened') {
-    return {
-      exitCode: ExitCode.GENERAL_ERROR,
-      result: {
-        status: 'error',
-        error: `Task ${taskFile.taskId} is opened, not claimed. Use 'narada task claim' or 'narada task roster assign' instead of 'task continue'.`,
-      },
-    };
-  }
-
-  if (currentStatus !== 'claimed' && currentStatus !== 'needs_continuation') {
-    return {
-      exitCode: ExitCode.GENERAL_ERROR,
-      result: {
-        status: 'error',
-        error: `Task ${taskFile.taskId} cannot be continued (status: ${currentStatus ?? 'missing'}). Only 'claimed' and 'needs_continuation' tasks support continuation.`,
-      },
-    };
-  }
-
-  // ── Load assignment and determine semantics ──
+  const { taskFile, frontMatter, body } = admission;
+  const currentStatus = admission.currentStatus;
   const existing = await loadAssignment(cwd, taskFile.taskId);
-  const active = existing ? getActiveAssignment(existing) : null;
-
+  const active = existing?.assignments.find((a) => a.released_at === null && a.agent_id === admission.previousAgentId);
   if (!active) {
+    recordAssignmentIntentFailed(cwd, admission.intent.request_id, 'Active assignment disappeared after admission');
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: {
         status: 'error',
         error: `Task ${taskFile.taskId} has no active assignment to continue from.`,
-      },
-    };
-  }
-
-  if (active.agent_id === agentId) {
-    return {
-      exitCode: ExitCode.GENERAL_ERROR,
-      result: {
-        status: 'error',
-        error: `Agent ${agentId} is already the active assignee for task ${taskFile.taskId}.`,
+        assignment_intent_id: admission.intent.request_id,
       },
     };
   }
@@ -186,56 +126,99 @@ export async function taskContinueCommand(
     record.continuations = [];
   }
 
-  const supersedes = SUPERSEDE_REASONS.includes(reason);
+  const supersedes = admission.supersedes;
 
-  if (supersedes) {
-    // Release prior active assignment
-    active.released_at = now;
-    active.release_reason = 'continued';
+  try {
+    if (supersedes) {
+      active.released_at = now;
+      active.release_reason = 'continued';
 
-    // Create new primary assignment
-    const newAssignment: TaskAssignment = {
-      agent_id: agentId,
-      claimed_at: now,
-      claim_context: null,
-      released_at: null,
-      release_reason: null,
-      continuation_reason: reason,
-      previous_agent_id: active.agent_id,
-      intent: continuationReasonToIntent(reason),
-    };
-    record.assignments.push(newAssignment);
+      const newAssignment: TaskAssignment = {
+        agent_id: agentId,
+        claimed_at: now,
+        claim_context: null,
+        released_at: null,
+        release_reason: null,
+        continuation_reason: reason,
+        previous_agent_id: active.agent_id,
+        intent: continuationReasonToIntent(reason),
+      };
+      record.assignments.push(newAssignment);
+    } else {
+      const continuation: TaskContinuation = {
+        agent_id: agentId,
+        started_at: now,
+        reason,
+        previous_agent_id: active.agent_id,
+      };
+      record.continuations.push(continuation);
+    }
 
-    // Transition needs_continuation → claimed
     if (currentStatus === 'needs_continuation') {
       frontMatter.status = 'claimed';
       await writeTaskFile(taskFile.path, frontMatter, body);
     }
-  } else {
-    // evidence_repair or review_fix: keep prior active, add continuation
-    const continuation: TaskContinuation = {
-      agent_id: agentId,
-      started_at: now,
-      reason,
-      previous_agent_id: active.agent_id,
-    };
-    record.continuations.push(continuation);
 
-    // Transition needs_continuation → claimed
-    if (currentStatus === 'needs_continuation') {
-      frontMatter.status = 'claimed';
-      await writeTaskFile(taskFile.path, frontMatter, body);
+    const store = openTaskLifecycleStore(cwd);
+    try {
+      ensureLifecycleForAssignment(store, taskFile.taskId, Number(taskNumber), frontMatter);
+      if (currentStatus === 'needs_continuation') {
+        store.updateStatus(taskFile.taskId, 'claimed', agentId);
+      }
+    } finally {
+      store.db.close();
     }
+
+    await saveAssignment(cwd, record);
+
+    const assignmentStore = openTaskLifecycleStore(cwd);
+    try {
+      if (supersedes) {
+        const activeRow = assignmentStore.getActiveAssignment(taskFile.taskId);
+        if (activeRow) {
+          assignmentStore.releaseAssignment(activeRow.assignment_id, 'continued');
+        }
+        assignmentStore.insertAssignment({
+          assignment_id: admission.intent.assignment_id ?? `assign-${taskFile.taskId}-${agentId}-${Date.now()}`,
+          task_id: taskFile.taskId,
+          agent_id: agentId,
+          claimed_at: now,
+          released_at: null,
+          release_reason: null,
+          intent: continuationReasonToIntent(reason),
+        });
+      }
+    } finally {
+      assignmentStore.db.close();
+    }
+
+    const { updateAgentRosterEntry } = await import('../lib/task-governance.js');
+    await updateAgentRosterEntry(cwd, agentId, {
+      status: 'working',
+      task: Number(taskNumber) || null,
+    });
+
+    recordAssignmentIntentApplied(cwd, admission.intent.request_id, {
+      lifecycleStatusAfter: frontMatter.status ?? null,
+      rosterStatusAfter: 'working',
+      assignmentId: admission.intent.assignment_id,
+      confirmation: {
+        task_id: taskFile.taskId,
+        task_number: Number(taskNumber),
+        supersedes,
+        previous_agent_id: active.agent_id,
+        lifecycle_status: frontMatter.status,
+        roster_status: 'working',
+      },
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    recordAssignmentIntentFailed(cwd, admission.intent.request_id, msg);
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: { status: 'error', error: msg, assignment_intent_id: admission.intent.request_id },
+    };
   }
-
-  await saveAssignment(cwd, record);
-
-  // Update roster
-  const { updateAgentRosterEntry } = await import('../lib/task-governance.js');
-  await updateAgentRosterEntry(cwd, agentId, {
-    status: 'working',
-    task: Number(taskNumber) || null,
-  });
 
   if (fmt.getFormat() === 'json') {
     return {
@@ -249,6 +232,7 @@ export async function taskContinueCommand(
         previous_agent_id: active.agent_id,
         task_status: frontMatter.status,
         continued_at: now,
+        assignment_intent_id: admission.intent.request_id,
       },
     };
   }
@@ -272,6 +256,7 @@ export async function taskContinueCommand(
       reason,
       supersedes,
       previous_agent_id: active.agent_id,
+      assignment_intent_id: admission.intent.request_id,
     },
   };
 }

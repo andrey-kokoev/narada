@@ -4,7 +4,7 @@ vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { createWorkbenchServer } from '../../src/commands/workbench-server.js';
+import { createWorkbenchServer, workbenchDiagnoseCommand } from '../../src/commands/workbench-server.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -305,6 +305,21 @@ describe('workbench server', () => {
       expect(status).toBe(200);
       expect((body as { status: string }).status).toBe('ok');
       await server.stop();
+    });
+  });
+
+  describe('workbench diagnose', () => {
+    it('returns bounded diagnostic counts without graph payload expansion', async () => {
+      writeTask(tempDir, '20260424-526-workbench.md', 'task_id: 526\nstatus: opened\ndepends_on: []\n', 'Workbench HTTP Adapter');
+      const result = await workbenchDiagnoseCommand({ cwd: tempDir, format: 'json' });
+      expect(result.exitCode).toBe(0);
+      expect(result.result).toMatchObject({
+        status: 'ok',
+        source: 'workbench',
+        graph: { nodes: 1, edges: 0 },
+      });
+      expect(result.result).not.toHaveProperty('nodes');
+      expect(result.result).not.toHaveProperty('edges');
     });
   });
 

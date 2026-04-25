@@ -102,6 +102,7 @@ When describing higher-order architecture, deployment, or design:
 | [10-ui-read-model-audit.md](packages/layers/control-plane/docs/10-ui-read-model-audit.md) | UI read surfaces, gaps, and authority rules | Are building operator UI |
 | [runtime-usc-boundary.md](docs/concepts/runtime-usc-boundary.md) | Runtime / USC / operator ownership boundary | Need to understand which layer owns what |
 | [runtime-usc-boundary.md §Language / Runtime Posture](docs/concepts/runtime-usc-boundary.md#language--runtime-posture) | TypeScript posture vs durable authority boundaries | Need to decide whether types, schemas, runtime checks, or another language own a concern |
+| [command-execution-intent-zone.md](docs/concepts/command-execution-intent-zone.md) | Command Execution Intent Zone — governed non-test command execution boundary | Need to separate command request, execution, result, and output admission |
 | [cloudflare-site-materialization.md](docs/deployment/cloudflare-site-materialization.md) | Cloudflare Site materialization design | Designing or deploying a Cloudflare-backed Narada Site |
 | [bootstrap-contract.md](docs/product/bootstrap-contract.md) | Canonical intent-to-operation bootstrap path | Setting up or onboarding a first-time user |
 | [site-bootstrap-contract.md](docs/product/site-bootstrap-contract.md) | Canonical Site first-run path (runtime locus setup) | Setting up a local Site on Windows, macOS, or Linux |
@@ -119,6 +120,7 @@ When describing higher-order architecture, deployment, or design:
 |--------------|---------|
 | Change event ID computation | [`src/ids/event-id.ts`](packages/layers/control-plane/src/ids/event-id.ts) |
 | Add a new persistence store | [`src/persistence/`](packages/layers/control-plane/src/persistence/) + see [03-persistence.md](packages/layers/control-plane/docs/03-persistence.md) |
+| Modify task governance domain law | [`@narada2/task-governance`](packages/task-governance/README.md) |
 | Modify the sync loop | [`src/runner/sync-once.ts`](packages/layers/control-plane/src/runner/sync-once.ts) |
 | Add a CLI command | [`packages/layers/cli/src/commands/`](packages/layers/cli/src/commands/) |
 | Change Graph API handling | [`src/adapter/graph/`](packages/layers/control-plane/src/adapter/graph/) |

@@ -1,0 +1,69 @@
+{
+  "name": "@narada2/task-governance",
+  "version": "0.1.0",
+  "description": "Narada task governance domain package",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./assignment-intent": {
+      "types": "./dist/assignment-intent.d.ts",
+      "import": "./dist/assignment-intent.js"
+    },
+    "./evidence-admission": {
+      "types": "./dist/evidence-admission.d.ts",
+      "import": "./dist/evidence-admission.js"
+    },
+    "./task-governance": {
+      "types": "./dist/task-governance.d.ts",
+      "import": "./dist/task-governance.js"
+    },
+    "./task-close-service": {
+      "types": "./dist/task-close-service.d.ts",
+      "import": "./dist/task-close-service.js"
+    },
+    "./task-graph": {
+      "types": "./dist/task-graph.d.ts",
+      "import": "./dist/task-graph.js"
+    },
+    "./task-lifecycle-store": {
+      "types": "./dist/task-lifecycle-store.d.ts",
+      "import": "./dist/task-lifecycle-store.js"
+    },
+    "./task-projection": {
+      "types": "./dist/task-projection.d.ts",
+      "import": "./dist/task-projection.js"
+    },
+    "./task-recommender": {
+      "types": "./dist/task-recommender.d.ts",
+      "import": "./dist/task-recommender.js"
+    },
+    "./task-spec": {
+      "types": "./dist/task-spec.d.ts",
+      "import": "./dist/task-spec.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:fast": "vitest run test/lib/task-lifecycle-store.test.ts test/lib/task-projection.test.ts test/lib/evidence-admission.test.ts test/lib/task-recommender.test.ts test/lib/task-close-service.test.ts --pool=forks --no-file-parallelism --maxWorkers=1 --minWorkers=1 --testTimeout=120000 --hookTimeout=120000",
+    "test:governance": "vitest run test/lib/task-governance.test.ts --pool=forks --no-file-parallelism --maxWorkers=1 --minWorkers=1 --testTimeout=120000 --hookTimeout=120000"
+  },
+  "dependencies": {
+    "@narada2/control-plane": "workspace:*",
+    "@narada2/intent-zones": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -16,6 +16,7 @@ import { readTaskGraph, renderMermaid, renderJson, type ReadTaskGraphOptions } f
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { renderAndMaybeOpen } from '../lib/browser-render.js';
+import { createObservationArtifact } from '../lib/observation-artifact.js';
 
 export interface TaskGraphOptions {
   format?: 'mermaid' | 'json' | 'auto';
@@ -27,6 +28,10 @@ export interface TaskGraphOptions {
   view?: boolean;
   /** Open browser after creating artifacts (default true when --view is set) */
   open?: boolean;
+  /** Explicitly print full graph output instead of bounded artifact pointer */
+  full?: boolean;
+  /** Use artifact-first bounded output; CLI enables this by default. */
+  bounded?: boolean;
 }
 
 export async function taskGraphCommand(
@@ -116,7 +121,22 @@ export async function taskGraphCommand(
     };
   }
 
-  if (outputFormat === 'json') {
+  if (!options.bounded) {
+    if (outputFormat === 'json') {
+      const jsonGraph = renderJson(graph);
+      return {
+        exitCode: ExitCode.SUCCESS,
+        result: { status: 'success', nodes: jsonGraph.nodes, edges: jsonGraph.edges },
+      };
+    }
+    const mermaid = renderMermaid(graph);
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: { status: 'success', count: graph.nodes.length, mermaid },
+    };
+  }
+
+  if (outputFormat === 'json' && options.full) {
     const jsonGraph = renderJson(graph);
     return {
       exitCode: ExitCode.SUCCESS,
@@ -124,13 +144,35 @@ export async function taskGraphCommand(
     };
   }
 
-  // Mermaid is the default human-readable output
+  // Artifact-first observation path: default output is bounded.
   const mermaid = renderMermaid(graph);
+  const jsonGraph = renderJson(graph);
+  const observation = await createObservationArtifact({
+    cwd,
+    artifactType: outputFormat === 'json' ? 'task_graph_json' : 'task_graph_mermaid',
+    sourceOperator: 'task_graph',
+    extension: outputFormat === 'json' ? 'json' : 'mmd',
+    content: outputFormat === 'json' ? JSON.stringify(jsonGraph, null, 2) : mermaid,
+    admittedView: {
+      node_count: graph.nodes.length,
+      edge_count: graph.edges.length,
+      format: outputFormat,
+      range: options.range ?? null,
+      status: options.status ?? null,
+      include_closed: options.includeClosed ?? false,
+    },
+  });
 
   if (fmt.getFormat() === 'json') {
     return {
       exitCode: ExitCode.SUCCESS,
-      result: { status: 'success', mermaid },
+      result: {
+        status: 'success',
+        count: graph.nodes.length,
+        edge_count: graph.edges.length,
+        observation: observation.view,
+        ...(options.full ? { mermaid } : {}),
+      },
     };
   }
 
@@ -138,17 +180,23 @@ export async function taskGraphCommand(
     fmt.message('No tasks match the current filters', 'info');
     return {
       exitCode: ExitCode.SUCCESS,
-      result: { status: 'success', count: 0, mermaid: '' },
+      result: { status: 'success', count: 0, observation: observation.view },
     };
   }
 
   fmt.section(`Task Graph (${graph.nodes.length} nodes, ${graph.edges.length} edges)`);
-  console.log('```mermaid');
-  console.log(mermaid.trimEnd());
-  console.log('```');
+  fmt.kv('Observation artifact', observation.view.artifact_uri);
+  fmt.kv('Digest', observation.view.digest);
+  if (options.full) {
+    console.log('```mermaid');
+    console.log(mermaid.trimEnd());
+    console.log('```');
+  } else {
+    fmt.message('Full graph output suppressed by default. Use --full or --view for rendering.', 'info');
+  }
 
   return {
     exitCode: ExitCode.SUCCESS,
-    result: { status: 'success', count: graph.nodes.length, mermaid },
+    result: { status: 'success', count: graph.nodes.length, observation: observation.view, ...(options.full ? { mermaid } : {}) },
   };
 }
