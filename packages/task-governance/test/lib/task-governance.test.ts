@@ -32,7 +32,7 @@ import {
   type WorkResultReport,
 } from '../../src/task-governance.js';
 import { openTaskLifecycleStore } from '../../src/task-lifecycle-store.js';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, statSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -596,6 +596,17 @@ describe('parseFrontMatter', () => {
     });
     expect(reparsed.frontMatter.task_id).toBe(999);
   });
+
+  it('serializes with exactly one final newline and no blank EOF line', () => {
+    const serialized = serializeFrontMatter(
+      { status: 'opened' },
+      '# Task 999\n\n## Acceptance Criteria\n\n- [x] Done.\n\n',
+    );
+
+    expect(serialized).toBe('---\nstatus: opened\n---\n\n# Task 999\n\n## Acceptance Criteria\n\n- [x] Done.\n');
+    expect(serialized).not.toMatch(/\n\n$/);
+    expect(serialized).toMatch(/[^\n]\n$/);
+  });
 });
 
 describe('writeTaskFile front-matter preservation', () => {
@@ -626,6 +637,16 @@ describe('writeTaskFile front-matter preservation', () => {
     expect(fm2.status).toBe('claimed');
     expect(fm2.depends_on).toEqual([998, 997]);
     expect(fm2.extra_field).toBe('preserved');
+  });
+
+  it('does not write a blank EOF line when body already ends with blank lines', async () => {
+    const path = join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test.md');
+
+    await writeTaskFile(path, { status: 'closed' }, '# Task 999\n\n## Acceptance Criteria\n\n- [x] Done.\n\n');
+
+    const written = readFileSync(path, 'utf8');
+    expect(written).not.toMatch(/\n\n$/);
+    expect(written).toMatch(/[^\n]\n$/);
   });
 });
 

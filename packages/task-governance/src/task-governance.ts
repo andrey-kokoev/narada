@@ -1287,7 +1287,7 @@ export function serializeFrontMatter(frontMatter: TaskFrontMatter, body: string)
   }
   lines.push('---');
   lines.push('');
-  lines.push(body.trimStart());
+  lines.push(body.trim());
   return lines.join('\n') + '\n';
 }
 
