@@ -35,6 +35,10 @@ export interface SyncOptions {
   mailbox?: string;
 }
 
+export function resolveSingleScopeSyncRoot(scope: ScopeConfig): string {
+  return resolve(scope.root_dir);
+}
+
 export async function syncCommand(
   options: SyncOptions,
   context: CommandContext,
@@ -80,7 +84,7 @@ export async function syncCommand(
   }
   const graph = graphSource as { user_id: string; tenant_id?: string; client_id?: string; client_secret?: string; base_url?: string; prefer_immutable_ids?: boolean };
 
-  const rootDir = resolve(config.root_dir);
+  const rootDir = resolveSingleScopeSyncRoot(scope);
 
   if (options.dryRun) {
     fmt.message('DRY RUN: Fetching and analyzing changes without writing local state', 'warning');
