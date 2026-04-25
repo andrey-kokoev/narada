@@ -308,6 +308,27 @@ describe('findTaskFile', () => {
     const result = await findTaskFile(tempDir, '495');
     expect(result?.taskId).toBe('20260423-495-crossing-regime-declaration-contract');
   });
+
+  it('resolves chapter-edge tasks with em dash headings', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260425-724-726-chapter-commit-coherence.md'),
+      '---\nstatus: opened\n---\n\n# Chapter Commit Coherence\n',
+    );
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260425-724-chapter-commit-coherence-1.md'),
+      '---\nstatus: opened\n---\n\n# Task 724 — Close Residual Tasks\n',
+    );
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260425-726-chapter-commit-coherence-3.md'),
+      '---\nstatus: opened\n---\n\n# Task 726 — Use Coherence Inspection\n',
+    );
+
+    const first = await findTaskFile(tempDir, '724');
+    const last = await findTaskFile(tempDir, '726');
+
+    expect(first?.taskId).toBe('20260425-724-chapter-commit-coherence-1');
+    expect(last?.taskId).toBe('20260425-726-chapter-commit-coherence-3');
+  });
 });
 
 describe('lintTaskFiles', () => {

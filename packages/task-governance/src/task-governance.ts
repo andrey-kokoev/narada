@@ -443,7 +443,6 @@ const DERIVATIVE_SUFFIXES = ['-EXECUTED.md', '-DONE.md', '-RESULT.md', '-FINAL.m
  * Excludes:
  * - Derivative status files (-EXECUTED, -DONE, -RESULT, -FINAL, -SUPERSEDED)
  * - Chapter range files (DATE-START-END-...)
- * - Chapter task files (basename contains `-chapter`)
  * - Chapter closure files (basename ends with `-closure`)
  * - Non-markdown files
  */
@@ -459,8 +458,7 @@ export function isExecutableTaskFile(fileName: string): boolean {
   // Exclude chapter range files: DATE-START-END-...
   if (/^[0-9]{8}-[0-9]+-[0-9]+/.test(base)) return false;
 
-  // Exclude chapter artifacts (chapter tasks and chapter closures)
-  if (base.includes('-chapter')) return false;
+  // Exclude chapter closure artifacts. A normal task slug may contain "chapter".
   if (base.endsWith('-closure')) return false;
 
   return true;
@@ -1116,12 +1114,8 @@ export async function findTaskFile(cwd: string, taskNumber: string): Promise<{ p
 
   // Try short number match (e.g., "260" matches "20260420-260-...")
   const candidates = files.filter((f) => {
-    if (!f.endsWith('.md')) return false;
+    if (!isExecutableTaskFile(f)) return false;
     const base = f.replace(/\.md$/, '');
-    // Exclude derivative status files from matching
-    for (const suffix of DERIVATIVE_SUFFIXES) {
-      if (base.includes(suffix.replace(/\.md$/, ''))) return false;
-    }
     // Match patterns like 20260420-260-... or 260 anywhere in the filename
     // Also handle zero-padded numbers (e.g., 050 matches 50)
     const numMatch = base.match(/-(\d+)-/);
@@ -1133,7 +1127,7 @@ export async function findTaskFile(cwd: string, taskNumber: string): Promise<{ p
   for (const candidate of candidates) {
     try {
       const content = await readFile(join(dir, candidate), 'utf8');
-      const heading = content.match(/^# Task (\d+)(?:\s+-|\s*$)/m);
+      const heading = content.match(/^# Task (\d+)(?:\s+[-—]|\s*$)/m);
       if (heading && Number(heading[1]) === Number(taskNumber)) {
         executableCandidates.push(candidate);
       }

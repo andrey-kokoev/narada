@@ -107,7 +107,7 @@ import { taskGraphCommand } from './commands/task-graph.js';
 import { taskSearchCommand } from './commands/task-search.js';
 import { taskEvidenceAdmitCommand, taskEvidenceCommand, taskEvidenceProveCriteriaCommand } from './commands/task-evidence.js';
 import { taskReadCommand } from './commands/task-read.js';
-import { taskEvidenceListCommand } from './commands/task-evidence-list.js';
+import { taskEvidenceAssertCompleteCommand, taskEvidenceListCommand } from './commands/task-evidence-list.js';
 import { taskReconcileInspectCommand, taskReconcileRecordCommand, taskReconcileRepairCommand } from './commands/task-reconcile.js';
 import {
   taskRosterShowCommand,
@@ -1660,6 +1660,28 @@ taskEvidenceCmd
     });
     if (result.exitCode !== 0) {
       console.error((result.result as { error?: string }).error ?? 'Evidence list failed');
+      process.exit(result.exitCode);
+    }
+    emitCommandResult(result.result);
+  });
+
+taskEvidenceCmd
+  .command('assert-complete <range>')
+  .description('Fail unless every task in a numeric range is evidence-complete')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (range: string, opts: Record<string, unknown>) => {
+    const result = await taskEvidenceAssertCompleteCommand({
+      range,
+      cwd: opts.cwd as string | undefined,
+      format: resolveCommandFormat(),
+    });
+    if (result.exitCode !== 0) {
+      if (resolveCommandFormat() === 'json') {
+        emitCommandResult(result.result);
+      } else {
+        const output = result.result as { incomplete_count?: number };
+        console.error(`Evidence range incomplete (${output.incomplete_count ?? 0} task(s))`);
+      }
       process.exit(result.exitCode);
     }
     emitCommandResult(result.result);

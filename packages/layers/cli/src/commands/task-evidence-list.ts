@@ -27,6 +27,12 @@ export interface TaskEvidenceListOptions {
   full?: boolean;
 }
 
+export interface TaskEvidenceAssertCompleteOptions {
+  range: string;
+  format?: 'json' | 'human' | 'auto';
+  cwd?: string;
+}
+
 const DEFAULT_LIST_LIMIT = 25;
 const MAX_LIST_LIMIT = 100;
 
@@ -66,6 +72,14 @@ function parseRangeFilter(input: string | undefined): { start: number; end: numb
   const end = Number(match[2]);
   if (start > end) return undefined;
   return { start, end };
+}
+
+function parseRequiredRange(input: string): { start: number; end: number } | null {
+  return parseRangeFilter(input) ?? null;
+}
+
+function isNumberedTaskId(taskId: string, taskNumber: number): boolean {
+  return new RegExp(`^[0-9]{8}-${taskNumber}(?!-[0-9]+)-`).test(taskId);
 }
 
 function parseLimit(input: string | number | undefined): number {
@@ -287,5 +301,93 @@ export async function taskEvidenceListCommand(
         observation: observation.view,
         tasks: visibleTasks.map(serializeTaskEvidence),
       },
+  };
+}
+
+export async function taskEvidenceAssertCompleteCommand(
+  options: TaskEvidenceAssertCompleteOptions,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const fmt = createFormatter({ format: options.format || 'auto', verbose: false });
+  const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
+  const range = parseRequiredRange(options.range);
+
+  if (!range) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: { status: 'error', error: 'Invalid range. Expected <start>-<end>.' },
+    };
+  }
+
+  let tasks: EvidenceBasedTaskEntry[];
+  try {
+    tasks = await listEvidenceBasedTasks(cwd, {
+      verdictFilter: ALL_VERDICTS,
+      rangeFilter: range,
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: { status: 'error', error: `Failed to inspect task range: ${msg}` },
+    };
+  }
+
+  const rangeTaskMap = new Map<string, EvidenceBasedTaskEntry>();
+  for (const task of tasks) {
+    if (task.task_number === null) continue;
+    if (task.task_number < range.start || task.task_number > range.end) continue;
+    if (!isNumberedTaskId(task.task_id, task.task_number)) continue;
+    rangeTaskMap.set(task.task_id, task);
+  }
+  const rangeTasks = Array.from(rangeTaskMap.values()).sort((a, b) => (a.task_number ?? 0) - (b.task_number ?? 0));
+  const incomplete = rangeTasks.filter((task) => task.verdict !== 'complete');
+  const rows = incomplete.map((task) => ({
+    task_number: task.task_number,
+    task_id: task.task_id,
+    status: task.status ?? null,
+    verdict: task.verdict,
+    unchecked_criteria: task.unchecked_count,
+    warnings: task.warnings.slice(0, 3),
+    violations: task.violations.slice(0, 3),
+  }));
+  const ok = incomplete.length === 0;
+  const result = {
+    status: ok ? 'success' : 'error',
+    range,
+    checked_count: rangeTasks.length,
+    incomplete_count: incomplete.length,
+    tasks: rows,
+  };
+
+  if (fmt.getFormat() === 'json') {
+    return {
+      exitCode: ok ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
+      result,
+    };
+  }
+
+  if (ok) {
+    fmt.message(`Range ${range.start}-${range.end} complete (${rangeTasks.length} tasks checked)`, 'success');
+  } else {
+    fmt.message(`Range ${range.start}-${range.end} has ${incomplete.length} incomplete task(s)`, 'error');
+    fmt.table(
+      [
+        { key: 'task' as const, label: 'Task', width: 6 },
+        { key: 'status' as const, label: 'Status', width: 14 },
+        { key: 'verdict' as const, label: 'Verdict', width: 16 },
+        { key: 'unchecked' as const, label: 'Unchecked', width: 10 },
+      ],
+      rows.map((task) => ({
+        task: String(task.task_number ?? task.task_id),
+        status: task.status ?? 'missing',
+        verdict: task.verdict,
+        unchecked: String(task.unchecked_criteria),
+      })),
+    );
+  }
+
+  return {
+    exitCode: ok ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
+    result,
   };
 }

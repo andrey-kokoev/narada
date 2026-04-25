@@ -5,6 +5,7 @@ vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskEvidenceAdmitCommand, taskEvidenceCommand, taskEvidenceProveCriteriaCommand } from '../../src/commands/task-evidence.js';
+import { taskEvidenceAssertCompleteCommand } from '../../src/commands/task-evidence-list.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -264,6 +265,56 @@ describe('task evidence operator', () => {
     expect(parsed.evidence.verdict).toBe('complete');
     expect(parsed.evidence.has_review).toBe(false);
     expect(parsed.evidence.has_closure).toBe(false);
+  });
+
+  it('asserts a complete task range with bounded output', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-120-test.md'),
+      `---\ntask_id: 120\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 120: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n\n## Execution Notes\nDone.\n\n## Verification\nPassed.\n`,
+    );
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-121-test.md'),
+      `---\ntask_id: 121\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 121: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n\n## Execution Notes\nDone.\n\n## Verification\nPassed.\n`,
+    );
+    ensureLifecycle(tempDir, '20260420-120-test');
+    ensureLifecycle(tempDir, '20260420-121-test');
+
+    const result = await taskEvidenceAssertCompleteCommand({ range: '120-121', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      checked_count: 2,
+      incomplete_count: 0,
+      tasks: [],
+    });
+  });
+
+  it('fails a task range with concise incomplete task rows', async () => {
+    createTask(tempDir, 122, 'claimed', '## Execution Notes\nDone.\n');
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-123-test.md'),
+      `---\ntask_id: 123\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 123: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n\n## Execution Notes\nDone.\n\n## Verification\nPassed.\n`,
+    );
+    ensureLifecycle(tempDir, '20260420-123-test');
+
+    const result = await taskEvidenceAssertCompleteCommand({ range: '122-123', cwd: tempDir, format: 'json' });
+    const parsed = result.result as {
+      status: string;
+      incomplete_count: number;
+      tasks: Array<{ task_number: number; verdict: string; warnings: string[] }>;
+    };
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(parsed.status).toBe('error');
+    expect(parsed.incomplete_count).toBe(1);
+    expect(parsed.tasks).toEqual([
+      expect.objectContaining({
+        task_number: 122,
+        verdict: 'attempt_complete',
+      }),
+    ]);
+    expect(JSON.stringify(parsed.tasks)).not.toContain('Execution Notes');
   });
 
   it('classifies direct closed task without verification as needs_closure', async () => {

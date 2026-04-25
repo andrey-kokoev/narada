@@ -1,30 +1,26 @@
 ---
-status: claimed
+status: closed
 depends_on: []
+criteria_proved_by: a1
+criteria_proved_at: 2026-04-25T22:02:20.821Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Proved through task finish orchestration; verification evidence remains separately admitted.
+closed_at: 2026-04-25T22:02:22.615Z
+closed_by: a1
+governed_by: task_close:a1
+closure_mode: agent_finish
 ---
 
 # Task 720 — Extract Finish Orchestrator Service
 
-## Execution Mode
+## Goal
 
-Proceed directly. This is a narrow corrective task; use focused edits only.
-
-## Assignment
-
-<!-- Assignment placeholder -->
-
-## Required Reading
-
-- docs/concepts/task-cli-service-extraction-rails.md
-- packages/task-governance/README.md
+Move finish orchestration semantics into @narada2/task-governance so task-finish coordinates report/review, evidence admission, optional criteria proof, close, and roster handoff through package services.
 
 ## Context
 
 <!-- Context placeholder -->
-
-## Goal
-
-Move finish orchestration semantics into @narada2/task-governance so task-finish coordinates report/review, evidence admission, optional criteria proof, close, and roster handoff through package services.
 
 ## Required Work
 
@@ -39,24 +35,6 @@ Move finish orchestration semantics into @narada2/task-governance so task-finish
 - Do not create derivative task-status files.
 - Do not mutate live external systems unless explicitly authorized.
 
-## Crossing Regime
-
-<!--
-Fill in ONLY if this task introduces a new durable authority-changing boundary.
-If the task uses an existing canonical crossing (e.g., Source → Fact, Decision → Intent),
-leave this section commented and delete it before closing.
-
-See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
-
-- source_zone:
-- destination_zone:
-- authority_owner:
-- admissibility_regime:
-- crossing_artifact:
-- confirmation_rule:
-- anti_collapse_invariant:
--->
-
 ## Execution Notes
 
 <!-- Record what was done, decisions made, and files changed during execution. -->
@@ -67,7 +45,7 @@ See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
 
 ## Acceptance Criteria
 
-- [ ] task-finish command delegates to package finish orchestrator
-- [ ] implementer and reviewer finish flows still function
-- [ ] --prove-criteria and --close paths still succeed with existing project rules
-- [ ] roster done gating semantics remain preserved
+- [x] task-finish command delegates to package finish orchestrator
+- [x] implementer and reviewer finish flows still function
+- [x] --prove-criteria and --close paths still succeed with existing project rules
+- [x] roster done gating semantics remain preserved
