@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeCommandError, runDirectCommand } from '../../src/lib/command-wrapper.js';
+import { normalizeCommandError, runDirectCommand, runDirectCommandWithResource } from '../../src/lib/command-wrapper.js';
 
 describe('command error normalization', () => {
   it('normalizes SQLITE_BUSY into a terse retryable operator error', () => {
@@ -89,5 +89,73 @@ describe('direct command runner', () => {
         throw new Error(`unexpected exit ${code}`);
       },
     })).rejects.toThrow('boom');
+  });
+});
+
+describe('resource-scoped direct command runner', () => {
+  it('closes the resource after successful command execution', async () => {
+    const events: string[] = [];
+
+    await runDirectCommandWithResource({
+      command: 'task resource',
+      open: () => ({ id: 'store' }),
+      close: (resource) => {
+        events.push(`close:${resource.id}`);
+      },
+      invocation: async (resource) => {
+        events.push(`invoke:${resource.id}`);
+        return { exitCode: 0, result: { status: 'success' } };
+      },
+      emit: () => undefined,
+      exit: (code): never => {
+        throw new Error(`unexpected exit ${code}`);
+      },
+    });
+
+    expect(events).toEqual(['invoke:store', 'close:store']);
+  });
+
+  it('closes the resource after normalized SQLite busy exit', async () => {
+    const events: string[] = [];
+
+    await expect(runDirectCommandWithResource({
+      command: 'task resource',
+      open: () => ({ id: 'store' }),
+      close: (resource) => {
+        events.push(`close:${resource.id}`);
+      },
+      invocation: async () => {
+        events.push('invoke');
+        throw Object.assign(new Error('database is locked'), { code: 'SQLITE_BUSY' });
+      },
+      emit: () => undefined,
+      exit: (): never => {
+        throw new Error('exit');
+      },
+    })).rejects.toThrow('exit');
+
+    expect(events).toEqual(['invoke', 'close:store']);
+  });
+
+  it('closes the resource after unexpected invocation errors', async () => {
+    const events: string[] = [];
+
+    await expect(runDirectCommandWithResource({
+      command: 'task resource',
+      open: () => ({ id: 'store' }),
+      close: (resource) => {
+        events.push(`close:${resource.id}`);
+      },
+      invocation: async () => {
+        events.push('invoke');
+        throw new Error('boom');
+      },
+      emit: () => undefined,
+      exit: (code): never => {
+        throw new Error(`unexpected exit ${code}`);
+      },
+    })).rejects.toThrow('boom');
+
+    expect(events).toEqual(['invoke', 'close:store']);
   });
 });

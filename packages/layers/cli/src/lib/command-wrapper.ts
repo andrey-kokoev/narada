@@ -41,6 +41,16 @@ export interface DirectCommandRunnerOptions {
   exit?: (code: number) => never;
 }
 
+export interface ResourceScopedDirectCommandRunnerOptions<TResource> {
+  command: string;
+  open: () => TResource;
+  close: (resource: TResource) => void | Promise<void>;
+  invocation: (resource: TResource) => Promise<CommandResultEnvelope>;
+  emit: (result: unknown, format?: unknown) => void;
+  format?: unknown;
+  exit?: (code: number) => never;
+}
+
 export function normalizeCommandError(command: string, error: unknown): NormalizedCommandError | undefined {
   const err = error instanceof Error ? error : new Error(String(error));
   const code = (error as { code?: unknown } | null)?.code;
@@ -77,6 +87,23 @@ export async function runDirectCommand(options: DirectCommandRunnerOptions): Pro
   options.emit(result.result, options.format);
   if (result.exitCode !== 0) {
     exit(result.exitCode);
+  }
+}
+
+export async function runDirectCommandWithResource<TResource>(
+  options: ResourceScopedDirectCommandRunnerOptions<TResource>,
+): Promise<void> {
+  const resource = options.open();
+  try {
+    await runDirectCommand({
+      command: options.command,
+      invocation: () => options.invocation(resource),
+      emit: options.emit,
+      format: options.format,
+      exit: options.exit,
+    });
+  } finally {
+    await options.close(resource);
   }
 }
 

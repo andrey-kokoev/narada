@@ -139,7 +139,7 @@ import {
   observationListCommand,
   observationOpenCommand,
 } from './commands/observation.js';
-import { runDirectCommand, wrapCommand, type CommandContext } from './lib/command-wrapper.js';
+import { runDirectCommand, runDirectCommandWithResource, wrapCommand, type CommandContext } from './lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from './lib/cli-output.js';
 import {
   wantMailbox,
@@ -995,9 +995,14 @@ taskCmd
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
     const cwd = opts.cwd as string | undefined;
-    const store = openTaskLifecycleStore(cwd || process.cwd());
-    try {
-      const result = await taskReviewCommand({
+    await runDirectCommandWithResource({
+      command: 'task review',
+      emit: emitCommandResult,
+      open: () => openTaskLifecycleStore(cwd || process.cwd()),
+      close: (store) => {
+        store.db.close();
+      },
+      invocation: (store) => taskReviewCommand({
         taskNumber,
         agent: opts.agent as string,
         verdict: opts.verdict as 'accepted' | 'accepted_with_notes' | 'rejected',
@@ -1007,15 +1012,8 @@ taskCmd
         format: resolveCommandFormat(),
         principalStateDir: opts.principalStateDir as string | undefined,
         store,
-      });
-      if (result.exitCode !== 0) {
-        console.error((result.result as { error?: string }).error ?? 'Review failed');
-        process.exit(result.exitCode);
-      }
-      emitCommandResult(result.result);
-    } finally {
-      store.db.close();
-    }
+      }),
+    });
   });
 
 taskCmd
@@ -1382,24 +1380,23 @@ taskCmd
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
     const cwd = opts.cwd as string | undefined;
-    const store = openTaskLifecycleStore(cwd || process.cwd());
-    try {
-      const result = await taskCloseCommand({
+    await runDirectCommandWithResource({
+      command: 'task close',
+      emit: emitCommandResult,
+      format: opts.format,
+      open: () => openTaskLifecycleStore(cwd || process.cwd()),
+      close: (store) => {
+        store.db.close();
+      },
+      invocation: (store) => taskCloseCommand({
         taskNumber,
         by: opts.by as string | undefined,
         mode: opts.mode as import('./lib/task-lifecycle-store.js').TaskClosureMode,
         cwd,
         format: resolveCommandFormat(opts.format, 'human'),
         store,
-      });
-      if (result.exitCode !== 0) {
-        console.error((result.result as { error?: string }).error ?? 'Close failed');
-        process.exit(result.exitCode);
-      }
-      emitCommandResult(result.result, opts.format);
-    } finally {
-      store.db.close();
-    }
+      }),
+    });
   });
 
 taskCmd
@@ -1496,9 +1493,15 @@ taskCmd
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (action: string, opts: Record<string, unknown>) => {
     const cwd = opts.cwd as string | undefined;
-    const store = openTaskLifecycleStore(cwd || process.cwd());
-    try {
-      const result = await taskDispatchCommand({
+    await runDirectCommandWithResource({
+      command: 'task dispatch',
+      emit: emitCommandResult,
+      format: opts.format,
+      open: () => openTaskLifecycleStore(cwd || process.cwd()),
+      close: (store) => {
+        store.db.close();
+      },
+      invocation: (store) => taskDispatchCommand({
         action: action as 'queue' | 'pickup' | 'status' | 'start',
         taskNumber: opts.taskNumber as string | undefined,
         agent: opts.agent as string | undefined,
@@ -1506,15 +1509,8 @@ taskCmd
         cwd,
         format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
         store,
-      });
-      if (result.exitCode !== 0) {
-        console.error((result.result as { error?: string }).error ?? 'Dispatch failed');
-        process.exit(result.exitCode);
-      }
-      console.log(result.result);
-    } finally {
-      store.db.close();
-    }
+      }),
+    });
   });
 
 taskCmd
