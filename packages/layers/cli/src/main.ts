@@ -1670,21 +1670,17 @@ taskEvidenceCmd
   .description('Fail unless every task in a numeric range is evidence-complete')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (range: string, opts: Record<string, unknown>) => {
+    const format = resolveCommandFormat(undefined, 'human');
     const result = await taskEvidenceAssertCompleteCommand({
       range,
       cwd: opts.cwd as string | undefined,
-      format: resolveCommandFormat(),
+      format,
     });
     if (result.exitCode !== 0) {
-      if (resolveCommandFormat() === 'json') {
-        emitCommandResult(result.result);
-      } else {
-        const output = result.result as { incomplete_count?: number };
-        console.error(`Evidence range incomplete (${output.incomplete_count ?? 0} task(s))`);
-      }
+      emitCommandResult(result.result, format);
       process.exit(result.exitCode);
     }
-    emitCommandResult(result.result);
+    emitCommandResult(result.result, format);
   });
 
 taskEvidenceCmd
@@ -1953,6 +1949,26 @@ chapterCmd
       process.exit(result.exitCode);
     }
     emitCommandResult(result.result, opts.format);
+  });
+
+chapterCmd
+  .command('assert-complete <range>')
+  .description('Fail unless every task in a numeric chapter range is evidence-complete')
+  .option('--format <format>', 'Output format: json, human, or auto', 'auto')
+  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+  .action(async (range: string, opts: Record<string, unknown>) => {
+    const localFormat = opts.format === 'auto' ? undefined : opts.format;
+    const format = resolveCommandFormat(localFormat, 'human');
+    const result = await taskEvidenceAssertCompleteCommand({
+      range,
+      cwd: opts.cwd as string | undefined,
+      format,
+    });
+    if (result.exitCode !== 0) {
+      emitCommandResult(result.result, format);
+      process.exit(result.exitCode);
+    }
+    emitCommandResult(result.result, format);
   });
 
 chapterCmd

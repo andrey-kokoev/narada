@@ -33,6 +33,22 @@ export interface TaskEvidenceAssertCompleteOptions {
   cwd?: string;
 }
 
+interface TaskEvidenceAssertCompleteResult {
+  status: 'success' | 'error';
+  range: { start: number; end: number };
+  checked_count: number;
+  incomplete_count: number;
+  tasks: Array<{
+    task_number: number | null;
+    task_id: string;
+    status: string | null;
+    verdict: EvidenceVerdict;
+    unchecked_criteria: number;
+    warnings: string[];
+    violations: string[];
+  }>;
+}
+
 const DEFAULT_LIST_LIMIT = 25;
 const MAX_LIST_LIMIT = 100;
 
@@ -307,7 +323,6 @@ export async function taskEvidenceListCommand(
 export async function taskEvidenceAssertCompleteCommand(
   options: TaskEvidenceAssertCompleteOptions,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const fmt = createFormatter({ format: options.format || 'auto', verbose: false });
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
   const range = parseRequiredRange(options.range);
 
@@ -351,7 +366,7 @@ export async function taskEvidenceAssertCompleteCommand(
     violations: task.violations.slice(0, 3),
   }));
   const ok = incomplete.length === 0;
-  const result = {
+  const result: TaskEvidenceAssertCompleteResult = {
     status: ok ? 'success' : 'error',
     range,
     checked_count: rangeTasks.length,
@@ -359,35 +374,26 @@ export async function taskEvidenceAssertCompleteCommand(
     tasks: rows,
   };
 
-  if (fmt.getFormat() === 'json') {
+  if (options.format === 'json') {
     return {
       exitCode: ok ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
       result,
     };
   }
 
-  if (ok) {
-    fmt.message(`Range ${range.start}-${range.end} complete (${rangeTasks.length} tasks checked)`, 'success');
-  } else {
-    fmt.message(`Range ${range.start}-${range.end} has ${incomplete.length} incomplete task(s)`, 'error');
-    fmt.table(
-      [
-        { key: 'task' as const, label: 'Task', width: 6 },
-        { key: 'status' as const, label: 'Status', width: 14 },
-        { key: 'verdict' as const, label: 'Verdict', width: 16 },
-        { key: 'unchecked' as const, label: 'Unchecked', width: 10 },
-      ],
-      rows.map((task) => ({
-        task: String(task.task_number ?? task.task_id),
-        status: task.status ?? 'missing',
-        verdict: task.verdict,
-        unchecked: String(task.unchecked_criteria),
-      })),
-    );
-  }
+  const formatted = ok
+    ? `Range ${range.start}-${range.end} complete (${rangeTasks.length} tasks checked)`
+    : [
+        `Range ${range.start}-${range.end} has ${incomplete.length} incomplete task(s)`,
+        'Task  Status        Verdict          Unchecked',
+        '----  ------------  ---------------  ---------',
+        ...rows.map((task) =>
+          `${String(task.task_number ?? task.task_id).padEnd(4)}  ${(task.status ?? 'missing').padEnd(12)}  ${task.verdict.padEnd(15)}  ${task.unchecked_criteria}`,
+        ),
+      ].join('\n');
 
   return {
     exitCode: ok ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
-    result,
+    result: { ...result, _formatted: formatted },
   };
 }

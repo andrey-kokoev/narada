@@ -23,6 +23,12 @@ export function formatCommandResultForStdout(
   if (wantsJsonOutput(format, envFormat)) {
     return JSON.stringify(result, null, 2);
   }
+  if (result && typeof result === 'object' && '_formatted' in result) {
+    return String((result as { _formatted: unknown })._formatted);
+  }
+  if (result && typeof result === 'object') {
+    return JSON.stringify(result, null, 2);
+  }
   return typeof result === 'string' ? result : String(result);
 }
 

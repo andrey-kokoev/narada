@@ -279,7 +279,7 @@ describe('task evidence operator', () => {
     ensureLifecycle(tempDir, '20260420-120-test');
     ensureLifecycle(tempDir, '20260420-121-test');
 
-    const result = await taskEvidenceAssertCompleteCommand({ range: '120-121', cwd: tempDir, format: 'json' });
+    const result = await taskEvidenceAssertCompleteCommand({ range: '120-121', cwd: tempDir, format: 'human' });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
@@ -287,6 +287,7 @@ describe('task evidence operator', () => {
       checked_count: 2,
       incomplete_count: 0,
       tasks: [],
+      _formatted: 'Range 120-121 complete (2 tasks checked)',
     });
   });
 
@@ -298,7 +299,7 @@ describe('task evidence operator', () => {
     );
     ensureLifecycle(tempDir, '20260420-123-test');
 
-    const result = await taskEvidenceAssertCompleteCommand({ range: '122-123', cwd: tempDir, format: 'json' });
+    const result = await taskEvidenceAssertCompleteCommand({ range: '122-123', cwd: tempDir, format: 'human' });
     const parsed = result.result as {
       status: string;
       incomplete_count: number;
@@ -315,6 +316,7 @@ describe('task evidence operator', () => {
       }),
     ]);
     expect(JSON.stringify(parsed.tasks)).not.toContain('Execution Notes');
+    expect((result.result as { _formatted?: string })._formatted).toContain('Range 122-123 has 1 incomplete task(s)');
   });
 
   it('classifies direct closed task without verification as needs_closure', async () => {
