@@ -1159,16 +1159,11 @@ taskCmd
   .option('--chapter <range>', 'Lint only tasks in a chapter range (e.g. 100-110)')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (opts: Record<string, unknown>) => {
-    const result = await taskLintCommand({
+    await runDirectCommand({ command: 'task lint', emit: emitCommandResult, invocation: () => taskLintCommand({
       cwd: opts.cwd as string | undefined,
       format: resolveCommandFormat(),
       chapter: opts.chapter as string | undefined,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Lint found issues');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result);
+    }) });
   });
 
 taskCmd
@@ -1177,16 +1172,11 @@ taskCmd
   .option('--range <start-end>', 'Filter tasks to a number range (e.g. 501-999)')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (opts: Record<string, unknown>) => {
-    const result = await taskListCommand({
+    await runDirectCommand({ command: 'task list', emit: emitCommandResult, invocation: () => taskListCommand({
       cwd: opts.cwd as string | undefined,
       format: resolveCommandFormat(),
       range: opts.range as string | undefined,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'List failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result);
+    }) });
   });
 
 taskCmd
@@ -1218,17 +1208,12 @@ taskCmd
   .option('--verbose', 'Show full sections (human mode only)', false)
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    const result = await taskReadCommand({
+    await runDirectCommand({ command: 'task read', emit: emitCommandResult, format: opts.format, invocation: () => taskReadCommand({
       taskNumber,
       format: resolveCommandFormat(opts.format, 'human'),
       verbose: opts.verbose as boolean | undefined,
       cwd: opts.cwd as string | undefined,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Read failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result, opts.format);
+    }) });
   });
 
 taskCmd
