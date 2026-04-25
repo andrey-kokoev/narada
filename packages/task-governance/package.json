@@ -30,6 +30,10 @@
       "types": "./dist/task-allocate-service.d.ts",
       "import": "./dist/task-allocate-service.js"
     },
+    "./task-assignment-lifecycle-service": {
+      "types": "./dist/task-assignment-lifecycle-service.d.ts",
+      "import": "./dist/task-assignment-lifecycle-service.js"
+    },
     "./task-search-service": {
       "types": "./dist/task-search-service.d.ts",
       "import": "./dist/task-search-service.js"
@@ -59,7 +63,7 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:fast": "vitest run test/lib/task-lifecycle-store.test.ts test/lib/task-projection.test.ts test/lib/evidence-admission.test.ts test/lib/task-recommender.test.ts test/lib/task-close-service.test.ts test/lib/task-allocate-service.test.ts test/lib/task-search-service.test.ts --pool=forks --no-file-parallelism --maxWorkers=1 --minWorkers=1 --testTimeout=120000 --hookTimeout=120000",
+    "test:fast": "vitest run test/lib/task-lifecycle-store.test.ts test/lib/task-projection.test.ts test/lib/evidence-admission.test.ts test/lib/task-recommender.test.ts test/lib/task-close-service.test.ts test/lib/task-allocate-service.test.ts test/lib/task-search-service.test.ts test/lib/task-assignment-lifecycle-service.test.ts --pool=forks --no-file-parallelism --maxWorkers=1 --minWorkers=1 --testTimeout=120000 --hookTimeout=120000",
     "test:governance": "vitest run test/lib/task-governance.test.ts --pool=forks --no-file-parallelism --maxWorkers=1 --minWorkers=1 --testTimeout=120000 --hookTimeout=120000"
   },
   "dependencies": {

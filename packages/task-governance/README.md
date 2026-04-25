@@ -10,6 +10,7 @@ This package exists because task management is no longer a CLI helper. It has it
 
 - task lifecycle status is durable state;
 - assignment intent is an admitted request, not a file edit;
+- assignment lifecycle services own claim, continue, and release transitions;
 - evidence admission is a governed crossing;
 - criteria proof is explicit state, not checkbox trust;
 - recommendations are advisory signals over task authority;

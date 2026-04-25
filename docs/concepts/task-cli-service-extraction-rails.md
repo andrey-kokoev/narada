@@ -34,19 +34,21 @@ may render those objects, but must not reinterpret their authority outcome.
 | `task close` | `@narada2/task-governance/task-close-service` | Adapter-complete |
 | `task allocate` | `@narada2/task-governance/task-allocate-service` | Adapter-complete |
 | `task search` | `@narada2/task-governance/task-search-service` | Adapter-complete |
+| `task claim` | `@narada2/task-governance/task-assignment-lifecycle-service` | Adapter-complete, except CLI-local principal-runtime advisory bridge |
+| `task continue` | `@narada2/task-governance/task-assignment-lifecycle-service` | Adapter-complete |
+| `task release` | `@narada2/task-governance/task-assignment-lifecycle-service` | Adapter-complete, except CLI-local principal-runtime advisory bridge |
 
 ## Remaining Service Families
 
 | Priority | CLI Surface | Target Service Seam | Why First |
 | --- | --- | --- | --- |
-| 1 | `task claim`, `task continue`, `task release` | `assignment-lifecycle-service` | These commands own the highest-risk roster/lifecycle crossing. |
-| 2 | `task report`, `task review`, `task finish` | `work-result-service` + `review-admission-service` | `finish` is still an orchestrator over report, review, evidence, close, and roster. |
-| 3 | `task evidence`, `task evidence list` | `evidence-inspection-service` + `evidence-admission-service` | Evidence outcome must be package-owned and CLI-output bounded. |
-| 4 | `task roster`, `task recommend`, `task next`, `task promote-recommendation` | `assignment-intent-service` + `recommendation-service` | Agent routing must stop depending on CLI-local interpretation. |
-| 5 | `task graph`, `task list`, `task read` | `task-observation-service` | Inspection output needs Observation Artifact Zone admission and hard output limits. |
-| 6 | `task create`, `task amend`, `task derive-from-finding` | `task-spec-service` | Specification authority is still transitional and must be cut over carefully. |
-| 7 | `task reconcile` | `task-reconciliation-service` | Repair must be package-owned once all target surfaces have service seams. |
-| 8 | `task lint` | `task-invariant-service` | Lint should inspect package-owned invariants, not CLI-local shape assumptions. |
+| 1 | `task report`, `task review`, `task finish` | `work-result-service` + `review-admission-service` | `finish` is still an orchestrator over report, review, evidence, close, and roster. |
+| 2 | `task evidence`, `task evidence list` | `evidence-inspection-service` + `evidence-admission-service` | Evidence outcome must be package-owned and CLI-output bounded. |
+| 3 | `task roster`, `task recommend`, `task next`, `task promote-recommendation` | `assignment-intent-service` + `recommendation-service` | Agent routing must stop depending on CLI-local interpretation. |
+| 4 | `task graph`, `task list`, `task read` | `task-observation-service` | Inspection output needs Observation Artifact Zone admission and hard output limits. |
+| 5 | `task create`, `task amend`, `task derive-from-finding` | `task-spec-service` | Specification authority is still transitional and must be cut over carefully. |
+| 6 | `task reconcile` | `task-reconciliation-service` | Repair must be package-owned once all target surfaces have service seams. |
+| 7 | `task lint` | `task-invariant-service` | Lint should inspect package-owned invariants, not CLI-local shape assumptions. |
 
 ## Extraction Rules
 

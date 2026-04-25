@@ -7,6 +7,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskClaimCommand } from '../../src/commands/task-claim.js';
 import { taskReleaseCommand } from '../../src/commands/task-release.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
+import { loadAssignment } from '../../src/lib/task-governance.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -65,10 +66,9 @@ describe('task release operator', () => {
     const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
     expect(taskContent).toContain('status: in_review');
 
-    const assignmentRaw = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-999-test-task.json'), 'utf8');
-    const assignment = JSON.parse(assignmentRaw);
-    expect(assignment.assignments[0].release_reason).toBe('completed');
-    expect(assignment.assignments[0].released_at).not.toBeNull();
+    const assignment = await loadAssignment(tempDir, '20260420-999-test-task');
+    expect(assignment?.assignments[0].release_reason).toBe('completed');
+    expect(assignment?.assignments[0].released_at).not.toBeNull();
   });
 
   it('releases a claimed task as abandoned', async () => {
@@ -221,9 +221,8 @@ describe('task release operator', () => {
     expect((result.result as { error: string }).error).toContain('--continuation');
 
     // Assignment must still be active (failure-atomic)
-    const assignmentRaw = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-999-test-task.json'), 'utf8');
-    const assignment = JSON.parse(assignmentRaw);
-    const active = assignment.assignments.find((a: { released_at: string | null }) => a.released_at === null);
+    const assignment = await loadAssignment(tempDir, '20260420-999-test-task');
+    const active = assignment?.assignments.find((a: { released_at: string | null }) => a.released_at === null);
     expect(active).toBeDefined();
 
     // Task status must still be claimed
