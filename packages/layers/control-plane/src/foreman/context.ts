@@ -64,6 +64,40 @@ function extractMailSenderEmail(fact: Fact): string | null {
   }
 }
 
+function addString(value: unknown, target: Set<string>): void {
+  if (typeof value === "string" && value.trim()) {
+    target.add(value.trim().toLowerCase());
+  }
+}
+
+function extractMailFolderRefs(fact: Fact): Set<string> {
+  const refs = new Set<string>();
+
+  try {
+    const payload = JSON.parse(fact.payload_json) as Record<string, unknown>;
+    const event = payload.event as Record<string, unknown> | undefined;
+    if (!event || typeof event !== "object") return refs;
+
+    const normalizedPayload = event.payload as Record<string, unknown> | undefined;
+    const folderRefs = normalizedPayload?.folder_refs;
+    if (Array.isArray(folderRefs)) {
+      for (const ref of folderRefs) {
+        addString(ref, refs);
+      }
+    }
+
+    const sourceExtensions = normalizedPayload?.source_extensions as Record<string, unknown> | undefined;
+    const namespaces = sourceExtensions?.namespaces as Record<string, unknown> | undefined;
+    const graph = namespaces?.graph as Record<string, unknown> | undefined;
+    addString(graph?.parent_folder_id, refs);
+    addString(graph?.queried_folder_ref, refs);
+  } catch {
+    return refs;
+  }
+
+  return refs;
+}
+
 function senderDomain(email: string): string | null {
   const at = email.lastIndexOf("@");
   if (at <= 0 || at === email.length - 1) return null;
@@ -73,6 +107,16 @@ function senderDomain(email: string): string | null {
 function mailFactPassesAdmission(fact: Fact, admission?: MailAdmissionConfig): boolean {
   if (!admission || fact.fact_type !== "mail.message.discovered") {
     return true;
+  }
+
+  const folderRefs = extractMailFolderRefs(fact);
+  const includedFolders = new Set((admission.included_folder_refs ?? []).map((s) => s.toLowerCase()));
+  const excludedFolders = new Set((admission.excluded_folder_refs ?? []).map((s) => s.toLowerCase()));
+  if (excludedFolders.size > 0 && [...folderRefs].some((ref) => excludedFolders.has(ref))) {
+    return false;
+  }
+  if (includedFolders.size > 0 && ![...folderRefs].some((ref) => includedFolders.has(ref))) {
+    return false;
   }
 
   const addresses = new Set((admission.allowed_sender_addresses ?? []).map((s) => s.toLowerCase()));

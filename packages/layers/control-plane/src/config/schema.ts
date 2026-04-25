@@ -117,6 +117,8 @@ const ToolCatalogRefSchema = z.object({
 });
 
 const MailAdmissionSchema = z.object({
+  included_folder_refs: z.array(z.string().min(1)).optional(),
+  excluded_folder_refs: z.array(z.string().min(1)).optional(),
   allowed_sender_addresses: z.array(z.string().email()).optional(),
   allowed_sender_domains: z.array(z.string().min(1)).optional(),
   unknown_sender_behavior: z.enum(['ignore', 'admit']).optional(),

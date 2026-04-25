@@ -77,6 +77,9 @@ describe("DefaultGraphAdapter", () => {
     expect(batch.events[0]?.event_kind).toBe("upsert");
     expect(batch.events[0]?.message_id).toBe("msg-1");
     expect(batch.events[0]?.payload?.folder_refs).toEqual(["folder-1"]);
+    expect(
+      batch.events[0]?.payload?.source_extensions?.namespaces.graph?.queried_folder_ref,
+    ).toBe("custom-folder-id");
   });
 
   it("maps removed delta entries into delete events", async () => {
@@ -199,6 +202,9 @@ describe("DefaultGraphAdapter", () => {
     const composite = JSON.parse(batch.next_cursor!);
     expect(composite["folder-1"]).toBe("cursor-0");
     expect(composite["folder-2"]).toBe("cursor-1");
+    expect(
+      batch.events.map((event) => event.payload?.source_extensions?.namespaces.graph?.queried_folder_ref),
+    ).toEqual(["folder-1", "folder-2"]);
 
     const batch2 = await adapter.fetch_since(batch.next_cursor);
     expect(seenUrls).toHaveLength(4);

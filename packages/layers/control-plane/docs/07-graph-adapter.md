@@ -207,7 +207,7 @@ const adapter = new DefaultGraphAdapter({
   client,
   adapter_scope: {
     mailbox_id: "user@example.com",
-    included_container_refs: ["inbox"],
+    included_container_refs: ["inbox", "sentitems"],
     included_item_kinds: ["message"],
     attachment_policy: "metadata_only",
     body_policy: "text_only",
@@ -226,6 +226,13 @@ const adapter = new DefaultGraphAdapter({
 const batch = await adapter.fetch_since(cursor);
 // Returns: NormalizedBatch with events and next_cursor
 ```
+
+When more than one folder ref is configured, the adapter walks each folder's
+delta stream and stores a composite cursor keyed by configured folder ref. Each
+normalized Graph payload includes
+`source_extensions.namespaces.graph.queried_folder_ref`, preserving the
+configured folder ref used for the query even when Graph reports an opaque
+`parentFolderId`.
 
 **Process**:
 1. Walk delta pages starting from cursor (or initial)
@@ -360,17 +367,12 @@ console.log(`Fetched ${batch.events.length} events`);
 
 ## Known Limitations
 
-### Single Folder Only
+### Folder-Scoped Delta
 
-Current implementation supports exactly one folder:
-
-```typescript
-if (refs.length !== 1) {
-  throw new Error("Exactly one included_container_ref is required");
-}
-```
-
-Multi-folder support requires architectural changes for proper delta tracking.
+The adapter is folder-scoped rather than whole-mailbox-scoped. Configure one or
+more explicit folder refs in `scope.included_container_refs`; use admission
+folder filters when a synced folder should provide context but should not
+produce admitted work.
 
 ### No Batch Size Control
 

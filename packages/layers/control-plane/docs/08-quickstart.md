@@ -27,14 +27,14 @@ narada init --interactive
 # - Enter your email address
 # - Choose data directory (default: ./data)
 # - Set Graph API credentials (or use env vars)
-# - Select a single folder to sync
+# - Select one or more folders to sync
 # - Test connection before saving
 ```
 
 ### Run Your First Sync
 
 ```bash
-# Run sync for the configured folder
+# Run sync for the configured folder scope
 narada sync
 
 # Check status
@@ -95,8 +95,13 @@ Edit `config.json`:
         "prefer_immutable_ids": true
       },
       "scope": {
-        "included_container_refs": ["inbox"],
+        "included_container_refs": ["inbox", "sentitems"],
         "included_item_kinds": ["message"]
+      },
+      "admission": {
+        "mail": {
+          "included_folder_refs": ["inbox"]
+        }
       }
     }
   ]
@@ -126,7 +131,10 @@ Get a token via [Microsoft Graph Explorer](https://developer.microsoft.com/en-us
 ## Current Scope
 
 The current Graph delta implementation is folder-scoped, not whole-mailbox scoped.
-Configure exactly one entry in `scope.included_container_refs` such as `["inbox"]`.
+Configure one or more entries in `scope.included_container_refs`, such as
+`["inbox", "sentitems"]`. Use `admission.mail.included_folder_refs` or
+`admission.mail.excluded_folder_refs` when some synced folders are context only
+and should not produce admitted work.
 
 #### Method C: Config File (Not Recommended for Secrets)
 
@@ -377,12 +385,19 @@ Missing credentials. Check:
 - `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET` are set, OR
 - Credentials are in config.json
 
-### "Current implementation requires exactly one included_container_ref"
+### Sent mail syncs as new work
 
-Config has multiple folders. Change to single folder:
+`sentitems` is in source scope without an admission folder filter. Keep it in
+source scope for thread context and restrict mail admission to incoming folders:
 ```json
 "scope": {
-  "included_container_refs": ["inbox"]
+  "included_container_refs": ["inbox", "sentitems"],
+  "included_item_kinds": ["message"]
+},
+"admission": {
+  "mail": {
+    "included_folder_refs": ["inbox"]
+  }
 }
 ```
 

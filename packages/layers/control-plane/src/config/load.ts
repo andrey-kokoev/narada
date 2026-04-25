@@ -327,6 +327,22 @@ function loadScopeConfig(rawScope: unknown, pathPrefix: string): ScopeConfig {
   const admission: ScopeConfig["admission"] | undefined = mailAdmissionRaw
     ? {
         mail: {
+          ...(Array.isArray(mailAdmissionRaw.included_folder_refs)
+            ? {
+                included_folder_refs: expectStringArray(
+                  mailAdmissionRaw.included_folder_refs,
+                  `${pathPrefix}.admission.mail.included_folder_refs`,
+                ),
+              }
+            : {}),
+          ...(Array.isArray(mailAdmissionRaw.excluded_folder_refs)
+            ? {
+                excluded_folder_refs: expectStringArray(
+                  mailAdmissionRaw.excluded_folder_refs,
+                  `${pathPrefix}.admission.mail.excluded_folder_refs`,
+                ),
+              }
+            : {}),
           ...(Array.isArray(mailAdmissionRaw.allowed_sender_addresses)
             ? {
                 allowed_sender_addresses: expectStringArray(
@@ -770,6 +786,7 @@ export async function loadConfig(
       lifecycle: root.lifecycle,
       charter: root.charter,
       policy: root.policy,
+      admission: root.admission,
       webhook: root.webhook,
       sources: [], // will be backfilled from graph
       context_strategy: root.context_strategy ?? "mail",

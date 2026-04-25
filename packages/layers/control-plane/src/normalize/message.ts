@@ -81,6 +81,9 @@ function buildSourceExtensions(
   if (message.parentFolderId !== undefined) {
     graph.parent_folder_id = message.parentFolderId;
   }
+  if (message.sourceQueriedFolderRef !== undefined) {
+    graph.queried_folder_ref = message.sourceQueriedFolderRef;
+  }
   if (message.webLink !== undefined) graph.web_link = message.webLink;
   if (message.inferenceClassification !== undefined) {
     graph.inference_classification = message.inferenceClassification;

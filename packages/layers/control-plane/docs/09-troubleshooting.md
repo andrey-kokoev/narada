@@ -104,14 +104,22 @@ cat data/state/sync.lock/meta.json 2>/dev/null
 
 ---
 
-### "Current implementation requires exactly one included_container_ref"
+### Sent mail is syncing as new work
 
-**Cause**: Config has multiple folders in `scope.included_container_refs`.
+**Cause**: `sentitems` is in `scope.included_container_refs`, but admission is
+not restricted to incoming folders.
 
-**Fix**: Use single folder only:
+**Fix**: Keep `sentitems` in source scope for thread context and restrict mail
+admission to folders that may produce work:
 ```json
 "scope": {
-  "included_container_refs": ["inbox"]
+  "included_container_refs": ["inbox", "sentitems"],
+  "included_item_kinds": ["message"]
+},
+"admission": {
+  "mail": {
+    "included_folder_refs": ["inbox"]
+  }
 }
 ```
 

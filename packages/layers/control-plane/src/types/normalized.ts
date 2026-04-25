@@ -103,6 +103,7 @@ export interface NormalizedPayload {
   attachments?: NormalizedAttachment[];
   internet_message_id?: string;
   headers?: { values: Record<string, string[]> };
+  source_extensions?: NormalizedExtensions;
   importance?: string;
   is_read?: boolean;
   is_draft?: boolean;

@@ -61,6 +61,14 @@ export interface ToolCatalogRef {
 }
 
 export interface MailAdmissionConfig {
+  /**
+   * Optional folder refs that may produce admitted work. The refs are matched
+   * against normalized folder_refs and Graph source metadata including the
+   * configured queried folder ref, so well-known Graph names such as "inbox"
+   * and "sentitems" are stable admission inputs.
+   */
+  included_folder_refs?: string[];
+  excluded_folder_refs?: string[];
   allowed_sender_addresses?: string[];
   allowed_sender_domains?: string[];
   unknown_sender_behavior?: "ignore" | "admit";

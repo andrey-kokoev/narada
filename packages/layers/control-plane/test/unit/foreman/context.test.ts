@@ -38,7 +38,20 @@ function makeNormalizedMailFact(
   conversationId: string,
   recordId: string,
   senderEmail: string,
+  options?: {
+    folderRefs?: string[];
+    parentFolderId?: string;
+    queriedFolderRef?: string;
+  },
 ): Omit<Fact, "created_at"> {
+  const graphExtensions: Record<string, string> = {};
+  if (options?.parentFolderId) {
+    graphExtensions.parent_folder_id = options.parentFolderId;
+  }
+  if (options?.queriedFolderRef) {
+    graphExtensions.queried_folder_ref = options.queriedFolderRef;
+  }
+
   const payload = {
     record_id: recordId,
     ordinal: new Date().toISOString(),
@@ -50,6 +63,16 @@ function makeNormalizedMailFact(
         conversation_id: conversationId,
         from: { email: senderEmail, display_name: "Sender" },
         sender: { email: senderEmail, display_name: "Sender" },
+        folder_refs: options?.folderRefs ?? [],
+        ...(Object.keys(graphExtensions).length
+          ? {
+              source_extensions: {
+                namespaces: {
+                  graph: graphExtensions,
+                },
+              },
+            }
+          : {}),
       },
     },
   };
@@ -180,6 +203,54 @@ describe("AdmittedMailContextStrategy", () => {
     const contexts = strategy.formContexts(facts, "scope-1");
     expect(contexts).toHaveLength(1);
     expect(contexts[0]!.context_id).toBe("conv-exact");
+  });
+
+  it("admits mail only from configured folder refs when present", () => {
+    const strategy = new AdmittedMailContextStrategy({
+      included_folder_refs: ["inbox"],
+      allowed_sender_domains: ["company.com"],
+      unknown_sender_behavior: "ignore",
+    });
+
+    const facts = [
+      {
+        ...makeNormalizedMailFact("conv-inbox", "rec-inbox", "person@company.com", {
+          queriedFolderRef: "inbox",
+          parentFolderId: "opaque-inbox-id",
+        }),
+        created_at: new Date().toISOString(),
+      },
+      {
+        ...makeNormalizedMailFact("conv-sent", "rec-sent", "person@company.com", {
+          queriedFolderRef: "sentitems",
+          parentFolderId: "opaque-sent-id",
+        }),
+        created_at: new Date().toISOString(),
+      },
+    ] as Fact[];
+
+    const contexts = strategy.formContexts(facts, "scope-1");
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]!.context_id).toBe("conv-inbox");
+  });
+
+  it("excludes configured folder refs before sender admission", () => {
+    const strategy = new AdmittedMailContextStrategy({
+      excluded_folder_refs: ["sentitems"],
+      allowed_sender_domains: ["company.com"],
+      unknown_sender_behavior: "ignore",
+    });
+
+    const facts = [
+      {
+        ...makeNormalizedMailFact("conv-sent", "rec-sent", "person@company.com", {
+          folderRefs: ["sentitems"],
+        }),
+        created_at: new Date().toISOString(),
+      },
+    ] as Fact[];
+
+    expect(strategy.formContexts(facts, "scope-1")).toHaveLength(0);
   });
 
   it("ignores unknown senders when configured to ignore", () => {

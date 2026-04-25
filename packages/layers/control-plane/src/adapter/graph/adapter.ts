@@ -53,6 +53,16 @@ function resolveFirstFolderId(scope: AdapterScope): string {
   return folderId;
 }
 
+function tagQueriedFolderRef(
+  messages: GraphDeltaMessage[],
+  folderRef: string,
+): GraphDeltaMessage[] {
+  return messages.map((message) => ({
+    ...message,
+    sourceQueriedFolderRef: folderRef,
+  }));
+}
+
 export class DefaultGraphAdapter implements GraphAdapter {
   private readonly cfg: GraphAdapterConfig;
   private readonly deltaWalker?: GraphDeltaWalker;
@@ -74,6 +84,7 @@ export class DefaultGraphAdapter implements GraphAdapter {
     const refs = this.cfg.adapter_scope.included_container_refs;
 
     if (refs.length === 1 && this.deltaWalker) {
+      const folderRef = resolveFirstFolderId(this.cfg.adapter_scope);
       const walked = await this.deltaWalker.walkFromCursor(cursor);
       return normalizeBatch({
         mailbox_id: this.cfg.mailbox_id,
@@ -81,7 +92,7 @@ export class DefaultGraphAdapter implements GraphAdapter {
         prior_cursor: cursor ?? null,
         next_cursor: walked.nextCursor,
         fetched_at: fetchedAt,
-        messages: walked.messages,
+        messages: tagQueriedFolderRef(walked.messages, folderRef),
         has_more: false,
         body_policy: this.cfg.body_policy,
         attachment_policy: this.cfg.attachment_policy,
@@ -107,7 +118,7 @@ export class DefaultGraphAdapter implements GraphAdapter {
       });
       const folderCursor = resolveFolderCursor(cursor, trimmedFolderId);
       const walked = await walker.walkFromCursor(folderCursor);
-      allMessages.push(...walked.messages);
+      allMessages.push(...tagQueriedFolderRef(walked.messages, trimmedFolderId));
       nextCursors[trimmedFolderId] = walked.nextCursor;
     }
 

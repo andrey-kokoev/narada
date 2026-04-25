@@ -520,6 +520,35 @@ describe("loadConfig", () => {
     expect(scope.policy.allowed_actions).toContain("campaign_brief");
   });
 
+  it("accepts mail admission folder filters", async () => {
+    const path = await writeConfigFile({
+      mailbox_id: "mailbox_primary",
+      root_dir: "./data/mail-sync",
+      graph: {
+        user_id: "user@example.com",
+        prefer_immutable_ids: true,
+      },
+      scope: {
+        included_container_refs: ["inbox", "sentitems"],
+        included_item_kinds: ["message"],
+      },
+      admission: {
+        mail: {
+          included_folder_refs: ["inbox"],
+          excluded_folder_refs: ["junkemail"],
+          allowed_sender_domains: ["company.com"],
+          unknown_sender_behavior: "ignore",
+        },
+      },
+    });
+    createdPaths.push(path);
+
+    const config = await loadConfig({ path });
+    const scope = config.scopes[0]!;
+    expect(scope.admission?.mail?.included_folder_refs).toEqual(["inbox"]);
+    expect(scope.admission?.mail?.excluded_folder_refs).toEqual(["junkemail"]);
+  });
+
   it("rejects invalid campaign_request_lookback_days", async () => {
     const path = await writeConfigFile({
       mailbox_id: "mailbox_primary",

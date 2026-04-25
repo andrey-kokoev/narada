@@ -90,6 +90,12 @@ export interface GraphMessage {
 }
 
 export interface GraphDeltaMessage extends GraphMessage {
+  /**
+   * Local adapter metadata. Microsoft Graph may report parentFolderId as an
+   * opaque folder id; this preserves the configured folder ref used to query
+   * the delta stream, such as "inbox" or "sentitems".
+   */
+  sourceQueriedFolderRef?: string;
   '@removed'?: {
     reason: string;
   };
