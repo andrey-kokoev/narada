@@ -289,7 +289,7 @@ export async function taskEvidenceListCommand(
   // Show warnings/violations summary if any
   const tasksWithIssues = visibleTasks.filter((t) => t.warnings.length > 0 || t.violations.length > 0);
   if (tasksWithIssues.length > 0) {
-    console.log('');
+    fmt.message('');
     for (const t of tasksWithIssues) {
       const label = t.task_number?.toString() ?? t.task_id;
       for (const v of t.violations) {

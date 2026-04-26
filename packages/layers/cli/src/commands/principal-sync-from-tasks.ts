@@ -303,7 +303,7 @@ export async function principalSyncFromTasksCommand(
           : d.action === "no_runtime"
             ? "?"
             : "−";
-    console.log(
+    fmt.message(
       `  ${icon} ${d.agent_id} / ${d.task_id}: ${d.actual_state} (task: ${d.task_status})${d.warning ? ` — ${d.warning}` : ""}`,
     );
   }

@@ -44,18 +44,9 @@ const allowlist = {
     { pattern: /console\.log\(''\)/, count: 3, reason: "legacy integrity spacing" },
     { pattern: /console\.log\('  narada sync --config \.\/config\.json'\)/, count: 1, reason: "legacy integrity remediation output" },
   ],
-  "posture.ts": [
-    { pattern: /console\.log\(`  \$\{posture\.counterweight_intent\}`\)/, count: 1, reason: "legacy posture multiline formatting" },
-  ],
-  "principal-sync-from-tasks.ts": [
-    { pattern: /console\.log\(/, count: 1, reason: "legacy principal sync reconciliation summary formatting" },
-  ],
   "sync.ts": [
     { pattern: /console\.log\(formatMultiSyncResult\(result\)\)/, count: 1, reason: "legacy multi-sync result admission" },
     { pattern: /console\.log\(''\)/, count: 4, reason: "legacy sync follow-up spacing" },
-  ],
-  "task-evidence-list.ts": [
-    { pattern: /console\.log\(''\)/, count: 1, reason: "legacy evidence list spacing" },
   ],
   "task-graph.ts": [
     { pattern: /console\.log\('```mermaid'\)/, count: 1, reason: "explicit full mermaid output mode" },

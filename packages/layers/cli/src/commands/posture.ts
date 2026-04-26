@@ -200,7 +200,7 @@ export async function postureShowCommand(
   }
 
   fmt.section('Counterweight Intent');
-  console.log(`  ${posture.counterweight_intent}`);
+  fmt.message(`  ${posture.counterweight_intent}`);
 
   if (posture.recommended_next_slices.length > 0) {
     fmt.section('Recommended Next Slices');
