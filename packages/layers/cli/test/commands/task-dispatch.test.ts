@@ -49,27 +49,40 @@ function writeTask(tempDir: string, num: number, status: string, extra = '') {
   );
 }
 
-function writeAssignment(tempDir: string, fileTaskId: string, agentId: string) {
-  writeFileSync(
-    join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', `${fileTaskId}.json`),
-    JSON.stringify(
-      {
-        task_id: fileTaskId,
-        assignments: [
-          {
-            agent_id: agentId,
-            claimed_at: '2026-04-24T10:00:00.000Z',
-            claim_context: null,
-            released_at: null,
-            release_reason: null,
-            intent: 'primary',
-          },
-        ],
-      },
-      null,
-      2,
-    ),
-  );
+function writeAssignment(store: SqliteTaskLifecycleStore, fileTaskId: string, agentId: string) {
+  const numberMatch = fileTaskId.match(/-(\d+)-/);
+  const taskNumber = numberMatch ? Number(numberMatch[1]) : 0;
+  if (!store.getLifecycle(fileTaskId)) {
+    store.upsertLifecycle({
+      task_id: fileTaskId,
+      task_number: taskNumber,
+      status: 'claimed',
+      governed_by: null,
+      closed_at: null,
+      closed_by: null,
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: '2026-04-24T10:00:00.000Z',
+    });
+  }
+  store.upsertAssignmentRecord({
+    task_id: fileTaskId,
+    record_json: JSON.stringify({
+      task_id: fileTaskId,
+      assignments: [
+        {
+          agent_id: agentId,
+          claimed_at: '2026-04-24T10:00:00.000Z',
+          claim_context: null,
+          released_at: null,
+          release_reason: null,
+          intent: 'primary',
+        },
+      ],
+    }),
+    updated_at: '2026-04-24T10:00:00.000Z',
+  });
 }
 
 function createStore(tempDir: string): SqliteTaskLifecycleStore {
@@ -111,7 +124,7 @@ describe('task dispatch surface', () => {
 
     it('shows assigned task as visible when ready to pick up', async () => {
       writeTask(tempDir, 100, 'claimed');
-      writeAssignment(tempDir, '20260420-100-test', 'alpha');
+      writeAssignment(store, '20260420-100-test', 'alpha');
       store.upsertLifecycle({
         task_id: '20260420-100-test',
         task_number: 100,
@@ -142,7 +155,7 @@ describe('task dispatch surface', () => {
 
     it('shows assigned task as blocked when already picked up', async () => {
       writeTask(tempDir, 100, 'claimed');
-      writeAssignment(tempDir, '20260420-100-test', 'alpha');
+      writeAssignment(store, '20260420-100-test', 'alpha');
       store.upsertLifecycle({
         task_id: '20260420-100-test',
         task_number: 100,
@@ -186,7 +199,7 @@ describe('task dispatch surface', () => {
   describe('pickup', () => {
     it('picks up an assigned task', async () => {
       writeTask(tempDir, 100, 'claimed');
-      writeAssignment(tempDir, '20260420-100-test', 'alpha');
+      writeAssignment(store, '20260420-100-test', 'alpha');
       store.upsertLifecycle({
         task_id: '20260420-100-test',
         task_number: 100,
@@ -234,7 +247,7 @@ describe('task dispatch surface', () => {
 
     it('rejects pickup by wrong agent', async () => {
       writeTask(tempDir, 100, 'claimed');
-      writeAssignment(tempDir, '20260420-100-test', 'beta');
+      writeAssignment(store, '20260420-100-test', 'beta');
       store.upsertLifecycle({
         task_id: '20260420-100-test',
         task_number: 100,
@@ -264,7 +277,7 @@ describe('task dispatch surface', () => {
 
     it('rejects double pickup', async () => {
       writeTask(tempDir, 100, 'claimed');
-      writeAssignment(tempDir, '20260420-100-test', 'alpha');
+      writeAssignment(store, '20260420-100-test', 'alpha');
       store.upsertLifecycle({
         task_id: '20260420-100-test',
         task_number: 100,
@@ -499,7 +512,7 @@ describe('task dispatch surface', () => {
   describe('session targeting (Task 576)', () => {
     it('includes resolved session targeting in pickup result when binding exists', async () => {
       writeTask(tempDir, 100, 'claimed');
-      writeAssignment(tempDir, '20260420-100-test', 'alpha');
+      writeAssignment(store, '20260420-100-test', 'alpha');
       store.upsertLifecycle({
         task_id: '20260420-100-test',
         task_number: 100,
@@ -552,7 +565,7 @@ describe('task dispatch surface', () => {
 
     it('handles missing binding gracefully (null targeting)', async () => {
       writeTask(tempDir, 100, 'claimed');
-      writeAssignment(tempDir, '20260420-100-test', 'alpha');
+      writeAssignment(store, '20260420-100-test', 'alpha');
       store.upsertLifecycle({
         task_id: '20260420-100-test',
         task_number: 100,
@@ -592,7 +605,7 @@ describe('task dispatch surface', () => {
 
     it('shows session targeting in status output', async () => {
       writeTask(tempDir, 100, 'claimed');
-      writeAssignment(tempDir, '20260420-100-test', 'alpha');
+      writeAssignment(store, '20260420-100-test', 'alpha');
       store.upsertLifecycle({
         task_id: '20260420-100-test',
         task_number: 100,
@@ -638,7 +651,7 @@ describe('task dispatch surface', () => {
   describe('start (Task 577)', () => {
     it('transitions packet to executing and returns execution context', async () => {
       writeTask(tempDir, 100, 'claimed');
-      writeAssignment(tempDir, '20260420-100-test', 'alpha');
+      writeAssignment(store, '20260420-100-test', 'alpha');
       store.upsertLifecycle({
         task_id: '20260420-100-test',
         task_number: 100,
@@ -693,7 +706,7 @@ describe('task dispatch surface', () => {
 
     it('uses --session when binding exists, --continue otherwise', async () => {
       writeTask(tempDir, 100, 'claimed');
-      writeAssignment(tempDir, '20260420-100-test', 'alpha');
+      writeAssignment(store, '20260420-100-test', 'alpha');
       store.upsertLifecycle({
         task_id: '20260420-100-test',
         task_number: 100,
@@ -751,7 +764,7 @@ describe('task dispatch surface', () => {
 
     it('rejects start when lease is expired', async () => {
       writeTask(tempDir, 100, 'claimed');
-      writeAssignment(tempDir, '20260420-100-test', 'alpha');
+      writeAssignment(store, '20260420-100-test', 'alpha');
       store.upsertLifecycle({
         task_id: '20260420-100-test',
         task_number: 100,
@@ -792,7 +805,7 @@ describe('task dispatch surface', () => {
 
     it('returns action executed when --exec is set', async () => {
       writeTask(tempDir, 100, 'claimed');
-      writeAssignment(tempDir, '20260420-100-test', 'alpha');
+      writeAssignment(store, '20260420-100-test', 'alpha');
       store.upsertLifecycle({
         task_id: '20260420-100-test',
         task_number: 100,

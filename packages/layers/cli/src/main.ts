@@ -70,13 +70,14 @@ import { taskDeriveFromFindingCommand } from './commands/task-derive-from-findin
 import { registerTaskAuthoringCommands } from './commands/task-authoring-register.js';
 import { taskLintCommand } from './commands/task-lint.js';
 import { registerTaskLifecycleCommands } from './commands/task-lifecycle-register.js';
-import { taskDispatchCommand } from './commands/task-dispatch.js';
+import { registerTaskRosterCommands } from './commands/task-roster-register.js';
+import { registerTaskEvidenceCommands } from './commands/task-evidence-register.js';
+import { registerTaskDispatchCommands } from './commands/task-dispatch-register.js';
 import {
   taskPeekNextCommand,
   taskPullNextCommand,
   taskWorkNextCommand,
 } from './commands/task-next.js';
-import { openTaskLifecycleStore } from './lib/task-lifecycle-store.js';
 import { chapterCloseCommand } from './commands/chapter-close.js';
 import { chapterFinishRangeCommand } from './commands/chapter-finish-range.js';
 import { chapterInitCommand, chapterValidateTasksFileCommand } from './commands/chapter-init.js';
@@ -94,17 +95,9 @@ import {
 import { taskListCommand } from './commands/task-list.js';
 import { taskGraphCommand } from './commands/task-graph.js';
 import { taskSearchCommand } from './commands/task-search.js';
-import { taskEvidenceAdmitCommand, taskEvidenceCommand, taskEvidenceProveCriteriaCommand } from './commands/task-evidence.js';
 import { taskReadCommand } from './commands/task-read.js';
-import { taskEvidenceAssertCompleteCommand, taskEvidenceListCommand } from './commands/task-evidence-list.js';
+import { taskEvidenceAssertCompleteCommand } from './commands/task-evidence-list.js';
 import { taskReconcileInspectCommand, taskReconcileRecordCommand, taskReconcileRepairCommand } from './commands/task-reconcile.js';
-import {
-  taskRosterShowCommand,
-  taskRosterAssignCommand,
-  taskRosterReviewCommand,
-  taskRosterDoneCommand,
-  taskRosterIdleCommand,
-} from './commands/task-roster.js';
 import { verifyStatusCommand } from './commands/verify-status.js';
 import {
   crossingListCommand,
@@ -128,7 +121,7 @@ import {
   observationListCommand,
   observationOpenCommand,
 } from './commands/observation.js';
-import { directCommandAction, runDirectCommand, runDirectCommandWithResource, wrapCommand, type CommandContext } from './lib/command-wrapper.js';
+import { directCommandAction, runDirectCommand, wrapCommand, type CommandContext } from './lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from './lib/cli-output.js';
 import {
   wantMailbox,
@@ -998,57 +991,7 @@ postureCmd
     console.log(result.result);
   });
 
-// Task roster tracking commands (Task 385)
-const rosterCmd = taskCmd
-  .command('roster')
-  .description('Roster projection operators for agent operational state');
-
-rosterCmd
-  .command('show')
-  .description('Observe current agent roster projection')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
-  .action(async (opts: Record<string, unknown>) => {
-    await runDirectCommand({ command: 'task roster show', emit: emitCommandResult, invocation: () => taskRosterShowCommand({
-      cwd: opts.cwd as string | undefined,
-      format: resolveCommandFormat(),
-      verbose: opts.verbose as boolean | undefined,
-    }) });
-  });
-
-rosterCmd
-  .command('assign <task-number>')
-  .description('Roster + assignment admission: mark agent working and claim by default')
-  .requiredOption('--agent <id>', 'Agent ID from roster')
-  .option('--no-claim', 'Skip claiming the task (exceptional: only for planning)')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
-  .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    await runDirectCommand({ command: 'task roster assign', emit: emitCommandResult, invocation: () => taskRosterAssignCommand({
-      taskNumber,
-      agent: opts.agent as string,
-      noClaim: opts.noClaim as boolean | undefined,
-      cwd: opts.cwd as string | undefined,
-      format: resolveCommandFormat(),
-      verbose: opts.verbose as boolean | undefined,
-    }) });
-  });
-
-rosterCmd
-  .command('review <task-number>')
-  .description('Roster projection: mark agent as reviewing a task')
-  .requiredOption('--agent <id>', 'Agent ID from roster')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
-  .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    await runDirectCommand({ command: 'task roster review', emit: emitCommandResult, invocation: () => taskRosterReviewCommand({
-      taskNumber,
-      agent: opts.agent as string,
-      cwd: opts.cwd as string | undefined,
-      format: resolveCommandFormat(),
-      verbose: opts.verbose as boolean | undefined,
-    }) });
-  });
+registerTaskRosterCommands(taskCmd);
 
 taskCmd
   .command('peek-next')
@@ -1101,136 +1044,9 @@ taskCmd
     }),
   }));
 
-taskCmd
-  .command('dispatch <action>')
-  .description('Dispatch surface: queue, pickup, status, start')
-  .option('--task-number <num>', 'Task number (for pickup/status)')
-  .option('--agent <id>', 'Agent ID')
-  .option('--exec', 'Actually spawn the execution session (start action only)')
-  .option('--format <fmt>', 'Output format: json or human', 'human')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (action: string, opts: Record<string, unknown>) => {
-    const cwd = opts.cwd as string | undefined;
-    await runDirectCommandWithResource({
-      command: 'task dispatch',
-      emit: emitCommandResult,
-      format: opts.format,
-      open: () => openTaskLifecycleStore(cwd || process.cwd()),
-      close: (store) => {
-        store.db.close();
-      },
-      invocation: (store) => taskDispatchCommand({
-        action: action as 'queue' | 'pickup' | 'status' | 'start',
-        taskNumber: opts.taskNumber as string | undefined,
-        agent: opts.agent as string | undefined,
-        exec: opts.exec as boolean | undefined,
-        cwd,
-        format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-        store,
-      }),
-    });
-  });
+registerTaskDispatchCommands(taskCmd);
 
-const taskEvidenceCmd = taskCmd
-  .command('evidence')
-  .description('Task evidence operators (inspect, admit, prove-criteria, list)');
-
-taskEvidenceCmd
-  .command('inspect <task-number>')
-  .description('Inspect task completion evidence (task-authority read-only; may admit observation output)')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    await runDirectCommand({ command: 'task evidence inspect', emit: emitCommandResult, invocation: () => taskEvidenceCommand({
-      taskNumber,
-      cwd: opts.cwd as string | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-    }) });
-  });
-
-taskEvidenceCmd
-  .command('list')
-  .description('List tasks by completion evidence (task-authority read-only; writes bounded observation artifact)')
-  .option('--verdict <csv>', 'Filter by verdict (comma-separated: complete,attempt_complete,needs_review,needs_closure,incomplete,unknown)')
-  .option('--status <csv>', 'Filter by front-matter status (comma-separated)')
-  .option('--range <start-end>', 'Filter tasks to a number range (e.g. 480-490)')
-  .option('--limit <n>', 'Maximum tasks to return/show without --full', '25')
-  .option('--full', 'Return the complete list (explicitly opt into unbounded output)', false)
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (opts: Record<string, unknown>) => {
-    await runDirectCommand({ command: 'task evidence list', emit: emitCommandResult, invocation: () => taskEvidenceListCommand({
-      cwd: opts.cwd as string | undefined,
-      format: resolveCommandFormat(),
-      verdict: opts.verdict as string | undefined,
-      status: opts.status as string | undefined,
-      range: opts.range as string | undefined,
-      limit: opts.limit as string | undefined,
-      full: opts.full === true,
-    }) });
-  });
-
-taskEvidenceCmd
-  .command('assert-complete <range>')
-  .description('Fail unless every task in a numeric range is evidence-complete')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (range: string, opts: Record<string, unknown>) => {
-    const format = resolveCommandFormat(undefined, 'human');
-    await runDirectCommand({ command: 'task evidence assert-complete', emit: emitCommandResult, format, invocation: () => taskEvidenceAssertCompleteCommand({
-      range,
-      cwd: opts.cwd as string | undefined,
-      format,
-    }) });
-  });
-
-taskEvidenceCmd
-  .command('prove-criteria <task-number>')
-  .description('Prove acceptance criteria completion through Evidence Admission')
-  .requiredOption('--by <id>', 'Operator or agent ID proving criteria')
-  .option('--verification-run <id>', 'Verification run ID supporting this criteria proof')
-  .option('--no-run-rationale <text>', 'Explicit rationale when criteria proof has no verification run binding')
-  .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    await runDirectCommand({ command: 'task evidence prove-criteria', emit: emitCommandResult, format: opts.format, invocation: () => taskEvidenceProveCriteriaCommand({
-      taskNumber,
-      by: opts.by as string,
-      verificationRunId: opts.verificationRun as string | undefined,
-      noRunRationale: opts.noRunRationale as string | undefined,
-      cwd: opts.cwd as string | undefined,
-      format: resolveCommandFormat(opts.format, 'auto'),
-    }) });
-  });
-
-taskEvidenceCmd
-  .command('admit <task-number>')
-  .description('Admit task evidence for lifecycle transition consumption')
-  .requiredOption('--by <id>', 'Operator or agent ID admitting evidence')
-  .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    await runDirectCommand({ command: 'task evidence admit', emit: emitCommandResult, format: opts.format, invocation: () => taskEvidenceAdmitCommand({
-      taskNumber,
-      by: opts.by as string,
-      cwd: opts.cwd as string | undefined,
-      format: resolveCommandFormat(opts.format, 'auto'),
-    }) });
-  });
-
-// Backward compatibility: `narada task evidence <task-number>` routes to inspect
-// This is handled by a catch-all argument on the parent evidence command
-taskEvidenceCmd
-  .argument('[task-number]', 'Task number to inspect (backward compatibility; prefer `inspect`)')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (taskNumber: string | undefined, opts: Record<string, unknown>) => {
-    if (!taskNumber) {
-      taskEvidenceCmd.help();
-      return;
-    }
-    await runDirectCommand({ command: 'task evidence', emit: emitCommandResult, invocation: () => taskEvidenceCommand({
-      taskNumber,
-      cwd: opts.cwd as string | undefined,
-      format: resolveCommandFormat(),
-    }) });
-  });
+registerTaskEvidenceCommands(taskCmd);
 
 const taskReconcileCmd = taskCmd
   .command('reconcile')
@@ -1356,41 +1172,6 @@ observationCmd
       process.exit(result.exitCode);
     }
     emitCommandResult(result.result, opts.format);
-  });
-
-rosterCmd
-  .command('done <task-number>')
-  .description('Mark agent done with a task')
-  .requiredOption('--agent <id>', 'Agent ID from roster')
-  .option('--strict', 'Fail if required evidence is missing (default behavior)', false)
-  .option('--allow-incomplete', 'Record roster availability even when task evidence is missing', false)
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
-  .action(async (taskNumber: string, opts: Record<string, unknown>) => {
-    await runDirectCommand({ command: 'task roster done', emit: emitCommandResult, invocation: () => taskRosterDoneCommand({
-      taskNumber,
-      agent: opts.agent as string,
-      strict: opts.strict as boolean | undefined,
-      allowIncomplete: opts.allowIncomplete as boolean | undefined,
-      cwd: opts.cwd as string | undefined,
-      format: resolveCommandFormat(),
-      verbose: opts.verbose as boolean | undefined,
-    }) });
-  });
-
-rosterCmd
-  .command('idle')
-  .description('Mark agent as idle')
-  .requiredOption('--agent <id>', 'Agent ID from roster')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
-  .action(async (opts: Record<string, unknown>) => {
-    await runDirectCommand({ command: 'task roster idle', emit: emitCommandResult, invocation: () => taskRosterIdleCommand({
-      agent: opts.agent as string,
-      cwd: opts.cwd as string | undefined,
-      format: resolveCommandFormat(),
-      verbose: opts.verbose as boolean | undefined,
-    }) });
   });
 
 // Chapter governance commands

@@ -57,9 +57,12 @@ function makePacketId(taskId: string, assignmentId: string, sequence: number): s
 async function loadAssignmentRecord(
   cwd: string,
   taskId: string,
+  store: TaskLifecycleStore,
 ): Promise<TaskAssignmentRecord | null> {
-  // For v0, assignments are still in JSON files; this reads the legacy format
-  // Task 564+ will migrate assignments to SQLite
+  const stored = store.getAssignmentRecord(taskId);
+  if (stored) {
+    return JSON.parse(stored.record_json) as TaskAssignmentRecord;
+  }
   const { loadAssignment } = await import('../lib/task-governance.js');
   return loadAssignment(cwd, taskId);
 }
@@ -75,7 +78,7 @@ async function isTaskVisible(
   store: TaskLifecycleStore,
 ): Promise<{ visible: boolean; reason?: string }> {
   // 1. Assignment exists and is unreleased for this agent
-  const assignmentRecord = await loadAssignmentRecord(cwd, taskId);
+  const assignmentRecord = await loadAssignmentRecord(cwd, taskId, store);
   if (!assignmentRecord) {
     return { visible: false, reason: 'No assignment record' };
   }
@@ -179,7 +182,7 @@ async function doQueue(
     const taskNumber = numMatch ? Number(numMatch[1]) : null;
     if (taskNumber === null) continue;
 
-    const assignmentRecord = await loadAssignmentRecord(cwd, taskFile.taskId);
+    const assignmentRecord = await loadAssignmentRecord(cwd, taskFile.taskId, store);
     const activeAssignment = assignmentRecord?.assignments.find((a) => a.released_at === null);
     if (!activeAssignment || activeAssignment.agent_id !== agentId) continue;
 
@@ -259,7 +262,7 @@ async function doPickup(
   }
 
   // Load assignment record
-  const assignmentRecord = await loadAssignmentRecord(cwd, taskFile.taskId);
+  const assignmentRecord = await loadAssignmentRecord(cwd, taskFile.taskId, store);
   if (!assignmentRecord) {
     return {
       exitCode: ExitCode.GENERAL_ERROR,
