@@ -24,16 +24,10 @@ const allowlist = {
     { pattern: /console\.log\('     export GRAPH_CLIENT_SECRET=your-client-secret'\)/, count: 1, reason: "legacy interactive next-step output" },
     { pattern: /console\.log\('  2\. Run: narada sync'\)/, count: 1, reason: "legacy interactive next-step output" },
   ],
-  "console-register.ts": [
-    { pattern: /process\.exit\(0\)/, count: 1, reason: "long-lived console server SIGINT shutdown" },
-  ],
   "usc-init.ts": [
     { pattern: /console\.log\(/, count: 16, reason: "legacy USC init progress and summary output" },
     { pattern: /console\.error\(`FAIL \$\{result\.name\}`\)/, count: 1, reason: "legacy USC init validation output" },
     { pattern: /console\.error\(`  \$\{err\}`\)/, count: 1, reason: "legacy USC init validation output" },
-  ],
-  "workbench-register.ts": [
-    { pattern: /process\.exit\(0\)/, count: 1, reason: "long-lived workbench server SIGINT shutdown" },
   ],
 };
 

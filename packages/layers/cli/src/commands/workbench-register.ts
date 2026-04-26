@@ -1,6 +1,11 @@
 import type { Command } from 'commander';
 import { createWorkbenchServer, workbenchDiagnoseCommand } from './workbench-server.js';
-import { emitFiniteCommandResult, emitLongLivedCommandStartup, resolveCommandFormat } from '../lib/cli-output.js';
+import {
+  emitFiniteCommandResult,
+  emitLongLivedCommandStartup,
+  exitLongLivedCommandSuccessfully,
+  resolveCommandFormat,
+} from '../lib/cli-output.js';
 
 export function registerWorkbenchCommands(program: Command): void {
   const workbenchCmd = program
@@ -40,7 +45,7 @@ export function registerWorkbenchCommands(program: Command): void {
       ]);
       process.on('SIGINT', async () => {
         await server.stop();
-        process.exit(0);
+        exitLongLivedCommandSuccessfully();
       });
     });
 }

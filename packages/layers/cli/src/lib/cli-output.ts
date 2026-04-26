@@ -99,6 +99,11 @@ export function emitLongLivedCommandStartup(lines: string[]): void {
   }
 }
 
+// Long-lived commands may terminate process lifetime after graceful shutdown.
+export function exitLongLivedCommandSuccessfully(exit: (code: number) => never = process.exit): never {
+  return exit(0);
+}
+
 // Finite command bodies should construct human output here, not write to stdout directly.
 export function attachFormattedOutput<T extends object>(
   result: T,

@@ -6,7 +6,12 @@ import {
 } from './console.js';
 import { createConsoleServer } from './console-server.js';
 import { silentCommandContext, wrapCommand } from '../lib/command-wrapper.js';
-import { emitFormatterBackedCommandResult, emitLongLivedCommandStartup, resolveCommandFormat } from '../lib/cli-output.js';
+import {
+  emitFormatterBackedCommandResult,
+  emitLongLivedCommandStartup,
+  exitLongLivedCommandSuccessfully,
+  resolveCommandFormat,
+} from '../lib/cli-output.js';
 
 export function registerConsoleCommands(program: Command): void {
   const consoleCmd = program
@@ -83,7 +88,7 @@ export function registerConsoleCommands(program: Command): void {
       ]);
       process.on('SIGINT', async () => {
         await server.stop();
-        process.exit(0);
+        exitLongLivedCommandSuccessfully();
       });
     });
 }
