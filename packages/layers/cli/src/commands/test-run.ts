@@ -14,6 +14,7 @@
 import { resolve } from 'node:path';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import { attachFormattedOutput } from '../lib/cli-output.js';
 import { openTaskLifecycleStore, type TaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 import {
   generateRunId,
@@ -213,22 +214,24 @@ export async function testRunCommand(
     };
   }
 
-  fmt.section('Test Run Result');
-  fmt.message(`Run ${runId} completed`, status === 'passed' ? 'success' : 'error');
-  fmt.kv('Command', command);
-  fmt.kv('Scope', scope);
-  fmt.kv('Status', status);
-  fmt.kv('Duration', `${(durationMs / 1000).toFixed(1)}s`);
-  if (options.taskNumber) fmt.kv('Linked task', options.taskNumber);
-  fmt.kv('Run ID', runId);
-
+  const result = {
+    status: 'success',
+    run_id: runId,
+    result: { status, exit_code: exitCode, duration_ms: durationMs, timed_out: timedOut },
+  };
+  const lines = [
+    `Test Run Result`,
+    `Run ${runId} completed`,
+    `Command: ${command}`,
+    `Scope: ${scope}`,
+    `Status: ${status}`,
+    `Duration: ${(durationMs / 1000).toFixed(1)}s`,
+    ...(options.taskNumber ? [`Linked task: ${options.taskNumber}`] : []),
+    `Run ID: ${runId}`,
+  ];
   return {
     exitCode: status === 'passed' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
-    result: {
-      status: 'success',
-      run_id: runId,
-      result: { status, exit_code: exitCode, duration_ms: durationMs, timed_out: timedOut },
-    },
+    result: attachFormattedOutput(result, lines.join('\n'), fmt.getFormat()),
   };
 }
 
@@ -263,27 +266,28 @@ export async function testRunInspectCommand(
     };
   }
 
-  fmt.section(`Test Run ${run.run_id}`);
-  fmt.kv('Command', run.target_command);
-  fmt.kv('Scope', run.scope);
-  fmt.kv('Status', run.status);
-  fmt.kv('Duration', run.duration_ms > 0 ? `${(run.duration_ms / 1000).toFixed(1)}s` : '—');
-  fmt.kv('Exit code', run.exit_code ?? '—');
-  fmt.kv('Requested at', run.requested_at);
-  fmt.kv('Completed at', run.completed_at ?? '—');
-  if (run.task_id) fmt.kv('Task ID', run.task_id);
+  const lines = [
+    `Test Run ${run.run_id}`,
+    `Command: ${run.target_command}`,
+    `Scope: ${run.scope}`,
+    `Status: ${run.status}`,
+    `Duration: ${run.duration_ms > 0 ? `${(run.duration_ms / 1000).toFixed(1)}s` : '-'}`,
+    `Exit code: ${run.exit_code ?? '-'}`,
+    `Requested at: ${run.requested_at}`,
+    `Completed at: ${run.completed_at ?? '-'}`,
+    ...(run.task_id ? [`Task ID: ${run.task_id}`] : []),
+  ];
   if (run.stdout_excerpt) {
-    console.log('\n  Stdout excerpt:');
-    console.log(run.stdout_excerpt.split('\n').map((l) => `    ${l}`).join('\n'));
+    lines.push('', 'Stdout excerpt:', run.stdout_excerpt.split('\n').map((l) => `  ${l}`).join('\n'));
   }
   if (run.stderr_excerpt) {
-    console.log('\n  Stderr excerpt:');
-    console.log(run.stderr_excerpt.split('\n').map((l) => `    ${l}`).join('\n'));
+    lines.push('', 'Stderr excerpt:', run.stderr_excerpt.split('\n').map((l) => `  ${l}`).join('\n'));
   }
+  const result = { status: 'success', run };
 
   return {
     exitCode: ExitCode.SUCCESS,
-    result: { status: 'success', run },
+    result: attachFormattedOutput(result, lines.join('\n'), fmt.getFormat()),
   };
 }
 
@@ -315,31 +319,19 @@ export async function testRunListCommand(
     };
   }
 
-  fmt.section(`Test Runs (${runs.length})`);
   if (runs.length === 0) {
-    fmt.message('No test runs found', 'info');
-    return { exitCode: ExitCode.SUCCESS, result: { status: 'success', count: 0, runs: [] } };
+    const result = { status: 'success', count: 0, runs: [] as VerificationRunRow[] };
+    return { exitCode: ExitCode.SUCCESS, result: attachFormattedOutput(result, 'No test runs found', fmt.getFormat()) };
   }
-
-  fmt.table(
-    [
-      { key: 'run_id' as const, label: 'Run ID', width: 24 },
-      { key: 'status' as const, label: 'Status', width: 12 },
-      { key: 'command' as const, label: 'Command', width: 30 },
-      { key: 'duration' as const, label: 'Duration', width: 10 },
-      { key: 'requested_at' as const, label: 'Requested', width: 20 },
-    ],
-    runs.map((r) => ({
-      run_id: r.run_id,
-      status: r.status,
-      command: r.target_command.length > 27 ? r.target_command.slice(0, 27) + '...' : r.target_command,
-      duration: r.duration_ms > 0 ? `${(r.duration_ms / 1000).toFixed(1)}s` : '—',
-      requested_at: r.requested_at.slice(0, 19).replace('T', ' '),
-    })),
-  );
-
+  const lines = [`Test Runs (${runs.length})`];
+  for (const run of runs) {
+    const command = run.target_command.length > 48 ? run.target_command.slice(0, 45) + '...' : run.target_command;
+    const duration = run.duration_ms > 0 ? `${(run.duration_ms / 1000).toFixed(1)}s` : '-';
+    lines.push(`${run.run_id} ${run.status} ${duration} ${command}`);
+  }
+  const result = { status: 'success', count: runs.length, runs };
   return {
     exitCode: ExitCode.SUCCESS,
-    result: { status: 'success', count: runs.length, runs },
+    result: attachFormattedOutput(result, lines.join('\n'), fmt.getFormat()),
   };
 }
