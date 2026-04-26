@@ -61,11 +61,7 @@ import { approveDraftForSendCommand } from './commands/approve-draft-for-send.js
 import { retryAuthFailedCommand } from './commands/retry-auth-failed.js';
 import { acknowledgeAlertCommand } from './commands/acknowledge-alert.js';
 import { taskRecommendCommand } from './commands/task-recommend.js';
-import {
-  postureShowCommand,
-  postureUpdateCommand,
-  postureCheckCommand,
-} from './commands/posture.js';
+import { registerPostureCommands } from './commands/posture-register.js';
 import { taskDeriveFromFindingCommand } from './commands/task-derive-from-finding.js';
 import { registerTaskAuthoringCommands } from './commands/task-authoring-register.js';
 import { taskLintCommand } from './commands/task-lint.js';
@@ -73,6 +69,7 @@ import { registerTaskLifecycleCommands } from './commands/task-lifecycle-registe
 import { registerTaskRosterCommands } from './commands/task-roster-register.js';
 import { registerTaskEvidenceCommands } from './commands/task-evidence-register.js';
 import { registerTaskDispatchCommands } from './commands/task-dispatch-register.js';
+import { registerTaskReconcileCommands } from './commands/task-reconcile-register.js';
 import {
   taskPeekNextCommand,
   taskPullNextCommand,
@@ -97,7 +94,6 @@ import { taskGraphCommand } from './commands/task-graph.js';
 import { taskSearchCommand } from './commands/task-search.js';
 import { taskReadCommand } from './commands/task-read.js';
 import { taskEvidenceAssertCompleteCommand } from './commands/task-evidence-list.js';
-import { taskReconcileInspectCommand, taskReconcileRecordCommand, taskReconcileRepairCommand } from './commands/task-reconcile.js';
 import { verifyStatusCommand } from './commands/verify-status.js';
 import {
   crossingListCommand,
@@ -116,11 +112,7 @@ import {
   commandRunInspectCommand,
   commandRunListCommand,
 } from './commands/command-run.js';
-import {
-  observationInspectCommand,
-  observationListCommand,
-  observationOpenCommand,
-} from './commands/observation.js';
+import { registerObservationCommands } from './commands/observation-register.js';
 import { directCommandAction, runDirectCommand, wrapCommand, type CommandContext } from './lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from './lib/cli-output.js';
 import {
@@ -931,65 +923,7 @@ taskCmd
     }) });
   });
 
-// Posture commands (Task 467)
-const postureCmd = program
-  .command('posture')
-  .description('CCC posture advisory signal management');
-
-postureCmd
-  .command('show')
-  .description('Display current CCC posture')
-  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (opts: Record<string, unknown>) => {
-    const result = await postureShowCommand({
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-      cwd: opts.cwd as string | undefined,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Posture show failed');
-      process.exit(result.exitCode);
-    }
-    console.log(result.result);
-  });
-
-postureCmd
-  .command('update')
-  .description('Update CCC posture from a JSON file')
-  .requiredOption('--from <source>', 'Source label, e.g. manual or chapter-closure-400-410')
-  .option('--file <path>', 'Path to posture JSON file')
-  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (opts: Record<string, unknown>) => {
-    const result = await postureUpdateCommand({
-      from: opts.from as string,
-      file: opts.file as string | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-      cwd: opts.cwd as string | undefined,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Posture update failed');
-      process.exit(result.exitCode);
-    }
-    console.log(result.result);
-  });
-
-postureCmd
-  .command('check')
-  .description('Validate current CCC posture schema and freshness')
-  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (opts: Record<string, unknown>) => {
-    const result = await postureCheckCommand({
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-      cwd: opts.cwd as string | undefined,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Posture check failed');
-      process.exit(result.exitCode);
-    }
-    console.log(result.result);
-  });
+registerPostureCommands(program);
 
 registerTaskRosterCommands(taskCmd);
 
@@ -1048,131 +982,9 @@ registerTaskDispatchCommands(taskCmd);
 
 registerTaskEvidenceCommands(taskCmd);
 
-const taskReconcileCmd = taskCmd
-  .command('reconcile')
-  .description('Task reconciliation operators (inspect, record, repair)');
+registerTaskReconcileCommands(taskCmd);
 
-taskReconcileCmd
-  .command('inspect')
-  .description('Detect task authority drift without recording or repairing it')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .option('--range <start-end>', 'Restrict inspection to task number range')
-  .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-  .action(async (opts: Record<string, unknown>) => {
-    const result = await taskReconcileInspectCommand({
-      cwd: opts.cwd as string | undefined,
-      range: opts.range as string | undefined,
-      format: opts.format as 'json' | 'human' | 'auto' | undefined,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Reconcile inspect failed');
-      process.exit(result.exitCode);
-    }
-    console.log(JSON.stringify(result.result, null, 2));
-  });
-
-taskReconcileCmd
-  .command('record')
-  .description('Record reconciliation findings for later sanctioned repair')
-  .option('--by <id>', 'Operator or agent recording findings', 'operator')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .option('--range <start-end>', 'Restrict recording to task number range')
-  .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-  .action(async (opts: Record<string, unknown>) => {
-    const result = await taskReconcileRecordCommand({
-      by: opts.by as string | undefined,
-      cwd: opts.cwd as string | undefined,
-      range: opts.range as string | undefined,
-      format: opts.format as 'json' | 'human' | 'auto' | undefined,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Reconcile record failed');
-      process.exit(result.exitCode);
-    }
-    console.log(JSON.stringify(result.result, null, 2));
-  });
-
-taskReconcileCmd
-  .command('repair')
-  .description('Apply a sanctioned reconciliation repair')
-  .requiredOption('--finding <id>', 'Finding ID to repair')
-  .requiredOption('--by <id>', 'Operator or agent performing repair')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-  .action(async (opts: Record<string, unknown>) => {
-    const result = await taskReconcileRepairCommand({
-      finding: opts.finding as string | undefined,
-      by: opts.by as string | undefined,
-      cwd: opts.cwd as string | undefined,
-      format: opts.format as 'json' | 'human' | 'auto' | undefined,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Reconcile repair failed');
-      process.exit(result.exitCode);
-    }
-    console.log(JSON.stringify(result.result, null, 2));
-  });
-
-const observationCmd = program
-  .command('observation')
-  .description('Observation artifact operators');
-
-observationCmd
-  .command('list')
-  .description('List recent observation artifacts')
-  .option('--limit <n>', 'Maximum artifacts to list', '20')
-  .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (opts: Record<string, unknown>) => {
-    const result = await observationListCommand({
-      cwd: opts.cwd as string | undefined,
-      limit: opts.limit ? Number(opts.limit) : undefined,
-      format: resolveCommandFormat(opts.format, 'auto'),
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Observation list failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result, opts.format);
-  });
-
-observationCmd
-  .command('inspect <artifact-id>')
-  .description('Inspect an observation artifact')
-  .option('--content', 'Include full artifact content', false)
-  .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (artifactId: string, opts: Record<string, unknown>) => {
-    const result = await observationInspectCommand({
-      artifactId,
-      cwd: opts.cwd as string | undefined,
-      content: opts.content as boolean | undefined,
-      format: resolveCommandFormat(opts.format, 'auto'),
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Observation inspect failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result, opts.format);
-  });
-
-observationCmd
-  .command('open <artifact-id>')
-  .description('Return the path and shell open command for an observation artifact')
-  .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (artifactId: string, opts: Record<string, unknown>) => {
-    const result = await observationOpenCommand({
-      artifactId,
-      cwd: opts.cwd as string | undefined,
-      format: resolveCommandFormat(opts.format, 'auto'),
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Observation open failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result, opts.format);
-  });
+registerObservationCommands(program);
 
 // Chapter governance commands
 const chapterCmd = program
