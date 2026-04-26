@@ -11,6 +11,52 @@ This package provides a bounded Cycle runner for Narada Sites on Windows substra
 
 Both variants share the same core code. The variant is selected at runtime by `detectVariant()`.
 
+## Authority Loci
+
+Windows Sites also distinguish authority locus from substrate variant.
+
+`variant` answers where the Cycle runs:
+
+- `native` — Windows process, NTFS, Task Scheduler, Credential Manager/env
+- `wsl` — Linux process inside WSL, ext4, systemd/cron, env/`.env`
+
+`locus.authority_locus` answers which Windows authority grammar the Site represents:
+
+- `user` — profile-local state such as user credentials, shell/app preferences, operator KB, task governance, and user-scoped tool policy
+- `pc` — machine/session state such as display topology, drivers, services, scheduled tasks, and recovery actions that may affect the whole PC
+
+The split prevents path names from carrying hidden policy. A profile-local Site can simply live under a user-owned root, while its config still records whether it represents the current user or the PC. New configs should set `locus` explicitly; omitted legacy configs are interpreted as user-locus Sites for compatibility.
+
+Example user-locus config fragment:
+
+```json
+{
+  "locus": {
+    "authority_locus": "user",
+    "principal": {
+      "windows_user_profile": "C:\\Users\\Andrey",
+      "username": "Andrey"
+    }
+  }
+}
+```
+
+Example PC-locus prototype config fragment:
+
+```json
+{
+  "locus": {
+    "authority_locus": "pc",
+    "machine": {
+      "hostname": "DESKTOP-SUNROOM-2"
+    },
+    "root_posture": "user_owned_pc_site_prototype"
+  }
+}
+```
+
+`user_owned_pc_site_prototype` means the Site represents PC authority but is still stored under a user-owned root until a machine-owned root, such as ProgramData, is introduced deliberately.
+
 ## WSL Boundaries
 
 ### Filesystem

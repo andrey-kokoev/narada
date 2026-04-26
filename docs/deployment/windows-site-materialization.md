@@ -7,6 +7,10 @@
 > It distinguishes two Windows variants:
 > - **Windows native Site** — runs directly on Windows 11 using PowerShell, Task Scheduler, and native filesystem/SQLite.
 > - **Windows WSL Site** — runs inside a WSL 2 Linux distribution using standard Linux process supervision and the WSL filesystem.
+>
+> It also distinguishes two Windows authority loci:
+> - **Windows user Site** — represents one user profile and its profile-local operator context.
+> - **Windows PC Site** — represents machine/session state such as display topology, drivers, services, scheduled tasks, and whole-PC recovery actions.
 
 ---
 
@@ -22,6 +26,8 @@ The Windows family covers two distinct runtime loci:
 | **WSL** | WSL 2 Linux | systemd / cron / shell | ext4 inside WSL (`/home/...`) | Linux env / `.env` / WSL interop | systemd timer / cron |
 
 Both variants are **Sites**, not operations, not verticals, and not deployment targets in the infrastructure sense.
+
+Variant and authority locus are independent. `native` vs `wsl` answers how the Site runs. `user` vs `pc` answers which Windows authority grammar the Site represents.
 
 ### Generic Site Abstraction Status
 
@@ -45,6 +51,8 @@ A Windows Site holds:
 - runtime context (policy, posture, allowed actions)
 
 A `%LOCALAPPDATA%\Narada\{site_id}\` directory is one Site. A `/var/lib/narada/{site_id}` directory inside WSL is another.
+
+For profile-local experimental Sites, an operator may override the Site root. That override is path policy, not a new canonical substrate convention; the config should carry the authority locus explicitly.
 
 ### `Site substrate`
 
@@ -77,6 +85,31 @@ Requires:
 - object storage for large artifacts (ext4 filesystem)
 - secret binding (environment variables or `.env` file)
 - operator surface (HTTP localhost server or CLI)
+
+### `Windows authority locus`
+
+The Windows authority locus is the part of Windows whose state and authority the Site represents.
+
+| Locus | Owns | Typical root posture |
+|-------|------|----------------------|
+| **User** | User profile state, per-user credentials/preferences, shell and app config, operator KB, task governance, user-scoped tool policy | User-owned profile root |
+| **PC** | Machine/session state, display topology, drivers, services, scheduled tasks, device inventory, recovery actions that affect the whole PC | Machine-owned root; user-owned prototype allowed before service/runtime hardening |
+
+This distinction is separate from `site_id` and from the substrate variant. A user-owned prototype PC Site may be stored under a user profile while explicitly declaring:
+
+```json
+{
+  "locus": {
+    "authority_locus": "pc",
+    "machine": {
+      "hostname": "DESKTOP-SUNROOM-2"
+    },
+    "root_posture": "user_owned_pc_site_prototype"
+  }
+}
+```
+
+The root posture names the policy instead of letting a path such as `C:\Users\...\` silently imply user authority.
 
 ### `Site materialization`
 
@@ -353,6 +386,7 @@ The WSL layout mirrors the native layout with POSIX path conventions.
 | Mailbox vertical conflation | **Forbidden** | Windows Site is a substrate, not a mailbox feature. Mailbox logic lives in the kernel, not the Site package. |
 | Developer machine layout dependence | **Forbidden** | All paths must resolve through `%LOCALAPPDATA%` or documented env vars. No hard-coded `C:\Users\...` paths. |
 | WSL as "just Linux" | **Forbidden** | WSL has distinct filesystem boundaries, interop quirks, and Windows-host coupling. It is a separate substrate variant. |
+| Path-implied authority locus | **Forbidden** | A Site's path must not be the only place where user-vs-PC authority is encoded. Use `locus.authority_locus`. |
 
 ---
 

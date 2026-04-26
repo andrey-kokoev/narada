@@ -1,5 +1,9 @@
 export type {
   WindowsSiteVariant,
+  WindowsAuthorityLocus,
+  WindowsUserSiteLocus,
+  WindowsPcSiteLocus,
+  WindowsSiteLocus,
   SiteVariant,
   WindowsSiteConfig,
   WindowsCycleOutcome,
@@ -7,6 +11,16 @@ export type {
   SiteHealthRecord,
   CycleTraceRecord,
 } from "./types.js";
+
+export {
+  defaultWindowsUserSiteLocus,
+  defaultWindowsPcSiteLocus,
+  defaultWindowsSiteLocus,
+  resolveWindowsSiteLocus,
+  validateWindowsSiteLocus,
+  type WindowsSiteLocusInput,
+  type WindowsSiteLocusValidationResult,
+} from "./authority-locus.js";
 
 export {
   detectVariant,

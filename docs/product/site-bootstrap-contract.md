@@ -58,6 +58,15 @@ Select the substrate class that matches your host environment:
 
 Cloudflare Site is explicitly deferred from this first-run path.
 
+For Windows Sites, substrate is not the same as authority locus. `windows-native` and `windows-wsl` describe how the Site runs. A Windows Site config may also declare:
+
+| Authority locus | Use when |
+|-----------------|----------|
+| `user` | The Site represents a Windows user profile: credentials, preferences, operator KB, task governance, and user-scoped tools |
+| `pc` | The Site represents machine/session state: display topology, drivers, services, scheduled tasks, and PC recovery actions |
+
+Omitted `locus` fields are treated as user-locus for legacy compatibility. New Windows configs should declare the locus explicitly, especially when a PC Site is temporarily stored under a user-owned root.
+
 ### Step 2: Create Site root
 
 ```bash
@@ -276,6 +285,13 @@ Each Site has a `config.json` in its root directory. The shape is substrate-spec
 {
   "site_id": "local-help",
   "variant": "native",
+  "locus": {
+    "authority_locus": "user",
+    "principal": {
+      "windows_user_profile": "C:\\Users\\User",
+      "username": "User"
+    }
+  },
   "site_root": "C:\\Users\\User\\AppData\\Local\\Narada\\local-help",
   "config_path": "C:\\Users\\User\\AppData\\Local\\Narada\\local-help\\config.json",
   "cycle_interval_minutes": 5,

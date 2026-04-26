@@ -9,6 +9,52 @@ export type WindowsSiteVariant = "native" | "wsl";
 export type SiteVariant = WindowsSiteVariant | "cloudflare" | "linux-user" | "linux-system";
 
 /**
+ * Windows authority locus represented by a Site.
+ *
+ * This is intentionally separate from `WindowsSiteVariant`:
+ * - `variant` answers where/how the Cycle runs (`native` vs `wsl`).
+ * - `authority_locus` answers which Windows authority grammar the Site represents.
+ */
+export type WindowsAuthorityLocus = "user" | "pc";
+
+/**
+ * A user-locus Windows Site owns profile-local state and operator context.
+ *
+ * Examples: user credentials, shell/app preferences, operator KB, task governance,
+ * per-user tool policy, and user-scoped evidence.
+ */
+export interface WindowsUserSiteLocus {
+  authority_locus: "user";
+  principal: {
+    /** Windows profile root, for example `C:\\Users\\Andrey`. */
+    windows_user_profile: string;
+    /** Windows account/user name as observed by the substrate. */
+    username: string;
+  };
+}
+
+/**
+ * A PC-locus Windows Site owns machine/session state.
+ *
+ * Examples: display topology, drivers, services, scheduled tasks, machine-level
+ * diagnostics, and recovery actions that may affect the whole PC.
+ */
+export interface WindowsPcSiteLocus {
+  authority_locus: "pc";
+  machine: {
+    /** Windows hostname, for example `DESKTOP-SUNROOM-2`. */
+    hostname: string;
+  };
+  /**
+   * Whether this PC Site is still stored under a user profile or has moved to
+   * a mature machine-owned root such as ProgramData.
+   */
+  root_posture: "user_owned_pc_site_prototype" | "machine_owned";
+}
+
+export type WindowsSiteLocus = WindowsUserSiteLocus | WindowsPcSiteLocus;
+
+/**
  * Live source configuration for a Windows Site.
  *
  * Only `graph` is supported in v0. The source is bounded by
@@ -46,6 +92,14 @@ export type WindowsLiveSourceConfig = WindowsLiveGraphSourceConfig;
 export interface WindowsSiteConfig {
   site_id: string;
   variant: WindowsSiteVariant;
+  /**
+   * Optional authority-locus descriptor.
+   *
+   * Omitted legacy configs are interpreted as user-locus native/WSL Sites only
+   * for compatibility. New configs should set this explicitly when the Site is
+   * intended to model either a Windows user profile or a PC/machine locus.
+   */
+  locus?: WindowsSiteLocus;
   site_root: string;
   config_path: string;
   cycle_interval_minutes: number;

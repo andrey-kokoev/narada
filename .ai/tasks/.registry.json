@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_allocated": 592,
+  "last_allocated": 593,
   "reserved": [
     471,
     472,
@@ -399,6 +399,15 @@
       "reserved_by": "codex",
       "reserved_at": "2026-04-24T00:47:00-05:00",
       "expires_at": "2026-04-25T00:47:00-05:00",
+      "status": "released"
+    },
+    {
+      "range_start": 593,
+      "range_end": 593,
+      "purpose": "Chapter: Windows Site Authority Loci",
+      "reserved_by": "chapter-create",
+      "reserved_at": "2026-04-26T19:29:50.652Z",
+      "expires_at": "2026-04-27T19:29:50.652Z",
       "status": "released"
     }
   ]
