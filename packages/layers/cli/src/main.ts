@@ -29,19 +29,13 @@ import {
 } from './commands/console.js';
 import { createConsoleServer } from './commands/console-server.js';
 import { createWorkbenchServer, workbenchDiagnoseCommand } from './commands/workbench-server.js';
-import { backupCommand } from './commands/backup.js';
-import { restoreCommand } from './commands/restore.js';
-import { verifyBackupCommand } from './commands/verify-backup.js';
-import { listBackupCommand } from './commands/backup-ls.js';
-import { cleanupCommand } from './commands/cleanup.js';
+import { registerBackupCommands } from './commands/backup-register.js';
+import { registerCleanupCommands } from './commands/cleanup-register.js';
 import { demoCommand } from './commands/demo.js';
 import { uscInitCommand } from './commands/usc-init.js';
 import { uscValidateCommand } from './commands/usc-validate.js';
-import { deriveWorkCommand } from './commands/derive-work.js';
-import { previewWorkCommand } from './commands/preview-work.js';
-import { confirmReplayCommand } from './commands/confirm-replay.js';
+import { registerRederivationCommands } from './commands/rederivation-register.js';
 import { selectCommand } from './commands/select.js';
-import { recoverCommand } from './commands/recover.js';
 import { showCommand } from './commands/show.js';
 import { auditCommand } from './commands/audit.js';
 import { doctorCommand } from './commands/doctor.js';
@@ -82,10 +76,7 @@ import { taskGraphCommand } from './commands/task-graph.js';
 import { taskSearchCommand } from './commands/task-search.js';
 import { taskReadCommand } from './commands/task-read.js';
 import { registerVerifyCommands } from './commands/verify-register.js';
-import {
-  crossingListCommand,
-  crossingShowCommand,
-} from './commands/crossing.js';
+import { registerCrossingCommands } from './commands/crossing-register.js';
 import { registerTestRunCommands } from './commands/test-run-register.js';
 import { registerCommandRunCommands } from './commands/command-run-register.js';
 import { registerObservationCommands } from './commands/observation-register.js';
@@ -972,155 +963,11 @@ registerCommandRunCommands(program);
 
 registerTestRunCommands(program);
 
-// Backup commands
-program
-  .command('backup')
-  .description('Create a backup of sync data')
-  .option('-c, --config <path>', 'Path to config file', './config.json')
-  .option('-v, --verbose', 'Enable verbose output', false)
-  .requiredOption('-o, --output <path>', 'Output file path (e.g., backup.tar.gz)')
-  .option('--include <components>', 'Components to include (comma-separated: messages,views,config,cursor,applyLog,tombstones)', 'messages,views,config,cursor,applyLog,tombstones')
-  .option('--exclude-pattern <pattern>', 'Exclude files matching pattern')
-  .option('--compression <type>', 'Compression type (gzip, brotli, none)', 'gzip')
-  .option('--encrypt', 'Encrypt backup with passphrase', false)
-  .option('--passphrase <phrase>', 'Passphrase for encryption')
-  .action(wrapCommand('backup', (opts, ctx) => {
-    const include = opts.include.split(',') as Array<'messages' | 'views' | 'config' | 'cursor' | 'applyLog' | 'tombstones'>;
-    return backupCommand({
-      ...opts,
-      include,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto'
-    }, ctx);
-  }));
+registerBackupCommands(program);
 
-program
-  .command('restore')
-  .description('Restore data from backup')
-  .option('-c, --config <path>', 'Path to config file', './config.json')
-  .option('-v, --verbose', 'Enable verbose output', false)
-  .requiredOption('-i, --input <path>', 'Backup file path')
-  .option('-t, --target-dir <path>', 'Override target directory')
-  .option('-f, --force', 'Overwrite existing files', false)
-  .option('--verify', 'Verify checksums before restoring', false)
-  .option('--select <id>', 'Restore specific message by ID')
-  .option('--before <date>', 'Restore only messages before date (ISO format)')
-  .option('--passphrase <phrase>', 'Passphrase for encrypted backups')
-  .action(wrapCommand('restore', (opts, ctx) =>
-    restoreCommand({ ...opts, format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto' }, ctx)));
+registerCleanupCommands(program);
 
-program
-  .command('backup-verify')
-  .description('Verify backup integrity without extracting')
-  .option('-v, --verbose', 'Enable verbose output', false)
-  .requiredOption('-i, --input <path>', 'Backup file path')
-  .option('--passphrase <phrase>', 'Passphrase for encrypted backups')
-  .action(wrapCommand('backup-verify', (opts, ctx) =>
-    verifyBackupCommand({ ...opts, format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto' }, ctx)));
-
-program
-  .command('backup-ls')
-  .description('List backup contents')
-  .option('-v, --verbose', 'Enable verbose output', false)
-  .requiredOption('-i, --input <path>', 'Backup file path')
-  .option('-d, --detailed', 'Show detailed file listing', false)
-  .option('--passphrase <phrase>', 'Passphrase for encrypted backups')
-  .action(wrapCommand('backup-ls', (opts, ctx) =>
-    listBackupCommand({ ...opts, format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto' }, ctx)));
-
-// Cleanup commands
-program
-  .command('cleanup')
-  .description('Run data lifecycle cleanup operations')
-  .option('-c, --config <path>', 'Path to config file', './config.json')
-  .option('-v, --verbose', 'Enable verbose output', false)
-  .option('--dry-run', 'Preview changes without applying', false)
-  .option('--tombstones', 'Clean tombstones only', false)
-  .option('--compact', 'Archive old messages only', false)
-  .option('--vacuum', 'Run integrity check only', false)
-  .option('--retention', 'Apply retention policy only', false)
-  .option('--all', 'Run all cleanup operations', false)
-  .action(wrapCommand('cleanup', (opts, ctx) =>
-    cleanupCommand({ ...opts, format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto' }, ctx)));
-
-program
-  .command('derive-work')
-  .description('Derive work from stored facts without requiring a fresh inbound event')
-  .option('-c, --config <path>', 'Path to config file', './config.json')
-  .option('-v, --verbose', 'Enable verbose output', false)
-  .option('-o, --operation <id>', 'Operation ID')
-  .addOption(new Option('-s, --scope <id>', 'Deprecated alias').hideHelp())
-  .option('--context-id <id>', 'Derive work for a specific context (conversation/thread)')
-  .option('--since <timestamp>', 'Only consider facts created at or after this ISO timestamp')
-  .option('--fact-ids <ids>', 'Comma-separated list of specific fact IDs to replay')
-  .action(wrapCommand('derive-work', (opts, ctx) =>
-    deriveWorkCommand({
-      ...opts,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-      contextId: opts.contextId as string | undefined,
-      since: opts.since as string | undefined,
-      factIds: opts.factIds ? String(opts.factIds).split(',') : undefined,
-    }, ctx)));
-
-program
-  .command('preview-work')
-  .description('Preview what a charter would propose for stored facts without opening work or creating intents')
-  .option('-c, --config <path>', 'Path to config file', './config.json')
-  .option('-v, --verbose', 'Enable verbose output', false)
-  .option('-o, --operation <id>', 'Operation ID')
-  .addOption(new Option('-s, --scope <id>', 'Deprecated alias').hideHelp())
-  .option('--context-id <id>', 'Preview work for a specific context (conversation/thread)')
-  .option('--since <timestamp>', 'Only consider facts created at or after this ISO timestamp')
-  .option('--fact-ids <ids>', 'Comma-separated list of specific fact IDs to preview')
-  .option('--mock', 'Use a mock charter runner instead of a real one', false)
-  .action(wrapCommand('preview-work', (opts, ctx) =>
-    previewWorkCommand({
-      ...opts,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-      contextId: opts.contextId as string | undefined,
-      since: opts.since as string | undefined,
-      factIds: opts.factIds ? String(opts.factIds).split(',') : undefined,
-      mock: opts.mock as boolean | undefined,
-    }, ctx)));
-
-program
-  .command('confirm-replay')
-  .description('Replay confirmation for unconfirmed or ambiguous executions without re-performing effects')
-  .option('-c, --config <path>', 'Path to config file', './config.json')
-  .option('-v, --verbose', 'Enable verbose output', false)
-  .option('-o, --operation <id>', 'Operation ID')
-  .addOption(new Option('-s, --scope <id>', 'Deprecated alias').hideHelp())
-  .option('--intent-ids <ids>', 'Comma-separated intent IDs to replay')
-  .option('--outbound-ids <ids>', 'Comma-separated outbound IDs to replay (mail family)')
-  .option('--limit <n>', 'Maximum items to process', '50')
-  .action(wrapCommand('confirm-replay', (opts, ctx) =>
-    confirmReplayCommand({
-      ...opts,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-      intentIds: opts.intentIds ? String(opts.intentIds).split(',') : undefined,
-      outboundIds: opts.outboundIds ? String(opts.outboundIds).split(',') : undefined,
-      limit: opts.limit ? Number(opts.limit) : undefined,
-    }, ctx)));
-
-program
-  .command('recover')
-  .description('Recover control-plane state from stored facts after coordinator loss')
-  .option('-c, --config <path>', 'Path to config file', './config.json')
-  .option('-v, --verbose', 'Enable verbose output', false)
-  .option('-o, --operation <id>', 'Operation ID')
-  .addOption(new Option('-s, --scope <id>', 'Deprecated alias').hideHelp())
-  .option('--context-id <id>', 'Recover a specific context')
-  .option('--since <timestamp>', 'Only consider facts created at or after this ISO timestamp')
-  .option('--fact-ids <ids>', 'Comma-separated list of specific fact IDs')
-  .option('--dry-run', 'Preview what would be recovered without making changes', false)
-  .action(wrapCommand('recover', (opts, ctx) =>
-    recoverCommand({
-      ...opts,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-      contextId: opts.contextId as string | undefined,
-      since: opts.since as string | undefined,
-      factIds: opts.factIds ? String(opts.factIds).split(',') : undefined,
-      dryRun: opts.dryRun as boolean | undefined,
-    }, ctx)));
+registerRederivationCommands(program);
 
 program
   .command('reject-draft')
@@ -1260,52 +1107,7 @@ program
       offset: opts.offset ? Number(opts.offset) : undefined,
     }, ctx)));
 
-// ── Crossing regime inspection commands (Task 498) ──
-
-const crossingCmd = program
-  .command('crossing')
-  .description('Crossing regime inspection operators (read-only)');
-
-crossingCmd
-  .command('list')
-  .description('List declared crossing regimes from the canonical inventory')
-  .option('--classification <csv>', 'Filter by classification: canonical,advisory,deferred')
-  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
-  .action(async (opts: Record<string, unknown>) => {
-    const result = await crossingListCommand({
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-      classification: opts.classification as string | undefined,
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Command failed');
-      process.exit(result.exitCode);
-    }
-    if (typeof result.result === 'string') {
-      console.log(result.result);
-    } else {
-      console.log(JSON.stringify(result.result, null, 2));
-    }
-  });
-
-crossingCmd
-  .command('show <name>')
-  .description('Show a single crossing regime declaration')
-  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
-  .action(async (name: string, opts: Record<string, unknown>) => {
-    const result = await crossingShowCommand({
-      name,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Command failed');
-      process.exit(result.exitCode);
-    }
-    if (typeof result.result === 'string') {
-      console.log(result.result);
-    } else {
-      console.log(JSON.stringify(result.result, null, 2));
-    }
-  });
+registerCrossingCommands(program);
 
 // ── Operation shaping commands (from ops-kit) ──
 
