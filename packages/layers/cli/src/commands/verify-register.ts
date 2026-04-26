@@ -22,7 +22,6 @@ export function registerVerifyCommands(program: Command): void {
         cwd: opts.cwd as string | undefined,
         format: process.env.OUTPUT_FORMAT,
       }, silentCommandContext()),
-      }, silentCommandContext()),
     }));
 
   verifyCmd
@@ -38,7 +37,6 @@ export function registerVerifyCommands(program: Command): void {
         cwd: opts.cwd as string | undefined,
         format: process.env.OUTPUT_FORMAT,
       }, silentCommandContext()),
-      }, silentCommandContext()),
     }));
 
   verifyCmd
@@ -53,7 +51,6 @@ export function registerVerifyCommands(program: Command): void {
         taskNumber: opts.task as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: process.env.OUTPUT_FORMAT,
-      }, silentCommandContext()),
       }, silentCommandContext()),
     }));
 
@@ -75,7 +72,6 @@ export function registerVerifyCommands(program: Command): void {
         allowPackage: opts.allowPackage as boolean | undefined,
         allowFullSuite: opts.allowFullSuite as boolean | undefined,
         format: process.env.OUTPUT_FORMAT,
-      }, silentCommandContext()),
       }, silentCommandContext()),
     }));
 }

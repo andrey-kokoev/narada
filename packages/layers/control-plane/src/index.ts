@@ -32,6 +32,25 @@ export type {
   SourceRecord,
   SourceProvenance,
 } from "./types/source.js";
+export {
+  createInboxEnvelope,
+  promoteInboxEnvelope,
+  isPromotedInboxEnvelope,
+  isActionableInboxCommandRequest,
+  isInertReceivedInboxEnvelope,
+} from "./inbox/types.js";
+export type {
+  InboxSourceKind,
+  InboxEnvelopeKind,
+  InboxAuthorityLevel,
+  InboxEnvelopeStatus,
+  InboxPromotionTargetKind,
+  InboxSourceRef,
+  InboxAuthority,
+  InboxPromotion,
+  InboxEnvelope,
+  CreateInboxEnvelopeOptions,
+} from "./inbox/types.js";
 export { ClientCredentialsTokenProvider } from "./adapter/graph/auth.js";
 export { buildGraphTokenProvider } from "./config/token-provider.js";
 export { DefaultGraphAdapter } from "./adapter/graph/adapter.js";

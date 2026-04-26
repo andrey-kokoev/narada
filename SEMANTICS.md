@@ -1546,6 +1546,24 @@ Templates are **descriptive**, not prescriptive. They provide a vocabulary for r
 | `verification` | Verification | `confirm` only. Binds external observation to durable state. Idempotent. Requires inbound observation. API success alone is insufficient. | Confirmation status, `apply_log`, reconciliation record | Performance zone | Confirmation | single-instance pattern |
 | `observation` | Observation | No mutating authority. Read-only. Non-authoritative: may be deleted and rebuilt without affecting correctness. | Derived views, projections, traces, search indexes | Any zone with mutating authority | Observation | single-instance pattern |
 
+### 2.17.2.1 Canonical Inbox: Typed Envelope Intake Zone
+
+The **Canonical Inbox** is Narada's single durable intake zone for things that arrive before they become facts, tasks, decisions, operator actions, or knowledge. It is not an email mailbox. Email is one intake source among user chat, diagnostics, agent reports, file drops, CLI submissions, webhooks, and system observations.
+
+The durable artifact is an `InboxEnvelope` with five separable axes:
+
+| Axis | Meaning |
+|------|---------|
+| `source` | Where the item arrived from (`user_chat`, `email`, `diagnostic`, `agent_report`, `file_drop`, `cli`, `webhook`, `system_observation`) |
+| `kind` | What the item means (`proposal`, `observation`, `command_request`, `question`, `knowledge_candidate`, `task_candidate`, `incident`, `upstream_task_candidate`) |
+| `authority` | What force the item has (`none`, `user_statement`, `operator_confirmed`, `system_observed`, `agent_reported`) |
+| `status` | Intake lifecycle (`received`, `classified`, `accepted`, `rejected`, `promoted`, `archived`, `superseded`) |
+| `promotion` | Optional governed crossing target (`task`, `decision`, `operator_action`, `knowledge_entry`, `site_config_change`, `archive`) |
+
+Inbox envelopes are inert. They do not do work, mutate tasks, execute commands, change Site configuration, or author knowledge directly. They may only be classified, accepted/rejected, archived, or promoted across an explicit governed crossing. This prevents source-shaped collapse: a mailbox message, chat instruction, diagnostic result, or agent report can arrive in one grammar without pretending to already be the authority artifact it may later become.
+
+The Canonical Inbox is an ingress-zone instance. Its invariant is: **arrival is not admission to act**.
+
 ### 2.17.3 Template vs Instance vs Local Stage
 
 **Zone instance** — a concrete zone in Narada's topology (e.g., `Source`, `Fact`, `Work`). Defined in §2.15.1.
