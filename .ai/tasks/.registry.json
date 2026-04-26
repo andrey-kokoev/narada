@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_allocated": 596,
+  "last_allocated": 597,
   "reserved": [
     471,
     472,
@@ -435,6 +435,15 @@
       "reserved_by": "chapter-create",
       "reserved_at": "2026-04-26T20:37:42.685Z",
       "expires_at": "2026-04-27T20:37:42.685Z",
+      "status": "released"
+    },
+    {
+      "range_start": 597,
+      "range_end": 597,
+      "purpose": "Chapter: Git Backed User Site Doctor",
+      "reserved_by": "chapter-create",
+      "reserved_at": "2026-04-26T21:15:58.852Z",
+      "expires_at": "2026-04-27T21:15:58.852Z",
       "status": "released"
     }
   ]

@@ -92,7 +92,10 @@ authority locus the Site represents.
 
 Use `narada sites doctor <site-id>` to validate a materialized User Site root.
 The doctor checks config identity, authority locus, sync posture, locus-aware
-registry path, registry entry, and `.ai/tasks/task-lifecycle.db`.
+registry path, registry entry, and `.ai/tasks/task-lifecycle.db`. For
+`git_backed` Sites, it also checks Git work-tree state, upstream tracking,
+origin URL, remote status, and private GitHub reachability when GitHub metadata
+is configured.
 
 ## WSL Boundaries
 

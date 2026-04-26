@@ -6,11 +6,15 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { execFile } from 'node:child_process';
 import { join, posix, win32 } from 'node:path';
+import { promisify } from 'node:util';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
+
+const execFileAsync = promisify(execFile);
 
 export interface SitesOptions {
   format?: string;
@@ -352,6 +356,20 @@ function normalizeNativePath(pathValue: string): string {
   return win32.normalize(pathValue).replace(/[\\/]+$/, '').toLowerCase();
 }
 
+function normalizeGitRemoteUrl(url: string): string {
+  return url.trim().replace(/\.git$/, '').replace(/^git@github\.com:/, 'https://github.com/');
+}
+
+async function runGit(siteRoot: string, args: string[]): Promise<string> {
+  const { stdout } = await execFileAsync('git', args, { cwd: siteRoot, windowsHide: true });
+  return stdout.trim();
+}
+
+async function runGh(args: string[]): Promise<string> {
+  const { stdout } = await execFileAsync('gh', args, { windowsHide: true });
+  return stdout.trim();
+}
+
 export async function sitesDoctorCommand(
   siteId: string,
   options: SitesDoctorOptions,
@@ -438,11 +456,98 @@ export async function sitesDoctorCommand(
           addCheck(checks, 'user_root_policy', 'fail', `User-locus root should be ${expectedRoot}; config=${String(config.site_root)} root=${siteRoot}`);
         }
 
-        const sync = config.sync as { posture?: string } | undefined;
+        const sync = config.sync as {
+          posture?: string;
+          git?: {
+            remote_kind?: string;
+            owner?: string;
+            repo?: string;
+            visibility?: string;
+            remote_url?: string;
+            remote_status?: string;
+          };
+        } | undefined;
         if (sync?.posture && validSyncPostures.has(sync.posture)) {
           addCheck(checks, 'sync_posture', 'pass', `Sync posture is ${sync.posture}`);
         } else {
           addCheck(checks, 'sync_posture', 'fail', 'User-locus Site has no valid sync posture', 'Set sync.posture to local_only, cloud_synced_folder, git_backed, hybrid, or hybrid_capable_plain_folder');
+        }
+
+        if (sync?.posture === 'git_backed') {
+          const gitMetadata = sync.git;
+          const gitDir = win32.join(siteRoot, '.git');
+          if (existsSync(gitDir)) {
+            addCheck(checks, 'git_root_exists', 'pass', `Git metadata exists: ${gitDir}`);
+          } else {
+            addCheck(checks, 'git_root_exists', 'fail', `Git metadata is missing: ${gitDir}`, 'Initialize Git at the Site root or change sync.posture');
+          }
+
+          try {
+            const insideWorkTree = await runGit(siteRoot, ['rev-parse', '--is-inside-work-tree']);
+            if (insideWorkTree === 'true') {
+              addCheck(checks, 'git_work_tree', 'pass', 'Site root is inside a Git work tree');
+            } else {
+              addCheck(checks, 'git_work_tree', 'fail', 'Site root is not inside a Git work tree');
+            }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            addCheck(checks, 'git_work_tree', 'fail', `Cannot inspect Git work tree: ${message}`);
+          }
+
+          try {
+            const upstream = await runGit(siteRoot, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
+            addCheck(checks, 'git_upstream', 'pass', `Current branch tracks ${upstream}`);
+          } catch {
+            addCheck(checks, 'git_upstream', 'fail', 'Current branch has no upstream', 'Run git push -u origin <branch>');
+          }
+
+          try {
+            const status = await runGit(siteRoot, ['status', '--porcelain']);
+            if (status.length === 0) {
+              addCheck(checks, 'git_working_tree_clean', 'pass', 'Git working tree is clean');
+            } else {
+              addCheck(checks, 'git_working_tree_clean', 'warn', 'Git working tree has uncommitted changes');
+            }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            addCheck(checks, 'git_working_tree_clean', 'warn', `Cannot inspect Git status: ${message}`);
+          }
+
+          if (gitMetadata?.remote_url) {
+            try {
+              const originUrl = await runGit(siteRoot, ['config', '--get', 'remote.origin.url']);
+              if (normalizeGitRemoteUrl(originUrl) === normalizeGitRemoteUrl(gitMetadata.remote_url)) {
+                addCheck(checks, 'git_remote_url', 'pass', 'Git origin matches sync.git.remote_url');
+              } else {
+                addCheck(checks, 'git_remote_url', 'fail', `Git origin is ${originUrl}, expected ${gitMetadata.remote_url}`);
+              }
+            } catch {
+              addCheck(checks, 'git_remote_url', 'fail', 'Git origin remote is missing', 'Set remote.origin.url or update sync.git.remote_url');
+            }
+          } else {
+            addCheck(checks, 'git_remote_url', 'fail', 'sync.git.remote_url is missing for git_backed Site');
+          }
+
+          if (gitMetadata?.remote_status === 'active') {
+            addCheck(checks, 'git_remote_status', 'pass', 'sync.git.remote_status is active');
+          } else {
+            addCheck(checks, 'git_remote_status', 'warn', `sync.git.remote_status is ${gitMetadata?.remote_status ?? 'missing'}`);
+          }
+
+          if (gitMetadata?.remote_kind === 'github' && gitMetadata.owner && gitMetadata.repo && gitMetadata.remote_status === 'active') {
+            try {
+              const repoJson = await runGh(['repo', 'view', `${gitMetadata.owner}/${gitMetadata.repo}`, '--json', 'isPrivate,url']);
+              const repo = JSON.parse(repoJson) as { isPrivate?: boolean; url?: string };
+              if (repo.isPrivate === true) {
+                addCheck(checks, 'github_repo_private', 'pass', `GitHub repo is private: ${repo.url ?? `${gitMetadata.owner}/${gitMetadata.repo}`}`);
+              } else {
+                addCheck(checks, 'github_repo_private', 'warn', `GitHub repo is not private: ${repo.url ?? `${gitMetadata.owner}/${gitMetadata.repo}`}`);
+              }
+            } catch (err) {
+              const message = err instanceof Error ? err.message : String(err);
+              addCheck(checks, 'github_repo_reachable', 'warn', `Cannot verify GitHub repo with gh: ${message}`);
+            }
+          }
         }
       }
     }

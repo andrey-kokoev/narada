@@ -145,7 +145,7 @@ Checks:
 - Supervisor unit is registered (if applicable)
 - Health status is not critical
 
-For Windows User Sites, `narada sites doctor <site-id>` also validates the Site root posture, `locus.authority_locus`, `sync.posture`, user/PC registry path, registry entry, and `.ai/tasks/task-lifecycle.db`.
+For Windows User Sites, `narada sites doctor <site-id>` also validates the Site root posture, `locus.authority_locus`, `sync.posture`, user/PC registry path, registry entry, and `.ai/tasks/task-lifecycle.db`. For `git_backed` User Sites it also checks the Git work tree, upstream branch, origin URL, configured remote status, and private GitHub repo reachability when `sync.git.remote_kind` is `github`.
 
 A newly initialized Site will show `warn` for "no cycle recorded yet" and "no health record" — this is expected.
 

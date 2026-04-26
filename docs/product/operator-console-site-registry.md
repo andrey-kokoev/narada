@@ -304,7 +304,7 @@ The registry is separate from Site data. Site directories live at substrate-spec
 
 Discovery should treat Windows user-locus and PC-locus roots as first-class roots, not as legacy `%LOCALAPPDATA%` children. A path that merely contains the string `narada` is not a Site unless it has Site identity, configuration, or registry evidence.
 
-`narada sites doctor <site-id>` is the validation surface for a local Site root. For Windows User Sites it checks root policy, config identity, declared authority locus, sync posture, registry path/entry, and task lifecycle schema before the Site is trusted as a coherent operator surface.
+`narada sites doctor <site-id>` is the validation surface for a local Site root. For Windows User Sites it checks root policy, config identity, declared authority locus, sync posture, registry path/entry, and task lifecycle schema before the Site is trusted as a coherent operator surface. For `git_backed` User Sites, it additionally checks that the Site root is a Git work tree with an upstream branch, matching origin URL, active remote status, and private GitHub repo reachability when GitHub metadata is configured.
 
 ## 12. Operator Console HTTP API
 
