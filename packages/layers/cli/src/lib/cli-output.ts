@@ -1,4 +1,20 @@
 export type CliFormat = 'json' | 'human' | 'auto';
+export type CliOutputAdmissionZone = 'finite' | 'interactive' | 'long_lived';
+export type CliOutputAdmissionStream = 'stdout' | 'stderr';
+
+export interface CliOutputAdmission {
+  zone: CliOutputAdmissionZone;
+  stream?: CliOutputAdmissionStream;
+  lines: string[];
+  stdout?: (line: string) => void;
+  stderr?: (line: string) => void;
+}
+
+export interface CliExitAdmission {
+  zone: Extract<CliOutputAdmissionZone, 'interactive' | 'long_lived'>;
+  code?: number;
+  exit?: (code: number) => never;
+}
 
 export function wantsJsonOutput(format?: unknown, envFormat = process.env.OUTPUT_FORMAT): boolean {
   return format === 'json' || envFormat === 'json';
@@ -35,6 +51,22 @@ export function formatCommandResultForStdout(
 
 export function emitCommandResult(result: unknown, format?: unknown): void {
   console.log(formatCommandResultForStdout(result, format));
+}
+
+export function emitCliOutputAdmission(admission: CliOutputAdmission): void {
+  const stream = admission.stream ?? 'stdout';
+  const write =
+    stream === 'stderr'
+      ? admission.stderr ?? console.error
+      : admission.stdout ?? console.log;
+  for (const line of admission.lines) {
+    write(line);
+  }
+}
+
+export function exitCliOutputAdmission(admission: CliExitAdmission): never {
+  const exit = admission.exit ?? ((code: number): never => process.exit(code));
+  return exit(admission.code ?? 0);
 }
 
 export interface CommandResultEnvelopeLike {
@@ -94,40 +126,32 @@ export function emitFormatterBackedCommandResult(
 
 // Long-lived commands are an explicit exception: startup notices precede process lifetime.
 export function emitLongLivedCommandStartup(lines: string[]): void {
-  for (const line of lines) {
-    console.log(line);
-  }
+  emitCliOutputAdmission({ zone: 'long_lived', lines });
 }
 
 // Long-lived commands may terminate process lifetime after graceful shutdown.
 export function exitLongLivedCommandSuccessfully(exit: (code: number) => never = process.exit): never {
-  return exit(0);
+  return exitCliOutputAdmission({ zone: 'long_lived', exit });
 }
 
 // Interactive commands may terminate process lifetime after prompt cancellation.
 export function exitInteractiveCommandSuccessfully(exit: (code: number) => never = process.exit): never {
-  return exit(0);
+  return exitCliOutputAdmission({ zone: 'interactive', exit });
 }
 
 // Interactive commands sometimes need bounded follow-up text after prompt rendering.
 export function emitInteractiveCommandFollowUp(lines: string[]): void {
-  for (const line of lines) {
-    console.log(line);
-  }
+  emitCliOutputAdmission({ zone: 'interactive', lines });
 }
 
 // Finite setup commands may render bounded progress summaries while they mutate local scaffolding.
 export function emitFiniteCommandProgress(lines: string[]): void {
-  for (const line of lines) {
-    console.log(line);
-  }
+  emitCliOutputAdmission({ zone: 'finite', lines });
 }
 
 // Finite setup commands may render bounded diagnostics before returning a failing envelope or throwing.
 export function emitFiniteCommandDiagnostics(lines: string[]): void {
-  for (const line of lines) {
-    console.error(line);
-  }
+  emitCliOutputAdmission({ zone: 'finite', stream: 'stderr', lines });
 }
 
 // Finite command bodies should construct human output here, not write to stdout directly.
