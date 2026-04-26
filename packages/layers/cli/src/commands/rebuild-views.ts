@@ -51,7 +51,7 @@ export async function rebuildViewsCommand(
   fmt.kv('Duration', fmt.duration(duration));
   fmt.kv('Root directory', rootDir);
   
-  console.log('');
+  fmt.message('');
   fmt.message('The following views have been regenerated:', 'info');
   fmt.list([
     'by-thread/ - Messages grouped by conversation',
@@ -60,7 +60,7 @@ export async function rebuildViewsCommand(
     'flagged/ - Flagged message links',
   ]);
   
-  console.log('');
+  fmt.message('');
   fmt.message('All views are now consistent with the message store.', 'info');
   
   return { exitCode: ExitCode.SUCCESS, result };

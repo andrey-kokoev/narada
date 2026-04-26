@@ -107,3 +107,13 @@ export function attachFormattedOutput<T extends object>(
 ): T | (T & { _formatted: string }) {
   return format === 'json' ? result : { ...result, _formatted: formatted };
 }
+
+// Preferred ergonomic helper for finite command results with human rendering.
+export function formattedResult<T extends object>(
+  result: T,
+  formatted: string | string[],
+  format: CliFormat,
+): T | (T & { _formatted: string }) {
+  const text = Array.isArray(formatted) ? formatted.join('\n') : formatted;
+  return attachFormattedOutput(result, text, format);
+}

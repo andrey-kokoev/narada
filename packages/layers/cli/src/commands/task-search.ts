@@ -7,7 +7,7 @@
 import { resolve } from 'node:path';
 import { searchTasksService } from '@narada2/task-governance/task-search-service';
 import { ExitCode } from '../lib/exit-codes.js';
-import { attachFormattedOutput } from '../lib/cli-output.js';
+import { formattedResult } from '../lib/cli-output.js';
 
 export interface TaskSearchOptions {
   query: string;
@@ -32,7 +32,7 @@ export async function taskSearchCommand(
   if (service.result.status === 'error') {
     return {
       exitCode: service.exitCode as unknown as ExitCode,
-      result: attachFormattedOutput(
+      result: formattedResult(
         service.result,
         service.result.error ?? 'Task search failed',
         'human',
@@ -45,7 +45,7 @@ export async function taskSearchCommand(
   if (results.length === 0) {
     return {
       exitCode: service.exitCode as unknown as ExitCode,
-      result: attachFormattedOutput(service.result, `No tasks match "${query}"`, 'human'),
+      result: formattedResult(service.result, `No tasks match "${query}"`, 'human'),
     };
   }
 
@@ -64,6 +64,6 @@ export async function taskSearchCommand(
 
   return {
     exitCode: service.exitCode as unknown as ExitCode,
-    result: attachFormattedOutput(service.result, lines.join('\n'), 'human'),
+    result: formattedResult(service.result, lines, 'human'),
   };
 }

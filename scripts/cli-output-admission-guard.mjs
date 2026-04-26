@@ -12,6 +12,7 @@ import { join } from "node:path";
 
 const COMMANDS_DIR = "packages/layers/cli/src/commands";
 const DIRECT_OUTPUT_RE = /\bconsole\.(log|error|warn)\s*\(|\bprocess\.exit\s*\(/;
+const reportMode = process.argv.includes("--report");
 
 const allowlist = {
   "backup-ls.ts": [
@@ -48,12 +49,6 @@ const allowlist = {
   ],
   "principal-sync-from-tasks.ts": [
     { pattern: /console\.log\(/, count: 1, reason: "legacy principal sync reconciliation summary formatting" },
-  ],
-  "rebuild-projections.ts": [
-    { pattern: /console\.log\(''\)/, count: 2, reason: "legacy projection rebuild spacing" },
-  ],
-  "rebuild-views.ts": [
-    { pattern: /console\.log\(''\)/, count: 2, reason: "legacy rebuild-views spacing" },
   ],
   "sync.ts": [
     { pattern: /console\.log\(formatMultiSyncResult\(result\)\)/, count: 1, reason: "legacy multi-sync result admission" },
@@ -97,6 +92,7 @@ function allowanceKey(file, allowanceIndex) {
 
 const violations = [];
 const observedCounts = new Map();
+const matchedAllowances = new Map();
 
 for (const file of commandFiles()) {
   const allowances = allowlist[file] ?? [];
@@ -108,6 +104,10 @@ for (const file of commandFiles()) {
     }
     const key = allowanceKey(file, allowanceIndex);
     observedCounts.set(key, (observedCounts.get(key) ?? 0) + 1);
+    const existing = matchedAllowances.get(file) ?? { count: 0, reasons: new Set() };
+    existing.count += 1;
+    existing.reasons.add(allowances[allowanceIndex].reason);
+    matchedAllowances.set(file, existing);
   }
 }
 
@@ -137,4 +137,12 @@ if (violations.length > 0) {
 }
 
 const allowanceCount = Object.values(allowlist).reduce((sum, entries) => sum + entries.length, 0);
-console.log(`CLI Output Admission Guard passed. ${allowanceCount} explicit allowance(s).`);
+if (reportMode) {
+  const totalDirectOutput = Array.from(matchedAllowances.values()).reduce((sum, entry) => sum + entry.count, 0);
+  console.log(`CLI Output Admission Debt: ${totalDirectOutput} allowlisted direct-output site(s), ${allowanceCount} allowance rule(s).`);
+  for (const [file, entry] of Array.from(matchedAllowances.entries()).sort((a, b) => b[1].count - a[1].count || a[0].localeCompare(b[0]))) {
+    console.log(`${String(entry.count).padStart(3)}  ${file}  ${Array.from(entry.reasons).join("; ")}`);
+  }
+} else {
+  console.log(`CLI Output Admission Guard passed. ${allowanceCount} explicit allowance(s).`);
+}

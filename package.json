@@ -7,6 +7,7 @@
     "narada:install-shim": "bash scripts/install-narada-shim.sh",
     "narada:guard-task-db": "bash scripts/guard-task-lifecycle-db.sh",
     "narada:guard-cli-output": "node scripts/cli-output-admission-guard.mjs",
+    "narada:guard-cli-output:report": "node scripts/cli-output-admission-guard.mjs --report",
     "test": "tsx scripts/test-guard.ts",
     "verify": "tsx scripts/verify.ts",
     "test:unit": "tsx scripts/test-unit.ts",

@@ -233,7 +233,7 @@ function outputHumanReadable(
   fmt.kv('Operations processed', String(mailboxResults.length));
 
   for (const m of mailboxResults) {
-    console.log('');
+    fmt.message('');
     fmt.message(`Operation: ${m.scopeId} (${m.rootDir})`, 'info');
     for (const r of m.projections) {
       const status = r.success ? '✓' : '✗';
@@ -246,7 +246,7 @@ function outputHumanReadable(
     }
   }
 
-  console.log('');
+  fmt.message('');
   fmt.message('Rebuilt projection set: filesystem_views, search_index', 'info');
   fmt.message('These non-authoritative surfaces are now consistent with the message store.', 'info');
 }
