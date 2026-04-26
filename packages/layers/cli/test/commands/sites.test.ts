@@ -233,5 +233,25 @@ describe('sites commands', () => {
 
       expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
     });
+
+    it('registers native pc-locus Site in ProgramData registry', async () => {
+      process.env.ProgramData = 'C:\\ProgramData';
+      process.env.COMPUTERNAME = 'DESKTOP-SUNROOM';
+      const { openRegistryDb } = await import('@narada2/windows-site');
+
+      const ctx = createMockContext();
+      const result = await sitesInitCommand('desktop-sunroom-2', {
+        substrate: 'windows-native',
+        authorityLocus: 'pc',
+        dryRun: false,
+        format: 'json',
+      }, ctx);
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      expect(openRegistryDb).toHaveBeenCalledWith('C:\\ProgramData\\Narada\\registry.db');
+      const data = result.result as { siteRoot: string; config: { locus: { authority_locus: string } } };
+      expect(data.siteRoot).toBe('C:\\ProgramData\\Narada\\sites\\pc\\desktop-sunroom-2');
+      expect(data.config.locus.authority_locus).toBe('pc');
+    });
   });
 });

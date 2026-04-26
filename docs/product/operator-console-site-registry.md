@@ -306,6 +306,8 @@ Discovery should treat Windows user-locus and PC-locus roots as first-class root
 
 `narada sites doctor <site-id>` is the validation surface for a local Site root. For Windows User Sites it checks root policy, config identity, declared authority locus, sync posture, registry path/entry, and task lifecycle schema before the Site is trusted as a coherent operator surface. For `git_backed` User Sites, it additionally checks that the Site root is a Git work tree with an upstream branch, matching origin URL, active remote status, and private GitHub repo reachability when GitHub metadata is configured.
 
+Windows Site initialization must register the Site in the registry for its authority locus. User-locus Sites register in `%USERPROFILE%\Narada\registry.db`; PC-locus Sites register in `%ProgramData%\Narada\registry.db`.
+
 ## 12. Operator Console HTTP API
 
 Browser UI tools consume the same console capabilities through an HTTP API. The HTTP API is **not** a Site-local API and **not** a fleet orchestrator. It is a client of the same Site Registry, adapter selection, and `ControlRequestRouter` boundaries used by the CLI.

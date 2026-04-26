@@ -701,6 +701,9 @@ export async function sitesInitCommand(
       const variant = substrate === 'windows-native' ? 'native' : 'wsl';
       const {
         resolveWindowsSiteRootByLocus,
+        resolveRegistryDbPathByLocus,
+        openRegistryDb,
+        SiteRegistry,
         SITE_SUBDIRECTORIES,
       } = await import('@narada2/windows-site');
       const authorityLocus = options.authorityLocus ?? 'user';
@@ -780,8 +783,13 @@ export async function sitesInitCommand(
       if (!dryRun) {
         await writeFile(configPath, JSON.stringify(configContent, null, 2) + '\n', 'utf8');
 
-        // Register in Windows SiteRegistry
-        const registry = await openRegistry();
+        // Register in the authority-locus registry for this Site.
+        const registryDbPath = resolveRegistryDbPathByLocus({
+          variant,
+          authorityLocus: authorityLocus as 'user' | 'pc',
+        });
+        const registryDb = await openRegistryDb(registryDbPath);
+        const registry = new SiteRegistry(registryDb);
         try {
           registry.registerSite({
             siteId,

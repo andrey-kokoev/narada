@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_allocated": 597,
+  "last_allocated": 598,
   "reserved": [
     471,
     472,
@@ -444,6 +444,15 @@
       "reserved_by": "chapter-create",
       "reserved_at": "2026-04-26T21:15:58.852Z",
       "expires_at": "2026-04-27T21:15:58.852Z",
+      "status": "released"
+    },
+    {
+      "range_start": 598,
+      "range_end": 598,
+      "purpose": "Chapter: PC Locus Registry Registration",
+      "reserved_by": "chapter-create",
+      "reserved_at": "2026-04-26T21:25:31.817Z",
+      "expires_at": "2026-04-27T21:25:31.817Z",
       "status": "released"
     }
   ]

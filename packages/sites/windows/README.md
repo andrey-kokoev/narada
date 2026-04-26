@@ -97,6 +97,9 @@ registry path, registry entry, and `.ai/tasks/task-lifecycle.db`. For
 origin URL, remote status, and private GitHub reachability when GitHub metadata
 is configured.
 
+PC-locus native Sites register in `%ProgramData%\Narada\registry.db`. User-locus
+native Sites register in `%USERPROFILE%\Narada\registry.db`.
+
 ## WSL Boundaries
 
 ### Filesystem
