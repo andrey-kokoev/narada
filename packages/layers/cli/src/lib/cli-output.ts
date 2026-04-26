@@ -116,6 +116,20 @@ export function emitInteractiveCommandFollowUp(lines: string[]): void {
   }
 }
 
+// Finite setup commands may render bounded progress summaries while they mutate local scaffolding.
+export function emitFiniteCommandProgress(lines: string[]): void {
+  for (const line of lines) {
+    console.log(line);
+  }
+}
+
+// Finite setup commands may render bounded diagnostics before returning a failing envelope or throwing.
+export function emitFiniteCommandDiagnostics(lines: string[]): void {
+  for (const line of lines) {
+    console.error(line);
+  }
+}
+
 // Finite command bodies should construct human output here, not write to stdout directly.
 export function attachFormattedOutput<T extends object>(
   result: T,

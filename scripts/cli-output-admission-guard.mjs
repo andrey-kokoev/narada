@@ -14,13 +14,7 @@ const COMMANDS_DIR = "packages/layers/cli/src/commands";
 const DIRECT_OUTPUT_RE = /\bconsole\.(log|error|warn)\s*\(|\bprocess\.exit\s*\(/;
 const reportMode = process.argv.includes("--report");
 
-const allowlist = {
-  "usc-init.ts": [
-    { pattern: /console\.log\(/, count: 16, reason: "legacy USC init progress and summary output" },
-    { pattern: /console\.error\(`FAIL \$\{result\.name\}`\)/, count: 1, reason: "legacy USC init validation output" },
-    { pattern: /console\.error\(`  \$\{err\}`\)/, count: 1, reason: "legacy USC init validation output" },
-  ],
-};
+const allowlist = {};
 
 function commandFiles() {
   return readdirSync(COMMANDS_DIR)

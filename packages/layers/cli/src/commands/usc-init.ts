@@ -17,6 +17,7 @@ import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { populateSchemaCache } from '../lib/usc-schema-cache.js';
+import { emitFiniteCommandDiagnostics, emitFiniteCommandProgress } from '../lib/cli-output.js';
 
 export interface UscInitOptions {
   path: string;
@@ -362,10 +363,10 @@ export async function uscInitCommand(options: UscInitOptions): Promise<void> {
     // Plan from refinement (replace placeholder task-graph)
     const planResult = plan({ target: targetDir, force: true });
 
-    console.log(`Task graph written to ${planResult.taskGraphPath}`);
-    console.log(
+    emitFiniteCommandProgress([
+      `Task graph written to ${planResult.taskGraphPath}`,
       `Tasks: ${planResult.summary.task_count}, Proposed: ${planResult.summary.proposed_count}, Admitted: ${planResult.summary.admitted_count}`,
-    );
+    ]);
   }
 
   // 4. Override README to point users to Narada proper
@@ -378,10 +379,10 @@ export async function uscInitCommand(options: UscInitOptions): Promise<void> {
   if (!validation.allPassed) {
     for (const result of validation.results) {
       if (!result.valid) {
-        console.error(`FAIL ${result.name}`);
-        for (const err of result.errors) {
-          console.error(`  ${err}`);
-        }
+        emitFiniteCommandDiagnostics([
+          `FAIL ${result.name}`,
+          ...result.errors.map((err) => `  ${err}`),
+        ]);
       }
     }
     throw new Error('Generated USC repo failed validation. See errors above.');
@@ -390,22 +391,29 @@ export async function uscInitCommand(options: UscInitOptions): Promise<void> {
   // 6. Populate schema cache for offline resilience
   const schemaCache = populateSchemaCache(rootDir, targetDir);
   if (schemaCache.cached > 0) {
-    console.log(`Cached ${schemaCache.cached} schema(s) to ${schemaCache.cacheDir}`);
+    emitFiniteCommandProgress([`Cached ${schemaCache.cached} schema(s) to ${schemaCache.cacheDir}`]);
   }
 
-  console.log(`USC repo '${name}' initialized at ${targetDir}`);
-  if (useCis) console.log('CIS admissibility policy included.');
-  console.log('');
-  console.log('Created:');
-  console.log(`  ${join(targetDir, 'usc', 'construction-state.json')}`);
+  const createdLines = [
+    `USC repo '${name}' initialized at ${targetDir}`,
+    ...(useCis ? ['CIS admissibility policy included.'] : []),
+    '',
+    'Created:',
+    `  ${join(targetDir, 'usc', 'construction-state.json')}`,
+  ];
   if (options.intent) {
-    console.log(`  ${join(targetDir, 'usc', 'refinement.json')}`);
-    console.log(`  ${join(targetDir, 'usc', 'refinement.md')}`);
+    createdLines.push(
+      `  ${join(targetDir, 'usc', 'refinement.json')}`,
+      `  ${join(targetDir, 'usc', 'refinement.md')}`,
+    );
   }
-  console.log(`  ${join(targetDir, 'usc', 'task-graph.json')}`);
-  console.log(`  ${readmePath}`);
-  console.log('');
-  console.log('Next steps:');
-  console.log('  - Review usc/refinement.md for ambiguities and blocking questions');
-  console.log('  - Continue construction through Narada proper');
+  createdLines.push(
+    `  ${join(targetDir, 'usc', 'task-graph.json')}`,
+    `  ${readmePath}`,
+    '',
+    'Next steps:',
+    '  - Review usc/refinement.md for ambiguities and blocking questions',
+    '  - Continue construction through Narada proper',
+  );
+  emitFiniteCommandProgress(createdLines);
 }
