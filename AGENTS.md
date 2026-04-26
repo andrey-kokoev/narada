@@ -331,6 +331,7 @@ All normal transitions are command-mediated. Direct status editing in markdown o
 
 | Operator | What it does | Mutates task file? | Mutates roster? |
 |----------|-------------|-------------------|-----------------|
+| `task roster add <agent-id>` | Enrolls an agent in the roster projection | No | Yes (`idle`, no task) |
 | `task roster assign <n> --agent <id>` | Assigns agent to task **and claims it by default** | Yes (status → `claimed`) | Yes (`working` + task) |
 | `task roster assign <n> --agent <id> --no-claim` | Assigns agent without claiming | No | Yes (`working` + task) |
 | `task claim <n> --agent <id>` | Claims task directly (no roster update except `last_active_at`) | Yes (status → `claimed`) | No (only timestamp) |

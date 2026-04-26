@@ -5,6 +5,7 @@ import {
   getActiveAssignment,
   continuationReasonToIntent,
   isValidTransition,
+  loadRoster,
   loadAssignment,
   readTaskFile,
   saveAssignment,
@@ -69,6 +70,7 @@ export interface ContinueTaskServiceResult {
   reason?: ContinuationReason;
   supersedes?: boolean;
   previous_agent_id?: string;
+  previous_roster_reconciled?: boolean;
   task_status?: string;
   continued_at?: string;
   assignment_intent_id?: string;
@@ -301,6 +303,7 @@ export async function continueTaskService(
   }
 
   const supersedes = admission.supersedes;
+  let previousRosterReconciled = false;
 
   try {
     if (supersedes) {
@@ -371,6 +374,18 @@ export async function continueTaskService(
       task: parsedTaskNumber || null,
     });
 
+    if (supersedes && active.agent_id !== agentId) {
+      const roster = await loadRoster(cwd);
+      const previousAgent = roster.agents.find((entry) => entry.agent_id === active.agent_id);
+      if (previousAgent?.task === parsedTaskNumber) {
+        await updateAgentRosterEntry(cwd, active.agent_id, {
+          status: 'idle',
+          task: null,
+        });
+        previousRosterReconciled = true;
+      }
+    }
+
     recordAssignmentIntentApplied(cwd, admission.intent.request_id, {
       lifecycleStatusAfter: (frontMatter.status as string | undefined) ?? null,
       rosterStatusAfter: 'working',
@@ -380,6 +395,7 @@ export async function continueTaskService(
         task_number: parsedTaskNumber,
         supersedes,
         previous_agent_id: active.agent_id,
+        previous_roster_reconciled: previousRosterReconciled,
         lifecycle_status: frontMatter.status,
         roster_status: 'working',
       },
@@ -402,6 +418,7 @@ export async function continueTaskService(
       reason,
       supersedes,
       previous_agent_id: active.agent_id,
+      previous_roster_reconciled: previousRosterReconciled,
       task_status: frontMatter.status as string | undefined,
       continued_at: now,
       assignment_intent_id: admission.intent.request_id,

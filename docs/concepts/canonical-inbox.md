@@ -10,7 +10,7 @@ Inbox envelopes are inert. Submitting an envelope does not create a task, execut
 narada inbox submit --source-kind diagnostic --source-ref site-doctor:desktop-sunroom-2 --kind observation --authority-level system_observed --payload '{"hostname":"desktop-sunroom-2","computer_name":"DESKTOP-SUNROOM"}'
 narada inbox list
 narada inbox show <envelope-id>
-narada inbox promote <envelope-id> --target-kind task --target-ref "Fix PC Site identity policy" --by operator
+narada inbox task <envelope-id> --title "Fix PC Site identity policy" --by operator
 narada inbox promote <envelope-id> --target-kind archive --by operator
 ```
 
@@ -34,8 +34,14 @@ Promotion is the governed crossing out of the Inbox. It must not imply more than
 
 | Target kind | Behavior |
 |-------------|----------|
-| `task` | Executed for `task_candidate` and `upstream_task_candidate` envelopes by calling the sanctioned task creation command. The envelope records `enactment_status: enacted` and `target_ref: task:<number>`. Repeating the promotion returns the existing promotion and does not create a duplicate task. |
+| `task` | Executed for `task_candidate` and `upstream_task_candidate` envelopes by calling the sanctioned task creation command. Prefer `narada inbox task <envelope-id> --by <principal>`; `inbox promote --target-kind task` remains the canonical compatibility path. The envelope records `enactment_status: enacted` and `target_ref: task:<number>`. Repeating the promotion returns the existing promotion and does not create a duplicate task. |
 | `archive` | Records the envelope as `archived` with no target-zone mutation. `--target-ref` is optional. |
 | `decision`, `operator_action`, `knowledge_entry`, `site_config_change` | Recorded as `enactment_status: pending` until those target zones have explicit executable promotion operators. |
 
 An unsupported or not-yet-executable target may be recorded as pending, but it must not be reported as enacted.
+
+For task promotion, CLI overrides take precedence over payload fields:
+
+```bash
+narada inbox task <envelope-id> --by operator --title "..." --goal "..." --criteria "First criterion" --criteria "Second criterion"
+```

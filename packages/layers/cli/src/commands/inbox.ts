@@ -42,6 +42,9 @@ export interface InboxPromoteOptions extends InboxCommandOptions {
   targetKind?: string;
   targetRef?: string;
   by?: string;
+  title?: string;
+  goal?: string;
+  criteria?: string[];
 }
 
 export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
@@ -122,7 +125,7 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
   if (!options.envelopeId || !targetKind || !options.by) {
     return errorResult('Missing or invalid envelope ID, --target-kind, or --by');
   }
-  if (targetKind !== 'archive' && !options.targetRef) {
+  if (targetKind !== 'archive' && targetKind !== 'task' && !options.targetRef) {
     return errorResult('Missing --target-ref for non-archive promotion');
   }
   return withInboxStoreAsync(options, async (store) => {
@@ -231,6 +234,14 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
   });
 }
 
+export async function inboxTaskCommand(options: Omit<InboxPromoteOptions, 'targetKind'>): Promise<{ exitCode: ExitCode; result: unknown }> {
+  return inboxPromoteCommand({
+    ...options,
+    targetKind: 'task',
+    targetRef: options.targetRef ?? options.title,
+  });
+}
+
 async function createTaskFromEnvelope(
   envelope: InboxEnvelope,
   options: InboxPromoteOptions,
@@ -240,14 +251,17 @@ async function createTaskFromEnvelope(
   }
 
   const payload = asRecord(envelope.payload);
-  const title = stringField(payload, 'title')
+  const title = cleanString(options.title)
+    ?? stringField(payload, 'title')
     ?? stringField(payload, 'summary')
     ?? options.targetRef
     ?? `Inbox envelope ${envelope.envelope_id}`;
-  const goal = stringField(payload, 'goal')
+  const goal = cleanString(options.goal)
+    ?? stringField(payload, 'goal')
     ?? stringField(payload, 'description')
     ?? `Promoted from inbox envelope ${envelope.envelope_id}.`;
-  const criteria = stringArrayField(payload, 'acceptance_criteria')
+  const criteria = cleanStringArray(options.criteria)
+    ?? stringArrayField(payload, 'acceptance_criteria')
     ?? stringArrayField(payload, 'criteria')
     ?? [`Inbox envelope ${envelope.envelope_id} has been handled.`];
 
@@ -340,6 +354,16 @@ function stringArrayField(record: Record<string, unknown>, key: string): string[
   if (!Array.isArray(value)) return undefined;
   const strings = value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
   return strings.length > 0 ? strings.map((item) => item.trim()) : undefined;
+}
+
+function cleanString(value: string | undefined): string | undefined {
+  return value && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function cleanStringArray(value: string[] | undefined): string[] | undefined {
+  if (!value) return undefined;
+  const strings = value.filter((item) => item.trim().length > 0).map((item) => item.trim());
+  return strings.length > 0 ? strings : undefined;
 }
 
 function numberArrayCsvField(record: Record<string, unknown>, key: string): string | undefined {

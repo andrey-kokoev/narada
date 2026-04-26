@@ -4,6 +4,7 @@ import {
   inboxPromoteCommand,
   inboxShowCommand,
   inboxSubmitCommand,
+  inboxTaskCommand,
 } from './inbox.js';
 import { directCommandAction } from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
@@ -81,6 +82,9 @@ export function registerInboxCommands(program: Command): void {
     .requiredOption('--target-kind <kind>', 'Promotion target kind')
     .option('--target-ref <ref>', 'Promotion target reference')
     .requiredOption('--by <principal>', 'Principal recording promotion')
+    .option('--title <title>', 'Task title override for task promotion')
+    .option('--goal <goal>', 'Task goal override for task promotion')
+    .option('--criteria <text>', 'Task acceptance criterion override (repeatable)', collectValues, [])
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[string, Record<string, unknown>]>({
@@ -92,8 +96,39 @@ export function registerInboxCommands(program: Command): void {
         targetKind: opts.targetKind as string | undefined,
         targetRef: opts.targetRef as string | undefined,
         by: opts.by as string | undefined,
+        title: opts.title as string | undefined,
+        goal: opts.goal as string | undefined,
+        criteria: opts.criteria as string[] | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }),
     }));
+
+  inboxCmd
+    .command('task <envelope-id>')
+    .description('Promote an inbox task candidate into a task')
+    .requiredOption('--by <principal>', 'Principal recording promotion')
+    .option('--title <title>', 'Task title override')
+    .option('--goal <goal>', 'Task goal override')
+    .option('--criteria <text>', 'Task acceptance criterion override (repeatable)', collectValues, [])
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[string, Record<string, unknown>]>({
+      command: 'inbox task',
+      emit: emitCommandResult,
+      format: (_envelopeId: string, opts: Record<string, unknown>) => opts.format,
+      invocation: (envelopeId, opts) => inboxTaskCommand({
+        envelopeId,
+        by: opts.by as string | undefined,
+        title: opts.title as string | undefined,
+        goal: opts.goal as string | undefined,
+        criteria: opts.criteria as string[] | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
+}
+
+function collectValues(value: string, previous: string[]): string[] {
+  return [...previous, value];
 }

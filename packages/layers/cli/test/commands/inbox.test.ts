@@ -3,7 +3,7 @@ import { vi } from 'vitest';
 vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
 
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -12,6 +12,7 @@ import {
   inboxPromoteCommand,
   inboxShowCommand,
   inboxSubmitCommand,
+  inboxTaskCommand,
 } from '../../src/commands/inbox.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
@@ -120,6 +121,46 @@ describe('Canonical Inbox CLI commands', () => {
     const taskFiles = readdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'))
       .filter((file) => file.includes('handle-captured-inbox-work'));
     expect(taskFiles).toHaveLength(1);
+  });
+
+  it('promotes task candidates through the ergonomic inbox task alias with overrides', async () => {
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'user_chat',
+      sourceRef: 'operator:manual',
+      kind: 'task_candidate',
+      authorityLevel: 'operator_confirmed',
+      payload: JSON.stringify({
+        title: 'Payload title',
+        goal: 'Payload goal',
+        acceptance_criteria: ['Payload criterion'],
+      }),
+    });
+    const envelope = (submitted.result as { envelope: { envelope_id: string } }).envelope;
+
+    const promoted = await inboxTaskCommand({
+      cwd: tempDir,
+      format: 'json',
+      envelopeId: envelope.envelope_id,
+      by: 'operator',
+      title: 'Override title',
+      goal: 'Override goal',
+      criteria: ['Override criterion A', 'Override criterion B'],
+    });
+
+    expect(promoted.exitCode).toBe(ExitCode.SUCCESS);
+    const result = promoted.result as {
+      target: { title: string; file_path: string };
+      envelope: { promotion: { target_ref: string; enactment_status: string } };
+    };
+    expect(result.target.title).toBe('Override title');
+    const taskContent = readFileSync(result.target.file_path, 'utf8');
+    expect(taskContent).toContain('Override goal');
+    expect(taskContent).toContain('- [ ] Override criterion A');
+    expect(taskContent).toContain('- [ ] Override criterion B');
+    expect(taskContent).not.toContain('Payload criterion');
+    expect(result.envelope.promotion.enactment_status).toBe('enacted');
   });
 
   it('archives envelopes without requiring a target ref or creating target work', async () => {

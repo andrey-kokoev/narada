@@ -8,7 +8,7 @@ import { taskContinueCommand } from '../../src/commands/task-continue.js';
 import { taskReportCommand } from '../../src/commands/task-report.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
-import { loadAssignment } from '../../src/lib/task-governance.js';
+import { loadAssignment, loadRoster } from '../../src/lib/task-governance.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -198,9 +198,10 @@ describe('task continue operator', () => {
     });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    const rec = result.result as { supersedes: boolean; previous_agent_id: string };
+    const rec = result.result as { supersedes: boolean; previous_agent_id: string; previous_roster_reconciled: boolean };
     expect(rec.supersedes).toBe(true);
     expect(rec.previous_agent_id).toBe('alpha');
+    expect(rec.previous_roster_reconciled).toBe(true);
 
     const assignment = await loadAssignment(tempDir, '20260420-100-claimed-task');
     expect(assignment?.assignments).toHaveLength(2);
@@ -211,6 +212,14 @@ describe('task continue operator', () => {
     expect(assignment?.assignments[1].released_at).toBeNull();
     expect(assignment?.assignments[1].continuation_reason).toBe('handoff');
     expect(assignment?.assignments[1].previous_agent_id).toBe('alpha');
+
+    const roster = await loadRoster(tempDir);
+    const alpha = roster.agents.find((agent) => agent.agent_id === 'alpha');
+    const beta = roster.agents.find((agent) => agent.agent_id === 'beta');
+    expect(alpha?.status).toBe('idle');
+    expect(alpha?.task).toBeNull();
+    expect(beta?.status).toBe('working');
+    expect(beta?.task).toBe(100);
 
     const store = openTaskLifecycleStore(tempDir);
     try {
@@ -386,6 +395,9 @@ describe('task continue operator', () => {
 
     const roster = JSON.parse(readFileSync(join(tempDir, '.ai', 'agents', 'roster.json'), 'utf8'));
     const beta = roster.agents.find((a: { agent_id: string }) => a.agent_id === 'beta');
+    const alpha = roster.agents.find((a: { agent_id: string }) => a.agent_id === 'alpha');
+    expect(alpha.status).toBe('working');
+    expect(alpha.task).toBe(100);
     expect(beta.status).toBe('working');
     expect(beta.task).toBe(100);
   });
