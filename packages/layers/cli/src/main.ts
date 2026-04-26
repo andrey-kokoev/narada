@@ -26,13 +26,7 @@ import { selectCommand } from './commands/select.js';
 import { showCommand } from './commands/show.js';
 import { auditCommand } from './commands/audit.js';
 import { doctorCommand } from './commands/doctor.js';
-import {
-  principalStatusCommand,
-  principalListCommand,
-  principalAttachCommand,
-  principalDetachCommand,
-} from './commands/principal.js';
-import { principalSyncFromTasksCommand } from './commands/principal-sync-from-tasks.js';
+import { registerPrincipalCommands } from './commands/principal-register.js';
 import { registerOutboundActionCommands } from './commands/outbound-action-register.js';
 import { taskRecommendCommand } from './commands/task-recommend.js';
 import { registerPostureCommands } from './commands/posture-register.js';
@@ -61,7 +55,7 @@ import { registerTestRunCommands } from './commands/test-run-register.js';
 import { registerCommandRunCommands } from './commands/command-run-register.js';
 import { registerObservationCommands } from './commands/observation-register.js';
 import { registerOpsKitCommands } from './commands/ops-kit-register.js';
-import { directCommandAction, runDirectCommand, wrapCommand, type CommandContext } from './lib/command-wrapper.js';
+import { directCommandAction, runDirectCommand, wrapCommand } from './lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from './lib/cli-output.js';
 
 const program = new Command();
@@ -252,150 +246,7 @@ program
       id: opts.id as string,
     }, ctx)));
 
-// ── Principal runtime commands (Task 406) ──
-
-const principalCmd = program
-  .command('principal')
-  .description('Manage principal runtime state');
-
-principalCmd
-  .command('status')
-  .description('Show principal runtime state for all scopes')
-  .option('-c, --config <path>', 'Path to config file', './config.json')
-  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
-  .option('-v, --verbose', 'Enable verbose output', false)
-  .action(async (opts: Record<string, unknown>) => {
-    const result = await principalStatusCommand(
-      {
-        format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-        verbose: opts.verbose as boolean | undefined,
-        config: opts.config as string | undefined,
-      },
-      { configPath: './config.json', verbose: !!opts.verbose, logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, trace: () => {} } as unknown as CommandContext['logger'] },
-    );
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Command failed');
-      process.exit(result.exitCode);
-    }
-    if ((opts.format as string) !== 'json' && process.env.OUTPUT_FORMAT !== 'json') {
-      // human output already printed by formatter
-    } else {
-      console.log(JSON.stringify(result.result, null, 2));
-    }
-  });
-
-principalCmd
-  .command('list')
-  .description('List principal runtimes')
-  .option('-c, --config <path>', 'Path to config file', './config.json')
-  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
-  .option('--scope <id>', 'Filter by scope ID')
-  .option('-v, --verbose', 'Enable verbose output', false)
-  .action(async (opts: Record<string, unknown>) => {
-    const result = await principalListCommand(
-      {
-        format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-        verbose: opts.verbose as boolean | undefined,
-        config: opts.config as string | undefined,
-        scope: opts.scope as string | undefined,
-      },
-      { configPath: './config.json', verbose: !!opts.verbose, logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, trace: () => {} } as unknown as CommandContext['logger'] },
-    );
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Command failed');
-      process.exit(result.exitCode);
-    }
-    if ((opts.format as string) !== 'json' && process.env.OUTPUT_FORMAT !== 'json') {
-      // human output already printed by formatter
-    } else {
-      console.log(JSON.stringify(result.result, null, 2));
-    }
-  });
-
-principalCmd
-  .command('attach <scope-id>')
-  .description('Attach a principal to a scope')
-  .option('-c, --config <path>', 'Path to config file', './config.json')
-  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
-  .option('--principal <id>', 'Principal identity ID (generated if omitted)')
-  .option('--runtime <id>', 'Runtime instance ID (generated if omitted)')
-  .option('--type <type>', 'Principal type: operator, agent, worker, external', 'operator')
-  .option('--mode <mode>', 'Attachment mode: observe or interact', 'interact')
-  .option('-v, --verbose', 'Enable verbose output', false)
-  .action(async (scopeId: string, opts: Record<string, unknown>) => {
-    const result = await principalAttachCommand(
-      {
-        scope: scopeId,
-        format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-        verbose: opts.verbose as boolean | undefined,
-        config: opts.config as string | undefined,
-        principal: opts.principal as string | undefined,
-        runtime: opts.runtime as string | undefined,
-        type: opts.type as string | undefined,
-        mode: opts.mode as string | undefined,
-      },
-      { configPath: './config.json', verbose: !!opts.verbose, logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, trace: () => {} } as unknown as CommandContext['logger'] },
-    );
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Command failed');
-      process.exit(result.exitCode);
-    }
-    if ((opts.format as string) !== 'json' && process.env.OUTPUT_FORMAT !== 'json') {
-      // human output already printed by formatter
-    } else {
-      console.log(JSON.stringify(result.result, null, 2));
-    }
-  });
-
-principalCmd
-  .command('detach <runtime-id>')
-  .description('Detach a principal from its scope')
-  .option('-c, --config <path>', 'Path to config file', './config.json')
-  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
-  .option('--reason <text>', 'Detach reason')
-  .option('-v, --verbose', 'Enable verbose output', false)
-  .action(async (runtimeId: string, opts: Record<string, unknown>) => {
-    const result = await principalDetachCommand(
-      {
-        runtimeId,
-        format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-        verbose: opts.verbose as boolean | undefined,
-        config: opts.config as string | undefined,
-        reason: opts.reason as string | undefined,
-      },
-      { configPath: './config.json', verbose: !!opts.verbose, logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, trace: () => {} } as unknown as CommandContext['logger'] },
-    );
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Command failed');
-      process.exit(result.exitCode);
-    }
-    if ((opts.format as string) !== 'json' && process.env.OUTPUT_FORMAT !== 'json') {
-      // human output already printed by formatter
-    } else {
-      console.log(JSON.stringify(result.result, null, 2));
-    }
-  });
-
-principalCmd
-  .command('sync-from-tasks')
-  .description('Reconcile PrincipalRuntime state from task governance artifacts')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .option('--principal-state-dir <path>', 'Directory containing PrincipalRuntime state file')
-  .option('--dry-run', 'Show divergences without applying corrections', false)
-  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
-  .action(async (opts: Record<string, unknown>) => {
-    const result = await principalSyncFromTasksCommand({
-      cwd: opts.cwd as string | undefined,
-      principalStateDir: opts.principalStateDir as string | undefined,
-      dryRun: opts.dryRun as boolean | undefined,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-    });
-    if (result.exitCode !== 0) {
-      console.error((result.result as { error?: string }).error ?? 'Sync failed');
-      process.exit(result.exitCode);
-    }
-    emitCommandResult(result.result);
-  });
+registerPrincipalCommands(program);
 
 program
   .command('doctor')

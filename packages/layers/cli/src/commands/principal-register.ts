@@ -1,0 +1,154 @@
+import type { Command } from 'commander';
+import {
+  principalStatusCommand,
+  principalListCommand,
+  principalAttachCommand,
+  principalDetachCommand,
+} from './principal.js';
+import { principalSyncFromTasksCommand } from './principal-sync-from-tasks.js';
+import type { CommandContext } from '../lib/command-wrapper.js';
+import { emitCommandResult } from '../lib/cli-output.js';
+
+function silentContext(verbose: boolean): CommandContext {
+  return {
+    configPath: './config.json',
+    verbose,
+    logger: {
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      trace: () => {},
+    } as unknown as CommandContext['logger'],
+  };
+}
+
+async function emitFormatterBackedResult(
+  result: { exitCode: number; result: unknown },
+  opts: Record<string, unknown>,
+): Promise<void> {
+  if (result.exitCode !== 0) {
+    console.error((result.result as { error?: string }).error ?? 'Command failed');
+    process.exit(result.exitCode);
+  }
+  if ((opts.format as string) === 'json' || process.env.OUTPUT_FORMAT === 'json') {
+    console.log(JSON.stringify(result.result, null, 2));
+  }
+}
+
+function outputFormat(): 'json' | 'human' | 'auto' {
+  return process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto';
+}
+
+export function registerPrincipalCommands(program: Command): void {
+  const principalCmd = program
+    .command('principal')
+    .description('Manage principal runtime state');
+
+  principalCmd
+    .command('status')
+    .description('Show principal runtime state for all scopes')
+    .option('-c, --config <path>', 'Path to config file', './config.json')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (opts: Record<string, unknown>) => {
+      const result = await principalStatusCommand(
+        {
+          format: outputFormat(),
+          verbose: opts.verbose as boolean | undefined,
+          config: opts.config as string | undefined,
+        },
+        silentContext(!!opts.verbose),
+      );
+      await emitFormatterBackedResult(result, opts);
+    });
+
+  principalCmd
+    .command('list')
+    .description('List principal runtimes')
+    .option('-c, --config <path>', 'Path to config file', './config.json')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('--scope <id>', 'Filter by scope ID')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (opts: Record<string, unknown>) => {
+      const result = await principalListCommand(
+        {
+          format: outputFormat(),
+          verbose: opts.verbose as boolean | undefined,
+          config: opts.config as string | undefined,
+          scope: opts.scope as string | undefined,
+        },
+        silentContext(!!opts.verbose),
+      );
+      await emitFormatterBackedResult(result, opts);
+    });
+
+  principalCmd
+    .command('attach <scope-id>')
+    .description('Attach a principal to a scope')
+    .option('-c, --config <path>', 'Path to config file', './config.json')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('--principal <id>', 'Principal identity ID (generated if omitted)')
+    .option('--runtime <id>', 'Runtime instance ID (generated if omitted)')
+    .option('--type <type>', 'Principal type: operator, agent, worker, external', 'operator')
+    .option('--mode <mode>', 'Attachment mode: observe or interact', 'interact')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (scopeId: string, opts: Record<string, unknown>) => {
+      const result = await principalAttachCommand(
+        {
+          scope: scopeId,
+          format: outputFormat(),
+          verbose: opts.verbose as boolean | undefined,
+          config: opts.config as string | undefined,
+          principal: opts.principal as string | undefined,
+          runtime: opts.runtime as string | undefined,
+          type: opts.type as string | undefined,
+          mode: opts.mode as string | undefined,
+        },
+        silentContext(!!opts.verbose),
+      );
+      await emitFormatterBackedResult(result, opts);
+    });
+
+  principalCmd
+    .command('detach <runtime-id>')
+    .description('Detach a principal from its scope')
+    .option('-c, --config <path>', 'Path to config file', './config.json')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('--reason <text>', 'Detach reason')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (runtimeId: string, opts: Record<string, unknown>) => {
+      const result = await principalDetachCommand(
+        {
+          runtimeId,
+          format: outputFormat(),
+          verbose: opts.verbose as boolean | undefined,
+          config: opts.config as string | undefined,
+          reason: opts.reason as string | undefined,
+        },
+        silentContext(!!opts.verbose),
+      );
+      await emitFormatterBackedResult(result, opts);
+    });
+
+  principalCmd
+    .command('sync-from-tasks')
+    .description('Reconcile PrincipalRuntime state from task governance artifacts')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--principal-state-dir <path>', 'Directory containing PrincipalRuntime state file')
+    .option('--dry-run', 'Show divergences without applying corrections', false)
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .action(async (opts: Record<string, unknown>) => {
+      const result = await principalSyncFromTasksCommand({
+        cwd: opts.cwd as string | undefined,
+        principalStateDir: opts.principalStateDir as string | undefined,
+        dryRun: opts.dryRun as boolean | undefined,
+        format: outputFormat(),
+      });
+      if (result.exitCode !== 0) {
+        console.error((result.result as { error?: string }).error ?? 'Sync failed');
+        process.exit(result.exitCode);
+      }
+      emitCommandResult(result.result);
+    });
+}
