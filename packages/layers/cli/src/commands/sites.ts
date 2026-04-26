@@ -30,7 +30,6 @@ interface SiteListEntry {
   failures: number;
 }
 
-<<<<<<< HEAD
 export interface SiteDoctorCheck {
   name: string;
   status: 'pass' | 'warn' | 'fail';
