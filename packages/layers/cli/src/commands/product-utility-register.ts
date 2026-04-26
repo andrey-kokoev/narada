@@ -6,6 +6,7 @@ import { opsCommand } from './ops.js';
 import { uscInitCommand } from './usc-init.js';
 import { uscValidateCommand } from './usc-validate.js';
 import { wrapCommand } from '../lib/command-wrapper.js';
+import { emitCommandResult } from '../lib/cli-output.js';
 
 function outputFormat(): 'json' | 'human' | 'auto' {
   return process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto';
@@ -55,7 +56,7 @@ export function registerProductUtilityCommands(program: Command): void {
         console.error(JSON.stringify(result.result, null, 2));
         process.exit(result.exitCode);
       }
-      console.log(JSON.stringify(result.result, null, 2));
+      emitCommandResult(result.result, 'json');
     });
 
   initCmd.action(wrapCommand('init', (opts, ctx) => {

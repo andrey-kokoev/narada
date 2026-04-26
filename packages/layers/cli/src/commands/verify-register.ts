@@ -3,24 +3,8 @@ import { verifyExplainCommand } from './verify-explain.js';
 import { verifyRunCommand } from './verify-run.js';
 import { verifyStatusCommand } from './verify-status.js';
 import { verifySuggestCommand } from './verify-suggest.js';
-import { directCommandAction, type CommandContext } from '../lib/command-wrapper.js';
+import { directCommandAction, silentCommandContext } from '../lib/command-wrapper.js';
 import { emitCommandResult } from '../lib/cli-output.js';
-
-function silentContext(): CommandContext {
-  return {
-    configPath: './config.json',
-    verbose: false,
-    logger: {
-      info: () => {},
-      success: () => {},
-      warning: () => {},
-      warn: () => {},
-      error: () => {},
-      debug: () => {},
-      result: () => {},
-    },
-  };
-}
 
 export function registerVerifyCommands(program: Command): void {
   const verifyCmd = program
@@ -37,7 +21,7 @@ export function registerVerifyCommands(program: Command): void {
       invocation: (opts) => verifyStatusCommand({
         cwd: opts.cwd as string | undefined,
         format: process.env.OUTPUT_FORMAT,
-      }, silentContext()),
+      }, silentCommandContext()),
     }));
 
   verifyCmd
@@ -52,7 +36,7 @@ export function registerVerifyCommands(program: Command): void {
         files: (opts.files as string | undefined)?.split(',').map((f) => f.trim()).filter(Boolean) ?? [],
         cwd: opts.cwd as string | undefined,
         format: process.env.OUTPUT_FORMAT,
-      }, silentContext()),
+      }, silentCommandContext()),
     }));
 
   verifyCmd
@@ -67,7 +51,7 @@ export function registerVerifyCommands(program: Command): void {
         taskNumber: opts.task as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: process.env.OUTPUT_FORMAT,
-      }, silentContext()),
+      }, silentCommandContext()),
     }));
 
   verifyCmd
@@ -88,6 +72,6 @@ export function registerVerifyCommands(program: Command): void {
         allowPackage: opts.allowPackage as boolean | undefined,
         allowFullSuite: opts.allowFullSuite as boolean | undefined,
         format: process.env.OUTPUT_FORMAT,
-      }, silentContext()),
+      }, silentCommandContext()),
     }));
 }

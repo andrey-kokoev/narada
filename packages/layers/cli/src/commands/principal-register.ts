@@ -6,35 +6,8 @@ import {
   principalDetachCommand,
 } from './principal.js';
 import { principalSyncFromTasksCommand } from './principal-sync-from-tasks.js';
-import type { CommandContext } from '../lib/command-wrapper.js';
-import { emitCommandResult } from '../lib/cli-output.js';
-
-function silentContext(verbose: boolean): CommandContext {
-  return {
-    configPath: './config.json',
-    verbose,
-    logger: {
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-      trace: () => {},
-    } as unknown as CommandContext['logger'],
-  };
-}
-
-async function emitFormatterBackedResult(
-  result: { exitCode: number; result: unknown },
-  opts: Record<string, unknown>,
-): Promise<void> {
-  if (result.exitCode !== 0) {
-    console.error((result.result as { error?: string }).error ?? 'Command failed');
-    process.exit(result.exitCode);
-  }
-  if ((opts.format as string) === 'json' || process.env.OUTPUT_FORMAT === 'json') {
-    console.log(JSON.stringify(result.result, null, 2));
-  }
-}
+import { silentCommandContext } from '../lib/command-wrapper.js';
+import { emitCommandResult, emitFormatterBackedCommandResult } from '../lib/cli-output.js';
 
 function outputFormat(): 'json' | 'human' | 'auto' {
   return process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto';
@@ -58,9 +31,9 @@ export function registerPrincipalCommands(program: Command): void {
           verbose: opts.verbose as boolean | undefined,
           config: opts.config as string | undefined,
         },
-        silentContext(!!opts.verbose),
+        silentCommandContext({ verbose: !!opts.verbose }),
       );
-      await emitFormatterBackedResult(result, opts);
+      emitFormatterBackedCommandResult(result, { format: opts.format });
     });
 
   principalCmd
@@ -78,9 +51,9 @@ export function registerPrincipalCommands(program: Command): void {
           config: opts.config as string | undefined,
           scope: opts.scope as string | undefined,
         },
-        silentContext(!!opts.verbose),
+        silentCommandContext({ verbose: !!opts.verbose }),
       );
-      await emitFormatterBackedResult(result, opts);
+      emitFormatterBackedCommandResult(result, { format: opts.format });
     });
 
   principalCmd
@@ -105,9 +78,9 @@ export function registerPrincipalCommands(program: Command): void {
           type: opts.type as string | undefined,
           mode: opts.mode as string | undefined,
         },
-        silentContext(!!opts.verbose),
+        silentCommandContext({ verbose: !!opts.verbose }),
       );
-      await emitFormatterBackedResult(result, opts);
+      emitFormatterBackedCommandResult(result, { format: opts.format });
     });
 
   principalCmd
@@ -126,9 +99,9 @@ export function registerPrincipalCommands(program: Command): void {
           config: opts.config as string | undefined,
           reason: opts.reason as string | undefined,
         },
-        silentContext(!!opts.verbose),
+        silentCommandContext({ verbose: !!opts.verbose }),
       );
-      await emitFormatterBackedResult(result, opts);
+      emitFormatterBackedCommandResult(result, { format: opts.format });
     });
 
   principalCmd

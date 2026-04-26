@@ -5,35 +5,8 @@ import {
   consoleControlCommand,
 } from './console.js';
 import { createConsoleServer } from './console-server.js';
-import { wrapCommand, type CommandContext } from '../lib/command-wrapper.js';
-import { resolveCommandFormat } from '../lib/cli-output.js';
-
-function silentContext(verbose: boolean): CommandContext {
-  return {
-    configPath: './config.json',
-    verbose,
-    logger: {
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-      trace: () => {},
-    } as unknown as CommandContext['logger'],
-  };
-}
-
-async function emitFormatterBackedResult(
-  result: { exitCode: number; result: unknown },
-  opts: Record<string, unknown>,
-): Promise<void> {
-  if (result.exitCode !== 0) {
-    console.error((result.result as { error?: string }).error ?? 'Command failed');
-    process.exit(result.exitCode);
-  }
-  if ((opts.format as string) === 'json' || process.env.OUTPUT_FORMAT === 'json') {
-    console.log(JSON.stringify(result.result, null, 2));
-  }
-}
+import { silentCommandContext, wrapCommand } from '../lib/command-wrapper.js';
+import { emitFormatterBackedCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 export function registerConsoleCommands(program: Command): void {
   const consoleCmd = program
@@ -64,8 +37,8 @@ export function registerConsoleCommands(program: Command): void {
       const result = await consoleControlCommand('approve', siteId, outboundId, {
         format: resolveCommandFormat(),
         verbose: opts.verbose as boolean | undefined,
-      }, silentContext(!!opts.verbose));
-      await emitFormatterBackedResult(result, opts);
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitFormatterBackedCommandResult(result, { format: opts.format });
     });
 
   consoleCmd
@@ -76,8 +49,8 @@ export function registerConsoleCommands(program: Command): void {
       const result = await consoleControlCommand('reject', siteId, outboundId, {
         format: resolveCommandFormat(),
         verbose: opts.verbose as boolean | undefined,
-      }, silentContext(!!opts.verbose));
-      await emitFormatterBackedResult(result, opts);
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitFormatterBackedCommandResult(result, { format: opts.format });
     });
 
   consoleCmd
@@ -88,8 +61,8 @@ export function registerConsoleCommands(program: Command): void {
       const result = await consoleControlCommand('retry', siteId, workItemId, {
         format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
         verbose: opts.verbose as boolean | undefined,
-      }, silentContext(!!opts.verbose));
-      await emitFormatterBackedResult(result, opts);
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitFormatterBackedCommandResult(result, { format: opts.format });
     });
 
   consoleCmd
@@ -99,6 +72,7 @@ export function registerConsoleCommands(program: Command): void {
     .option('--port <port>', 'Port to bind to (0 for ephemeral)', '0')
     .option('-v, --verbose', 'Enable verbose output', false)
     .action(async (opts: Record<string, unknown>) => {
+      // Long-lived process surface: keep direct lifecycle output and SIGINT handling.
       const host = (opts.host as string) ?? '127.0.0.1';
       const port = opts.port ? parseInt(String(opts.port), 10) : 0;
       const server = await createConsoleServer({ host, port, verbose: !!opts.verbose });

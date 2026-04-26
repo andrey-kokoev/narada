@@ -106,20 +106,16 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(async (query: string, opts: Record<string, unknown>) => {
-      const result = await taskSearchCommand({
-        query,
-        cwd: opts.cwd as string | undefined,
-        format: resolveCommandFormat(opts.format, 'human'),
+      await runDirectCommand({
+        command: 'task search',
+        emit: emitCommandResult,
+        format: opts.format,
+        invocation: () => taskSearchCommand({
+          query,
+          cwd: opts.cwd as string | undefined,
+          format: resolveCommandFormat(opts.format, 'human'),
+        }),
       });
-      if (result.exitCode !== 0) {
-        console.error((result.result as { error?: string }).error ?? 'Search failed');
-        process.exit(result.exitCode);
-      }
-      if (typeof result.result === 'string') {
-        console.log(result.result);
-      } else if (opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json') {
-        console.log(JSON.stringify(result.result, null, 2));
-      }
     });
 
   taskCmd

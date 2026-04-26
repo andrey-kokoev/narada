@@ -7,35 +7,8 @@ import {
   sitesInitCommand,
   sitesEnableCommand,
 } from './sites.js';
-import { wrapCommand, type CommandContext } from '../lib/command-wrapper.js';
-import { resolveCommandFormat } from '../lib/cli-output.js';
-
-function silentContext(verbose: boolean): CommandContext {
-  return {
-    configPath: './config.json',
-    verbose,
-    logger: {
-      debug: () => {},
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-      trace: () => {},
-    } as unknown as CommandContext['logger'],
-  };
-}
-
-async function emitFormatterBackedResult(
-  result: { exitCode: number; result: unknown },
-  opts: Record<string, unknown>,
-): Promise<void> {
-  if (result.exitCode !== 0) {
-    console.error((result.result as { error?: string }).error ?? 'Command failed');
-    process.exit(result.exitCode);
-  }
-  if ((opts.format as string) === 'json' || process.env.OUTPUT_FORMAT === 'json') {
-    console.log(JSON.stringify(result.result, null, 2));
-  }
-}
+import { silentCommandContext, wrapCommand } from '../lib/command-wrapper.js';
+import { emitFormatterBackedCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 export function registerSitesCommands(program: Command): void {
   const sitesCmd = program
@@ -67,8 +40,8 @@ export function registerSitesCommands(program: Command): void {
       const result = await sitesShowCommand(siteId, {
         format: resolveCommandFormat(),
         verbose: opts.verbose as boolean | undefined,
-      }, silentContext(!!opts.verbose));
-      await emitFormatterBackedResult(result, opts);
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitFormatterBackedCommandResult(result, { format: opts.format });
     });
 
   sitesCmd
@@ -80,8 +53,8 @@ export function registerSitesCommands(program: Command): void {
       const result = await sitesRemoveCommand(siteId, {
         format: resolveCommandFormat(),
         verbose: opts.verbose as boolean | undefined,
-      }, silentContext(!!opts.verbose));
-      await emitFormatterBackedResult(result, opts);
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitFormatterBackedCommandResult(result, { format: opts.format });
     });
 
   sitesCmd
@@ -101,8 +74,8 @@ export function registerSitesCommands(program: Command): void {
         dryRun: opts.dryRun as boolean | undefined,
         format: resolveCommandFormat(),
         verbose: opts.verbose as boolean | undefined,
-      }, silentContext(!!opts.verbose));
-      await emitFormatterBackedResult(result, opts);
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitFormatterBackedCommandResult(result, { format: opts.format });
     });
 
   sitesCmd
@@ -118,7 +91,7 @@ export function registerSitesCommands(program: Command): void {
         dryRun: opts.dryRun as boolean | undefined,
         format: resolveCommandFormat(),
         verbose: opts.verbose as boolean | undefined,
-      }, silentContext(!!opts.verbose));
-      await emitFormatterBackedResult(result, opts);
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitFormatterBackedCommandResult(result, { format: opts.format });
     });
 }

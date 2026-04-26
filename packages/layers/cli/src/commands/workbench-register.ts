@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { createWorkbenchServer, workbenchDiagnoseCommand } from './workbench-server.js';
-import { resolveCommandFormat } from '../lib/cli-output.js';
+import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 export function registerWorkbenchCommands(program: Command): void {
   const workbenchCmd = program
@@ -17,11 +17,7 @@ export function registerWorkbenchCommands(program: Command): void {
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'human'),
       });
-      if (opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json') {
-        console.log(JSON.stringify(result.result, null, 2));
-      } else {
-        console.log(result.result);
-      }
+      emitCommandResult(result.result, opts.format);
       if (result.exitCode !== 0) process.exit(result.exitCode);
     });
 
@@ -33,6 +29,7 @@ export function registerWorkbenchCommands(program: Command): void {
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('-v, --verbose', 'Enable verbose output', false)
     .action(async (opts: Record<string, unknown>) => {
+      // Long-lived process surface: keep direct lifecycle output and SIGINT handling.
       const host = (opts.host as string) ?? '127.0.0.1';
       const port = opts.port ? parseInt(String(opts.port), 10) : 0;
       const cwd = (opts.cwd as string) ?? '.';

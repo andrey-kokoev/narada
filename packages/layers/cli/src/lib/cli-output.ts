@@ -37,6 +37,30 @@ export function emitCommandResult(result: unknown, format?: unknown): void {
   console.log(formatCommandResultForStdout(result, format));
 }
 
+export interface CommandResultEnvelopeLike {
+  exitCode: number;
+  result: unknown;
+}
+
+export function emitFormatterBackedCommandResult(
+  envelope: CommandResultEnvelopeLike,
+  options: {
+    format?: unknown;
+    errorFallback?: string;
+    exit?: (code: number) => never;
+  } = {},
+): void {
+  const exit = options.exit ?? ((code: number): never => process.exit(code));
+  if (envelope.exitCode !== 0) {
+    console.error((envelope.result as { error?: string }).error ?? options.errorFallback ?? 'Command failed');
+    exit(envelope.exitCode);
+    return;
+  }
+  if (wantsJsonOutput(options.format)) {
+    console.log(JSON.stringify(envelope.result, null, 2));
+  }
+}
+
 export function attachFormattedOutput<T extends Record<string, unknown>>(
   result: T,
   formatted: string,

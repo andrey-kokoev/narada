@@ -16,6 +16,26 @@ export interface CommandContext {
   logger: Logger;
 }
 
+export function silentCommandContext(options: {
+  configPath?: string;
+  verbose?: boolean;
+} = {}): CommandContext {
+  return {
+    configPath: options.configPath ?? './config.json',
+    verbose: options.verbose ?? false,
+    logger: {
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      warning: () => {},
+      success: () => {},
+      error: () => {},
+      result: () => {},
+      trace: () => {},
+    } as unknown as Logger,
+  };
+}
+
 export type CommandHandler<T extends Record<string, unknown>> = (
   options: T,
   context: CommandContext,
