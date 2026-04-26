@@ -1,10 +1,4 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import {
-  sitesListCommand,
-  sitesDiscoverCommand,
-  sitesShowCommand,
-  sitesRemoveCommand,
-} from '../../src/commands/sites.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 
@@ -56,6 +50,27 @@ vi.mock('@narada2/windows-site', async (importOriginal) => {
     })),
   };
 });
+
+vi.mock('@narada2/macos-site', () => ({
+  discoverMacosSites: vi.fn(() => []),
+  getMacosSiteStatus: vi.fn(),
+  isMacosSite: vi.fn(() => false),
+}), { virtual: true });
+
+vi.mock('@narada2/linux-site', () => ({
+  listAllSites: vi.fn(() => []),
+  getSiteHealth: vi.fn(),
+  isLinuxSite: vi.fn(() => false),
+  resolveLinuxSiteMode: vi.fn(() => null),
+}), { virtual: true });
+
+const {
+  sitesListCommand,
+  sitesDiscoverCommand,
+  sitesShowCommand,
+  sitesRemoveCommand,
+  sitesInitCommand,
+} = await import('../../src/commands/sites.js');
 
 describe('sites commands', () => {
   beforeEach(() => {
@@ -179,6 +194,44 @@ describe('sites commands', () => {
       const result = await sitesRemoveCommand('unknown', { format: 'json' }, ctx);
 
       expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    });
+  });
+
+  describe('sitesInitCommand', () => {
+    it('dry-runs native user-locus Site under visible user Narada root', async () => {
+      process.env.USERPROFILE = 'C:\\Users\\Andrey';
+      process.env.USERNAME = 'Andrey';
+
+      const ctx = createMockContext();
+      const result = await sitesInitCommand('andrey-user', {
+        substrate: 'windows-native',
+        authorityLocus: 'user',
+        sync: 'hybrid_capable_plain_folder',
+        dryRun: true,
+        format: 'json',
+      }, ctx);
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      const data = result.result as {
+        siteRoot: string;
+        config: { locus: { authority_locus: string }; sync: { posture: string } };
+      };
+      expect(data.siteRoot).toBe('C:\\Users\\Andrey\\Narada');
+      expect(data.config.locus.authority_locus).toBe('user');
+      expect(data.config.sync.posture).toBe('hybrid_capable_plain_folder');
+    });
+
+    it('rejects invalid Windows sync posture', async () => {
+      const ctx = createMockContext();
+      const result = await sitesInitCommand('andrey-user', {
+        substrate: 'windows-native',
+        authorityLocus: 'user',
+        sync: 'mystery-sync',
+        dryRun: true,
+        format: 'json',
+      }, ctx);
+
+      expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
     });
   });
 });

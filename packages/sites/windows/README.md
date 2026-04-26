@@ -64,12 +64,31 @@ from substrate alone.
 
 | Locus | Native canonical root | Meaning |
 |-------|-----------------------|---------|
-| `user` | `%USERPROFILE%\.narada` | Andrey-as-user's operator memory, task context, preferences, and user-scoped tool policy |
+| `user` | `%USERPROFILE%\Narada` | Andrey-as-user's operator memory, task context, preferences, and user-scoped tool policy |
 | `pc` | `%ProgramData%\Narada\sites\pc\{site_id}` | Machine/session state, display topology, services, scheduled tasks, drivers, and PC recovery memory |
 
 Use `resolveWindowsSiteRootByLocus()` for new locus-aware config creation.
 The older `resolveSiteRoot(siteId, variant)` remains available for legacy
 `%LOCALAPPDATA%\Narada\{site_id}` native Sites and existing runtime callers.
+
+## User Site Sync Posture
+
+User-locus Sites separate authority from sync/storage posture. A User Site may
+be local-only, externally synced by a profile-sync system, Git-backed, or
+hybrid. New configs may carry:
+
+```json
+{
+  "sync": {
+    "posture": "hybrid_capable_plain_folder",
+    "git_initialized": false,
+    "cloud_sync": "external_if_configured"
+  }
+}
+```
+
+The posture records how durable user files travel. It does not change which
+authority locus the Site represents.
 
 ## WSL Boundaries
 

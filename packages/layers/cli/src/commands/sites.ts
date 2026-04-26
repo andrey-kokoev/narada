@@ -4,10 +4,12 @@
  * Site discovery and registry management commands.
  */
 
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join, posix, win32 } from 'node:path';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 
 export interface SitesOptions {
   format?: string;
@@ -327,6 +329,8 @@ export interface SitesInitOptions extends SitesOptions {
   substrate?: string;
   operation?: string;
   root?: string;
+  authorityLocus?: string;
+  sync?: string;
   dryRun?: boolean;
 }
 
@@ -363,6 +367,8 @@ export async function sitesInitCommand(
   const intervalMinutes = 5;
   const lockTtlMs = 310_000;
   const ceilingMs = 300_000;
+  const validAuthorityLoci = ['user', 'pc'];
+  const validSyncPostures = ['local_only', 'cloud_synced_folder', 'git_backed', 'hybrid', 'hybrid_capable_plain_folder'];
 
   // Resolve site root and config per substrate
   let siteRoot: string;
@@ -373,23 +379,78 @@ export async function sitesInitCommand(
     if (substrate === 'windows-native' || substrate === 'windows-wsl') {
       const variant = substrate === 'windows-native' ? 'native' : 'wsl';
       const {
-        resolveSiteRoot,
-        ensureSiteDir,
-        siteConfigPath,
+        resolveWindowsSiteRootByLocus,
+        SITE_SUBDIRECTORIES,
       } = await import('@narada2/windows-site');
+      const authorityLocus = options.authorityLocus ?? 'user';
+      if (!validAuthorityLoci.includes(authorityLocus)) {
+        return {
+          exitCode: ExitCode.INVALID_CONFIG,
+          result: {
+            status: 'error',
+            error: `Unsupported authority locus: "${authorityLocus}". Valid loci: ${validAuthorityLoci.join(', ')}`,
+            remediation: `Choose one of: ${validAuthorityLoci.join(', ')}`,
+          },
+        };
+      }
+      const syncPosture = options.sync ?? (authorityLocus === 'user' ? 'hybrid_capable_plain_folder' : undefined);
+      if (syncPosture && !validSyncPostures.includes(syncPosture)) {
+        return {
+          exitCode: ExitCode.INVALID_CONFIG,
+          result: {
+            status: 'error',
+            error: `Unsupported sync posture: "${syncPosture}". Valid postures: ${validSyncPostures.join(', ')}`,
+            remediation: `Choose one of: ${validSyncPostures.join(', ')}`,
+          },
+        };
+      }
 
-      siteRoot = options.root ?? resolveSiteRoot(siteId, variant);
-      configPath = siteConfigPath(siteId, variant);
+      siteRoot = options.root ?? resolveWindowsSiteRootByLocus({
+        siteId,
+        variant,
+        authorityLocus: authorityLocus as 'user' | 'pc',
+      });
+      const pathLib = variant === 'native' ? win32 : posix;
+      configPath = pathLib.join(siteRoot, 'config.json');
 
       if (!dryRun) {
-        await ensureSiteDir(siteId, variant);
+        await mkdir(siteRoot, { recursive: true });
+        for (const subdir of SITE_SUBDIRECTORIES) {
+          await mkdir(pathLib.join(siteRoot, subdir), { recursive: true });
+        }
+        await mkdir(pathLib.join(siteRoot, '.ai', 'tasks'), { recursive: true });
+        const taskStore = openTaskLifecycleStore(siteRoot);
+        taskStore.db.close();
       }
 
       configContent = {
         site_id: siteId,
         variant,
+        substrate,
         site_root: siteRoot,
         config_path: configPath,
+        locus: authorityLocus === 'user'
+          ? {
+              authority_locus: 'user',
+              principal: {
+                windows_user_profile: process.env.USERPROFILE ?? '',
+                username: process.env.USERNAME ?? '',
+              },
+            }
+          : {
+              authority_locus: 'pc',
+              machine: {
+                hostname: process.env.COMPUTERNAME ?? '',
+              },
+              root_posture: variant === 'native' ? 'machine_owned' : 'user_owned_pc_site_prototype',
+            },
+        ...(syncPosture ? {
+          sync: {
+            posture: syncPosture,
+            git_initialized: false,
+            cloud_sync: 'external_if_configured',
+          },
+        } : {}),
         cycle_interval_minutes: intervalMinutes,
         lock_ttl_ms: lockTtlMs,
         ceiling_ms: ceilingMs,
@@ -502,6 +563,14 @@ export async function sitesInitCommand(
     fmt.kv('Substrate', substrate);
     fmt.kv('Site Root', siteRoot!);
     fmt.kv('Config Path', configPath!);
+    if ('locus' in configContent!) {
+      const locus = configContent!.locus as { authority_locus?: string };
+      fmt.kv('Authority Locus', locus.authority_locus ?? '-');
+    }
+    if ('sync' in configContent!) {
+      const sync = configContent!.sync as { posture?: string };
+      fmt.kv('Sync Posture', sync.posture ?? '-');
+    }
     if (options.operation) {
       fmt.kv('Operation', options.operation);
     }

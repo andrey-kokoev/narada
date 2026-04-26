@@ -122,7 +122,7 @@ The following are independent of substrate:
 
 The first implementation targets:
 
-- **Native Windows user-locus** Site (`%USERPROFILE%\.narada`)
+- **Native Windows user-locus** Site (`%USERPROFILE%\Narada`)
 - **Native Windows PC-locus** Sites (`%ProgramData%\Narada\sites\pc\{site_id}`)
 - Legacy **Native Windows** Sites (`%LOCALAPPDATA%\Narada\{site_id}`)
 - **WSL** Sites (`/var/lib/narada/{site_id}` or `~/narada/{site_id}`)
@@ -285,7 +285,7 @@ The Site Registry database is stored at a platform-specific path:
 
 | Platform | Path |
 |----------|------|
-| **Native Windows user-locus** | `%USERPROFILE%\.narada\registry.db` |
+| **Native Windows user-locus** | `%USERPROFILE%\Narada\registry.db` |
 | **Native Windows PC-locus** | `%ProgramData%\Narada\registry.db` |
 | **Native Windows legacy** | `%LOCALAPPDATA%\Narada\.registry\registry.db` |
 | **WSL / Linux / POSIX** | `~/.narada/registry.db` |
@@ -294,12 +294,14 @@ The registry is separate from Site data. Site directories live at substrate-spec
 
 | Substrate | Site Root |
 |-----------|-----------|
-| **Windows native user-locus** | `%USERPROFILE%\.narada` |
+| **Windows native user-locus** | `%USERPROFILE%\Narada` |
 | **Windows native PC-locus** | `%ProgramData%\Narada\sites\pc\{site_id}` |
 | **Windows native legacy** | `%LOCALAPPDATA%\Narada\{site_id}` |
 | **WSL** | `/var/lib/narada/{site_id}` or `~/narada/{site_id}` |
 | **Linux user-mode** | `~/.local/share/narada/{site_id}` or `$XDG_DATA_HOME/narada/{site_id}` |
 | **Linux system-mode** | `/var/lib/narada/{site_id}` |
+
+Discovery should treat Windows user-locus and PC-locus roots as first-class roots, not as legacy `%LOCALAPPDATA%` children. A path that merely contains the string `narada` is not a Site unless it has Site identity, configuration, or registry evidence.
 | **Cloudflare** | Remote Worker — no local filesystem root |
 
 ## 12. Operator Console HTTP API

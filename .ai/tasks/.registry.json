@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_allocated": 594,
+  "last_allocated": 595,
   "reserved": [
     471,
     472,
@@ -418,6 +418,15 @@
       "reserved_at": "2026-04-26T19:49:10.485Z",
       "expires_at": "2026-04-27T19:49:10.485Z",
       "status": "released"
+    },
+    {
+      "range_start": 595,
+      "range_end": 595,
+      "purpose": "Chapter: Windows User Site Ergonomics",
+      "reserved_by": "chapter-create",
+      "reserved_at": "2026-04-26T20:29:59.259Z",
+      "expires_at": "2026-04-27T20:29:59.259Z",
+      "status": "active"
     }
   ]
 }

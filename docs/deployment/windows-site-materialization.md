@@ -22,7 +22,7 @@ The Windows family covers two distinct runtime loci:
 
 | Variant | Host OS | Process Model | Filesystem | Credential Store | Scheduling |
 |---------|---------|---------------|------------|------------------|------------|
-| **Native** | Windows 11 | PowerShell / Node.js | NTFS (`%USERPROFILE%\.narada` for user-locus; `%ProgramData%\Narada\sites\pc\...` for PC-locus; legacy `%LOCALAPPDATA%` Sites remain compatible) | Windows Credential Manager or env | Task Scheduler |
+| **Native** | Windows 11 | PowerShell / Node.js | NTFS (`%USERPROFILE%\Narada` for user-locus; `%ProgramData%\Narada\sites\pc\...` for PC-locus; legacy `%LOCALAPPDATA%` Sites remain compatible) | Windows Credential Manager or env | Task Scheduler |
 | **WSL** | WSL 2 Linux | systemd / cron / shell | ext4 inside WSL (`/home/...`) | Linux env / `.env` / WSL interop | systemd timer / cron |
 
 Both variants are **Sites**, not operations, not verticals, and not deployment targets in the infrastructure sense.
@@ -50,7 +50,7 @@ A Windows Site holds:
 - substrate bindings (Graph API, charter runtime, secrets)
 - runtime context (policy, posture, allowed actions)
 
-A Windows Site root is selected by authority locus. A `%USERPROFILE%\.narada\` directory is the Windows user-locus Site for that profile. A `%ProgramData%\Narada\sites\pc\{site_id}\` directory is a native Windows PC-locus Site. A `/var/lib/narada/{site_id}` directory inside WSL is another Site.
+A Windows Site root is selected by authority locus. A `%USERPROFILE%\Narada\` directory is the Windows user-locus Site for that profile. A `%ProgramData%\Narada\sites\pc\{site_id}\` directory is a native Windows PC-locus Site. A `/var/lib/narada/{site_id}` directory inside WSL is another Site.
 
 For profile-local experimental Sites, an operator may override the Site root. That override is path policy, not a new canonical substrate convention; the config should carry the authority locus explicitly.
 
@@ -92,7 +92,7 @@ The Windows authority locus is the part of Windows whose state and authority the
 
 | Locus | Owns | Typical root posture |
 |-------|------|----------------------|
-| **User** | User profile state, per-user credentials/preferences, shell and app config, operator KB, task governance, user-scoped tool policy | `%USERPROFILE%\.narada` |
+| **User** | User profile state, per-user credentials/preferences, shell and app config, operator KB, task governance, user-scoped tool policy | `%USERPROFILE%\Narada` |
 | **PC** | Machine/session state, display topology, drivers, services, scheduled tasks, device inventory, recovery actions that affect the whole PC | `%ProgramData%\Narada\sites\pc\{site_id}`; user-owned prototype allowed before service/runtime hardening |
 
 This distinction is separate from `site_id` and from the substrate variant. A user-owned prototype PC Site may be stored under a user profile while explicitly declaring:
@@ -165,7 +165,7 @@ On WSL:
 | --- | --- |
 | **PowerShell / Node.js process** | Cycle runner. Receives Task Scheduler invocation, executes Cycle, exits. Stateless between invocations. |
 | **Task Scheduler** | Cycle scheduler. Fires the PowerShell/Node script at a configured interval. |
-| **NTFS directory (`%USERPROFILE%\.narada` or `%ProgramData%\Narada\sites\pc\{site_id}`)** | Site state, config, SQLite coordinator, and trace artifact root chosen by authority locus. Legacy `%LOCALAPPDATA%\Narada\{site_id}` Sites remain compatible. |
+| **NTFS directory (`%USERPROFILE%\Narada` or `%ProgramData%\Narada\sites\pc\{site_id}`)** | Site state, config, SQLite coordinator, and trace artifact root chosen by authority locus. Legacy `%LOCALAPPDATA%\Narada\{site_id}` Sites remain compatible. |
 | **SQLite (`better-sqlite3`)** | Coordinator/control-state store. Strong consistency via single-writer SQLite. |
 | **Windows Credential Manager** | Secret binding for Graph API, Kimi API, and admin tokens. |
 | **Windows Event Log / log file** | Ephemeral execution traces. Structured JSON log lines written under the locus-selected Site root's `logs\` directory. |
@@ -189,7 +189,7 @@ Both variants share these Narada concerns, even though the Windows substrate dif
 
 | Concern | Native Windows | WSL |
 |---------|---------------|-----|
-| **Site identity** | `site_id` string, config-declared authority locus, root under `%USERPROFILE%\.narada` or `%ProgramData%\Narada\sites\pc\` | `site_id` string, directory name under `/var/lib/narada/` |
+| **Site identity** | `site_id` string, config-declared authority locus, root under `%USERPROFILE%\Narada` or `%ProgramData%\Narada\sites\pc\` | `site_id` string, directory name under `/var/lib/narada/` |
 | **Cycle trigger** | Task Scheduler task → PowerShell → Node.js | systemd timer / cron → shell → Node.js |
 | **Coordinator/storage** | `better-sqlite3` file at `{siteRoot}\coordinator.db` | `better-sqlite3` file at `{siteRoot}/coordinator.db` |
 | **Lock/recovery model** | `FileLock` from `@narada2/control-plane` (cross-platform, handles Windows via `tasklist` PID check) | Same `FileLock` |
@@ -234,7 +234,7 @@ The Cycle explicitly avoids long-running daemon assumptions.
 | Linux / macOS Assumption | Windows Replacement | Variant |
 |--------------------------|---------------------|---------|
 | Unix signal handling (`SIGTERM`, `SIGHUP`) | PowerShell pipeline stop / process termination | Native |
-| `~/.config/narada/` config directory | `%USERPROFILE%\.narada` for the user-locus Site | Native user-locus |
+| `~/.config/narada/` config directory | `%USERPROFILE%\Narada` for the user-locus Site | Native user-locus |
 | `/var/lib/narada/` machine state | `%ProgramData%\Narada\sites\pc\{site_id}` | Native PC-locus |
 | Legacy Windows local app data | `%LOCALAPPDATA%\Narada\{site_id}\` | Native compatibility |
 | Unix domain sockets for inter-process communication | Named pipes or localhost TCP | Native |
@@ -351,7 +351,7 @@ WSL Sites use the same secret resolution as local Linux development:
 User-locus:
 
 ```text
-%USERPROFILE%\.narada\
+%USERPROFILE%\Narada\
   ├── config.json              # User Site configuration
   ├── registry.db              # User-locus Site registry / operator memory index
   ├── kb\

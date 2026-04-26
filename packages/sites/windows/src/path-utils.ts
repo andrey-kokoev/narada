@@ -92,7 +92,7 @@ export function resolveSiteRoot(
  * Resolve the canonical Site root using Windows authority-locus policy.
  *
  * This is the explicit root-policy surface for new Windows Site configs:
- * - native/user: the operator's profile Site at %USERPROFILE%\.narada
+ * - native/user: the operator's profile Site at %USERPROFILE%\Narada
  * - native/pc: machine-owned Site state under %ProgramData%\Narada\sites\pc\{site_id}
  * - wsl/user: the distro user's ~/.narada Site
  * - wsl/pc: system Site under /var/lib/narada/sites/pc/{site_id} when writable,
@@ -115,7 +115,7 @@ export function resolveWindowsSiteRootByLocus(
       if (!userProfile) {
         throw new Error("Cannot resolve user-locus Site root: USERPROFILE not set");
       }
-      return win32.join(userProfile, ".narada");
+      return win32.join(userProfile, "Narada");
     }
 
     return posix.join(homedir(), ".narada");

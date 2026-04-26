@@ -4,6 +4,8 @@ export type {
   WindowsUserSiteLocus,
   WindowsPcSiteLocus,
   WindowsSiteLocus,
+  WindowsUserSiteSyncPosture,
+  WindowsUserSiteSyncConfig,
   SiteVariant,
   WindowsSiteConfig,
   WindowsCycleOutcome,
@@ -24,6 +26,7 @@ export {
 
 export {
   detectVariant,
+  SITE_SUBDIRECTORIES,
   resolveSiteRoot,
   resolveWindowsSiteRootByLocus,
   sitePath,

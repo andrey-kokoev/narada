@@ -93,14 +93,14 @@ describe("resolveRegistryDbPathByLocus", () => {
     process.env.PROGRAMDATA = originalEnv.PROGRAMDATA;
   });
 
-  it("resolves native user-locus registry under the user .narada root", () => {
+  it("resolves native user-locus registry under the visible user Narada root", () => {
     delete process.env.NARADA_USER_SITE_ROOT;
     process.env.USERPROFILE = "C:\\Users\\Andrey";
 
     expect(resolveRegistryDbPathByLocus({
       variant: "native",
       authorityLocus: "user",
-    })).toBe("C:\\Users\\Andrey\\.narada\\registry.db");
+    })).toBe("C:\\Users\\Andrey\\Narada\\registry.db");
   });
 
   it("resolves native PC-locus registry under ProgramData", () => {

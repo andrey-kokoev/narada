@@ -147,7 +147,7 @@ describe("resolveWindowsSiteRootByLocus", () => {
     process.env.PROGRAMDATA = originalEnv.PROGRAMDATA;
   });
 
-  it("resolves native user-locus Site to the user profile .narada root", () => {
+  it("resolves native user-locus Site to the visible user profile Narada root", () => {
     delete process.env.NARADA_SITE_ROOT;
     delete process.env.NARADA_USER_SITE_ROOT;
     process.env.USERPROFILE = "C:\\Users\\Andrey";
@@ -158,7 +158,7 @@ describe("resolveWindowsSiteRootByLocus", () => {
         variant: "native",
         authorityLocus: "user",
       }),
-    ).toBe("C:\\Users\\Andrey\\.narada");
+    ).toBe("C:\\Users\\Andrey\\Narada");
   });
 
   it("resolves native PC-locus Site to ProgramData", () => {

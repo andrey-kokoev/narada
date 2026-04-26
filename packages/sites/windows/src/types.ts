@@ -54,6 +54,21 @@ export interface WindowsPcSiteLocus {
 
 export type WindowsSiteLocus = WindowsUserSiteLocus | WindowsPcSiteLocus;
 
+export type WindowsUserSiteSyncPosture =
+  | "local_only"
+  | "cloud_synced_folder"
+  | "git_backed"
+  | "hybrid"
+  | "hybrid_capable_plain_folder";
+
+export interface WindowsUserSiteSyncConfig {
+  posture: WindowsUserSiteSyncPosture;
+  git_initialized?: boolean;
+  cloud_sync?: "external_if_configured" | "none" | "unknown";
+  durable_paths?: string[];
+  volatile_paths?: string[];
+}
+
 /**
  * Live source configuration for a Windows Site.
  *
@@ -100,6 +115,7 @@ export interface WindowsSiteConfig {
    * intended to model either a Windows user profile or a PC/machine locus.
    */
   locus?: WindowsSiteLocus;
+  sync?: WindowsUserSiteSyncConfig;
   site_root: string;
   config_path: string;
   cycle_interval_minutes: number;

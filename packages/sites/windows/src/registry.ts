@@ -89,7 +89,7 @@ export function resolveRegistryDbPathByLocus(
   if (variant === "native") {
     if (policy.authorityLocus === "user") {
       const userRoot = process.env.NARADA_USER_SITE_ROOT ?? (
-        process.env.USERPROFILE ? win32.join(process.env.USERPROFILE, ".narada") : undefined
+        process.env.USERPROFILE ? win32.join(process.env.USERPROFILE, "Narada") : undefined
       );
       if (!userRoot) {
         throw new Error("Cannot resolve user-locus registry path: USERPROFILE not set");

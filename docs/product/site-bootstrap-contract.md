@@ -71,15 +71,27 @@ Windows root policy follows the authority locus:
 
 | Authority locus | Native Windows root |
 |-----------------|---------------------|
-| `user` | `%USERPROFILE%\.narada` |
+| `user` | `%USERPROFILE%\Narada` |
 | `pc` | `%ProgramData%\Narada\sites\pc\{site_id}` |
 
 The user-locus Site is the operator's personal working memory and control surface. The PC-locus Site is the machine/session memory and recovery surface.
 
+Windows User Sites also carry a sync posture. This is separate from authority locus:
+
+| Sync posture | Meaning |
+|--------------|---------|
+| `local_only` | User Site remains local to one profile |
+| `cloud_synced_folder` | User Site is synced by an external profile-sync layer such as OneDrive |
+| `git_backed` | User Site is a Git repository |
+| `hybrid` | Durable text/config/KB are Git-friendly while local runtime state remains ignored |
+| `hybrid_capable_plain_folder` | Default bootstrap posture: not a Git repo yet, but shaped so Git or external sync can be added later |
+
+`sites init` should record this posture instead of inferring it from the presence of `.git` or a cloud-sync path.
+
 ### Step 2: Create Site root
 
 ```bash
-narada sites init <site-id> --substrate <substrate> [--operation <operation-id>]
+narada sites init <site-id> --substrate <substrate> [--operation <operation-id>] [--authority-locus user|pc] [--sync <posture>]
 ```
 
 This creates:
@@ -301,8 +313,8 @@ Each Site has a `config.json` in its root directory. The shape is substrate-spec
       "username": "User"
     }
   },
-  "site_root": "C:\\Users\\User\\.narada",
-  "config_path": "C:\\Users\\User\\.narada\\config.json",
+  "site_root": "C:\\Users\\User\\Narada",
+  "config_path": "C:\\Users\\User\\Narada\\config.json",
   "cycle_interval_minutes": 5,
   "lock_ttl_ms": 310000,
   "ceiling_ms": 300000
