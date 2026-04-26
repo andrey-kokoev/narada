@@ -5,9 +5,9 @@
  */
 
 import { resolve } from 'node:path';
-import { searchTasksService, type TaskSearchResult } from '@narada2/task-governance/task-search-service';
+import { searchTasksService } from '@narada2/task-governance/task-search-service';
 import { ExitCode } from '../lib/exit-codes.js';
-import { createFormatter } from '../lib/formatter.js';
+import { attachFormattedOutput } from '../lib/cli-output.js';
 
 export interface TaskSearchOptions {
   query: string;
@@ -18,11 +18,11 @@ export interface TaskSearchOptions {
 export async function taskSearchCommand(
   options: TaskSearchOptions,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const fmt = createFormatter({ format: options.format || 'auto', verbose: false });
+  const format = options.format || 'auto';
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
   const service = await searchTasksService({ query: options.query, cwd });
 
-  if (fmt.getFormat() === 'json') {
+  if (format === 'json') {
     return {
       exitCode: service.exitCode as unknown as ExitCode,
       result: service.result,
@@ -30,33 +30,40 @@ export async function taskSearchCommand(
   }
 
   if (service.result.status === 'error') {
-    fmt.message(service.result.error ?? 'Task search failed', 'error');
     return {
       exitCode: service.exitCode as unknown as ExitCode,
-      result: service.result,
+      result: attachFormattedOutput(
+        service.result,
+        service.result.error ?? 'Task search failed',
+        'human',
+      ),
     };
   }
 
   const query = service.result.query ?? options.query.trim();
   const results = service.result.results ?? [];
   if (results.length === 0) {
-    fmt.message(`No tasks match "${query}"`, 'info');
-    return service;
+    return {
+      exitCode: service.exitCode as unknown as ExitCode,
+      result: attachFormattedOutput(service.result, `No tasks match "${query}"`, 'human'),
+    };
   }
 
-  fmt.section(`Task Search Results for "${query}" (${results.length})`);
-
+  const lines = [
+    `Task Search Results for "${query}" (${results.length})`,
+    '─'.repeat(`Task Search Results for "${query}" (${results.length})`.length),
+  ];
   for (const r of results) {
     const numStr = r.task_number !== null ? `#${r.task_number}` : r.task_id;
     const statusStr = r.status ? `[${r.status}]` : '';
-    console.log(`\n${numStr} ${statusStr} ${r.title ?? ''}`);
+    lines.push('', `${numStr} ${statusStr} ${r.title ?? ''}`);
     for (const snippet of r.matches) {
-      console.log(`  ${snippet}`);
+      lines.push(`  ${snippet}`);
     }
   }
 
   return {
     exitCode: service.exitCode as unknown as ExitCode,
-    result: service.result,
+    result: attachFormattedOutput(service.result, lines.join('\n'), 'human'),
   };
 }

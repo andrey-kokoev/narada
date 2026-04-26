@@ -84,6 +84,8 @@ export function emitFormatterBackedCommandResult(
   }
   if (wantsJsonOutput(options.format)) {
     console.log(JSON.stringify(envelope.result, null, 2));
+  } else if (envelope.result && typeof envelope.result === 'object' && '_formatted' in envelope.result) {
+    console.log(String((envelope.result as { _formatted: unknown })._formatted));
   }
 }
 
@@ -93,7 +95,7 @@ export function emitLongLivedCommandStartup(lines: string[]): void {
   }
 }
 
-export function attachFormattedOutput<T extends Record<string, unknown>>(
+export function attachFormattedOutput<T extends object>(
   result: T,
   formatted: string,
   format: CliFormat,

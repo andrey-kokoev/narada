@@ -7,7 +7,7 @@ import {
 } from './principal.js';
 import { principalSyncFromTasksCommand } from './principal-sync-from-tasks.js';
 import { silentCommandContext } from '../lib/command-wrapper.js';
-import { emitFiniteCommandResult, emitFormatterBackedCommandResult } from '../lib/cli-output.js';
+import { emitFiniteCommandResult, emitFormatterBackedCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 function outputFormat(): 'json' | 'human' | 'auto' {
   return process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto';
@@ -27,7 +27,7 @@ export function registerPrincipalCommands(program: Command): void {
     .action(async (opts: Record<string, unknown>) => {
       const result = await principalStatusCommand(
         {
-          format: outputFormat(),
+          format: resolveCommandFormat(opts.format),
           verbose: opts.verbose as boolean | undefined,
           config: opts.config as string | undefined,
         },
@@ -46,7 +46,7 @@ export function registerPrincipalCommands(program: Command): void {
     .action(async (opts: Record<string, unknown>) => {
       const result = await principalListCommand(
         {
-          format: outputFormat(),
+          format: resolveCommandFormat(opts.format),
           verbose: opts.verbose as boolean | undefined,
           config: opts.config as string | undefined,
           scope: opts.scope as string | undefined,
@@ -70,7 +70,7 @@ export function registerPrincipalCommands(program: Command): void {
       const result = await principalAttachCommand(
         {
           scope: scopeId,
-          format: outputFormat(),
+          format: resolveCommandFormat(opts.format),
           verbose: opts.verbose as boolean | undefined,
           config: opts.config as string | undefined,
           principal: opts.principal as string | undefined,
@@ -94,7 +94,7 @@ export function registerPrincipalCommands(program: Command): void {
       const result = await principalDetachCommand(
         {
           runtimeId,
-          format: outputFormat(),
+          format: resolveCommandFormat(opts.format),
           verbose: opts.verbose as boolean | undefined,
           config: opts.config as string | undefined,
           reason: opts.reason as string | undefined,

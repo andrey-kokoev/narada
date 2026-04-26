@@ -18,6 +18,7 @@ import {
   type PrincipalRuntimeSnapshot,
 } from "@narada2/control-plane";
 import type { CommandContext } from "../lib/command-wrapper.js";
+import { attachFormattedOutput } from "../lib/cli-output.js";
 
 interface PrincipalCommandOptions {
   format: "json" | "human" | "auto";
@@ -59,6 +60,47 @@ function formatPrincipal(p: PrincipalRuntimeSnapshot & { can_claim_work?: boolea
   return lines.filter(Boolean).join("\n");
 }
 
+function formatPrincipalStatus(snapshots: PrincipalRuntimeSnapshot[]): string {
+  if (snapshots.length === 0) return "No principal runtimes registered.";
+  const lines = ["Principal Runtimes", ""];
+  for (const p of snapshots) {
+    lines.push(formatPrincipal({
+      ...p,
+      can_claim_work: canClaimWork(p.state),
+      can_execute: canExecute(p.state),
+    }));
+    lines.push("");
+  }
+  return lines.join("\n").trimEnd();
+}
+
+function formatPrincipalList(
+  snapshots: Array<{
+    runtime_id: string;
+    principal_id: string;
+    principal_type: string;
+    state: string;
+    scope_id?: string | null;
+    attachment_mode?: string | null;
+    can_claim_work: boolean;
+    can_execute: boolean;
+  }>,
+): string {
+  if (snapshots.length === 0) return "No principal runtimes found.";
+  const lines = [
+    "Principal Runtimes",
+    "-".repeat(80),
+    `${"Runtime ID".padEnd(24)} ${"Principal".padEnd(16)} ${"Type".padEnd(8)} ${"State".padEnd(16)} ${"Scope".padEnd(12)} ${"Can Claim".padEnd(10)}`,
+    "-".repeat(80),
+  ];
+  for (const p of snapshots) {
+    lines.push(
+      `${p.runtime_id.padEnd(24)} ${p.principal_id.padEnd(16)} ${p.principal_type.padEnd(8)} ${p.state.padEnd(16)} ${(p.scope_id ?? "-").padEnd(12)} ${p.can_claim_work ? "yes" : "no"}`,
+    );
+  }
+  return lines.join("\n");
+}
+
 export async function principalStatusCommand(
   opts: PrincipalCommandOptions,
   _ctx: CommandContext,
@@ -71,22 +113,7 @@ export async function principalStatusCommand(
     return { exitCode: 0, result: snapshots };
   }
 
-  if (snapshots.length === 0) {
-    console.log("No principal runtimes registered.");
-    return { exitCode: 0, result: [] };
-  }
-
-  console.log("Principal Runtimes\n");
-  for (const p of snapshots) {
-    console.log(formatPrincipal({
-      ...p,
-      can_claim_work: canClaimWork(p.state),
-      can_execute: canExecute(p.state),
-    }));
-    console.log("");
-  }
-
-  return { exitCode: 0, result: snapshots };
+  return { exitCode: 0, result: attachFormattedOutput({ snapshots }, formatPrincipalStatus(snapshots), "human") };
 }
 
 export async function principalListCommand(
@@ -111,22 +138,7 @@ export async function principalListCommand(
     return { exitCode: 0, result: snapshots };
   }
 
-  if (snapshots.length === 0) {
-    console.log("No principal runtimes found.");
-    return { exitCode: 0, result: [] };
-  }
-
-  console.log("Principal Runtimes");
-  console.log("-".repeat(80));
-  console.log(`${"Runtime ID".padEnd(24)} ${"Principal".padEnd(16)} ${"Type".padEnd(8)} ${"State".padEnd(16)} ${"Scope".padEnd(12)} ${"Can Claim".padEnd(10)}`);
-  console.log("-".repeat(80));
-  for (const p of snapshots) {
-    console.log(
-      `${p.runtime_id.padEnd(24)} ${p.principal_id.padEnd(16)} ${p.principal_type.padEnd(8)} ${p.state.padEnd(16)} ${(p.scope_id ?? "-").padEnd(12)} ${p.can_claim_work ? "yes" : "no"}`,
-    );
-  }
-
-  return { exitCode: 0, result: snapshots };
+  return { exitCode: 0, result: attachFormattedOutput({ snapshots }, formatPrincipalList(snapshots), "human") };
 }
 
 export async function principalAttachCommand(
@@ -170,8 +182,14 @@ export async function principalAttachCommand(
     return { exitCode: 0, result: snapshot };
   }
 
-  console.log(`Attached principal ${principalId} (runtime ${runtimeId}) to scope ${opts.scope} in ${mode} mode`);
-  return { exitCode: 0, result: snapshot };
+  return {
+    exitCode: 0,
+    result: attachFormattedOutput(
+      { snapshot },
+      `Attached principal ${principalId} (runtime ${runtimeId}) to scope ${opts.scope} in ${mode} mode`,
+      "human",
+    ),
+  };
 }
 
 export async function principalDetachCommand(
@@ -208,6 +226,8 @@ export async function principalDetachCommand(
     return { exitCode: 0, result: snapshot };
   }
 
-  console.log(`Detached principal ${opts.runtimeId}`);
-  return { exitCode: 0, result: snapshot };
+  return {
+    exitCode: 0,
+    result: attachFormattedOutput({ snapshot }, `Detached principal ${opts.runtimeId}`, "human"),
+  };
 }
