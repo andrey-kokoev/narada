@@ -46,14 +46,7 @@ import {
   principalDetachCommand,
 } from './commands/principal.js';
 import { principalSyncFromTasksCommand } from './commands/principal-sync-from-tasks.js';
-import { rejectDraftCommand } from './commands/reject-draft.js';
-import { markReviewedCommand } from './commands/mark-reviewed.js';
-import { handledExternallyCommand } from './commands/handled-externally.js';
-import { showDraftCommand } from './commands/show-draft.js';
-import { draftsCommand } from './commands/drafts.js';
-import { approveDraftForSendCommand } from './commands/approve-draft-for-send.js';
-import { retryAuthFailedCommand } from './commands/retry-auth-failed.js';
-import { acknowledgeAlertCommand } from './commands/acknowledge-alert.js';
+import { registerOutboundActionCommands } from './commands/outbound-action-register.js';
 import { taskRecommendCommand } from './commands/task-recommend.js';
 import { registerPostureCommands } from './commands/posture-register.js';
 import { taskDeriveFromFindingCommand } from './commands/task-derive-from-finding.js';
@@ -969,117 +962,7 @@ registerCleanupCommands(program);
 
 registerRederivationCommands(program);
 
-program
-  .command('reject-draft')
-  .description('Reject a draft-ready outbound command')
-  .argument('<outbound-id>', 'Outbound command ID to reject')
-  .option('-c, --config <path>', 'Path to config file', './config.json')
-  .option('-v, --verbose', 'Enable verbose output', false)
-  .option('--rationale <text>', 'Operator rationale for rejection')
-  .action((outboundId: string, opts: Record<string, unknown>) => wrapCommand<Record<string, unknown> & { config?: string; verbose?: boolean; format?: string }>('reject-draft', (merged, ctx) =>
-    rejectDraftCommand({
-      ...merged,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-      outboundId,
-      rationale: merged.rationale as string | undefined,
-    }, ctx))({ ...opts, outboundId }));
-
-program
-  .command('mark-reviewed')
-  .description('Mark a draft-ready outbound command as reviewed')
-  .argument('<outbound-id>', 'Outbound command ID to mark reviewed')
-  .option('-c, --config <path>', 'Path to config file', './config.json')
-  .option('-v, --verbose', 'Enable verbose output', false)
-  .option('--notes <text>', 'Reviewer notes')
-  .action((outboundId: string, opts: Record<string, unknown>) => wrapCommand<Record<string, unknown> & { config?: string; verbose?: boolean; format?: string }>('mark-reviewed', (merged, ctx) =>
-    markReviewedCommand({
-      ...merged,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-      outboundId,
-      notes: merged.notes as string | undefined,
-    }, ctx))({ ...opts, outboundId }));
-
-program
-  .command('handled-externally')
-  .description('Record that a draft was handled outside Narada')
-  .argument('<outbound-id>', 'Outbound command ID')
-  .requiredOption('--ref <reference>', 'External reference (ticket ID, thread URL)')
-  .option('-c, --config <path>', 'Path to config file', './config.json')
-  .option('-v, --verbose', 'Enable verbose output', false)
-  .action((outboundId: string, opts: Record<string, unknown>) => wrapCommand<Record<string, unknown> & { config?: string; verbose?: boolean; format?: string }>('handled-externally', (merged, ctx) =>
-    handledExternallyCommand({
-      ...merged,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-      outboundId,
-      ref: merged.ref as string,
-    }, ctx))({ ...opts, outboundId }));
-
-program
-  .command('drafts')
-  .description('Mailbox-specific draft overview — grouped by status with counts and available actions')
-  .option('-c, --config <path>', 'Path to config file', './config.json')
-  .option('-v, --verbose', 'Enable verbose output', false)
-  .option('-l, --limit <n>', 'Maximum drafts per group', '20')
-  .action(wrapCommand('drafts', (opts, ctx) =>
-    draftsCommand({
-      ...opts,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-      limit: opts.limit ? Number(opts.limit) : undefined,
-    }, ctx)));
-
-program
-  .command('show-draft')
-  .description('Show deep-dive draft review detail including lineage and available actions')
-  .argument('<outbound-id>', 'Outbound command ID to inspect')
-  .option('-c, --config <path>', 'Path to config file', './config.json')
-  .option('-v, --verbose', 'Enable verbose output', false)
-  .action((outboundId: string, opts: Record<string, unknown>) => wrapCommand<Record<string, unknown> & { config?: string; verbose?: boolean; format?: string }>('show-draft', (merged, ctx) =>
-    showDraftCommand({
-      ...merged,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-      outboundId,
-    }, ctx))({ ...opts, outboundId }));
-
-program
-  .command('approve-draft-for-send')
-  .description('Approve a draft-ready outbound command for send execution')
-  .argument('<outbound-id>', 'Outbound command ID to approve for send')
-  .option('-c, --config <path>', 'Path to config file', './config.json')
-  .option('-v, --verbose', 'Enable verbose output', false)
-  .action((outboundId: string, opts: Record<string, unknown>) => wrapCommand<Record<string, unknown> & { config?: string; verbose?: boolean; format?: string }>('approve-draft-for-send', (merged, ctx) =>
-    approveDraftForSendCommand({
-      ...merged,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-      outboundId,
-    }, ctx))({ ...opts, outboundId }));
-
-program
-  .command('retry-auth-failed')
-  .description('Retry outbound commands that failed due to auth errors after credentials are restored')
-  .argument('[outbound-id]', 'Specific outbound command ID to retry (optional; scans all scopes if omitted)')
-  .option('-c, --config <path>', 'Path to config file', './config.json')
-  .option('-v, --verbose', 'Enable verbose output', false)
-  .option('-l, --limit <n>', 'Maximum commands to retry per scope when scanning', '50')
-  .action((outboundId: string | undefined, opts: Record<string, unknown>) => wrapCommand<Record<string, unknown> & { config?: string; verbose?: boolean; format?: string }>('retry-auth-failed', (merged, ctx) =>
-    retryAuthFailedCommand({
-      ...merged,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-      outboundId,
-      limit: merged.limit ? Number(merged.limit) : undefined,
-    }, ctx))({ ...opts, outboundId }));
-
-program
-  .command('acknowledge-alert')
-  .description('Acknowledge a failed work item so it no longer appears as active operator attention')
-  .argument('<work-item-id>', 'Failed work item ID to acknowledge')
-  .option('-c, --config <path>', 'Path to config file', './config.json')
-  .option('-v, --verbose', 'Enable verbose output', false)
-  .action((workItemId: string, opts: Record<string, unknown>) => wrapCommand<Record<string, unknown> & { config?: string; verbose?: boolean; format?: string }>('acknowledge-alert', (merged, ctx) =>
-    acknowledgeAlertCommand({
-      ...merged,
-      format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
-      workItemId,
-    }, ctx))({ ...opts, workItemId }));
+registerOutboundActionCommands(program);
 
 program
   .command('select')
