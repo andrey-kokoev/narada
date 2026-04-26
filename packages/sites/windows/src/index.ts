@@ -25,12 +25,14 @@ export {
 export {
   detectVariant,
   resolveSiteRoot,
+  resolveWindowsSiteRootByLocus,
   sitePath,
   ensureSiteDir,
   siteConfigPath,
   siteDbPath,
   siteLogsPath,
   siteTracesPath,
+  type WindowsSiteRootPolicy,
 } from "./path-utils.js";
 
 export {
@@ -92,8 +94,10 @@ export {
   type RegisteredSite,
   type RegistryAuditRecord,
   resolveRegistryDbPath,
+  resolveRegistryDbPathByLocus,
   resolveSitesBaseDir,
   openRegistryDb,
+  type WindowsRegistryPathPolicy,
 } from "./registry.js";
 
 export {

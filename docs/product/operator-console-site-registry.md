@@ -122,7 +122,9 @@ The following are independent of substrate:
 
 The first implementation targets:
 
-- **Native Windows** Sites (`%LOCALAPPDATA%\Narada\{site_id}`)
+- **Native Windows user-locus** Site (`%USERPROFILE%\.narada`)
+- **Native Windows PC-locus** Sites (`%ProgramData%\Narada\sites\pc\{site_id}`)
+- Legacy **Native Windows** Sites (`%LOCALAPPDATA%\Narada\{site_id}`)
 - **WSL** Sites (`/var/lib/narada/{site_id}` or `~/narada/{site_id}`)
 - **Linux user-mode** Sites (`~/.local/share/narada/{site_id}` or `$XDG_DATA_HOME/narada/{site_id}`)
 - **Linux system-mode** Sites (`/var/lib/narada/{site_id}`)
@@ -283,14 +285,18 @@ The Site Registry database is stored at a platform-specific path:
 
 | Platform | Path |
 |----------|------|
-| **Native Windows** | `%LOCALAPPDATA%\Narada\.registry\registry.db` |
+| **Native Windows user-locus** | `%USERPROFILE%\.narada\registry.db` |
+| **Native Windows PC-locus** | `%ProgramData%\Narada\registry.db` |
+| **Native Windows legacy** | `%LOCALAPPDATA%\Narada\.registry\registry.db` |
 | **WSL / Linux / POSIX** | `~/.narada/registry.db` |
 
 The registry is separate from Site data. Site directories live at substrate-specific paths:
 
 | Substrate | Site Root |
 |-----------|-----------|
-| **Windows native** | `%LOCALAPPDATA%\Narada\{site_id}` |
+| **Windows native user-locus** | `%USERPROFILE%\.narada` |
+| **Windows native PC-locus** | `%ProgramData%\Narada\sites\pc\{site_id}` |
+| **Windows native legacy** | `%LOCALAPPDATA%\Narada\{site_id}` |
 | **WSL** | `/var/lib/narada/{site_id}` or `~/narada/{site_id}` |
 | **Linux user-mode** | `~/.local/share/narada/{site_id}` or `$XDG_DATA_HOME/narada/{site_id}` |
 | **Linux system-mode** | `/var/lib/narada/{site_id}` |

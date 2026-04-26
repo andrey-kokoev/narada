@@ -57,6 +57,20 @@ Example PC-locus prototype config fragment:
 
 `user_owned_pc_site_prototype` means the Site represents PC authority but is still stored under a user-owned root until a machine-owned root, such as ProgramData, is introduced deliberately.
 
+## Authority-Locus Root Policy
+
+New Windows Site materialization should choose roots from authority locus, not
+from substrate alone.
+
+| Locus | Native canonical root | Meaning |
+|-------|-----------------------|---------|
+| `user` | `%USERPROFILE%\.narada` | Andrey-as-user's operator memory, task context, preferences, and user-scoped tool policy |
+| `pc` | `%ProgramData%\Narada\sites\pc\{site_id}` | Machine/session state, display topology, services, scheduled tasks, drivers, and PC recovery memory |
+
+Use `resolveWindowsSiteRootByLocus()` for new locus-aware config creation.
+The older `resolveSiteRoot(siteId, variant)` remains available for legacy
+`%LOCALAPPDATA%\Narada\{site_id}` native Sites and existing runtime callers.
+
 ## WSL Boundaries
 
 ### Filesystem

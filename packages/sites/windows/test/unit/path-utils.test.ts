@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   detectVariant,
   resolveSiteRoot,
+  resolveWindowsSiteRootByLocus,
   sitePath,
   siteConfigPath,
   siteDbPath,
@@ -131,6 +132,60 @@ describe("resolveSiteRoot", () => {
     expect(resolveSiteRoot("test-site", "native")).toBe(
       "C:\\Users\\Test\\AppData\\Local\\Narada\\test-site"
     );
+  });
+});
+
+describe("resolveWindowsSiteRootByLocus", () => {
+  const originalEnv = { ...process.env };
+
+  afterEach(() => {
+    process.env.NARADA_SITE_ROOT = originalEnv.NARADA_SITE_ROOT;
+    process.env.NARADA_USER_SITE_ROOT = originalEnv.NARADA_USER_SITE_ROOT;
+    process.env.NARADA_PC_SITE_ROOT = originalEnv.NARADA_PC_SITE_ROOT;
+    process.env.USERPROFILE = originalEnv.USERPROFILE;
+    process.env.ProgramData = originalEnv.ProgramData;
+    process.env.PROGRAMDATA = originalEnv.PROGRAMDATA;
+  });
+
+  it("resolves native user-locus Site to the user profile .narada root", () => {
+    delete process.env.NARADA_SITE_ROOT;
+    delete process.env.NARADA_USER_SITE_ROOT;
+    process.env.USERPROFILE = "C:\\Users\\Andrey";
+
+    expect(
+      resolveWindowsSiteRootByLocus({
+        siteId: "andrey",
+        variant: "native",
+        authorityLocus: "user",
+      }),
+    ).toBe("C:\\Users\\Andrey\\.narada");
+  });
+
+  it("resolves native PC-locus Site to ProgramData", () => {
+    delete process.env.NARADA_SITE_ROOT;
+    delete process.env.NARADA_PC_SITE_ROOT;
+    process.env.ProgramData = "C:\\ProgramData";
+
+    expect(
+      resolveWindowsSiteRootByLocus({
+        siteId: "local-machine",
+        variant: "native",
+        authorityLocus: "pc",
+      }),
+    ).toBe("C:\\ProgramData\\Narada\\sites\\pc\\local-machine");
+  });
+
+  it("uses locus-specific overrides before the legacy root override", () => {
+    process.env.NARADA_SITE_ROOT = "C:\\legacy";
+    process.env.NARADA_PC_SITE_ROOT = "D:\\NaradaPc";
+
+    expect(
+      resolveWindowsSiteRootByLocus({
+        siteId: "local-machine",
+        variant: "native",
+        authorityLocus: "pc",
+      }),
+    ).toBe("D:\\NaradaPc\\local-machine");
   });
 });
 

@@ -67,6 +67,15 @@ For Windows Sites, substrate is not the same as authority locus. `windows-native
 
 Omitted `locus` fields are treated as user-locus for legacy compatibility. New Windows configs should declare the locus explicitly, especially when a PC Site is temporarily stored under a user-owned root.
 
+Windows root policy follows the authority locus:
+
+| Authority locus | Native Windows root |
+|-----------------|---------------------|
+| `user` | `%USERPROFILE%\.narada` |
+| `pc` | `%ProgramData%\Narada\sites\pc\{site_id}` |
+
+The user-locus Site is the operator's personal working memory and control surface. The PC-locus Site is the machine/session memory and recovery surface.
+
 ### Step 2: Create Site root
 
 ```bash
@@ -292,8 +301,8 @@ Each Site has a `config.json` in its root directory. The shape is substrate-spec
       "username": "User"
     }
   },
-  "site_root": "C:\\Users\\User\\AppData\\Local\\Narada\\local-help",
-  "config_path": "C:\\Users\\User\\AppData\\Local\\Narada\\local-help\\config.json",
+  "site_root": "C:\\Users\\User\\.narada",
+  "config_path": "C:\\Users\\User\\.narada\\config.json",
   "cycle_interval_minutes": 5,
   "lock_ttl_ms": 310000,
   "ceiling_ms": 300000

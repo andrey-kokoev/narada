@@ -13,6 +13,7 @@ import {
   SiteRegistry,
   openRegistryDb,
   resolveRegistryDbPath,
+  resolveRegistryDbPathByLocus,
   resolveSitesBaseDir,
 } from "../../src/registry.js";
 import type { RegisteredSite, RegistryAuditRecord } from "../../src/registry.js";
@@ -78,6 +79,38 @@ describe("resolveRegistryDbPath", () => {
     if (originalPlatform) {
       Object.defineProperty(process, "platform", originalPlatform);
     }
+  });
+});
+
+describe("resolveRegistryDbPathByLocus", () => {
+  const originalEnv = { ...process.env };
+
+  afterEach(() => {
+    process.env.NARADA_USER_SITE_ROOT = originalEnv.NARADA_USER_SITE_ROOT;
+    process.env.NARADA_PC_REGISTRY_ROOT = originalEnv.NARADA_PC_REGISTRY_ROOT;
+    process.env.USERPROFILE = originalEnv.USERPROFILE;
+    process.env.ProgramData = originalEnv.ProgramData;
+    process.env.PROGRAMDATA = originalEnv.PROGRAMDATA;
+  });
+
+  it("resolves native user-locus registry under the user .narada root", () => {
+    delete process.env.NARADA_USER_SITE_ROOT;
+    process.env.USERPROFILE = "C:\\Users\\Andrey";
+
+    expect(resolveRegistryDbPathByLocus({
+      variant: "native",
+      authorityLocus: "user",
+    })).toBe("C:\\Users\\Andrey\\.narada\\registry.db");
+  });
+
+  it("resolves native PC-locus registry under ProgramData", () => {
+    delete process.env.NARADA_PC_REGISTRY_ROOT;
+    process.env.ProgramData = "C:\\ProgramData";
+
+    expect(resolveRegistryDbPathByLocus({
+      variant: "native",
+      authorityLocus: "pc",
+    })).toBe("C:\\ProgramData\\Narada\\registry.db");
   });
 });
 

@@ -2,7 +2,7 @@ import { win32, posix } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { existsSync, accessSync, constants } from "node:fs";
 import { homedir } from "node:os";
-import type { WindowsSiteVariant } from "./types.js";
+import type { WindowsAuthorityLocus, WindowsSiteVariant } from "./types.js";
 
 /** Standard subdirectories created inside a site root. */
 export const SITE_SUBDIRECTORIES = [
@@ -19,6 +19,12 @@ export const SITE_SUBDIRECTORIES = [
 
 function getPathLib(variant: WindowsSiteVariant) {
   return variant === "native" ? win32 : posix;
+}
+
+export interface WindowsSiteRootPolicy {
+  siteId: string;
+  variant: WindowsSiteVariant;
+  authorityLocus: WindowsAuthorityLocus;
 }
 
 /**
@@ -80,6 +86,59 @@ export function resolveSiteRoot(
     }
   }
   return posix.join(homedir(), "narada", siteId);
+}
+
+/**
+ * Resolve the canonical Site root using Windows authority-locus policy.
+ *
+ * This is the explicit root-policy surface for new Windows Site configs:
+ * - native/user: the operator's profile Site at %USERPROFILE%\.narada
+ * - native/pc: machine-owned Site state under %ProgramData%\Narada\sites\pc\{site_id}
+ * - wsl/user: the distro user's ~/.narada Site
+ * - wsl/pc: system Site under /var/lib/narada/sites/pc/{site_id} when writable,
+ *   otherwise a user-owned prototype under ~/narada/sites/pc/{site_id}
+ *
+ * `resolveSiteRoot(siteId, variant)` remains the legacy compatibility resolver.
+ */
+export function resolveWindowsSiteRootByLocus(
+  policy: WindowsSiteRootPolicy,
+): string {
+  const { siteId, variant, authorityLocus } = policy;
+  const pathLib = getPathLib(variant);
+
+  if (authorityLocus === "user") {
+    const override = process.env.NARADA_USER_SITE_ROOT ?? process.env.NARADA_SITE_ROOT;
+    if (override) return pathLib.normalize(override);
+
+    if (variant === "native") {
+      const userProfile = process.env.USERPROFILE;
+      if (!userProfile) {
+        throw new Error("Cannot resolve user-locus Site root: USERPROFILE not set");
+      }
+      return win32.join(userProfile, ".narada");
+    }
+
+    return posix.join(homedir(), ".narada");
+  }
+
+  const override = process.env.NARADA_PC_SITE_ROOT ?? process.env.NARADA_SITE_ROOT;
+  if (override) return pathLib.join(override, siteId);
+
+  if (variant === "native") {
+    const programData = process.env.ProgramData ?? process.env.PROGRAMDATA ?? "C:\\ProgramData";
+    return win32.join(programData, "Narada", "sites", "pc", siteId);
+  }
+
+  const varLibNarada = "/var/lib/narada";
+  if (existsSync(varLibNarada)) {
+    try {
+      accessSync(varLibNarada, constants.W_OK);
+      return posix.join(varLibNarada, "sites", "pc", siteId);
+    } catch {
+      // not writable, fall through to user-owned prototype root
+    }
+  }
+  return posix.join(homedir(), "narada", "sites", "pc", siteId);
 }
 
 /**

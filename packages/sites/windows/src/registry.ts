@@ -12,7 +12,7 @@ import { homedir } from "node:os";
 import { readdirSync, existsSync, readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import type { Database } from "better-sqlite3";
-import type { WindowsSiteVariant, SiteVariant } from "./types.js";
+import type { WindowsAuthorityLocus, WindowsSiteVariant, SiteVariant } from "./types.js";
 
 function getPathLib(variant: WindowsSiteVariant) {
   return variant === "native" ? win32 : posix;
@@ -68,6 +68,52 @@ export function resolveRegistryDbPath(): string {
     return win32.join(localAppData, "Narada", ".registry", "registry.db");
   }
   return posix.join(homedir(), ".narada", "registry.db");
+}
+
+export interface WindowsRegistryPathPolicy {
+  variant?: WindowsSiteVariant;
+  authorityLocus: WindowsAuthorityLocus;
+}
+
+/**
+ * Resolve the registry database path using authority-locus policy.
+ *
+ * This is the explicit path for new Windows Site registries. The older
+ * `resolveRegistryDbPath()` remains the legacy compatibility resolver.
+ */
+export function resolveRegistryDbPathByLocus(
+  policy: WindowsRegistryPathPolicy,
+): string {
+  const variant = policy.variant ?? (process.platform === "win32" ? "native" : "wsl");
+
+  if (variant === "native") {
+    if (policy.authorityLocus === "user") {
+      const userRoot = process.env.NARADA_USER_SITE_ROOT ?? (
+        process.env.USERPROFILE ? win32.join(process.env.USERPROFILE, ".narada") : undefined
+      );
+      if (!userRoot) {
+        throw new Error("Cannot resolve user-locus registry path: USERPROFILE not set");
+      }
+      return win32.join(userRoot, "registry.db");
+    }
+
+    const pcRoot =
+      process.env.NARADA_PC_REGISTRY_ROOT ??
+      process.env.ProgramData ??
+      process.env.PROGRAMDATA ??
+      "C:\\ProgramData";
+    return win32.join(pcRoot, "Narada", "registry.db");
+  }
+
+  if (policy.authorityLocus === "user") {
+    return posix.join(homedir(), ".narada", "registry.db");
+  }
+
+  const varLibNarada = "/var/lib/narada";
+  if (existsSync(varLibNarada)) {
+    return posix.join(varLibNarada, "registry.db");
+  }
+  return posix.join(homedir(), "narada", "registry.db");
 }
 
 /**

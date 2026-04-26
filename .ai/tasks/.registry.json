@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_allocated": 593,
+  "last_allocated": 594,
   "reserved": [
     471,
     472,
@@ -408,6 +408,15 @@
       "reserved_by": "chapter-create",
       "reserved_at": "2026-04-26T19:29:50.652Z",
       "expires_at": "2026-04-27T19:29:50.652Z",
+      "status": "released"
+    },
+    {
+      "range_start": 594,
+      "range_end": 594,
+      "purpose": "Chapter: Windows Site Root Policy By Authority Locus",
+      "reserved_by": "chapter-create",
+      "reserved_at": "2026-04-26T19:49:10.485Z",
+      "expires_at": "2026-04-27T19:49:10.485Z",
       "status": "released"
     }
   ]
