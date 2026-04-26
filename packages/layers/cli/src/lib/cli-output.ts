@@ -158,37 +158,6 @@ export function emitFiniteCommandDiagnostics(lines: string[]): void {
   emitCliOutputAdmission({ zone: 'finite', stream: 'stderr', lines });
 }
 
-// Long-lived commands may terminate process lifetime after graceful shutdown.
-export function exitLongLivedCommandSuccessfully(exit: (code: number) => never = process.exit): never {
-  return exit(0);
-}
-
-// Interactive commands may terminate process lifetime after prompt cancellation.
-export function exitInteractiveCommandSuccessfully(exit: (code: number) => never = process.exit): never {
-  return exit(0);
-}
-
-// Interactive commands sometimes need bounded follow-up text after prompt rendering.
-export function emitInteractiveCommandFollowUp(lines: string[]): void {
-  for (const line of lines) {
-    console.log(line);
-  }
-}
-
-// Finite setup commands may render bounded progress summaries while they mutate local scaffolding.
-export function emitFiniteCommandProgress(lines: string[]): void {
-  for (const line of lines) {
-    console.log(line);
-  }
-}
-
-// Finite setup commands may render bounded diagnostics before returning a failing envelope or throwing.
-export function emitFiniteCommandDiagnostics(lines: string[]): void {
-  for (const line of lines) {
-    console.error(line);
-  }
-}
-
 // Finite command bodies should construct human output here, not write to stdout directly.
 export function attachFormattedOutput<T extends object>(
   result: T,
