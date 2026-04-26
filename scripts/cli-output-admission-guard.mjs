@@ -34,12 +34,6 @@ const allowlist = {
   "console-register.ts": [
     { pattern: /process\.exit\(0\)/, count: 1, reason: "long-lived console server SIGINT shutdown" },
   ],
-  "integrity.ts": [
-    { pattern: /console\.log\(`  • \$\{error\}`\)/, count: 1, reason: "legacy integrity sample-error formatting" },
-    { pattern: /console\.log\(`  \.\.\. and \$\{report\.checks\.messages\.errors\.length - 3\} more`\)/, count: 1, reason: "legacy integrity sample-error formatting" },
-    { pattern: /console\.log\(''\)/, count: 3, reason: "legacy integrity spacing" },
-    { pattern: /console\.log\('  narada sync --config \.\/config\.json'\)/, count: 1, reason: "legacy integrity remediation output" },
-  ],
   "sync.ts": [
     { pattern: /console\.log\(formatMultiSyncResult\(result\)\)/, count: 1, reason: "legacy multi-sync result admission" },
     { pattern: /console\.log\(''\)/, count: 4, reason: "legacy sync follow-up spacing" },

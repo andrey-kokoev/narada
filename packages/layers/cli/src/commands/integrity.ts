@@ -213,10 +213,10 @@ function outputHumanReadable(
     fmt.kv('Invalid records', report.checks.messages.invalid);
     fmt.message('Sample errors:', 'error');
     for (const error of report.checks.messages.errors.slice(0, 3)) {
-      console.log(`  • ${error}`);
+      fmt.message(`  • ${error}`, 'error');
     }
     if (report.checks.messages.errors.length > 3) {
-      console.log(`  ... and ${report.checks.messages.errors.length - 3} more`);
+      fmt.message(`  ... and ${report.checks.messages.errors.length - 3} more`, 'error');
     }
   } else if (report.checks.messages.count > 0) {
     fmt.message('All sampled messages are valid', 'success');
@@ -240,16 +240,16 @@ function outputHumanReadable(
   }
   
   if (report.status === 'ok') {
-    console.log('');
+    fmt.message('');
     fmt.message('Your data directory looks healthy!', 'success');
   } else {
-    console.log('');
+    fmt.message('');
     fmt.message('Some issues were found. Review the details above.', 'warning');
     
     if (!report.checks.cursor.valid) {
-      console.log('');
+      fmt.message('');
       fmt.message('To fix cursor issues, try running a fresh sync:', 'info');
-      console.log('  narada sync --config ./config.json');
+      fmt.message('  narada sync --config ./config.json', 'info');
     }
   }
 }
