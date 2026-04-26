@@ -50,6 +50,8 @@ export interface InboxPromoteOptions extends InboxCommandOptions {
 
 export interface InboxNextOptions extends InboxListOptions {}
 
+export interface InboxWorkNextOptions extends InboxNextOptions {}
+
 export interface InboxTriageOptions extends Omit<InboxPromoteOptions, 'targetKind'> {
   action?: string;
   targetKind?: string;
@@ -135,6 +137,38 @@ export async function inboxNextCommand(options: InboxNextOptions): Promise<{ exi
           `Alternatives: ${alternatives.length}`,
         ]
         : ['No matching inbox envelopes.'],
+      options.format,
+    );
+  });
+}
+
+export async function inboxWorkNextCommand(options: InboxWorkNextOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const status = options.status ? parseStatus(options.status) : 'received';
+  const kind = options.kind ? parseEnvelopeKind(options.kind) : undefined;
+  if (options.status && !status) return errorResult(`Invalid status: ${options.status}`);
+  if (options.kind && !kind) return errorResult(`Invalid kind: ${options.kind}`);
+
+  return withInboxStoreAsync(options, async (store) => {
+    const limit = clampLimit(options.limit ?? 5);
+    const envelopes = selectEnvelopes(store, { status, kind, limit });
+    const [primary, ...alternatives] = envelopes;
+    const admissibleActions = primary ? admissibleActionsForEnvelope(primary) : [];
+    return okResult(
+      {
+        status: 'success',
+        primary: primary ?? null,
+        admissible_actions: admissibleActions,
+        alternatives,
+        alternatives_count: alternatives.length,
+      },
+      primary
+        ? [
+          `Next inbox work: ${primary.envelope_id}`,
+          `Kind: ${primary.kind}`,
+          `Admissible actions: ${admissibleActions.map((action) => action.action).join(', ') || 'none'}`,
+          `Alternatives: ${alternatives.length}`,
+        ]
+        : ['No matching inbox work.'],
       options.format,
     );
   });
@@ -250,19 +284,20 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
         promoted_at: new Date().toISOString(),
         promoted_by: options.by!,
         enactment_status: 'pending',
-        note: `Executable promotion for target kind '${targetKind}' is not implemented yet.`,
+        note: `recorded_pending_crossing: executable promotion for target kind '${targetKind}' is not implemented yet.`,
       });
       return okResult(
         {
           status: 'success',
           enactment_status: 'pending',
+          pending_kind: 'recorded_pending_crossing',
           target_mutation: false,
           envelope,
         },
         [
-          `Inbox envelope promoted: ${envelope.envelope_id}`,
+          `Inbox envelope recorded as pending crossing: ${envelope.envelope_id}`,
           `Target: ${targetKind}:${options.targetRef}`,
-          'Enactment: pending',
+          'Enactment: pending (not executed)',
           `Promoted by: ${options.by}`,
         ],
         options.format,
@@ -292,10 +327,43 @@ export async function inboxTriageCommand(options: InboxTriageOptions): Promise<{
       if (!options.targetKind || options.targetKind === 'task' || options.targetKind === 'archive') {
         return errorResult('--target-kind must be a pending target kind for --action pending');
       }
+      if (!options.targetRef) {
+        return errorResult('--target-ref is required for --action pending');
+      }
       return inboxPromoteCommand(options);
     default:
       return errorResult('--action must be one of: archive, task, pending');
   }
+}
+
+function admissibleActionsForEnvelope(envelope: InboxEnvelope): Array<Record<string, unknown>> {
+  if (envelope.status !== 'received') {
+    return [];
+  }
+  const actions: Array<Record<string, unknown>> = [
+    {
+      action: 'archive',
+      command: `narada inbox triage ${envelope.envelope_id} --action archive --by <principal>`,
+      mutates: true,
+      target_mutation: false,
+    },
+    {
+      action: 'pending',
+      command: `narada inbox triage ${envelope.envelope_id} --action pending --target-kind <kind> --target-ref <ref> --by <principal>`,
+      mutates: true,
+      target_mutation: false,
+      pending_kind: 'recorded_pending_crossing',
+    },
+  ];
+  if (envelope.kind === 'task_candidate' || envelope.kind === 'upstream_task_candidate') {
+    actions.unshift({
+      action: 'task',
+      command: `narada inbox task ${envelope.envelope_id} --by <principal>`,
+      mutates: true,
+      target_mutation: true,
+    });
+  }
+  return actions;
 }
 
 function selectEnvelopes(

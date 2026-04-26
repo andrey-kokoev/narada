@@ -15,6 +15,7 @@ import {
   inboxSubmitCommand,
   inboxTaskCommand,
   inboxTriageCommand,
+  inboxWorkNextCommand,
 } from '../../src/commands/inbox.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
@@ -23,7 +24,6 @@ describe('Canonical Inbox CLI commands', () => {
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'narada-inbox-cli-'));
-    setupRepo(tempDir);
   });
 
   afterEach(() => {
@@ -72,6 +72,7 @@ describe('Canonical Inbox CLI commands', () => {
   });
 
   it('enacts task promotion through the sanctioned task create command and is idempotent', async () => {
+    setupRepo(tempDir);
     const submitted = await inboxSubmitCommand({
       cwd: tempDir,
       format: 'json',
@@ -126,6 +127,7 @@ describe('Canonical Inbox CLI commands', () => {
   });
 
   it('promotes task candidates through the ergonomic inbox task alias with overrides', async () => {
+    setupRepo(tempDir);
     const submitted = await inboxSubmitCommand({
       cwd: tempDir,
       format: 'json',
@@ -233,6 +235,7 @@ describe('Canonical Inbox CLI commands', () => {
       authorityLevel: 'operator_confirmed',
       payload: JSON.stringify({ title: 'Triaged task' }),
     });
+    setupRepo(tempDir);
     const taskEnvelope = (taskCandidate.result as { envelope: { envelope_id: string } }).envelope;
     const triagedTask = await inboxTriageCommand({
       cwd: tempDir,
@@ -243,6 +246,32 @@ describe('Canonical Inbox CLI commands', () => {
     });
     expect(triagedTask.exitCode).toBe(ExitCode.SUCCESS);
     expect((triagedTask.result as { enactment_status: string }).enactment_status).toBe('enacted');
+  });
+
+  it('returns work-next with admissible actions', async () => {
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual',
+      kind: 'task_candidate',
+      authorityLevel: 'operator_confirmed',
+      payload: JSON.stringify({ title: 'Work next task' }),
+    });
+    const envelope = (submitted.result as { envelope: { envelope_id: string } }).envelope;
+
+    const workNext = await inboxWorkNextCommand({ cwd: tempDir, format: 'json' });
+
+    expect(workNext.exitCode).toBe(ExitCode.SUCCESS);
+    const result = workNext.result as {
+      primary: { envelope_id: string };
+      admissible_actions: Array<{ action: string; target_mutation: boolean; pending_kind?: string }>;
+      alternatives_count: number;
+    };
+    expect(result.primary.envelope_id).toBe(envelope.envelope_id);
+    expect(result.admissible_actions.map((action) => action.action)).toEqual(['task', 'archive', 'pending']);
+    expect(result.admissible_actions.find((action) => action.action === 'pending')?.pending_kind).toBe('recorded_pending_crossing');
+    expect(result.alternatives_count).toBe(0);
   });
 
   it('archives envelopes without requiring a target ref or creating target work', async () => {
@@ -296,8 +325,34 @@ describe('Canonical Inbox CLI commands', () => {
     expect(promoted.exitCode).toBe(ExitCode.SUCCESS);
     expect(promoted.result).toMatchObject({
       enactment_status: 'pending',
+      pending_kind: 'recorded_pending_crossing',
       target_mutation: false,
     });
+  });
+
+  it('requires target ref for pending triage', async () => {
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual',
+      kind: 'proposal',
+      authorityLevel: 'user_statement',
+      payload: JSON.stringify({ title: 'Maybe change a site' }),
+    });
+    const envelope = (submitted.result as { envelope: { envelope_id: string } }).envelope;
+
+    const result = await inboxTriageCommand({
+      cwd: tempDir,
+      format: 'json',
+      envelopeId: envelope.envelope_id,
+      action: 'pending',
+      targetKind: 'site_config_change',
+      by: 'operator',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({ status: 'error', error: expect.stringContaining('target-ref') });
   });
 
   it('rejects invalid JSON payloads', async () => {

@@ -7,6 +7,7 @@ import {
   inboxSubmitCommand,
   inboxTaskCommand,
   inboxTriageCommand,
+  inboxWorkNextCommand,
 } from './inbox.js';
 import { directCommandAction } from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
@@ -77,6 +78,27 @@ export function registerInboxCommands(program: Command): void {
       emit: emitCommandResult,
       format: (opts: Record<string, unknown>) => opts.format,
       invocation: (opts) => inboxNextCommand({
+        status: opts.status as string | undefined,
+        kind: opts.kind as string | undefined,
+        limit: opts.limit ? Number(opts.limit) : undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
+
+  inboxCmd
+    .command('work-next')
+    .description('Show next inbox work with admissible actions')
+    .option('--status <status>', 'Filter by status', 'received')
+    .option('--kind <kind>', 'Filter by envelope kind')
+    .option('--limit <n>', 'Maximum envelopes including alternatives', '5')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'inbox work-next',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => inboxWorkNextCommand({
         status: opts.status as string | undefined,
         kind: opts.kind as string | undefined,
         limit: opts.limit ? Number(opts.limit) : undefined,
