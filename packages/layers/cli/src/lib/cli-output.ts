@@ -11,7 +11,7 @@ export interface CliOutputAdmission {
 }
 
 export interface CliExitAdmission {
-  zone: Extract<CliOutputAdmissionZone, 'interactive' | 'long_lived'>;
+  zone: CliOutputAdmissionZone;
   code?: number;
   exit?: (code: number) => never;
 }
@@ -50,7 +50,10 @@ export function formatCommandResultForStdout(
 }
 
 export function emitCommandResult(result: unknown, format?: unknown): void {
-  console.log(formatCommandResultForStdout(result, format));
+  emitCliOutputAdmission({
+    zone: 'finite',
+    lines: [formatCommandResultForStdout(result, format)],
+  });
 }
 
 export function emitCliOutputAdmission(admission: CliOutputAdmission): void {
@@ -82,10 +85,9 @@ export function emitFiniteCommandResult(
     exit?: (code: number) => never;
   } = {},
 ): void {
-  const exit = options.exit ?? ((code: number): never => process.exit(code));
   emitCommandResult(envelope.result, options.format);
   if (envelope.exitCode !== 0) {
-    exit(envelope.exitCode);
+    exitCliOutputAdmission({ zone: 'finite', code: envelope.exitCode, exit: options.exit });
   }
 }
 
@@ -97,9 +99,8 @@ export function emitFiniteCommandFailure(
     exit?: (code: number) => never;
   } = {},
 ): never {
-  const exit = options.exit ?? ((code: number): never => process.exit(code));
-  console.error(message);
-  return exit(options.exitCode ?? 1);
+  emitCliOutputAdmission({ zone: 'finite', stream: 'stderr', lines: [message] });
+  return exitCliOutputAdmission({ zone: 'finite', code: options.exitCode ?? 1, exit: options.exit });
 }
 
 // Use when the command body has already rendered human output through Formatter.
@@ -111,16 +112,19 @@ export function emitFormatterBackedCommandResult(
     exit?: (code: number) => never;
   } = {},
 ): void {
-  const exit = options.exit ?? ((code: number): never => process.exit(code));
   if (envelope.exitCode !== 0) {
-    console.error((envelope.result as { error?: string }).error ?? options.errorFallback ?? 'Command failed');
-    exit(envelope.exitCode);
+    emitCliOutputAdmission({
+      zone: 'finite',
+      stream: 'stderr',
+      lines: [(envelope.result as { error?: string }).error ?? options.errorFallback ?? 'Command failed'],
+    });
+    exitCliOutputAdmission({ zone: 'finite', code: envelope.exitCode, exit: options.exit });
     return;
   }
   if (wantsJsonOutput(options.format)) {
-    console.log(JSON.stringify(envelope.result, null, 2));
+    emitCliOutputAdmission({ zone: 'finite', lines: [JSON.stringify(envelope.result, null, 2)] });
   } else if (envelope.result && typeof envelope.result === 'object' && '_formatted' in envelope.result) {
-    console.log(String((envelope.result as { _formatted: unknown })._formatted));
+    emitCliOutputAdmission({ zone: 'finite', lines: [String((envelope.result as { _formatted: unknown })._formatted)] });
   }
 }
 
@@ -130,12 +134,12 @@ export function emitLongLivedCommandStartup(lines: string[]): void {
 }
 
 // Long-lived commands may terminate process lifetime after graceful shutdown.
-export function exitLongLivedCommandSuccessfully(exit: (code: number) => never = process.exit): never {
+export function exitLongLivedCommandSuccessfully(exit?: (code: number) => never): never {
   return exitCliOutputAdmission({ zone: 'long_lived', exit });
 }
 
 // Interactive commands may terminate process lifetime after prompt cancellation.
-export function exitInteractiveCommandSuccessfully(exit: (code: number) => never = process.exit): never {
+export function exitInteractiveCommandSuccessfully(exit?: (code: number) => never): never {
   return exitCliOutputAdmission({ zone: 'interactive', exit });
 }
 

@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   emitCliOutputAdmission,
+  emitCommandResult,
+  emitFiniteCommandFailure,
   emitFiniteCommandDiagnostics,
+  emitFiniteCommandResult,
+  emitFormatterBackedCommandResult,
   exitCliOutputAdmission,
   exitInteractiveCommandSuccessfully,
   exitLongLivedCommandSuccessfully,
@@ -82,5 +86,99 @@ describe('CLI output admission', () => {
       { zone: 'long_lived', code: 0 },
       { zone: 'interactive', code: 0 },
     ]);
+  });
+
+  it('routes emitCommandResult through stdout admission', () => {
+    const stdout: string[] = [];
+    const originalLog = console.log;
+    console.log = (line?: unknown) => {
+      stdout.push(String(line));
+    };
+    try {
+      emitCommandResult({ status: 'ok' }, 'json');
+    } finally {
+      console.log = originalLog;
+    }
+    expect(JSON.parse(stdout[0] ?? '{}')).toEqual({ status: 'ok' });
+  });
+
+  it('routes finite failure through stderr and finite exit admission', () => {
+    const stderr: string[] = [];
+    const originalError = console.error;
+    console.error = (line?: unknown) => {
+      stderr.push(String(line));
+    };
+    try {
+      expect(() =>
+        emitFiniteCommandFailure('failed before envelope', {
+          exitCode: 7,
+          exit: (code): never => {
+            throw new Error(`exit:${code}`);
+          },
+        }),
+      ).toThrow('exit:7');
+    } finally {
+      console.error = originalError;
+    }
+    expect(stderr).toEqual(['failed before envelope']);
+  });
+
+  it('routes finite command result failure through finite exit admission', () => {
+    const stdout: string[] = [];
+    const originalLog = console.log;
+    console.log = (line?: unknown) => {
+      stdout.push(String(line));
+    };
+    try {
+      expect(() =>
+        emitFiniteCommandResult(
+          { exitCode: 9, result: { status: 'failed' } },
+          {
+            format: 'json',
+            exit: (code): never => {
+              throw new Error(`exit:${code}`);
+            },
+          },
+        ),
+      ).toThrow('exit:9');
+    } finally {
+      console.log = originalLog;
+    }
+    expect(JSON.parse(stdout[0] ?? '{}')).toEqual({ status: 'failed' });
+  });
+
+  it('routes formatter-backed stdout and stderr through admission', () => {
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const originalLog = console.log;
+    const originalError = console.error;
+    console.log = (line?: unknown) => {
+      stdout.push(String(line));
+    };
+    console.error = (line?: unknown) => {
+      stderr.push(String(line));
+    };
+    try {
+      emitFormatterBackedCommandResult(
+        { exitCode: 0, result: { status: 'ok', _formatted: 'human ok' } },
+        { format: 'human' },
+      );
+      expect(() =>
+        emitFormatterBackedCommandResult(
+          { exitCode: 5, result: { error: 'human failed' } },
+          {
+            format: 'human',
+            exit: (code): never => {
+              throw new Error(`exit:${code}`);
+            },
+          },
+        ),
+      ).toThrow('exit:5');
+    } finally {
+      console.log = originalLog;
+      console.error = originalError;
+    }
+    expect(stdout).toEqual(['human ok']);
+    expect(stderr).toEqual(['human failed']);
   });
 });
