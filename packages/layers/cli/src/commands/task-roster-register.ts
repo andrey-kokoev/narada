@@ -1,5 +1,6 @@
 import type { Command } from 'commander';
 import {
+  taskRosterAddCommand,
   taskRosterAssignCommand,
   taskRosterDoneCommand,
   taskRosterIdleCommand,
@@ -26,6 +27,22 @@ export function registerTaskRosterCommands(taskCmd: Command): void {
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(),
         verbose: opts.verbose as boolean | undefined,
+      }),
+    }));
+
+  rosterCmd
+    .command('add <agent-id>')
+    .description('Add an agent to the roster projection')
+    .option('--role <role>', 'Agent role', 'implementer')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .action(directCommandAction<[string, Record<string, unknown>]>({
+      command: 'task roster add',
+      emit: emitCommandResult,
+      invocation: (agentId, opts) => taskRosterAddCommand({
+        agent: agentId,
+        role: opts.role as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(),
       }),
     }));
 

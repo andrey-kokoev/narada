@@ -42,6 +42,12 @@ export type InboxPromotionTargetKind =
   | 'site_config_change'
   | 'archive';
 
+export type InboxPromotionEnactmentStatus =
+  | 'enacted'
+  | 'recorded'
+  | 'pending'
+  | 'unsupported';
+
 export interface InboxSourceRef {
   kind: InboxSourceKind;
   ref: string;
@@ -60,6 +66,10 @@ export interface InboxPromotion {
   target_ref: string;
   promoted_at: string;
   promoted_by: string;
+  enactment_status?: InboxPromotionEnactmentStatus;
+  target_command?: string;
+  target_result?: unknown;
+  note?: string;
 }
 
 export interface InboxEnvelope<TPayload = unknown> {

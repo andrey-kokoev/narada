@@ -49,4 +49,28 @@ describe('SqliteInboxStore', () => {
     expect(promoted.payload).toEqual(payload);
     expect(store!.list({ status: 'promoted', limit: 10 })).toHaveLength(1);
   });
+
+  it('archives envelopes without marking them promoted', () => {
+    store!.insert({
+      envelope_id: 'env_archive',
+      received_at: '2026-04-26T22:32:00.000Z',
+      source: { kind: 'cli', ref: 'manual' },
+      kind: 'observation',
+      authority: { level: 'user_statement' },
+      payload: { note: 'No follow-up needed' },
+    });
+
+    const archived = store!.archive('env_archive', {
+      target_kind: 'archive',
+      target_ref: 'archive:env_archive',
+      promoted_at: '2026-04-26T22:33:00.000Z',
+      promoted_by: 'operator',
+      enactment_status: 'recorded',
+    });
+
+    expect(archived.status).toBe('archived');
+    expect(archived.promotion?.target_kind).toBe('archive');
+    expect(store!.list({ status: 'archived', limit: 10 })).toHaveLength(1);
+    expect(store!.list({ status: 'received', limit: 10 })).toHaveLength(0);
+  });
 });

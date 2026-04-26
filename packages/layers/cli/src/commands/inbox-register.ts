@@ -77,9 +77,9 @@ export function registerInboxCommands(program: Command): void {
 
   inboxCmd
     .command('promote <envelope-id>')
-    .description('Record governed promotion metadata for an inbox envelope')
+    .description('Promote an inbox envelope across a governed target crossing')
     .requiredOption('--target-kind <kind>', 'Promotion target kind')
-    .requiredOption('--target-ref <ref>', 'Promotion target reference')
+    .option('--target-ref <ref>', 'Promotion target reference')
     .requiredOption('--by <principal>', 'Principal recording promotion')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')

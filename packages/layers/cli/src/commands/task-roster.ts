@@ -8,6 +8,7 @@
 import { resolve } from 'node:path';
 import {
   loadRoster,
+  saveRoster,
   updateAgentRosterEntry,
   formatRoster,
   listReportsForTask,
@@ -49,6 +50,10 @@ export interface TaskRosterAssignOptions extends TaskRosterOptions {
 
 export interface TaskRosterAgentOptions extends TaskRosterOptions {
   agent: string;
+}
+
+export interface TaskRosterAddOptions extends TaskRosterAgentOptions {
+  role?: string;
 }
 
 export async function taskRosterShowCommand(
@@ -94,6 +99,67 @@ export async function taskRosterShowCommand(
     exitCode: ExitCode.SUCCESS,
     result: lines.join('\n'),
   };
+}
+
+export async function taskRosterAddCommand(
+  options: TaskRosterAddOptions,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
+  const agentId = options.agent.trim();
+  if (!agentId) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: { status: 'error', error: 'Agent ID is required' },
+    };
+  }
+
+  try {
+    const roster = await loadRoster(cwd);
+    const existing = roster.agents.find((agent) => agent.agent_id === agentId);
+    if (existing) {
+      return {
+        exitCode: ExitCode.SUCCESS,
+        result: {
+          status: 'ok',
+          agent: agentId,
+          agent_status: existing.status ?? 'idle',
+          already_exists: true,
+          roster_updated_at: roster.updated_at,
+        },
+      };
+    }
+
+    const now = new Date().toISOString();
+    roster.agents.push({
+      agent_id: agentId,
+      role: options.role ?? 'implementer',
+      capabilities: ['derive', 'propose', 'claim', 'execute', 'resolve', 'confirm'],
+      first_seen_at: now,
+      last_active_at: now,
+      status: 'idle',
+      task: null,
+      last_done: null,
+      updated_at: now,
+    });
+    await saveRoster(cwd, roster);
+
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: {
+        status: 'ok',
+        agent: agentId,
+        agent_status: 'idle',
+        role: options.role ?? 'implementer',
+        roster_updated_at: roster.updated_at,
+      },
+    };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: { status: 'error', error: msg },
+    };
+  }
 }
 
 export async function taskRosterAssignCommand(

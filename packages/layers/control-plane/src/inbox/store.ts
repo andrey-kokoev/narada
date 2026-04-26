@@ -15,6 +15,7 @@ export interface InboxStore {
   get(envelopeId: string): InboxEnvelope | null;
   list(options?: { status?: InboxEnvelopeStatus; limit?: number }): InboxEnvelope[];
   promote(envelopeId: string, promotion: InboxPromotion): InboxEnvelope;
+  archive(envelopeId: string, promotion: InboxPromotion): InboxEnvelope;
   close(): void;
 }
 
@@ -92,6 +93,24 @@ export class SqliteInboxStore implements InboxStore {
       where envelope_id = ?
     `).run(promoted.status, JSON.stringify(promoted.promotion), envelopeId);
     return promoted;
+  }
+
+  archive(envelopeId: string, promotion: InboxPromotion): InboxEnvelope {
+    const existing = this.get(envelopeId);
+    if (!existing) {
+      throw new Error(`Inbox envelope not found: ${envelopeId}`);
+    }
+    const archived: InboxEnvelope = {
+      ...existing,
+      status: 'archived',
+      promotion,
+    };
+    this.db.prepare(`
+      update inbox_envelopes
+      set status = ?, promotion_json = ?
+      where envelope_id = ?
+    `).run(archived.status, JSON.stringify(archived.promotion), envelopeId);
+    return archived;
   }
 
   close(): void {

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import {
   type InboxAuthorityLevel,
+  type InboxEnvelope,
   type InboxEnvelopeKind,
   type InboxEnvelopeStatus,
   type InboxPromotionTargetKind,
@@ -10,6 +11,7 @@ import {
 } from '@narada2/control-plane';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
+import { taskCreateCommand } from './task-create.js';
 
 export interface InboxCommandOptions {
   cwd?: string;
@@ -53,7 +55,7 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
   const payload = parsePayload(options.payload);
   if (payload instanceof Error) return errorResult(payload.message);
 
-  return withInboxStore(options, (store) => {
+  return withInboxStoreAsync(options, async (store) => {
     const envelope = store.insert({
       envelope_id: `env_${randomUUID()}`,
       received_at: new Date().toISOString(),
@@ -81,7 +83,7 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
 export async function inboxListCommand(options: InboxListOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
   const status = options.status ? parseStatus(options.status) : undefined;
   if (options.status && !status) return errorResult(`Invalid status: ${options.status}`);
-  return withInboxStore(options, (store) => {
+  return withInboxStoreAsync(options, async (store) => {
     const envelopes = store.list({ status, limit: options.limit });
     return okResult(
       { status: 'success', count: envelopes.length, envelopes },
@@ -97,7 +99,7 @@ export async function inboxListCommand(options: InboxListOptions): Promise<{ exi
 
 export async function inboxShowCommand(options: InboxShowOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
   if (!options.envelopeId) return errorResult('Missing envelope ID');
-  return withInboxStore(options, (store) => {
+  return withInboxStoreAsync(options, async (store) => {
     const envelope = store.get(options.envelopeId!);
     if (!envelope) return errorResult(`Inbox envelope not found: ${options.envelopeId}`);
     return okResult(
@@ -117,22 +119,107 @@ export async function inboxShowCommand(options: InboxShowOptions): Promise<{ exi
 
 export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
   const targetKind = parsePromotionTargetKind(options.targetKind);
-  if (!options.envelopeId || !targetKind || !options.targetRef || !options.by) {
-    return errorResult('Missing or invalid envelope ID, --target-kind, --target-ref, or --by');
+  if (!options.envelopeId || !targetKind || !options.by) {
+    return errorResult('Missing or invalid envelope ID, --target-kind, or --by');
   }
-  return withInboxStore(options, (store) => {
+  if (targetKind !== 'archive' && !options.targetRef) {
+    return errorResult('Missing --target-ref for non-archive promotion');
+  }
+  return withInboxStoreAsync(options, async (store) => {
+    const existing = store.get(options.envelopeId!);
+    if (!existing) return errorResult(`Inbox envelope not found: ${options.envelopeId}`);
+    if (existing.promotion?.target_kind === targetKind) {
+      return okResult(
+        {
+          status: 'success',
+          already_promoted: true,
+          enactment_status: existing.promotion.enactment_status ?? 'recorded',
+          envelope: existing,
+        },
+        [
+          `Inbox envelope already promoted: ${existing.envelope_id}`,
+          `Target: ${existing.promotion.target_kind}:${existing.promotion.target_ref}`,
+          `Enactment: ${existing.promotion.enactment_status ?? 'recorded'}`,
+        ],
+        options.format,
+      );
+    }
+
     try {
+      if (targetKind === 'archive') {
+        const envelope = store.archive(options.envelopeId!, {
+          target_kind: 'archive',
+          target_ref: options.targetRef ?? `archive:${options.envelopeId}`,
+          promoted_at: new Date().toISOString(),
+          promoted_by: options.by!,
+          enactment_status: 'recorded',
+          note: 'Envelope archived; no target-zone mutation was performed.',
+        });
+        return okResult(
+          {
+            status: 'success',
+            enactment_status: 'recorded',
+            target_mutation: false,
+            envelope,
+          },
+          [
+            `Inbox envelope archived: ${envelope.envelope_id}`,
+            'Target mutation: none',
+            `Promoted by: ${options.by}`,
+          ],
+          options.format,
+        );
+      }
+
+      if (targetKind === 'task') {
+        const taskResult = await createTaskFromEnvelope(existing, options);
+        if (taskResult.exitCode !== ExitCode.SUCCESS) return taskResult;
+        const task = taskResult.result as { task_number: number; task_id: string };
+        const envelope = store.promote(options.envelopeId!, {
+          target_kind: 'task',
+          target_ref: `task:${task.task_number}`,
+          promoted_at: new Date().toISOString(),
+          promoted_by: options.by!,
+          enactment_status: 'enacted',
+          target_command: 'task create',
+          target_result: taskResult.result,
+        });
+        return okResult(
+          {
+            status: 'success',
+            enactment_status: 'enacted',
+            target_mutation: true,
+            target: taskResult.result,
+            envelope,
+          },
+          [
+            `Inbox envelope promoted: ${envelope.envelope_id}`,
+            `Created task: ${task.task_number}`,
+            `Promoted by: ${options.by}`,
+          ],
+          options.format,
+        );
+      }
+
       const envelope = store.promote(options.envelopeId!, {
         target_kind: targetKind,
         target_ref: options.targetRef!,
         promoted_at: new Date().toISOString(),
         promoted_by: options.by!,
+        enactment_status: 'pending',
+        note: `Executable promotion for target kind '${targetKind}' is not implemented yet.`,
       });
       return okResult(
-        { status: 'success', envelope },
+        {
+          status: 'success',
+          enactment_status: 'pending',
+          target_mutation: false,
+          envelope,
+        },
         [
           `Inbox envelope promoted: ${envelope.envelope_id}`,
           `Target: ${targetKind}:${options.targetRef}`,
+          'Enactment: pending',
           `Promoted by: ${options.by}`,
         ],
         options.format,
@@ -144,6 +231,37 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
   });
 }
 
+async function createTaskFromEnvelope(
+  envelope: InboxEnvelope,
+  options: InboxPromoteOptions,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  if (envelope.kind !== 'task_candidate' && envelope.kind !== 'upstream_task_candidate') {
+    return errorResult(`Envelope kind '${envelope.kind}' cannot be enacted as task`);
+  }
+
+  const payload = asRecord(envelope.payload);
+  const title = stringField(payload, 'title')
+    ?? stringField(payload, 'summary')
+    ?? options.targetRef
+    ?? `Inbox envelope ${envelope.envelope_id}`;
+  const goal = stringField(payload, 'goal')
+    ?? stringField(payload, 'description')
+    ?? `Promoted from inbox envelope ${envelope.envelope_id}.`;
+  const criteria = stringArrayField(payload, 'acceptance_criteria')
+    ?? stringArrayField(payload, 'criteria')
+    ?? [`Inbox envelope ${envelope.envelope_id} has been handled.`];
+
+  return taskCreateCommand({
+    cwd: options.cwd,
+    title,
+    goal,
+    criteria,
+    chapter: stringField(payload, 'chapter') ?? 'Canonical Inbox Promotions',
+    dependsOn: numberArrayCsvField(payload, 'depends_on'),
+    format: 'json',
+  });
+}
+
 function withInboxStore(
   options: InboxCommandOptions,
   run: (store: SqliteInboxStore) => { exitCode: ExitCode; result: unknown },
@@ -152,6 +270,19 @@ function withInboxStore(
   const store = new SqliteInboxStore(join(options.cwd ?? process.cwd(), '.ai', 'inbox.db'));
   try {
     return run(store);
+  } finally {
+    store.close();
+  }
+}
+
+async function withInboxStoreAsync(
+  options: InboxCommandOptions,
+  run: (store: SqliteInboxStore) => Promise<{ exitCode: ExitCode; result: unknown }>,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  if (options.store) return run(options.store);
+  const store = new SqliteInboxStore(join(options.cwd ?? process.cwd(), '.ai', 'inbox.db'));
+  try {
+    return await run(store);
   } finally {
     store.close();
   }
@@ -193,6 +324,31 @@ function parseStatus(value: string | undefined): InboxEnvelopeStatus | undefined
 
 function parsePromotionTargetKind(value: string | undefined): InboxPromotionTargetKind | undefined {
   return oneOf(value, ['task', 'decision', 'operator_action', 'knowledge_entry', 'site_config_change', 'archive']);
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function stringField(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function stringArrayField(record: Record<string, unknown>, key: string): string[] | undefined {
+  const value = record[key];
+  if (!Array.isArray(value)) return undefined;
+  const strings = value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+  return strings.length > 0 ? strings.map((item) => item.trim()) : undefined;
+}
+
+function numberArrayCsvField(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  if (!Array.isArray(value)) return undefined;
+  const numbers = value
+    .map((item) => typeof item === 'number' ? item : Number(item))
+    .filter((item) => Number.isInteger(item) && item > 0);
+  return numbers.length > 0 ? numbers.join(',') : undefined;
 }
 
 function oneOf<T extends string>(value: string | undefined, allowed: readonly T[]): T | undefined {

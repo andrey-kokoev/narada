@@ -33,6 +33,7 @@ import {
   taskRosterReviewCommand,
   taskRosterDoneCommand,
   taskRosterIdleCommand,
+  taskRosterAddCommand,
 } from '../../src/commands/task-roster.js';
 import {
   loadRoster,
@@ -654,6 +655,32 @@ describe('task roster operator', () => {
       expect(entry?.status).toBe('idle');
       expect(entry?.task).toBeNull();
       expect(entry?.last_done).toBe(385); // preserved
+    });
+  });
+
+  describe('add', () => {
+    it('adds a new idle agent to the roster', async () => {
+      const result = await taskRosterAddCommand({
+        agent: 'architect',
+        role: 'implementer',
+        cwd: tempDir,
+        format: 'json',
+      });
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      expect(result.result).toMatchObject({
+        status: 'ok',
+        agent: 'architect',
+        agent_status: 'idle',
+      });
+
+      const roster = await loadRoster(tempDir);
+      const entry = roster.agents.find((agent) => agent.agent_id === 'architect');
+      expect(entry).toMatchObject({
+        role: 'implementer',
+        status: 'idle',
+        task: null,
+      });
     });
   });
 
