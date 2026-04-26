@@ -10,10 +10,12 @@ import { generateRecommendations, type TaskRecommendation, type CandidateAssignm
 import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import { attachFormattedOutput } from '../lib/cli-output.js';
 import {
   recallAcceptedLearning,
   formatGuidanceForHumans,
   formatGuidanceForJson,
+  type LearningGuidance,
 } from '../lib/learning-recall.js';
 import { loadRoster } from '../lib/task-governance.js';
 import { loadPosture, type CCCPosture } from './posture.js';
@@ -187,6 +189,76 @@ function boundRecommendationOutput(
   };
 }
 
+function formatHumanRecommendationOutput(options: {
+  recommendation: TaskRecommendation;
+  limit: number;
+  postureWarning: string | null;
+  postureReasons: string[];
+  guidance: LearningGuidance[];
+  verbose?: boolean;
+}): string {
+  const { recommendation, limit, postureWarning, postureReasons, guidance, verbose } = options;
+  const lines: string[] = [];
+
+  if (postureWarning) {
+    lines.push(postureWarning);
+    lines.push('');
+  }
+
+  if (recommendation.primary) {
+    lines.push(`Top recommendation: ${recommendation.primary.task_id} -> ${recommendation.primary.principal_id}`);
+    lines.push(`  Score: ${recommendation.primary.score} (confidence: ${recommendation.primary.confidence})`);
+    lines.push(`  ${recommendation.primary.rationale}`);
+  } else {
+    lines.push('No recommendations available.');
+  }
+
+  if (postureReasons.length > 0) {
+    lines.push('');
+    lines.push('Posture adjustments:');
+    for (const reason of postureReasons) {
+      lines.push(`  ${reason}`);
+    }
+  }
+
+  if (recommendation.alternatives.length > 0) {
+    lines.push('');
+    lines.push(`Alternatives (${recommendation.alternatives.length}):`);
+    for (const alt of recommendation.alternatives.slice(0, limit)) {
+      lines.push(`  ${alt.task_id} -> ${alt.principal_id} (score: ${alt.score}, ${alt.confidence})`);
+    }
+    if (recommendation.alternatives_truncated) {
+      lines.push('  Alternatives truncated; pass --full for the complete diagnostic list.');
+    }
+  }
+
+  if (recommendation.abstained.length > 0) {
+    const total = recommendation.abstained_total ?? recommendation.abstained.length;
+    lines.push('');
+    lines.push(`Abstained (${recommendation.abstained.length}/${total} shown):`);
+    for (const abs of recommendation.abstained) {
+      const blockedDetail = abs.blocked_by && abs.blocked_by.length > 0
+        ? `: ${abs.blocked_by.join(', ')}`
+        : '';
+      const agentDetail = abs.blocked_by_agents && abs.blocked_by_agents.length > 0
+        ? ` [${abs.blocked_by_agents.map((b) => `${b.task_number}->${b.agent_id}`).join(', ')}]`
+        : '';
+      lines.push(`  ${abs.task_id}: ${abs.reason}${blockedDetail}${agentDetail}`);
+    }
+    if (recommendation.abstained_truncated) {
+      lines.push('  Abstentions truncated; pass --full for the complete diagnostic list.');
+    }
+  }
+
+  if (verbose && guidance.length > 0) {
+    lines.push('');
+    lines.push('Active guidance:');
+    lines.push(...formatGuidanceForHumans(guidance));
+  }
+
+  return lines.join('\n');
+}
+
 export async function taskRecommendCommand(
   options: TaskRecommendOptions,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
@@ -280,76 +352,26 @@ export async function taskRecommendCommand(
       full: options.full,
     });
 
-    if (fmt.getFormat() === 'json') {
-      const result: Record<string, unknown> = {
-        ...outputRecommendation,
-        guidance: formatGuidanceForJson(guidance),
-      };
-      if (postureWarning) result.posture_warning = postureWarning;
-      if (postureReasons.length > 0) result.posture_adjustments = postureReasons;
-      return {
-        exitCode: outputRecommendation.primary ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
-        result,
-      };
-    }
-
-    // Human-readable output
-    if (postureWarning) {
-      fmt.message(postureWarning, 'warning');
-    }
-
-    if (outputRecommendation.primary) {
-      fmt.message(`Top recommendation: ${outputRecommendation.primary.task_id} → ${outputRecommendation.primary.principal_id}`, 'success');
-      fmt.message(`  Score: ${outputRecommendation.primary.score} (confidence: ${outputRecommendation.primary.confidence})`, 'info');
-      fmt.message(`  ${outputRecommendation.primary.rationale}`, 'info');
-    } else {
-      fmt.message('No recommendations available.', 'warning');
-    }
-
-    if (postureReasons.length > 0) {
-      fmt.message('\nPosture adjustments:', 'info');
-      for (const reason of postureReasons) {
-        fmt.message(`  ${reason}`, 'info');
-      }
-    }
-
-    if (outputRecommendation.alternatives.length > 0) {
-      fmt.message(`\nAlternatives (${outputRecommendation.alternatives.length}):`, 'info');
-      for (const alt of outputRecommendation.alternatives.slice(0, limit)) {
-        fmt.message(`  ${alt.task_id} → ${alt.principal_id} (score: ${alt.score}, ${alt.confidence})`, 'info');
-      }
-      if (outputRecommendation.alternatives_truncated) {
-        fmt.message('  Alternatives truncated; pass --full for the complete diagnostic list.', 'info');
-      }
-    }
-
-    if (outputRecommendation.abstained.length > 0) {
-      const total = outputRecommendation.abstained_total ?? outputRecommendation.abstained.length;
-      fmt.message(`\nAbstained (${outputRecommendation.abstained.length}/${total} shown):`, 'warning');
-      for (const abs of outputRecommendation.abstained) {
-        const blockedDetail = abs.blocked_by && abs.blocked_by.length > 0
-          ? `: ${abs.blocked_by.join(', ')}`
-          : '';
-        const agentDetail = abs.blocked_by_agents && abs.blocked_by_agents.length > 0
-          ? ` [${abs.blocked_by_agents.map((b) => `${b.task_number}→${b.agent_id}`).join(', ')}]`
-          : '';
-        fmt.message(`  ${abs.task_id}: ${abs.reason}${blockedDetail}${agentDetail}`, 'warning');
-      }
-      if (outputRecommendation.abstained_truncated) {
-        fmt.message('  Abstentions truncated; pass --full for the complete diagnostic list.', 'warning');
-      }
-    }
-
-    if (options.verbose && guidance.length > 0) {
-      fmt.message('\nActive guidance:', 'info');
-      for (const line of formatGuidanceForHumans(guidance)) {
-        fmt.message(line, 'info');
-      }
-    }
-
+    const result: Record<string, unknown> = {
+      ...outputRecommendation,
+      guidance: formatGuidanceForJson(guidance),
+    };
+    if (postureWarning) result.posture_warning = postureWarning;
+    if (postureReasons.length > 0) result.posture_adjustments = postureReasons;
     return {
       exitCode: outputRecommendation.primary ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
-      result: outputRecommendation,
+      result: attachFormattedOutput(
+        result,
+        formatHumanRecommendationOutput({
+          recommendation: outputRecommendation,
+          limit,
+          postureWarning,
+          postureReasons,
+          guidance,
+          verbose: options.verbose,
+        }),
+        fmt.getFormat(),
+      ),
     };
   } catch (err) {
     return {

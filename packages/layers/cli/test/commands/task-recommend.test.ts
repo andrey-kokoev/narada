@@ -654,27 +654,19 @@ describe('task recommend operator', () => {
   });
 
   it('human default output is terse and omits guidance', async () => {
-    const logs: string[] = [];
-    const spy = vi.spyOn(console, 'log').mockImplementation((msg: string) => { logs.push(msg); });
-
     const result = await taskRecommendCommand({ cwd: tempDir, format: 'human' });
 
-    spy.mockRestore();
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    const hasGuidance = logs.some((l) => l.includes('Active guidance:'));
-    expect(hasGuidance).toBe(false);
+    const formatted = (result.result as { _formatted?: string })._formatted ?? '';
+    expect(formatted.includes('Active guidance:')).toBe(false);
   });
 
   it('human verbose output includes guidance', async () => {
-    const logs: string[] = [];
-    const spy = vi.spyOn(console, 'log').mockImplementation((msg: string) => { logs.push(msg); });
-
     const result = await taskRecommendCommand({ cwd: tempDir, format: 'human', verbose: true });
 
-    spy.mockRestore();
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    const hasGuidance = logs.some((l) => l.includes('Active guidance:'));
-    expect(hasGuidance).toBe(true);
+    const formatted = (result.result as { _formatted?: string })._formatted ?? '';
+    expect(formatted.includes('Active guidance:')).toBe(true);
   });
 
   it('excludes chapter range files from recommendation candidates', async () => {
@@ -853,22 +845,15 @@ describe('task recommend operator', () => {
     );
     setLifecycleStatus(tempDir, 999, 'claimed');
 
-    const logs: string[] = [];
-    const logSpy = vi.spyOn(console, 'log').mockImplementation((msg: string) => { logs.push(msg); });
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
     const result = await taskRecommendCommand({ cwd: tempDir, format: 'human' });
 
-    logSpy.mockRestore();
-    errorSpy.mockRestore();
-
     expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
-    const rec = result.result as { primary: null; abstained: unknown[] };
+    const rec = result.result as { primary: null; abstained: unknown[]; _formatted?: string };
     expect(rec.primary).toBeNull();
     // Should report empty honestly, not as a failure
-    expect(logs.some((l) => l.includes('No recommendations available.'))).toBe(true);
+    expect(rec._formatted?.includes('No recommendations available.')).toBe(true);
     // Should NOT print the misleading failure message
-    expect(logs.some((l) => l.includes('Recommendation failed'))).toBe(false);
+    expect(rec._formatted?.includes('Recommendation failed')).toBe(false);
   });
 
   it('reports actual command failure as failure', async () => {

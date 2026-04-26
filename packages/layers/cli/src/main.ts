@@ -128,7 +128,7 @@ import {
   observationListCommand,
   observationOpenCommand,
 } from './commands/observation.js';
-import { runDirectCommand, runDirectCommandWithResource, wrapCommand, type CommandContext } from './lib/command-wrapper.js';
+import { directCommandAction, runDirectCommand, runDirectCommandWithResource, wrapCommand, type CommandContext } from './lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from './lib/cli-output.js';
 import {
   wantMailbox,
@@ -817,9 +817,11 @@ taskCmd
   .option('--format <fmt>', 'Output format: json or human')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
   .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
-  .action(async (opts: Record<string, unknown>) => {
-    const wantsJson = opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json';
-    const result = await taskRecommendCommand({
+  .action(directCommandAction<[Record<string, unknown>]>({
+    command: 'task recommend',
+    emit: emitCommandResult,
+    format: (opts: Record<string, unknown>) => opts.format,
+    invocation: (opts) => taskRecommendCommand({
       taskNumber: opts.task as string | undefined,
       agent: opts.agent as string | undefined,
       limit: opts.limit ? Number(opts.limit) : undefined,
@@ -829,35 +831,8 @@ taskCmd
       cwd: opts.cwd as string | undefined,
       format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
       verbose: opts.verbose as boolean | undefined,
-    });
-    if (result.exitCode !== 0) {
-      const resultObj = result.result as Record<string, unknown>;
-      if (resultObj.error) {
-        // Actual runtime error
-        if (wantsJson) {
-          console.log(JSON.stringify(result.result, null, 2));
-        } else {
-          console.error(resultObj.error);
-        }
-        process.exit(result.exitCode);
-      }
-      // Valid empty recommendation (no primary) — not a failure
-      if (resultObj.primary === null) {
-        const fmt = process.env.OUTPUT_FORMAT as string | undefined;
-        const isJson = wantsJson || (fmt !== 'human' && !process.stdout.isTTY);
-        if (isJson) {
-          console.log(JSON.stringify(result.result, null, 2));
-        }
-        // Human mode already printed "No recommendations available." in the command
-        process.exit(result.exitCode);
-      }
-      console.error('Recommendation failed');
-      process.exit(result.exitCode);
-    }
-    if (wantsJson) {
-      console.log(JSON.stringify(result.result, null, 2));
-    }
-  });
+    }),
+  }));
 
 registerTaskAuthoringCommands(taskCmd);
 
@@ -1081,27 +1056,16 @@ taskCmd
   .requiredOption('--agent <id>', 'Agent ID')
   .option('--format <fmt>', 'Output format: json or human', 'human')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (opts: Record<string, unknown>) => {
-    const wantsJson = opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json';
-    const result = await taskPeekNextCommand({
+  .action(directCommandAction<[Record<string, unknown>]>({
+    command: 'task peek-next',
+    emit: emitCommandResult,
+    format: (opts: Record<string, unknown>) => opts.format,
+    invocation: (opts) => taskPeekNextCommand({
       agent: opts.agent as string,
       format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
       cwd: opts.cwd as string | undefined,
-    });
-    if (result.exitCode !== 0) {
-      if (wantsJson) {
-        console.log(JSON.stringify(result.result, null, 2));
-      } else {
-        console.error((result.result as { error?: string }).error ?? 'Peek-next failed');
-      }
-      process.exit(result.exitCode);
-    }
-    if (wantsJson) {
-      console.log(JSON.stringify(result.result, null, 2));
-    } else {
-      console.log(result.result);
-    }
-  });
+    }),
+  }));
 
 taskCmd
   .command('pull-next')
@@ -1109,27 +1073,16 @@ taskCmd
   .requiredOption('--agent <id>', 'Agent ID')
   .option('--format <fmt>', 'Output format: json or human', 'human')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (opts: Record<string, unknown>) => {
-    const wantsJson = opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json';
-    const result = await taskPullNextCommand({
+  .action(directCommandAction<[Record<string, unknown>]>({
+    command: 'task pull-next',
+    emit: emitCommandResult,
+    format: (opts: Record<string, unknown>) => opts.format,
+    invocation: (opts) => taskPullNextCommand({
       agent: opts.agent as string,
       format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
       cwd: opts.cwd as string | undefined,
-    });
-    if (result.exitCode !== 0) {
-      if (wantsJson) {
-        console.log(JSON.stringify(result.result, null, 2));
-      } else {
-        console.error((result.result as { error?: string }).error ?? 'Pull-next failed');
-      }
-      process.exit(result.exitCode);
-    }
-    if (wantsJson) {
-      console.log(JSON.stringify(result.result, null, 2));
-    } else {
-      console.log(result.result);
-    }
-  });
+    }),
+  }));
 
 taskCmd
   .command('work-next')
@@ -1137,27 +1090,16 @@ taskCmd
   .requiredOption('--agent <id>', 'Agent ID')
   .option('--format <fmt>', 'Output format: json or human', 'human')
   .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (opts: Record<string, unknown>) => {
-    const wantsJson = opts.format === 'json' || process.env.OUTPUT_FORMAT === 'json';
-    const result = await taskWorkNextCommand({
+  .action(directCommandAction<[Record<string, unknown>]>({
+    command: 'task work-next',
+    emit: emitCommandResult,
+    format: (opts: Record<string, unknown>) => opts.format,
+    invocation: (opts) => taskWorkNextCommand({
       agent: opts.agent as string,
       format: (opts.format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
       cwd: opts.cwd as string | undefined,
-    });
-    if (result.exitCode !== 0) {
-      if (wantsJson) {
-        console.log(JSON.stringify(result.result, null, 2));
-      } else {
-        console.error((result.result as { error?: string }).error ?? 'Work-next failed');
-      }
-      process.exit(result.exitCode);
-    }
-    if (wantsJson) {
-      console.log(JSON.stringify(result.result, null, 2));
-    } else {
-      console.log(result.result);
-    }
-  });
+    }),
+  }));
 
 taskCmd
   .command('dispatch <action>')
