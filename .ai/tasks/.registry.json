@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_allocated": 595,
+  "last_allocated": 596,
   "reserved": [
     471,
     472,
@@ -427,6 +427,15 @@
       "reserved_at": "2026-04-26T20:29:59.259Z",
       "expires_at": "2026-04-27T20:29:59.259Z",
       "status": "active"
+    },
+    {
+      "range_start": 596,
+      "range_end": 596,
+      "purpose": "Chapter: Windows User Site Doctor",
+      "reserved_by": "chapter-create",
+      "reserved_at": "2026-04-26T20:37:42.685Z",
+      "expires_at": "2026-04-27T20:37:42.685Z",
+      "status": "released"
     }
   ]
 }

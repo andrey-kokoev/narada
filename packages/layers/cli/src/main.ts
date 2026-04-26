@@ -18,6 +18,7 @@ import {
   sitesDiscoverCommand,
   sitesShowCommand,
   sitesRemoveCommand,
+  sitesDoctorCommand,
   sitesInitCommand,
   sitesEnableCommand,
 } from './commands/sites.js';
@@ -359,6 +360,32 @@ sitesCmd
       // human output already printed by formatter
     } else {
       console.log(JSON.stringify(result.result, null, 2));
+    }
+  });
+
+sitesCmd
+  .command('doctor <site-id>')
+  .description('Validate Site root posture, registry, and lifecycle state')
+  .option('--root <path>', 'Override Site root directory')
+  .option('--authority-locus <locus>', 'Windows authority locus: user or pc')
+  .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+  .option('-v, --verbose', 'Enable verbose output', false)
+  .action(async (siteId: string, opts: Record<string, unknown>) => {
+    const format = (opts.format ?? process.env.OUTPUT_FORMAT) as 'json' | 'human' | 'auto';
+    const result = await sitesDoctorCommand(siteId, {
+      root: opts.root as string | undefined,
+      authorityLocus: opts.authorityLocus as string | undefined,
+      format,
+      verbose: opts.verbose as boolean | undefined,
+    }, { configPath: './config.json', verbose: !!opts.verbose, logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, trace: () => {} } as unknown as CommandContext['logger'] });
+    const shouldPrintJson = format === 'json' || (format === 'auto' && !process.stdout.isTTY);
+    if (!shouldPrintJson) {
+      // human output already printed by formatter
+    } else {
+      console.log(JSON.stringify(result.result, null, 2));
+    }
+    if (result.exitCode !== 0) {
+      process.exit(result.exitCode);
     }
   });
 

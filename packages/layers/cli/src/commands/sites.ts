@@ -4,7 +4,8 @@
  * Site discovery and registry management commands.
  */
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { join, posix, win32 } from 'node:path';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
@@ -23,6 +24,13 @@ interface SiteListEntry {
   health: string;
   lastCycle: string | null;
   failures: number;
+}
+
+export interface SiteDoctorCheck {
+  name: string;
+  status: 'pass' | 'warn' | 'fail';
+  message: string;
+  remediation?: string;
 }
 
 async function openRegistry() {
@@ -319,6 +327,214 @@ export async function sitesRemoveCommand(
   } finally {
     registry.close();
   }
+}
+
+// ---------------------------------------------------------------------------
+// Site doctor
+// ---------------------------------------------------------------------------
+
+export interface SitesDoctorOptions extends SitesOptions {
+  root?: string;
+  authorityLocus?: string;
+}
+
+function addCheck(
+  checks: SiteDoctorCheck[],
+  name: string,
+  status: SiteDoctorCheck['status'],
+  message: string,
+  remediation?: string,
+): void {
+  checks.push({ name, status, message, remediation });
+}
+
+function normalizeNativePath(pathValue: string): string {
+  return win32.normalize(pathValue).replace(/[\\/]+$/, '').toLowerCase();
+}
+
+export async function sitesDoctorCommand(
+  siteId: string,
+  options: SitesDoctorOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
+  const checks: SiteDoctorCheck[] = [];
+  const validSyncPostures = new Set([
+    'local_only',
+    'cloud_synced_folder',
+    'git_backed',
+    'hybrid',
+    'hybrid_capable_plain_folder',
+  ]);
+
+  let siteRoot = options.root;
+  let config: Record<string, unknown> | null = null;
+  let authorityLocus = options.authorityLocus;
+
+  try {
+    const {
+      resolveWindowsSiteRootByLocus,
+      resolveRegistryDbPathByLocus,
+      openRegistryDb,
+      SiteRegistry,
+    } = await import('@narada2/windows-site');
+
+    if (!siteRoot) {
+      siteRoot = resolveWindowsSiteRootByLocus({
+        siteId,
+        variant: 'native',
+        authorityLocus: (authorityLocus ?? 'user') as 'user' | 'pc',
+      });
+    }
+
+    if (existsSync(siteRoot)) {
+      addCheck(checks, 'root_exists', 'pass', `Site root exists: ${siteRoot}`);
+    } else {
+      addCheck(checks, 'root_exists', 'fail', `Site root is missing: ${siteRoot}`, `Run narada sites init ${siteId} --substrate windows-native --authority-locus ${authorityLocus ?? 'user'}`);
+    }
+
+    const configPath = win32.join(siteRoot, 'config.json');
+    if (existsSync(configPath)) {
+      addCheck(checks, 'config_exists', 'pass', `Config exists: ${configPath}`);
+      try {
+        config = JSON.parse(await readFile(configPath, 'utf8')) as Record<string, unknown>;
+        addCheck(checks, 'config_parse', 'pass', 'Config parses as JSON');
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        addCheck(checks, 'config_parse', 'fail', `Config is not valid JSON: ${message}`);
+      }
+    } else {
+      addCheck(checks, 'config_exists', 'fail', `Config is missing: ${configPath}`, `Run narada sites init ${siteId} --substrate windows-native --authority-locus ${authorityLocus ?? 'user'}`);
+    }
+
+    if (config) {
+      const configSiteId = config.site_id;
+      if (configSiteId === siteId) {
+        addCheck(checks, 'config_site_id', 'pass', `Config site_id matches ${siteId}`);
+      } else {
+        addCheck(checks, 'config_site_id', 'fail', `Config site_id is ${String(configSiteId)}, expected ${siteId}`);
+      }
+
+      const locus = config.locus as { authority_locus?: string } | undefined;
+      authorityLocus = authorityLocus ?? locus?.authority_locus;
+      if (locus?.authority_locus === 'user' || locus?.authority_locus === 'pc') {
+        addCheck(checks, 'authority_locus', 'pass', `Authority locus is ${locus.authority_locus}`);
+      } else {
+        addCheck(checks, 'authority_locus', 'warn', 'Config does not declare a Windows authority locus', 'Add locus.authority_locus as user or pc');
+      }
+
+      if (locus?.authority_locus === 'user') {
+        const expectedRoot = resolveWindowsSiteRootByLocus({
+          siteId,
+          variant: 'native',
+          authorityLocus: 'user',
+        });
+        if (
+          normalizeNativePath(String(config.site_root)) === normalizeNativePath(expectedRoot)
+          && normalizeNativePath(siteRoot) === normalizeNativePath(expectedRoot)
+        ) {
+          addCheck(checks, 'user_root_policy', 'pass', `User-locus root follows policy: ${expectedRoot}`);
+        } else {
+          addCheck(checks, 'user_root_policy', 'fail', `User-locus root should be ${expectedRoot}; config=${String(config.site_root)} root=${siteRoot}`);
+        }
+
+        const sync = config.sync as { posture?: string } | undefined;
+        if (sync?.posture && validSyncPostures.has(sync.posture)) {
+          addCheck(checks, 'sync_posture', 'pass', `Sync posture is ${sync.posture}`);
+        } else {
+          addCheck(checks, 'sync_posture', 'fail', 'User-locus Site has no valid sync posture', 'Set sync.posture to local_only, cloud_synced_folder, git_backed, hybrid, or hybrid_capable_plain_folder');
+        }
+      }
+    }
+
+    const resolvedLocus = authorityLocus === 'pc' ? 'pc' : 'user';
+    const registryPath = resolveRegistryDbPathByLocus({
+      variant: 'native',
+      authorityLocus: resolvedLocus,
+    });
+    if (existsSync(registryPath)) {
+      addCheck(checks, 'registry_db_exists', 'pass', `Registry DB exists: ${registryPath}`);
+      try {
+        const db = await openRegistryDb(registryPath);
+        const registry = new SiteRegistry(db);
+        try {
+          const registered = registry.getSite(siteId);
+          if (registered) {
+            addCheck(checks, 'registry_entry', 'pass', `Registry has Site ${siteId}`);
+            if (normalizeNativePath(registered.siteRoot) === normalizeNativePath(siteRoot)) {
+              addCheck(checks, 'registry_root_match', 'pass', 'Registry root matches Site root');
+            } else {
+              addCheck(checks, 'registry_root_match', 'fail', `Registry root is ${registered.siteRoot}, expected ${siteRoot}`);
+            }
+          } else {
+            addCheck(checks, 'registry_entry', 'fail', `Registry DB does not contain ${siteId}`, 'Run narada sites discover or re-run sites init for this Site');
+          }
+        } finally {
+          registry.close();
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        addCheck(checks, 'registry_readable', 'fail', `Registry DB is not readable: ${message}`);
+      }
+    } else {
+      addCheck(checks, 'registry_db_exists', 'fail', `Registry DB is missing: ${registryPath}`, 'Run narada sites init or registry discovery for this locus');
+    }
+
+    const lifecycleDbPath = win32.join(siteRoot, '.ai', 'tasks', 'task-lifecycle.db');
+    if (existsSync(lifecycleDbPath)) {
+      addCheck(checks, 'task_lifecycle_db_exists', 'pass', `Task lifecycle DB exists: ${lifecycleDbPath}`);
+      try {
+        const { Database } = await import('@narada2/control-plane');
+        const db = new Database(lifecycleDbPath, { readonly: true, fileMustExist: true });
+        try {
+          const rows = db.prepare("select name from sqlite_master where type = 'table' and name in ('task_lifecycle', 'task_number_sequence')").all() as Array<{ name: string }>;
+          const names = new Set(rows.map((row) => row.name));
+          if (names.has('task_lifecycle') && names.has('task_number_sequence')) {
+            addCheck(checks, 'task_lifecycle_schema', 'pass', 'Task lifecycle schema is installed');
+          } else {
+            addCheck(checks, 'task_lifecycle_schema', 'fail', 'Task lifecycle DB is missing required tables');
+          }
+        } finally {
+          db.close();
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        addCheck(checks, 'task_lifecycle_schema', 'fail', `Task lifecycle DB is not readable: ${message}`);
+      }
+    } else {
+      addCheck(checks, 'task_lifecycle_db_exists', 'fail', `Task lifecycle DB is missing: ${lifecycleDbPath}`, 'Run narada sites init with current Windows User Site bootstrap');
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    addCheck(checks, 'doctor_runtime', 'fail', `Site doctor failed: ${message}`);
+  }
+
+  const failed = checks.filter((check) => check.status === 'fail');
+  const warned = checks.filter((check) => check.status === 'warn');
+  const health = failed.length > 0 ? 'failed' : warned.length > 0 ? 'warning' : 'passed';
+
+  if (fmt.getFormat() === 'human') {
+    fmt.section(`Site Doctor — ${siteId}`);
+    fmt.kv('Root', siteRoot ?? '-');
+    fmt.kv('Health', health);
+    for (const check of checks) {
+      const prefix = check.status === 'pass' ? '[pass]' : check.status === 'warn' ? '[warn]' : '[fail]';
+      fmt.message(`${prefix} ${check.name}: ${check.message}`, check.status === 'pass' ? 'success' : check.status === 'warn' ? 'warning' : 'error');
+      if (check.remediation && options.verbose) {
+        fmt.message(`  remediation: ${check.remediation}`, 'info');
+      }
+    }
+  }
+
+  return {
+    exitCode: failed.length > 0 ? ExitCode.GENERAL_ERROR : ExitCode.SUCCESS,
+    result: {
+      status: health,
+      siteId,
+      siteRoot,
+      checks,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------

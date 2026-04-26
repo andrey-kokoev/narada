@@ -90,6 +90,10 @@ hybrid. New configs may carry:
 The posture records how durable user files travel. It does not change which
 authority locus the Site represents.
 
+Use `narada sites doctor <site-id>` to validate a materialized User Site root.
+The doctor checks config identity, authority locus, sync posture, locus-aware
+registry path, registry entry, and `.ai/tasks/task-lifecycle.db`.
+
 ## WSL Boundaries
 
 ### Filesystem

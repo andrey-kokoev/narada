@@ -300,9 +300,11 @@ The registry is separate from Site data. Site directories live at substrate-spec
 | **WSL** | `/var/lib/narada/{site_id}` or `~/narada/{site_id}` |
 | **Linux user-mode** | `~/.local/share/narada/{site_id}` or `$XDG_DATA_HOME/narada/{site_id}` |
 | **Linux system-mode** | `/var/lib/narada/{site_id}` |
+| **Cloudflare** | Remote Worker — no local filesystem root |
 
 Discovery should treat Windows user-locus and PC-locus roots as first-class roots, not as legacy `%LOCALAPPDATA%` children. A path that merely contains the string `narada` is not a Site unless it has Site identity, configuration, or registry evidence.
-| **Cloudflare** | Remote Worker — no local filesystem root |
+
+`narada sites doctor <site-id>` is the validation surface for a local Site root. For Windows User Sites it checks root policy, config identity, declared authority locus, sync posture, registry path/entry, and task lifecycle schema before the Site is trusted as a coherent operator surface.
 
 ## 12. Operator Console HTTP API
 

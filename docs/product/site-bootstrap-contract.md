@@ -135,6 +135,7 @@ Linux system-mode v1 will add systemd `LoadCredential=`. Linux user-mode v1 will
 
 ```bash
 narada doctor --site <site-id>
+narada sites doctor <site-id>
 ```
 
 Checks:
@@ -143,6 +144,8 @@ Checks:
 - Lock is not stuck
 - Supervisor unit is registered (if applicable)
 - Health status is not critical
+
+For Windows User Sites, `narada sites doctor <site-id>` also validates the Site root posture, `locus.authority_locus`, `sync.posture`, user/PC registry path, registry entry, and `.ai/tasks/task-lifecycle.db`.
 
 A newly initialized Site will show `warn` for "no cycle recorded yet" and "no health record" — this is expected.
 
