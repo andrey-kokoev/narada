@@ -334,7 +334,7 @@ All normal transitions are command-mediated. Direct status editing in markdown o
 | `task roster add <agent-id>` | Enrolls an agent in the roster projection | No | Yes (`idle`, no task) |
 | `task roster assign <n> --agent <id>` | Assigns agent to task **and claims it by default** | Yes (status → `claimed`) | Yes (`working` + task) |
 | `task roster assign <n> --agent <id> --no-claim` | Assigns agent without claiming | No | Yes (`working` + task) |
-| `task claim <n> --agent <id>` | Claims task directly (no roster update except `last_active_at`) | Yes (status → `claimed`) | No (only timestamp) |
+| `task claim <n> --agent <id>` | Claims task directly | Yes (status → `claimed`) | Yes (`working` + task) |
 | `task roster done <n> --agent <id>` | Marks agent done only if required evidence exists | No | Yes (`done`, clears task) |
 | `task roster done <n> --agent <id> --allow-incomplete` | Records agent availability despite missing evidence | No | Yes (`done`, clears task) |
 | `task finish <n> --agent <id>` | Canonical completion: report/review → evidence → roster done | Yes (report/review) | Yes (`done`, clears task) |

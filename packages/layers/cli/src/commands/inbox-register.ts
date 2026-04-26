@@ -1,10 +1,12 @@
 import type { Command } from 'commander';
 import {
   inboxListCommand,
+  inboxNextCommand,
   inboxPromoteCommand,
   inboxShowCommand,
   inboxSubmitCommand,
   inboxTaskCommand,
+  inboxTriageCommand,
 } from './inbox.js';
 import { directCommandAction } from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
@@ -45,6 +47,7 @@ export function registerInboxCommands(program: Command): void {
     .command('list')
     .description('List Canonical Inbox envelopes')
     .option('--status <status>', 'Filter by status')
+    .option('--kind <kind>', 'Filter by envelope kind')
     .option('--limit <n>', 'Maximum envelopes', '20')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
@@ -54,6 +57,28 @@ export function registerInboxCommands(program: Command): void {
       format: (opts: Record<string, unknown>) => opts.format,
       invocation: (opts) => inboxListCommand({
         status: opts.status as string | undefined,
+        kind: opts.kind as string | undefined,
+        limit: opts.limit ? Number(opts.limit) : undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
+
+  inboxCmd
+    .command('next')
+    .description('Show the next inbox envelope without mutating it')
+    .option('--status <status>', 'Filter by status', 'received')
+    .option('--kind <kind>', 'Filter by envelope kind')
+    .option('--limit <n>', 'Maximum envelopes including alternatives', '5')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'inbox next',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => inboxNextCommand({
+        status: opts.status as string | undefined,
+        kind: opts.kind as string | undefined,
         limit: opts.limit ? Number(opts.limit) : undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
@@ -120,6 +145,36 @@ export function registerInboxCommands(program: Command): void {
       invocation: (envelopeId, opts) => inboxTaskCommand({
         envelopeId,
         by: opts.by as string | undefined,
+        title: opts.title as string | undefined,
+        goal: opts.goal as string | undefined,
+        criteria: opts.criteria as string[] | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
+
+  inboxCmd
+    .command('triage <envelope-id>')
+    .description('Handle an inbox envelope with an explicit triage action')
+    .requiredOption('--action <action>', 'Triage action: archive, task, or pending')
+    .requiredOption('--by <principal>', 'Principal recording triage')
+    .option('--target-kind <kind>', 'Pending target kind for --action pending')
+    .option('--target-ref <ref>', 'Pending target reference')
+    .option('--title <title>', 'Task title override for --action task')
+    .option('--goal <goal>', 'Task goal override for --action task')
+    .option('--criteria <text>', 'Task acceptance criterion override (repeatable)', collectValues, [])
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[string, Record<string, unknown>]>({
+      command: 'inbox triage',
+      emit: emitCommandResult,
+      format: (_envelopeId: string, opts: Record<string, unknown>) => opts.format,
+      invocation: (envelopeId, opts) => inboxTriageCommand({
+        envelopeId,
+        action: opts.action as string | undefined,
+        by: opts.by as string | undefined,
+        targetKind: opts.targetKind as string | undefined,
+        targetRef: opts.targetRef as string | undefined,
         title: opts.title as string | undefined,
         goal: opts.goal as string | undefined,
         criteria: opts.criteria as string[] | undefined,

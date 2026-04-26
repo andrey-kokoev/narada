@@ -149,12 +149,33 @@ describe('task roster operator', () => {
       const result = await taskRosterShowCommand({ cwd: tempDir, format: 'json' });
       expect(result.exitCode).toBe(ExitCode.SUCCESS);
       expect(typeof result.result).toBe('object');
-      const parsed = result.result as { roster: { agents: unknown[] }; guidance: unknown[] };
+      const parsed = result.result as { roster: { agents: unknown[] }; ownership: unknown[]; guidance: unknown[] };
       expect(parsed.roster.agents).toHaveLength(2);
+      expect(parsed.ownership).toHaveLength(0);
       expect(parsed.guidance.length).toBeGreaterThan(0);
       expect(parsed.guidance[0]).toMatchObject({
         artifact_id: '20260422-003',
       });
+    });
+
+    it('shows active assignment ownership hints', async () => {
+      writeFileSync(
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-385-test.md'),
+        '---\ntask_id: 385\nstatus: opened\n---\n\n# Task 385\n',
+      );
+      await taskRosterAssignCommand({
+        taskNumber: '385',
+        agent: 'test-agent',
+        cwd: tempDir,
+        format: 'json',
+      });
+
+      const json = await taskRosterShowCommand({ cwd: tempDir, format: 'json' });
+      const parsed = json.result as { ownership: Array<{ agent_id: string; ownership: string; task: number }> };
+      expect(parsed.ownership).toContainEqual({ agent_id: 'test-agent', ownership: 'primary', task: 385 });
+
+      const human = await taskRosterShowCommand({ cwd: tempDir, format: 'human' });
+      expect(human.result).toContain('ownership=primary');
     });
 
     it('fails with clear error when roster is missing', async () => {

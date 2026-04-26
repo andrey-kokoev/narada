@@ -7,7 +7,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskClaimCommand } from '../../src/commands/task-claim.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
-import { loadAssignment } from '../../src/lib/task-governance.js';
+import { loadAssignment, loadRoster } from '../../src/lib/task-governance.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -74,6 +74,11 @@ describe('task claim operator', () => {
     expect(assignment.assignments[0].claim_context).toBe('Testing claim');
     expect(assignment.assignments[0].released_at).toBeNull();
     expect(assignment.assignments[0].intent).toBe('primary');
+
+    const roster = await loadRoster(tempDir);
+    const agent = roster.agents.find((entry) => entry.agent_id === 'test-agent');
+    expect(agent?.status).toBe('working');
+    expect(agent?.task).toBe(999);
 
     const parsed = result.result as { assignment_intent_id: string };
     const store = openTaskLifecycleStore(tempDir);

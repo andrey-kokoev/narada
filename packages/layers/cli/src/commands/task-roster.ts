@@ -56,6 +56,14 @@ export interface TaskRosterAddOptions extends TaskRosterAgentOptions {
   role?: string;
 }
 
+interface RosterOwnershipHint {
+  agent_id: string;
+  task: number;
+  ownership: 'primary' | 'takeover' | 'continuation' | 'unknown';
+  previous_agent_id?: string | null;
+  reason?: string | null;
+}
+
 export async function taskRosterShowCommand(
   options: TaskRosterOptions,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
@@ -77,19 +85,21 @@ export async function taskRosterShowCommand(
     cwd,
     scopes: ['roster', 'task-governance'],
   });
+  const ownership = await deriveRosterOwnershipHints(cwd, roster);
 
   if (format === 'json') {
     return {
       exitCode: ExitCode.SUCCESS,
       result: {
         roster,
+        ownership,
         guidance: formatGuidanceForJson(guidance),
       },
     };
   }
 
   const lines: string[] = [];
-  lines.push(formatRoster(roster, 'human'));
+  lines.push(formatRosterWithOwnership(roster, ownership));
   if (options.verbose && guidance.length > 0) {
     lines.push('');
     lines.push('Active guidance:');
@@ -99,6 +109,48 @@ export async function taskRosterShowCommand(
     exitCode: ExitCode.SUCCESS,
     result: lines.join('\n'),
   };
+}
+
+async function deriveRosterOwnershipHints(cwd: string, roster: AgentRoster): Promise<RosterOwnershipHint[]> {
+  const hints: RosterOwnershipHint[] = [];
+  for (const agent of roster.agents) {
+    if (agent.task == null) continue;
+    const task = agent.task;
+    let ownership: RosterOwnershipHint['ownership'] = 'unknown';
+    let previousAgentId: string | null | undefined;
+    let reason: string | null | undefined;
+    const taskFiles = await findTaskFile(cwd, String(task));
+    const taskId = taskFiles?.taskId;
+    if (taskId) {
+      const assignment = await loadAssignment(cwd, taskId).catch(() => null);
+      const active = assignment?.assignments.find((entry) => entry.released_at === null && entry.agent_id === agent.agent_id);
+      const continuation = assignment?.continuations?.find((entry) => !entry.completed_at && entry.agent_id === agent.agent_id);
+      if (active) {
+        ownership = active.previous_agent_id ? 'takeover' : 'primary';
+        previousAgentId = active.previous_agent_id;
+        reason = active.continuation_reason;
+      } else if (continuation) {
+        ownership = 'continuation';
+        previousAgentId = continuation.previous_agent_id;
+        reason = continuation.reason;
+      }
+    }
+    hints.push({ agent_id: agent.agent_id, task, ownership, previous_agent_id: previousAgentId, reason });
+  }
+  return hints;
+}
+
+function formatRosterWithOwnership(roster: AgentRoster, ownership: RosterOwnershipHint[]): string {
+  const lines = formatRoster(roster, 'human').split('\n');
+  const byAgent = new Map(ownership.map((hint) => [hint.agent_id, hint]));
+  return lines.map((line) => {
+    const hint = [...byAgent.values()].find((entry) => line.includes(entry.agent_id) && line.includes(`task=${entry.task}`));
+    if (!hint) return line;
+    const suffix = hint.ownership === 'unknown'
+      ? 'ownership=unknown'
+      : `ownership=${hint.ownership}${hint.previous_agent_id ? ` from=${hint.previous_agent_id}` : ''}${hint.reason ? ` reason=${hint.reason}` : ''}`;
+    return `${line} ${suffix}`;
+  }).join('\n');
 }
 
 export async function taskRosterAddCommand(

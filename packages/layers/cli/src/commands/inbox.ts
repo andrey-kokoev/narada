@@ -30,6 +30,7 @@ export interface InboxSubmitOptions extends InboxCommandOptions {
 
 export interface InboxListOptions extends InboxCommandOptions {
   status?: string;
+  kind?: string;
   limit?: number;
 }
 
@@ -45,6 +46,13 @@ export interface InboxPromoteOptions extends InboxCommandOptions {
   title?: string;
   goal?: string;
   criteria?: string[];
+}
+
+export interface InboxNextOptions extends InboxListOptions {}
+
+export interface InboxTriageOptions extends Omit<InboxPromoteOptions, 'targetKind'> {
+  action?: string;
+  targetKind?: string;
 }
 
 export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
@@ -85,9 +93,11 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
 
 export async function inboxListCommand(options: InboxListOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
   const status = options.status ? parseStatus(options.status) : undefined;
+  const kind = options.kind ? parseEnvelopeKind(options.kind) : undefined;
   if (options.status && !status) return errorResult(`Invalid status: ${options.status}`);
+  if (options.kind && !kind) return errorResult(`Invalid kind: ${options.kind}`);
   return withInboxStoreAsync(options, async (store) => {
-    const envelopes = store.list({ status, limit: options.limit });
+    const envelopes = selectEnvelopes(store, { status, kind, limit: options.limit });
     return okResult(
       { status: 'success', count: envelopes.length, envelopes },
       [
@@ -95,6 +105,36 @@ export async function inboxListCommand(options: InboxListOptions): Promise<{ exi
         ...envelopes.map((envelope: { envelope_id: string; status: string; kind: string; source: { kind: string; ref: string } }) =>
           `${envelope.envelope_id}  ${envelope.status}  ${envelope.kind}  ${envelope.source.kind}:${envelope.source.ref}`),
       ],
+      options.format,
+    );
+  });
+}
+
+export async function inboxNextCommand(options: InboxNextOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const status = options.status ? parseStatus(options.status) : 'received';
+  const kind = options.kind ? parseEnvelopeKind(options.kind) : undefined;
+  if (options.status && !status) return errorResult(`Invalid status: ${options.status}`);
+  if (options.kind && !kind) return errorResult(`Invalid kind: ${options.kind}`);
+
+  return withInboxStoreAsync(options, async (store) => {
+    const limit = clampLimit(options.limit ?? 5);
+    const envelopes = selectEnvelopes(store, { status, kind, limit });
+    const [primary, ...alternatives] = envelopes;
+    return okResult(
+      {
+        status: 'success',
+        primary: primary ?? null,
+        alternatives,
+        count: envelopes.length,
+      },
+      primary
+        ? [
+          `Next inbox envelope: ${primary.envelope_id}`,
+          `Kind: ${primary.kind}`,
+          `Source: ${primary.source.kind}:${primary.source.ref}`,
+          `Alternatives: ${alternatives.length}`,
+        ]
+        : ['No matching inbox envelopes.'],
       options.format,
     );
   });
@@ -240,6 +280,38 @@ export async function inboxTaskCommand(options: Omit<InboxPromoteOptions, 'targe
     targetKind: 'task',
     targetRef: options.targetRef ?? options.title,
   });
+}
+
+export async function inboxTriageCommand(options: InboxTriageOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
+  switch (options.action) {
+    case 'archive':
+      return inboxPromoteCommand({ ...options, targetKind: 'archive' });
+    case 'task':
+      return inboxTaskCommand(options);
+    case 'pending':
+      if (!options.targetKind || options.targetKind === 'task' || options.targetKind === 'archive') {
+        return errorResult('--target-kind must be a pending target kind for --action pending');
+      }
+      return inboxPromoteCommand(options);
+    default:
+      return errorResult('--action must be one of: archive, task, pending');
+  }
+}
+
+function selectEnvelopes(
+  store: SqliteInboxStore,
+  options: { status?: InboxEnvelopeStatus; kind?: InboxEnvelopeKind; limit?: number },
+): InboxEnvelope[] {
+  const limit = clampLimit(options.limit ?? 20);
+  const scanLimit = options.kind ? 200 : limit;
+  return store
+    .list({ status: options.status, limit: scanLimit })
+    .filter((envelope) => !options.kind || envelope.kind === options.kind)
+    .slice(0, limit);
+}
+
+function clampLimit(limit: number): number {
+  return Math.max(1, Math.min(limit, 50));
 }
 
 async function createTaskFromEnvelope(

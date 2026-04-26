@@ -9,10 +9,12 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   inboxListCommand,
+  inboxNextCommand,
   inboxPromoteCommand,
   inboxShowCommand,
   inboxSubmitCommand,
   inboxTaskCommand,
+  inboxTriageCommand,
 } from '../../src/commands/inbox.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
@@ -161,6 +163,86 @@ describe('Canonical Inbox CLI commands', () => {
     expect(taskContent).toContain('- [ ] Override criterion B');
     expect(taskContent).not.toContain('Payload criterion');
     expect(result.envelope.promotion.enactment_status).toBe('enacted');
+  });
+
+  it('shows the next received inbox envelope without mutating it', async () => {
+    await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual-a',
+      kind: 'observation',
+      authorityLevel: 'user_statement',
+      payload: JSON.stringify({ note: 'Ignore' }),
+    });
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual-b',
+      kind: 'task_candidate',
+      authorityLevel: 'operator_confirmed',
+      payload: JSON.stringify({ title: 'Next task candidate' }),
+    });
+
+    const next = await inboxNextCommand({
+      cwd: tempDir,
+      format: 'json',
+      kind: 'task_candidate',
+      limit: 2,
+    });
+
+    expect(next.exitCode).toBe(ExitCode.SUCCESS);
+    const expected = (submitted.result as { envelope: { envelope_id: string } }).envelope;
+    const result = next.result as { primary: { envelope_id: string; status: string }; alternatives: unknown[] };
+    expect(result.primary.envelope_id).toBe(expected.envelope_id);
+    expect(result.primary.status).toBe('received');
+    expect(result.alternatives).toHaveLength(0);
+
+    const listed = await inboxListCommand({ cwd: tempDir, format: 'json', status: 'received', limit: 10 });
+    expect((listed.result as { count: number }).count).toBe(2);
+  });
+
+  it('triages envelopes to archive and task through explicit actions', async () => {
+    const archiveCandidate = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual',
+      kind: 'observation',
+      authorityLevel: 'user_statement',
+      payload: JSON.stringify({ note: 'No action' }),
+    });
+    const archiveEnvelope = (archiveCandidate.result as { envelope: { envelope_id: string } }).envelope;
+    const archived = await inboxTriageCommand({
+      cwd: tempDir,
+      format: 'json',
+      envelopeId: archiveEnvelope.envelope_id,
+      action: 'archive',
+      by: 'operator',
+    });
+    expect(archived.exitCode).toBe(ExitCode.SUCCESS);
+    expect((archived.result as { envelope: { status: string } }).envelope.status).toBe('archived');
+
+    const taskCandidate = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual',
+      kind: 'task_candidate',
+      authorityLevel: 'operator_confirmed',
+      payload: JSON.stringify({ title: 'Triaged task' }),
+    });
+    const taskEnvelope = (taskCandidate.result as { envelope: { envelope_id: string } }).envelope;
+    const triagedTask = await inboxTriageCommand({
+      cwd: tempDir,
+      format: 'json',
+      envelopeId: taskEnvelope.envelope_id,
+      action: 'task',
+      by: 'operator',
+    });
+    expect(triagedTask.exitCode).toBe(ExitCode.SUCCESS);
+    expect((triagedTask.result as { enactment_status: string }).enactment_status).toBe('enacted');
   });
 
   it('archives envelopes without requiring a target ref or creating target work', async () => {
