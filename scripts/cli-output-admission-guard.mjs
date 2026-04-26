@@ -34,10 +34,6 @@ const allowlist = {
   "console-register.ts": [
     { pattern: /process\.exit\(0\)/, count: 1, reason: "long-lived console server SIGINT shutdown" },
   ],
-  "sync.ts": [
-    { pattern: /console\.log\(formatMultiSyncResult\(result\)\)/, count: 1, reason: "legacy multi-sync result admission" },
-    { pattern: /console\.log\(''\)/, count: 4, reason: "legacy sync follow-up spacing" },
-  ],
   "usc-init.ts": [
     { pattern: /console\.log\(/, count: 16, reason: "legacy USC init progress and summary output" },
     { pattern: /console\.error\(`FAIL \$\{result\.name\}`\)/, count: 1, reason: "legacy USC init validation output" },

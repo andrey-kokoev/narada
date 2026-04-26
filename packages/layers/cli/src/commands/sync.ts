@@ -298,7 +298,7 @@ async function syncMultiMailbox(
     };
   }
 
-  console.log(formatMultiSyncResult(result));
+  fmt.message(formatMultiSyncResult(result));
   return {
     exitCode: result.failures === 0 ? ExitCode.SUCCESS : ExitCode.SYNC_FATAL,
     result,
@@ -401,22 +401,22 @@ function outputHumanReadable(
   }
 
   if (dryRun) {
-    console.log('');
+    fmt.message('');
     fmt.message('This was a dry run. Remote changes were fetched, but cursor, apply-log, messages, and views were not modified.', 'info');
   }
 
   if (status === 'success' && result.applied_count === 0) {
-    console.log('');
+    fmt.message('');
     fmt.message('No new messages to sync. The mailbox is up to date.', 'info');
   }
 
   if (status === 'retryable_failure') {
-    console.log('');
+    fmt.message('');
     fmt.message('This error may be temporary. You can retry the sync.', 'info');
   }
 
   if (status === 'fatal_failure') {
-    console.log('');
+    fmt.message('');
     fmt.message('A fatal error occurred. Please check your configuration and credentials.', 'error');
   }
 }

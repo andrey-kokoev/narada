@@ -30,12 +30,25 @@ interface SiteListEntry {
   failures: number;
 }
 
+<<<<<<< HEAD
 export interface SiteDoctorCheck {
   name: string;
   status: 'pass' | 'warn' | 'fail';
   message: string;
   remediation?: string;
 }
+
+const SITE_SUBDIRECTORIES = [
+  'state',
+  'messages',
+  'tombstones',
+  'views',
+  'blobs',
+  'tmp',
+  'db',
+  'logs',
+  'traces',
+] as const;
 
 async function openRegistry() {
   const {
@@ -701,7 +714,6 @@ export async function sitesInitCommand(
       const variant = substrate === 'windows-native' ? 'native' : 'wsl';
       const {
         resolveWindowsSiteRootByLocus,
-        SITE_SUBDIRECTORIES,
       } = await import('@narada2/windows-site');
       const authorityLocus = options.authorityLocus ?? 'user';
       if (!validAuthorityLoci.includes(authorityLocus)) {
