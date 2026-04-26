@@ -42,6 +42,7 @@ export interface CommandResultEnvelopeLike {
   result: unknown;
 }
 
+// Finite commands return an envelope; this function is the stdout/exit admission point.
 export function emitFiniteCommandResult(
   envelope: CommandResultEnvelopeLike,
   options: {
@@ -56,6 +57,7 @@ export function emitFiniteCommandResult(
   }
 }
 
+// Use for finite command failures that are thrown before a normal envelope exists.
 export function emitFiniteCommandFailure(
   message: string,
   options: {
@@ -68,6 +70,7 @@ export function emitFiniteCommandFailure(
   return exit(options.exitCode ?? 1);
 }
 
+// Use when the command body has already rendered human output through Formatter.
 export function emitFormatterBackedCommandResult(
   envelope: CommandResultEnvelopeLike,
   options: {
@@ -89,12 +92,14 @@ export function emitFormatterBackedCommandResult(
   }
 }
 
+// Long-lived commands are an explicit exception: startup notices precede process lifetime.
 export function emitLongLivedCommandStartup(lines: string[]): void {
   for (const line of lines) {
     console.log(line);
   }
 }
 
+// Finite command bodies should construct human output here, not write to stdout directly.
 export function attachFormattedOutput<T extends object>(
   result: T,
   formatted: string,
