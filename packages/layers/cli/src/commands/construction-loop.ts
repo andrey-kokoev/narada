@@ -16,6 +16,7 @@ import {
 import { buildPlan, type ConstructionLoopPlan, type PromotionCandidate } from '../lib/construction-loop-plan.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import { attachFormattedOutput } from '../lib/cli-output.js';
 import { writeFile, mkdir, readFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { taskPromoteRecommendationCommand } from './task-promote-recommendation.js';
@@ -192,12 +193,11 @@ export async function constructionLoopPlanCommand(
     };
   }
 
-  const output = formatPlanHuman(planWithMeta);
-  fmt.message(output, 'info');
+  const result = { status: plan.status, plan: planWithMeta };
 
   return {
     exitCode: plan.status === 'ok' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
-    result: { status: plan.status, plan: planWithMeta },
+    result: attachFormattedOutput(result, formatPlanHuman(planWithMeta), fmt.getFormat()),
   };
 }
 
@@ -270,10 +270,10 @@ export async function constructionLoopPolicyShowCommand(
   lines.push(`  on_cycle_limit_reached:  ${policy.stop_conditions.on_cycle_limit_reached}`);
   lines.push(`  on_policy_violation:     ${policy.stop_conditions.on_policy_violation}`);
 
-  fmt.message(lines.join('\n'), 'info');
+  const result = { status: 'ok', policy };
   return {
     exitCode: ExitCode.SUCCESS,
-    result: { status: 'ok', policy },
+    result: attachFormattedOutput(result, lines.join('\n'), fmt.getFormat()),
   };
 }
 
@@ -305,10 +305,10 @@ export async function constructionLoopPolicyInitCommand(
     };
   }
 
-  fmt.message(`Created ${mode} policy at ${path}`, 'info');
+  const result = { status: 'ok', mode, path, policy };
   return {
     exitCode: ExitCode.SUCCESS,
-    result: { status: 'ok', mode, path, policy },
+    result: attachFormattedOutput(result, `Created ${mode} policy at ${path}`, fmt.getFormat()),
   };
 }
 
@@ -338,8 +338,8 @@ export async function constructionLoopPolicyValidateCommand(
       if (fmt.getFormat() === 'json') {
         return { exitCode: ExitCode.INVALID_CONFIG, result: { status: 'error', error: msg } };
       }
-      fmt.message(msg, 'error');
-      return { exitCode: ExitCode.INVALID_CONFIG, result: { status: 'error', error: msg } };
+      const result = { status: 'error', error: msg };
+      return { exitCode: ExitCode.INVALID_CONFIG, result: attachFormattedOutput(result, msg, fmt.getFormat()) };
     }
     throw err;
   }
@@ -352,8 +352,8 @@ export async function constructionLoopPolicyValidateCommand(
     if (fmt.getFormat() === 'json') {
       return { exitCode: ExitCode.INVALID_CONFIG, result: { status: 'error', error: msg } };
     }
-    fmt.message(msg, 'error');
-    return { exitCode: ExitCode.INVALID_CONFIG, result: { status: 'error', error: msg } };
+    const result = { status: 'error', error: msg };
+    return { exitCode: ExitCode.INVALID_CONFIG, result: attachFormattedOutput(result, msg, fmt.getFormat()) };
   }
 
   const errors = validatePolicyDeep(parsed);
@@ -365,10 +365,10 @@ export async function constructionLoopPolicyValidateCommand(
         result: { status: 'ok', valid: true, path },
       };
     }
-    fmt.message(`Policy at ${path} is valid.`, 'info');
+    const result = { status: 'ok', valid: true, path };
     return {
       exitCode: ExitCode.SUCCESS,
-      result: { status: 'ok', valid: true, path },
+      result: attachFormattedOutput(result, `Policy at ${path} is valid.`, fmt.getFormat()),
     };
   }
 
@@ -383,11 +383,11 @@ export async function constructionLoopPolicyValidateCommand(
     return { exitCode: ExitCode.INVALID_CONFIG, result };
   }
 
-  fmt.message(`Policy at ${path} has ${errors.length} error(s):`, 'error');
+  const lines = [`Policy at ${path} has ${errors.length} error(s):`];
   for (const e of errors) {
-    fmt.message(`  [${e.path}] ${e.message}`, 'error');
+    lines.push(`  [${e.path}] ${e.message}`);
   }
-  return { exitCode: ExitCode.INVALID_CONFIG, result };
+  return { exitCode: ExitCode.INVALID_CONFIG, result: attachFormattedOutput(result, lines.join('\n'), fmt.getFormat()) };
 }
 
 // ── Hard gates ──
@@ -602,8 +602,15 @@ export async function constructionLoopRunCommand(
     if (fmt.getFormat() === 'json') {
       return { exitCode: ExitCode.GENERAL_ERROR, result: { status: 'paused', warnings: plan.warnings } };
     }
-    fmt.message('Construction loop is paused. Run `narada construction-loop resume` to continue.', 'warning');
-    return { exitCode: ExitCode.GENERAL_ERROR, result: { status: 'paused', warnings: plan.warnings } };
+    const result = { status: 'paused', warnings: plan.warnings };
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: attachFormattedOutput(
+        result,
+        'Construction loop is paused. Run `narada construction-loop resume` to continue.',
+        fmt.getFormat(),
+      ),
+    };
   }
 
   // Pre-check: policy must allow bounded_auto
@@ -629,10 +636,10 @@ export async function constructionLoopRunCommand(
         result: { status: 'policy_error', error: record.detail },
       };
     }
-    fmt.message(`Auto-promotion blocked: ${record.detail}`, 'error');
+    const result = { status: 'policy_error', error: record.detail };
     return {
       exitCode: ExitCode.INVALID_CONFIG,
-      result: { status: 'policy_error', error: record.detail },
+      result: attachFormattedOutput(result, `Auto-promotion blocked: ${record.detail}`, fmt.getFormat()),
     };
   }
 
@@ -806,24 +813,25 @@ export async function constructionLoopRunCommand(
     };
   }
 
+  const lines: string[] = [];
   if (result.status === 'ok') {
-    fmt.message(`Auto-promoted ${promoted.length} task(s):`, 'success');
+    lines.push(`Auto-promoted ${promoted.length} task(s):`);
     for (const p of promoted) {
-      fmt.message(`  ✓ ${p.task_id} → ${p.agent_id}`, 'success');
+      lines.push(`  ✓ ${p.task_id} → ${p.agent_id}`);
     }
   } else if (rejected.length > 0) {
-    fmt.message(`${rejected.length} candidate(s) rejected by hard gates:`, 'warning');
+    lines.push(`${rejected.length} candidate(s) rejected by hard gates:`);
     for (const r of rejected) {
       const failed = r.gate_results.filter((g) => !g.passed);
-      fmt.message(`  ✗ ${r.task_id} → ${r.agent_id} (${failed.map((g) => g.gate).join(', ')})`, 'warning');
+      lines.push(`  ✗ ${r.task_id} → ${r.agent_id} (${failed.map((g) => g.gate).join(', ')})`);
     }
   } else {
-    fmt.message('No promotion candidates found.', 'info');
+    lines.push('No promotion candidates found.');
   }
 
   return {
     exitCode: promoted.length > 0 ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
-    result,
+    result: attachFormattedOutput(result, lines.join('\n'), fmt.getFormat()),
   };
 }
 
@@ -849,8 +857,15 @@ export async function constructionLoopPauseCommand(
   if (fmt.getFormat() === 'json') {
     return { exitCode: ExitCode.SUCCESS, result: { status: 'ok', paused: true, reason: options.reason } };
   }
-  fmt.message(`Construction loop paused: ${options.reason ?? 'operator requested'}`, 'info');
-  return { exitCode: ExitCode.SUCCESS, result: { status: 'ok', paused: true } };
+  const result = { status: 'ok', paused: true };
+  return {
+    exitCode: ExitCode.SUCCESS,
+    result: attachFormattedOutput(
+      result,
+      `Construction loop paused: ${options.reason ?? 'operator requested'}`,
+      fmt.getFormat(),
+    ),
+  };
 }
 
 export interface ConstructionLoopResumeOptions {
@@ -874,8 +889,11 @@ export async function constructionLoopResumeCommand(
   if (fmt.getFormat() === 'json') {
     return { exitCode: ExitCode.SUCCESS, result: { status: 'ok', resumed: true } };
   }
-  fmt.message('Construction loop resumed.', 'info');
-  return { exitCode: ExitCode.SUCCESS, result: { status: 'ok', resumed: true } };
+  const result = { status: 'ok', resumed: true };
+  return {
+    exitCode: ExitCode.SUCCESS,
+    result: attachFormattedOutput(result, 'Construction loop resumed.', fmt.getFormat()),
+  };
 }
 
 // ── Metrics ──
@@ -916,6 +934,6 @@ export async function constructionLoopMetricsCommand(
     }
   }
 
-  fmt.message(lines.join('\n'), 'info');
-  return { exitCode: ExitCode.SUCCESS, result: { status: 'ok', metrics } };
+  const result = { status: 'ok', metrics };
+  return { exitCode: ExitCode.SUCCESS, result: attachFormattedOutput(result, lines.join('\n'), fmt.getFormat()) };
 }
