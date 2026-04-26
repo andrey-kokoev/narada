@@ -27,6 +27,10 @@ export const DEFAULT_COMMAND_GROUPS: CommandGroup[] = [
     commands: ['posture', 'construction-loop', 'verify'],
   },
   {
+    label: 'Intent & Intake Zones',
+    commands: ['inbox', 'observation', 'command-run', 'test-run'],
+  },
+  {
     label: 'Site & Console',
     commands: ['sites', 'console', 'workbench'],
   },

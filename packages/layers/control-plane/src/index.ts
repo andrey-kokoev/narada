@@ -39,6 +39,10 @@ export {
   isActionableInboxCommandRequest,
   isInertReceivedInboxEnvelope,
 } from "./inbox/types.js";
+export {
+  SqliteInboxStore,
+  defaultInboxDbPath,
+} from "./inbox/store.js";
 export type {
   InboxSourceKind,
   InboxEnvelopeKind,
@@ -51,6 +55,7 @@ export type {
   InboxEnvelope,
   CreateInboxEnvelopeOptions,
 } from "./inbox/types.js";
+export type { InboxStore } from "./inbox/store.js";
 export { ClientCredentialsTokenProvider } from "./adapter/graph/auth.js";
 export { buildGraphTokenProvider } from "./config/token-provider.js";
 export { DefaultGraphAdapter } from "./adapter/graph/adapter.js";
