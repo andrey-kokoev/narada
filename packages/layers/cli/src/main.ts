@@ -75,10 +75,7 @@ import {
   taskPullNextCommand,
   taskWorkNextCommand,
 } from './commands/task-next.js';
-import { chapterCloseCommand } from './commands/chapter-close.js';
-import { chapterFinishRangeCommand } from './commands/chapter-finish-range.js';
-import { chapterInitCommand, chapterValidateTasksFileCommand } from './commands/chapter-init.js';
-import { chapterStatusCommand } from './commands/chapter-status.js';
+import { registerChapterCommands } from './commands/chapter-register.js';
 import {
   constructionLoopPlanCommand,
   constructionLoopPolicyShowCommand,
@@ -93,7 +90,6 @@ import { taskListCommand } from './commands/task-list.js';
 import { taskGraphCommand } from './commands/task-graph.js';
 import { taskSearchCommand } from './commands/task-search.js';
 import { taskReadCommand } from './commands/task-read.js';
-import { taskEvidenceAssertCompleteCommand } from './commands/task-evidence-list.js';
 import { verifyStatusCommand } from './commands/verify-status.js';
 import {
   crossingListCommand,
@@ -986,159 +982,7 @@ registerTaskReconcileCommands(taskCmd);
 
 registerObservationCommands(program);
 
-// Chapter governance commands
-const chapterCmd = program
-  .command('chapter')
-  .description('Chapter governance operators');
-
-chapterCmd
-  .command('finish-range <range>')
-  .description('Sanctioned chapter task completion orchestration for a numeric range')
-  .requiredOption('--agent <id>', 'Agent ID performing the finish path')
-  .option('--summary-prefix <text>', 'Summary prefix for each task report')
-  .option('--force', 'Continue after task-level failure', false)
-  .option('--details', 'Include full per-task command results', false)
-  .option('--format <format>', 'Output format: json, human, or auto', 'auto')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (range: string, opts: Record<string, unknown>) => {
-    await runDirectCommand({
-      command: 'chapter finish-range',
-      emit: emitCommandResult,
-      format: opts.format,
-      invocation: () => chapterFinishRangeCommand({
-        range,
-        agent: opts.agent as string,
-        summaryPrefix: opts.summaryPrefix as string | undefined,
-        force: opts.force as boolean | undefined,
-        details: opts.details as boolean | undefined,
-        cwd: opts.cwd as string | undefined,
-        format: resolveCommandFormat(opts.format, 'human'),
-      }),
-    });
-  });
-
-chapterCmd
-  .command('assert-complete <range>')
-  .description('Fail unless every task in a numeric chapter range is evidence-complete')
-  .option('--format <format>', 'Output format: json, human, or auto', 'auto')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (range: string, opts: Record<string, unknown>) => {
-    const localFormat = opts.format === 'auto' ? undefined : opts.format;
-    const format = resolveCommandFormat(localFormat, 'human');
-    await runDirectCommand({
-      command: 'chapter assert-complete',
-      emit: emitCommandResult,
-      format,
-      invocation: () => taskEvidenceAssertCompleteCommand({
-        range,
-        cwd: opts.cwd as string | undefined,
-        format,
-      }),
-    });
-  });
-
-chapterCmd
-  .command('init <slug>')
-  .description('Initialize a chapter skeleton with range file and child tasks')
-  .requiredOption('--title <title>', 'Chapter title')
-  .requiredOption('--from <number>', 'First task number (positive integer)')
-  .requiredOption('--count <n>', 'Number of child tasks (>= 1)')
-  .option('--depends-on <numbers>', 'Comma-separated dependency task numbers')
-  .option('--tasks-file <path>', 'JSON array of detailed child task specifications')
-  .option('--dry-run', 'Preview files without writing', false)
-  .option('--format <format>', 'Output format: json, human, or auto', 'auto')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (slug: string, opts: Record<string, unknown>) => {
-    const format = resolveCommandFormat(opts.format, 'auto');
-    await runDirectCommand({
-      command: 'chapter init',
-      emit: emitCommandResult,
-      format,
-      invocation: () => chapterInitCommand({
-        slug,
-        title: opts.title as string | undefined,
-        from: opts.from ? Number(opts.from) : undefined,
-        count: opts.count ? Number(opts.count) : undefined,
-        dependsOn: opts.dependsOn as string | undefined,
-        tasksFile: opts.tasksFile as string | undefined,
-        dryRun: opts.dryRun as boolean | undefined,
-        cwd: opts.cwd as string | undefined,
-        format,
-      }),
-    });
-  });
-
-chapterCmd
-  .command('validate-tasks-file <path>')
-  .description('Validate a chapter task-spec JSON file without writing tasks')
-  .requiredOption('--count <n>', 'Expected number of child task specs')
-  .option('--format <format>', 'Output format: json, human, or auto', 'auto')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (path: string, opts: Record<string, unknown>) => {
-    await runDirectCommand({
-      command: 'chapter validate-tasks-file',
-      emit: emitCommandResult,
-      format: opts.format,
-      invocation: () => chapterValidateTasksFileCommand({
-        path,
-        count: opts.count ? Number(opts.count) : undefined,
-        cwd: opts.cwd as string | undefined,
-        format: resolveCommandFormat(opts.format, 'human'),
-      }),
-    });
-  });
-
-chapterCmd
-  .command('status <range>')
-  .description('Derive and display chapter state from task statuses in a range')
-  .option('--format <format>', 'Output format: json, human, or auto', 'auto')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (range: string, opts: Record<string, unknown>) => {
-    const format = resolveCommandFormat(opts.format, 'auto');
-    await runDirectCommand({
-      command: 'chapter status',
-      emit: emitCommandResult,
-      format,
-      invocation: () => chapterStatusCommand({
-        range,
-        cwd: opts.cwd as string | undefined,
-        format,
-      }),
-    });
-  });
-
-chapterCmd
-  .command('close <identifier>')
-  .description('Close a chapter: verify tasks, generate closure artifact, or manage closure workflow')
-  .option('--dry-run', 'Preview closure without mutating state (legacy chapter-name mode)', false)
-  .option('--start', 'Generate closure decision draft (range mode)', false)
-  .option('--finish', 'Accept closure and transition tasks to confirmed (range mode)', false)
-  .option('--reopen', 'Reopen a closing/closed chapter (range mode)', false)
-  .option('--by <operator-id>', 'Operator ID for closure decision')
-  .option('--reason <text>', 'Reason for reopen')
-  .option('--format <format>', 'Output format: json, human, or auto', 'auto')
-  .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
-  .action(async (identifier: string, opts: Record<string, unknown>) => {
-    const isRange = /^\d+(?:-\d+)?$/.test(identifier);
-    const format = resolveCommandFormat(opts.format, 'auto');
-    await runDirectCommand({
-      command: 'chapter close',
-      emit: emitCommandResult,
-      format,
-      invocation: () => chapterCloseCommand({
-        chapterName: isRange && !opts.start && !opts.finish && !opts.reopen ? undefined : (isRange ? undefined : identifier),
-        range: isRange && (opts.start || opts.finish || opts.reopen) ? identifier : undefined,
-        start: opts.start as boolean | undefined,
-        finish: opts.finish as boolean | undefined,
-        reopen: opts.reopen as boolean | undefined,
-        by: opts.by as string | undefined,
-        reason: opts.reason as string | undefined,
-        dryRun: opts.dryRun as boolean | undefined,
-        cwd: opts.cwd as string | undefined,
-        format,
-      }),
-    });
-  });
+registerChapterCommands(program);
 
 // ── Construction loop commands ──
 
