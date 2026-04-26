@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { directCommandAction, normalizeCommandError, runDirectCommand, runDirectCommandWithResource } from '../../src/lib/command-wrapper.js';
+import {
+  directCommandAction,
+  normalizeCommandError,
+  resourceScopedDirectCommandAction,
+  runDirectCommand,
+  runDirectCommandWithResource,
+} from '../../src/lib/command-wrapper.js';
 
 describe('command error normalization', () => {
   it('normalizes SQLITE_BUSY into a terse retryable operator error', () => {
@@ -201,5 +207,65 @@ describe('resource-scoped direct command runner', () => {
     })).rejects.toThrow('boom');
 
     expect(events).toEqual(['invoke', 'close:store']);
+  });
+});
+
+describe('resource-scoped direct command action helper', () => {
+  it('adapts action arguments to a resource-scoped invocation', async () => {
+    const events: string[] = [];
+    const emitted: Array<{ result: unknown; format?: unknown }> = [];
+    const action = resourceScopedDirectCommandAction<{ id: string }, [string, { format: string }]>({
+      command: 'task resource action',
+      open: (taskNumber) => {
+        events.push(`open:${taskNumber}`);
+        return { id: 'store' };
+      },
+      close: (resource) => {
+        events.push(`close:${resource.id}`);
+      },
+      invocation: async (resource, taskNumber) => {
+        events.push(`invoke:${resource.id}:${taskNumber}`);
+        return { exitCode: 0, result: { status: 'success', taskNumber } };
+      },
+      emit: (result, format) => emitted.push({ result, format }),
+      format: (_taskNumber, opts) => opts.format,
+      exit: (code): never => {
+        throw new Error(`unexpected exit ${code}`);
+      },
+    });
+
+    await action('123', { format: 'json' });
+
+    expect(events).toEqual(['open:123', 'invoke:store:123', 'close:store']);
+    expect(emitted).toEqual([{ result: { status: 'success', taskNumber: '123' }, format: 'json' }]);
+  });
+
+  it('closes resources when the adapted invocation exits nonzero', async () => {
+    const events: string[] = [];
+    let exitCode: number | null = null;
+    const action = resourceScopedDirectCommandAction<{ id: string }, [Record<string, unknown>]>({
+      command: 'task resource action',
+      open: () => {
+        events.push('open');
+        return { id: 'store' };
+      },
+      close: (resource) => {
+        events.push(`close:${resource.id}`);
+      },
+      invocation: async () => {
+        events.push('invoke');
+        return { exitCode: 2, result: { status: 'error', error: 'bad' } };
+      },
+      emit: () => undefined,
+      exit: (code): never => {
+        exitCode = code;
+        throw new Error('exit');
+      },
+    });
+
+    await expect(action({})).rejects.toThrow('exit');
+
+    expect(events).toEqual(['open', 'invoke', 'close:store']);
+    expect(exitCode).toBe(2);
   });
 });

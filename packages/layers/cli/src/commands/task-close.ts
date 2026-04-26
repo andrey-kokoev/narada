@@ -16,7 +16,7 @@ export interface TaskCloseOptions {
   format?: 'json' | 'human' | 'auto';
   cwd?: string;
   store?: TaskLifecycleStore;
-  mode: TaskClosureMode;
+  mode?: TaskClosureMode;
 }
 
 export async function taskCloseCommand(
@@ -29,7 +29,7 @@ export async function taskCloseCommand(
     by: options.by,
     cwd,
     store: options.store,
-    mode: options.mode,
+    mode: options.mode ?? 'operator_direct',
   });
   const result = serviceResult.result;
 

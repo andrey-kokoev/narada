@@ -59,6 +59,16 @@ export interface ResourceScopedDirectCommandRunnerOptions<TResource> {
   exit?: (code: number) => never;
 }
 
+export interface ResourceScopedDirectCommandActionOptions<TResource, TArgs extends unknown[]> {
+  command: string;
+  open: (...args: TArgs) => TResource;
+  close: (resource: TResource) => void | Promise<void>;
+  invocation: (resource: TResource, ...args: TArgs) => Promise<CommandResultEnvelope>;
+  emit: (result: unknown, format?: unknown) => void;
+  format?: unknown | ((...args: TArgs) => unknown);
+  exit?: (code: number) => never;
+}
+
 export function normalizeCommandError(command: string, error: unknown): NormalizedCommandError | undefined {
   const err = error instanceof Error ? error : new Error(String(error));
   const code = (error as { code?: unknown } | null)?.code;
@@ -128,6 +138,23 @@ export async function runDirectCommandWithResource<TResource>(
   } finally {
     await options.close(resource);
   }
+}
+
+export function resourceScopedDirectCommandAction<TResource, TArgs extends unknown[]>(
+  options: ResourceScopedDirectCommandActionOptions<TResource, TArgs>,
+): (...args: TArgs) => Promise<void> {
+  return async (...args: TArgs): Promise<void> => {
+    const format = typeof options.format === 'function' ? options.format(...args) : options.format;
+    await runDirectCommandWithResource({
+      command: options.command,
+      open: () => options.open(...args),
+      close: options.close,
+      invocation: (resource) => options.invocation(resource, ...args),
+      emit: options.emit,
+      format,
+      exit: options.exit,
+    });
+  };
 }
 
 export function wrapCommand<T extends { config?: string; verbose?: boolean; format?: string }>(
