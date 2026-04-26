@@ -104,6 +104,18 @@ export function exitLongLivedCommandSuccessfully(exit: (code: number) => never =
   return exit(0);
 }
 
+// Interactive commands may terminate process lifetime after prompt cancellation.
+export function exitInteractiveCommandSuccessfully(exit: (code: number) => never = process.exit): never {
+  return exit(0);
+}
+
+// Interactive commands sometimes need bounded follow-up text after prompt rendering.
+export function emitInteractiveCommandFollowUp(lines: string[]): void {
+  for (const line of lines) {
+    console.log(line);
+  }
+}
+
 // Finite command bodies should construct human output here, not write to stdout directly.
 export function attachFormattedOutput<T extends object>(
   result: T,

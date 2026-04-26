@@ -15,15 +15,6 @@ const DIRECT_OUTPUT_RE = /\bconsole\.(log|error|warn)\s*\(|\bprocess\.exit\s*\(/
 const reportMode = process.argv.includes("--report");
 
 const allowlist = {
-  "config-interactive.ts": [
-    { pattern: /process\.exit\(0\)/, count: 1, reason: "interactive cancellation path" },
-    { pattern: /console\.log\(''\)/, count: 1, reason: "legacy interactive next-step spacing" },
-    { pattern: /console\.log\('  1\. Set environment variables for Graph API auth:'\)/, count: 1, reason: "legacy interactive next-step output" },
-    { pattern: /console\.log\('     export GRAPH_TENANT_ID=your-tenant-id'\)/, count: 1, reason: "legacy interactive next-step output" },
-    { pattern: /console\.log\('     export GRAPH_CLIENT_ID=your-client-id'\)/, count: 1, reason: "legacy interactive next-step output" },
-    { pattern: /console\.log\('     export GRAPH_CLIENT_SECRET=your-client-secret'\)/, count: 1, reason: "legacy interactive next-step output" },
-    { pattern: /console\.log\('  2\. Run: narada sync'\)/, count: 1, reason: "legacy interactive next-step output" },
-  ],
   "usc-init.ts": [
     { pattern: /console\.log\(/, count: 16, reason: "legacy USC init progress and summary output" },
     { pattern: /console\.error\(`FAIL \$\{result\.name\}`\)/, count: 1, reason: "legacy USC init validation output" },

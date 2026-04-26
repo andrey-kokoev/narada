@@ -9,6 +9,7 @@ import * as p from '@clack/prompts';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import { emitInteractiveCommandFollowUp, exitInteractiveCommandSuccessfully } from '../lib/cli-output.js';
 import { buildGraphTokenProvider } from '@narada2/control-plane';
 import { GraphHttpClient } from '@narada2/control-plane';
 import type { GraphListResponse, GraphMessage } from '@narada2/control-plane';
@@ -175,7 +176,7 @@ async function runPrompts(defaultOutputPath: string): Promise<ConfigValues | nul
     {
       onCancel: () => {
         p.cancel('Configuration cancelled.');
-        process.exit(0);
+        exitInteractiveCommandSuccessfully();
       },
     }
   );
@@ -305,13 +306,15 @@ export async function configInteractiveCommand(
   fmt.kv('Graph User ID', graphSource?.user_id ?? 'unknown');
   fmt.kv('Folders', scope?.scope.included_container_refs.join(', ') ?? '');
 
-  console.log('');
+  emitInteractiveCommandFollowUp(['']);
   fmt.message('Next Steps:', 'info');
-  console.log('  1. Set environment variables for Graph API auth:');
-  console.log('     export GRAPH_TENANT_ID=your-tenant-id');
-  console.log('     export GRAPH_CLIENT_ID=your-client-id');
-  console.log('     export GRAPH_CLIENT_SECRET=your-client-secret');
-  console.log('  2. Run: narada sync');
+  emitInteractiveCommandFollowUp([
+    '  1. Set environment variables for Graph API auth:',
+    '     export GRAPH_TENANT_ID=your-tenant-id',
+    '     export GRAPH_CLIENT_ID=your-client-id',
+    '     export GRAPH_CLIENT_SECRET=your-client-secret',
+    '  2. Run: narada sync',
+  ]);
 
   return {
     exitCode: ExitCode.SUCCESS,
