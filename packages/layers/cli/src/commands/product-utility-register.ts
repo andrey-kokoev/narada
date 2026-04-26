@@ -6,7 +6,7 @@ import { opsCommand } from './ops.js';
 import { uscInitCommand } from './usc-init.js';
 import { uscValidateCommand } from './usc-validate.js';
 import { wrapCommand } from '../lib/command-wrapper.js';
-import { emitCommandResult } from '../lib/cli-output.js';
+import { emitFiniteCommandFailure, emitFiniteCommandResult } from '../lib/cli-output.js';
 
 function outputFormat(): 'json' | 'human' | 'auto' {
   return process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto';
@@ -42,8 +42,7 @@ export function registerProductUtilityCommands(program: Command): void {
         });
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
-        console.error(`init usc failed: ${err.message}`);
-        process.exit(1);
+        emitFiniteCommandFailure(`init usc failed: ${err.message}`);
       }
     });
 
@@ -52,11 +51,7 @@ export function registerProductUtilityCommands(program: Command): void {
     .description('Validate a USC repo using USC packages or cached schemas as fallback')
     .action(async (targetPath: string) => {
       const result = await uscValidateCommand({ path: targetPath });
-      if (result.exitCode !== 0) {
-        console.error(JSON.stringify(result.result, null, 2));
-        process.exit(result.exitCode);
-      }
-      emitCommandResult(result.result, 'json');
+      emitFiniteCommandResult(result, { format: 'json' });
     });
 
   initCmd.action(wrapCommand('init', (opts, ctx) => {

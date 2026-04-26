@@ -6,7 +6,7 @@ import {
 } from './console.js';
 import { createConsoleServer } from './console-server.js';
 import { silentCommandContext, wrapCommand } from '../lib/command-wrapper.js';
-import { emitFormatterBackedCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
+import { emitFormatterBackedCommandResult, emitLongLivedCommandStartup, resolveCommandFormat } from '../lib/cli-output.js';
 
 export function registerConsoleCommands(program: Command): void {
   const consoleCmd = program
@@ -77,8 +77,10 @@ export function registerConsoleCommands(program: Command): void {
       const port = opts.port ? parseInt(String(opts.port), 10) : 0;
       const server = await createConsoleServer({ host, port, verbose: !!opts.verbose });
       const url = await server.start();
-      console.log(`Operator Console HTTP API listening at ${url}`);
-      console.log('Press Ctrl+C to stop');
+      emitLongLivedCommandStartup([
+        `Operator Console HTTP API listening at ${url}`,
+        'Press Ctrl+C to stop',
+      ]);
       process.on('SIGINT', async () => {
         await server.stop();
         process.exit(0);

@@ -42,6 +42,32 @@ export interface CommandResultEnvelopeLike {
   result: unknown;
 }
 
+export function emitFiniteCommandResult(
+  envelope: CommandResultEnvelopeLike,
+  options: {
+    format?: unknown;
+    exit?: (code: number) => never;
+  } = {},
+): void {
+  const exit = options.exit ?? ((code: number): never => process.exit(code));
+  emitCommandResult(envelope.result, options.format);
+  if (envelope.exitCode !== 0) {
+    exit(envelope.exitCode);
+  }
+}
+
+export function emitFiniteCommandFailure(
+  message: string,
+  options: {
+    exitCode?: number;
+    exit?: (code: number) => never;
+  } = {},
+): never {
+  const exit = options.exit ?? ((code: number): never => process.exit(code));
+  console.error(message);
+  return exit(options.exitCode ?? 1);
+}
+
 export function emitFormatterBackedCommandResult(
   envelope: CommandResultEnvelopeLike,
   options: {
@@ -58,6 +84,12 @@ export function emitFormatterBackedCommandResult(
   }
   if (wantsJsonOutput(options.format)) {
     console.log(JSON.stringify(envelope.result, null, 2));
+  }
+}
+
+export function emitLongLivedCommandStartup(lines: string[]): void {
+  for (const line of lines) {
+    console.log(line);
   }
 }
 

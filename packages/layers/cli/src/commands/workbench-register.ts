@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { createWorkbenchServer, workbenchDiagnoseCommand } from './workbench-server.js';
-import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
+import { emitFiniteCommandResult, emitLongLivedCommandStartup, resolveCommandFormat } from '../lib/cli-output.js';
 
 export function registerWorkbenchCommands(program: Command): void {
   const workbenchCmd = program
@@ -17,8 +17,7 @@ export function registerWorkbenchCommands(program: Command): void {
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'human'),
       });
-      emitCommandResult(result.result, opts.format);
-      if (result.exitCode !== 0) process.exit(result.exitCode);
+      emitFiniteCommandResult(result, { format: opts.format });
     });
 
   workbenchCmd
@@ -35,8 +34,10 @@ export function registerWorkbenchCommands(program: Command): void {
       const cwd = (opts.cwd as string) ?? '.';
       const server = await createWorkbenchServer({ host, port, cwd, verbose: !!opts.verbose });
       const url = await server.start();
-      console.log(`Workbench HTTP API listening at ${url}`);
-      console.log('Press Ctrl+C to stop');
+      emitLongLivedCommandStartup([
+        `Workbench HTTP API listening at ${url}`,
+        'Press Ctrl+C to stop',
+      ]);
       process.on('SIGINT', async () => {
         await server.stop();
         process.exit(0);

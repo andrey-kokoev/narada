@@ -7,7 +7,7 @@ import {
 } from './principal.js';
 import { principalSyncFromTasksCommand } from './principal-sync-from-tasks.js';
 import { silentCommandContext } from '../lib/command-wrapper.js';
-import { emitCommandResult, emitFormatterBackedCommandResult } from '../lib/cli-output.js';
+import { emitFiniteCommandResult, emitFormatterBackedCommandResult } from '../lib/cli-output.js';
 
 function outputFormat(): 'json' | 'human' | 'auto' {
   return process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto';
@@ -118,10 +118,6 @@ export function registerPrincipalCommands(program: Command): void {
         dryRun: opts.dryRun as boolean | undefined,
         format: outputFormat(),
       });
-      if (result.exitCode !== 0) {
-        console.error((result.result as { error?: string }).error ?? 'Sync failed');
-        process.exit(result.exitCode);
-      }
-      emitCommandResult(result.result);
+      emitFiniteCommandResult(result, { format: opts.format });
     });
 }
