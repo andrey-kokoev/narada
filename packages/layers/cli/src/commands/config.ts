@@ -78,7 +78,7 @@ export async function configCommand(
 
   fmt.message(' narada init (non-interactive) is deprecated.', 'warning');
   fmt.message('Use narada init-repo <path> instead.', 'info');
-  console.log('');
+  fmt.message('');
 
   if (existsSync(outputPath) && !options.force) {
     const error = `File already exists: ${outputPath}. Use --force to overwrite.`;
@@ -92,9 +92,9 @@ export async function configCommand(
     }
 
     fmt.message(error, 'error');
-    console.log('');
+    fmt.message('');
     fmt.message('To overwrite the existing file:', 'info');
-    console.log(`  narada init --output ${options.output || './config.json'} --force`);
+    fmt.message(`  narada init --output ${options.output || './config.json'} --force`, 'info');
 
     return { exitCode: ExitCode.GENERAL_ERROR, result: { status: 'error', error } };
   }
@@ -137,11 +137,11 @@ export async function configCommand(
   fmt.section('Next Steps');
   fmt.list(result.next_steps);
 
-  console.log('');
+  fmt.message('');
   fmt.message('Quick start:', 'info');
-  console.log('  1. Edit config.json with your credentials');
-  console.log('  2. Set environment variables for Graph API auth');
-  console.log('  3. Run: narada sync');
+  fmt.message('  1. Edit config.json with your credentials', 'info');
+  fmt.message('  2. Set environment variables for Graph API auth', 'info');
+  fmt.message('  3. Run: narada sync', 'info');
 
   return { exitCode: ExitCode.SUCCESS, result };
 }

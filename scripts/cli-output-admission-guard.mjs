@@ -24,13 +24,6 @@ const allowlist = {
     { pattern: /console\.log\('     export GRAPH_CLIENT_SECRET=your-client-secret'\)/, count: 1, reason: "legacy interactive next-step output" },
     { pattern: /console\.log\('  2\. Run: narada sync'\)/, count: 1, reason: "legacy interactive next-step output" },
   ],
-  "config.ts": [
-    { pattern: /console\.log\(''\)/, count: 3, reason: "legacy init spacing" },
-    { pattern: /console\.log\(`  narada init --output/, count: 1, reason: "legacy init remediation output" },
-    { pattern: /console\.log\('  1\. Edit config\.json with your credentials'\)/, count: 1, reason: "legacy init next-step output" },
-    { pattern: /console\.log\('  2\. Set environment variables for Graph API auth'\)/, count: 1, reason: "legacy init next-step output" },
-    { pattern: /console\.log\('  3\. Run: narada sync'\)/, count: 1, reason: "legacy init next-step output" },
-  ],
   "console-register.ts": [
     { pattern: /process\.exit\(0\)/, count: 1, reason: "long-lived console server SIGINT shutdown" },
   ],
