@@ -15,10 +15,6 @@ const DIRECT_OUTPUT_RE = /\bconsole\.(log|error|warn)\s*\(|\bprocess\.exit\s*\(/
 const reportMode = process.argv.includes("--report");
 
 const allowlist = {
-  "backup-ls.ts": [
-    { pattern: /console\.log\(''\)/, count: 1, reason: "legacy blank-line formatting inside backup listing body" },
-    { pattern: /console\.log\(`  \$\{label\.padEnd/, count: 1, reason: "legacy backup summary row formatting" },
-  ],
   "config-interactive.ts": [
     { pattern: /process\.exit\(0\)/, count: 1, reason: "interactive cancellation path" },
     { pattern: /console\.log\(''\)/, count: 1, reason: "legacy interactive next-step spacing" },
@@ -47,11 +43,6 @@ const allowlist = {
   "sync.ts": [
     { pattern: /console\.log\(formatMultiSyncResult\(result\)\)/, count: 1, reason: "legacy multi-sync result admission" },
     { pattern: /console\.log\(''\)/, count: 4, reason: "legacy sync follow-up spacing" },
-  ],
-  "task-graph.ts": [
-    { pattern: /console\.log\('```mermaid'\)/, count: 1, reason: "explicit full mermaid output mode" },
-    { pattern: /console\.log\(mermaid\.trimEnd\(\)\)/, count: 1, reason: "explicit full mermaid output mode" },
-    { pattern: /console\.log\('```'\)/, count: 1, reason: "explicit full mermaid output mode" },
   ],
   "usc-init.ts": [
     { pattern: /console\.log\(/, count: 16, reason: "legacy USC init progress and summary output" },

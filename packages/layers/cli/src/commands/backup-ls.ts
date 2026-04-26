@@ -305,7 +305,7 @@ export async function listBackupCommand(
     }
     
     // Human-readable output
-    console.log('');
+    fmt.message('');
     fmt.message(`Backup: ${inputPath}`, 'info');
     fmt.kv('Size', fmt.fileSize(stats.totalSize));
     fmt.kv('Files', stats.totalFiles);
@@ -330,12 +330,25 @@ export async function listBackupCommand(
       { key: 'other', label: 'Other' },
     ];
     
+    const typeRows: Array<{ type: string; files: string; size: string }> = [];
     for (const { key, label } of types) {
       const { count, size } = stats.byType[key];
       if (count > 0) {
-        console.log(`  ${label.padEnd(12)} ${fmt.formatNumber(count).padStart(8)} files (${fmt.fileSize(size).padStart(10)})`);
+        typeRows.push({
+          type: label,
+          files: fmt.formatNumber(count),
+          size: fmt.fileSize(size),
+        });
       }
     }
+    fmt.table(
+      [
+        { key: 'type' as const, label: 'Type', width: 14 },
+        { key: 'files' as const, label: 'Files', width: 10 },
+        { key: 'size' as const, label: 'Size', width: 12 },
+      ],
+      typeRows,
+    );
     
     // Detailed listing
     if (options.detailed) {

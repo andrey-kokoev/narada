@@ -17,6 +17,7 @@ import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { renderAndMaybeOpen } from '../lib/browser-render.js';
 import { createObservationArtifact } from '../lib/observation-artifact.js';
+import { formattedResult } from '../lib/cli-output.js';
 
 export interface TaskGraphOptions {
   format?: 'mermaid' | 'json' | 'auto';
@@ -188,12 +189,21 @@ export async function taskGraphCommand(
   fmt.kv('Observation artifact', observation.view.artifact_uri);
   fmt.kv('Digest', observation.view.digest);
   if (options.full) {
-    console.log('```mermaid');
-    console.log(mermaid.trimEnd());
-    console.log('```');
-  } else {
-    fmt.message('Full graph output suppressed by default. Use --full or --view for rendering.', 'info');
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: formattedResult(
+        {
+          status: 'success',
+          count: graph.nodes.length,
+          observation: observation.view,
+          mermaid,
+        },
+        ['```mermaid', mermaid.trimEnd(), '```'],
+        'human',
+      ),
+    };
   }
+  fmt.message('Full graph output suppressed by default. Use --full or --view for rendering.', 'info');
 
   return {
     exitCode: ExitCode.SUCCESS,
