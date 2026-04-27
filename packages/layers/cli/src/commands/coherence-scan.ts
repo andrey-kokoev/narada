@@ -12,14 +12,19 @@ export interface CoherenceScanOptions {
   format?: CliFormat;
   submit?: boolean;
   limit?: number;
+  modules?: string[];
   store?: SqliteInboxStore;
 }
 
 type CoherenceSeverity = 'info' | 'warning' | 'error';
 type CoherenceEnvelopeKind = Extract<InboxEnvelopeKind, 'observation' | 'task_candidate'>;
+export type CoherenceModule = 'operational' | 'semantic' | 'telos' | 'documentation';
+
+const ALL_MODULES: CoherenceModule[] = ['operational', 'semantic', 'telos', 'documentation'];
 
 interface CoherenceFinding {
   finding_id: string;
+  module: CoherenceModule;
   severity: CoherenceSeverity;
   confidence: 'low' | 'medium' | 'high';
   locus: string;
@@ -40,11 +45,19 @@ interface SubmittedFinding {
 export async function coherenceScanCommand(options: CoherenceScanOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
   const cwd = resolve(options.cwd ?? process.cwd());
   const limit = clampLimit(options.limit ?? 20);
-  const findings = (await collectFindings(cwd)).slice(0, limit);
+  const modules = parseModules(options.modules);
+  if (modules instanceof Error) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: { status: 'error', error: modules.message },
+    };
+  }
+  const findings = (await collectFindings(cwd, modules)).slice(0, limit);
   const submitted = options.submit ? await submitFindings(cwd, findings, options.store) : [];
   const result = {
     status: 'success',
     mode: options.submit ? 'submitted' : 'dry_run',
+    modules,
     finding_count: findings.length,
     findings,
     submitted,
@@ -52,7 +65,8 @@ export async function coherenceScanCommand(options: CoherenceScanOptions): Promi
   const human = [
     `Coherence findings: ${findings.length}`,
     `Mode: ${options.submit ? 'submitted' : 'dry-run'}`,
-    ...findings.map((finding) => `${finding.severity} ${finding.finding_id}: ${finding.title}`),
+    `Modules: ${modules.join(', ')}`,
+    ...findings.map((finding) => `${finding.severity} ${finding.module}/${finding.finding_id}: ${finding.title}`),
     ...(options.submit ? submitted.map((item) => `Submitted ${item.kind}: ${item.envelope_id}`) : ['No inbox mutation performed. Use --submit to emit envelopes.']),
   ];
   return {
@@ -61,13 +75,30 @@ export async function coherenceScanCommand(options: CoherenceScanOptions): Promi
   };
 }
 
-async function collectFindings(cwd: string): Promise<CoherenceFinding[]> {
+async function collectFindings(cwd: string, modules: CoherenceModule[]): Promise<CoherenceFinding[]> {
   const findings: CoherenceFinding[] = [];
-  const snapshotFinding = checkTaskLifecycleSnapshot(cwd);
-  if (snapshotFinding) findings.push(snapshotFinding);
+  if (modules.includes('operational')) {
+    const snapshotFinding = checkTaskLifecycleSnapshot(cwd);
+    if (snapshotFinding) findings.push(snapshotFinding);
 
-  const workNextFinding = await checkUnifiedWorkNextPeek(cwd);
-  if (workNextFinding) findings.push(workNextFinding);
+    const workNextFinding = await checkUnifiedWorkNextPeek(cwd);
+    if (workNextFinding) findings.push(workNextFinding);
+  }
+
+  if (modules.includes('semantic')) {
+    const semanticFinding = await checkSemanticTopologyDocumentation(cwd);
+    if (semanticFinding) findings.push(semanticFinding);
+  }
+
+  if (modules.includes('telos')) {
+    const telosFinding = await checkTelosDoctrine(cwd);
+    if (telosFinding) findings.push(telosFinding);
+  }
+
+  if (modules.includes('documentation')) {
+    const docFinding = await checkDocumentationCoherenceDoctrine(cwd);
+    if (docFinding) findings.push(docFinding);
+  }
 
   return findings;
 }
@@ -87,6 +118,7 @@ function checkTaskLifecycleSnapshot(cwd: string): CoherenceFinding | null {
     if (guard.status === 0) return null;
     return {
       finding_id: 'task-lifecycle-snapshot-stale',
+      module: 'operational',
       severity: 'error',
       confidence: 'high',
       locus: 'task_lifecycle_authority',
@@ -100,6 +132,7 @@ function checkTaskLifecycleSnapshot(cwd: string): CoherenceFinding | null {
   }
   return {
     finding_id: 'task-lifecycle-snapshot-posture-missing',
+    module: 'operational',
     severity: 'error',
     confidence: 'high',
     locus: 'task_lifecycle_authority',
@@ -125,6 +158,7 @@ async function checkUnifiedWorkNextPeek(cwd: string): Promise<CoherenceFinding |
   if (register.includes('--peek') || command.includes('peek?:')) return null;
   return {
     finding_id: 'work-next-missing-peek',
+    module: 'operational',
     severity: 'warning',
     confidence: 'high',
     locus: 'agent_work_selection',
@@ -137,6 +171,93 @@ async function checkUnifiedWorkNextPeek(cwd: string): Promise<CoherenceFinding |
     ],
     proposed_action: 'Add narada work-next --peek as a no-claim read-only inspection mode.',
     cooldown_key: 'work-next-missing-peek',
+  };
+}
+
+async function checkSemanticTopologyDocumentation(cwd: string): Promise<CoherenceFinding | null> {
+  const agents = await readFile(join(cwd, 'AGENTS.md'), 'utf8').catch(() => '');
+  const semantics = await readFile(join(cwd, 'SEMANTICS.md'), 'utf8').catch(() => '');
+  if (
+    agents.includes('composed topology of authority-homogeneous zones')
+    && semantics.includes('zone')
+    && semantics.includes('governed crossing')
+  ) {
+    return null;
+  }
+  return {
+    finding_id: 'semantic-topology-doctrine-missing',
+    module: 'semantic',
+    severity: 'warning',
+    confidence: 'medium',
+    locus: 'semantic_coherence',
+    kind: 'task_candidate',
+    title: 'Zone/crossing topology doctrine is not discoverable enough',
+    summary: 'Semantic coherence requires the topology reading to be visible from agent instructions and canonical semantics.',
+    evidence: [
+      `AGENTS topology phrase present=${agents.includes('composed topology of authority-homogeneous zones')}`,
+      `SEMANTICS zone present=${semantics.includes('zone')}`,
+      `SEMANTICS governed crossing present=${semantics.includes('governed crossing')}`,
+    ],
+    proposed_action: 'Amend semantic documentation so Zone and governed crossing remain the primary explanatory lens.',
+    cooldown_key: 'semantic-topology-doctrine',
+  };
+}
+
+async function checkTelosDoctrine(cwd: string): Promise<CoherenceFinding | null> {
+  const inhabited = await readFile(join(cwd, 'docs', 'concepts', 'inhabited-evolution.md'), 'utf8').catch(() => '');
+  const coherence = await readFile(join(cwd, 'docs', 'concepts', 'self-maintenance-coherence-loop.md'), 'utf8').catch(() => '');
+  const inhabitedLower = inhabited.toLowerCase();
+  if (
+    inhabitedLower.includes('build what the operation has earned')
+    && coherence.includes('treat earned evolution as valid unless an explicit invariant is violated')
+    && coherence.includes('Repair, promotion, and execution are never default scanner actions')
+  ) {
+    return null;
+  }
+  return {
+    finding_id: 'telos-preservation-doctrine-missing',
+    module: 'telos',
+    severity: 'warning',
+    confidence: 'medium',
+    locus: 'telos_preservation',
+    kind: 'task_candidate',
+    title: 'Telos preservation doctrine is not explicit enough',
+    summary: 'Telos preservation should protect earned evolution, intelligence-authority separation, and anti-autoimmune posture.',
+    evidence: [
+      `earned operation phrase present=${inhabitedLower.includes('build what the operation has earned')}`,
+      `earned evolution exception present=${coherence.includes('treat earned evolution as valid unless an explicit invariant is violated')}`,
+      `no default repair phrase present=${coherence.includes('Repair, promotion, and execution are never default scanner actions')}`,
+    ],
+    proposed_action: 'Amend coherence doctrine with explicit telos-preservation charter module rules.',
+    cooldown_key: 'telos-preservation-doctrine',
+  };
+}
+
+async function checkDocumentationCoherenceDoctrine(cwd: string): Promise<CoherenceFinding | null> {
+  const coherence = await readFile(join(cwd, 'docs', 'concepts', 'self-maintenance-coherence-loop.md'), 'utf8').catch(() => '');
+  if (
+    coherence.includes('Documentation Coherency')
+    && coherence.includes('Documentation findings should use the same envelope path')
+    && coherence.includes('premature machinery')
+  ) {
+    return null;
+  }
+  return {
+    finding_id: 'documentation-coherence-doctrine-missing',
+    module: 'documentation',
+    severity: 'info',
+    confidence: 'medium',
+    locus: 'documentation_coherence',
+    kind: 'task_candidate',
+    title: 'Documentation coherency charter posture is not explicit',
+    summary: 'Documentation coherency should remain a module until repeated drift earns a separate charter.',
+    evidence: [
+      `documentation section present=${coherence.includes('Documentation Coherency')}`,
+      `envelope path present=${coherence.includes('Documentation findings should use the same envelope path')}`,
+      `premature machinery phrase present=${coherence.includes('premature machinery')}`,
+    ],
+    proposed_action: 'Document documentation-coherence as a module under the event-summoned coherence loop.',
+    cooldown_key: 'documentation-coherence-doctrine',
   };
 }
 
@@ -158,6 +279,7 @@ async function submitFindings(
         authority: { level: 'system_observed', principal: 'coherence-scan' },
         payload: {
           title: finding.title,
+          module: finding.module,
           summary: finding.summary,
           severity: finding.severity,
           confidence: finding.confidence,
@@ -173,6 +295,20 @@ async function submitFindings(
   } finally {
     if (!providedStore) store.close();
   }
+}
+
+function parseModules(values: string[] | undefined): CoherenceModule[] | Error {
+  if (!values || values.length === 0) return [...ALL_MODULES];
+  const expanded = values.flatMap((value) => value.split(',')).map((value) => value.trim()).filter(Boolean);
+  if (expanded.includes('all')) return [...ALL_MODULES];
+  const modules: CoherenceModule[] = [];
+  for (const value of expanded) {
+    if (!ALL_MODULES.includes(value as CoherenceModule)) {
+      return new Error(`Invalid coherence module '${value}'. Expected one of: ${ALL_MODULES.join(', ')}, all`);
+    }
+    if (!modules.includes(value as CoherenceModule)) modules.push(value as CoherenceModule);
+  }
+  return modules.length > 0 ? modules : [...ALL_MODULES];
 }
 
 function hasOpenEnvelopeForFinding(store: SqliteInboxStore, finding: CoherenceFinding): boolean {

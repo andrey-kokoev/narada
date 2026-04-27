@@ -1,7 +1,7 @@
 {
   "snapshot_kind": "task_lifecycle_snapshot",
   "snapshot_version": 1,
-  "exported_at": "2026-04-27T13:55:00.060Z",
+  "exported_at": "2026-04-27T14:19:19.312Z",
   "tables": [
     {
       "name": "agent_roster",
@@ -26,7 +26,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 720,
-          "updated_at": "2026-04-27T13:55:00.060Z"
+          "updated_at": "2026-04-27T14:19:19.312Z"
         },
         {
           "agent_id": "a2",
@@ -37,7 +37,7 @@
           "status": "idle",
           "task_number": null,
           "last_done": 886,
-          "updated_at": "2026-04-27T13:55:00.060Z"
+          "updated_at": "2026-04-27T14:19:19.312Z"
         },
         {
           "agent_id": "a3",
@@ -48,7 +48,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 610,
-          "updated_at": "2026-04-27T13:55:00.060Z"
+          "updated_at": "2026-04-27T14:19:19.312Z"
         },
         {
           "agent_id": "a4",
@@ -59,7 +59,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 574,
-          "updated_at": "2026-04-27T13:55:00.060Z"
+          "updated_at": "2026-04-27T14:19:19.312Z"
         },
         {
           "agent_id": "a5",
@@ -70,7 +70,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 551,
-          "updated_at": "2026-04-27T13:55:00.060Z"
+          "updated_at": "2026-04-27T14:19:19.312Z"
         },
         {
           "agent_id": "a6",
@@ -81,18 +81,18 @@
           "status": "done",
           "task_number": null,
           "last_done": 545,
-          "updated_at": "2026-04-27T13:55:00.060Z"
+          "updated_at": "2026-04-27T14:19:19.312Z"
         },
         {
           "agent_id": "architect",
           "role": "implementer",
           "capabilities_json": "[\"derive\",\"propose\",\"claim\",\"execute\",\"resolve\",\"confirm\"]",
           "first_seen_at": "2026-04-26T22:28:56.453Z",
-          "last_active_at": "2026-04-27T13:55:00.060Z",
+          "last_active_at": "2026-04-27T14:19:19.312Z",
           "status": "done",
           "task_number": null,
-          "last_done": 971,
-          "updated_at": "2026-04-27T13:55:00.060Z"
+          "last_done": 972,
+          "updated_at": "2026-04-27T14:19:19.312Z"
         }
       ]
     },
@@ -5957,6 +5957,27 @@
           "confirmation_json": "{\"task_id\":\"20260427-971-unified-work-next-lacks-a-read-only-peek-mode\",\"task_number\":971,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
           "warnings_json": null,
           "updated_at": "2026-04-27T13:50:00.151Z"
+        },
+        {
+          "request_id": "air_claim_972_architect_1777299306007_ug0dzv",
+          "kind": "claim",
+          "task_id": "20260427-972-organize-coherence-scan-as-chartered-module-bundle",
+          "task_number": 972,
+          "agent_id": "architect",
+          "requested_by": "architect",
+          "requested_at": "2026-04-27T14:15:06.007Z",
+          "reason": null,
+          "no_claim": 0,
+          "status": "applied",
+          "rejection_reason": null,
+          "assignment_id": "assign-20260427-972-organize-coherence-scan-as-chartered-module-bundle-architect-1777299306007",
+          "previous_agent_id": null,
+          "lifecycle_status_before": "opened",
+          "lifecycle_status_after": "claimed",
+          "roster_status_after": "working",
+          "confirmation_json": "{\"task_id\":\"20260427-972-organize-coherence-scan-as-chartered-module-bundle\",\"task_number\":972,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
+          "warnings_json": null,
+          "updated_at": "2026-04-27T14:15:07.073Z"
         }
       ]
     },
@@ -6889,6 +6910,15 @@
           "proved_at": "2026-04-27T13:54:56.019Z",
           "criteria_json": "[{\"text\":\"Inbox envelope env_4aa73794-308d-443f-967c-eb259f0ea7f6 has been handled.\",\"checked\":true}]",
           "verification_binding_json": "{\"state\":\"unbound\",\"rationale\":\"Implemented unified work-next --peek. The command rejects --peek with execution flags, reports current task work before future claimable work, uses task peek-next for claimable task inspection, and calls inbox work-next without claim for inbox inspection. Focused tests cover task peek without claim, current-task precedence, inbox peek without claim, invalid flag combinations, and coherence scanner no longer reports missing peek. Live CLI returned current Task 971 and coherence scan returned zero findings after snapshot refresh; pnpm verify passed.\"}"
+        },
+        {
+          "proof_id": "criteria_proof_20260427-972-organize-coherence-scan-as-chartered-module-bundle_2026-04-27T14:19:13.580Z",
+          "task_id": "20260427-972-organize-coherence-scan-as-chartered-module-bundle",
+          "task_number": 972,
+          "proved_by": "architect",
+          "proved_at": "2026-04-27T14:19:13.580Z",
+          "criteria_json": "[{\"text\":\"coherence scan exposes explicit selectable modules\",\"checked\":true},{\"text\":\"findings identify their charter module\",\"checked\":true},{\"text\":\"documentation defines module scope\",\"checked\":true},{\"text\":\"invariants\",\"checked\":true},{\"text\":\"evidence\",\"checked\":true},{\"text\":\"false-positive posture\",\"checked\":true},{\"text\":\"output kind\",\"checked\":true},{\"text\":\"severity\",\"checked\":true},{\"text\":\"cooldown\",\"checked\":true},{\"text\":\"and max findings policy\",\"checked\":true},{\"text\":\"telos preservation is represented as a charter module under the coherence umbrella\",\"checked\":true},{\"text\":\"not a separate resident agent\",\"checked\":true},{\"text\":\"focused tests cover module selection and dry-run/submission behavior\",\"checked\":true}]",
+          "verification_binding_json": "{\"state\":\"unbound\",\"rationale\":\"Organized coherence scan as an explicit charter-module bundle. The scan now supports selectable modules (operational, semantic, telos, documentation, all), tags each finding with its module, and documents scope/invariants/evidence/false-positive/output/severity/cooldown/max-findings policy. Telos preservation is represented as a module under the event-summoned coherence umbrella rather than a separate resident agent. Focused tests cover module selection, module tagging, invalid module rejection, dry-run, explicit inbox submission, and dedupe. Live all-module scan returned zero findings after snapshot refresh; pnpm verify passed.\"}"
         }
       ]
     },
@@ -14790,6 +14820,32 @@
           "admitted_at": "2026-04-27T13:54:57.090Z",
           "admitted_by": "architect",
           "confirmation_json": "{\"has_report\":false,\"has_review\":false,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_972_1777299553662_67g30s",
+          "bundle_id": "evb_972_1777299553662_4sw0ms",
+          "task_id": "20260427-972-organize-coherence-scan-as-chartered-module-bundle",
+          "task_number": 972,
+          "verdict": "admitted",
+          "methods_json": "[\"criteria_proof\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T14:19:13.662Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":false,\"has_review\":false,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_972_1777299554212_m9vmsw",
+          "bundle_id": "evb_972_1777299554212_73f27z",
+          "task_id": "20260427-972-organize-coherence-scan-as-chartered-module-bundle",
+          "task_number": 972,
+          "verdict": "admitted",
+          "methods_json": "[\"admission\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": "closed",
+          "admitted_at": "2026-04-27T14:19:14.212Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":false,\"has_review\":false,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
         }
       ]
     },
@@ -22673,6 +22729,32 @@
           "residuals_json": "[]",
           "assembled_at": "2026-04-27T13:54:57.090Z",
           "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_972_1777299553662_4sw0ms",
+          "task_id": "20260427-972-organize-coherence-scan-as-chartered-module-bundle",
+          "task_number": 972,
+          "report_ids_json": "[]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[]",
+          "changed_files_json": "[]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T14:19:13.662Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_972_1777299554212_73f27z",
+          "task_id": "20260427-972-organize-coherence-scan-as-chartered-module-bundle",
+          "task_number": 972,
+          "report_ids_json": "[]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[]",
+          "changed_files_json": "[]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T14:19:14.212Z",
+          "assembled_by": "architect"
         }
       ]
     },
@@ -25786,6 +25868,11 @@
           "task_id": "20260427-971-unified-work-next-lacks-a-read-only-peek-mode",
           "record_json": "{\"task_id\":\"20260427-971-unified-work-next-lacks-a-read-only-peek-mode\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T13:49:57.122Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T13:54:57.726Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
           "updated_at": "2026-04-27T13:54:57.931Z"
+        },
+        {
+          "task_id": "20260427-972-organize-coherence-scan-as-chartered-module-bundle",
+          "record_json": "{\"task_id\":\"20260427-972-organize-coherence-scan-as-chartered-module-bundle\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T14:15:06.214Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T14:19:14.831Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
+          "updated_at": "2026-04-27T14:19:15.039Z"
         }
       ]
     },
@@ -28443,6 +28530,15 @@
           "task_id": "20260427-971-unified-work-next-lacks-a-read-only-peek-mode",
           "agent_id": "architect",
           "claimed_at": "2026-04-27T13:49:57.122Z",
+          "released_at": null,
+          "release_reason": null,
+          "intent": "primary"
+        },
+        {
+          "assignment_id": "assign-20260427-972-organize-coherence-scan-as-chartered-module-bundle-architect-1777299306007",
+          "task_id": "20260427-972-organize-coherence-scan-as-chartered-module-bundle",
+          "agent_id": "architect",
+          "claimed_at": "2026-04-27T14:15:06.214Z",
           "released_at": null,
           "release_reason": null,
           "intent": "primary"
@@ -40788,6 +40884,19 @@
           "continuation_packet_json": null,
           "updated_at": "2026-04-27T13:54:59.361Z",
           "closure_mode": "operator_direct"
+        },
+        {
+          "task_id": "20260427-972-organize-coherence-scan-as-chartered-module-bundle",
+          "task_number": 972,
+          "status": "closed",
+          "governed_by": "task_close:architect",
+          "closed_at": "2026-04-27T14:19:18.552Z",
+          "closed_by": "architect",
+          "reopened_at": null,
+          "reopened_by": null,
+          "continuation_packet_json": null,
+          "updated_at": "2026-04-27T14:19:18.553Z",
+          "closure_mode": "operator_direct"
         }
       ]
     },
@@ -40813,7 +40922,7 @@
       "rows": [
         {
           "singleton": 1,
-          "last_allocated": 971
+          "last_allocated": 972
         }
       ]
     },
@@ -43274,6 +43383,14 @@
           "agent_id": "architect",
           "reported_at": "2026-04-27T13:54:57.726Z",
           "report_json": "{\"report_id\":\"wrr_c590e31e_20260427-971-unified-work-next-lacks-a-read-only-peek-mode_architect\",\"task_number\":\"971\",\"task_id\":\"20260427-971-unified-work-next-lacks-a-read-only-peek-mode\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-971-unified-work-next-lacks-a-read-only-peek-mode-2026-04-27T13:49:57.122Z\",\"reported_at\":\"2026-04-27T13:54:57.726Z\",\"summary\":\"Added read-only unified work-next --peek with current-task precedence and no-claim inbox/task inspection. Verified focused tests, live CLI, coherence scan, and pnpm verify.\",\"changed_files\":[],\"verification\":[],\"known_residuals\":[],\"ready_for_review\":true,\"report_status\":\"submitted\"}"
+        },
+        {
+          "report_id": "wrr_d2850114_20260427-972-organize-coherence-scan-as-chartered-module-bundle_architect",
+          "task_id": "20260427-972-organize-coherence-scan-as-chartered-module-bundle",
+          "assignment_id": "20260427-972-organize-coherence-scan-as-chartered-module-bundle-2026-04-27T14:15:06.214Z",
+          "agent_id": "architect",
+          "reported_at": "2026-04-27T14:19:14.831Z",
+          "report_json": "{\"report_id\":\"wrr_d2850114_20260427-972-organize-coherence-scan-as-chartered-module-bundle_architect\",\"task_number\":\"972\",\"task_id\":\"20260427-972-organize-coherence-scan-as-chartered-module-bundle\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-972-organize-coherence-scan-as-chartered-module-bundle-2026-04-27T14:15:06.214Z\",\"reported_at\":\"2026-04-27T14:19:14.831Z\",\"summary\":\"Added charter-module organization for the coherence scan umbrella, module selection, module-tagged findings, documentation, and focused tests.\",\"changed_files\":[],\"verification\":[],\"known_residuals\":[],\"ready_for_review\":true,\"report_status\":\"submitted\"}"
         }
       ]
     },
@@ -55324,6 +55441,19 @@
           "acceptance_criteria_json": "[\"Inbox envelope env_4aa73794-308d-443f-967c-eb259f0ea7f6 has been handled.\"]",
           "dependencies_json": "[]",
           "updated_at": "2026-04-27T13:49:53.316Z"
+        },
+        {
+          "task_id": "20260427-972-organize-coherence-scan-as-chartered-module-bundle",
+          "task_number": 972,
+          "title": "Organize coherence scan as chartered module bundle",
+          "chapter_markdown": "Coherence Agent Umbrella",
+          "goal_markdown": "Make the coherence agent umbrella Narada-compliant by representing it as a bounded event-summoned scan bundle with explicit charter modules for operational, semantic, telos, and documentation coherence.",
+          "context_markdown": null,
+          "required_work_markdown": "1. TBD",
+          "non_goals_markdown": "- Do not expand scope beyond this task.\n- Do not create derivative task-status files.\n- Do not mutate live external systems unless explicitly authorized.",
+          "acceptance_criteria_json": "[\"coherence scan exposes explicit selectable modules\",\"findings identify their charter module\",\"documentation defines module scope\",\"invariants\",\"evidence\",\"false-positive posture\",\"output kind\",\"severity\",\"cooldown\",\"and max findings policy\",\"telos preservation is represented as a charter module under the coherence umbrella\",\"not a separate resident agent\",\"focused tests cover module selection and dry-run/submission behavior\"]",
+          "dependencies_json": "[]",
+          "updated_at": "2026-04-27T14:15:05.368Z"
         }
       ]
     },
