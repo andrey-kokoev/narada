@@ -18,9 +18,26 @@ export interface CoherenceScanOptions {
 
 type CoherenceSeverity = 'info' | 'warning' | 'error';
 type CoherenceEnvelopeKind = Extract<InboxEnvelopeKind, 'observation' | 'task_candidate'>;
-export type CoherenceModule = 'operational' | 'semantic' | 'telos' | 'documentation';
+export type CoherenceModule = 'operational' | 'semantic' | 'telos' | 'documentation' | 'authority_inversion';
 
 const ALL_MODULES: CoherenceModule[] = ['operational', 'semantic', 'telos', 'documentation'];
+const VALID_MODULES: CoherenceModule[] = [...ALL_MODULES, 'authority_inversion'];
+
+interface AuthorityInversionInventory {
+  findings?: AuthorityInversionInventoryFinding[];
+}
+
+interface AuthorityInversionInventoryFinding {
+  finding_id?: unknown;
+  surface?: unknown;
+  visible_artifact?: unknown;
+  hidden_authority_structure?: unknown;
+  current_guard?: unknown;
+  gap?: unknown;
+  severity?: unknown;
+  recommended_follow_up?: unknown;
+  candidate_tasks?: unknown;
+}
 
 interface CoherenceFinding {
   finding_id: string;
@@ -98,6 +115,10 @@ async function collectFindings(cwd: string, modules: CoherenceModule[]): Promise
   if (modules.includes('documentation')) {
     const docFinding = await checkDocumentationCoherenceDoctrine(cwd);
     if (docFinding) findings.push(docFinding);
+  }
+
+  if (modules.includes('authority_inversion')) {
+    findings.push(...await checkAuthorityInversionInventory(cwd));
   }
 
   return findings;
@@ -261,6 +282,90 @@ async function checkDocumentationCoherenceDoctrine(cwd: string): Promise<Coheren
   };
 }
 
+async function checkAuthorityInversionInventory(cwd: string): Promise<CoherenceFinding[]> {
+  const inventoryPath = join(cwd, 'docs', 'concepts', 'authority-inversion-inventory.json');
+  const raw = await readFile(inventoryPath, 'utf8').catch(() => null);
+  if (!raw) {
+    return [{
+      finding_id: 'authority-inversion-inventory-missing',
+      module: 'authority_inversion',
+      severity: 'warning',
+      confidence: 'high',
+      locus: 'authority_inversion_doctrine',
+      kind: 'task_candidate',
+      title: 'Authority inversion inventory is missing',
+      summary: 'Authority-Revealing Inversion scanner needs the bounded inventory artifact produced by task 991.',
+      evidence: [`missing=${inventoryPath}`],
+      proposed_action: 'Restore docs/concepts/authority-inversion-inventory.json or rerun task 991.',
+      cooldown_key: 'authority-inversion-inventory-missing',
+    }];
+  }
+
+  let parsed: AuthorityInversionInventory;
+  try {
+    parsed = JSON.parse(raw) as AuthorityInversionInventory;
+  } catch (error) {
+    return [{
+      finding_id: 'authority-inversion-inventory-invalid-json',
+      module: 'authority_inversion',
+      severity: 'error',
+      confidence: 'high',
+      locus: 'authority_inversion_doctrine',
+      kind: 'task_candidate',
+      title: 'Authority inversion inventory is invalid JSON',
+      summary: 'The scanner cannot consume the authority inversion inventory.',
+      evidence: [error instanceof Error ? error.message : String(error)],
+      proposed_action: 'Fix docs/concepts/authority-inversion-inventory.json so it parses as JSON.',
+      cooldown_key: 'authority-inversion-inventory-invalid-json',
+    }];
+  }
+
+  const entries = Array.isArray(parsed.findings) ? parsed.findings : [];
+  if (entries.length === 0) {
+    return [{
+      finding_id: 'authority-inversion-inventory-empty',
+      module: 'authority_inversion',
+      severity: 'warning',
+      confidence: 'high',
+      locus: 'authority_inversion_doctrine',
+      kind: 'task_candidate',
+      title: 'Authority inversion inventory is empty',
+      summary: 'The scanner has no bounded artifact-first authority categories to inspect.',
+      evidence: ['findings=[]'],
+      proposed_action: 'Populate the inventory with bounded authority inversion findings.',
+      cooldown_key: 'authority-inversion-inventory-empty',
+    }];
+  }
+
+  return entries.map((entry) => inventoryEntryToFinding(entry));
+}
+
+function inventoryEntryToFinding(entry: AuthorityInversionInventoryFinding): CoherenceFinding {
+  const findingId = stringOr(entry.finding_id, 'authority-inversion-unknown');
+  const severity = parseSeverity(entry.severity);
+  const candidateTasks = Array.isArray(entry.candidate_tasks)
+    ? entry.candidate_tasks.filter((value) => Number.isFinite(Number(value))).map((value) => Number(value))
+    : [];
+  return {
+    finding_id: `authority-inversion-${findingId}`,
+    module: 'authority_inversion',
+    severity,
+    confidence: 'medium',
+    locus: stringOr(entry.surface, 'authority_inversion'),
+    kind: severity === 'info' ? 'observation' : 'task_candidate',
+    title: `Authority inversion risk: ${findingId}`,
+    summary: stringOr(entry.gap, 'Visible artifact may be mistaken for authority.'),
+    evidence: [
+      `visible_artifact=${stringOr(entry.visible_artifact, 'unknown')}`,
+      `hidden_authority=${stringOr(entry.hidden_authority_structure, 'unknown')}`,
+      `current_guard=${stringOr(entry.current_guard, 'unknown')}`,
+      candidateTasks.length > 0 ? `candidate_tasks=${candidateTasks.join(',')}` : 'candidate_tasks=none',
+    ],
+    proposed_action: stringOrNull(entry.recommended_follow_up),
+    cooldown_key: `authority-inversion:${findingId}`,
+  };
+}
+
 async function submitFindings(
   cwd: string,
   findings: CoherenceFinding[],
@@ -300,11 +405,11 @@ async function submitFindings(
 function parseModules(values: string[] | undefined): CoherenceModule[] | Error {
   if (!values || values.length === 0) return [...ALL_MODULES];
   const expanded = values.flatMap((value) => value.split(',')).map((value) => value.trim()).filter(Boolean);
-  if (expanded.includes('all')) return [...ALL_MODULES];
+  if (expanded.includes('all')) return [...VALID_MODULES];
   const modules: CoherenceModule[] = [];
   for (const value of expanded) {
-    if (!ALL_MODULES.includes(value as CoherenceModule)) {
-      return new Error(`Invalid coherence module '${value}'. Expected one of: ${ALL_MODULES.join(', ')}, all`);
+    if (!VALID_MODULES.includes(value as CoherenceModule)) {
+      return new Error(`Invalid coherence module '${value}'. Expected one of: ${VALID_MODULES.join(', ')}, all`);
     }
     if (!modules.includes(value as CoherenceModule)) modules.push(value as CoherenceModule);
   }
@@ -339,4 +444,16 @@ function firstLines(text: string, limit: number): string[] {
 
 function clampLimit(limit: number): number {
   return Math.max(1, Math.min(limit, 50));
+}
+
+function stringOr(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim().length > 0 ? value : fallback;
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
+
+function parseSeverity(value: unknown): CoherenceSeverity {
+  return value === 'error' || value === 'warning' || value === 'info' ? value : 'warning';
 }

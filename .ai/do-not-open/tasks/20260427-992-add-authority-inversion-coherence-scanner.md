@@ -1,8 +1,17 @@
 ---
-status: opened
+status: closed
 depends_on: [991]
 amended_by: architect
 amended_at: 2026-04-27T21:49:37.691Z
+criteria_proved_by: architect
+criteria_proved_at: 2026-04-27T22:02:22.287Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-27T22:02:22.704Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: agent_finish
 ---
 
 # Add authority inversion coherence scanner
@@ -43,8 +52,8 @@ Task 991 inventories artifact-first authority leaks. This task operationalizes t
 
 ## Acceptance Criteria
 
-- [ ] Scanner module uses the inventory categories from task 991.
-- [ ] Findings include artifact, authority/lifecycle/evidence/locus gap, severity, and proposed governed action.
-- [ ] Scanner is read-only and rate-limited to avoid autoimmune churn.
-- [ ] Focused tests cover at least task files, inbox DB/envelope posture, and CLI output artifacts.
-- [ ] `pnpm verify` passes.
+- [x] Scanner module uses the inventory categories from task 991.
+- [x] Findings include artifact, authority/lifecycle/evidence/locus gap, severity, and proposed governed action.
+- [x] Scanner is read-only and rate-limited to avoid autoimmune churn.
+- [x] Focused tests cover at least task files, inbox DB/envelope posture, and CLI output artifacts.
+- [x] `pnpm verify` passes.

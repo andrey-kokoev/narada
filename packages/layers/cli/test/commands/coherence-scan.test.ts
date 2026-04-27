@@ -94,6 +94,69 @@ describe('coherence scan command', () => {
     });
   });
 
+  it('scans authority inversion inventory only when explicitly selected', async () => {
+    const defaultScan = await coherenceScanCommand({ cwd: tempDir, format: 'json' });
+    const authorityScan = await coherenceScanCommand({
+      cwd: tempDir,
+      format: 'json',
+      modules: ['authority_inversion'],
+      limit: 2,
+    });
+
+    expect(defaultScan.exitCode).toBe(ExitCode.SUCCESS);
+    expect((defaultScan.result as { modules: string[] }).modules).not.toContain('authority_inversion');
+    expect(authorityScan.exitCode).toBe(ExitCode.SUCCESS);
+    expect(authorityScan.result).toMatchObject({
+      modules: ['authority_inversion'],
+      finding_count: 2,
+      findings: [
+        {
+          module: 'authority_inversion',
+          finding_id: 'authority-inversion-task-markdown-projection-authority',
+          locus: 'task_lifecycle',
+          kind: 'task_candidate',
+          cooldown_key: 'authority-inversion:task-markdown-projection-authority',
+        },
+        {
+          module: 'authority_inversion',
+          finding_id: 'authority-inversion-inbox-db-envelope-authority',
+          locus: 'inbox',
+          kind: 'observation',
+        },
+      ],
+    });
+  });
+
+  it('submits authority inversion findings without duplicating active cooldown keys', async () => {
+    const store = new SqliteInboxStore(join(tempDir, '.ai', 'inbox.db'));
+    const first = await coherenceScanCommand({
+      cwd: tempDir,
+      format: 'json',
+      modules: ['authority_inversion'],
+      limit: 1,
+      submit: true,
+      store,
+    });
+    const second = await coherenceScanCommand({
+      cwd: tempDir,
+      format: 'json',
+      modules: ['authority_inversion'],
+      limit: 1,
+      submit: true,
+      store,
+    });
+
+    expect(first.exitCode).toBe(ExitCode.SUCCESS);
+    expect(second.exitCode).toBe(ExitCode.SUCCESS);
+    expect((first.result as { submitted: unknown[] }).submitted).toHaveLength(1);
+    expect((second.result as { submitted: unknown[] }).submitted).toHaveLength(0);
+    expect(store.list({ limit: 10 })[0].payload).toMatchObject({
+      module: 'authority_inversion',
+      cooldown_key: 'authority-inversion:task-markdown-projection-authority',
+    });
+    store.close();
+  });
+
   it('rejects unknown charter modules', async () => {
     const result = await coherenceScanCommand({
       cwd: tempDir,
@@ -129,6 +192,35 @@ function setupRepo(cwd: string): void {
       'Documentation findings should use the same envelope path',
       'premature machinery',
     ].join('\n'),
+  );
+  writeFileSync(
+    join(cwd, 'docs', 'concepts', 'authority-inversion-inventory.json'),
+    JSON.stringify({
+      findings: [
+        {
+          finding_id: 'task-markdown-projection-authority',
+          surface: 'task_lifecycle',
+          visible_artifact: '.ai/do-not-open/tasks/*.md',
+          hidden_authority_structure: 'command-mediated task lifecycle',
+          current_guard: 'task file guard',
+          gap: 'markdown can look authoritative',
+          severity: 'warning',
+          recommended_follow_up: 'Surface advisory warning.',
+          candidate_tasks: [992, 993],
+        },
+        {
+          finding_id: 'inbox-db-envelope-authority',
+          surface: 'inbox',
+          visible_artifact: '.ai/inbox.db',
+          hidden_authority_structure: 'inert envelopes and governed promotion',
+          current_guard: 'inbox export/import',
+          gap: 'transitions need normalized mutation evidence',
+          severity: 'info',
+          recommended_follow_up: 'Emit inbox mutation evidence.',
+          candidate_tasks: [996],
+        },
+      ],
+    }, null, 2),
   );
   execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['init', '-b', 'main'], { cwd });
   execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['config', 'user.email', 'test@example.invalid'], { cwd });

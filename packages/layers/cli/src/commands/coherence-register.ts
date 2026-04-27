@@ -11,7 +11,7 @@ export function registerCoherenceCommands(program: Command): void {
   coherenceCmd
     .command('scan')
     .description('Scan for bounded repo incoherences and optionally submit inbox envelopes')
-    .option('--module <name>', 'Module to run: operational, semantic, telos, documentation, or all; repeatable/comma-separated', collectValues, [])
+    .option('--module <name>', 'Module to run: operational, semantic, telos, documentation, authority_inversion, or all; repeatable/comma-separated', collectValues, [])
     .option('--submit', 'Submit findings to Canonical Inbox as inert envelopes', false)
     .option('--limit <n>', 'Maximum findings', '20')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
