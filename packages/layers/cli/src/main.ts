@@ -8,6 +8,7 @@ import { registerInspectionAdminCommands } from './commands/inspection-admin-reg
 import { registerSitesCommands } from './commands/sites-register.js';
 import { registerConsoleCommands } from './commands/console-register.js';
 import { registerWorkbenchCommands } from './commands/workbench-register.js';
+import { registerResumeCommands } from './commands/resume-register.js';
 import { registerWorkNextCommands } from './commands/work-next-register.js';
 import { registerPrincipalCommands } from './commands/principal-register.js';
 import { registerTaskAuthoringCommands } from './commands/task-authoring-register.js';
@@ -70,6 +71,7 @@ registerInspectionAdminCommands(program);
 registerSitesCommands(program);
 registerConsoleCommands(program);
 registerWorkbenchCommands(program);
+registerResumeCommands(program);
 registerWorkNextCommands(program);
 registerPrincipalCommands(program);
 
