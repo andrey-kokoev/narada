@@ -211,14 +211,48 @@ describe('Canonical Inbox CLI commands', () => {
     }
   });
 
+  it('auto-refreshes work-next from exported envelope artifacts', async () => {
+    const sourceDir = mkdtempSync(join(tmpdir(), 'narada-inbox-export-source-'));
+    try {
+      const submitted = await inboxSubmitCommand({
+        cwd: sourceDir,
+        format: 'json',
+        sourceKind: 'agent_report',
+        sourceRef: 'codex-session:auto-refresh',
+        kind: 'observation',
+        authorityLevel: 'agent_reported',
+        principal: 'codex',
+        payload: JSON.stringify({ title: 'Auto refresh visible' }),
+      });
+      expect(submitted.exitCode).toBe(ExitCode.SUCCESS);
+      const exportDir = join(tempDir, '.ai', 'inbox-envelopes');
+      const exported = await inboxExportCommand({
+        cwd: sourceDir,
+        format: 'json',
+        outDir: exportDir,
+      });
+      expect(exported.exitCode).toBe(ExitCode.SUCCESS);
+
+      const next = await inboxWorkNextCommand({ cwd: tempDir, format: 'json' });
+
+      expect(next.exitCode).toBe(ExitCode.SUCCESS);
+      const primary = (next.result as { primary: { payload: { title: string } } | null }).primary;
+      expect(primary?.payload.title).toBe('Auto refresh visible');
+    } finally {
+      rmSync(sourceDir, { recursive: true, force: true });
+    }
+  });
+
   it('reports conflict-safe local DB posture in doctor delivery coordinates', async () => {
     setupGitRepo(tempDir);
     const doctor = await inboxDoctorCommand({ cwd: tempDir, format: 'json' });
-    const delivery = (doctor.result as { delivery: Record<string, unknown> }).delivery;
+    const result = doctor.result as { delivery: Record<string, unknown>; refresh: Record<string, unknown> };
+    const delivery = result.delivery;
     expect(delivery).toMatchObject({
       export_dir: join(tempDir, '.ai', 'inbox-envelopes'),
       git_conflict_posture: 'local sqlite db ignored; use inbox export/import for portable envelopes',
     });
+    expect(result.refresh).toMatchObject({ imported: 0, skipped: 0, exported_count: 0 });
   });
 
   it('rejects ambiguous payload sources', async () => {

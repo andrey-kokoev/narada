@@ -139,6 +139,7 @@ export async function inboxDoctorCommand(options: InboxDoctorOptions): Promise<{
   const cwd = options.cwd ?? process.cwd();
   const delivery = inspectInboxDelivery(cwd);
   const readiness = inspectInboxReadiness(cwd, delivery.inbox_db_path);
+  const refresh = await refreshInboxFromExports(new SqliteInboxStore(String(delivery.inbox_db_path)), cwd, { closeStore: true });
   const checks = [
     { name: 'repo_detected', ok: delivery.repo_root !== null, detail: delivery.repo_root ?? 'not a git worktree' },
     { name: 'inbox_db_accessible', ok: readiness.inbox_db_accessible, detail: readiness.inbox_db_detail },
@@ -152,6 +153,7 @@ export async function inboxDoctorCommand(options: InboxDoctorOptions): Promise<{
       ready: ok,
       delivery,
       readiness,
+      refresh,
       checks,
     },
     [
@@ -161,6 +163,7 @@ export async function inboxDoctorCommand(options: InboxDoctorOptions): Promise<{
       `Branch: ${delivery.branch ?? 'unknown'}`,
       `HEAD: ${delivery.head_commit ?? 'unknown'}`,
       `Remote visibility: ${delivery.head_matches_remote === true ? 'current' : delivery.head_matches_remote === false ? 'not current' : 'unknown'}`,
+      `Export refresh: ${refresh.imported} imported, ${refresh.skipped} already present, ${refresh.exported_count} artifacts`,
       ...checks.map((check) => `${check.ok ? 'ok' : 'warn'} ${check.name}: ${check.detail}`),
     ],
     options.format,
@@ -204,60 +207,19 @@ export async function inboxImportCommand(options: InboxImportOptions): Promise<{
   const cwd = options.cwd ?? process.cwd();
   const fromDir = resolve(cwd, options.fromDir ?? join('.ai', 'inbox-envelopes'));
   return withInboxStoreAsync(options, async (store) => {
-    let names: string[];
-    try {
-      names = (await readdir(fromDir)).filter((name) => name.endsWith('.json')).sort();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return errorResult(`Failed to read inbox import directory: ${message}`);
-    }
-    let imported = 0;
-    let skipped = 0;
-    const files: string[] = [];
-    for (const name of names) {
-      const path = join(fromDir, name);
-      const parsed = parsePayload(await readFile(path, 'utf8'));
-      if (parsed instanceof Error) return errorResult(`Invalid exported envelope ${name}: ${parsed.message}`);
-      const envelope = parsed as InboxEnvelope;
-      if (!isValidExportedEnvelope(envelope)) return errorResult(`Invalid exported envelope shape: ${name}`);
-      if (store.get(envelope.envelope_id)) {
-        skipped += 1;
-        continue;
-      }
-      const inserted = store.insert({
-        envelope_id: envelope.envelope_id,
-        received_at: envelope.received_at,
-        source: envelope.source,
-        kind: envelope.kind,
-        authority: envelope.authority,
-        payload: envelope.payload,
-      });
-      if (envelope.status === 'archived') {
-        store.archive(inserted.envelope_id, envelope.promotion ?? {
-          target_kind: 'archive',
-          target_ref: `archive:${inserted.envelope_id}`,
-          promoted_at: new Date().toISOString(),
-          promoted_by: 'inbox import',
-          enactment_status: 'recorded',
-          note: 'Imported archived envelope without original promotion metadata.',
-        });
-      } else if (envelope.status === 'promoted' && envelope.promotion) {
-        store.promote(inserted.envelope_id, envelope.promotion);
-      }
-      imported += 1;
-      files.push(path);
-    }
+    const refresh = await refreshInboxFromExports(store, cwd, { fromDir, missingDirIsEmpty: false });
+    if (refresh.error) return errorResult(refresh.error);
     return okResult(
       {
         status: 'success',
-        imported,
-        skipped,
+        imported: refresh.imported,
+        skipped: refresh.skipped,
         from_dir: fromDir,
-        files,
+        files: refresh.files,
       },
       [
-        `Inbox envelopes imported: ${imported}`,
-        `Skipped existing: ${skipped}`,
+        `Inbox envelopes imported: ${refresh.imported}`,
+        `Skipped existing: ${refresh.skipped}`,
         `Source: ${fromDir}`,
       ],
       options.format,
@@ -271,6 +233,7 @@ export async function inboxListCommand(options: InboxListOptions): Promise<{ exi
   if (options.status && !status) return errorResult(`Invalid status: ${options.status}`);
   if (options.kind && !kind) return errorResult(`Invalid kind: ${options.kind}`);
   return withInboxStoreAsync(options, async (store) => {
+    await refreshInboxFromExports(store, options.cwd ?? process.cwd());
     const envelopes = selectEnvelopes(store, { status, kind, limit: options.limit });
     return okResult(
       { status: 'success', count: envelopes.length, envelopes },
@@ -291,6 +254,7 @@ export async function inboxNextCommand(options: InboxNextOptions): Promise<{ exi
   if (options.kind && !kind) return errorResult(`Invalid kind: ${options.kind}`);
 
   return withInboxStoreAsync(options, async (store) => {
+    await refreshInboxFromExports(store, options.cwd ?? process.cwd());
     const limit = clampLimit(options.limit ?? 5);
     const envelopes = selectEnvelopes(store, { status, kind, limit });
     const [primary, ...alternatives] = envelopes;
@@ -323,6 +287,7 @@ export async function inboxWorkNextCommand(options: InboxWorkNextOptions): Promi
   if (options.claim && !options.by) return errorResult('--by is required with --claim');
 
   return withInboxStoreAsync(options, async (store) => {
+    await refreshInboxFromExports(store, options.cwd ?? process.cwd());
     const limit = clampLimit(options.limit ?? 5);
     const envelopes = selectEnvelopes(store, { status, kind, limit });
     const [selected, ...alternatives] = envelopes;
@@ -363,6 +328,7 @@ export async function inboxWorkNextCommand(options: InboxWorkNextOptions): Promi
 export async function inboxShowCommand(options: InboxShowOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
   if (!options.envelopeId) return errorResult('Missing envelope ID');
   return withInboxStoreAsync(options, async (store) => {
+    await refreshInboxFromExports(store, options.cwd ?? process.cwd());
     const envelope = store.get(options.envelopeId!);
     if (!envelope) return errorResult(`Inbox envelope not found: ${options.envelopeId}`);
     return okResult(
@@ -822,6 +788,65 @@ function inspectInboxReadiness(cwdInput: string, inboxDbPath: unknown): Record<s
     cli_build_present: existsSync(cliBuildPath),
     cli_build_detail: existsSync(cliBuildPath) ? cliBuildPath : `${cliBuildPath} missing; run pnpm --filter @narada2/cli build`,
   };
+}
+
+async function refreshInboxFromExports(
+  store: SqliteInboxStore,
+  cwdInput: string,
+  options: { fromDir?: string; missingDirIsEmpty?: boolean; closeStore?: boolean } = {},
+): Promise<{ imported: number; skipped: number; exported_count: number; files: string[]; error?: string }> {
+  const fromDir = options.fromDir ?? resolve(cwdInput, '.ai', 'inbox-envelopes');
+  try {
+    let names: string[];
+    try {
+      names = (await readdir(fromDir)).filter((name) => name.endsWith('.json')).sort();
+    } catch (error) {
+      if (options.missingDirIsEmpty !== false) {
+        return { imported: 0, skipped: 0, exported_count: 0, files: [] };
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      return { imported: 0, skipped: 0, exported_count: 0, files: [], error: `Failed to read inbox import directory: ${message}` };
+    }
+    let imported = 0;
+    let skipped = 0;
+    const files: string[] = [];
+    for (const name of names) {
+      const path = join(fromDir, name);
+      const parsed = parsePayload(await readFile(path, 'utf8'));
+      if (parsed instanceof Error) return { imported, skipped, exported_count: names.length, files, error: `Invalid exported envelope ${name}: ${parsed.message}` };
+      const envelope = parsed as InboxEnvelope;
+      if (!isValidExportedEnvelope(envelope)) return { imported, skipped, exported_count: names.length, files, error: `Invalid exported envelope shape: ${name}` };
+      if (store.get(envelope.envelope_id)) {
+        skipped += 1;
+        continue;
+      }
+      const inserted = store.insert({
+        envelope_id: envelope.envelope_id,
+        received_at: envelope.received_at,
+        source: envelope.source,
+        kind: envelope.kind,
+        authority: envelope.authority,
+        payload: envelope.payload,
+      });
+      if (envelope.status === 'archived') {
+        store.archive(inserted.envelope_id, envelope.promotion ?? {
+          target_kind: 'archive',
+          target_ref: `archive:${inserted.envelope_id}`,
+          promoted_at: new Date().toISOString(),
+          promoted_by: 'inbox refresh',
+          enactment_status: 'recorded',
+          note: 'Imported archived envelope without original promotion metadata.',
+        });
+      } else if (envelope.status === 'promoted' && envelope.promotion) {
+        store.promote(inserted.envelope_id, envelope.promotion);
+      }
+      imported += 1;
+      files.push(path);
+    }
+    return { imported, skipped, exported_count: names.length, files };
+  } finally {
+    if (options.closeStore) store.close();
+  }
 }
 
 function git(cwd: string, args: string[]): string | null {
