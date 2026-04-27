@@ -2,6 +2,7 @@ import type { Command } from 'commander';
 import { chapterCloseCommand } from './chapter-close.js';
 import { chapterFinishRangeCommand } from './chapter-finish-range.js';
 import { chapterInitCommand, chapterValidateTasksFileCommand } from './chapter-init.js';
+import { chapterPreflightCommand } from './chapter-preflight.js';
 import { chapterStatusCommand } from './chapter-status.js';
 import { taskEvidenceAssertCompleteCommand } from './task-evidence-list.js';
 import { directCommandAction } from '../lib/command-wrapper.js';
@@ -122,6 +123,29 @@ export function registerChapterCommands(program: Command): void {
         return chapterStatusCommand({
           range,
           cwd: opts.cwd as string | undefined,
+          format,
+        });
+      },
+    }));
+
+  chapterCmd
+    .command('preflight <range>')
+    .description('Check whether chapter execution/commit crossings are currently admissible')
+    .option('--expect-commit', 'Check that Git metadata is writable for commit publication', false)
+    .option('--expect-push', 'Check that Git metadata is writable and the branch has an upstream', false)
+    .option('--format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .action(directCommandAction<[string, Record<string, unknown>]>({
+      command: 'chapter preflight',
+      emit: emitCommandResult,
+      format: (_range: string, opts: Record<string, unknown>) => resolveCommandFormat(opts.format, 'auto'),
+      invocation: (range, opts) => {
+        const format = resolveCommandFormat(opts.format, 'auto');
+        return chapterPreflightCommand({
+          range,
+          cwd: opts.cwd as string | undefined,
+          expectCommit: opts.expectCommit as boolean | undefined,
+          expectPush: opts.expectPush as boolean | undefined,
           format,
         });
       },
