@@ -34,6 +34,7 @@ import { registerCleanupCommands } from './commands/cleanup-register.js';
 import { registerRederivationCommands } from './commands/rederivation-register.js';
 import { registerOutboundActionCommands } from './commands/outbound-action-register.js';
 import { registerPostureCommands } from './commands/posture-register.js';
+import { registerMutationEvidenceCommands } from './commands/mutation-evidence-register.js';
 
 loadEnvFile('./.env');
 
@@ -89,6 +90,7 @@ registerTaskReconcileCommands(taskCmd);
 registerPostureCommands(program);
 registerObservationCommands(program);
 registerInboxCommands(program);
+registerMutationEvidenceCommands(program);
 registerCoherenceCommands(program);
 registerChapterCommands(program);
 registerConstructionLoopCommands(program);

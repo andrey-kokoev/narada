@@ -1,8 +1,17 @@
 ---
-status: opened
+status: closed
 depends_on: [995, 996]
 amended_by: architect
 amended_at: 2026-04-27T21:49:40.358Z
+criteria_proved_by: architect
+criteria_proved_at: 2026-04-27T22:42:49.559Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-27T22:42:50.046Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: agent_finish
 ---
 
 # Add mutation evidence reconcile command
@@ -43,8 +52,8 @@ After tasks 994-996 introduce mutation evidence, Narada needs the operator surfa
 
 ## Acceptance Criteria
 
-- [ ] Command validates evidence records before replay.
-- [ ] Command can dry-run and apply for task lifecycle and inbox evidence families.
-- [ ] Command reports stale, missing, duplicate, and conflicting operation ids with bounded output.
-- [ ] Tests prove idempotent replay and refusal of malformed evidence.
-- [ ] `pnpm verify` passes.
+- [x] Command validates evidence records before replay.
+- [x] Command can dry-run and apply for task lifecycle and inbox evidence families.
+- [x] Command reports stale, missing, duplicate, and conflicting operation ids with bounded output.
+- [x] Tests prove idempotent replay and refusal of malformed evidence.
+- [x] `pnpm verify` passes.

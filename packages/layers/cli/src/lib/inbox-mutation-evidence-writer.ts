@@ -85,6 +85,7 @@ export async function writeInboxMutationEvidence(
       after_status: options.after?.status ?? null,
       promotion_target_kind: options.after?.promotion_target_kind ?? null,
       promotion_target_ref: options.after?.promotion_target_ref ?? null,
+      envelope: extractEnvelope(options.result),
       command_result: summarizeCommandResult(options.result),
     },
   });
