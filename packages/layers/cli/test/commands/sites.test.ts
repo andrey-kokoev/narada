@@ -1,4 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+
+vi.unmock('node:fs');
+vi.unmock('node:fs/promises');
+
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 
@@ -70,6 +77,7 @@ const {
   sitesShowCommand,
   sitesRemoveCommand,
   sitesInitCommand,
+  sitesTaskLifecycleInitCommand,
 } = await import('../../src/commands/sites.js');
 
 describe('sites commands', () => {
@@ -232,6 +240,79 @@ describe('sites commands', () => {
       }, ctx);
 
       expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    });
+  });
+
+  describe('sitesTaskLifecycleInitCommand', () => {
+    it('initializes task lifecycle schema in an explicit external Site path', async () => {
+      const siteRoot = mkdtempSync(join(tmpdir(), 'narada-external-site-'));
+      try {
+        const ctx = createMockContext();
+        const result = await sitesTaskLifecycleInitCommand({
+          site: siteRoot,
+          format: 'json',
+        }, ctx);
+
+        expect(result.exitCode).toBe(ExitCode.SUCCESS);
+        const data = result.result as {
+          status: string;
+          site_path: string;
+          db_path: string;
+          created: boolean;
+          tables_initialized: string[];
+        };
+        expect(data.status).toBe('success');
+        expect(data.site_path).toBe(siteRoot);
+        expect(data.db_path).toBe(join(siteRoot, '.ai', 'task-lifecycle.db'));
+        expect(data.created).toBe(true);
+        expect(data.tables_initialized).toEqual(expect.arrayContaining([
+          'task_lifecycle',
+          'task_specs',
+          'task_number_sequence',
+        ]));
+        expect(existsSync(join(siteRoot, '.ai', 'task-lifecycle.db'))).toBe(true);
+        expect(existsSync(join(siteRoot, '.ai', 'do-not-open', 'tasks'))).toBe(false);
+      } finally {
+        rmSync(siteRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('is idempotent for an existing Site lifecycle database', async () => {
+      const siteRoot = mkdtempSync(join(tmpdir(), 'narada-external-site-'));
+      try {
+        const ctx = createMockContext();
+        const first = await sitesTaskLifecycleInitCommand({ site: siteRoot, format: 'json' }, ctx);
+        const second = await sitesTaskLifecycleInitCommand({ site: siteRoot, format: 'json' }, ctx);
+
+        expect(first.exitCode).toBe(ExitCode.SUCCESS);
+        expect(second.exitCode).toBe(ExitCode.SUCCESS);
+        expect((first.result as { created: boolean }).created).toBe(true);
+        expect((second.result as { created: boolean }).created).toBe(false);
+      } finally {
+        rmSync(siteRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('dry-runs without mutating the target Site path', async () => {
+      const siteRoot = mkdtempSync(join(tmpdir(), 'narada-external-site-'));
+      try {
+        const ctx = createMockContext();
+        const result = await sitesTaskLifecycleInitCommand({
+          site: siteRoot,
+          dryRun: true,
+          format: 'json',
+        }, ctx);
+
+        expect(result.exitCode).toBe(ExitCode.SUCCESS);
+        expect(result.result).toMatchObject({
+          status: 'dry_run',
+          db_path: join(siteRoot, '.ai', 'task-lifecycle.db'),
+          created: true,
+        });
+        expect(existsSync(join(siteRoot, '.ai'))).toBe(false);
+      } finally {
+        rmSync(siteRoot, { recursive: true, force: true });
+      }
     });
   });
 });

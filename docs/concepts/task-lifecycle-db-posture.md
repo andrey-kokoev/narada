@@ -44,6 +44,16 @@ pnpm narada:guard-task-db
 
 The guard performs a bounded freshness check when a local DB exists: it runs a sanctioned export to a temporary file and byte-compares that export to `.ai/task-lifecycle-snapshot.json`. `pnpm verify` runs this guard after build, so verification fails if local lifecycle state has not been exported into the tracked handoff.
 
+## Site-Local Initialization
+
+External Sites do not need to be Narada proper checkouts to receive the task lifecycle substrate. Initialize an explicit Site root with:
+
+```bash
+narada sites task-lifecycle init --site /path/to/site
+```
+
+The command creates the canonical runtime database at `/path/to/site/.ai/task-lifecycle.db`, initializes the same SQLite schema used by Narada proper, and reports the initialized tables. It does not create `.ai/do-not-open/tasks/` or require the Site to have Narada's repository task projections.
+
 ## Residual Requirements
 
 1. Add a mutation ledger so sanctioned commands can prove provenance more strongly than filesystem posture.

@@ -6,6 +6,7 @@ import {
   sitesRemoveCommand,
   sitesInitCommand,
   sitesEnableCommand,
+  sitesTaskLifecycleInitCommand,
 } from './sites.js';
 import { silentCommandContext, wrapCommand } from '../lib/command-wrapper.js';
 import { emitFormatterBackedCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
@@ -30,6 +31,27 @@ export function registerSitesCommands(program: Command): void {
     .option('-v, --verbose', 'Enable verbose output', false)
     .action(wrapCommand('sites-discover', (opts, ctx) =>
       sitesDiscoverCommand({ format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto', verbose: opts.verbose }, ctx)));
+
+  const taskLifecycleCmd = sitesCmd
+    .command('task-lifecycle')
+    .description('Site-local task lifecycle operators');
+
+  taskLifecycleCmd
+    .command('init')
+    .description('Initialize SQLite-backed task lifecycle machinery inside an explicit Site path')
+    .requiredOption('--site <path>', 'Target Site root path')
+    .option('--dry-run', 'Preview without making changes', false)
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (opts: Record<string, unknown>) => {
+      const result = await sitesTaskLifecycleInitCommand({
+        site: opts.site as string | undefined,
+        dryRun: opts.dryRun as boolean | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitFormatterBackedCommandResult(result, { format: opts.format });
+    });
 
   sitesCmd
     .command('show <site-id>')

@@ -1,0 +1,36 @@
+{
+  "envelope_id": "env_e50511ac-f65e-4f59-ac84-98bbe27107f6",
+  "received_at": "2026-04-27T19:51:37.7772360Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "staccato-elt:task-lifecycle-lift"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Site-local task lifecycle lift is not ergonomic",
+    "summary": "While lifting SQLite-backed task lifecycle machinery into the Staccato ELT Narada site, the authority model fit cleanly but the implementation was too embedded in the Narada monorepo and workspace package graph. The desired product surface is a portable site-local task lifecycle initializer/installer that can materialize SQLite task machinery into an arbitrary .narada site without relocating authority into Narada proper.",
+    "evidence": [
+      "Originating site: D:\\data\\elt\\staccato\\.narada",
+      "Upstream source inspected: /home/andrey/src/narada packages/task-governance and scripts/task-*",
+      "Friction: task-lifecycle-store.ts imports @narada2/control-plane and broader intent-zone types; scripts assume .ai/do-not-open/tasks; no simple narada site task-lifecycle init --site <path> command.",
+      "Local workaround: implemented a self-contained Python CLI preserving the SQLite lifecycle schema at D:\\data\\elt\\staccato\\.narada\\task-lifecycle.db."
+    ],
+    "proposal": [
+      "Add a portable site-local task lifecycle installer, e.g. narada site task-lifecycle init --site <path>, that initializes DB/schema, task spec directories, wrappers, and projection conventions without requiring monorepo-local paths."
+    ],
+    "recommendation": "Promote to Narada product task for external Site task-lifecycle materialization ergonomics."
+  },
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_e50511ac-f65e-4f59-ac84-98bbe27107f6",
+    "promoted_at": "2026-04-27T20:00:16.468Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
+}

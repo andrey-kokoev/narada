@@ -7,7 +7,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { execFile } from 'node:child_process';
-import { join, posix, win32 } from 'node:path';
+import { join, posix, resolve, win32 } from 'node:path';
 import { promisify } from 'node:util';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
@@ -19,6 +19,11 @@ const execFileAsync = promisify(execFile);
 export interface SitesOptions {
   format?: string;
   verbose?: boolean;
+}
+
+export interface SitesTaskLifecycleInitOptions extends SitesOptions {
+  site?: string;
+  dryRun?: boolean;
 }
 
 interface SiteListEntry {
@@ -240,6 +245,62 @@ export async function sitesDiscoverCommand(
   } finally {
     registry.close();
   }
+}
+
+export async function sitesTaskLifecycleInitCommand(
+  options: SitesTaskLifecycleInitOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
+  if (!options.site) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: { status: 'error', error: '--site is required' },
+    };
+  }
+
+  const sitePath = resolve(options.site);
+  const aiPath = join(sitePath, '.ai');
+  const dbPath = join(aiPath, 'task-lifecycle.db');
+  const existed = existsSync(dbPath);
+
+  if (!options.dryRun) {
+    await mkdir(aiPath, { recursive: true });
+    const store = openTaskLifecycleStore(sitePath);
+    try {
+      const rows = store.db
+        .prepare("select name from sqlite_master where type = 'table' order by name")
+        .all() as Array<{ name: string }>;
+      const tableNames = rows.map((row) => row.name);
+      const result = {
+        status: 'success',
+        site_path: sitePath,
+        db_path: dbPath,
+        created: !existed,
+        tables_initialized: tableNames,
+      };
+      if (fmt.getFormat() === 'human') {
+        fmt.message(`Task lifecycle initialized: ${dbPath}`, 'success');
+        fmt.kv('Site', sitePath);
+        fmt.kv('Created', String(!existed));
+        fmt.kv('Tables', String(tableNames.length));
+      }
+      return { exitCode: ExitCode.SUCCESS, result };
+    } finally {
+      store.db.close();
+    }
+  }
+
+  return {
+    exitCode: ExitCode.SUCCESS,
+    result: {
+      status: 'dry_run',
+      site_path: sitePath,
+      db_path: dbPath,
+      created: !existed,
+      tables_initialized: [],
+    },
+  };
 }
 
 export async function sitesShowCommand(
