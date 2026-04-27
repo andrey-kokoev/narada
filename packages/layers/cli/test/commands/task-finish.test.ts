@@ -64,6 +64,25 @@ function setupRepo(tempDir: string, roster?: unknown) {
       scopes: ['report', 'task-governance'],
     }, null, 2),
   );
+
+  mkdirSync(join(tempDir, 'docs', 'concepts'), { recursive: true });
+  writeFileSync(
+    join(tempDir, 'docs', 'concepts', 'authority-inversion-inventory.json'),
+    JSON.stringify({
+      findings: [
+        {
+          finding_id: 'task-markdown-projection-authority',
+          surface: 'task_lifecycle',
+          visible_artifact: '.ai/do-not-open/tasks/*.md',
+          hidden_authority_structure: 'command-mediated task lifecycle',
+          current_guard: 'task file guard',
+          gap: 'markdown can look authoritative',
+          severity: 'warning',
+          recommended_follow_up: 'Use command-mediated task lifecycle changes.',
+        },
+      ],
+    }, null, 2),
+  );
 }
 
 describe('task finish operator', () => {
@@ -100,6 +119,34 @@ describe('task finish operator', () => {
       expect(data.report_id).toBeTruthy();
       expect(data.roster_transition).toBe('done');
       expect(data.evidence_verdict).toBe('needs_review');
+    });
+
+    it('surfaces bounded authority inversion warnings for artifact-first changed files', async () => {
+      await taskClaimCommand({ taskNumber: '999', agent: 'impl-agent', cwd: tempDir, format: 'json' });
+
+      const result = await taskFinishCommand({
+        taskNumber: '999',
+        agent: 'impl-agent',
+        summary: 'Implemented feature X',
+        changedFiles: '.ai/do-not-open/tasks/20260420-999-test-task.md',
+        verification: JSON.stringify([{ command: 'pnpm test', result: 'passed' }]),
+        residuals: JSON.stringify([]),
+        cwd: tempDir,
+        format: 'json',
+      });
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      expect(result.result).toMatchObject({
+        authority_inversion_warnings: [
+          {
+            finding_id: 'task-markdown-projection-authority',
+            surface: 'task_lifecycle',
+            changed_file: '.ai/do-not-open/tasks/20260420-999-test-task.md',
+            severity: 'warning',
+          },
+        ],
+      });
+      expect((result.result as { warnings: string[] }).warnings[0]).toContain('command-mediated task lifecycle');
     });
 
     it('--close admits evidence and closes lifecycle through sanctioned crossings', async () => {

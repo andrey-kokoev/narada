@@ -3,6 +3,10 @@ import { FinishTaskServiceOptions, finishTaskService } from '@narada2/task-gover
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { type TaskLifecycleStore } from '../lib/task-lifecycle-store.js';
+import {
+  evaluateAuthorityInversionForChangedFiles,
+  formatAuthorityInversionWarning,
+} from '../lib/authority-inversion.js';
 
 export interface TaskFinishOptions {
   taskNumber?: string;
@@ -47,7 +51,17 @@ export async function taskFinishCommand(
     store: serviceStore,
   } as FinishTaskServiceOptions & { store?: TaskLifecycleStore });
 
-  const result = serviceResult.result;
+  const authorityInversionWarnings = await evaluateAuthorityInversionForChangedFiles(cwd, options.changedFiles);
+  const result = authorityInversionWarnings.length > 0 && serviceResult.result && typeof serviceResult.result === 'object'
+    ? {
+      ...(serviceResult.result as Record<string, unknown>),
+      authority_inversion_warnings: authorityInversionWarnings,
+      warnings: [
+        ...(((serviceResult.result as { warnings?: string[] }).warnings) ?? []),
+        ...authorityInversionWarnings.map(formatAuthorityInversionWarning),
+      ],
+    }
+    : serviceResult.result;
 
   if (fmt.getFormat() === 'json') {
     return {
