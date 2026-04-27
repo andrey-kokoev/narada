@@ -894,12 +894,18 @@ async function refreshInboxFromExports(
     let imported = 0;
     let skipped = 0;
     const files: string[] = [];
+    const seenEnvelopeIds = new Set<string>();
     for (const name of names) {
       const path = join(fromDir, name);
       const parsed = parsePayload(await readFile(path, 'utf8'));
       if (parsed instanceof Error) return { imported, skipped, exported_count: names.length, files, error: `Invalid exported envelope ${name}: ${parsed.message}` };
       const envelope = parsed as InboxEnvelope;
       if (!isValidExportedEnvelope(envelope)) return { imported, skipped, exported_count: names.length, files, error: `Invalid exported envelope shape: ${name}` };
+      if (seenEnvelopeIds.has(envelope.envelope_id)) {
+        skipped += 1;
+        continue;
+      }
+      seenEnvelopeIds.add(envelope.envelope_id);
       if (store.get(envelope.envelope_id)) {
         skipped += 1;
         continue;

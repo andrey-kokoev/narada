@@ -290,6 +290,54 @@ describe('Canonical Inbox CLI commands', () => {
     }
   });
 
+  it('skips duplicate exported envelope files in a single import pass', async () => {
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual:portable-duplicate',
+      kind: 'observation',
+      authorityLevel: 'operator_confirmed',
+      payload: JSON.stringify({ title: 'Portable duplicate envelope' }),
+    });
+    expect(submitted.exitCode).toBe(ExitCode.SUCCESS);
+
+    const exportDir = join(tempDir, 'exports');
+    const exported = await inboxExportCommand({
+      cwd: tempDir,
+      format: 'json',
+      outDir: exportDir,
+    });
+    expect(exported.exitCode).toBe(ExitCode.SUCCESS);
+    const [original] = readdirSync(exportDir).filter((name) => name.endsWith('.json'));
+    expect(original).toBeTruthy();
+    writeFileSync(
+      join(exportDir, `duplicate-${original}`),
+      readFileSync(join(exportDir, original!), 'utf8'),
+    );
+
+    const importedDir = mkdtempSync(join(tmpdir(), 'narada-inbox-import-duplicates-'));
+    try {
+      const imported = await inboxImportCommand({
+        cwd: importedDir,
+        format: 'json',
+        fromDir: exportDir,
+      });
+      expect(imported.exitCode).toBe(ExitCode.SUCCESS);
+      expect(imported.result).toMatchObject({ imported: 1, skipped: 1 });
+
+      const repeated = await inboxImportCommand({
+        cwd: importedDir,
+        format: 'json',
+        fromDir: exportDir,
+      });
+      expect(repeated.exitCode).toBe(ExitCode.SUCCESS);
+      expect(repeated.result).toMatchObject({ imported: 0, skipped: 2 });
+    } finally {
+      rmSync(importedDir, { recursive: true, force: true });
+    }
+  });
+
   it('auto-refreshes work-next from exported envelope artifacts', async () => {
     const sourceDir = mkdtempSync(join(tmpdir(), 'narada-inbox-export-source-'));
     try {
