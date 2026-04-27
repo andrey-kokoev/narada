@@ -12,6 +12,10 @@ import {
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { type TaskLifecycleStore } from '../lib/task-lifecycle-store.js';
+import {
+  captureTaskLifecycleEvidenceState,
+  writeTaskLifecycleMutationEvidence,
+} from '../lib/mutation-evidence-writer.js';
 
 export interface TaskReportOptions {
   taskNumber?: string;
@@ -32,6 +36,7 @@ export async function taskReportCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const fmt = createFormatter({ format: options.format || 'auto', verbose: false });
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
+  const before = await captureTaskLifecycleEvidenceState(cwd, options.taskNumber, options.store);
 
   const serviceResult = await reportTaskService({
     taskNumber: options.taskNumber,
@@ -45,6 +50,21 @@ export async function taskReportCommand(
   } as ReportTaskServiceOptions);
 
   const result = serviceResult.result;
+  const after = result.status === 'success'
+    ? await captureTaskLifecycleEvidenceState(cwd, options.taskNumber, options.store)
+    : null;
+  if (result.status === 'success') {
+    await writeTaskLifecycleMutationEvidence({
+      cwd,
+      taskNumber: options.taskNumber,
+      command: 'task report',
+      principal: options.agent,
+      authorityClass: 'resolve',
+      before,
+      after,
+      result,
+    });
+  }
   if (fmt.getFormat() === 'json') {
     const output: Omit<ReportTaskServiceResponse['result'], 'guidance'> & {
       guidance?: ReturnType<typeof formatGuidanceForJson>;

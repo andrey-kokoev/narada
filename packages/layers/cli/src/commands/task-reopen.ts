@@ -16,6 +16,10 @@ import {
 } from '../lib/task-governance.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import {
+  captureTaskLifecycleEvidenceState,
+  writeTaskLifecycleMutationEvidence,
+} from '../lib/mutation-evidence-writer.js';
 
 export interface TaskReopenOptions {
   taskNumber: string;
@@ -32,6 +36,7 @@ export async function taskReopenCommand(
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
   const taskNumber = options.taskNumber;
   const reopenedBy = options.by ?? 'operator';
+  const before = await captureTaskLifecycleEvidenceState(cwd, taskNumber);
 
   if (!taskNumber || !Number.isFinite(Number(taskNumber))) {
     return {
@@ -129,19 +134,33 @@ export async function taskReopenCommand(
   delete frontMatter.governed_by;
 
   await writeTaskFile(taskFile.path, frontMatter, body);
+  const after = await captureTaskLifecycleEvidenceState(cwd, taskNumber);
+  const successResult = {
+    status: 'success',
+    task_id: taskFile.taskId,
+    task_number: Number(taskNumber),
+    previous_status: currentStatus,
+    new_status: targetStatus,
+    reopened_by: reopenedBy,
+    reopened_at: frontMatter.reopened_at,
+    violations_cleared: evidence.violations,
+  };
+  await writeTaskLifecycleMutationEvidence({
+    cwd,
+    taskNumber,
+    command: 'task reopen',
+    principal: reopenedBy,
+    authorityClass: 'admin',
+    before,
+    after,
+    result: successResult,
+  });
 
   if (fmt.getFormat() === 'json') {
     return {
       exitCode: ExitCode.SUCCESS,
       result: {
-        status: 'success',
-        task_id: taskFile.taskId,
-        task_number: Number(taskNumber),
-        previous_status: currentStatus,
-        new_status: targetStatus,
-        reopened_by: reopenedBy,
-        reopened_at: frontMatter.reopened_at,
-        violations_cleared: evidence.violations,
+        ...successResult,
         note: `Re-close through governed operator: narada task close ${taskNumber} --by <id> or narada task review ${taskNumber} --agent <id> --verdict accepted`,
       },
     };
@@ -164,15 +183,6 @@ export async function taskReopenCommand(
 
   return {
     exitCode: ExitCode.SUCCESS,
-    result: {
-      status: 'success',
-      task_id: taskFile.taskId,
-      task_number: Number(taskNumber),
-      previous_status: currentStatus,
-      new_status: targetStatus,
-      reopened_by: reopenedBy,
-      reopened_at: frontMatter.reopened_at,
-      violations_cleared: evidence.violations,
-    },
+    result: successResult,
   };
 }

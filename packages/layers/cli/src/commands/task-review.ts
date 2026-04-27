@@ -7,6 +7,10 @@ import {
   resolvePrincipalStateDir,
   updatePrincipalRuntimeFromTaskEvent,
 } from '../lib/principal-bridge.js';
+import {
+  captureTaskLifecycleEvidenceState,
+  writeTaskLifecycleMutationEvidence,
+} from '../lib/mutation-evidence-writer.js';
 
 export interface TaskReviewOptions {
   taskNumber?: string;
@@ -25,6 +29,7 @@ export async function taskReviewCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const fmt = createFormatter({ format: options.format || 'auto', verbose: false });
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
+  const before = await captureTaskLifecycleEvidenceState(cwd, options.taskNumber, options.store);
 
   const serviceResult = await reviewTaskService({
     taskNumber: options.taskNumber,
@@ -37,6 +42,21 @@ export async function taskReviewCommand(
   } as ReviewTaskServiceOptions);
 
   const result = serviceResult.result;
+  const after = result.status === 'success'
+    ? await captureTaskLifecycleEvidenceState(cwd, options.taskNumber, options.store)
+    : null;
+  if (result.status === 'success') {
+    await writeTaskLifecycleMutationEvidence({
+      cwd,
+      taskNumber: options.taskNumber,
+      command: 'task review',
+      principal: options.agent,
+      authorityClass: 'confirm',
+      before,
+      after,
+      result,
+    });
+  }
 
   if (fmt.getFormat() === 'json') {
     if (result.status === 'success' && result.verdict) {

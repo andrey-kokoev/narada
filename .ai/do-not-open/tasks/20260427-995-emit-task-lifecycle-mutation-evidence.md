@@ -1,8 +1,17 @@
 ---
-status: opened
+status: closed
 depends_on: [994]
 amended_by: architect
 amended_at: 2026-04-27T21:49:39.335Z
+criteria_proved_by: architect
+criteria_proved_at: 2026-04-27T22:25:41.295Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-27T22:25:41.782Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: agent_finish
 ---
 
 # Emit task lifecycle mutation evidence
@@ -43,8 +52,8 @@ Task lifecycle state is SQLite-backed with a tracked snapshot guard. That is use
 
 ## Acceptance Criteria
 
-- [ ] Claim, report, review, finish, close, reopen, release, and confirm paths emit evidence records or explicitly document why a path is read-only/not applicable.
-- [ ] Evidence records are Git-visible mergeable artifacts and idempotent by operation id.
-- [ ] Existing lifecycle snapshot guard remains as projection freshness guard.
-- [ ] Focused tests cover at least claim, report, finish, and close.
-- [ ] `pnpm verify` passes.
+- [x] Claim, report, review, finish, close, reopen, release, and confirm paths emit evidence records or explicitly document why a path is read-only/not applicable.
+- [x] Evidence records are Git-visible mergeable artifacts and idempotent by operation id.
+- [x] Existing lifecycle snapshot guard remains as projection freshness guard.
+- [x] Focused tests cover at least claim, report, finish, and close.
+- [x] `pnpm verify` passes.

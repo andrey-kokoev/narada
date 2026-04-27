@@ -13,6 +13,10 @@ import {
   resolvePrincipalStateDir,
   updatePrincipalRuntimeFromTaskEvent,
 } from '../lib/principal-bridge.js';
+import {
+  captureTaskLifecycleEvidenceState,
+  writeTaskLifecycleMutationEvidence,
+} from '../lib/mutation-evidence-writer.js';
 
 export interface TaskClaimOptions {
   taskNumber?: string;
@@ -31,6 +35,7 @@ export async function taskClaimCommand(
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
   const taskNumber = (options as Record<string, unknown>).taskNumber as string | undefined;
   const agentId = options.agent;
+  const before = await captureTaskLifecycleEvidenceState(cwd, taskNumber);
   const service = await claimTaskService({
     taskNumber,
     agent: agentId,
@@ -38,6 +43,21 @@ export async function taskClaimCommand(
     cwd,
   });
   const result = service.result;
+  const after = result.status === 'success'
+    ? await captureTaskLifecycleEvidenceState(cwd, taskNumber)
+    : null;
+  if (result.status === 'success') {
+    await writeTaskLifecycleMutationEvidence({
+      cwd,
+      taskNumber,
+      command: 'task claim',
+      principal: agentId,
+      authorityClass: 'claim',
+      before,
+      after,
+      result,
+    });
+  }
 
   // Post-commit advisory PrincipalRuntime update
   if (result.status === 'success' && options.updatePrincipalRuntime && agentId && result.task_id) {

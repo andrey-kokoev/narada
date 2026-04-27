@@ -6,7 +6,12 @@ import { type TaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 import {
   evaluateAuthorityInversionForChangedFiles,
   formatAuthorityInversionWarning,
+  summarizeAuthorityInversionWarning,
 } from '../lib/authority-inversion.js';
+import {
+  captureTaskLifecycleEvidenceState,
+  writeTaskLifecycleMutationEvidence,
+} from '../lib/mutation-evidence-writer.js';
 
 export interface TaskFinishOptions {
   taskNumber?: string;
@@ -33,6 +38,7 @@ export async function taskFinishCommand(
   const fmt = createFormatter({ format: options.format || 'auto', verbose: false });
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
   const serviceStore = options.store;
+  const before = await captureTaskLifecycleEvidenceState(cwd, options.taskNumber, serviceStore);
 
   const serviceResult = await finishTaskService({
     taskNumber: options.taskNumber,
@@ -55,13 +61,26 @@ export async function taskFinishCommand(
   const result = authorityInversionWarnings.length > 0 && serviceResult.result && typeof serviceResult.result === 'object'
     ? {
       ...(serviceResult.result as Record<string, unknown>),
-      authority_inversion_warnings: authorityInversionWarnings,
+      authority_inversion_warnings: authorityInversionWarnings.map(summarizeAuthorityInversionWarning),
       warnings: [
         ...(((serviceResult.result as { warnings?: string[] }).warnings) ?? []),
         ...authorityInversionWarnings.map(formatAuthorityInversionWarning),
       ],
     }
     : serviceResult.result;
+  if (serviceResult.exitCode === ExitCode.SUCCESS && result && typeof result === 'object' && (result as { status?: string }).status === 'success') {
+    const after = await captureTaskLifecycleEvidenceState(cwd, options.taskNumber, serviceStore);
+    await writeTaskLifecycleMutationEvidence({
+      cwd,
+      taskNumber: options.taskNumber,
+      command: 'task finish',
+      principal: options.agent,
+      authorityClass: 'resolve',
+      before,
+      after,
+      result,
+    });
+  }
 
   if (fmt.getFormat() === 'json') {
     return {

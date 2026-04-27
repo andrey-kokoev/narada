@@ -13,6 +13,14 @@ export interface AuthorityInversionWarning {
   recommended_follow_up: string | null;
 }
 
+export interface AuthorityInversionWarningSummary {
+  finding_id: string;
+  surface: string;
+  changed_file: string;
+  severity: 'info' | 'warning' | 'error';
+  guard: string;
+}
+
 interface Inventory {
   findings?: InventoryFinding[];
 }
@@ -76,7 +84,17 @@ export async function evaluateAuthorityInversionForChangedFiles(
 }
 
 export function formatAuthorityInversionWarning(warning: AuthorityInversionWarning): string {
-  return `${warning.surface}: ${warning.changed_file} appears as ${warning.visible_artifact}; authority is ${warning.hidden_authority_structure}`;
+  return `${warning.surface}: ${warning.changed_file} touches authority-sensitive surface; authority=${warning.hidden_authority_structure}; guard=${warning.current_guard}`;
+}
+
+export function summarizeAuthorityInversionWarning(warning: AuthorityInversionWarning): AuthorityInversionWarningSummary {
+  return {
+    finding_id: warning.finding_id,
+    surface: warning.surface,
+    changed_file: warning.changed_file,
+    severity: warning.severity,
+    guard: warning.current_guard,
+  };
 }
 
 function parseChangedFiles(changedFilesCsv: string | undefined): string[] {

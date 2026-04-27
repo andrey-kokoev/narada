@@ -16,6 +16,10 @@ import {
   resolvePrincipalStateDir,
   updatePrincipalRuntimeFromTaskEvent,
 } from '../lib/principal-bridge.js';
+import {
+  captureTaskLifecycleEvidenceState,
+  writeTaskLifecycleMutationEvidence,
+} from '../lib/mutation-evidence-writer.js';
 
 export interface TaskReleaseOptions {
   taskNumber?: string;
@@ -32,6 +36,7 @@ export async function taskReleaseCommand(
   const fmt = createFormatter({ format: options.format || 'auto', verbose: false });
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
   const taskNumber = (options as Record<string, unknown>).taskNumber as string | undefined;
+  const before = await captureTaskLifecycleEvidenceState(cwd, taskNumber);
   const service = await releaseTaskService({
     taskNumber,
     reason: options.reason,
@@ -39,6 +44,21 @@ export async function taskReleaseCommand(
     cwd,
   });
   const result = service.result;
+  const after = result.status === 'success'
+    ? await captureTaskLifecycleEvidenceState(cwd, taskNumber)
+    : null;
+  if (result.status === 'success') {
+    await writeTaskLifecycleMutationEvidence({
+      cwd,
+      taskNumber,
+      command: 'task release',
+      principal: result.agent_id,
+      authorityClass: 'resolve',
+      before,
+      after,
+      result,
+    });
+  }
 
   // Post-commit advisory PrincipalRuntime update
   if (result.status === 'success' && result.agent_id && result.task_id && result.release_reason) {

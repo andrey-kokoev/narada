@@ -13,6 +13,10 @@ import { resolve } from 'node:path';
 import { findTaskFile, readTaskFile, writeTaskFile } from '../lib/task-governance.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import {
+  captureTaskLifecycleEvidenceState,
+  writeTaskLifecycleMutationEvidence,
+} from '../lib/mutation-evidence-writer.js';
 
 export interface TaskConfirmOptions {
   taskNumber: string;
@@ -28,6 +32,7 @@ export async function taskConfirmCommand(
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
   const taskNumber = options.taskNumber;
   const confirmedBy = options.by ?? 'operator';
+  const before = await captureTaskLifecycleEvidenceState(cwd, taskNumber);
 
   if (!taskNumber || !Number.isFinite(Number(taskNumber))) {
     return {
@@ -86,19 +91,31 @@ export async function taskConfirmCommand(
   frontMatter.confirmed_at = new Date().toISOString();
 
   await writeTaskFile(taskFile.path, frontMatter, body);
+  const after = await captureTaskLifecycleEvidenceState(cwd, taskNumber);
+  const successResult = {
+    status: 'success',
+    task_id: taskFile.taskId,
+    task_number: Number(taskNumber),
+    previous_status: 'closed',
+    new_status: 'confirmed',
+    confirmed_by: confirmedBy,
+    confirmed_at: frontMatter.confirmed_at,
+  };
+  await writeTaskLifecycleMutationEvidence({
+    cwd,
+    taskNumber,
+    command: 'task confirm',
+    principal: confirmedBy,
+    authorityClass: 'confirm',
+    before,
+    after,
+    result: successResult,
+  });
 
   if (fmt.getFormat() === 'json') {
     return {
       exitCode: ExitCode.SUCCESS,
-      result: {
-        status: 'success',
-        task_id: taskFile.taskId,
-        task_number: Number(taskNumber),
-        previous_status: 'closed',
-        new_status: 'confirmed',
-        confirmed_by: confirmedBy,
-        confirmed_at: frontMatter.confirmed_at,
-      },
+      result: successResult,
     };
   }
 
@@ -108,13 +125,6 @@ export async function taskConfirmCommand(
 
   return {
     exitCode: ExitCode.SUCCESS,
-    result: {
-      status: 'success',
-      task_id: taskFile.taskId,
-      task_number: Number(taskNumber),
-      new_status: 'confirmed',
-      confirmed_by: confirmedBy,
-      confirmed_at: frontMatter.confirmed_at,
-    },
+    result: successResult,
   };
 }
