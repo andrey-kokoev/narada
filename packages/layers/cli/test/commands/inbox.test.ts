@@ -8,9 +8,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  inboxClaimCommand,
   inboxListCommand,
   inboxNextCommand,
+  inboxPendingCommand,
   inboxPromoteCommand,
+  inboxReleaseCommand,
   inboxShowCommand,
   inboxSubmitCommand,
   inboxTaskCommand,
@@ -270,8 +273,58 @@ describe('Canonical Inbox CLI commands', () => {
     };
     expect(result.primary.envelope_id).toBe(envelope.envelope_id);
     expect(result.admissible_actions.map((action) => action.action)).toEqual(['task', 'archive', 'pending']);
-    expect(result.admissible_actions.find((action) => action.action === 'pending')?.pending_kind).toBe('recorded_pending_crossing');
+    const pending = result.admissible_actions.find((action) => action.action === 'pending');
+    expect(pending?.pending_kind).toBe('recorded_pending_crossing');
+    expect(pending?.command_args).toEqual(['inbox', 'pending', envelope.envelope_id, '--to', '<kind>:<ref>', '--by', '<principal>']);
     expect(result.alternatives_count).toBe(0);
+  });
+
+  it('claims, releases, and claim-skips inbox work-next envelopes', async () => {
+    const first = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual-first',
+      kind: 'task_candidate',
+      authorityLevel: 'operator_confirmed',
+      payload: JSON.stringify({ title: 'First' }),
+    });
+    const second = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual-second',
+      kind: 'task_candidate',
+      authorityLevel: 'operator_confirmed',
+      payload: JSON.stringify({ title: 'Second' }),
+    });
+    const firstEnvelope = (first.result as { envelope: { envelope_id: string } }).envelope;
+    const secondEnvelope = (second.result as { envelope: { envelope_id: string } }).envelope;
+
+    const claimed = await inboxClaimCommand({
+      cwd: tempDir,
+      format: 'json',
+      envelopeId: secondEnvelope.envelope_id,
+      by: 'architect',
+    });
+    expect(claimed.exitCode).toBe(ExitCode.SUCCESS);
+    expect((claimed.result as { envelope: { status: string; handling: { handled_by: string } } }).envelope.status).toBe('handling');
+
+    const workNext = await inboxWorkNextCommand({ cwd: tempDir, format: 'json', claim: true, by: 'architect' });
+    expect(workNext.exitCode).toBe(ExitCode.SUCCESS);
+    const result = workNext.result as { primary: { envelope_id: string; status: string; handling: { handled_by: string } } };
+    expect(result.primary.envelope_id).toBe(firstEnvelope.envelope_id);
+    expect(result.primary.status).toBe('handling');
+    expect(result.primary.handling.handled_by).toBe('architect');
+
+    const released = await inboxReleaseCommand({
+      cwd: tempDir,
+      format: 'json',
+      envelopeId: secondEnvelope.envelope_id,
+      by: 'architect',
+    });
+    expect(released.exitCode).toBe(ExitCode.SUCCESS);
+    expect((released.result as { envelope: { status: string; handling?: unknown } }).envelope.status).toBe('received');
   });
 
   it('archives envelopes without requiring a target ref or creating target work', async () => {
@@ -353,6 +406,34 @@ describe('Canonical Inbox CLI commands', () => {
 
     expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
     expect(result.result).toMatchObject({ status: 'error', error: expect.stringContaining('target-ref') });
+  });
+
+  it('records pending crossing through concise pending shortcut', async () => {
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual',
+      kind: 'proposal',
+      authorityLevel: 'user_statement',
+      payload: JSON.stringify({ title: 'Maybe change a site' }),
+    });
+    const envelope = (submitted.result as { envelope: { envelope_id: string } }).envelope;
+
+    const pending = await inboxPendingCommand({
+      cwd: tempDir,
+      format: 'json',
+      envelopeId: envelope.envelope_id,
+      to: 'site_config_change:site:desktop-sunroom-2',
+      by: 'operator',
+    });
+
+    expect(pending.exitCode).toBe(ExitCode.SUCCESS);
+    expect(pending.result).toMatchObject({
+      enactment_status: 'pending',
+      pending_kind: 'recorded_pending_crossing',
+      target_mutation: false,
+    });
   });
 
   it('rejects invalid JSON payloads', async () => {

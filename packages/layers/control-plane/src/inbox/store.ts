@@ -7,6 +7,7 @@ import {
   type CreateInboxEnvelopeOptions,
   type InboxEnvelope,
   type InboxEnvelopeStatus,
+  type InboxHandlingLease,
   type InboxPromotion,
 } from './types.js';
 
@@ -14,6 +15,8 @@ export interface InboxStore {
   insert<TPayload>(options: CreateInboxEnvelopeOptions<TPayload>): InboxEnvelope<TPayload>;
   get(envelopeId: string): InboxEnvelope | null;
   list(options?: { status?: InboxEnvelopeStatus; limit?: number }): InboxEnvelope[];
+  claim(envelopeId: string, lease: InboxHandlingLease): InboxEnvelope;
+  release(envelopeId: string, by: string): InboxEnvelope;
   promote(envelopeId: string, promotion: InboxPromotion): InboxEnvelope;
   archive(envelopeId: string, promotion: InboxPromotion): InboxEnvelope;
   close(): void;
@@ -28,6 +31,7 @@ interface InboxEnvelopeRow {
   payload_json: string;
   status: string;
   promotion_json: string | null;
+  handling_json?: string | null;
 }
 
 export function defaultInboxDbPath(cwd: string): string {
@@ -81,6 +85,43 @@ export class SqliteInboxStore implements InboxStore {
     return (rows as InboxEnvelopeRow[]).map(rowToEnvelope);
   }
 
+  claim(envelopeId: string, lease: InboxHandlingLease): InboxEnvelope {
+    const existing = this.get(envelopeId);
+    if (!existing) {
+      throw new Error(`Inbox envelope not found: ${envelopeId}`);
+    }
+    if (existing.status !== 'received') {
+      throw new Error(`Inbox envelope ${envelopeId} is not claimable from status ${existing.status}`);
+    }
+    const claimed: InboxEnvelope = { ...existing, status: 'handling', handling: lease };
+    this.db.prepare(`
+      update inbox_envelopes
+      set status = ?, handling_json = ?
+      where envelope_id = ?
+    `).run(claimed.status, JSON.stringify(lease), envelopeId);
+    return claimed;
+  }
+
+  release(envelopeId: string, by: string): InboxEnvelope {
+    const existing = this.get(envelopeId);
+    if (!existing) {
+      throw new Error(`Inbox envelope not found: ${envelopeId}`);
+    }
+    if (existing.status !== 'handling') {
+      throw new Error(`Inbox envelope ${envelopeId} is not releasable from status ${existing.status}`);
+    }
+    if (existing.handling?.handled_by !== by) {
+      throw new Error(`Inbox envelope ${envelopeId} is handled by ${existing.handling?.handled_by ?? 'unknown'}, not ${by}`);
+    }
+    const released: InboxEnvelope = { ...existing, status: 'received', handling: undefined };
+    this.db.prepare(`
+      update inbox_envelopes
+      set status = ?, handling_json = null
+      where envelope_id = ?
+    `).run(released.status, envelopeId);
+    return released;
+  }
+
   promote(envelopeId: string, promotion: InboxPromotion): InboxEnvelope {
     const existing = this.get(envelopeId);
     if (!existing) {
@@ -89,7 +130,7 @@ export class SqliteInboxStore implements InboxStore {
     const promoted = promoteInboxEnvelope(existing, promotion);
     this.db.prepare(`
       update inbox_envelopes
-      set status = ?, promotion_json = ?
+      set status = ?, promotion_json = ?, handling_json = null
       where envelope_id = ?
     `).run(promoted.status, JSON.stringify(promoted.promotion), envelopeId);
     return promoted;
@@ -107,7 +148,7 @@ export class SqliteInboxStore implements InboxStore {
     };
     this.db.prepare(`
       update inbox_envelopes
-      set status = ?, promotion_json = ?
+      set status = ?, promotion_json = ?, handling_json = null
       where envelope_id = ?
     `).run(archived.status, JSON.stringify(archived.promotion), envelopeId);
     return archived;
@@ -127,12 +168,18 @@ export class SqliteInboxStore implements InboxStore {
         authority_json text not null,
         payload_json text not null,
         status text not null,
-        promotion_json text
+        promotion_json text,
+        handling_json text
       );
 
       create index if not exists idx_inbox_envelopes_status_received
         on inbox_envelopes(status, received_at desc);
     `);
+    try {
+      this.db.exec(`alter table inbox_envelopes add column handling_json text`);
+    } catch {
+      // Existing stores already have the column.
+    }
   }
 }
 
@@ -146,5 +193,6 @@ function rowToEnvelope(row: InboxEnvelopeRow): InboxEnvelope {
     payload: JSON.parse(row.payload_json) as InboxEnvelope['payload'],
     status: row.status as InboxEnvelopeStatus,
     promotion: row.promotion_json ? JSON.parse(row.promotion_json) as InboxEnvelope['promotion'] : undefined,
+    handling: row.handling_json ? JSON.parse(row.handling_json) as InboxEnvelope['handling'] : undefined,
   };
 }

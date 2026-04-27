@@ -8,12 +8,12 @@ Inbox envelopes are inert. Submitting an envelope does not create a task, execut
 
 ```bash
 narada inbox submit --source-kind diagnostic --source-ref site-doctor:desktop-sunroom-2 --kind observation --authority-level system_observed --payload '{"hostname":"desktop-sunroom-2","computer_name":"DESKTOP-SUNROOM"}'
-narada inbox work-next
+narada inbox work-next --claim --by operator
 narada inbox list
 narada inbox show <envelope-id>
 narada inbox task <envelope-id> --title "Fix PC Site identity policy" --by operator
 narada inbox triage <envelope-id> --action archive --by operator
-narada inbox triage <envelope-id> --action pending --target-kind site_config_change --target-ref site:desktop-sunroom-2 --by operator
+narada inbox pending <envelope-id> --to site_config_change:site:desktop-sunroom-2 --by operator
 ```
 
 ## Envelope Axes
@@ -25,6 +25,7 @@ narada inbox triage <envelope-id> --action pending --target-kind site_config_cha
 | `authority` | What force the item has |
 | `status` | Intake lifecycle state |
 | `promotion` | Optional target after governed promotion |
+| `handling` | Optional claim/lease metadata while a principal handles the envelope |
 
 ## Example
 
@@ -50,10 +51,11 @@ narada inbox task <envelope-id> --by operator --title "..." --goal "..." --crite
 
 ## Work-Next
 
-`narada inbox work-next` is the bounded operator/agent surface for deciding what to do next. It returns the next received envelope plus admissible actions. It does not mutate the Inbox.
+`narada inbox work-next` is the bounded operator/agent surface for deciding what to do next. Without `--claim`, it returns the next received envelope plus admissible actions and does not mutate the Inbox. With `--claim --by <principal>`, it atomically moves the selected envelope to `handling` so another worker does not receive it as unclaimed work.
 
 ```bash
 narada inbox work-next --kind task_candidate --format json
+narada inbox work-next --claim --by operator --format json
 ```
 
 The normal loop is:
@@ -62,5 +64,11 @@ The normal loop is:
 narada inbox work-next
 narada inbox triage <envelope-id> --action task --by operator
 narada inbox triage <envelope-id> --action archive --by operator
-narada inbox triage <envelope-id> --action pending --target-kind site_config_change --target-ref site:desktop-sunroom-2 --by operator
+narada inbox pending <envelope-id> --to site_config_change:site:desktop-sunroom-2 --by operator
+```
+
+If handling must be abandoned without taking an action:
+
+```bash
+narada inbox release <envelope-id> --by operator
 ```

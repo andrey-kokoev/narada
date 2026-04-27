@@ -73,4 +73,31 @@ describe('SqliteInboxStore', () => {
     expect(store!.list({ status: 'archived', limit: 10 })).toHaveLength(1);
     expect(store!.list({ status: 'received', limit: 10 })).toHaveLength(0);
   });
+
+  it('claims and releases received envelopes', () => {
+    store!.insert({
+      envelope_id: 'env_claim',
+      received_at: '2026-04-26T22:34:00.000Z',
+      source: { kind: 'cli', ref: 'manual' },
+      kind: 'task_candidate',
+      authority: { level: 'operator_confirmed' },
+      payload: { title: 'Claim me' },
+    });
+
+    const claimed = store!.claim('env_claim', {
+      handled_by: 'architect',
+      claimed_at: '2026-04-26T22:35:00.000Z',
+    });
+
+    expect(claimed.status).toBe('handling');
+    expect(claimed.handling?.handled_by).toBe('architect');
+    expect(() => store!.claim('env_claim', {
+      handled_by: 'a2',
+      claimed_at: '2026-04-26T22:36:00.000Z',
+    })).toThrow(/not claimable/);
+
+    const released = store!.release('env_claim', 'architect');
+    expect(released.status).toBe('received');
+    expect(released.handling).toBeUndefined();
+  });
 });

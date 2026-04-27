@@ -1,8 +1,11 @@
 import type { Command } from 'commander';
 import {
+  inboxClaimCommand,
   inboxListCommand,
   inboxNextCommand,
+  inboxPendingCommand,
   inboxPromoteCommand,
+  inboxReleaseCommand,
   inboxShowCommand,
   inboxSubmitCommand,
   inboxTaskCommand,
@@ -92,6 +95,8 @@ export function registerInboxCommands(program: Command): void {
     .option('--status <status>', 'Filter by status', 'received')
     .option('--kind <kind>', 'Filter by envelope kind')
     .option('--limit <n>', 'Maximum envelopes including alternatives', '5')
+    .option('--claim', 'Claim the selected envelope before returning it', false)
+    .option('--by <principal>', 'Principal claiming the selected envelope')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[Record<string, unknown>]>({
@@ -102,6 +107,44 @@ export function registerInboxCommands(program: Command): void {
         status: opts.status as string | undefined,
         kind: opts.kind as string | undefined,
         limit: opts.limit ? Number(opts.limit) : undefined,
+        claim: opts.claim as boolean | undefined,
+        by: opts.by as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
+
+  inboxCmd
+    .command('claim <envelope-id>')
+    .description('Claim an inbox envelope for handling')
+    .requiredOption('--by <principal>', 'Principal claiming the envelope')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[string, Record<string, unknown>]>({
+      command: 'inbox claim',
+      emit: emitCommandResult,
+      format: (_envelopeId: string, opts: Record<string, unknown>) => opts.format,
+      invocation: (envelopeId, opts) => inboxClaimCommand({
+        envelopeId,
+        by: opts.by as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
+
+  inboxCmd
+    .command('release <envelope-id>')
+    .description('Release a claimed inbox envelope back to received')
+    .requiredOption('--by <principal>', 'Principal releasing the envelope')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[string, Record<string, unknown>]>({
+      command: 'inbox release',
+      emit: emitCommandResult,
+      format: (_envelopeId: string, opts: Record<string, unknown>) => opts.format,
+      invocation: (envelopeId, opts) => inboxReleaseCommand({
+        envelopeId,
+        by: opts.by as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }),
@@ -200,6 +243,26 @@ export function registerInboxCommands(program: Command): void {
         title: opts.title as string | undefined,
         goal: opts.goal as string | undefined,
         criteria: opts.criteria as string[] | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
+
+  inboxCmd
+    .command('pending <envelope-id>')
+    .description('Record a concise pending crossing: --to <kind>:<ref>')
+    .requiredOption('--to <target>', 'Pending target as <kind>:<ref>')
+    .requiredOption('--by <principal>', 'Principal recording pending crossing')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[string, Record<string, unknown>]>({
+      command: 'inbox pending',
+      emit: emitCommandResult,
+      format: (_envelopeId: string, opts: Record<string, unknown>) => opts.format,
+      invocation: (envelopeId, opts) => inboxPendingCommand({
+        envelopeId,
+        to: opts.to as string | undefined,
+        by: opts.by as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }),

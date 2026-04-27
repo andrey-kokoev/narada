@@ -48,13 +48,27 @@ export interface InboxPromoteOptions extends InboxCommandOptions {
   criteria?: string[];
 }
 
+export interface InboxLeaseOptions extends InboxCommandOptions {
+  envelopeId?: string;
+  by?: string;
+}
+
 export interface InboxNextOptions extends InboxListOptions {}
 
-export interface InboxWorkNextOptions extends InboxNextOptions {}
+export interface InboxWorkNextOptions extends InboxNextOptions {
+  claim?: boolean;
+  by?: string;
+}
 
 export interface InboxTriageOptions extends Omit<InboxPromoteOptions, 'targetKind'> {
   action?: string;
   targetKind?: string;
+}
+
+export interface InboxPendingOptions extends InboxCommandOptions {
+  envelopeId?: string;
+  to?: string;
+  by?: string;
 }
 
 export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
@@ -148,10 +162,24 @@ export async function inboxWorkNextCommand(options: InboxWorkNextOptions): Promi
   if (options.status && !status) return errorResult(`Invalid status: ${options.status}`);
   if (options.kind && !kind) return errorResult(`Invalid kind: ${options.kind}`);
 
+  if (options.claim && !options.by) return errorResult('--by is required with --claim');
+
   return withInboxStoreAsync(options, async (store) => {
     const limit = clampLimit(options.limit ?? 5);
     const envelopes = selectEnvelopes(store, { status, kind, limit });
-    const [primary, ...alternatives] = envelopes;
+    const [selected, ...alternatives] = envelopes;
+    let primary = selected ?? null;
+    if (primary && options.claim) {
+      try {
+        primary = store.claim(primary.envelope_id, {
+          handled_by: options.by!,
+          claimed_at: new Date().toISOString(),
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return errorResult(message);
+      }
+    }
     const admissibleActions = primary ? admissibleActionsForEnvelope(primary) : [];
     return okResult(
       {
@@ -191,6 +219,43 @@ export async function inboxShowCommand(options: InboxShowOptions): Promise<{ exi
       ],
       options.format,
     );
+  });
+}
+
+export async function inboxClaimCommand(options: InboxLeaseOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
+  if (!options.envelopeId || !options.by) return errorResult('Missing envelope ID or --by');
+  return withInboxStoreAsync(options, async (store) => {
+    try {
+      const envelope = store.claim(options.envelopeId!, {
+        handled_by: options.by!,
+        claimed_at: new Date().toISOString(),
+      });
+      return okResult(
+        { status: 'success', envelope },
+        [`Inbox envelope claimed: ${envelope.envelope_id}`, `Handled by: ${options.by}`],
+        options.format,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return errorResult(message);
+    }
+  });
+}
+
+export async function inboxReleaseCommand(options: InboxLeaseOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
+  if (!options.envelopeId || !options.by) return errorResult('Missing envelope ID or --by');
+  return withInboxStoreAsync(options, async (store) => {
+    try {
+      const envelope = store.release(options.envelopeId!, options.by!);
+      return okResult(
+        { status: 'success', envelope },
+        [`Inbox envelope released: ${envelope.envelope_id}`, 'Status: received'],
+        options.format,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return errorResult(message);
+    }
   });
 }
 
@@ -336,20 +401,33 @@ export async function inboxTriageCommand(options: InboxTriageOptions): Promise<{
   }
 }
 
+export async function inboxPendingCommand(options: InboxPendingOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
+  if (!options.to) return errorResult('--to is required as <kind>:<ref>');
+  const parsed = parsePendingTo(options.to);
+  if (!parsed) return errorResult('--to must be <kind>:<ref>');
+  return inboxPromoteCommand({
+    ...options,
+    targetKind: parsed.targetKind,
+    targetRef: parsed.targetRef,
+  });
+}
+
 function admissibleActionsForEnvelope(envelope: InboxEnvelope): Array<Record<string, unknown>> {
-  if (envelope.status !== 'received') {
+  if (envelope.status !== 'received' && envelope.status !== 'handling') {
     return [];
   }
   const actions: Array<Record<string, unknown>> = [
     {
       action: 'archive',
       command: `narada inbox triage ${envelope.envelope_id} --action archive --by <principal>`,
+      command_args: ['inbox', 'triage', envelope.envelope_id, '--action', 'archive', '--by', '<principal>'],
       mutates: true,
       target_mutation: false,
     },
     {
       action: 'pending',
-      command: `narada inbox triage ${envelope.envelope_id} --action pending --target-kind <kind> --target-ref <ref> --by <principal>`,
+      command: `narada inbox pending ${envelope.envelope_id} --to <kind>:<ref> --by <principal>`,
+      command_args: ['inbox', 'pending', envelope.envelope_id, '--to', '<kind>:<ref>', '--by', '<principal>'],
       mutates: true,
       target_mutation: false,
       pending_kind: 'recorded_pending_crossing',
@@ -359,6 +437,7 @@ function admissibleActionsForEnvelope(envelope: InboxEnvelope): Array<Record<str
     actions.unshift({
       action: 'task',
       command: `narada inbox task ${envelope.envelope_id} --by <principal>`,
+      command_args: ['inbox', 'task', envelope.envelope_id, '--by', '<principal>'],
       mutates: true,
       target_mutation: true,
     });
@@ -473,11 +552,19 @@ function parseAuthorityLevel(value: string | undefined): InboxAuthorityLevel | u
 }
 
 function parseStatus(value: string | undefined): InboxEnvelopeStatus | undefined {
-  return oneOf(value, ['received', 'classified', 'accepted', 'rejected', 'promoted', 'archived', 'superseded']);
+  return oneOf(value, ['received', 'handling', 'classified', 'accepted', 'rejected', 'promoted', 'archived', 'superseded']);
 }
 
 function parsePromotionTargetKind(value: string | undefined): InboxPromotionTargetKind | undefined {
   return oneOf(value, ['task', 'decision', 'operator_action', 'knowledge_entry', 'site_config_change', 'archive']);
+}
+
+function parsePendingTo(value: string): { targetKind: InboxPromotionTargetKind; targetRef: string } | undefined {
+  const index = value.indexOf(':');
+  if (index <= 0 || index === value.length - 1) return undefined;
+  const targetKind = parsePromotionTargetKind(value.slice(0, index));
+  if (!targetKind || targetKind === 'task' || targetKind === 'archive') return undefined;
+  return { targetKind, targetRef: value.slice(index + 1) };
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

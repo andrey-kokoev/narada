@@ -27,6 +27,7 @@ export type InboxAuthorityLevel =
 
 export type InboxEnvelopeStatus =
   | 'received'
+  | 'handling'
   | 'classified'
   | 'accepted'
   | 'rejected'
@@ -72,6 +73,11 @@ export interface InboxPromotion {
   note?: string;
 }
 
+export interface InboxHandlingLease {
+  handled_by: string;
+  claimed_at: string;
+}
+
 export interface InboxEnvelope<TPayload = unknown> {
   envelope_id: string;
   received_at: string;
@@ -81,6 +87,7 @@ export interface InboxEnvelope<TPayload = unknown> {
   payload: TPayload;
   status: InboxEnvelopeStatus;
   promotion?: InboxPromotion;
+  handling?: InboxHandlingLease;
 }
 
 export interface CreateInboxEnvelopeOptions<TPayload = unknown> {
