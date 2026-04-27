@@ -15,6 +15,10 @@ import {
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { taskCreateCommand } from './task-create.js';
+import {
+  inboxEnvelopeToEvidenceState,
+  writeInboxMutationEvidence,
+} from '../lib/inbox-mutation-evidence-writer.js';
 
 const USER_PC_TEMPLATE_WORKFLOW_REF = 'user-pc-template-materialization-workflow';
 const USER_PC_TEMPLATE_WORKFLOW_PATH = 'docs/product/user-pc-template-materialization-workflow.md';
@@ -148,6 +152,7 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
 
   return withInboxStoreAsync(options, async (store) => {
     const delivery = inspectInboxDelivery(options.cwd ?? process.cwd());
+    const cwd = options.cwd ?? process.cwd();
     const envelope = store.insert({
       envelope_id: `env_${randomUUID()}`,
       received_at: new Date().toISOString(),
@@ -158,6 +163,16 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
         ...(options.principal ? { principal: options.principal } : {}),
       },
       payload,
+    });
+    await writeInboxMutationEvidence({
+      cwd,
+      command: 'inbox submit',
+      principal: options.principal,
+      authorityClass: 'claim',
+      before: null,
+      after: inboxEnvelopeToEvidenceState(store.get(envelope.envelope_id)),
+      result: { status: 'success', envelope },
+      occurredAt: envelope.received_at,
     });
     return okResult(
       { status: 'success', envelope, delivery },
@@ -319,8 +334,25 @@ export async function inboxImportCommand(options: InboxImportOptions): Promise<{
   const cwd = options.cwd ?? process.cwd();
   const fromDir = resolve(cwd, options.fromDir ?? join('.ai', 'inbox-envelopes'));
   return withInboxStoreAsync(options, async (store) => {
+    const beforeIds = new Set(store.list({ limit: 200 }).map((envelope) => envelope.envelope_id));
     const refresh = await refreshInboxFromExports(store, cwd, { fromDir, missingDirIsEmpty: false });
     if (refresh.error) return errorResult(refresh.error);
+    const importedEnvelopes = store
+      .list({ limit: 200 })
+      .filter((envelope) => !beforeIds.has(envelope.envelope_id));
+    for (const envelope of importedEnvelopes) {
+      await writeInboxMutationEvidence({
+        cwd,
+        command: 'inbox import',
+        principal: 'import_replay',
+        authorityClass: 'resolve',
+        before: null,
+        after: inboxEnvelopeToEvidenceState(envelope),
+        result: { status: 'success', imported: refresh.imported, skipped: refresh.skipped, envelope },
+        occurredAt: envelope.received_at,
+        confirmationKind: 'import_replay',
+      });
+    }
     return okResult(
       {
         status: 'success',
@@ -406,9 +438,19 @@ export async function inboxWorkNextCommand(options: InboxWorkNextOptions): Promi
     let primary = selected ?? null;
     if (primary && options.claim) {
       try {
+        const before = inboxEnvelopeToEvidenceState(primary);
         primary = store.claim(primary.envelope_id, {
           handled_by: options.by!,
           claimed_at: new Date().toISOString(),
+        });
+        await writeInboxMutationEvidence({
+          cwd: options.cwd ?? process.cwd(),
+          command: 'inbox work-next claim',
+          principal: options.by,
+          authorityClass: 'claim',
+          before,
+          after: inboxEnvelopeToEvidenceState(store.get(primary.envelope_id)),
+          result: { status: 'success', envelope: primary },
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -462,9 +504,19 @@ export async function inboxClaimCommand(options: InboxLeaseOptions): Promise<{ e
   if (!options.envelopeId || !options.by) return errorResult('Missing envelope ID or --by');
   return withInboxStoreAsync(options, async (store) => {
     try {
+      const before = inboxEnvelopeToEvidenceState(store.get(options.envelopeId!));
       const envelope = store.claim(options.envelopeId!, {
         handled_by: options.by!,
         claimed_at: new Date().toISOString(),
+      });
+      await writeInboxMutationEvidence({
+        cwd: options.cwd ?? process.cwd(),
+        command: 'inbox claim',
+        principal: options.by,
+        authorityClass: 'claim',
+        before,
+        after: inboxEnvelopeToEvidenceState(store.get(envelope.envelope_id)),
+        result: { status: 'success', envelope },
       });
       return okResult(
         { status: 'success', envelope },
@@ -482,7 +534,17 @@ export async function inboxReleaseCommand(options: InboxLeaseOptions): Promise<{
   if (!options.envelopeId || !options.by) return errorResult('Missing envelope ID or --by');
   return withInboxStoreAsync(options, async (store) => {
     try {
+      const before = inboxEnvelopeToEvidenceState(store.get(options.envelopeId!));
       const envelope = store.release(options.envelopeId!, options.by!);
+      await writeInboxMutationEvidence({
+        cwd: options.cwd ?? process.cwd(),
+        command: 'inbox release',
+        principal: options.by,
+        authorityClass: 'resolve',
+        before,
+        after: inboxEnvelopeToEvidenceState(store.get(envelope.envelope_id)),
+        result: { status: 'success', envelope },
+      });
       return okResult(
         { status: 'success', envelope },
         [`Inbox envelope released: ${envelope.envelope_id}`, 'Status: received'],
@@ -506,6 +568,8 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
   return withInboxStoreAsync(options, async (store) => {
     const existing = store.get(options.envelopeId!);
     if (!existing) return errorResult(`Inbox envelope not found: ${options.envelopeId}`);
+    const before = inboxEnvelopeToEvidenceState(existing);
+    const cwd = options.cwd ?? process.cwd();
     const canUpgradePendingPromotion =
       existing.promotion?.target_kind === targetKind
       && existing.promotion.target_ref === options.targetRef
@@ -539,6 +603,15 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
           enactment_status: 'recorded',
           note: 'Envelope archived; no target-zone mutation was performed.',
         });
+        await writeInboxMutationEvidence({
+          cwd,
+          command: 'inbox promote archive',
+          principal: options.by,
+          authorityClass: 'resolve',
+          before,
+          after: inboxEnvelopeToEvidenceState(store.get(envelope.envelope_id)),
+          result: { status: 'success', enactment_status: 'recorded', target_mutation: false, envelope },
+        });
         return okResult(
           {
             status: 'success',
@@ -568,6 +641,15 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
           target_command: 'task create',
           target_result: taskResult.result,
         });
+        await writeInboxMutationEvidence({
+          cwd,
+          command: 'inbox promote task',
+          principal: options.by,
+          authorityClass: 'resolve',
+          before,
+          after: inboxEnvelopeToEvidenceState(store.get(envelope.envelope_id)),
+          result: { status: 'success', enactment_status: 'enacted', target_mutation: true, envelope },
+        });
         return okResult(
           {
             status: 'success',
@@ -596,6 +678,15 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
           target_command: 'site_config_change:user-pc-template-materialization-workflow',
           target_result: target,
         });
+        await writeInboxMutationEvidence({
+          cwd,
+          command: 'inbox promote site_config_change',
+          principal: options.by,
+          authorityClass: 'resolve',
+          before,
+          after: inboxEnvelopeToEvidenceState(store.get(envelope.envelope_id)),
+          result: { status: 'success', enactment_status: 'enacted', target_mutation: target.created, envelope },
+        });
         return okResult(
           {
             status: 'success',
@@ -621,6 +712,15 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
         promoted_by: options.by!,
         enactment_status: 'pending',
         note: `recorded_pending_crossing: executable promotion for target kind '${targetKind}' is not implemented yet.`,
+      });
+      await writeInboxMutationEvidence({
+        cwd,
+        command: 'inbox promote pending',
+        principal: options.by,
+        authorityClass: 'resolve',
+        before,
+        after: inboxEnvelopeToEvidenceState(store.get(envelope.envelope_id)),
+        result: { status: 'success', enactment_status: 'pending', pending_kind: 'recorded_pending_crossing', target_mutation: false, envelope },
       });
       return okResult(
         {

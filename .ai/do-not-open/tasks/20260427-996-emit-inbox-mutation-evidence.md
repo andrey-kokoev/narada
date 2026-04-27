@@ -1,8 +1,17 @@
 ---
-status: opened
+status: closed
 depends_on: [994]
 amended_by: architect
 amended_at: 2026-04-27T21:49:39.824Z
+criteria_proved_by: architect
+criteria_proved_at: 2026-04-27T22:34:35.454Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-27T22:34:35.905Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: agent_finish
 ---
 
 # Emit inbox mutation evidence
@@ -43,8 +52,8 @@ Inbox already has exported envelope artifacts, but status transitions and promot
 
 ## Acceptance Criteria
 
-- [ ] Submit, claim, release, triage, pending, promote, task, import, and archive-producing flows emit evidence records or are classified as import/replay.
-- [ ] Evidence records identify envelope id, previous status, next status, principal, command, promotion target, and read-back confirmation.
-- [ ] Import/replay does not fabricate new mutation authority.
-- [ ] Focused tests cover submit, triage archive, pending crossing, and task promotion.
-- [ ] `pnpm verify` passes.
+- [x] Submit, claim, release, triage, pending, promote, task, import, and archive-producing flows emit evidence records or are classified as import/replay.
+- [x] Evidence records identify envelope id, previous status, next status, principal, command, promotion target, and read-back confirmation.
+- [x] Import/replay does not fabricate new mutation authority.
+- [x] Focused tests cover submit, triage archive, pending crossing, and task promotion.
+- [x] `pnpm verify` passes.
