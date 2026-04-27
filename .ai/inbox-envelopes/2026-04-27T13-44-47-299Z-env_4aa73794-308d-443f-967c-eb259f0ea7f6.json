@@ -23,5 +23,21 @@
     "proposed_action": "Add narada work-next --peek as a no-claim read-only inspection mode.",
     "cooldown_key": "work-next-missing-peek"
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:971",
+    "promoted_at": "2026-04-27T13:49:53.532Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task create",
+    "target_result": {
+      "status": "success",
+      "task_id": "20260427-971-unified-work-next-lacks-a-read-only-peek-mode",
+      "task_number": 971,
+      "file_name": "20260427-971-unified-work-next-lacks-a-read-only-peek-mode.md",
+      "file_path": "/home/andrey/src/narada/.ai/do-not-open/tasks/20260427-971-unified-work-next-lacks-a-read-only-peek-mode.md",
+      "title": "Unified work-next lacks a read-only peek mode"
+    }
+  }
 }

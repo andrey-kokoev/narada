@@ -80,6 +80,68 @@ describe('work-next unified next action', () => {
     expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-test.md'), 'utf8')).toContain('status: claimed');
   });
 
+  it('peeks task work without claiming it', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-test.md'),
+      '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n\n## Goal\nDo task work.\n\n## Acceptance Criteria\n- [ ] Do task work.\n',
+    );
+
+    const result = await workNextCommand({ agent: 'architect', cwd: tempDir, format: 'json', peek: true });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      action_kind: 'task_work',
+      agent_id: 'architect',
+      primary: { task_number: 100 },
+      task_result: { action: 'peek_next' },
+      next_step: 'Inspect only; rerun without --peek to claim or execute the selected work.',
+    });
+    expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-test.md'), 'utf8')).toContain('status: opened');
+  });
+
+  it('peeks current task before claimable future work', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'agents', 'roster.json'),
+      JSON.stringify({
+        version: 2,
+        schema: 'https://narada.dev/schemas/agent-roster/v2',
+        updated_at: '2026-01-01T00:00:00Z',
+        agents: [{
+          agent_id: 'architect',
+          role: 'architect',
+          capabilities: ['claim', 'execute', 'review'],
+          first_seen_at: '2026-01-01T00:00:00Z',
+          last_active_at: '2026-01-01T00:00:00Z',
+          status: 'working',
+          task: 100,
+          last_done: null,
+          updated_at: '2026-01-01T00:00:00Z',
+        }],
+      }, null, 2),
+    );
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-current.md'),
+      '---\ntask_id: 100\nstatus: claimed\n---\n\n# Task 100 Current\n\n## Acceptance Criteria\n- [ ] Do current work.\n',
+    );
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-101-future.md'),
+      '---\ntask_id: 101\nstatus: opened\n---\n\n# Task 101 Future\n\n## Acceptance Criteria\n- [ ] Do future work.\n',
+    );
+
+    const result = await workNextCommand({ agent: 'architect', cwd: tempDir, format: 'json', peek: true });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      action_kind: 'task_work',
+      primary: { task_number: 100, current: true },
+      task_result: { action: 'peek_current' },
+      next_step: 'Inspect only; this agent already has current task work.',
+    });
+    expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-101-future.md'), 'utf8')).toContain('status: opened');
+  });
+
   it('claims task work when SQLite says opened and markdown has no status', async () => {
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-102-sqlite-opened.md'),
@@ -221,6 +283,49 @@ describe('work-next unified next action', () => {
         status: 'handling',
         handling: { handled_by: 'architect' },
       },
+    });
+  });
+
+  it('peeks inbox work without claiming it', async () => {
+    await inboxSubmitCommand({
+      cwd: tempDir,
+      sourceKind: 'user_chat',
+      sourceRef: 'chat:peek',
+      kind: 'task_candidate',
+      authorityLevel: 'operator_confirmed',
+      principal: 'operator',
+      payload: '{"title":"Inbox work","goal":"Handle inbox."}',
+      format: 'json',
+    });
+
+    const result = await workNextCommand({ agent: 'architect', cwd: tempDir, format: 'json', peek: true });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      action_kind: 'inbox_work',
+      agent_id: 'architect',
+      primary: {
+        status: 'received',
+        handling: undefined,
+      },
+      next_step: 'Inspect only; rerun inbox claim or work-next without --peek to take the work.',
+    });
+  });
+
+  it('rejects peek with task execution options', async () => {
+    const result = await workNextCommand({
+      agent: 'architect',
+      cwd: tempDir,
+      format: 'json',
+      peek: true,
+      startTask: true,
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      error: '--peek cannot be combined with --start-task or --exec-task',
     });
   });
 

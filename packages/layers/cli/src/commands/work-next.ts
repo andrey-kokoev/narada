@@ -9,14 +9,17 @@ import { resolve } from 'node:path';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import {
+  findTaskFile,
+  loadRoster,
   listReportsForTask,
   listReviewsForTask,
+  readTaskFile,
   scanTasksByRange,
 } from '../lib/task-governance.js';
 import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 import { inboxWorkNextCommand } from './inbox.js';
 import { taskDispatchCommand } from './task-dispatch.js';
-import { taskWorkNextCommand } from './task-next.js';
+import { taskPeekNextCommand, taskWorkNextCommand } from './task-next.js';
 
 export interface WorkNextOptions {
   agent?: string;
@@ -24,6 +27,7 @@ export interface WorkNextOptions {
   format?: CliFormat;
   startTask?: boolean;
   execTask?: boolean;
+  peek?: boolean;
 }
 
 interface CommandEnvelope {
@@ -146,6 +150,33 @@ async function findReviewWork(cwd: string, agentId: string): Promise<Record<stri
   }
 }
 
+async function findCurrentTaskWork(cwd: string, agentId: string): Promise<Record<string, unknown> | null> {
+  const roster = await loadRoster(cwd);
+  const agent = roster.agents.find((entry) => entry.agent_id === agentId);
+  const taskNumber = agent?.task ?? null;
+  if (taskNumber === null) return null;
+  const taskFile = await findTaskFile(cwd, String(taskNumber));
+  if (!taskFile) {
+    return {
+      task_number: taskNumber,
+      task_id: null,
+      title: null,
+      status: 'unknown',
+      current: true,
+    };
+  }
+  const { frontMatter, body } = await readTaskFile(taskFile.path);
+  const title = /^#\s+(.+)$/m.exec(body)?.[1] ?? null;
+  return {
+    task_id: taskFile.taskId,
+    task_number: taskNumber,
+    title,
+    status: frontMatter.status ?? 'claimed',
+    file_path: taskFile.path,
+    current: true,
+  };
+}
+
 export async function workNextCommand(options: WorkNextOptions): Promise<CommandEnvelope> {
   if (!options.agent) {
     return {
@@ -153,12 +184,50 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
       result: { status: 'error', error: '--agent is required', primary: null },
     };
   }
+  if (options.peek && (options.startTask || options.execTask)) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: { status: 'error', error: '--peek cannot be combined with --start-task or --exec-task', primary: null },
+    };
+  }
 
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
   const format = options.format ?? 'auto';
   const checked: WorkNextCheckedZone[] = [];
 
-  const taskResult = await taskWorkNextCommand({
+  if (options.peek) {
+    const currentTask = await findCurrentTaskWork(cwd, options.agent);
+    if (currentTask) {
+      checked.push({ zone: 'task_work', status: 'selected', selected_ref: taskSelectedRef(currentTask) });
+      const result = {
+        status: 'success',
+        action_kind: 'task_work',
+        agent_id: options.agent,
+        primary: currentTask,
+        checked,
+        task_result: {
+          status: 'ok',
+          agent: options.agent,
+          agent_id: options.agent,
+          action: 'peek_current',
+          primary: currentTask,
+          task: currentTask,
+        },
+        dispatch_result: null,
+        next_step: 'Inspect only; this agent already has current task work.',
+      };
+      return {
+        exitCode: ExitCode.SUCCESS,
+        result: formattedResult(result, formatHuman(result), format),
+      };
+    }
+  }
+
+  const taskResult = options.peek ? await taskPeekNextCommand({
+    agent: options.agent,
+    cwd,
+    format: 'json',
+  }) : await taskWorkNextCommand({
     agent: options.agent,
     cwd,
     format: 'json',
@@ -225,7 +294,9 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
       checked,
       task_result: taskResult.result,
       dispatch_result: dispatchResult,
-      next_step: 'Execute the returned task packet through the governed task lifecycle.',
+      next_step: options.peek
+        ? 'Inspect only; rerun without --peek to claim or execute the selected work.'
+        : 'Execute the returned task packet through the governed task lifecycle.',
     };
     return {
       exitCode: ExitCode.SUCCESS,
@@ -255,8 +326,8 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
   const inboxResult = await inboxWorkNextCommand({
     cwd,
     format: 'json',
-    claim: true,
-    by: options.agent,
+    claim: !options.peek,
+    by: options.peek ? undefined : options.agent,
   });
 
   if (inboxResult.exitCode !== ExitCode.SUCCESS) {
@@ -274,7 +345,9 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
       primary,
       checked,
       inbox_result: inboxResult.result,
-      next_step: 'Handle the inbox envelope through one of its admissible actions.',
+      next_step: options.peek
+        ? 'Inspect only; rerun inbox claim or work-next without --peek to take the work.'
+        : 'Handle the inbox envelope through one of its admissible actions.',
     };
     return {
       exitCode: ExitCode.SUCCESS,

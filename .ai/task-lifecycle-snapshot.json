@@ -1,7 +1,7 @@
 {
   "snapshot_kind": "task_lifecycle_snapshot",
   "snapshot_version": 1,
-  "exported_at": "2026-04-27T13:47:22.008Z",
+  "exported_at": "2026-04-27T13:55:00.060Z",
   "tables": [
     {
       "name": "agent_roster",
@@ -26,7 +26,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 720,
-          "updated_at": "2026-04-27T13:47:22.008Z"
+          "updated_at": "2026-04-27T13:55:00.060Z"
         },
         {
           "agent_id": "a2",
@@ -37,7 +37,7 @@
           "status": "idle",
           "task_number": null,
           "last_done": 886,
-          "updated_at": "2026-04-27T13:47:22.008Z"
+          "updated_at": "2026-04-27T13:55:00.060Z"
         },
         {
           "agent_id": "a3",
@@ -48,7 +48,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 610,
-          "updated_at": "2026-04-27T13:47:22.008Z"
+          "updated_at": "2026-04-27T13:55:00.060Z"
         },
         {
           "agent_id": "a4",
@@ -59,7 +59,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 574,
-          "updated_at": "2026-04-27T13:47:22.008Z"
+          "updated_at": "2026-04-27T13:55:00.060Z"
         },
         {
           "agent_id": "a5",
@@ -70,7 +70,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 551,
-          "updated_at": "2026-04-27T13:47:22.008Z"
+          "updated_at": "2026-04-27T13:55:00.060Z"
         },
         {
           "agent_id": "a6",
@@ -81,18 +81,18 @@
           "status": "done",
           "task_number": null,
           "last_done": 545,
-          "updated_at": "2026-04-27T13:47:22.008Z"
+          "updated_at": "2026-04-27T13:55:00.060Z"
         },
         {
           "agent_id": "architect",
           "role": "implementer",
           "capabilities_json": "[\"derive\",\"propose\",\"claim\",\"execute\",\"resolve\",\"confirm\"]",
           "first_seen_at": "2026-04-26T22:28:56.453Z",
-          "last_active_at": "2026-04-27T13:47:22.008Z",
+          "last_active_at": "2026-04-27T13:55:00.060Z",
           "status": "done",
           "task_number": null,
-          "last_done": 970,
-          "updated_at": "2026-04-27T13:47:22.008Z"
+          "last_done": 971,
+          "updated_at": "2026-04-27T13:55:00.060Z"
         }
       ]
     },
@@ -5936,6 +5936,27 @@
           "confirmation_json": "{\"task_id\":\"20260427-970-add-governed-coherence-scan-inbox-surface\",\"task_number\":970,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
           "warnings_json": null,
           "updated_at": "2026-04-27T13:42:48.710Z"
+        },
+        {
+          "request_id": "air_claim_971_architect_1777297796920_mkmtql",
+          "kind": "claim",
+          "task_id": "20260427-971-unified-work-next-lacks-a-read-only-peek-mode",
+          "task_number": 971,
+          "agent_id": "architect",
+          "requested_by": "architect",
+          "requested_at": "2026-04-27T13:49:56.920Z",
+          "reason": null,
+          "no_claim": 0,
+          "status": "applied",
+          "rejection_reason": null,
+          "assignment_id": "assign-20260427-971-unified-work-next-lacks-a-read-only-peek-mode-architect-1777297796920",
+          "previous_agent_id": null,
+          "lifecycle_status_before": "opened",
+          "lifecycle_status_after": "claimed",
+          "roster_status_after": "working",
+          "confirmation_json": "{\"task_id\":\"20260427-971-unified-work-next-lacks-a-read-only-peek-mode\",\"task_number\":971,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
+          "warnings_json": null,
+          "updated_at": "2026-04-27T13:50:00.151Z"
         }
       ]
     },
@@ -6859,6 +6880,15 @@
           "proved_at": "2026-04-27T13:47:16.891Z",
           "criteria_json": "[{\"text\":\"narada coherence scan runs read-only by default and reports bounded findings\",\"checked\":true},{\"text\":\"scanner can submit Canonical Inbox envelopes only with an explicit submit flag\",\"checked\":true},{\"text\":\"submitted envelopes are typed as observation or task_candidate with system_observed authority\",\"checked\":true},{\"text\":\"scanner detects at least snapshot freshness/posture and missing read-only unified work-next peek support\",\"checked\":true},{\"text\":\"focused tests cover dry-run output and explicit inbox submission without auto-promotion or repair\",\"checked\":true}]",
           "verification_binding_json": "{\"state\":\"unbound\",\"rationale\":\"Implemented governed coherence scan surface. narada coherence scan runs dry by default and reports bounded findings; --submit explicitly writes Canonical Inbox envelopes with system_observed authority. Scanner emits observations or task candidates and dedupes active cooldown keys. It detects task lifecycle snapshot posture/freshness and missing unified work-next read-only peek support. Added doctrine for self-maintenance coherence loop and autoimmune controls. Focused tests cover dry-run, explicit submit, and dedupe; live scan submitted a task_candidate envelope; pnpm verify passed.\"}"
+        },
+        {
+          "proof_id": "criteria_proof_20260427-971-unified-work-next-lacks-a-read-only-peek-mode_2026-04-27T13:54:56.019Z",
+          "task_id": "20260427-971-unified-work-next-lacks-a-read-only-peek-mode",
+          "task_number": 971,
+          "proved_by": "architect",
+          "proved_at": "2026-04-27T13:54:56.019Z",
+          "criteria_json": "[{\"text\":\"Inbox envelope env_4aa73794-308d-443f-967c-eb259f0ea7f6 has been handled.\",\"checked\":true}]",
+          "verification_binding_json": "{\"state\":\"unbound\",\"rationale\":\"Implemented unified work-next --peek. The command rejects --peek with execution flags, reports current task work before future claimable work, uses task peek-next for claimable task inspection, and calls inbox work-next without claim for inbox inspection. Focused tests cover task peek without claim, current-task precedence, inbox peek without claim, invalid flag combinations, and coherence scanner no longer reports missing peek. Live CLI returned current Task 971 and coherence scan returned zero findings after snapshot refresh; pnpm verify passed.\"}"
         }
       ]
     },
@@ -14734,6 +14764,32 @@
           "admitted_at": "2026-04-27T13:47:17.778Z",
           "admitted_by": "architect",
           "confirmation_json": "{\"has_report\":false,\"has_review\":false,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_971_1777298096557_qdgrko",
+          "bundle_id": "evb_971_1777298096557_3w7h8t",
+          "task_id": "20260427-971-unified-work-next-lacks-a-read-only-peek-mode",
+          "task_number": 971,
+          "verdict": "admitted",
+          "methods_json": "[\"criteria_proof\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T13:54:56.557Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":false,\"has_review\":false,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_971_1777298097090_ip7u33",
+          "bundle_id": "evb_971_1777298097090_ag654a",
+          "task_id": "20260427-971-unified-work-next-lacks-a-read-only-peek-mode",
+          "task_number": 971,
+          "verdict": "admitted",
+          "methods_json": "[\"admission\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": "closed",
+          "admitted_at": "2026-04-27T13:54:57.090Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":false,\"has_review\":false,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
         }
       ]
     },
@@ -22591,6 +22647,32 @@
           "residuals_json": "[]",
           "assembled_at": "2026-04-27T13:47:17.778Z",
           "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_971_1777298096557_3w7h8t",
+          "task_id": "20260427-971-unified-work-next-lacks-a-read-only-peek-mode",
+          "task_number": 971,
+          "report_ids_json": "[]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[]",
+          "changed_files_json": "[]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T13:54:56.557Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_971_1777298097090_ag654a",
+          "task_id": "20260427-971-unified-work-next-lacks-a-read-only-peek-mode",
+          "task_number": 971,
+          "report_ids_json": "[]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[]",
+          "changed_files_json": "[]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T13:54:57.090Z",
+          "assembled_by": "architect"
         }
       ]
     },
@@ -25699,6 +25781,11 @@
           "task_id": "20260427-970-add-governed-coherence-scan-inbox-surface",
           "record_json": "{\"task_id\":\"20260427-970-add-governed-coherence-scan-inbox-surface\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T13:42:47.702Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T13:47:18.415Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
           "updated_at": "2026-04-27T13:47:18.635Z"
+        },
+        {
+          "task_id": "20260427-971-unified-work-next-lacks-a-read-only-peek-mode",
+          "record_json": "{\"task_id\":\"20260427-971-unified-work-next-lacks-a-read-only-peek-mode\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T13:49:57.122Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T13:54:57.726Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
+          "updated_at": "2026-04-27T13:54:57.931Z"
         }
       ]
     },
@@ -28347,6 +28434,15 @@
           "task_id": "20260427-970-add-governed-coherence-scan-inbox-surface",
           "agent_id": "architect",
           "claimed_at": "2026-04-27T13:42:47.702Z",
+          "released_at": null,
+          "release_reason": null,
+          "intent": "primary"
+        },
+        {
+          "assignment_id": "assign-20260427-971-unified-work-next-lacks-a-read-only-peek-mode-architect-1777297796920",
+          "task_id": "20260427-971-unified-work-next-lacks-a-read-only-peek-mode",
+          "agent_id": "architect",
+          "claimed_at": "2026-04-27T13:49:57.122Z",
           "released_at": null,
           "release_reason": null,
           "intent": "primary"
@@ -40679,6 +40775,19 @@
           "continuation_packet_json": null,
           "updated_at": "2026-04-27T13:47:21.322Z",
           "closure_mode": "operator_direct"
+        },
+        {
+          "task_id": "20260427-971-unified-work-next-lacks-a-read-only-peek-mode",
+          "task_number": 971,
+          "status": "closed",
+          "governed_by": "task_close:architect",
+          "closed_at": "2026-04-27T13:54:59.360Z",
+          "closed_by": "architect",
+          "reopened_at": null,
+          "reopened_by": null,
+          "continuation_packet_json": null,
+          "updated_at": "2026-04-27T13:54:59.361Z",
+          "closure_mode": "operator_direct"
         }
       ]
     },
@@ -40704,7 +40813,7 @@
       "rows": [
         {
           "singleton": 1,
-          "last_allocated": 970
+          "last_allocated": 971
         }
       ]
     },
@@ -43157,6 +43266,14 @@
           "agent_id": "architect",
           "reported_at": "2026-04-27T13:47:18.415Z",
           "report_json": "{\"report_id\":\"wrr_41bf710a_20260427-970-add-governed-coherence-scan-inbox-surface_architect\",\"task_number\":\"970\",\"task_id\":\"20260427-970-add-governed-coherence-scan-inbox-surface\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-970-add-governed-coherence-scan-inbox-surface-2026-04-27T13:42:47.702Z\",\"reported_at\":\"2026-04-27T13:47:18.415Z\",\"summary\":\"Added narada coherence scan with dry-run default, explicit inbox submission, cooldown dedupe, snapshot posture check, work-next peek finding, docs, and focused tests.\",\"changed_files\":[],\"verification\":[],\"known_residuals\":[],\"ready_for_review\":true,\"report_status\":\"submitted\"}"
+        },
+        {
+          "report_id": "wrr_c590e31e_20260427-971-unified-work-next-lacks-a-read-only-peek-mode_architect",
+          "task_id": "20260427-971-unified-work-next-lacks-a-read-only-peek-mode",
+          "assignment_id": "20260427-971-unified-work-next-lacks-a-read-only-peek-mode-2026-04-27T13:49:57.122Z",
+          "agent_id": "architect",
+          "reported_at": "2026-04-27T13:54:57.726Z",
+          "report_json": "{\"report_id\":\"wrr_c590e31e_20260427-971-unified-work-next-lacks-a-read-only-peek-mode_architect\",\"task_number\":\"971\",\"task_id\":\"20260427-971-unified-work-next-lacks-a-read-only-peek-mode\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-971-unified-work-next-lacks-a-read-only-peek-mode-2026-04-27T13:49:57.122Z\",\"reported_at\":\"2026-04-27T13:54:57.726Z\",\"summary\":\"Added read-only unified work-next --peek with current-task precedence and no-claim inbox/task inspection. Verified focused tests, live CLI, coherence scan, and pnpm verify.\",\"changed_files\":[],\"verification\":[],\"known_residuals\":[],\"ready_for_review\":true,\"report_status\":\"submitted\"}"
         }
       ]
     },
@@ -55194,6 +55311,19 @@
           "acceptance_criteria_json": "[\"narada coherence scan runs read-only by default and reports bounded findings\",\"scanner can submit Canonical Inbox envelopes only with an explicit submit flag\",\"submitted envelopes are typed as observation or task_candidate with system_observed authority\",\"scanner detects at least snapshot freshness/posture and missing read-only unified work-next peek support\",\"focused tests cover dry-run output and explicit inbox submission without auto-promotion or repair\"]",
           "dependencies_json": "[]",
           "updated_at": "2026-04-27T13:42:46.661Z"
+        },
+        {
+          "task_id": "20260427-971-unified-work-next-lacks-a-read-only-peek-mode",
+          "task_number": 971,
+          "title": "Unified work-next lacks a read-only peek mode",
+          "chapter_markdown": "Canonical Inbox Promotions",
+          "goal_markdown": "Promoted from inbox envelope env_4aa73794-308d-443f-967c-eb259f0ea7f6.",
+          "context_markdown": null,
+          "required_work_markdown": "1. TBD",
+          "non_goals_markdown": "- Do not expand scope beyond this task.\n- Do not create derivative task-status files.\n- Do not mutate live external systems unless explicitly authorized.",
+          "acceptance_criteria_json": "[\"Inbox envelope env_4aa73794-308d-443f-967c-eb259f0ea7f6 has been handled.\"]",
+          "dependencies_json": "[]",
+          "updated_at": "2026-04-27T13:49:53.316Z"
         }
       ]
     },

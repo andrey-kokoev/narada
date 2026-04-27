@@ -8,6 +8,7 @@ export function registerWorkNextCommands(program: Command): void {
     .command('work-next')
     .description('Unified next action for an agent: task work, inbox work, or idle')
     .requiredOption('--agent <id>', 'Agent ID')
+    .option('--peek', 'Inspect next work without claiming inbox/task work or starting dispatch', false)
     .option('--start-task', 'When task work is selected, create dispatch packet and start execution context', false)
     .option('--exec-task', 'With --start-task, mark dispatch start as executed', false)
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
@@ -19,6 +20,7 @@ export function registerWorkNextCommands(program: Command): void {
       invocation: (opts) => workNextCommand({
         agent: opts.agent as string | undefined,
         cwd: opts.cwd as string | undefined,
+        peek: opts.peek as boolean | undefined,
         startTask: opts.startTask as boolean | undefined,
         execTask: opts.execTask as boolean | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
