@@ -33,7 +33,7 @@ export function registerTaskAuthoringCommands(taskCmd: Command): void {
     .option('--goal <text>', 'Task goal (defaults to title)')
     .option('--chapter <name>', 'Chapter name for task grouping')
     .option('--depends-on <numbers>', 'Comma-separated dependency task numbers')
-    .option('--criteria <csv>', 'Comma-separated acceptance criteria')
+    .option('--criteria <text>', 'Acceptance criterion; repeatable, comma-separated values also accepted', collectCsvValues, [])
     .option('--number <n>', 'Use a pre-allocated task number (skips allocation)')
     .option('--from-file <path>', 'Read task body from a file instead of generating scaffold')
     .option('--dry-run', 'Preview task without creating files', false)
@@ -50,7 +50,7 @@ export function registerTaskAuthoringCommands(taskCmd: Command): void {
           goal: opts.goal as string | undefined,
           chapter: opts.chapter as string | undefined,
           dependsOn: opts.dependsOn as string | undefined,
-          criteria: opts.criteria ? String(opts.criteria).split(',').map((s: string) => s.trim()).filter(Boolean) : undefined,
+          criteria: Array.isArray(opts.criteria) && opts.criteria.length > 0 ? opts.criteria as string[] : undefined,
           number: opts.number ? Number(opts.number) : undefined,
           dryRun: opts.dryRun as boolean,
           fromFile: opts.fromFile as string | undefined,
@@ -124,4 +124,12 @@ export function registerTaskAuthoringCommands(taskCmd: Command): void {
         dryRun: opts.dryRun as boolean,
       }),
     }));
+}
+
+function collectCsvValues(value: string, previous: string[]): string[] {
+  const values = value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return [...previous, ...values];
 }
