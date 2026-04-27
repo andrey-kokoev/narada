@@ -1,18 +1,31 @@
+---
+status: closed
+criteria_proved_by: architect
+criteria_proved_at: 2026-04-27T23:52:16.123Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-27T23:52:16.682Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: agent_finish
+---
+
 # Task 231: Live Operation Inspection Surfaces
 
 ## Chapter
 
 Live Operation
 
+## Goal
+
+Expose the evaluation payload, decision rationale, and execution envelope so an operator can inspect what the charter saw, what it proposed, and why the foreman decided what it did.
+
 ## Why
 
 An operator running a live support operation must be able to see *why* the system made a decision. Today, the rich evaluation content (proposed actions, tool requests, escalations, confidence) and decision rationale are stored in SQLite but completely hidden from observation queries, API routes, and the UI. An operator looking at a work item sees only a summary string like "Proposed draft reply" — not the draft content, not the confidence score, not alternative actions considered.
 
 This opacity is unacceptable for a live operation.
-
-## Goal
-
-Expose the evaluation payload, decision rationale, and execution envelope so an operator can inspect what the charter saw, what it proposed, and why the foreman decided what it did.
 
 ## Required Work
 
@@ -84,6 +97,62 @@ Alternatively, extend `narada status` to include the latest evaluation/decision 
 - Do not modify the evaluation schema — only expose existing fields.
 - Do not send email.
 
+## Execution Notes
+
+### Types Added
+
+- `EvaluationDetail` — full evaluation with parsed JSON fields (proposed_actions, tool_requests, escalations, classifications, facts, confidence)
+- `DecisionDetail` — full decision with parsed payload and source_charter_ids
+- `ExecutionDetail` — full execution with parsed runtime_envelope and outcome
+
+### Query Functions Added
+
+- `getEvaluationDetail(store, evaluationId)` — deep-dive evaluation view
+- `getDecisionDetail(store, decisionId)` — deep-dive decision view
+- `getExecutionDetail(store, executionId)` — deep-dive execution view
+- `getEvaluationsByContextDetail(store, contextId, scopeId)` — all evaluations for a context with full detail
+
+### API Routes Added
+
+- `GET /scopes/:id/evaluations/:evaluationId`
+- `GET /scopes/:id/decisions/:decisionId`
+- `GET /scopes/:id/executions/:executionId`
+- `GET /scopes/:id/contexts/:contextId/evaluations`
+
+### CLI Command Added
+
+- `narada show --type evaluation --id <evaluation-id>`
+- `narada show --type decision --id <decision-id>`
+- `narada show --type execution --id <execution-id>`
+
+### UI Updates
+
+- Context detail page now fetches and displays full evaluations with proposed actions, escalations, and tool requests
+- Work item detail page now links execution IDs and decision IDs to deep-dive views
+- New detail views: `showEvaluationDetail`, `showDecisionDetail`, `showExecutionDetail`
+- JSON content rendered in styled `<pre>` blocks for readability
+
+### Tests Added
+
+- `packages/layers/control-plane/test/unit/observability/queries.test.ts` — detail query coverage
+- `packages/layers/cli/test/commands/show.test.ts` — CLI show command coverage
+- `packages/layers/daemon/test/unit/observation-server.test.ts` — daemon route coverage
+
+### CLI Interface Note
+
+The task description originally suggested subcommand-style `narada inspect evaluation <id>`. The implemented surface is the existing flag-style show interface: `narada show --type <evaluation|decision|execution> --id <id> [--scope <scope-id>]`.
+
+### Corrective Work (Task 241)
+
+- Query parameter types narrowed from `CoordinatorStoreView` to `Pick<CoordinatorStoreView, "db">` to eliminate unsafe `{ db } as CoordinatorStoreView` casts in CLI.
+- CLI tests added for show command.
+
+## Verification
+
+- `pnpm --filter @narada2/control-plane exec vitest run test/unit/observability/queries.test.ts` — 62/62 passed.
+- `pnpm --filter @narada2/cli exec vitest run test/commands/show.test.ts` — 9/9 passed.
+- `pnpm --filter @narada2/daemon exec vitest run test/unit/observation-server.test.ts` — 62/62 passed.
+
 ## Acceptance Criteria
 
 - [x] An operator can query the full evaluation content (proposed actions, tool requests, escalations, confidence, classifications) via API and CLI.
@@ -98,45 +167,3 @@ Alternatively, extend `narada status` to include the latest evaluation/decision 
 - Task 228: Config and Sync Readiness (observation stores must have data)
 - Task 229: Support Steward Charter Profile (evaluations must exist to inspect)
 - Task 230: Draft Proposal Pipeline Verification (decisions and executions must exist to inspect)
-
-## Implementation Summary
-
-### Types Added
-- `EvaluationDetail` — full evaluation with parsed JSON fields (proposed_actions, tool_requests, escalations, classifications, facts, confidence)
-- `DecisionDetail` — full decision with parsed payload and source_charter_ids
-- `ExecutionDetail` — full execution with parsed runtime_envelope and outcome
-
-### Query Functions Added
-- `getEvaluationDetail(store, evaluationId)` — deep-dive evaluation view
-- `getDecisionDetail(store, decisionId)` — deep-dive decision view
-- `getExecutionDetail(store, executionId)` — deep-dive execution view
-- `getEvaluationsByContextDetail(store, contextId, scopeId)` — all evaluations for a context with full detail
-
-### API Routes Added
-- `GET /scopes/:id/evaluations/:evaluationId`
-- `GET /scopes/:id/decisions/:decisionId`
-- `GET /scopes/:id/executions/:executionId`
-- `GET /scopes/:id/contexts/:contextId/evaluations`
-
-### CLI Command Added
-- `narada show evaluation <evaluation-id>`
-- `narada show decision <decision-id>`
-- `narada show execution <execution-id>`
-
-### UI Updates
-- Context detail page now fetches and displays full evaluations with proposed actions, escalations, and tool requests
-- Work item detail page now links execution IDs and decision IDs to deep-dive views
-- New detail views: `showEvaluationDetail`, `showDecisionDetail`, `showExecutionDetail`
-- JSON content rendered in styled `<pre>` blocks for readability
-
-### Tests Added
-- `packages/layers/control-plane/test/unit/observability/queries.test.ts` — 7 tests for detail queries (getEvaluationDetail ×2, getDecisionDetail ×2, getExecutionDetail ×2, getEvaluationsByContextDetail ×1)
-- `packages/layers/cli/test/commands/show.test.ts` — 8 tests for the CLI show command (evaluation/decision/execution JSON output, missing entity errors, missing database error, human-readable format)
-- All new query functions verified with parsed JSON field assertions
-
-### CLI Interface Note
-The actual CLI uses flag-style arguments: `narada show --type evaluation --id <evaluation-id> [--scope <scope-id>]`. The task description originally suggested subcommand-style `narada inspect evaluation <id>`; the implemented flag interface is more consistent with other CLI commands.
-
-### Corrective Work (Task 241)
-- Query parameter types narrowed from `CoordinatorStoreView` to `Pick<CoordinatorStoreView, "db">` to eliminate unsafe `{ db } as CoordinatorStoreView` casts in CLI.
-- CLI tests added for show command.
