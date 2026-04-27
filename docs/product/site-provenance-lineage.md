@@ -39,6 +39,8 @@ Each lineage event must carry:
 | `occurred_at` | Event timestamp. |
 | `rollback_or_residual_posture` | How to reverse, retire, or retain unresolved linkage. |
 
+Authority-relevant lineage events should eventually carry verifiable envelope trust evidence for authoring, forwarding, and admission provenance. A valid signature is evidence about origin or relay; it is not authority to mutate the receiving Site.
+
 ## Event Vocabulary
 
 | Event | Edge Type | Authority Effect |

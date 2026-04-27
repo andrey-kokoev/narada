@@ -1,0 +1,34 @@
+{
+  "envelope_id": "env_7d808cd8-1beb-4471-ab6f-55fdce467604",
+  "received_at": "2026-04-27T21:02:07.392Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:secret-management-telos"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Define Narada secret management as capability-governed and locus-aware",
+    "summary": "Operator and architect identified that Narada's telos implies secret management should treat secrets as authority-bearing capabilities, not ordinary configuration or knowledge. Narada Sites may record that a secret exists and what capability it grants, but raw secret values should live in appropriate authority-bearing secret stores for the relevant locus.",
+    "evidence": [
+      "Narada Sites are becoming plural, federated, Git-backed, pub/sub-connected, and agent-assisted; this increases risk if secrets are treated as portable Site knowledge.",
+      "User Site, PC Site, project/client Sites, data/ELT Sites, cloud Sites, and agents have different secret authority and storage requirements.",
+      "Plural Embodiment, Singular Authority implies that access to a secret-capability must resolve to a declared authority locus rather than whichever embodiment asks.",
+      "Verifiable envelope trust proposal covers message authenticity; secret management covers protected capabilities used to authenticate, decrypt, sign, fetch, execute, or mutate external systems."
+    ],
+    "proposal": [
+      "Develop Narada secret-management doctrine around capabilities: knowledge can be copied, secrets confer power.",
+      "Site config should store secret references, metadata, intended capability, authority locus, allowed principals, and retrieval policy, not raw secret values.",
+      "Support locus-specific secret stores: Windows Credential Manager/DPAPI for PC or User loci, OS keychains, .env only as local development fallback, cloud provider secret stores, GitHub Actions secrets, client-managed vaults, and future Narada-managed adapters.",
+      "Separate secret discovery, authorization, retrieval, use, rotation, revocation, and audit as distinct governed transitions.",
+      "Agents should request capabilities by reference and purpose. Raw secret disclosure to an agent should be exceptional, explicit, auditable, and bounded by tool authority.",
+      "Secret references should be compatible with Site lifecycle, pub/sub, and cloning: cloned or re-instantiated Sites should carry references/policies, not secret material, and should require local binding or reauthorization.",
+      "doctor/preflight should detect raw secret leakage, missing local bindings, stale/rotated secrets, wrong-locus secret references, and unsafe Git/cloud-sync inclusion."
+    ],
+    "recommendation": "Promote to Narada security/authority design work before broad Site federation: define capability-oriented secret management with locus-aware stores, governed access, and audit."
+  },
+  "status": "received"
+}

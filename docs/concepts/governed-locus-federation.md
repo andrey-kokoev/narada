@@ -35,6 +35,7 @@ Prove re-instantiation before lifting.
 | Provenance lineage | Append-only events record where loci and authority effects came from. | Decorative diagrams or unverifiable history. |
 | Pub/sub influence | Sites can publish and subscribe to typed signals. | Automatic admission, replication, or ownership. |
 | Governed admission | Incoming material remains inert until promoted by the receiving locus. | The sender's intent. |
+| Verifiable envelope trust | Messages may carry authenticity, integrity, confidentiality, and provenance evidence. | Mutation authority or admission. |
 | Re-instantiable memory | Templates and lifted machinery must rerun the originating case. | Abstract symmetry or unearned platform structure. |
 
 ## Existing Narada Pieces
@@ -48,6 +49,7 @@ Prove re-instantiation before lifting.
 | Site provenance lineage | Documented event vocabulary plus read-only CLI. |
 | Site pub/sub | Proposal, not yet admitted as machinery. |
 | User Site awareness registry | Documented semantics; storage/discovery command not yet implemented. |
+| Verifiable envelope trust | Documented doctrine/requirements; crypto substrate not selected. |
 | Authority-clone routing | Queued task, not yet implemented. |
 | Mutating Site lifecycle operators | Deferred until durable transformation artifacts exist. |
 

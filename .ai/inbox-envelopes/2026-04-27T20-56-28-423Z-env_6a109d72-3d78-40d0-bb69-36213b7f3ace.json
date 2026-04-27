@@ -30,5 +30,13 @@
     ],
     "recommendation": "Promote to Narada doctrine/security design work adjacent to canonical inbox, Site pub/sub, provenance lineage, and authority routing. De-arbitrarize requirements first; choose PGP or another substrate only after forced distinctions are explicit."
   },
-  "status": "received"
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_6a109d72-3d78-40d0-bb69-36213b7f3ace",
+    "promoted_at": "2026-04-27T21:03:18.505Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
 }

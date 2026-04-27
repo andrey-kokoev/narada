@@ -1,7 +1,7 @@
 {
   "snapshot_kind": "task_lifecycle_snapshot",
   "snapshot_version": 1,
-  "exported_at": "2026-04-27T20:58:39.214Z",
+  "exported_at": "2026-04-27T21:03:11.506Z",
   "tables": [
     {
       "name": "agent_roster",
@@ -26,7 +26,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 720,
-          "updated_at": "2026-04-27T20:58:39.214Z"
+          "updated_at": "2026-04-27T21:03:11.506Z"
         },
         {
           "agent_id": "a2",
@@ -37,7 +37,7 @@
           "status": "idle",
           "task_number": null,
           "last_done": 886,
-          "updated_at": "2026-04-27T20:58:39.214Z"
+          "updated_at": "2026-04-27T21:03:11.506Z"
         },
         {
           "agent_id": "a3",
@@ -48,7 +48,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 610,
-          "updated_at": "2026-04-27T20:58:39.214Z"
+          "updated_at": "2026-04-27T21:03:11.506Z"
         },
         {
           "agent_id": "a4",
@@ -59,7 +59,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 574,
-          "updated_at": "2026-04-27T20:58:39.214Z"
+          "updated_at": "2026-04-27T21:03:11.506Z"
         },
         {
           "agent_id": "a5",
@@ -70,7 +70,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 551,
-          "updated_at": "2026-04-27T20:58:39.214Z"
+          "updated_at": "2026-04-27T21:03:11.506Z"
         },
         {
           "agent_id": "a6",
@@ -81,18 +81,18 @@
           "status": "done",
           "task_number": null,
           "last_done": 545,
-          "updated_at": "2026-04-27T20:58:39.214Z"
+          "updated_at": "2026-04-27T21:03:11.506Z"
         },
         {
           "agent_id": "architect",
           "role": "implementer",
           "capabilities_json": "[\"derive\",\"propose\",\"claim\",\"execute\",\"resolve\",\"confirm\"]",
           "first_seen_at": "2026-04-26T22:28:56.453Z",
-          "last_active_at": "2026-04-27T20:58:39.214Z",
+          "last_active_at": "2026-04-27T21:03:11.506Z",
           "status": "done",
           "task_number": null,
-          "last_done": 983,
-          "updated_at": "2026-04-27T20:58:39.214Z"
+          "last_done": 984,
+          "updated_at": "2026-04-27T21:03:11.506Z"
         }
       ]
     },
@@ -6188,6 +6188,27 @@
           "confirmation_json": "{\"task_id\":\"20260427-983-define-user-site-awareness-registry\",\"task_number\":983,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
           "warnings_json": null,
           "updated_at": "2026-04-27T20:56:40.654Z"
+        },
+        {
+          "request_id": "air_claim_984_architect_1777323659096_o7siy9",
+          "kind": "claim",
+          "task_id": "20260427-984-define-verifiable-envelope-trust-doctrine",
+          "task_number": 984,
+          "agent_id": "architect",
+          "requested_by": "architect",
+          "requested_at": "2026-04-27T21:00:59.096Z",
+          "reason": null,
+          "no_claim": 0,
+          "status": "applied",
+          "rejection_reason": null,
+          "assignment_id": "assign-20260427-984-define-verifiable-envelope-trust-doctrine-architect-1777323659096",
+          "previous_agent_id": null,
+          "lifecycle_status_before": "opened",
+          "lifecycle_status_after": "claimed",
+          "roster_status_after": "working",
+          "confirmation_json": "{\"task_id\":\"20260427-984-define-verifiable-envelope-trust-doctrine\",\"task_number\":984,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
+          "warnings_json": null,
+          "updated_at": "2026-04-27T21:01:00.404Z"
         }
       ]
     },
@@ -15446,6 +15467,45 @@
           "admitted_at": "2026-04-27T20:58:38.717Z",
           "admitted_by": "architect",
           "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_984_1777323790469_w4hci8",
+          "bundle_id": "evb_984_1777323790469_fhj3cj",
+          "task_id": "20260427-984-define-verifiable-envelope-trust-doctrine",
+          "task_number": 984,
+          "verdict": "rejected",
+          "methods_json": "[\"review\"]",
+          "blockers_json": "[\"10 acceptance criteria remain unchecked\"]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T21:03:10.469Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_984_1777323790708_26evym",
+          "bundle_id": "evb_984_1777323790708_ki1bam",
+          "task_id": "20260427-984-define-verifiable-envelope-trust-doctrine",
+          "task_number": 984,
+          "verdict": "admitted",
+          "methods_json": "[\"criteria_proof\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T21:03:10.708Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_984_1777323791079_owhcaq",
+          "bundle_id": "evb_984_1777323791079_tqe7oq",
+          "task_id": "20260427-984-define-verifiable-envelope-trust-doctrine",
+          "task_number": 984,
+          "verdict": "admitted",
+          "methods_json": "[\"admission\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": "closed",
+          "admitted_at": "2026-04-27T21:03:11.079Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
         }
       ]
     },
@@ -23745,6 +23805,45 @@
           "residuals_json": "[]",
           "assembled_at": "2026-04-27T20:58:38.717Z",
           "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_984_1777323790469_fhj3cj",
+          "task_id": "20260427-984-define-verifiable-envelope-trust-doctrine",
+          "task_number": 984,
+          "report_ids_json": "[\"wrr_4b01fcf3_20260427-984-define-verifiable-envelope-trust-doctrine_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":false,\"unchecked_count\":10}",
+          "review_ids_json": "[\"review-20260427-984-define-verifiable-envelope-trust-doctrine-1777323790379\"]",
+          "changed_files_json": "[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/governed-locus-federation.md\",\"docs/concepts/verifiable-envelope-trust.md\",\"docs/product/site-provenance-lineage.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T21:03:10.469Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_984_1777323790708_ki1bam",
+          "task_id": "20260427-984-define-verifiable-envelope-trust-doctrine",
+          "task_number": 984,
+          "report_ids_json": "[\"wrr_4b01fcf3_20260427-984-define-verifiable-envelope-trust-doctrine_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[\"review-20260427-984-define-verifiable-envelope-trust-doctrine-1777323790379\"]",
+          "changed_files_json": "[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/governed-locus-federation.md\",\"docs/concepts/verifiable-envelope-trust.md\",\"docs/product/site-provenance-lineage.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T21:03:10.708Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_984_1777323791079_tqe7oq",
+          "task_id": "20260427-984-define-verifiable-envelope-trust-doctrine",
+          "task_number": 984,
+          "report_ids_json": "[\"wrr_4b01fcf3_20260427-984-define-verifiable-envelope-trust-doctrine_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[\"review-20260427-984-define-verifiable-envelope-trust-doctrine-1777323790379\"]",
+          "changed_files_json": "[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/governed-locus-federation.md\",\"docs/concepts/verifiable-envelope-trust.md\",\"docs/product/site-provenance-lineage.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T21:03:11.079Z",
+          "assembled_by": "architect"
         }
       ]
     },
@@ -26913,6 +27012,11 @@
           "task_id": "20260427-983-define-user-site-awareness-registry",
           "record_json": "{\"task_id\":\"20260427-983-define-user-site-awareness-registry\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T20:56:39.698Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T20:58:27.833Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
           "updated_at": "2026-04-27T20:58:28.059Z"
+        },
+        {
+          "task_id": "20260427-984-define-verifiable-envelope-trust-doctrine",
+          "record_json": "{\"task_id\":\"20260427-984-define-verifiable-envelope-trust-doctrine\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T21:00:59.341Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T21:02:59.018Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
+          "updated_at": "2026-04-27T21:02:59.260Z"
         }
       ]
     },
@@ -29669,6 +29773,15 @@
           "task_id": "20260427-983-define-user-site-awareness-registry",
           "agent_id": "architect",
           "claimed_at": "2026-04-27T20:56:39.698Z",
+          "released_at": null,
+          "release_reason": null,
+          "intent": "primary"
+        },
+        {
+          "assignment_id": "assign-20260427-984-define-verifiable-envelope-trust-doctrine-architect-1777323659096",
+          "task_id": "20260427-984-define-verifiable-envelope-trust-doctrine",
+          "agent_id": "architect",
+          "claimed_at": "2026-04-27T21:00:59.341Z",
           "released_at": null,
           "release_reason": null,
           "intent": "primary"
@@ -42170,6 +42283,19 @@
           "continuation_packet_json": null,
           "updated_at": "2026-04-27T20:58:38.906Z",
           "closure_mode": "agent_finish"
+        },
+        {
+          "task_id": "20260427-984-define-verifiable-envelope-trust-doctrine",
+          "task_number": 984,
+          "status": "closed",
+          "governed_by": "task_close:architect",
+          "closed_at": "2026-04-27T21:03:11.223Z",
+          "closed_by": "architect",
+          "reopened_at": null,
+          "reopened_by": null,
+          "continuation_packet_json": null,
+          "updated_at": "2026-04-27T21:03:11.224Z",
+          "closure_mode": "agent_finish"
         }
       ]
     },
@@ -42195,7 +42321,7 @@
       "rows": [
         {
           "singleton": 1,
-          "last_allocated": 983
+          "last_allocated": 984
         }
       ]
     },
@@ -44744,6 +44870,14 @@
           "agent_id": "architect",
           "reported_at": "2026-04-27T20:58:27.833Z",
           "report_json": "{\"report_id\":\"wrr_e699f152_20260427-983-define-user-site-awareness-registry_architect\",\"task_number\":\"983\",\"task_id\":\"20260427-983-define-user-site-awareness-registry\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-983-define-user-site-awareness-registry-2026-04-27T20:56:39.698Z\",\"reported_at\":\"2026-04-27T20:58:27.833Z\",\"summary\":\"Defined User Site awareness registry semantics as user-locus directory and coordination without mutation authority over linked Sites.\",\"changed_files\":[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/governed-locus-federation.md\",\"docs/product/site-bootstrap-contract.md\",\"docs/product/user-site-awareness-registry.md\"],\"verification\":[{\"command\":\"pnpm verify\",\"result\":\"passed\"}],\"known_residuals\":[\"Storage, discovery, subscription management, and command surfaces for the User Site awareness registry remain future work.\"],\"ready_for_review\":true,\"report_status\":\"accepted\"}"
+        },
+        {
+          "report_id": "wrr_4b01fcf3_20260427-984-define-verifiable-envelope-trust-doctrine_architect",
+          "task_id": "20260427-984-define-verifiable-envelope-trust-doctrine",
+          "assignment_id": "20260427-984-define-verifiable-envelope-trust-doctrine-2026-04-27T21:00:59.341Z",
+          "agent_id": "architect",
+          "reported_at": "2026-04-27T21:02:59.018Z",
+          "report_json": "{\"report_id\":\"wrr_4b01fcf3_20260427-984-define-verifiable-envelope-trust-doctrine_architect\",\"task_number\":\"984\",\"task_id\":\"20260427-984-define-verifiable-envelope-trust-doctrine\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-984-define-verifiable-envelope-trust-doctrine-2026-04-27T21:00:59.341Z\",\"reported_at\":\"2026-04-27T21:02:59.018Z\",\"summary\":\"Defined Verifiable Envelope Trust doctrine for authenticity, integrity, optional confidentiality, provenance, verification posture, and the rule that signatures are evidence, not mutation authority.\",\"changed_files\":[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/governed-locus-federation.md\",\"docs/concepts/verifiable-envelope-trust.md\",\"docs/product/site-provenance-lineage.md\"],\"verification\":[{\"command\":\"pnpm verify\",\"result\":\"passed\"}],\"known_residuals\":[\"Signing, encryption, key storage, trust policy evaluation, verification commands, and crypto substrate selection remain future implementation work.\"],\"ready_for_review\":true,\"report_status\":\"accepted\"}"
         }
       ]
     },
@@ -45130,6 +45264,14 @@
           "verdict": "accepted",
           "findings_json": null,
           "reviewed_at": "2026-04-27T20:58:37.912Z"
+        },
+        {
+          "review_id": "review-20260427-984-define-verifiable-envelope-trust-doctrine-1777323790379",
+          "task_id": "20260427-984-define-verifiable-envelope-trust-doctrine",
+          "reviewer_agent_id": "architect",
+          "verdict": "accepted",
+          "findings_json": null,
+          "reviewed_at": "2026-04-27T21:03:10.379Z"
         }
       ]
     },
@@ -57030,6 +57172,19 @@
           "acceptance_criteria_json": "[\"Narada docs define User Site awareness registry semantics;The registry field model distinguishes identity\",\"locus type\",\"roots\",\"authority boundaries\",\"sync posture\",\"capabilities\",\"inbox/subscription endpoints\",\"lineage\",\"freshness\",\"and health;Docs state that User Site awareness does not imply mutation authority over linked Sites;The source inbox envelope is handled through a governed pending or archive action;pnpm verify passes\"]",
           "dependencies_json": "[]",
           "updated_at": "2026-04-27T20:56:34.717Z"
+        },
+        {
+          "task_id": "20260427-984-define-verifiable-envelope-trust-doctrine",
+          "task_number": 984,
+          "title": "Define verifiable envelope trust doctrine",
+          "chapter_markdown": "site-lifecycle",
+          "goal_markdown": "Define doctrine-level requirements for verifiable Narada envelope trust across inbox, pub/sub, lineage, and authority-relevant messages without prematurely choosing PGP/GPG or another crypto substrate.",
+          "context_markdown": null,
+          "required_work_markdown": "1. TBD",
+          "non_goals_markdown": "- Do not expand scope beyond this task.\n- Do not create derivative task-status files.\n- Do not mutate live external systems unless explicitly authorized.",
+          "acceptance_criteria_json": "[\"Docs define authenticity\",\"integrity\",\"optional confidentiality\",\"principal identity\",\"Site identity\",\"forwarding provenance\",\"key rotation\",\"revocation\",\"trust policy\",\"and verification status requirements;Docs distinguish signature evidence from mutation authority;Candidate crypto substrates are framed as future evaluation rather than chosen implementation;The source inbox envelope is handled through a governed pending or archive action;pnpm verify passes\"]",
+          "dependencies_json": "[]",
+          "updated_at": "2026-04-27T21:00:55.613Z"
         }
       ]
     },

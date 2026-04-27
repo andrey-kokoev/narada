@@ -1175,6 +1175,10 @@ The User Site may serve as the user-locus awareness registry for Sites relevant 
 
 See [`docs/product/user-site-awareness-registry.md`](docs/product/user-site-awareness-registry.md).
 
+Verifiable Envelope Trust supplies authenticity, integrity, optional confidentiality, and provenance evidence for messages crossing loci. Signatures and encryption are evidence inputs to crossing regimes; they do not grant admission or mutation authority by themselves.
+
+See [`docs/concepts/verifiable-envelope-trust.md`](docs/concepts/verifiable-envelope-trust.md).
+
 ### 2.14.6 Canonical Expansion Table
 
 When precision matters — specifications, interfaces, authority boundaries, agent instructions — use the canonical expansion, not the compact term alone.
