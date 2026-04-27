@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-27T21:49:40.911Z
+criteria_proved_by: architect
+criteria_proved_at: 2026-04-27T22:48:24.551Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-27T22:48:24.975Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: agent_finish
 ---
 
 # Enrich resume brief from durable traces
@@ -42,8 +51,8 @@ The v0 resume command is intentionally read-only and tool-hydration-advisory. It
 
 ## Acceptance Criteria
 
-- [ ] Brief includes active/current task, open in-review work, inbox received/handling counts, dirty file summary, branch/upstream posture, recent task evidence, and next coherent action.
-- [ ] Output remains bounded and has JSON and human forms.
-- [ ] Command remains read-only and does not claim task or inbox work.
-- [ ] Focused tests cover dirty state, current task, and inbox summary.
-- [ ] `pnpm verify` passes.
+- [x] Brief includes active/current task, open in-review work, inbox received/handling counts, dirty file summary, branch/upstream posture, recent task evidence, and next coherent action.
+- [x] Output remains bounded and has JSON and human forms.
+- [x] Command remains read-only and does not claim task or inbox work.
+- [x] Focused tests cover dirty state, current task, and inbox summary.
+- [x] `pnpm verify` passes.
