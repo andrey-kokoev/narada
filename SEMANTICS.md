@@ -1183,6 +1183,10 @@ Site pub/sub is a typed signal exchange posture between Sites. Publication and s
 
 See [`docs/product/site-pubsub-signal-exchange.md`](docs/product/site-pubsub-signal-exchange.md).
 
+Capability-Governed Secret Management treats secrets as authority-bearing capabilities rather than ordinary configuration or knowledge. Site artifacts may carry secret references and capability policy; raw secret values belong in locus-appropriate secret stores. Secret discovery, authorization, binding, retrieval, use, rotation, revocation, and audit are distinct transitions.
+
+See [`docs/concepts/capability-governed-secret-management.md`](docs/concepts/capability-governed-secret-management.md).
+
 ### 2.14.6 Canonical Expansion Table
 
 When precision matters — specifications, interfaces, authority boundaries, agent instructions — use the canonical expansion, not the compact term alone.

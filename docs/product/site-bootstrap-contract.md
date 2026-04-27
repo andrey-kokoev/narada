@@ -122,6 +122,8 @@ The Site config and operation config are separate files. The Site config tells N
 
 Set the required secrets for your operation. Each substrate has its own precedence chain:
 
+Credentials are capability-bearing secrets, not ordinary Site knowledge. Site config should prefer references, capability metadata, and retrieval policy; raw values belong in the locus-appropriate secret store. See [`../concepts/capability-governed-secret-management.md`](../concepts/capability-governed-secret-management.md).
+
 **Windows native:**
 1. Windows Credential Manager (`keytar`)
 2. Environment variable (`NARADA_{SITE_ID}_{SECRET_NAME}`)

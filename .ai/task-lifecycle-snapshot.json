@@ -1,7 +1,7 @@
 {
   "snapshot_kind": "task_lifecycle_snapshot",
   "snapshot_version": 1,
-  "exported_at": "2026-04-27T21:07:44.703Z",
+  "exported_at": "2026-04-27T21:13:11.044Z",
   "tables": [
     {
       "name": "agent_roster",
@@ -26,7 +26,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 720,
-          "updated_at": "2026-04-27T21:07:44.703Z"
+          "updated_at": "2026-04-27T21:13:11.044Z"
         },
         {
           "agent_id": "a2",
@@ -37,7 +37,7 @@
           "status": "idle",
           "task_number": null,
           "last_done": 886,
-          "updated_at": "2026-04-27T21:07:44.703Z"
+          "updated_at": "2026-04-27T21:13:11.044Z"
         },
         {
           "agent_id": "a3",
@@ -48,7 +48,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 610,
-          "updated_at": "2026-04-27T21:07:44.703Z"
+          "updated_at": "2026-04-27T21:13:11.044Z"
         },
         {
           "agent_id": "a4",
@@ -59,7 +59,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 574,
-          "updated_at": "2026-04-27T21:07:44.703Z"
+          "updated_at": "2026-04-27T21:13:11.044Z"
         },
         {
           "agent_id": "a5",
@@ -70,7 +70,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 551,
-          "updated_at": "2026-04-27T21:07:44.703Z"
+          "updated_at": "2026-04-27T21:13:11.044Z"
         },
         {
           "agent_id": "a6",
@@ -81,18 +81,18 @@
           "status": "done",
           "task_number": null,
           "last_done": 545,
-          "updated_at": "2026-04-27T21:07:44.703Z"
+          "updated_at": "2026-04-27T21:13:11.044Z"
         },
         {
           "agent_id": "architect",
           "role": "implementer",
           "capabilities_json": "[\"derive\",\"propose\",\"claim\",\"execute\",\"resolve\",\"confirm\"]",
           "first_seen_at": "2026-04-26T22:28:56.453Z",
-          "last_active_at": "2026-04-27T21:07:44.703Z",
+          "last_active_at": "2026-04-27T21:13:11.044Z",
           "status": "done",
           "task_number": null,
-          "last_done": 985,
-          "updated_at": "2026-04-27T21:07:44.703Z"
+          "last_done": 986,
+          "updated_at": "2026-04-27T21:13:11.044Z"
         }
       ]
     },
@@ -6230,6 +6230,27 @@
           "confirmation_json": "{\"task_id\":\"20260427-985-define-site-pubsub-signal-exchange-doctrine\",\"task_number\":985,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
           "warnings_json": null,
           "updated_at": "2026-04-27T21:05:40.874Z"
+        },
+        {
+          "request_id": "air_claim_986_architect_1777324253817_sguvm5",
+          "kind": "claim",
+          "task_id": "20260427-986-define-capability-governed-secret-management-doctrine",
+          "task_number": 986,
+          "agent_id": "architect",
+          "requested_by": "architect",
+          "requested_at": "2026-04-27T21:10:53.817Z",
+          "reason": null,
+          "no_claim": 0,
+          "status": "applied",
+          "rejection_reason": null,
+          "assignment_id": "assign-20260427-986-define-capability-governed-secret-management-doctrine-architect-1777324253817",
+          "previous_agent_id": null,
+          "lifecycle_status_before": "opened",
+          "lifecycle_status_after": "claimed",
+          "roster_status_after": "working",
+          "confirmation_json": "{\"task_id\":\"20260427-986-define-capability-governed-secret-management-doctrine\",\"task_number\":986,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
+          "warnings_json": null,
+          "updated_at": "2026-04-27T21:10:55.188Z"
         }
       ]
     },
@@ -15566,6 +15587,45 @@
           "admitted_at": "2026-04-27T21:07:44.183Z",
           "admitted_by": "architect",
           "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_986_1777324389948_2el5tq",
+          "bundle_id": "evb_986_1777324389947_i308y6",
+          "task_id": "20260427-986-define-capability-governed-secret-management-doctrine",
+          "task_number": 986,
+          "verdict": "rejected",
+          "methods_json": "[\"review\"]",
+          "blockers_json": "[\"15 acceptance criteria remain unchecked\"]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T21:13:09.948Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_986_1777324390234_1ybfei",
+          "bundle_id": "evb_986_1777324390234_b3e83r",
+          "task_id": "20260427-986-define-capability-governed-secret-management-doctrine",
+          "task_number": 986,
+          "verdict": "admitted",
+          "methods_json": "[\"criteria_proof\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T21:13:10.234Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_986_1777324390600_c4a1k8",
+          "bundle_id": "evb_986_1777324390600_fp47ok",
+          "task_id": "20260427-986-define-capability-governed-secret-management-doctrine",
+          "task_number": 986,
+          "verdict": "admitted",
+          "methods_json": "[\"admission\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": "closed",
+          "admitted_at": "2026-04-27T21:13:10.600Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
         }
       ]
     },
@@ -23943,6 +24003,45 @@
           "residuals_json": "[]",
           "assembled_at": "2026-04-27T21:07:44.183Z",
           "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_986_1777324389947_i308y6",
+          "task_id": "20260427-986-define-capability-governed-secret-management-doctrine",
+          "task_number": 986,
+          "report_ids_json": "[\"wrr_aa9e5799_20260427-986-define-capability-governed-secret-management-doctrine_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":false,\"unchecked_count\":15}",
+          "review_ids_json": "[\"review-20260427-986-define-capability-governed-secret-management-doctrine-1777324389841\"]",
+          "changed_files_json": "[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/capability-governed-secret-management.md\",\"docs/concepts/governed-locus-federation.md\",\"docs/concepts/verifiable-envelope-trust.md\",\"docs/product/site-bootstrap-contract.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T21:13:09.947Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_986_1777324390234_b3e83r",
+          "task_id": "20260427-986-define-capability-governed-secret-management-doctrine",
+          "task_number": 986,
+          "report_ids_json": "[\"wrr_aa9e5799_20260427-986-define-capability-governed-secret-management-doctrine_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[\"review-20260427-986-define-capability-governed-secret-management-doctrine-1777324389841\"]",
+          "changed_files_json": "[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/capability-governed-secret-management.md\",\"docs/concepts/governed-locus-federation.md\",\"docs/concepts/verifiable-envelope-trust.md\",\"docs/product/site-bootstrap-contract.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T21:13:10.234Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_986_1777324390600_fp47ok",
+          "task_id": "20260427-986-define-capability-governed-secret-management-doctrine",
+          "task_number": 986,
+          "report_ids_json": "[\"wrr_aa9e5799_20260427-986-define-capability-governed-secret-management-doctrine_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[\"review-20260427-986-define-capability-governed-secret-management-doctrine-1777324389841\"]",
+          "changed_files_json": "[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/capability-governed-secret-management.md\",\"docs/concepts/governed-locus-federation.md\",\"docs/concepts/verifiable-envelope-trust.md\",\"docs/product/site-bootstrap-contract.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T21:13:10.600Z",
+          "assembled_by": "architect"
         }
       ]
     },
@@ -27121,6 +27220,11 @@
           "task_id": "20260427-985-define-site-pubsub-signal-exchange-doctrine",
           "record_json": "{\"task_id\":\"20260427-985-define-site-pubsub-signal-exchange-doctrine\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T21:05:39.651Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T21:07:42.206Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
           "updated_at": "2026-04-27T21:07:42.504Z"
+        },
+        {
+          "task_id": "20260427-986-define-capability-governed-secret-management-doctrine",
+          "record_json": "{\"task_id\":\"20260427-986-define-capability-governed-secret-management-doctrine\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T21:10:54.035Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T21:13:08.521Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
+          "updated_at": "2026-04-27T21:13:08.747Z"
         }
       ]
     },
@@ -29895,6 +29999,15 @@
           "task_id": "20260427-985-define-site-pubsub-signal-exchange-doctrine",
           "agent_id": "architect",
           "claimed_at": "2026-04-27T21:05:39.651Z",
+          "released_at": null,
+          "release_reason": null,
+          "intent": "primary"
+        },
+        {
+          "assignment_id": "assign-20260427-986-define-capability-governed-secret-management-doctrine-architect-1777324253817",
+          "task_id": "20260427-986-define-capability-governed-secret-management-doctrine",
+          "agent_id": "architect",
+          "claimed_at": "2026-04-27T21:10:54.035Z",
           "released_at": null,
           "release_reason": null,
           "intent": "primary"
@@ -42422,6 +42535,19 @@
           "continuation_packet_json": null,
           "updated_at": "2026-04-27T21:07:44.472Z",
           "closure_mode": "agent_finish"
+        },
+        {
+          "task_id": "20260427-986-define-capability-governed-secret-management-doctrine",
+          "task_number": 986,
+          "status": "closed",
+          "governed_by": "task_close:architect",
+          "closed_at": "2026-04-27T21:13:10.766Z",
+          "closed_by": "architect",
+          "reopened_at": null,
+          "reopened_by": null,
+          "continuation_packet_json": null,
+          "updated_at": "2026-04-27T21:13:10.766Z",
+          "closure_mode": "agent_finish"
         }
       ]
     },
@@ -42447,7 +42573,7 @@
       "rows": [
         {
           "singleton": 1,
-          "last_allocated": 985
+          "last_allocated": 986
         }
       ]
     },
@@ -45012,6 +45138,14 @@
           "agent_id": "architect",
           "reported_at": "2026-04-27T21:07:42.206Z",
           "report_json": "{\"report_id\":\"wrr_7f9336d2_20260427-985-define-site-pubsub-signal-exchange-doctrine_architect\",\"task_number\":\"985\",\"task_id\":\"20260427-985-define-site-pubsub-signal-exchange-doctrine\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-985-define-site-pubsub-signal-exchange-doctrine-2026-04-27T21:05:39.651Z\",\"reported_at\":\"2026-04-27T21:07:42.206Z\",\"summary\":\"Defined Site pub/sub as typed signal exchange into governed local admission, with publication/subscription treated as influence rather than replication or mutation authority.\",\"changed_files\":[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/governed-locus-federation.md\",\"docs/product/site-pubsub-signal-exchange.md\",\"docs/product/site-provenance-lineage.md\",\"docs/product/user-site-awareness-registry.md\"],\"verification\":[{\"command\":\"pnpm verify\",\"result\":\"passed\"}],\"known_residuals\":[\"Subscription storage, delivery, fanout, trust verification, and admission commands remain future implementation work.\"],\"ready_for_review\":true,\"report_status\":\"submitted\"}"
+        },
+        {
+          "report_id": "wrr_aa9e5799_20260427-986-define-capability-governed-secret-management-doctrine_architect",
+          "task_id": "20260427-986-define-capability-governed-secret-management-doctrine",
+          "assignment_id": "20260427-986-define-capability-governed-secret-management-doctrine-2026-04-27T21:10:54.035Z",
+          "agent_id": "architect",
+          "reported_at": "2026-04-27T21:13:08.521Z",
+          "report_json": "{\"report_id\":\"wrr_aa9e5799_20260427-986-define-capability-governed-secret-management-doctrine_architect\",\"task_number\":\"986\",\"task_id\":\"20260427-986-define-capability-governed-secret-management-doctrine\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-986-define-capability-governed-secret-management-doctrine-2026-04-27T21:10:54.035Z\",\"reported_at\":\"2026-04-27T21:13:08.521Z\",\"summary\":\"Defined capability-governed secret management doctrine: secrets are authority-bearing capabilities, Site artifacts carry references/policy, and raw values remain in locus-owned stores.\",\"changed_files\":[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/capability-governed-secret-management.md\",\"docs/concepts/governed-locus-federation.md\",\"docs/concepts/verifiable-envelope-trust.md\",\"docs/product/site-bootstrap-contract.md\"],\"verification\":[{\"command\":\"pnpm verify\",\"result\":\"passed\"}],\"known_residuals\":[\"No vault, resolver unification, secret scanning, doctor checks, or capability request commands were implemented in this doctrine slice.\"],\"ready_for_review\":true,\"report_status\":\"submitted\"}"
         }
       ]
     },
@@ -45414,6 +45548,14 @@
           "verdict": "accepted",
           "findings_json": null,
           "reviewed_at": "2026-04-27T21:07:43.540Z"
+        },
+        {
+          "review_id": "review-20260427-986-define-capability-governed-secret-management-doctrine-1777324389841",
+          "task_id": "20260427-986-define-capability-governed-secret-management-doctrine",
+          "reviewer_agent_id": "architect",
+          "verdict": "accepted",
+          "findings_json": null,
+          "reviewed_at": "2026-04-27T21:13:09.841Z"
         }
       ]
     },
@@ -57340,6 +57482,19 @@
           "acceptance_criteria_json": "[\"Docs define Site pub/sub signal exchange semantics;Docs state subscriptions deliver inert signals into governed admission rather than mutating local Site state;Docs connect pub/sub to canonical inbox\",\"lineage\",\"User Site awareness\",\"and governed locus federation;The source inbox envelope is handled through a governed pending or archive action;pnpm verify passes\"]",
           "dependencies_json": "[]",
           "updated_at": "2026-04-27T21:05:38.905Z"
+        },
+        {
+          "task_id": "20260427-986-define-capability-governed-secret-management-doctrine",
+          "task_number": 986,
+          "title": "Define capability-governed secret management doctrine",
+          "chapter_markdown": "site-security",
+          "goal_markdown": "Define Narada secret management as capability-governed and locus-aware: Sites may store secret references and capability policy, while raw secret values remain in appropriate authority-bearing secret stores.",
+          "context_markdown": null,
+          "required_work_markdown": "1. TBD",
+          "non_goals_markdown": "- Do not expand scope beyond this task.\n- Do not create derivative task-status files.\n- Do not mutate live external systems unless explicitly authorized.",
+          "acceptance_criteria_json": "[\"Docs define secrets as authority-bearing capabilities rather than ordinary config or knowledge;Docs distinguish secret reference\",\"authorization\",\"retrieval\",\"use\",\"rotation\",\"revocation\",\"and audit transitions;Docs define locus-aware stores for User\",\"PC\",\"project\",\"client\",\"data\",\"ELT\",\"cloud\",\"and agent contexts;Docs state that cloned or re-instantiated Sites carry references and policies\",\"not secret material;The source inbox envelope is handled through a governed pending or archive action;pnpm verify passes\"]",
+          "dependencies_json": "[]",
+          "updated_at": "2026-04-27T21:10:40.098Z"
         }
       ]
     },

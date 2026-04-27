@@ -30,5 +30,13 @@
     ],
     "recommendation": "Promote to Narada security/authority design work before broad Site federation: define capability-oriented secret management with locus-aware stores, governed access, and audit."
   },
-  "status": "received"
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_7d808cd8-1beb-4471-ab6f-55fdce467604",
+    "promoted_at": "2026-04-27T21:13:19.832Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
 }

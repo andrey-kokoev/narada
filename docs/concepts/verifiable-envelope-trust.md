@@ -11,6 +11,8 @@ It applies to:
 - task, knowledge, tool, template, and config-change candidates;
 - forwarded messages between embodiments or Sites.
 
+Secret management is adjacent but distinct: envelope trust verifies message provenance and integrity; secret management governs protected capabilities used to authenticate, decrypt, sign, fetch, execute, or mutate.
+
 ## Doctrine
 
 ```text
@@ -98,3 +100,5 @@ Useful statuses:
 This document defines doctrine and requirements only. It does not add signing, encryption, key storage, trust policy evaluation, or verification commands.
 
 Those are future implementation tasks.
+
+For protected capability handling, see [`capability-governed-secret-management.md`](capability-governed-secret-management.md).
