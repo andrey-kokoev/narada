@@ -106,6 +106,7 @@ This is the deepest semantic lens. The other major Narada descriptions are deriv
 - the **nine-layer pipeline** says one canonical traversal order through the topology;
 - **Aim / Site / Cycle / Act / Trace** gives the operator/runtime reading of the same structure;
 - **Inhabited Evolution** gives the self-build construction posture for lifting real operational friction into doctrine, tooling, or substrate without speculative machinery;
+- **Authority-Revealing Inversion** gives the review lens for turning artifact-first proposals back toward the authority, lifecycle, evidence, locus, admission, or capability structure that makes the artifact meaningful;
 - **Intelligence-Authority Separation** states one of the topology's core anti-collapse invariants;
 - **crossing regime** names the local law at each governed crossing.
 
@@ -1282,6 +1283,24 @@ Unearned structure must be recorded as:
 - a proposal, when it needs admission;
 - a residual, when it is known debt;
 - or a rejected path, when the operation disproves it.
+
+#### Authority-Revealing Inversion
+
+When a visible artifact appears primary, invert toward the concealed authority structure that makes it meaningful:
+
+```text
+artifact -> authority / lifecycle / evidence / locus / admission / capability -> artifact-as-embodiment
+```
+
+This is a review lens, not a new runtime object or zone. It is used to prevent files, commands, repos, messages, UI surfaces, database rows, or agent actions from becoming authoritative merely because they are convenient.
+
+The practical question is:
+
+```text
+What authority grammar does this artifact embody, and what confirms that grammar was followed?
+```
+
+If the answer is unclear, the material remains proposal, residual, projection, transport, cache, or embodiment until a governed crossing admits it.
 
 This preserves Intelligence-Authority Separation: AI synthesis may identify patterns, but authority to lift them into doctrine or substrate comes from governed admission and durable evidence.
 

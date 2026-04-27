@@ -1,7 +1,7 @@
 {
   "snapshot_kind": "task_lifecycle_snapshot",
   "snapshot_version": 1,
-  "exported_at": "2026-04-27T21:22:30.108Z",
+  "exported_at": "2026-04-27T21:28:15.180Z",
   "tables": [
     {
       "name": "agent_roster",
@@ -26,7 +26,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 720,
-          "updated_at": "2026-04-27T21:22:30.108Z"
+          "updated_at": "2026-04-27T21:28:15.180Z"
         },
         {
           "agent_id": "a2",
@@ -37,7 +37,7 @@
           "status": "idle",
           "task_number": null,
           "last_done": 886,
-          "updated_at": "2026-04-27T21:22:30.108Z"
+          "updated_at": "2026-04-27T21:28:15.180Z"
         },
         {
           "agent_id": "a3",
@@ -48,7 +48,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 610,
-          "updated_at": "2026-04-27T21:22:30.108Z"
+          "updated_at": "2026-04-27T21:28:15.180Z"
         },
         {
           "agent_id": "a4",
@@ -59,7 +59,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 574,
-          "updated_at": "2026-04-27T21:22:30.108Z"
+          "updated_at": "2026-04-27T21:28:15.180Z"
         },
         {
           "agent_id": "a5",
@@ -70,7 +70,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 551,
-          "updated_at": "2026-04-27T21:22:30.108Z"
+          "updated_at": "2026-04-27T21:28:15.180Z"
         },
         {
           "agent_id": "a6",
@@ -81,18 +81,18 @@
           "status": "done",
           "task_number": null,
           "last_done": 545,
-          "updated_at": "2026-04-27T21:22:30.108Z"
+          "updated_at": "2026-04-27T21:28:15.180Z"
         },
         {
           "agent_id": "architect",
           "role": "implementer",
           "capabilities_json": "[\"derive\",\"propose\",\"claim\",\"execute\",\"resolve\",\"confirm\"]",
           "first_seen_at": "2026-04-26T22:28:56.453Z",
-          "last_active_at": "2026-04-27T21:22:30.108Z",
+          "last_active_at": "2026-04-27T21:28:15.180Z",
           "status": "done",
           "task_number": null,
-          "last_done": 987,
-          "updated_at": "2026-04-27T21:22:30.108Z"
+          "last_done": 988,
+          "updated_at": "2026-04-27T21:28:15.180Z"
         }
       ]
     },
@@ -6272,6 +6272,27 @@
           "confirmation_json": "{\"task_id\":\"20260427-987-improve-inbox-runtime-origin-preflight\",\"task_number\":987,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
           "warnings_json": null,
           "updated_at": "2026-04-27T21:17:26.957Z"
+        },
+        {
+          "request_id": "air_claim_988_architect_1777325124076_kg1ou1",
+          "kind": "claim",
+          "task_id": "20260427-988-admit-authority-revealing-inversion-doctrine",
+          "task_number": 988,
+          "agent_id": "architect",
+          "requested_by": "architect",
+          "requested_at": "2026-04-27T21:25:24.076Z",
+          "reason": null,
+          "no_claim": 0,
+          "status": "applied",
+          "rejection_reason": null,
+          "assignment_id": "assign-20260427-988-admit-authority-revealing-inversion-doctrine-architect-1777325124076",
+          "previous_agent_id": null,
+          "lifecycle_status_before": "opened",
+          "lifecycle_status_after": "claimed",
+          "roster_status_after": "working",
+          "confirmation_json": "{\"task_id\":\"20260427-988-admit-authority-revealing-inversion-doctrine\",\"task_number\":988,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
+          "warnings_json": null,
+          "updated_at": "2026-04-27T21:25:25.321Z"
         }
       ]
     },
@@ -15686,6 +15707,45 @@
           "admitted_at": "2026-04-27T21:22:29.657Z",
           "admitted_by": "architect",
           "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_988_1777325294097_fv7urg",
+          "bundle_id": "evb_988_1777325294097_esoc60",
+          "task_id": "20260427-988-admit-authority-revealing-inversion-doctrine",
+          "task_number": 988,
+          "verdict": "rejected",
+          "methods_json": "[\"review\"]",
+          "blockers_json": "[\"4 acceptance criteria remain unchecked\"]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T21:28:14.097Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_988_1777325294434_1rmrg3",
+          "bundle_id": "evb_988_1777325294434_0d2h7o",
+          "task_id": "20260427-988-admit-authority-revealing-inversion-doctrine",
+          "task_number": 988,
+          "verdict": "admitted",
+          "methods_json": "[\"criteria_proof\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T21:28:14.434Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_988_1777325294751_o7dw0m",
+          "bundle_id": "evb_988_1777325294751_tad5ki",
+          "task_id": "20260427-988-admit-authority-revealing-inversion-doctrine",
+          "task_number": 988,
+          "verdict": "admitted",
+          "methods_json": "[\"admission\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": "closed",
+          "admitted_at": "2026-04-27T21:28:14.751Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
         }
       ]
     },
@@ -24141,6 +24201,45 @@
           "residuals_json": "[]",
           "assembled_at": "2026-04-27T21:22:29.657Z",
           "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_988_1777325294097_esoc60",
+          "task_id": "20260427-988-admit-authority-revealing-inversion-doctrine",
+          "task_number": 988,
+          "report_ids_json": "[\"wrr_a33c1821_20260427-988-admit-authority-revealing-inversion-doctrine_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":false,\"unchecked_count\":4}",
+          "review_ids_json": "[\"review-20260427-988-admit-authority-revealing-inversion-doctrine-1777325293997\"]",
+          "changed_files_json": "[\"docs/concepts/authority-revealing-inversion.md\",\"AGENTS.md\",\"SEMANTICS.md\",\".ai/do-not-open/tasks/20260427-988-admit-authority-revealing-inversion-doctrine.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T21:28:14.097Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_988_1777325294434_0d2h7o",
+          "task_id": "20260427-988-admit-authority-revealing-inversion-doctrine",
+          "task_number": 988,
+          "report_ids_json": "[\"wrr_a33c1821_20260427-988-admit-authority-revealing-inversion-doctrine_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[\"review-20260427-988-admit-authority-revealing-inversion-doctrine-1777325293997\"]",
+          "changed_files_json": "[\"docs/concepts/authority-revealing-inversion.md\",\"AGENTS.md\",\"SEMANTICS.md\",\".ai/do-not-open/tasks/20260427-988-admit-authority-revealing-inversion-doctrine.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T21:28:14.434Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_988_1777325294751_tad5ki",
+          "task_id": "20260427-988-admit-authority-revealing-inversion-doctrine",
+          "task_number": 988,
+          "report_ids_json": "[\"wrr_a33c1821_20260427-988-admit-authority-revealing-inversion-doctrine_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[\"review-20260427-988-admit-authority-revealing-inversion-doctrine-1777325293997\"]",
+          "changed_files_json": "[\"docs/concepts/authority-revealing-inversion.md\",\"AGENTS.md\",\"SEMANTICS.md\",\".ai/do-not-open/tasks/20260427-988-admit-authority-revealing-inversion-doctrine.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T21:28:14.751Z",
+          "assembled_by": "architect"
         }
       ]
     },
@@ -27329,6 +27428,11 @@
           "task_id": "20260427-987-improve-inbox-runtime-origin-preflight",
           "record_json": "{\"task_id\":\"20260427-987-improve-inbox-runtime-origin-preflight\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T21:17:25.982Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T21:22:19.058Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
           "updated_at": "2026-04-27T21:22:20.121Z"
+        },
+        {
+          "task_id": "20260427-988-admit-authority-revealing-inversion-doctrine",
+          "record_json": "{\"task_id\":\"20260427-988-admit-authority-revealing-inversion-doctrine\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T21:25:24.298Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T21:28:06.359Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
+          "updated_at": "2026-04-27T21:28:06.773Z"
         }
       ]
     },
@@ -30121,6 +30225,15 @@
           "task_id": "20260427-987-improve-inbox-runtime-origin-preflight",
           "agent_id": "architect",
           "claimed_at": "2026-04-27T21:17:25.982Z",
+          "released_at": null,
+          "release_reason": null,
+          "intent": "primary"
+        },
+        {
+          "assignment_id": "assign-20260427-988-admit-authority-revealing-inversion-doctrine-architect-1777325124076",
+          "task_id": "20260427-988-admit-authority-revealing-inversion-doctrine",
+          "agent_id": "architect",
+          "claimed_at": "2026-04-27T21:25:24.298Z",
           "released_at": null,
           "release_reason": null,
           "intent": "primary"
@@ -42674,6 +42787,19 @@
           "continuation_packet_json": null,
           "updated_at": "2026-04-27T21:22:29.829Z",
           "closure_mode": "agent_finish"
+        },
+        {
+          "task_id": "20260427-988-admit-authority-revealing-inversion-doctrine",
+          "task_number": 988,
+          "status": "closed",
+          "governed_by": "task_close:architect",
+          "closed_at": "2026-04-27T21:28:14.947Z",
+          "closed_by": "architect",
+          "reopened_at": null,
+          "reopened_by": null,
+          "continuation_packet_json": null,
+          "updated_at": "2026-04-27T21:28:14.947Z",
+          "closure_mode": "agent_finish"
         }
       ]
     },
@@ -42699,7 +42825,7 @@
       "rows": [
         {
           "singleton": 1,
-          "last_allocated": 987
+          "last_allocated": 988
         }
       ]
     },
@@ -45280,6 +45406,14 @@
           "agent_id": "architect",
           "reported_at": "2026-04-27T21:22:19.058Z",
           "report_json": "{\"report_id\":\"wrr_fc1b2993_20260427-987-improve-inbox-runtime-origin-preflight_architect\",\"task_number\":\"987\",\"task_id\":\"20260427-987-improve-inbox-runtime-origin-preflight\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-987-improve-inbox-runtime-origin-preflight-2026-04-27T21:17:25.982Z\",\"reported_at\":\"2026-04-27T21:22:19.058Z\",\"summary\":\"Extended inbox doctor with runtime-origin preflight diagnostics, documented cross-environment usage, added focused tests, and archived the source inbox envelope.\",\"changed_files\":[\"packages/layers/cli/src/commands/inbox.ts\",\"packages/layers/cli/test/commands/inbox.test.ts\",\"docs/concepts/canonical-inbox.md\",\".ai/do-not-open/tasks/20260427-987-improve-inbox-runtime-origin-preflight.md\"],\"verification\":[{\"command\":\"pnpm --filter @narada2/cli exec vitest run test/commands/inbox.test.ts --pool=forks\",\"result\":\"26/26 passed\"},{\"command\":\"pnpm --filter @narada2/cli build\",\"result\":\"passed\"},{\"command\":\"narada inbox doctor --format json bounded projection\",\"result\":\"ready true; runtime-origin checks present\"},{\"command\":\"pnpm verify\",\"result\":\"all 8 steps passed\"}],\"known_residuals\":[],\"ready_for_review\":true,\"report_status\":\"accepted\"}"
+        },
+        {
+          "report_id": "wrr_a33c1821_20260427-988-admit-authority-revealing-inversion-doctrine_architect",
+          "task_id": "20260427-988-admit-authority-revealing-inversion-doctrine",
+          "assignment_id": "20260427-988-admit-authority-revealing-inversion-doctrine-2026-04-27T21:25:24.298Z",
+          "agent_id": "architect",
+          "reported_at": "2026-04-27T21:28:06.359Z",
+          "report_json": "{\"report_id\":\"wrr_a33c1821_20260427-988-admit-authority-revealing-inversion-doctrine_architect\",\"task_number\":\"988\",\"task_id\":\"20260427-988-admit-authority-revealing-inversion-doctrine\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-988-admit-authority-revealing-inversion-doctrine-2026-04-27T21:25:24.298Z\",\"reported_at\":\"2026-04-27T21:28:06.359Z\",\"summary\":\"Admitted Authority-Revealing Inversion as Narada-local review doctrine, linked it from agent and semantic guidance, and verified the repo.\",\"changed_files\":[\"docs/concepts/authority-revealing-inversion.md\",\"AGENTS.md\",\"SEMANTICS.md\",\".ai/do-not-open/tasks/20260427-988-admit-authority-revealing-inversion-doctrine.md\"],\"verification\":[{\"command\":\"pnpm verify\",\"result\":\"all 8 steps passed\"}],\"known_residuals\":[],\"ready_for_review\":true,\"report_status\":\"accepted\"}"
         }
       ]
     },
@@ -45698,6 +45832,14 @@
           "verdict": "accepted",
           "findings_json": null,
           "reviewed_at": "2026-04-27T21:22:28.994Z"
+        },
+        {
+          "review_id": "review-20260427-988-admit-authority-revealing-inversion-doctrine-1777325293997",
+          "task_id": "20260427-988-admit-authority-revealing-inversion-doctrine",
+          "reviewer_agent_id": "architect",
+          "verdict": "accepted",
+          "findings_json": null,
+          "reviewed_at": "2026-04-27T21:28:13.997Z"
         }
       ]
     },
@@ -57650,6 +57792,19 @@
           "acceptance_criteria_json": "[\"inbox doctor reports cwd\",\"CLI entrypoint\",\"Node executable\",\"platform\",\"WSL posture\",\"package root\",\"dist entry existence\",\"and inbox command availability;submit-observation docs or help point operators to inbox doctor for delivery-coordinate preflight;Focused tests cover doctor runtime fields and command availability;The source inbox envelope is handled through a governed pending or archive action;pnpm verify passes\"]",
           "dependencies_json": "[]",
           "updated_at": "2026-04-27T21:15:44.590Z"
+        },
+        {
+          "task_id": "20260427-988-admit-authority-revealing-inversion-doctrine",
+          "task_number": 988,
+          "title": "Admit Authority-Revealing Inversion doctrine",
+          "chapter_markdown": "doctrine-intake",
+          "goal_markdown": "Admit Authority-Revealing Inversion as a Narada-local review doctrine for detecting artifact-first regressions, link it from the core semantic guidance, and close the originating inbox observation.",
+          "context_markdown": null,
+          "required_work_markdown": "1. TBD",
+          "non_goals_markdown": "- Do not expand scope beyond this task.\n- Do not create derivative task-status files.\n- Do not mutate live external systems unless explicitly authorized.",
+          "acceptance_criteria_json": "[\"Narada has a concept document defining Authority-Revealing Inversion in local terms.\",\"AGENTS or SEMANTICS points agents to the doctrine as a review lens without inventing new runtime objects.\",\"The source inbox envelope is archived or otherwise governed after admission.\",\"pnpm verify passes.\"]",
+          "dependencies_json": "[]",
+          "updated_at": "2026-04-27T21:25:17.086Z"
         }
       ]
     },

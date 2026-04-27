@@ -21,5 +21,13 @@
     ],
     "recommendation": "Treat this initially as FYI plus doctrine-intake candidate, not as an immediate implementation mandate. A later de-arbitrarization pass can decide which Narada modules need explicit guards, schemas, commands, or docs updates."
   },
-  "status": "received"
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_0ad70f77-a780-435b-8edf-3a51337b0546",
+    "promoted_at": "2026-04-27T21:28:06.330Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
 }

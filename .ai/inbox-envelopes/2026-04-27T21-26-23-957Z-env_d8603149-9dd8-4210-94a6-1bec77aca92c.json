@@ -1,0 +1,25 @@
+{
+  "envelope_id": "env_d8603149-9dd8-4210-94a6-1bec77aca92c",
+  "received_at": "2026-04-27T21:26:23.957Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:sqlite-git-event-reconcile-priority"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Prioritize SQLite-in-Git resolution via canonical mutation evidence",
+    "summary": "User and architect converged on a preferred direction for the SQLite-in-Git problem: do not make raw SQLite file merge the primary invariant. Instead, make governed mutations emit canonical, mergeable operation evidence; treat SQLite as local runtime substrate/projection that can be rebuilt or reconciled from those admitted operations.",
+    "evidence": [
+      "Problem pressure arose from Git-backed Narada User Sites and task machinery. Options considered included single-authority SQLite, raw SQL-level reconciliation, Git lease files, branch-per-device admission, avoiding SQLite in Git, and event/delta based projection rebuild. The preferred near-term compromise is SQLite for ergonomic local runtime plus Git-tracked canonical mutation records for merge/replay/reconciliation."
+    ],
+    "proposal": [
+      "Make this a priority design/implementation arc: define canonical mutation records for SQLite-backed Site/task/inbox state; require every governed mutation to emit an operation/event/envelope; make Git carry mergeable mutation evidence; provide checkout/pull reconcile or rebuild commands that bring SQLite into agreement by replaying admitted operations. Raw SQL-level DB merging may remain a repair/migration tool, not the governing invariant."
+    ],
+    "recommendation": "Adopt the doctrine: SQLite is the fast local runtime substrate; Git carries canonical mutation evidence; reconciliation happens by replaying admitted operations, not by merging opaque SQLite files. Prioritize guards so no governed DB mutation can occur without its exported canonical delta."
+  },
+  "status": "received"
+}
