@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { inboxShowCommand, inboxSubmitCommand } from '../../src/commands/inbox.js';
 import { resumeCommand } from '../../src/commands/resume.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 
 function setupRepo(tempDir: string): void {
   execFileSync('git', ['init', '-b', 'main'], { cwd: tempDir, stdio: 'ignore' });
@@ -39,6 +40,7 @@ function setupRepo(tempDir: string): void {
     }, null, 2),
   );
   writeFileSync(join(tempDir, 'README.md'), '# test\n');
+  writeFileSync(join(tempDir, 'AGENTS.md'), '# Agent instructions\n');
   execFileSync('git', ['add', '.'], { cwd: tempDir });
   execFileSync('git', ['commit', '-m', 'init'], { cwd: tempDir, stdio: 'ignore' });
 }
@@ -179,5 +181,66 @@ describe('resume continuity brief', () => {
         command: expect.stringContaining('codex'),
       },
     });
+  });
+
+  it('routes explicit tool hydration execution through CEIZ policy', async () => {
+    const result = await resumeCommand({
+      agent: 'architect',
+      cwd: tempDir,
+      withTool: 'codex',
+      executeTool: true,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      tool_hydration: {
+        execution_requested: true,
+        ceiz: {
+          status: 'blocked_by_policy',
+          run: {
+            requester_id: 'architect',
+            side_effect_class: 'process_control',
+            output_admission_profile: 'bounded_excerpt',
+            status: 'blocked_by_policy',
+            command_argv: ['codex'],
+          },
+        },
+      },
+    });
+
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      const runs = store.listCommandRuns(10, null, 'architect');
+      expect(runs).toHaveLength(1);
+      expect(runs[0]).toMatchObject({
+        requester_id: 'architect',
+        side_effect_class: 'process_control',
+        status: 'blocked_by_policy',
+      });
+      expect(runs[0]?.rationale).toContain('AGENTS.md');
+    } finally {
+      store.db.close();
+    }
+  });
+
+  it('refuses explicit tool hydration when locus is ambiguous', async () => {
+    const noRepo = mkdtempSync(join(tmpdir(), 'narada-resume-no-locus-'));
+    try {
+      const result = await resumeCommand({
+        agent: 'architect',
+        cwd: noRepo,
+        withTool: 'codex',
+        executeTool: true,
+        format: 'json',
+      });
+
+      expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+      expect(result.result).toMatchObject({
+        reason: 'ambiguous_locus',
+      });
+    } finally {
+      rmSync(noRepo, { recursive: true, force: true });
+    }
   });
 });

@@ -1,15 +1,18 @@
 import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { SqliteInboxStore, type InboxEnvelope } from '@narada2/control-plane';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
+import { commandRunCommand } from './command-run.js';
 import { workNextCommand } from './work-next.js';
 
 export interface ResumeOptions {
   agent?: string;
   cwd?: string;
   withTool?: string;
+  executeTool?: boolean;
   format?: CliFormat;
 }
 
@@ -76,6 +79,11 @@ function toolHydration(tool: string | undefined, cwd: string, agent: string): Re
     command: `cd ${JSON.stringify(cwd)} && codex`,
     note: `Hydrate ${agent} after reading the resume brief; this command is advisory and was not launched.`,
   };
+}
+
+function resolveToolCommand(tool: string | undefined): string[] | null {
+  if (tool === 'codex') return ['codex'];
+  return null;
 }
 
 function formatHuman(result: Record<string, unknown>): string {
@@ -185,6 +193,30 @@ export async function resumeCommand(options: ResumeOptions): Promise<CommandEnve
   const cwd = resolve(options.cwd ?? process.cwd());
   const repoRoot = git(cwd, ['rev-parse', '--show-toplevel']);
   const gitCwd = repoRoot ?? cwd;
+  if (options.executeTool) {
+    if (!options.withTool) {
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: { status: 'error', error: '--execute-tool requires --with <tool>' },
+      };
+    }
+    if (!repoRoot || !existsSync(join(repoRoot, 'AGENTS.md'))) {
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: {
+          status: 'error',
+          reason: 'ambiguous_locus',
+          error: 'Refusing tool hydration execution: cwd must be inside a git worktree with AGENTS.md.',
+        },
+      };
+    }
+    if (!resolveToolCommand(options.withTool)) {
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: { status: 'error', error: `Unsupported tool hydration target: ${options.withTool}` },
+      };
+    }
+  }
   const dirty = repoRoot ? dirtyFiles(gitCwd) : [];
   const dirtyDetails = repoRoot ? dirtySummary(gitCwd) : { count: 0, categories: {}, files: [], truncated: false };
   const nextWork = await workNextCommand({
@@ -194,7 +226,7 @@ export async function resumeCommand(options: ResumeOptions): Promise<CommandEnve
     format: 'json',
   });
   const nextWorkRecord = asRecord(nextWork.result);
-  const result = {
+  const result: Record<string, unknown> = {
     status: nextWork.exitCode === ExitCode.SUCCESS ? 'success' : 'attention_required',
     agent_id: options.agent,
     cwd,
@@ -219,6 +251,33 @@ export async function resumeCommand(options: ResumeOptions): Promise<CommandEnve
     next_action: nextWorkRecord.next_step ?? 'Inspect the resume brief and choose the next governed action.',
     tool_hydration: toolHydration(options.withTool, cwd, options.agent),
   };
+
+  if (options.executeTool && options.withTool) {
+    const argv = resolveToolCommand(options.withTool)!;
+    const commandRun = await commandRunCommand({
+      argv: JSON.stringify(argv),
+      agent: options.agent,
+      requester: options.agent,
+      requesterKind: 'agent',
+      sideEffect: 'process_control',
+      outputProfile: 'bounded_excerpt',
+      timeout: 300,
+      cwd,
+      format: 'json',
+      rationale: [
+        'Resume tool hydration requested explicitly.',
+        'Context pointers: AGENTS.md, SEMANTICS.md, docs/concepts/command-execution-intent-zone.md.',
+        `Resume brief digest inputs: agent=${options.agent}; cwd=${cwd}; next_action=${String(result.next_action)}`,
+      ].join(' '),
+    });
+    const commandRunResult = asRecord(commandRun.result);
+    result.tool_hydration = {
+      ...(result.tool_hydration ? asRecord(result.tool_hydration) : {}),
+      execution_requested: true,
+      ceiz: commandRunResult,
+      note: 'Tool process launch is routed through CEIZ; process_control is policy-blocked unless separately approved.',
+    };
+  }
 
   return {
     exitCode: nextWork.exitCode,
