@@ -47,7 +47,7 @@ Prove re-instantiation before lifting.
 | Canonical Inbox | Implemented typed-envelope intake and export/import handoff. |
 | Site lifecycle transformations | Documented transformation grammar plus read-only/preflight CLI. |
 | Site provenance lineage | Documented event vocabulary plus read-only CLI. |
-| Site pub/sub | Proposal, not yet admitted as machinery. |
+| Site pub/sub | Documented doctrine; delivery/subscription machinery not yet implemented. |
 | User Site awareness registry | Documented semantics; storage/discovery command not yet implemented. |
 | Verifiable envelope trust | Documented doctrine/requirements; crypto substrate not selected. |
 | Authority-clone routing | Queued task, not yet implemented. |

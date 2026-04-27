@@ -61,6 +61,8 @@ Any such mutation must cross through the target Site's authority surface or an e
 - Site Provenance Lineage records where Sites came from and how they relate.
 - Site pub/sub can feed the awareness registry with typed signals, but subscribed signals remain inert until admitted.
 
+For Site pub/sub doctrine, see [`site-pubsub-signal-exchange.md`](site-pubsub-signal-exchange.md).
+
 ## Current Boundary
 
 This document defines registry semantics. It does not yet implement storage, discovery, subscription management, or mutation routing.

@@ -29,5 +29,13 @@
     ],
     "recommendation": "Promote to Narada architecture/product proposal adjacent to Site lifecycle machinery and canonical inbox evolution: implement pub/sub as typed envelope exchange plus governed admission, not automatic replication."
   },
-  "status": "received"
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_ab0d1436-6621-421b-bfdb-b15fbf2918ba",
+    "promoted_at": "2026-04-27T21:07:51.658Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
 }

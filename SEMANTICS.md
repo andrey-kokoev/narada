@@ -1179,6 +1179,10 @@ Verifiable Envelope Trust supplies authenticity, integrity, optional confidentia
 
 See [`docs/concepts/verifiable-envelope-trust.md`](docs/concepts/verifiable-envelope-trust.md).
 
+Site pub/sub is a typed signal exchange posture between Sites. Publication and subscription are influence-only until the receiving locus admits the incoming signal through a governed boundary.
+
+See [`docs/product/site-pubsub-signal-exchange.md`](docs/product/site-pubsub-signal-exchange.md).
+
 ### 2.14.6 Canonical Expansion Table
 
 When precision matters — specifications, interfaces, authority boundaries, agent instructions — use the canonical expansion, not the compact term alone.

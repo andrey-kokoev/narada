@@ -71,6 +71,8 @@ Lineage edges must not smear authority:
 - `authority_refused` preserves rejected or blocked authority attempts as evidence;
 - `template_applied` is not proof by itself; re-instantiation evidence is still required.
 
+For Site pub/sub doctrine, see [`site-pubsub-signal-exchange.md`](site-pubsub-signal-exchange.md).
+
 ## CLI Surface
 
 The initial CLI surface is read-only:

@@ -139,6 +139,7 @@ When describing higher-order architecture, deployment, or design:
 | [site-lifecycle-transformations.md](docs/product/site-lifecycle-transformations.md) | Governed Site lifecycle transformations — clone, fork, split, absorb, migrate, re-instantiate, archive | Need to transform Sites without smearing authority or provenance |
 | [site-provenance-lineage.md](docs/product/site-provenance-lineage.md) | Site provenance lineage — append-only lineage events with graph projections | Need to distinguish authority transfer, provenance, template application, and pub/sub influence |
 | [user-site-awareness-registry.md](docs/product/user-site-awareness-registry.md) | User Site awareness registry — user-locus directory and coordination without ownership | Need to model how the User Site knows about other Sites without mutating them |
+| [site-pubsub-signal-exchange.md](docs/product/site-pubsub-signal-exchange.md) | Site pub/sub signal exchange — typed signals into governed local admission | Need to model cross-Site publication/subscription without replication or authority transfer |
 
 ---
 
