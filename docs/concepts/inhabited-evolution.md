@@ -91,3 +91,11 @@ What friction did this operation earn, what invariant does it expose, and can th
 ```
 
 If the answer is unclear, do not invent architecture. Record the uncertainty as a residual or proposal and keep the next change local.
+
+Agents are expected to push back when a proposed move is not earned by the operation or moves against Narada's spirit. This is not refusal for its own sake; it is protection of the construction loop. The correct pushback shape is:
+
+- name the concrete friction or invariant that is missing;
+- identify whether the proposal should remain possibility, proposal, residual, or rejected path;
+- prefer the smallest local construction that lets the originating case keep running;
+- avoid adding machinery merely to complete a symmetry;
+- route any authority-bearing change through a governed artifact.

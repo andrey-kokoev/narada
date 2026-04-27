@@ -47,7 +47,7 @@
   "scripts": {
     "build": "tsc && pnpm run generate:config-schema",
     "typecheck": "tsc --noEmit",
-    "generate:config-schema": "pnpm exec tsx scripts/generate-config-schema.ts",
+    "generate:config-schema": "node --import tsx scripts/generate-config-schema.ts",
     "test": "vitest run",
     "test:unit": "vitest run test/unit",
     "test:integration": "vitest run test/integration",
