@@ -296,10 +296,25 @@ describe('doctor command', () => {
     const result = await doctorCommand({ bootstrap: true, cwd: '/repo', format: 'json' }, createMockContext());
 
     expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
-    const report = result.result as { status: string; checks: Array<{ name: string; status: string; remediation?: string }> };
+    const report = result.result as {
+      status: string;
+      checks: Array<{ name: string; status: string; remediation?: string; remediation_command?: string; remediation_args?: string[] }>;
+      repair_plan: Array<{ check: string; command: string; args: string[] }>;
+    };
     expect(report.status).toBe('degraded');
     expect(report.checks.find((check) => check.name === 'pnpm-lockfile')?.status).toBe('fail');
     expect(report.checks.find((check) => check.name === 'dependencies-installed')?.remediation).toContain('pnpm install');
+    expect(report.checks.find((check) => check.name === 'dependencies-installed')?.remediation_args).toEqual(['pnpm', 'install']);
     expect(report.checks.find((check) => check.name === 'cli-built')?.remediation).toContain('pnpm -r build');
+    expect(report.repair_plan).toContainEqual({
+      check: 'dependencies-installed',
+      command: 'pnpm install',
+      args: ['pnpm', 'install'],
+    });
+    expect(report.repair_plan).toContainEqual({
+      check: 'cli-built',
+      command: 'pnpm -r build',
+      args: ['pnpm', '-r', 'build'],
+    });
   });
 });

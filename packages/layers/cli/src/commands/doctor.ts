@@ -23,6 +23,8 @@ interface DoctorCheck {
   status: 'pass' | 'fail' | 'warn';
   detail: string;
   remediation?: string;
+  remediation_command?: string;
+  remediation_args?: string[];
 }
 
 interface ScopeDoctorResult {
@@ -45,6 +47,11 @@ interface DoctorReport {
 interface BootstrapDoctorReport {
   status: 'healthy' | 'degraded';
   checks: DoctorCheck[];
+  repair_plan: Array<{
+    check: string;
+    command: string;
+    args: string[];
+  }>;
   summary: {
     pass: number;
     fail: number;
@@ -98,6 +105,8 @@ async function doctorBootstrap(
     status: await pathExists(nodeModules) ? 'pass' : 'fail',
     detail: await pathExists(nodeModules) ? 'node_modules exists' : 'node_modules is missing',
     remediation: 'Run `pnpm install` from the repository root.',
+    remediation_command: 'pnpm install',
+    remediation_args: ['pnpm', 'install'],
   });
 
   const cliMain = join(root, 'packages', 'layers', 'cli', 'dist', 'main.js');
@@ -106,6 +115,8 @@ async function doctorBootstrap(
     status: await pathExists(cliMain) ? 'pass' : 'fail',
     detail: await pathExists(cliMain) ? 'CLI dist entry exists' : 'CLI dist entry is missing',
     remediation: 'Run `pnpm -r build` from the repository root.',
+    remediation_command: 'pnpm -r build',
+    remediation_args: ['pnpm', '-r', 'build'],
   });
 
   const naradaBin = join(root, 'node_modules', '.bin', 'narada');
@@ -114,6 +125,8 @@ async function doctorBootstrap(
     status: await pathExists(naradaBin) ? 'pass' : 'warn',
     detail: await pathExists(naradaBin) ? 'node_modules/.bin/narada exists' : 'node_modules/.bin/narada is missing',
     remediation: 'Run `pnpm install`; for shell-level access run `pnpm run narada:install-shim`.',
+    remediation_command: 'pnpm run narada:install-shim',
+    remediation_args: ['pnpm', 'run', 'narada:install-shim'],
   });
 
   try {
@@ -132,14 +145,23 @@ async function doctorBootstrap(
       status: 'fail',
       detail: error instanceof Error ? error.message : String(error),
       remediation: 'Run `pnpm rebuild better-sqlite3` or reinstall with native build scripts enabled.',
+      remediation_command: 'pnpm rebuild better-sqlite3',
+      remediation_args: ['pnpm', 'rebuild', 'better-sqlite3'],
     });
   }
 
+  const repairPlan = checks
+    .filter((check) => check.status !== 'pass' && check.remediation_command && check.remediation_args)
+    .map((check) => ({
+      check: check.name,
+      command: check.remediation_command!,
+      args: check.remediation_args!,
+    }));
   const pass = checks.filter((check) => check.status === 'pass').length;
   const fail = checks.filter((check) => check.status === 'fail').length;
   const warn = checks.filter((check) => check.status === 'warn').length;
   const status: BootstrapDoctorReport['status'] = fail > 0 ? 'degraded' : 'healthy';
-  const report: BootstrapDoctorReport = { status, checks, summary: { pass, fail, warn } };
+  const report: BootstrapDoctorReport = { status, checks, repair_plan: repairPlan, summary: { pass, fail, warn } };
 
   if (fmt.getFormat() === 'json') {
     return {
@@ -155,6 +177,12 @@ async function doctorBootstrap(
     const fmtType = check.status === 'pass' ? 'success' : check.status === 'fail' ? 'error' : 'warning';
     fmt.message(`${icon} ${check.name}: ${check.detail}`, fmtType);
     if (check.remediation) fmt.message(`  → ${check.remediation}`, 'info');
+  }
+  if (repairPlan.length > 0) {
+    fmt.message('Repair plan:', 'info');
+    for (const item of repairPlan) {
+      fmt.message(`  ${item.command}`, 'info');
+    }
   }
 
   return {
