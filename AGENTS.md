@@ -81,6 +81,12 @@ When describing higher-order architecture, deployment, or design:
 - Treat `task allocate/create/claim/close/confirm/finish`, `chapter init/close/finish-range`, `inbox triage/promote/pending/task`, `task lifecycle import/export`, roster, assignment, dispatch, evidence-admission, and publication commands as authority-affecting surfaces.
 - If an accidental Narada proper mutation happens, repair only the introduced residue and verify with bounded evidence; do not use broad reset/revert commands.
 
+## Default Inbox Arc Execution
+
+- When asked to check or process inbox work, do not stop after listing actionable envelopes if the next step is obvious and low-risk.
+- Default path: create the appropriate Narada proper task/chapter, execute, verify, close, handle the source inbox envelope, export/import handoff artifacts, commit, push, then recheck inbox/work-next.
+- Stop only for a real blocker: unclear target locus, explicit Operator constraint, external permission, destructive risk, missing credentials, or non-local scope.
+
 ## Operator Input Format
 
 - When asking for operator input, number the question and letter the options.

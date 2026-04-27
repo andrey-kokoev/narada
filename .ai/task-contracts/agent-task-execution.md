@@ -48,6 +48,21 @@ For dependency-heavy tasks, include explicit dependency assumptions and the "rea
 
 Architect/operator assignment text should usually be only `execute N` or `review N`. If more is needed, first ask whether that content belongs in the task file.
 
+## Default Inbox Arc Execution
+
+When the Operator asks to check or process inbox work and `narada inbox work-next` returns an actionable item, the default is to continue through a complete chapter arc rather than stopping at availability reporting:
+
+1. create the appropriate Narada proper task or chapter;
+2. execute the task locally when the next step is low-risk and locally executable;
+3. verify with focused checks and `pnpm verify` when code/docs/task state changed;
+4. close the task through the sanctioned lifecycle;
+5. archive, promote, or mark pending the source inbox envelope;
+6. export/import inbox and lifecycle handoff artifacts as needed;
+7. commit and push;
+8. recheck inbox/work-next and continue only when the next item is obvious and low-risk.
+
+Stop only for real blockers: unclear target locus, explicit Operator constraint, external permission, destructive-risk boundary, missing credentials, or a task whose scope is not locally executable.
+
 ## Safety
 
 - Do not interpret, narrow, relax, or silently carve exceptions into operator-set constraints.
