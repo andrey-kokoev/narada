@@ -78,6 +78,32 @@ describe('work-next unified next action', () => {
     expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-test.md'), 'utf8')).toContain('status: claimed');
   });
 
+  it('starts dispatch context for task work when requested', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-test.md'),
+      '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100: Dispatch Start\n\n## Goal\nDo task work.\n',
+    );
+
+    const result = await workNextCommand({
+      agent: 'architect',
+      cwd: tempDir,
+      format: 'json',
+      startTask: true,
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      action_kind: 'task_work',
+      agent_id: 'architect',
+      primary: { task_number: 100 },
+      dispatch_result: {
+        pickup: { status: 'success', task_number: '100' },
+        start: { status: 'success', action: 'ready', recommended_command: expect.stringContaining('kimi') },
+      },
+    });
+  });
+
   it('claims inbox work when no task work is available', async () => {
     const submitted = await inboxSubmitCommand({
       cwd: tempDir,

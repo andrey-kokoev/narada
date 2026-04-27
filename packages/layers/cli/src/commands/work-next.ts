@@ -15,12 +15,15 @@ import {
 } from '../lib/task-governance.js';
 import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 import { inboxWorkNextCommand } from './inbox.js';
+import { taskDispatchCommand } from './task-dispatch.js';
 import { taskWorkNextCommand } from './task-next.js';
 
 export interface WorkNextOptions {
   agent?: string;
   cwd?: string;
   format?: CliFormat;
+  startTask?: boolean;
+  execTask?: boolean;
 }
 
 interface CommandEnvelope {
@@ -134,12 +137,55 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
 
   if (taskResult.exitCode === ExitCode.SUCCESS && !isEmptyTaskResult(taskResult.result)) {
     const taskRecord = asRecord(taskResult.result);
+    const primary = asRecord(taskRecord.primary ?? taskRecord.packet ?? null);
+    let dispatchResult: unknown = null;
+    if (options.startTask) {
+      const store = openTaskLifecycleStore(cwd);
+      try {
+        const taskNumber = primary.task_number;
+        if (typeof taskNumber !== 'number') {
+          return {
+            exitCode: ExitCode.GENERAL_ERROR,
+            result: {
+              status: 'error',
+              error: 'Cannot start task work without a numeric task_number',
+              primary,
+            },
+          };
+        }
+        const pickup = await taskDispatchCommand({
+          action: 'pickup',
+          taskNumber: String(taskNumber),
+          agent: options.agent,
+          cwd,
+          format: 'json',
+          store,
+        });
+        if (pickup.exitCode !== ExitCode.SUCCESS) return pickup;
+        const start = await taskDispatchCommand({
+          action: 'start',
+          agent: options.agent,
+          cwd,
+          format: 'json',
+          exec: options.execTask,
+          store,
+        });
+        if (start.exitCode !== ExitCode.SUCCESS) return start;
+        dispatchResult = {
+          pickup: pickup.result,
+          start: start.result,
+        };
+      } finally {
+        store.db.close();
+      }
+    }
     const result = {
       status: 'success',
       action_kind: 'task_work',
       agent_id: options.agent,
-      primary: taskRecord.primary ?? taskRecord.packet ?? null,
+      primary,
       task_result: taskResult.result,
+      dispatch_result: dispatchResult,
       next_step: 'Execute the returned task packet through the governed task lifecycle.',
     };
     return {
