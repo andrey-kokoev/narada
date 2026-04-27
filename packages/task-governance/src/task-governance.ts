@@ -9,6 +9,7 @@ import { readFile, writeFile, readdir, rename, open, unlink } from 'node:fs/prom
 import { join, resolve, dirname } from 'node:path';
 import type { TaskLifecycleStore, AgentRosterRow } from './task-lifecycle-store.js';
 import { openTaskLifecycleStore } from './task-lifecycle-store.js';
+import { parseTaskSpecFromMarkdown } from './task-spec.js';
 
 export interface AgentRosterEntry {
   agent_id: string;
@@ -2459,15 +2460,16 @@ export async function listRunnableTasks(
   const files = await readdir(dir);
   const mdFiles = files.filter(isExecutableTaskFile);
   const ownership = await resolveExecutableTaskNumberOwnership(cwd, store);
-  const specByNumber = new Map<number, { title: string; dependencies: number[] }>();
+  const specByNumber = new Map<number, { title: string; dependencies: number[]; acceptanceCriteria: string[] }>();
   if (store) {
     const rows = store.db
-      .prepare('select task_number, title, dependencies_json from task_specs')
-      .all() as Array<{ task_number: number; title: string; dependencies_json: string }>;
+      .prepare('select task_number, title, dependencies_json, acceptance_criteria_json from task_specs')
+      .all() as Array<{ task_number: number; title: string; dependencies_json: string; acceptance_criteria_json: string }>;
     for (const row of rows) {
       specByNumber.set(Number(row.task_number), {
         title: String(row.title),
         dependencies: JSON.parse(String(row.dependencies_json)) as number[],
+        acceptanceCriteria: JSON.parse(String(row.acceptance_criteria_json)) as string[],
       });
     }
   }
@@ -2504,12 +2506,24 @@ export async function listRunnableTasks(
 
     if (status !== 'opened' && status !== 'needs_continuation') continue;
 
+    const storedSpec = taskNumber !== null ? specByNumber.get(taskNumber) : undefined;
+    const parsedSpec = taskNumber !== null
+      ? parseTaskSpecFromMarkdown({
+          taskId: base,
+          taskNumber,
+          frontMatter,
+          body,
+        })
+      : null;
+    const acceptanceCriteria = storedSpec?.acceptanceCriteria ?? parsedSpec?.acceptance_criteria ?? [];
+    if (acceptanceCriteria.length === 0) continue;
+
     const info: ChapterTaskInfo = {
       taskId: base,
       taskNumber,
       status,
       fileName: f,
-      dependsOn: (taskNumber !== null ? specByNumber.get(taskNumber)?.dependencies : undefined) ?? [],
+      dependsOn: storedSpec?.dependencies ?? parsedSpec?.dependencies ?? [],
       continuationAffinity: frontMatter.continuation_affinity as TaskContinuationAffinity | undefined,
     };
 
@@ -2518,7 +2532,7 @@ export async function listRunnableTasks(
     }
     rawTasks.push({
       info,
-      title: taskNumber !== null ? (specByNumber.get(taskNumber)?.title ?? null) : null,
+      title: storedSpec?.title ?? parsedSpec?.title ?? null,
     });
   }
 

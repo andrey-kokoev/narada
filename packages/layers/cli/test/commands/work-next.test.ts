@@ -53,7 +53,7 @@ describe('work-next unified next action', () => {
   it('returns task work before inbox work', async () => {
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-test.md'),
-      '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n\n## Goal\nDo task work.\n',
+      '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n\n## Goal\nDo task work.\n\n## Acceptance Criteria\n- [ ] Do task work.\n',
     );
     const inbox = await inboxSubmitCommand({
       cwd: tempDir,
@@ -83,7 +83,7 @@ describe('work-next unified next action', () => {
   it('claims task work when SQLite says opened and markdown has no status', async () => {
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-102-sqlite-opened.md'),
-      '---\ntask_id: 20260427-102-sqlite-opened\n---\n\n# Task 102\n\n## Goal\nDo task work.\n',
+      '---\ntask_id: 20260427-102-sqlite-opened\n---\n\n# Task 102\n\n## Goal\nDo task work.\n\n## Acceptance Criteria\n- [ ] Do task work.\n',
     );
     const store = openTaskLifecycleStore(tempDir);
     try {
@@ -115,10 +115,61 @@ describe('work-next unified next action', () => {
     expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-102-sqlite-opened.md'), 'utf8')).toContain('status: claimed');
   });
 
+  it('skips opened lifecycle rows whose task artifact has no acceptance criteria', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-102-legacy-plan.md'),
+      '---\ntask_id: 20260427-102-legacy-plan\n---\n\n# Legacy Plan\n\nThis is not an executable task artifact.\n',
+    );
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-103-executable.md'),
+      '---\ntask_id: 20260427-103-executable\nstatus: opened\n---\n\n# Task 103\n\n## Acceptance Criteria\n- [ ] Do executable work.\n',
+    );
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.upsertLifecycle({
+        task_id: '20260427-102-legacy-plan',
+        task_number: 102,
+        status: 'opened',
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: '2026-01-01T00:00:00.000Z',
+      });
+      store.upsertLifecycle({
+        task_id: '20260427-103-executable',
+        task_number: 103,
+        status: 'opened',
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: '2026-01-01T00:00:00.000Z',
+      });
+    } finally {
+      store.db.close();
+    }
+
+    const result = await workNextCommand({ agent: 'architect', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      action_kind: 'task_work',
+      agent_id: 'architect',
+      primary: { task_number: 103 },
+    });
+    expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-102-legacy-plan.md'), 'utf8')).not.toContain('status: claimed');
+  });
+
   it('starts dispatch context for task work when requested', async () => {
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-test.md'),
-      '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100: Dispatch Start\n\n## Goal\nDo task work.\n',
+      '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100: Dispatch Start\n\n## Goal\nDo task work.\n\n## Acceptance Criteria\n- [ ] Do task work.\n',
     );
 
     const result = await workNextCommand({
