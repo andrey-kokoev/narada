@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { access, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import {
   type InboxAuthorityLevel,
   type InboxEnvelope,
@@ -94,6 +94,25 @@ export interface InboxPendingOptions extends InboxCommandOptions {
 }
 
 export interface InboxDoctorOptions extends InboxCommandOptions {}
+
+interface InboxRuntimeDiagnostics {
+  node_exec_path: string;
+  node_platform: NodeJS.Platform;
+  node_version: string;
+  is_wsl: boolean;
+  wsl_distro: string | null;
+  cli_entrypoint: string | null;
+  cli_entrypoint_dir: string | null;
+  cli_entrypoint_exists: boolean;
+  cli_package_root: string | null;
+  expected_repo_dist_entrypoint: string;
+  expected_repo_dist_present: boolean;
+  runtime_posture: string;
+  runtime_origin_detail: string;
+  canonical_inbox_commands_available: boolean;
+  canonical_inbox_commands_detail: string;
+  preflight_recommendation: string;
+}
 
 export interface InboxExportOptions extends InboxCommandOptions {
   status?: string;
@@ -223,12 +242,16 @@ export async function inboxDoctorCommand(options: InboxDoctorOptions): Promise<{
   const cwd = options.cwd ?? process.cwd();
   const delivery = inspectInboxDelivery(cwd);
   const readiness = inspectInboxReadiness(cwd, delivery.inbox_db_path);
+  const runtime = inspectInboxRuntime(cwd);
   const refresh = await refreshInboxFromExports(new SqliteInboxStore(String(delivery.inbox_db_path)), cwd, { closeStore: true });
   const checks = [
     { name: 'repo_detected', ok: delivery.repo_root !== null, detail: delivery.repo_root ?? 'not a git worktree' },
     { name: 'inbox_db_accessible', ok: readiness.inbox_db_accessible, detail: readiness.inbox_db_detail },
     { name: 'sqlite_binding_loaded', ok: readiness.sqlite_binding_loaded, detail: readiness.sqlite_binding_detail },
     { name: 'cli_build_present', ok: readiness.cli_build_present, detail: readiness.cli_build_detail },
+    { name: 'node_runtime_origin', ok: true, detail: runtime.runtime_origin_detail },
+    { name: 'cli_entrypoint_exists', ok: runtime.cli_entrypoint_exists, detail: runtime.cli_entrypoint ?? 'no CLI entrypoint recorded' },
+    { name: 'canonical_inbox_commands_available', ok: runtime.canonical_inbox_commands_available, detail: runtime.canonical_inbox_commands_detail },
   ];
   const ok = checks.every((check) => check.ok);
   return okResult(
@@ -237,6 +260,7 @@ export async function inboxDoctorCommand(options: InboxDoctorOptions): Promise<{
       ready: ok,
       delivery,
       readiness,
+      runtime,
       refresh,
       checks,
     },
@@ -247,6 +271,10 @@ export async function inboxDoctorCommand(options: InboxDoctorOptions): Promise<{
       `Branch: ${delivery.branch ?? 'unknown'}`,
       `HEAD: ${delivery.head_commit ?? 'unknown'}`,
       `Remote visibility: ${delivery.head_matches_remote === true ? 'current' : delivery.head_matches_remote === false ? 'not current' : 'unknown'}`,
+      `Node: ${runtime.node_exec_path}`,
+      `CLI entrypoint: ${runtime.cli_entrypoint}`,
+      `Platform: ${runtime.node_platform}/${process.arch}${runtime.is_wsl ? ` (WSL${runtime.wsl_distro ? ` ${runtime.wsl_distro}` : ''})` : ''}`,
+      `Runtime posture: ${runtime.runtime_posture}`,
       `Export refresh: ${refresh.imported} imported, ${refresh.skipped} already present, ${refresh.exported_count} artifacts`,
       ...checks.map((check) => `${check.ok ? 'ok' : 'warn'} ${check.name}: ${check.detail}`),
     ],
@@ -872,6 +900,57 @@ function inspectInboxReadiness(cwdInput: string, inboxDbPath: unknown): Record<s
     cli_build_present: existsSync(cliBuildPath),
     cli_build_detail: existsSync(cliBuildPath) ? cliBuildPath : `${cliBuildPath} missing; run pnpm --filter @narada2/cli build`,
   };
+}
+
+function inspectInboxRuntime(cwdInput: string): InboxRuntimeDiagnostics {
+  const cwd = resolve(cwdInput);
+  const cliEntrypoint = process.argv[1] ? resolve(process.argv[1]) : null;
+  const packageRoot = findCliPackageRoot(cliEntrypoint, cwd);
+  const expectedDistEntry = join(cwd, 'packages', 'layers', 'cli', 'dist', 'main.js');
+  const isWsl = Boolean(process.env.WSL_DISTRO_NAME || process.env.WSL_INTEROP || /microsoft|wsl/i.test(process.release?.name ?? ''));
+  const canonicalInboxCommandsAvailable = existsSync(expectedDistEntry);
+  const cliEntrypointExists = cliEntrypoint ? existsSync(cliEntrypoint) : false;
+  const runtimePosture = cliEntrypoint && cliEntrypoint.includes('node_modules/.bin')
+    ? 'package_bin_shim'
+    : cliEntrypoint && cliEntrypoint === expectedDistEntry
+      ? 'repo_dist_entrypoint'
+      : cliEntrypoint?.endsWith('/tsx') || cliEntrypoint?.endsWith('\\tsx')
+        ? 'tsx_development_entrypoint'
+        : 'unknown_or_external_entrypoint';
+  const runtimeOriginDetail = `${process.execPath} ${process.version} on ${process.platform}/${process.arch}${isWsl ? ' under WSL' : ''}`;
+
+  return {
+    node_exec_path: process.execPath,
+    node_platform: process.platform,
+    node_version: process.version,
+    is_wsl: isWsl,
+    wsl_distro: process.env.WSL_DISTRO_NAME ?? null,
+    cli_entrypoint: cliEntrypoint,
+    cli_entrypoint_dir: cliEntrypoint ? dirname(cliEntrypoint) : null,
+    cli_entrypoint_exists: cliEntrypointExists,
+    cli_package_root: packageRoot,
+    expected_repo_dist_entrypoint: expectedDistEntry,
+    expected_repo_dist_present: existsSync(expectedDistEntry),
+    runtime_posture: runtimePosture,
+    runtime_origin_detail: runtimeOriginDetail,
+    canonical_inbox_commands_available: canonicalInboxCommandsAvailable,
+    canonical_inbox_commands_detail: canonicalInboxCommandsAvailable
+      ? `expected repo CLI build exists: ${expectedDistEntry}`
+      : `expected repo CLI build missing: ${expectedDistEntry}; run pnpm --filter @narada2/cli build`,
+    preflight_recommendation: 'Run narada inbox doctor before cross-environment inbox submission; submit from the authority clone when runtime posture is ambiguous.',
+  };
+}
+
+function findCliPackageRoot(cliEntrypoint: string | null, cwd: string): string | null {
+  const candidates = [
+    cliEntrypoint ? dirname(cliEntrypoint) : null,
+    cliEntrypoint ? dirname(dirname(cliEntrypoint)) : null,
+    join(cwd, 'packages', 'layers', 'cli'),
+  ].filter((value): value is string => Boolean(value));
+  for (const candidate of candidates) {
+    if (existsSync(join(candidate, 'package.json'))) return candidate;
+  }
+  return null;
 }
 
 async function refreshInboxFromExports(

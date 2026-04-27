@@ -233,14 +233,31 @@ describe('Canonical Inbox CLI commands', () => {
     const result = doctor.result as {
       ready: boolean;
       delivery: Record<string, unknown>;
+      runtime: Record<string, unknown>;
       checks: Array<{ name: string; ok: boolean }>;
     };
     expect(result.delivery).toMatchObject({ repo_root: tempDir, branch: 'main' });
+    expect(result.runtime).toMatchObject({
+      node_exec_path: process.execPath,
+      node_platform: process.platform,
+      node_version: process.version,
+      cli_entrypoint: expect.any(String),
+      cli_entrypoint_exists: true,
+      expected_repo_dist_entrypoint: join(tempDir, 'packages', 'layers', 'cli', 'dist', 'main.js'),
+      expected_repo_dist_present: false,
+      canonical_inbox_commands_available: false,
+    });
+    expect(result.runtime).toHaveProperty('runtime_posture');
+    expect(result.runtime).toHaveProperty('runtime_origin_detail');
+    expect(result.runtime).toHaveProperty('preflight_recommendation');
     expect(result.checks.map((check) => check.name)).toEqual(expect.arrayContaining([
       'repo_detected',
       'inbox_db_accessible',
       'sqlite_binding_loaded',
       'cli_build_present',
+      'node_runtime_origin',
+      'cli_entrypoint_exists',
+      'canonical_inbox_commands_available',
     ]));
     const after = await inboxListCommand({ cwd: tempDir, format: 'json' });
     expect((after.result as { count: number }).count).toBe((before.result as { count: number }).count);

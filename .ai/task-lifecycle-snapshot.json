@@ -1,7 +1,7 @@
 {
   "snapshot_kind": "task_lifecycle_snapshot",
   "snapshot_version": 1,
-  "exported_at": "2026-04-27T21:13:11.044Z",
+  "exported_at": "2026-04-27T21:22:30.108Z",
   "tables": [
     {
       "name": "agent_roster",
@@ -26,7 +26,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 720,
-          "updated_at": "2026-04-27T21:13:11.044Z"
+          "updated_at": "2026-04-27T21:22:30.108Z"
         },
         {
           "agent_id": "a2",
@@ -37,7 +37,7 @@
           "status": "idle",
           "task_number": null,
           "last_done": 886,
-          "updated_at": "2026-04-27T21:13:11.044Z"
+          "updated_at": "2026-04-27T21:22:30.108Z"
         },
         {
           "agent_id": "a3",
@@ -48,7 +48,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 610,
-          "updated_at": "2026-04-27T21:13:11.044Z"
+          "updated_at": "2026-04-27T21:22:30.108Z"
         },
         {
           "agent_id": "a4",
@@ -59,7 +59,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 574,
-          "updated_at": "2026-04-27T21:13:11.044Z"
+          "updated_at": "2026-04-27T21:22:30.108Z"
         },
         {
           "agent_id": "a5",
@@ -70,7 +70,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 551,
-          "updated_at": "2026-04-27T21:13:11.044Z"
+          "updated_at": "2026-04-27T21:22:30.108Z"
         },
         {
           "agent_id": "a6",
@@ -81,18 +81,18 @@
           "status": "done",
           "task_number": null,
           "last_done": 545,
-          "updated_at": "2026-04-27T21:13:11.044Z"
+          "updated_at": "2026-04-27T21:22:30.108Z"
         },
         {
           "agent_id": "architect",
           "role": "implementer",
           "capabilities_json": "[\"derive\",\"propose\",\"claim\",\"execute\",\"resolve\",\"confirm\"]",
           "first_seen_at": "2026-04-26T22:28:56.453Z",
-          "last_active_at": "2026-04-27T21:13:11.044Z",
+          "last_active_at": "2026-04-27T21:22:30.108Z",
           "status": "done",
           "task_number": null,
-          "last_done": 986,
-          "updated_at": "2026-04-27T21:13:11.044Z"
+          "last_done": 987,
+          "updated_at": "2026-04-27T21:22:30.108Z"
         }
       ]
     },
@@ -6251,6 +6251,27 @@
           "confirmation_json": "{\"task_id\":\"20260427-986-define-capability-governed-secret-management-doctrine\",\"task_number\":986,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
           "warnings_json": null,
           "updated_at": "2026-04-27T21:10:55.188Z"
+        },
+        {
+          "request_id": "air_claim_987_architect_1777324645760_g44npd",
+          "kind": "claim",
+          "task_id": "20260427-987-improve-inbox-runtime-origin-preflight",
+          "task_number": 987,
+          "agent_id": "architect",
+          "requested_by": "architect",
+          "requested_at": "2026-04-27T21:17:25.760Z",
+          "reason": null,
+          "no_claim": 0,
+          "status": "applied",
+          "rejection_reason": null,
+          "assignment_id": "assign-20260427-987-improve-inbox-runtime-origin-preflight-architect-1777324645760",
+          "previous_agent_id": null,
+          "lifecycle_status_before": "opened",
+          "lifecycle_status_after": "claimed",
+          "roster_status_after": "working",
+          "confirmation_json": "{\"task_id\":\"20260427-987-improve-inbox-runtime-origin-preflight\",\"task_number\":987,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
+          "warnings_json": null,
+          "updated_at": "2026-04-27T21:17:26.957Z"
         }
       ]
     },
@@ -15626,6 +15647,45 @@
           "admitted_at": "2026-04-27T21:13:10.600Z",
           "admitted_by": "architect",
           "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_987_1777324949076_3urwmn",
+          "bundle_id": "evb_987_1777324949075_xny7c2",
+          "task_id": "20260427-987-improve-inbox-runtime-origin-preflight",
+          "task_number": 987,
+          "verdict": "rejected",
+          "methods_json": "[\"review\"]",
+          "blockers_json": "[\"5 acceptance criteria remain unchecked\"]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T21:22:29.076Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_987_1777324949346_uefp0s",
+          "bundle_id": "evb_987_1777324949346_jrlehx",
+          "task_id": "20260427-987-improve-inbox-runtime-origin-preflight",
+          "task_number": 987,
+          "verdict": "admitted",
+          "methods_json": "[\"criteria_proof\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T21:22:29.346Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_987_1777324949657_u1aelw",
+          "bundle_id": "evb_987_1777324949657_9kbu4m",
+          "task_id": "20260427-987-improve-inbox-runtime-origin-preflight",
+          "task_number": 987,
+          "verdict": "admitted",
+          "methods_json": "[\"admission\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": "closed",
+          "admitted_at": "2026-04-27T21:22:29.657Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
         }
       ]
     },
@@ -24042,6 +24102,45 @@
           "residuals_json": "[]",
           "assembled_at": "2026-04-27T21:13:10.600Z",
           "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_987_1777324949075_xny7c2",
+          "task_id": "20260427-987-improve-inbox-runtime-origin-preflight",
+          "task_number": 987,
+          "report_ids_json": "[\"wrr_fc1b2993_20260427-987-improve-inbox-runtime-origin-preflight_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":false,\"unchecked_count\":5}",
+          "review_ids_json": "[\"review-20260427-987-improve-inbox-runtime-origin-preflight-1777324948994\"]",
+          "changed_files_json": "[\"packages/layers/cli/src/commands/inbox.ts\",\"packages/layers/cli/test/commands/inbox.test.ts\",\"docs/concepts/canonical-inbox.md\",\".ai/do-not-open/tasks/20260427-987-improve-inbox-runtime-origin-preflight.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T21:22:29.076Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_987_1777324949346_jrlehx",
+          "task_id": "20260427-987-improve-inbox-runtime-origin-preflight",
+          "task_number": 987,
+          "report_ids_json": "[\"wrr_fc1b2993_20260427-987-improve-inbox-runtime-origin-preflight_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[\"review-20260427-987-improve-inbox-runtime-origin-preflight-1777324948994\"]",
+          "changed_files_json": "[\"packages/layers/cli/src/commands/inbox.ts\",\"packages/layers/cli/test/commands/inbox.test.ts\",\"docs/concepts/canonical-inbox.md\",\".ai/do-not-open/tasks/20260427-987-improve-inbox-runtime-origin-preflight.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T21:22:29.346Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_987_1777324949657_9kbu4m",
+          "task_id": "20260427-987-improve-inbox-runtime-origin-preflight",
+          "task_number": 987,
+          "report_ids_json": "[\"wrr_fc1b2993_20260427-987-improve-inbox-runtime-origin-preflight_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[\"review-20260427-987-improve-inbox-runtime-origin-preflight-1777324948994\"]",
+          "changed_files_json": "[\"packages/layers/cli/src/commands/inbox.ts\",\"packages/layers/cli/test/commands/inbox.test.ts\",\"docs/concepts/canonical-inbox.md\",\".ai/do-not-open/tasks/20260427-987-improve-inbox-runtime-origin-preflight.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T21:22:29.657Z",
+          "assembled_by": "architect"
         }
       ]
     },
@@ -27225,6 +27324,11 @@
           "task_id": "20260427-986-define-capability-governed-secret-management-doctrine",
           "record_json": "{\"task_id\":\"20260427-986-define-capability-governed-secret-management-doctrine\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T21:10:54.035Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T21:13:08.521Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
           "updated_at": "2026-04-27T21:13:08.747Z"
+        },
+        {
+          "task_id": "20260427-987-improve-inbox-runtime-origin-preflight",
+          "record_json": "{\"task_id\":\"20260427-987-improve-inbox-runtime-origin-preflight\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T21:17:25.982Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T21:22:19.058Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
+          "updated_at": "2026-04-27T21:22:20.121Z"
         }
       ]
     },
@@ -30008,6 +30112,15 @@
           "task_id": "20260427-986-define-capability-governed-secret-management-doctrine",
           "agent_id": "architect",
           "claimed_at": "2026-04-27T21:10:54.035Z",
+          "released_at": null,
+          "release_reason": null,
+          "intent": "primary"
+        },
+        {
+          "assignment_id": "assign-20260427-987-improve-inbox-runtime-origin-preflight-architect-1777324645760",
+          "task_id": "20260427-987-improve-inbox-runtime-origin-preflight",
+          "agent_id": "architect",
+          "claimed_at": "2026-04-27T21:17:25.982Z",
           "released_at": null,
           "release_reason": null,
           "intent": "primary"
@@ -42548,6 +42661,19 @@
           "continuation_packet_json": null,
           "updated_at": "2026-04-27T21:13:10.766Z",
           "closure_mode": "agent_finish"
+        },
+        {
+          "task_id": "20260427-987-improve-inbox-runtime-origin-preflight",
+          "task_number": 987,
+          "status": "closed",
+          "governed_by": "task_close:architect",
+          "closed_at": "2026-04-27T21:22:29.828Z",
+          "closed_by": "architect",
+          "reopened_at": null,
+          "reopened_by": null,
+          "continuation_packet_json": null,
+          "updated_at": "2026-04-27T21:22:29.829Z",
+          "closure_mode": "agent_finish"
         }
       ]
     },
@@ -42573,7 +42699,7 @@
       "rows": [
         {
           "singleton": 1,
-          "last_allocated": 986
+          "last_allocated": 987
         }
       ]
     },
@@ -45146,6 +45272,14 @@
           "agent_id": "architect",
           "reported_at": "2026-04-27T21:13:08.521Z",
           "report_json": "{\"report_id\":\"wrr_aa9e5799_20260427-986-define-capability-governed-secret-management-doctrine_architect\",\"task_number\":\"986\",\"task_id\":\"20260427-986-define-capability-governed-secret-management-doctrine\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-986-define-capability-governed-secret-management-doctrine-2026-04-27T21:10:54.035Z\",\"reported_at\":\"2026-04-27T21:13:08.521Z\",\"summary\":\"Defined capability-governed secret management doctrine: secrets are authority-bearing capabilities, Site artifacts carry references/policy, and raw values remain in locus-owned stores.\",\"changed_files\":[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/capability-governed-secret-management.md\",\"docs/concepts/governed-locus-federation.md\",\"docs/concepts/verifiable-envelope-trust.md\",\"docs/product/site-bootstrap-contract.md\"],\"verification\":[{\"command\":\"pnpm verify\",\"result\":\"passed\"}],\"known_residuals\":[\"No vault, resolver unification, secret scanning, doctor checks, or capability request commands were implemented in this doctrine slice.\"],\"ready_for_review\":true,\"report_status\":\"submitted\"}"
+        },
+        {
+          "report_id": "wrr_fc1b2993_20260427-987-improve-inbox-runtime-origin-preflight_architect",
+          "task_id": "20260427-987-improve-inbox-runtime-origin-preflight",
+          "assignment_id": "20260427-987-improve-inbox-runtime-origin-preflight-2026-04-27T21:17:25.982Z",
+          "agent_id": "architect",
+          "reported_at": "2026-04-27T21:22:19.058Z",
+          "report_json": "{\"report_id\":\"wrr_fc1b2993_20260427-987-improve-inbox-runtime-origin-preflight_architect\",\"task_number\":\"987\",\"task_id\":\"20260427-987-improve-inbox-runtime-origin-preflight\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-987-improve-inbox-runtime-origin-preflight-2026-04-27T21:17:25.982Z\",\"reported_at\":\"2026-04-27T21:22:19.058Z\",\"summary\":\"Extended inbox doctor with runtime-origin preflight diagnostics, documented cross-environment usage, added focused tests, and archived the source inbox envelope.\",\"changed_files\":[\"packages/layers/cli/src/commands/inbox.ts\",\"packages/layers/cli/test/commands/inbox.test.ts\",\"docs/concepts/canonical-inbox.md\",\".ai/do-not-open/tasks/20260427-987-improve-inbox-runtime-origin-preflight.md\"],\"verification\":[{\"command\":\"pnpm --filter @narada2/cli exec vitest run test/commands/inbox.test.ts --pool=forks\",\"result\":\"26/26 passed\"},{\"command\":\"pnpm --filter @narada2/cli build\",\"result\":\"passed\"},{\"command\":\"narada inbox doctor --format json bounded projection\",\"result\":\"ready true; runtime-origin checks present\"},{\"command\":\"pnpm verify\",\"result\":\"all 8 steps passed\"}],\"known_residuals\":[],\"ready_for_review\":true,\"report_status\":\"accepted\"}"
         }
       ]
     },
@@ -45556,6 +45690,14 @@
           "verdict": "accepted",
           "findings_json": null,
           "reviewed_at": "2026-04-27T21:13:09.841Z"
+        },
+        {
+          "review_id": "review-20260427-987-improve-inbox-runtime-origin-preflight-1777324948994",
+          "task_id": "20260427-987-improve-inbox-runtime-origin-preflight",
+          "reviewer_agent_id": "architect",
+          "verdict": "accepted",
+          "findings_json": null,
+          "reviewed_at": "2026-04-27T21:22:28.994Z"
         }
       ]
     },
@@ -57495,6 +57637,19 @@
           "acceptance_criteria_json": "[\"Docs define secrets as authority-bearing capabilities rather than ordinary config or knowledge;Docs distinguish secret reference\",\"authorization\",\"retrieval\",\"use\",\"rotation\",\"revocation\",\"and audit transitions;Docs define locus-aware stores for User\",\"PC\",\"project\",\"client\",\"data\",\"ELT\",\"cloud\",\"and agent contexts;Docs state that cloned or re-instantiated Sites carry references and policies\",\"not secret material;The source inbox envelope is handled through a governed pending or archive action;pnpm verify passes\"]",
           "dependencies_json": "[]",
           "updated_at": "2026-04-27T21:10:40.098Z"
+        },
+        {
+          "task_id": "20260427-987-improve-inbox-runtime-origin-preflight",
+          "task_number": 987,
+          "title": "Improve inbox runtime origin preflight",
+          "chapter_markdown": "cli-ergonomics",
+          "goal_markdown": "Make canonical inbox diagnostics disclose repo path, CLI entrypoint/runtime origin, package/build availability, and canonical inbox command availability so Windows/WSL shim contamination is visible before payload submission.",
+          "context_markdown": null,
+          "required_work_markdown": "1. TBD",
+          "non_goals_markdown": "- Do not expand scope beyond this task.\n- Do not create derivative task-status files.\n- Do not mutate live external systems unless explicitly authorized.",
+          "acceptance_criteria_json": "[\"inbox doctor reports cwd\",\"CLI entrypoint\",\"Node executable\",\"platform\",\"WSL posture\",\"package root\",\"dist entry existence\",\"and inbox command availability;submit-observation docs or help point operators to inbox doctor for delivery-coordinate preflight;Focused tests cover doctor runtime fields and command availability;The source inbox envelope is handled through a governed pending or archive action;pnpm verify passes\"]",
+          "dependencies_json": "[]",
+          "updated_at": "2026-04-27T21:15:44.590Z"
         }
       ]
     },

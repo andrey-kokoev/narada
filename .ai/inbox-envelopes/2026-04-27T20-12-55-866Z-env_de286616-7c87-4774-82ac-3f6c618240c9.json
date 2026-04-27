@@ -26,5 +26,13 @@
     ],
     "recommendation": "Promote to Narada ergonomics task for cross-environment CLI invocation reliability around canonical inbox submission."
   },
-  "status": "received"
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_de286616-7c87-4774-82ac-3f6c618240c9",
+    "promoted_at": "2026-04-27T21:21:48.528Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
 }

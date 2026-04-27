@@ -1,0 +1,25 @@
+{
+  "envelope_id": "env_0ad70f77-a780-435b-8edf-3a51337b0546",
+  "received_at": "2026-04-27T21:15:48.923Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:authority-revealing-inversion-doctrine-fyi"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "FYI: new doctrine page Authority-Revealing Inversion",
+    "summary": "A new thoughts concept page was created and pushed: Authority-Revealing Inversion. It names a recurring Narada move: when a conventional artifact, tool, folder, repo, message, UI, sync channel, config value, or agent action appears primary, invert toward the concealed authority, lifecycle, evidence, locus, admission, or capability structure that makes it meaningful. The artifact is then reintroduced as embodiment, projection, substrate, transport, request, or cache.",
+    "evidence": [
+      "Thoughts repo commit c61659d adds content/concepts/authority-revealing-inversion.md and links it from the concepts index, CIPDA, Inhabited Evolution, and Plural Embodiment, Singular Authority. The page includes expected signs, anti-signs, Narada examples, imperfection examples, relation to CIPDA, failure modes, and a working review rule."
+    ],
+    "proposal": [
+      "Narada should familiarize itself with Authority-Revealing Inversion and consider admitting it into its doctrine or concept set if its charter supports external doctrine intake. It should also use the concept as a review lens for artifact-first regressions in task lifecycle, inbox admission, Site identity, clone authority routing, secrets, pub/sub, provenance, and UI/read-model boundaries."
+    ],
+    "recommendation": "Treat this initially as FYI plus doctrine-intake candidate, not as an immediate implementation mandate. A later de-arbitrarization pass can decide which Narada modules need explicit guards, schemas, commands, or docs updates."
+  },
+  "status": "received"
+}
