@@ -215,6 +215,28 @@ describe('task evidence operator', () => {
     expect(content).toContain('verification_run_id: vr_114');
   });
 
+  it('records unbound criteria proof rationale in output and projection', async () => {
+    createTask(tempDir, 116, 'claimed', '## Execution Notes\nDone.\n\n## Verification\nManual inspection passed.\n');
+
+    const result = await taskEvidenceProveCriteriaCommand({
+      taskNumber: '116',
+      cwd: tempDir,
+      by: 'test-agent',
+      unboundRationale: 'Manual inspection is sufficient for this criteria proof.',
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const parsed = result.result as { criteria_proof_verification: { state: string; rationale?: string } };
+    expect(parsed.criteria_proof_verification).toEqual({
+      state: 'unbound',
+      rationale: 'Manual inspection is sufficient for this criteria proof.',
+    });
+    const content = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-116-test.md'), 'utf8');
+    expect(content).toContain('criteria_proof_verification:');
+    expect(content).toContain('rationale: Manual inspection is sufficient for this criteria proof.');
+  });
+
   it('rejects criteria proof without verification posture', async () => {
     createTask(tempDir, 115, 'claimed', '## Execution Notes\nDone.\n\n## Verification\nTests passed.\n');
 
@@ -226,7 +248,7 @@ describe('task evidence operator', () => {
     });
 
     expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
-    expect((result.result as { error: string }).error).toContain('--verification-run or --no-run-rationale');
+    expect((result.result as { error: string }).error).toContain('--verification-run or --unbound-rationale');
   });
 
   it('classifies attempt-complete task with report but open status', async () => {

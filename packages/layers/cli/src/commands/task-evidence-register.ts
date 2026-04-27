@@ -76,7 +76,7 @@ export function registerTaskEvidenceCommands(taskCmd: Command): void {
     .description('Prove acceptance criteria completion through Evidence Admission')
     .requiredOption('--by <id>', 'Operator or agent ID proving criteria')
     .option('--verification-run <id>', 'Verification run ID supporting this criteria proof')
-    .option('--no-run-rationale <text>', 'Explicit rationale when criteria proof has no verification run binding')
+    .option('--unbound-rationale <text>', 'Explicit rationale when criteria proof has no verification run binding')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .action(directCommandAction<[string, Record<string, unknown>]>({
@@ -87,7 +87,7 @@ export function registerTaskEvidenceCommands(taskCmd: Command): void {
         taskNumber,
         by: opts.by as string,
         verificationRunId: opts.verificationRun as string | undefined,
-        noRunRationale: opts.noRunRationale as string | undefined,
+        unboundRationale: opts.unboundRationale as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }),

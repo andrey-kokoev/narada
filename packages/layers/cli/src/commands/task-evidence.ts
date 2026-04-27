@@ -32,7 +32,7 @@ export interface TaskEvidenceOptions {
 export interface TaskEvidenceProveCriteriaOptions extends TaskEvidenceOptions {
   by: string;
   verificationRunId?: string;
-  noRunRationale?: string;
+  unboundRationale?: string;
 }
 
 export interface TaskEvidenceAdmitOptions extends TaskEvidenceOptions {
@@ -190,12 +190,12 @@ export async function taskEvidenceProveCriteriaCommand(
       result: { status: 'error', error: '--by is required (operator or agent ID)' },
     };
   }
-  if (!options.verificationRunId && !options.noRunRationale) {
+  if (!options.verificationRunId && !options.unboundRationale) {
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: {
         status: 'error',
-        error: 'Criteria proof requires --verification-run or --no-run-rationale',
+        error: 'Criteria proof requires --verification-run or --unbound-rationale',
       },
     };
   }
@@ -278,7 +278,7 @@ export async function taskEvidenceProveCriteriaCommand(
     });
     const verificationBinding = options.verificationRunId
       ? { state: 'bound', verification_run_id: options.verificationRunId }
-      : { state: 'unbound', rationale: options.noRunRationale ?? 'No verification run binding supplied' };
+      : { state: 'unbound', rationale: options.unboundRationale ?? 'No verification run binding supplied' };
     const provedAt = new Date().toISOString();
     store.upsertCriteriaProof({
       proof_id: `criteria_proof_${taskFile.taskId}_${provedAt}`,

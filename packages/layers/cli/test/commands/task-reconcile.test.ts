@@ -290,7 +290,7 @@ describe('task reconcile operator', () => {
       verification: JSON.stringify([{ command: 'pnpm test:focused', result: 'passed' }]),
       format: 'json',
     })).exitCode).toBe(ExitCode.SUCCESS);
-    expect((await taskEvidenceProveCriteriaCommand({ cwd: tempDir, taskNumber: '656', by: 'a1', noRunRationale: 'Focused reconcile test proof.', format: 'json' })).exitCode)
+    expect((await taskEvidenceProveCriteriaCommand({ cwd: tempDir, taskNumber: '656', by: 'a1', unboundRationale: 'Focused reconcile test proof.', format: 'json' })).exitCode)
       .toBe(ExitCode.SUCCESS);
     expect((await taskEvidenceAdmitCommand({ cwd: tempDir, taskNumber: '656', by: 'a1', format: 'json' })).exitCode)
       .toBe(ExitCode.SUCCESS);

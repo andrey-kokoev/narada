@@ -125,7 +125,7 @@ describe('task close operator', () => {
       taskNumber: '109',
       by: 'operator-1',
       cwd: tempDir,
-      noRunRationale: 'Focused close test proof.',
+      unboundRationale: 'Focused close test proof.',
       format: 'json',
     });
     expect(proof.exitCode).toBe(ExitCode.SUCCESS);
