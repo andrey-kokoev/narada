@@ -1,0 +1,50 @@
+{
+  "envelope_id": "env_796f9b43-a2a9-4b20-ab4b-cb1ec3a7a501",
+  "received_at": "2026-04-27T16:40:14.392Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:narada-proper-task-locus-incident-20260427"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Prevent accidental Narada proper task-substrate mutation from local Site work",
+    "summary": "During local YASB/Narada Site work, the agent misinterpreted a request to inspect Narada machinery in the WSL clone as authorization to mutate Narada proper task state. It ran narada task allocate --count 6, advancing local SQLite task_number_sequence.last_allocated from 972 to 978. The operator remediated by resetting the sequence to 972; no task files or reservations for 973-978 existed, guard passed, and git status was clean.",
+    "incident": {
+      "date": "2026-04-27",
+      "target_repo": "/home/andrey/src/narada",
+      "accidental_command": "narada task allocate --count 6 --format json",
+      "accidental_effect": "Advanced ignored local SQLite task_number_sequence.last_allocated from 972 to 978",
+      "remediation": [
+        "Reset task_number_sequence.last_allocated to 972",
+        "Verified narada task allocate --dry-run --count 6 returns 973-978",
+        "Verified pnpm narada:guard-task-db passes",
+        "Verified git status is clean: main...origin/main"
+      ],
+      "no_effects_observed": [
+        "No task files created",
+        "No reservations for 973-978 existed",
+        "No commit was made"
+      ]
+    },
+    "root_cause": "The agent crossed from reading Narada proper doctrine/tooling into mutating Narada proper task lifecycle because the target work substrate was not explicitly confirmed before invoking a mutating task command.",
+    "proposed_prevention": [
+      "Classify task allocate, task create, chapter init, task close, task confirm, inbox triage, inbox promote, and related lifecycle commands as mutating even when preparatory.",
+      "Require explicit target locus and path before any Arc/Chapter/Task/Inbox mutation: Narada proper, User Site, PC Site, client Site, data Site, or external repo.",
+      "Default ~/src/narada to read-only doctrine/tool inspection unless the operator explicitly says modify Narada proper or names Narada proper as the target work substrate.",
+      "Before mutating Narada proper task state, require the agent to state the target locus, repo path, exact mutation command, and why Narada proper owns the work.",
+      "Prefer read-only or dry-run commands in Narada proper when the work being planned belongs to a local Site or sidecar repository.",
+      "Record this guard in agent-facing instructions so future agents do not use Narada proper task machinery as the task substrate for local Site/YASB operations."
+    ],
+    "suggested_target": {
+      "kind": "governance_feedback_or_task_candidate",
+      "area": "agent execution contract / task-governance locus guards",
+      "urgency": "high",
+      "reason": "The failure mode can silently mutate ignored local SQLite state without git-visible evidence, so prevention must be instruction-level or command-level, not memory-only."
+    }
+  },
+  "status": "received"
+}

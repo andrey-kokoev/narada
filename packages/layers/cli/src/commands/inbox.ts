@@ -34,7 +34,20 @@ export interface InboxSubmitOptions extends InboxCommandOptions {
   payload?: string;
   payloadFile?: string;
   payloadStdin?: boolean;
+  allowEmptyPayload?: boolean;
   stdin?: NodeJS.ReadableStream;
+}
+
+export interface InboxSubmitObservationOptions extends InboxCommandOptions {
+  sourceKind?: string;
+  sourceRef?: string;
+  authorityLevel?: string;
+  principal?: string;
+  title?: string;
+  summary?: string;
+  evidence?: string[];
+  proposal?: string[];
+  recommendation?: string;
 }
 
 export interface InboxListOptions extends InboxCommandOptions {
@@ -95,16 +108,24 @@ export interface InboxImportOptions extends InboxCommandOptions {
 
 export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
   const sourceKind = parseSourceKind(options.sourceKind);
+  if (!sourceKind) return errorResult(invalidValueMessage('--source-kind', options.sourceKind, SOURCE_KINDS));
   const kind = parseEnvelopeKind(options.kind);
+  if (!kind) return errorResult(invalidValueMessage('--kind', options.kind, ENVELOPE_KINDS));
   const authorityLevel = parseAuthorityLevel(options.authorityLevel);
+  if (!authorityLevel) return errorResult(invalidValueMessage('--authority-level', options.authorityLevel, AUTHORITY_LEVELS));
   const sourceRef = options.sourceRef;
-  if (!sourceKind || !kind || !authorityLevel || !sourceRef) {
-    return errorResult('Missing or invalid --source-kind, --source-ref, --kind, or --authority-level');
+  if (!sourceRef) {
+    return errorResult('Missing --source-ref');
   }
   const payloadText = await resolvePayloadText(options);
   if (payloadText instanceof Error) return errorResult(payloadText.message);
   const payload = parsePayload(payloadText);
   if (payload instanceof Error) return errorResult(payload.message);
+  if (!options.allowEmptyPayload && requiresNonEmptyPayload(kind) && isEmptyObject(payload)) {
+    return errorResult(
+      `Empty payload is not admissible for --kind ${kind}; provide --payload, --payload-file, or --payload-stdin, or pass --allow-empty-payload explicitly.`,
+    );
+  }
 
   return withInboxStoreAsync(options, async (store) => {
     const delivery = inspectInboxDelivery(options.cwd ?? process.cwd());
@@ -129,6 +150,69 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
         `Inbox DB: ${delivery.inbox_db_path}`,
         `Repo: ${delivery.repo_root ?? 'unknown'} @ ${delivery.branch ?? 'unknown'} ${delivery.head_commit ?? 'unknown'}`,
         `Visible on remote: ${delivery.head_matches_remote === true ? 'yes' : delivery.head_matches_remote === false ? 'no' : 'unknown'}`,
+      ],
+      options.format,
+    );
+  });
+}
+
+export async function inboxSubmitObservationCommand(
+  options: InboxSubmitObservationOptions,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const sourceKind = options.sourceKind ?? 'user_chat';
+  const authorityLevel = options.authorityLevel ?? 'agent_reported';
+  if (!options.sourceRef) return errorResult('Missing --source-ref');
+  if (!cleanString(options.title)) return errorResult('Missing --title');
+
+  const payload = compactRecord({
+    title: cleanString(options.title),
+    summary: cleanString(options.summary),
+    evidence: cleanStringArray(options.evidence),
+    proposal: cleanStringArray(options.proposal),
+    recommendation: cleanString(options.recommendation),
+  });
+
+  const submitted = await inboxSubmitCommand({
+    ...options,
+    sourceKind,
+    sourceRef: options.sourceRef,
+    kind: 'observation',
+    authorityLevel,
+    payload: JSON.stringify(payload),
+  });
+  if (submitted.exitCode !== ExitCode.SUCCESS) return submitted;
+
+  const result = submitted.result as {
+    envelope?: InboxEnvelope;
+    delivery?: Record<string, unknown>;
+  };
+  const envelopeId = result.envelope?.envelope_id;
+  if (!envelopeId) return errorResult('Submitted envelope did not return an envelope_id');
+
+  return withInboxStoreAsync(options, async (store) => {
+    const readBack = store.get(envelopeId);
+    if (!readBack) return errorResult(`Submitted envelope could not be read back: ${envelopeId}`);
+    const payloadEquivalent = JSON.stringify(readBack.payload) === JSON.stringify(payload);
+    if (!payloadEquivalent) return errorResult(`Submitted envelope payload read-back mismatch: ${envelopeId}`);
+    const exportCommand = 'narada inbox export --format json';
+    return okResult(
+      {
+        status: 'success',
+        envelope: readBack,
+        delivery: result.delivery,
+        confirmation: {
+          read_back_envelope_id: readBack.envelope_id,
+          payload_equivalent: true,
+        },
+        next_steps: {
+          export_command: exportCommand,
+        },
+      },
+      [
+        `Inbox observation received: ${readBack.envelope_id}`,
+        `Title: ${payload.title}`,
+        'Read-back confirmation: payload equivalent',
+        `Export visibility: ${exportCommand}`,
       ],
       options.format,
     );
@@ -928,16 +1012,21 @@ function parsePayload(payload: string | undefined): unknown | Error {
   }
 }
 
+const SOURCE_KINDS = ['user_chat', 'email', 'diagnostic', 'agent_report', 'file_drop', 'cli', 'webhook', 'system_observation'] as const;
+const ENVELOPE_KINDS = ['proposal', 'observation', 'command_request', 'question', 'knowledge_candidate', 'task_candidate', 'incident', 'upstream_task_candidate'] as const;
+const AUTHORITY_LEVELS = ['none', 'user_statement', 'operator_confirmed', 'system_observed', 'agent_reported'] as const;
+const ENVELOPE_KINDS_REQUIRING_PAYLOAD: readonly InboxEnvelopeKind[] = ['observation', 'task_candidate', 'upstream_task_candidate'];
+
 function parseSourceKind(value: string | undefined): InboxSourceKind | undefined {
-  return oneOf(value, ['user_chat', 'email', 'diagnostic', 'agent_report', 'file_drop', 'cli', 'webhook', 'system_observation']);
+  return oneOf(value, SOURCE_KINDS);
 }
 
 function parseEnvelopeKind(value: string | undefined): InboxEnvelopeKind | undefined {
-  return oneOf(value, ['proposal', 'observation', 'command_request', 'question', 'knowledge_candidate', 'task_candidate', 'incident', 'upstream_task_candidate']);
+  return oneOf(value, ENVELOPE_KINDS);
 }
 
 function parseAuthorityLevel(value: string | undefined): InboxAuthorityLevel | undefined {
-  return oneOf(value, ['none', 'user_statement', 'operator_confirmed', 'system_observed', 'agent_reported']);
+  return oneOf(value, AUTHORITY_LEVELS);
 }
 
 function parseStatus(value: string | undefined): InboxEnvelopeStatus | undefined {
@@ -954,6 +1043,19 @@ function parsePendingTo(value: string): { targetKind: InboxPromotionTargetKind; 
   const targetKind = parsePromotionTargetKind(value.slice(0, index));
   if (!targetKind || targetKind === 'task' || targetKind === 'archive') return undefined;
   return { targetKind, targetRef: value.slice(index + 1) };
+}
+
+function invalidValueMessage(name: string, value: string | undefined, allowed: readonly string[]): string {
+  if (!value) return `Missing ${name}. Allowed values: ${allowed.join(', ')}`;
+  return `Invalid ${name}: ${value}. Allowed values: ${allowed.join(', ')}`;
+}
+
+function requiresNonEmptyPayload(kind: InboxEnvelopeKind): boolean {
+  return ENVELOPE_KINDS_REQUIRING_PAYLOAD.includes(kind);
+}
+
+function isEmptyObject(value: unknown): boolean {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0;
 }
 
 function isValidExportedEnvelope(value: unknown): value is InboxEnvelope {
@@ -990,6 +1092,10 @@ function cleanStringArray(value: string[] | undefined): string[] | undefined {
   if (!value) return undefined;
   const strings = value.filter((item) => item.trim().length > 0).map((item) => item.trim());
   return strings.length > 0 ? strings : undefined;
+}
+
+function compactRecord(record: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
 }
 
 function numberArrayCsvField(record: Record<string, unknown>, key: string): string | undefined {

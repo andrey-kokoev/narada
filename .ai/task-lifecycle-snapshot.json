@@ -1,7 +1,7 @@
 {
   "snapshot_kind": "task_lifecycle_snapshot",
   "snapshot_version": 1,
-  "exported_at": "2026-04-27T14:19:19.312Z",
+  "exported_at": "2026-04-27T16:58:29.234Z",
   "tables": [
     {
       "name": "agent_roster",
@@ -26,7 +26,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 720,
-          "updated_at": "2026-04-27T14:19:19.312Z"
+          "updated_at": "2026-04-27T16:58:29.234Z"
         },
         {
           "agent_id": "a2",
@@ -37,7 +37,7 @@
           "status": "idle",
           "task_number": null,
           "last_done": 886,
-          "updated_at": "2026-04-27T14:19:19.312Z"
+          "updated_at": "2026-04-27T16:58:29.234Z"
         },
         {
           "agent_id": "a3",
@@ -48,7 +48,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 610,
-          "updated_at": "2026-04-27T14:19:19.312Z"
+          "updated_at": "2026-04-27T16:58:29.234Z"
         },
         {
           "agent_id": "a4",
@@ -59,7 +59,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 574,
-          "updated_at": "2026-04-27T14:19:19.312Z"
+          "updated_at": "2026-04-27T16:58:29.234Z"
         },
         {
           "agent_id": "a5",
@@ -70,7 +70,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 551,
-          "updated_at": "2026-04-27T14:19:19.312Z"
+          "updated_at": "2026-04-27T16:58:29.234Z"
         },
         {
           "agent_id": "a6",
@@ -81,18 +81,18 @@
           "status": "done",
           "task_number": null,
           "last_done": 545,
-          "updated_at": "2026-04-27T14:19:19.312Z"
+          "updated_at": "2026-04-27T16:58:29.234Z"
         },
         {
           "agent_id": "architect",
           "role": "implementer",
           "capabilities_json": "[\"derive\",\"propose\",\"claim\",\"execute\",\"resolve\",\"confirm\"]",
           "first_seen_at": "2026-04-26T22:28:56.453Z",
-          "last_active_at": "2026-04-27T14:19:19.312Z",
+          "last_active_at": "2026-04-27T16:58:29.234Z",
           "status": "done",
           "task_number": null,
-          "last_done": 972,
-          "updated_at": "2026-04-27T14:19:19.312Z"
+          "last_done": 973,
+          "updated_at": "2026-04-27T16:58:29.234Z"
         }
       ]
     },
@@ -5978,6 +5978,27 @@
           "confirmation_json": "{\"task_id\":\"20260427-972-organize-coherence-scan-as-chartered-module-bundle\",\"task_number\":972,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
           "warnings_json": null,
           "updated_at": "2026-04-27T14:15:07.073Z"
+        },
+        {
+          "request_id": "air_claim_973_architect_1777308550788_25o8ir",
+          "kind": "claim",
+          "task_id": "20260427-973-canonical-inbox-intent-confirmation-submission-workflow",
+          "task_number": 973,
+          "agent_id": "architect",
+          "requested_by": "architect",
+          "requested_at": "2026-04-27T16:49:10.788Z",
+          "reason": null,
+          "no_claim": 0,
+          "status": "applied",
+          "rejection_reason": null,
+          "assignment_id": "assign-20260427-973-canonical-inbox-intent-confirmation-submission-workflow-architect-1777308550787",
+          "previous_agent_id": null,
+          "lifecycle_status_before": "opened",
+          "lifecycle_status_after": "claimed",
+          "roster_status_after": "working",
+          "confirmation_json": "{\"task_id\":\"20260427-973-canonical-inbox-intent-confirmation-submission-workflow\",\"task_number\":973,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
+          "warnings_json": null,
+          "updated_at": "2026-04-27T16:49:12.278Z"
         }
       ]
     },
@@ -14846,6 +14867,45 @@
           "admitted_at": "2026-04-27T14:19:14.212Z",
           "admitted_by": "architect",
           "confirmation_json": "{\"has_report\":false,\"has_review\":false,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_973_1777309108274_5theyf",
+          "bundle_id": "evb_973_1777309108273_qs338b",
+          "task_id": "20260427-973-canonical-inbox-intent-confirmation-submission-workflow",
+          "task_number": 973,
+          "verdict": "rejected",
+          "methods_json": "[\"review\"]",
+          "blockers_json": "[\"17 acceptance criteria remain unchecked\"]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T16:58:28.274Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_973_1777309108519_hutirn",
+          "bundle_id": "evb_973_1777309108519_lauq7a",
+          "task_id": "20260427-973-canonical-inbox-intent-confirmation-submission-workflow",
+          "task_number": 973,
+          "verdict": "admitted",
+          "methods_json": "[\"criteria_proof\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T16:58:28.519Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_973_1777309108817_gvt5za",
+          "bundle_id": "evb_973_1777309108817_n2x8n7",
+          "task_id": "20260427-973-canonical-inbox-intent-confirmation-submission-workflow",
+          "task_number": 973,
+          "verdict": "admitted",
+          "methods_json": "[\"admission\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": "closed",
+          "admitted_at": "2026-04-27T16:58:28.817Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
         }
       ]
     },
@@ -22755,6 +22815,45 @@
           "residuals_json": "[]",
           "assembled_at": "2026-04-27T14:19:14.212Z",
           "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_973_1777309108273_qs338b",
+          "task_id": "20260427-973-canonical-inbox-intent-confirmation-submission-workflow",
+          "task_number": 973,
+          "report_ids_json": "[\"wrr_76b890ed_20260427-973-canonical-inbox-intent-confirmation-submission-workflow_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":false,\"unchecked_count\":17}",
+          "review_ids_json": "[\"review-20260427-973-canonical-inbox-intent-confirmation-submission-workflow-1777309108192\"]",
+          "changed_files_json": "[\"packages/layers/cli/src/commands/inbox.ts\",\"packages/layers/cli/src/commands/inbox-register.ts\",\"packages/layers/cli/test/commands/inbox.test.ts\",\"docs/concepts/canonical-inbox.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T16:58:28.274Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_973_1777309108519_lauq7a",
+          "task_id": "20260427-973-canonical-inbox-intent-confirmation-submission-workflow",
+          "task_number": 973,
+          "report_ids_json": "[\"wrr_76b890ed_20260427-973-canonical-inbox-intent-confirmation-submission-workflow_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[\"review-20260427-973-canonical-inbox-intent-confirmation-submission-workflow-1777309108192\"]",
+          "changed_files_json": "[\"packages/layers/cli/src/commands/inbox.ts\",\"packages/layers/cli/src/commands/inbox-register.ts\",\"packages/layers/cli/test/commands/inbox.test.ts\",\"docs/concepts/canonical-inbox.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T16:58:28.519Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_973_1777309108817_n2x8n7",
+          "task_id": "20260427-973-canonical-inbox-intent-confirmation-submission-workflow",
+          "task_number": 973,
+          "report_ids_json": "[\"wrr_76b890ed_20260427-973-canonical-inbox-intent-confirmation-submission-workflow_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[\"review-20260427-973-canonical-inbox-intent-confirmation-submission-workflow-1777309108192\"]",
+          "changed_files_json": "[\"packages/layers/cli/src/commands/inbox.ts\",\"packages/layers/cli/src/commands/inbox-register.ts\",\"packages/layers/cli/test/commands/inbox.test.ts\",\"docs/concepts/canonical-inbox.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T16:58:28.817Z",
+          "assembled_by": "architect"
         }
       ]
     },
@@ -25873,6 +25972,11 @@
           "task_id": "20260427-972-organize-coherence-scan-as-chartered-module-bundle",
           "record_json": "{\"task_id\":\"20260427-972-organize-coherence-scan-as-chartered-module-bundle\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T14:15:06.214Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T14:19:14.831Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
           "updated_at": "2026-04-27T14:19:15.039Z"
+        },
+        {
+          "task_id": "20260427-973-canonical-inbox-intent-confirmation-submission-workflow",
+          "record_json": "{\"task_id\":\"20260427-973-canonical-inbox-intent-confirmation-submission-workflow\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T16:49:11.038Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T16:57:46.437Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
+          "updated_at": "2026-04-27T16:57:46.846Z"
         }
       ]
     },
@@ -28539,6 +28643,15 @@
           "task_id": "20260427-972-organize-coherence-scan-as-chartered-module-bundle",
           "agent_id": "architect",
           "claimed_at": "2026-04-27T14:15:06.214Z",
+          "released_at": null,
+          "release_reason": null,
+          "intent": "primary"
+        },
+        {
+          "assignment_id": "assign-20260427-973-canonical-inbox-intent-confirmation-submission-workflow-architect-1777308550787",
+          "task_id": "20260427-973-canonical-inbox-intent-confirmation-submission-workflow",
+          "agent_id": "architect",
+          "claimed_at": "2026-04-27T16:49:11.038Z",
           "released_at": null,
           "release_reason": null,
           "intent": "primary"
@@ -40897,6 +41010,19 @@
           "continuation_packet_json": null,
           "updated_at": "2026-04-27T14:19:18.553Z",
           "closure_mode": "operator_direct"
+        },
+        {
+          "task_id": "20260427-973-canonical-inbox-intent-confirmation-submission-workflow",
+          "task_number": 973,
+          "status": "closed",
+          "governed_by": "task_close:architect",
+          "closed_at": "2026-04-27T16:58:28.959Z",
+          "closed_by": "architect",
+          "reopened_at": null,
+          "reopened_by": null,
+          "continuation_packet_json": null,
+          "updated_at": "2026-04-27T16:58:28.960Z",
+          "closure_mode": "agent_finish"
         }
       ]
     },
@@ -40922,7 +41048,7 @@
       "rows": [
         {
           "singleton": 1,
-          "last_allocated": 972
+          "last_allocated": 973
         }
       ]
     },
@@ -43391,6 +43517,14 @@
           "agent_id": "architect",
           "reported_at": "2026-04-27T14:19:14.831Z",
           "report_json": "{\"report_id\":\"wrr_d2850114_20260427-972-organize-coherence-scan-as-chartered-module-bundle_architect\",\"task_number\":\"972\",\"task_id\":\"20260427-972-organize-coherence-scan-as-chartered-module-bundle\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-972-organize-coherence-scan-as-chartered-module-bundle-2026-04-27T14:15:06.214Z\",\"reported_at\":\"2026-04-27T14:19:14.831Z\",\"summary\":\"Added charter-module organization for the coherence scan umbrella, module selection, module-tagged findings, documentation, and focused tests.\",\"changed_files\":[],\"verification\":[],\"known_residuals\":[],\"ready_for_review\":true,\"report_status\":\"submitted\"}"
+        },
+        {
+          "report_id": "wrr_76b890ed_20260427-973-canonical-inbox-intent-confirmation-submission-workflow_architect",
+          "task_id": "20260427-973-canonical-inbox-intent-confirmation-submission-workflow",
+          "assignment_id": "20260427-973-canonical-inbox-intent-confirmation-submission-workflow-2026-04-27T16:49:11.038Z",
+          "agent_id": "architect",
+          "reported_at": "2026-04-27T16:57:46.437Z",
+          "report_json": "{\"report_id\":\"wrr_76b890ed_20260427-973-canonical-inbox-intent-confirmation-submission-workflow_architect\",\"task_number\":\"973\",\"task_id\":\"20260427-973-canonical-inbox-intent-confirmation-submission-workflow\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-973-canonical-inbox-intent-confirmation-submission-workflow-2026-04-27T16:49:11.038Z\",\"reported_at\":\"2026-04-27T16:57:46.437Z\",\"summary\":\"Implemented Canonical Inbox intent-confirmation submission workflow: added submit-observation, enum help/diagnostics, empty-payload guard, read-back confirmation, export guidance, docs, and focused tests.\",\"changed_files\":[\"packages/layers/cli/src/commands/inbox.ts\",\"packages/layers/cli/src/commands/inbox-register.ts\",\"packages/layers/cli/test/commands/inbox.test.ts\",\"docs/concepts/canonical-inbox.md\"],\"verification\":[{\"command\":\"pnpm typecheck\",\"result\":\"passed\"},{\"command\":\"pnpm --filter @narada2/cli exec vitest run test/commands/inbox.test.ts --pool=forks\",\"result\":\"passed 25/25 outside sandbox; sandboxed run hit existing git spawn EPERM\"},{\"command\":\"pnpm --filter @narada2/cli exec vitest run test/commands/inbox.test.ts -t submit/empty/enum --pool=forks\",\"result\":\"passed 3/3\"},{\"command\":\"compiled CLI proof\",\"result\":\"submit-observation read-back confirmation passed; invalid enum and empty observation payload rejected\"},{\"command\":\"pnpm verify\",\"result\":\"passed\"}],\"known_residuals\":[\"Existing inbox pending target grammar excludes task; source observation will be archived with task reference after closure.\"],\"ready_for_review\":true,\"report_status\":\"accepted\"}"
         }
       ]
     },
@@ -43697,6 +43831,14 @@
           "verdict": "accepted",
           "findings_json": null,
           "reviewed_at": "2026-04-25T04:30:44.548Z"
+        },
+        {
+          "review_id": "review-20260427-973-canonical-inbox-intent-confirmation-submission-workflow-1777309108192",
+          "task_id": "20260427-973-canonical-inbox-intent-confirmation-submission-workflow",
+          "reviewer_agent_id": "architect",
+          "verdict": "accepted",
+          "findings_json": null,
+          "reviewed_at": "2026-04-27T16:58:28.192Z"
         }
       ]
     },
@@ -55454,6 +55596,19 @@
           "acceptance_criteria_json": "[\"coherence scan exposes explicit selectable modules\",\"findings identify their charter module\",\"documentation defines module scope\",\"invariants\",\"evidence\",\"false-positive posture\",\"output kind\",\"severity\",\"cooldown\",\"and max findings policy\",\"telos preservation is represented as a charter module under the coherence umbrella\",\"not a separate resident agent\",\"focused tests cover module selection and dry-run/submission behavior\"]",
           "dependencies_json": "[]",
           "updated_at": "2026-04-27T14:15:05.368Z"
+        },
+        {
+          "task_id": "20260427-973-canonical-inbox-intent-confirmation-submission-workflow",
+          "task_number": 973,
+          "title": "Canonical Inbox intent-confirmation submission workflow",
+          "chapter_markdown": "Canonical Inbox ergonomics",
+          "goal_markdown": "Separate routine inbox observation submission into a higher-level intent-to-confirmation workflow so operators and agents do not manually preserve target locus, payload validity, execution, read-back confirmation, and export visibility across fragile shell commands.",
+          "context_markdown": null,
+          "required_work_markdown": "1. TBD",
+          "non_goals_markdown": "- Do not expand scope beyond this task.\n- Do not create derivative task-status files.\n- Do not mutate live external systems unless explicitly authorized.",
+          "acceptance_criteria_json": "[\"Add a sanctioned high-level inbox observation submission command that accepts title\",\"summary\",\"evidence/proposal/recommendation fields without raw JSON quoting.\",\"Reject empty observation payloads on the low-level submit path unless explicitly allowed\",\"with a precise error naming the field and allowed escape hatch.\",\"Expose allowed source kind\",\"envelope kind\",\"and authority level values in inbox submit help and invalid-field diagnostics.\",\"After high-level submission\",\"read back the stored envelope and report delivery coordinates and payload confirmation.\",\"Offer export/publication visibility in the confirmed flow or document the exact export command as the next step.\",\"Add focused tests for validation\",\"help/diagnostics\",\"high-level observation submission\",\"read-back confirmation\",\"and empty-payload rejection.\",\"Mark source inbox envelope env_45fa0d43-1746-40dd-b988-519c5ea182b0 handled or pending to the created task.\"]",
+          "dependencies_json": "[]",
+          "updated_at": "2026-04-27T16:48:59.246Z"
         }
       ]
     },

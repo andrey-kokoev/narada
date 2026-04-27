@@ -10,6 +10,7 @@ import {
   inboxPromoteCommand,
   inboxReleaseCommand,
   inboxShowCommand,
+  inboxSubmitObservationCommand,
   inboxSubmitCommand,
   inboxTaskCommand,
   inboxTriageCommand,
@@ -17,6 +18,11 @@ import {
 } from './inbox.js';
 import { directCommandAction } from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
+
+function collectOption(value: string, previous: string[]): string[] {
+  previous.push(value);
+  return previous;
+}
 
 export function registerInboxCommands(program: Command): void {
   const inboxCmd = program
@@ -41,14 +47,15 @@ export function registerInboxCommands(program: Command): void {
   inboxCmd
     .command('submit')
     .description('Submit an inert typed envelope into the Canonical Inbox')
-    .requiredOption('--source-kind <kind>', 'Source kind')
+    .requiredOption('--source-kind <kind>', 'Source kind: user_chat|email|diagnostic|agent_report|file_drop|cli|webhook|system_observation')
     .requiredOption('--source-ref <ref>', 'Source reference')
-    .requiredOption('--kind <kind>', 'Envelope kind')
-    .requiredOption('--authority-level <level>', 'Authority level')
+    .requiredOption('--kind <kind>', 'Envelope kind: proposal|observation|command_request|question|knowledge_candidate|task_candidate|incident|upstream_task_candidate')
+    .requiredOption('--authority-level <level>', 'Authority level: none|user_statement|operator_confirmed|system_observed|agent_reported')
     .option('--principal <id>', 'Principal associated with authority')
     .option('--payload <json>', 'JSON payload')
     .option('--payload-file <path>', 'Read JSON payload from a file')
     .option('--payload-stdin', 'Read JSON payload from stdin', false)
+    .option('--allow-empty-payload', 'Allow empty object payload for envelope kinds that normally require content', false)
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[Record<string, unknown>]>({
@@ -64,6 +71,40 @@ export function registerInboxCommands(program: Command): void {
         payload: opts.payload as string | undefined,
         payloadFile: opts.payloadFile as string | undefined,
         payloadStdin: opts.payloadStdin as boolean | undefined,
+        allowEmptyPayload: opts.allowEmptyPayload as boolean | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
+
+  inboxCmd
+    .command('submit-observation')
+    .description('Submit a shell-safe observation with read-back confirmation')
+    .requiredOption('--source-ref <ref>', 'Source reference')
+    .requiredOption('--title <title>', 'Observation title')
+    .option('--summary <text>', 'Observation summary')
+    .option('--source-kind <kind>', 'Source kind (default: user_chat): user_chat|email|diagnostic|agent_report|file_drop|cli|webhook|system_observation', 'user_chat')
+    .option('--authority-level <level>', 'Authority level (default: agent_reported): none|user_statement|operator_confirmed|system_observed|agent_reported', 'agent_reported')
+    .option('--principal <id>', 'Principal associated with authority')
+    .option('--evidence <text>', 'Evidence line; repeatable', collectOption, [])
+    .option('--proposal <text>', 'Proposal line; repeatable', collectOption, [])
+    .option('--recommendation <text>', 'Recommended handling')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'inbox submit-observation',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => inboxSubmitObservationCommand({
+        sourceKind: opts.sourceKind as string | undefined,
+        sourceRef: opts.sourceRef as string | undefined,
+        authorityLevel: opts.authorityLevel as string | undefined,
+        principal: opts.principal as string | undefined,
+        title: opts.title as string | undefined,
+        summary: opts.summary as string | undefined,
+        evidence: opts.evidence as string[] | undefined,
+        proposal: opts.proposal as string[] | undefined,
+        recommendation: opts.recommendation as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }),

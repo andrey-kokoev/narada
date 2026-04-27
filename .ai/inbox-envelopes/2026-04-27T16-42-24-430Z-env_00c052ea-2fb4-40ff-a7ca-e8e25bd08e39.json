@@ -1,0 +1,79 @@
+{
+  "envelope_id": "env_00c052ea-2fb4-40ff-a7ca-e8e25bd08e39",
+  "received_at": "2026-04-27T16:42:24.430Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:canonical-inbox-submission-friction-20260427-corrected"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Canonical Inbox submission friction from cross-shell observation report",
+    "summary": "Submitting inbox observations from a Windows PowerShell -> WSL -> Narada path exposed repeated friction in enum discoverability, invalid-value diagnostics, noninteractive WSL PATH, and cross-shell JSON/file quoting. One attempted correction even submitted an empty payload envelope, showing that failure can look superficially successful.",
+    "observed_friction": [
+      {
+        "issue": "Envelope vocabulary was not obvious",
+        "detail": "Initial attempt used source kind chat and authority level operator_report, but valid values required user_chat and one of none, user_statement, operator_confirmed, system_observed, agent_reported."
+      },
+      {
+        "issue": "Help output did not show allowed enum values",
+        "detail": "narada inbox submit --help listed flags but not accepted values. Source inspection was needed to find parseSourceKind and parseAuthorityLevel."
+      },
+      {
+        "issue": "PowerShell to WSL to Bash quoting was fragile",
+        "detail": "The first heredoc attempt let backticks inside JSON strings be interpreted by the shell, producing bogus command-not-found errors."
+      },
+      {
+        "issue": "Inline JSON is risky across shell boundaries",
+        "detail": "Even with --payload-stdin, nested PowerShell/WSL/Bash made quoting easy to get wrong. A payload file is more reliable."
+      },
+      {
+        "issue": "Invalid enum error was underspecified",
+        "detail": "The CLI returned Missing or invalid --source-kind, --source-ref, --kind, or --authority-level without naming the invalid field or allowed values."
+      },
+      {
+        "issue": "Noninteractive WSL PATH did not include narada",
+        "detail": "The noninteractive WSL shell could not find narada, requiring the absolute path /home/andrey/.local/bin/narada."
+      },
+      {
+        "issue": "PowerShell command substitution collided with Bash command substitution",
+        "detail": "An attempt to use mktemp inside a double-quoted PowerShell command caused PowerShell to evaluate $(mktemp) before WSL saw it."
+      },
+      {
+        "issue": "Malformed temp-file quoting produced a successful empty-payload envelope",
+        "detail": "Envelope env_b384b82a-dc77-4253-8190-70089c85bbfd was submitted with payload {} while trying to submit this observation, demonstrating that submit success does not necessarily mean payload admission matched operator intent."
+      }
+    ],
+    "proposed_improvements": [
+      "Show valid enum values in narada inbox submit --help.",
+      "On invalid enum, report the exact invalid field and allowed values.",
+      "Document PowerShell/WSL-safe submission patterns, especially payload-file as the preferred cross-shell path.",
+      "Consider a first-class narada inbox submit-observation wrapper for common observation reports with --title, --summary, and repeated --proposed-action flags.",
+      "Ensure noninteractive shell PATH includes ~/.local/bin, or document absolute CLI path usage.",
+      "Add an ergonomics note: for cross-shell submission, write JSON to a temp file and pass --payload-file rather than using heredoc or inline JSON.",
+      "Consider warning or confirmation when submitting observation/task_candidate envelopes with empty object payloads."
+    ],
+    "related_envelopes": [
+      "env_796f9b43-a2a9-4b20-ab4b-cb1ec3a7a501",
+      "env_b384b82a-dc77-4253-8190-70089c85bbfd"
+    ],
+    "suggested_target": {
+      "kind": "task_candidate",
+      "area": "Canonical Inbox CLI ergonomics",
+      "urgency": "medium",
+      "reason": "The inbox is intended as a routine intake surface; submission should not require source inspection or fragile shell quoting, and successful empty-payload admission can hide operator-intent loss."
+    }
+  },
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_00c052ea-2fb4-40ff-a7ca-e8e25bd08e39",
+    "promoted_at": "2026-04-27T16:59:08.097Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
+}

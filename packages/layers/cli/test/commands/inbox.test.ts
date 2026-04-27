@@ -22,6 +22,7 @@ import {
   inboxPromoteCommand,
   inboxReleaseCommand,
   inboxShowCommand,
+  inboxSubmitObservationCommand,
   inboxSubmitCommand,
   inboxTaskCommand,
   inboxTriageCommand,
@@ -115,6 +116,84 @@ describe('Canonical Inbox CLI commands', () => {
     expect(submitted.exitCode).toBe(ExitCode.SUCCESS);
     const envelope = (submitted.result as { envelope: { payload: unknown } }).envelope;
     expect(envelope.payload).toEqual({ title: 'From stdin' });
+  });
+
+  it('submits shell-safe observations with read-back confirmation and export guidance', async () => {
+    const submitted = await inboxSubmitObservationCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceRef: 'codex-session:test',
+      title: 'Observed friction',
+      summary: 'Submission should not require raw JSON quoting.',
+      evidence: ['Raw JSON was fragile', 'Read-back is required'],
+      proposal: ['Use a structured observation command'],
+      recommendation: 'Promote to task when actionable',
+      principal: 'architect',
+    });
+
+    expect(submitted.exitCode).toBe(ExitCode.SUCCESS);
+    const result = submitted.result as {
+      envelope: { envelope_id: string; kind: string; source: { kind: string }; payload: Record<string, unknown> };
+      confirmation: { read_back_envelope_id: string; payload_equivalent: boolean };
+      next_steps: { export_command: string };
+    };
+    expect(result.envelope.kind).toBe('observation');
+    expect(result.envelope.source.kind).toBe('user_chat');
+    expect(result.envelope.payload).toMatchObject({
+      title: 'Observed friction',
+      summary: 'Submission should not require raw JSON quoting.',
+      evidence: ['Raw JSON was fragile', 'Read-back is required'],
+      proposal: ['Use a structured observation command'],
+      recommendation: 'Promote to task when actionable',
+    });
+    expect(result.confirmation).toEqual({
+      read_back_envelope_id: result.envelope.envelope_id,
+      payload_equivalent: true,
+    });
+    expect(result.next_steps.export_command).toBe('narada inbox export --format json');
+  });
+
+  it('rejects empty observation payloads unless explicitly allowed', async () => {
+    const rejected = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual:empty',
+      kind: 'observation',
+      authorityLevel: 'operator_confirmed',
+    });
+
+    expect(rejected.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect((rejected.result as { error: string }).error).toContain('Empty payload is not admissible');
+
+    const allowed = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual:empty',
+      kind: 'observation',
+      authorityLevel: 'operator_confirmed',
+      allowEmptyPayload: true,
+    });
+
+    expect(allowed.exitCode).toBe(ExitCode.SUCCESS);
+    expect((allowed.result as { envelope: { payload: unknown } }).envelope.payload).toEqual({});
+  });
+
+  it('names invalid enum fields and allowed values', async () => {
+    const result = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'chat',
+      sourceRef: 'manual:bad-enum',
+      kind: 'observation',
+      authorityLevel: 'operator_confirmed',
+      payload: JSON.stringify({ title: 'Bad enum' }),
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect((result.result as { error: string }).error).toContain('Invalid --source-kind: chat');
+    expect((result.result as { error: string }).error).toContain('user_chat');
   });
 
   it('includes delivery coordinates in submit results', async () => {

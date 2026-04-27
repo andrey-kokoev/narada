@@ -1,0 +1,67 @@
+{
+  "envelope_id": "env_45fa0d43-1746-40dd-b988-519c5ea182b0",
+  "received_at": "2026-04-27T16:44:59.477Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:canonical-inbox-intent-confirmation-split-20260427"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Canonical Inbox submit collapses intent, preflight, approval, execution, and confirmation",
+    "summary": "The Narada-proper task-locus incident and follow-up inbox-submission friction suggest a deeper workflow incoherency: inbox submission is exposed primarily as a low-level execution primitive, while real operator use needs an intent-to-confirmation pipeline. Collapsing these phases allowed an accidental Narada task allocation and later allowed an empty-payload inbox envelope to be submitted successfully while not matching operator intent.",
+    "evidence": [
+      "A local Site/YASB planning discussion crossed into Narada proper task allocation because target locus and mutation authority were not separated from tool execution.",
+      "Submitting an observation required several hidden decisions: target inbox, source kind, authority level, payload transport, payload validity, and delivery visibility.",
+      "One retry produced env_b384b82a-dc77-4253-8190-70089c85bbfd with payload {}, demonstrating that execution success did not confirm semantic success.",
+      "The corrected friction report is env_00c052ea-2fb4-40ff-a7ca-e8e25bd08e39.",
+      "The original task-locus incident report is env_796f9b43-a2a9-4b20-ab4b-cb1ec3a7a501."
+    ],
+    "analysis": {
+      "collapsed_phases": [
+        "operator intent",
+        "target locus/inbox resolution",
+        "typed envelope formation",
+        "payload inspection",
+        "transport/command planning",
+        "preflight validation",
+        "approval when crossing loci or using mutating surfaces",
+        "execution",
+        "read-back confirmation",
+        "export/publication visibility when needed"
+      ],
+      "why_it_matters": "Narada doctrine already separates intent, decision, execution, and confirmation. Canonical Inbox submission is itself a crossing into durable intake state, so routine operator submission should not make the human or agent manually preserve that separation across shell commands."
+    },
+    "proposal": [
+      "Keep narada inbox submit as a low-level execution primitive.",
+      "Add a higher-level inbox submission workflow for common observations/task candidates, e.g. narada inbox prepare/preview/commit or narada inbox submit-observation.",
+      "The higher-level flow should form the typed envelope from operator intent, resolve target locus/inbox, validate enum fields, reject or warn on empty payloads for observation/task_candidate envelopes, and display a preview before mutation.",
+      "For cross-locus submissions or Narada proper targets, require explicit approval of the target root, envelope kind, authority level, and payload summary before execution.",
+      "After execution, read back the stored envelope and confirm that payload equivalence holds relative to the prepared payload.",
+      "Offer optional export/publication in the same confirmed flow so ignored local SQLite state does not become invisible work."
+    ],
+    "suggested_target": {
+      "kind": "task_candidate",
+      "area": "Canonical Inbox intent-to-confirmation workflow",
+      "urgency": "high",
+      "reason": "This is a doctrine-level mismatch in a core intake surface: execution is currently too easy to perform without preflight, approval, and read-back confirmation."
+    },
+    "related_envelopes": [
+      "env_796f9b43-a2a9-4b20-ab4b-cb1ec3a7a501",
+      "env_b384b82a-dc77-4253-8190-70089c85bbfd",
+      "env_00c052ea-2fb4-40ff-a7ca-e8e25bd08e39"
+    ]
+  },
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_45fa0d43-1746-40dd-b988-519c5ea182b0",
+    "promoted_at": "2026-04-27T16:58:43.987Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
+}

@@ -39,5 +39,13 @@
     ],
     "posture": "observation_not_proposal"
   },
-  "status": "received"
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_abd1f7d2-3c50-463d-8c50-d85bc250ee5e",
+    "promoted_at": "2026-04-27T12:54:43.662Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
 }

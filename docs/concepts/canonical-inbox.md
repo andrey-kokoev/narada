@@ -7,6 +7,7 @@ Inbox envelopes are inert. Submitting an envelope does not create a task, execut
 ## CLI Surface
 
 ```bash
+narada inbox submit-observation --source-ref codex-session:pc-friction --title "PC Site identity mismatch" --summary "hostname and COMPUTERNAME differ" --evidence "hostname=desktop-sunroom-2" --evidence "COMPUTERNAME=DESKTOP-SUNROOM" --principal architect
 narada inbox submit --source-kind diagnostic --source-ref site-doctor:desktop-sunroom-2 --kind observation --authority-level system_observed --payload-file /tmp/site-observation.json
 narada inbox work-next --claim --by operator
 narada inbox list
@@ -16,7 +17,9 @@ narada inbox triage <envelope-id> --action archive --by operator
 narada inbox pending <envelope-id> --to site_config_change:site:desktop-sunroom-2 --by operator
 ```
 
-Prefer `--payload-file` or `--payload-stdin` for non-trivial payloads. Inline JSON is acceptable for tiny POSIX-shell examples, but it is brittle across PowerShell, chat copy/paste, and multi-line payloads.
+Prefer `submit-observation` for routine observations from chat, diagnostics, and agent reports. It builds the typed payload from flags, writes the envelope, reads it back, confirms payload equivalence, and returns the exact export command for portable visibility.
+
+Use low-level `submit` when the caller already has a complete typed envelope payload. Prefer `--payload-file` or `--payload-stdin` for non-trivial payloads. Inline JSON is acceptable for tiny POSIX-shell examples, but it is brittle across PowerShell, chat copy/paste, and multi-line payloads. Empty object payloads are rejected for observations and task candidates unless `--allow-empty-payload` is explicit.
 
 ## Envelope Axes
 
@@ -81,7 +84,8 @@ Canonical Inbox first use should not require ad hoc repair work.
 
 | Friction | Canonical Surface |
 | --- | --- |
-| Shell-hostile JSON quoting, especially in PowerShell | Use `inbox submit --payload-file <path>` or `--payload-stdin`; avoid inline JSON for real payloads. |
+| Shell-hostile JSON quoting, especially in PowerShell | Use `inbox submit-observation` for observations, or `inbox submit --payload-file <path>` / `--payload-stdin` for low-level typed envelopes; avoid inline JSON for real payloads. |
+| Submission succeeds but semantic payload was lost | Use `submit-observation` for read-back payload confirmation; low-level `submit` rejects empty observation/task-candidate payloads by default. |
 | Fresh checkout missing dependencies, build output, CLI shim, or native SQLite binding | Run `narada doctor --bootstrap --format json` and follow its `repair_plan`. |
 | Git/worktree uncertainty before publishing an inbox-backed chapter | Run `narada chapter preflight <range> --expect-commit --expect-push`. |
 | Inbox entry is informative but not executable | Use `inbox triage <id> --action archive --by <principal>` after durable guidance or residuals are recorded. |

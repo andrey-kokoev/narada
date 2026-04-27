@@ -1,0 +1,23 @@
+{
+  "envelope_id": "env_b384b82a-dc77-4253-8190-70089c85bbfd",
+  "received_at": "2026-04-27T16:41:55.027Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:canonical-inbox-submission-friction-20260427"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "architect"
+  },
+  "payload": {},
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_b384b82a-dc77-4253-8190-70089c85bbfd",
+    "promoted_at": "2026-04-27T16:59:08.477Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
+}
