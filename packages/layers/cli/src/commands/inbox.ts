@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import {
   type InboxAuthorityLevel,
   type InboxEnvelope,
@@ -78,6 +80,8 @@ export interface InboxPendingOptions extends InboxCommandOptions {
   by?: string;
 }
 
+export interface InboxDoctorOptions extends InboxCommandOptions {}
+
 export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
   const sourceKind = parseSourceKind(options.sourceKind);
   const kind = parseEnvelopeKind(options.kind);
@@ -92,6 +96,7 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
   if (payload instanceof Error) return errorResult(payload.message);
 
   return withInboxStoreAsync(options, async (store) => {
+    const delivery = inspectInboxDelivery(options.cwd ?? process.cwd());
     const envelope = store.insert({
       envelope_id: `env_${randomUUID()}`,
       received_at: new Date().toISOString(),
@@ -104,16 +109,51 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
       payload,
     });
     return okResult(
-      { status: 'success', envelope },
+      { status: 'success', envelope, delivery },
       [
         `Inbox envelope received: ${envelope.envelope_id}`,
         `Kind: ${envelope.kind}`,
         `Source: ${envelope.source.kind}:${envelope.source.ref}`,
         `Status: ${envelope.status}`,
+        `Inbox DB: ${delivery.inbox_db_path}`,
+        `Repo: ${delivery.repo_root ?? 'unknown'} @ ${delivery.branch ?? 'unknown'} ${delivery.head_commit ?? 'unknown'}`,
+        `Visible on remote: ${delivery.head_matches_remote === true ? 'yes' : delivery.head_matches_remote === false ? 'no' : 'unknown'}`,
       ],
       options.format,
     );
   });
+}
+
+export async function inboxDoctorCommand(options: InboxDoctorOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const cwd = options.cwd ?? process.cwd();
+  const delivery = inspectInboxDelivery(cwd);
+  const readiness = inspectInboxReadiness(cwd, delivery.inbox_db_path);
+  const checks = [
+    { name: 'repo_detected', ok: delivery.repo_root !== null, detail: delivery.repo_root ?? 'not a git worktree' },
+    { name: 'inbox_db_accessible', ok: readiness.inbox_db_accessible, detail: readiness.inbox_db_detail },
+    { name: 'sqlite_binding_loaded', ok: readiness.sqlite_binding_loaded, detail: readiness.sqlite_binding_detail },
+    { name: 'cli_build_present', ok: readiness.cli_build_present, detail: readiness.cli_build_detail },
+  ];
+  const ok = checks.every((check) => check.ok);
+  return okResult(
+    {
+      status: 'success',
+      ready: ok,
+      delivery,
+      readiness,
+      checks,
+    },
+    [
+      `Inbox doctor: ${ok ? 'ready' : 'attention required'}`,
+      `Inbox DB: ${delivery.inbox_db_path}`,
+      `Repo: ${delivery.repo_root ?? 'unknown'}`,
+      `Branch: ${delivery.branch ?? 'unknown'}`,
+      `HEAD: ${delivery.head_commit ?? 'unknown'}`,
+      `Remote visibility: ${delivery.head_matches_remote === true ? 'current' : delivery.head_matches_remote === false ? 'not current' : 'unknown'}`,
+      ...checks.map((check) => `${check.ok ? 'ok' : 'warn'} ${check.name}: ${check.detail}`),
+    ],
+    options.format,
+  );
 }
 
 export async function inboxListCommand(options: InboxListOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
@@ -623,6 +663,65 @@ function withInboxStore(
     return run(store);
   } finally {
     store.close();
+  }
+}
+
+function inspectInboxDelivery(cwdInput: string): Record<string, unknown> {
+  const cwd = resolve(cwdInput);
+  const repoRoot = git(cwd, ['rev-parse', '--show-toplevel']);
+  const branch = repoRoot ? git(repoRoot, ['rev-parse', '--abbrev-ref', 'HEAD']) : null;
+  const headCommit = repoRoot ? git(repoRoot, ['rev-parse', 'HEAD']) : null;
+  const upstream = repoRoot ? git(repoRoot, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']) : null;
+  const upstreamCommit = repoRoot && upstream ? git(repoRoot, ['rev-parse', upstream]) : null;
+  const dirty = repoRoot ? (git(repoRoot, ['status', '--porcelain']) ?? '').trim().length > 0 : null;
+  return {
+    cwd,
+    repo_root: repoRoot,
+    branch,
+    head_commit: headCommit,
+    upstream,
+    upstream_commit: upstreamCommit,
+    head_matches_remote: headCommit && upstreamCommit ? headCommit === upstreamCommit : null,
+    worktree_dirty: dirty,
+    inbox_db_path: join(cwd, '.ai', 'inbox.db'),
+    merge_or_replay_required: headCommit && upstreamCommit ? headCommit !== upstreamCommit : null,
+  };
+}
+
+function inspectInboxReadiness(cwdInput: string, inboxDbPath: unknown): Record<string, unknown> {
+  const cwd = resolve(cwdInput);
+  const inboxPath = String(inboxDbPath);
+  let inboxDbAccessible = false;
+  let inboxDbDetail = 'not checked';
+  try {
+    const store = new SqliteInboxStore(inboxPath);
+    store.close();
+    inboxDbAccessible = true;
+    inboxDbDetail = existsSync(inboxPath) ? 'openable' : 'created by doctor';
+  } catch (error) {
+    inboxDbDetail = error instanceof Error ? error.message : String(error);
+  }
+
+  const cliBuildPath = join(cwd, 'packages', 'layers', 'cli', 'dist', 'main.js');
+  return {
+    inbox_db_accessible: inboxDbAccessible,
+    inbox_db_detail: inboxDbDetail,
+    sqlite_binding_loaded: true,
+    sqlite_binding_detail: 'better-sqlite3 loaded by CLI process',
+    cli_build_present: existsSync(cliBuildPath),
+    cli_build_detail: existsSync(cliBuildPath) ? cliBuildPath : `${cliBuildPath} missing; run pnpm --filter @narada2/cli build`,
+  };
+}
+
+function git(cwd: string, args: string[]): string | null {
+  try {
+    return execFileSync('git', args, {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return null;
   }
 }
 

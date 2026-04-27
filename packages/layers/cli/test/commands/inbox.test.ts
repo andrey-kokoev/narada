@@ -2,7 +2,9 @@ import { vi } from 'vitest';
 
 vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
+vi.unmock('node:child_process');
 
+import { execFileSync } from 'node:child_process';
 import { Readable } from 'node:stream';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SqliteInboxStore } from '@narada2/control-plane';
 import {
   inboxClaimCommand,
+  inboxDoctorCommand,
   inboxListCommand,
   inboxNextCommand,
   inboxPendingCommand,
@@ -110,6 +113,56 @@ describe('Canonical Inbox CLI commands', () => {
     expect(submitted.exitCode).toBe(ExitCode.SUCCESS);
     const envelope = (submitted.result as { envelope: { payload: unknown } }).envelope;
     expect(envelope.payload).toEqual({ title: 'From stdin' });
+  });
+
+  it('includes delivery coordinates in submit results', async () => {
+    setupGitRepo(tempDir);
+
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual:delivery',
+      kind: 'observation',
+      authorityLevel: 'operator_confirmed',
+      payload: JSON.stringify({ title: 'Delivery coordinates' }),
+    });
+
+    expect(submitted.exitCode).toBe(ExitCode.SUCCESS);
+    const result = submitted.result as {
+      envelope: { envelope_id: string };
+      delivery: Record<string, unknown>;
+    };
+    expect(result.delivery).toMatchObject({
+      repo_root: tempDir,
+      branch: 'main',
+      inbox_db_path: join(tempDir, '.ai', 'inbox.db'),
+    });
+    expect(result.delivery.head_commit).toEqual(expect.any(String));
+    expect(result.delivery).toHaveProperty('head_matches_remote');
+  });
+
+  it('doctors inbox delivery and local readiness without mutating envelopes', async () => {
+    setupGitRepo(tempDir);
+    const before = await inboxListCommand({ cwd: tempDir, format: 'json' });
+
+    const doctor = await inboxDoctorCommand({ cwd: tempDir, format: 'json' });
+
+    expect(doctor.exitCode).toBe(ExitCode.SUCCESS);
+    const result = doctor.result as {
+      ready: boolean;
+      delivery: Record<string, unknown>;
+      checks: Array<{ name: string; ok: boolean }>;
+    };
+    expect(result.delivery).toMatchObject({ repo_root: tempDir, branch: 'main' });
+    expect(result.checks.map((check) => check.name)).toEqual(expect.arrayContaining([
+      'repo_detected',
+      'inbox_db_accessible',
+      'sqlite_binding_loaded',
+      'cli_build_present',
+    ]));
+    const after = await inboxListCommand({ cwd: tempDir, format: 'json' });
+    expect((after.result as { count: number }).count).toBe((before.result as { count: number }).count);
   });
 
   it('rejects ambiguous payload sources', async () => {
@@ -611,4 +664,13 @@ function setupRepo(tempDir: string): void {
     join(tasksDir, '20260420-100-alpha.md'),
     '---\nstatus: opened\n---\n\n# Task 100\n',
   );
+}
+
+function setupGitRepo(tempDir: string): void {
+  execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['init', '-b', 'main'], { cwd: tempDir });
+  execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['config', 'user.email', 'test@example.invalid'], { cwd: tempDir });
+  execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['config', 'user.name', 'Test Agent'], { cwd: tempDir });
+  writeFileSync(join(tempDir, 'README.md'), '# test\n');
+  execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['add', 'README.md'], { cwd: tempDir });
+  execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['commit', '-m', 'base'], { cwd: tempDir });
 }

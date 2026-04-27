@@ -1,6 +1,7 @@
 import type { Command } from 'commander';
 import {
   inboxClaimCommand,
+  inboxDoctorCommand,
   inboxListCommand,
   inboxNextCommand,
   inboxPendingCommand,
@@ -19,6 +20,21 @@ export function registerInboxCommands(program: Command): void {
   const inboxCmd = program
     .command('inbox')
     .description('Canonical Inbox typed-envelope intake operators');
+
+  inboxCmd
+    .command('doctor')
+    .description('Check Canonical Inbox delivery coordinates and local readiness')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'inbox doctor',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => inboxDoctorCommand({
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
 
   inboxCmd
     .command('submit')
