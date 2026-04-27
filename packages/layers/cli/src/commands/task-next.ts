@@ -340,7 +340,8 @@ export async function taskPullNextCommand(
     }
 
     // Validate transition
-    const currentStatus = frontMatter.status as string | undefined;
+    const lifecycleStatus = store?.getLifecycle(taskFile.taskId)?.status;
+    const currentStatus = lifecycleStatus ?? (frontMatter.status as string | undefined);
     if (!isValidTransition(currentStatus, 'claimed')) {
       return {
         exitCode: ExitCode.GENERAL_ERROR,

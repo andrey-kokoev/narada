@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { inboxSubmitCommand } from '../../src/commands/inbox.js';
 import { workNextCommand } from '../../src/commands/work-next.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 
 function setupRepo(tempDir: string): void {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
@@ -77,6 +78,41 @@ describe('work-next unified next action', () => {
       checked: [{ zone: 'task_work', status: 'selected', selected_ref: 'task:100' }],
     });
     expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-test.md'), 'utf8')).toContain('status: claimed');
+  });
+
+  it('claims task work when SQLite says opened and markdown has no status', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-102-sqlite-opened.md'),
+      '---\ntask_id: 20260427-102-sqlite-opened\n---\n\n# Task 102\n\n## Goal\nDo task work.\n',
+    );
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.upsertLifecycle({
+        task_id: '20260427-102-sqlite-opened',
+        task_number: 102,
+        status: 'opened',
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: '2026-01-01T00:00:00.000Z',
+      });
+    } finally {
+      store.db.close();
+    }
+
+    const result = await workNextCommand({ agent: 'architect', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      action_kind: 'task_work',
+      agent_id: 'architect',
+      primary: { task_number: 102 },
+    });
+    expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-102-sqlite-opened.md'), 'utf8')).toContain('status: claimed');
   });
 
   it('starts dispatch context for task work when requested', async () => {
