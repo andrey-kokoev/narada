@@ -34,4 +34,28 @@ if [[ ! -f "${DB_PATH}" ]]; then
   exit 0
 fi
 
-echo "task lifecycle snapshot posture ok: tracked snapshot, ignored local DB"
+TMP_SNAPSHOT="$(mktemp)"
+cleanup() {
+  rm -f "${TMP_SNAPSHOT}"
+}
+trap cleanup EXIT
+
+if command -v narada >/dev/null 2>&1; then
+  NARADA_CMD=(narada)
+elif [[ -x "node_modules/.bin/narada" ]]; then
+  NARADA_CMD=(pnpm narada)
+else
+  echo "narada command unavailable; cannot verify task lifecycle snapshot freshness" >&2
+  echo "Run: pnpm install && pnpm build" >&2
+  exit 2
+fi
+
+"${NARADA_CMD[@]}" task lifecycle export --output "${TMP_SNAPSHOT}" --format json >/dev/null
+
+if ! cmp -s "${TMP_SNAPSHOT}" "${SNAPSHOT_PATH}"; then
+  echo "task lifecycle snapshot is stale: ${SNAPSHOT_PATH}" >&2
+  echo "Run: narada task lifecycle export --output ${SNAPSHOT_PATH}" >&2
+  exit 2
+fi
+
+echo "task lifecycle snapshot posture ok: tracked fresh snapshot, ignored local DB"

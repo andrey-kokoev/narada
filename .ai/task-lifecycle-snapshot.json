@@ -1,7 +1,7 @@
 {
   "snapshot_kind": "task_lifecycle_snapshot",
   "snapshot_version": 1,
-  "exported_at": "2026-04-27T13:26:59.336Z",
+  "exported_at": "2026-04-27T13:31:31.795Z",
   "tables": [
     {
       "name": "agent_roster",
@@ -26,7 +26,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 720,
-          "updated_at": "2026-04-27T13:26:59.336Z"
+          "updated_at": "2026-04-27T13:31:31.795Z"
         },
         {
           "agent_id": "a2",
@@ -37,7 +37,7 @@
           "status": "idle",
           "task_number": null,
           "last_done": 886,
-          "updated_at": "2026-04-27T13:26:59.336Z"
+          "updated_at": "2026-04-27T13:31:31.795Z"
         },
         {
           "agent_id": "a3",
@@ -48,7 +48,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 610,
-          "updated_at": "2026-04-27T13:26:59.336Z"
+          "updated_at": "2026-04-27T13:31:31.795Z"
         },
         {
           "agent_id": "a4",
@@ -59,7 +59,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 574,
-          "updated_at": "2026-04-27T13:26:59.336Z"
+          "updated_at": "2026-04-27T13:31:31.795Z"
         },
         {
           "agent_id": "a5",
@@ -70,7 +70,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 551,
-          "updated_at": "2026-04-27T13:26:59.336Z"
+          "updated_at": "2026-04-27T13:31:31.795Z"
         },
         {
           "agent_id": "a6",
@@ -81,18 +81,18 @@
           "status": "done",
           "task_number": null,
           "last_done": 545,
-          "updated_at": "2026-04-27T13:26:59.336Z"
+          "updated_at": "2026-04-27T13:31:31.795Z"
         },
         {
           "agent_id": "architect",
           "role": "implementer",
           "capabilities_json": "[\"derive\",\"propose\",\"claim\",\"execute\",\"resolve\",\"confirm\"]",
           "first_seen_at": "2026-04-26T22:28:56.453Z",
-          "last_active_at": "2026-04-27T13:26:59.336Z",
+          "last_active_at": "2026-04-27T13:31:31.795Z",
           "status": "done",
           "task_number": null,
-          "last_done": 968,
-          "updated_at": "2026-04-27T13:26:59.336Z"
+          "last_done": 969,
+          "updated_at": "2026-04-27T13:31:31.795Z"
         }
       ]
     },
@@ -5894,6 +5894,27 @@
           "confirmation_json": "{\"task_id\":\"20260427-968-cut-over-task-lifecycle-authority-from-tracked-sqlite-to-tra\",\"task_number\":968,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
           "warnings_json": null,
           "updated_at": "2026-04-27T13:23:13.034Z"
+        },
+        {
+          "request_id": "air_claim_969_architect_1777296546031_ak1wtz",
+          "kind": "claim",
+          "task_id": "20260427-969-enforce-task-lifecycle-snapshot-freshness",
+          "task_number": 969,
+          "agent_id": "architect",
+          "requested_by": "architect",
+          "requested_at": "2026-04-27T13:29:06.031Z",
+          "reason": null,
+          "no_claim": 0,
+          "status": "applied",
+          "rejection_reason": null,
+          "assignment_id": "assign-20260427-969-enforce-task-lifecycle-snapshot-freshness-architect-1777296546031",
+          "previous_agent_id": null,
+          "lifecycle_status_before": "opened",
+          "lifecycle_status_after": "claimed",
+          "roster_status_after": "working",
+          "confirmation_json": "{\"task_id\":\"20260427-969-enforce-task-lifecycle-snapshot-freshness\",\"task_number\":969,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
+          "warnings_json": null,
+          "updated_at": "2026-04-27T13:29:07.215Z"
         }
       ]
     },
@@ -6799,6 +6820,15 @@
           "proved_at": "2026-04-27T13:26:55.614Z",
           "criteria_json": "[{\"text\":\"Tracked .ai/task-lifecycle.db is removed from the Git index and ignored without deleting the local runtime DB\",\"checked\":true},{\"text\":\"Tracked .ai/task-lifecycle-snapshot.json is produced through narada task lifecycle export and committed as the portable lifecycle authority handoff\",\"checked\":true},{\"text\":\"Posture guard accepts the new snapshot-backed posture and rejects missing snapshot state\",\"checked\":true},{\"text\":\"Documentation states snapshot-backed Git posture\",\"checked\":true},{\"text\":\"local SQLite runtime posture\",\"checked\":true},{\"text\":\"and sanctioned refresh/import/export workflow\",\"checked\":true},{\"text\":\"Verification proves snapshot import can reconstruct a fresh local DB and pnpm verify passes\",\"checked\":true}]",
           "verification_binding_json": "{\"state\":\"unbound\",\"rationale\":\"Implemented task lifecycle snapshot cutover. .ai/task-lifecycle.db is removed from Git index and ignored while preserved as local runtime state. .ai/task-lifecycle-snapshot.json is produced through narada task lifecycle export. Guard now enforces tracked snapshot plus ignored DB posture. Docs explain snapshot-backed Git handoff and local import/export workflow. Focused snapshot test proves deterministic repeated export and representative round-trip; live import reconstructed a fresh DB; pnpm verify passed.\"}"
+        },
+        {
+          "proof_id": "criteria_proof_20260427-969-enforce-task-lifecycle-snapshot-freshness_2026-04-27T13:31:28.382Z",
+          "task_id": "20260427-969-enforce-task-lifecycle-snapshot-freshness",
+          "task_number": 969,
+          "proved_by": "architect",
+          "proved_at": "2026-04-27T13:31:28.382Z",
+          "criteria_json": "[{\"text\":\"task lifecycle posture guard compares a fresh sanctioned export against .ai/task-lifecycle-snapshot.json when local DB exists\",\"checked\":true},{\"text\":\"guard emits a bounded exact refresh command when the snapshot is stale\",\"checked\":true},{\"text\":\"pnpm verify runs the task lifecycle snapshot guard after build\",\"checked\":true},{\"text\":\"docs describe snapshot freshness as enforced posture instead of manual convention\",\"checked\":true},{\"text\":\"verification covers stale snapshot failure and fresh snapshot success without dumping snapshot contents\",\"checked\":true}]",
+          "verification_binding_json": "{\"state\":\"unbound\",\"rationale\":\"Implemented task lifecycle snapshot freshness enforcement. Guard now exports local DB to a temporary snapshot and byte-compares it to .ai/task-lifecycle-snapshot.json, emitting the exact refresh command when stale. pnpm verify runs the guard after build. Docs describe enforced freshness. Negative guard check failed on stale snapshot without dumping contents; positive guard check passed after refresh; pnpm verify passed with 8 steps.\"}"
         }
       ]
     },
@@ -14622,6 +14652,32 @@
           "admitted_at": "2026-04-27T13:26:56.438Z",
           "admitted_by": "architect",
           "confirmation_json": "{\"has_report\":false,\"has_review\":false,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_969_1777296688476_av56th",
+          "bundle_id": "evb_969_1777296688476_b0c4q4",
+          "task_id": "20260427-969-enforce-task-lifecycle-snapshot-freshness",
+          "task_number": 969,
+          "verdict": "admitted",
+          "methods_json": "[\"criteria_proof\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T13:31:28.476Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":false,\"has_review\":false,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_969_1777296689038_5929ju",
+          "bundle_id": "evb_969_1777296689038_7econq",
+          "task_id": "20260427-969-enforce-task-lifecycle-snapshot-freshness",
+          "task_number": 969,
+          "verdict": "admitted",
+          "methods_json": "[\"admission\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": "closed",
+          "admitted_at": "2026-04-27T13:31:29.038Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":false,\"has_review\":false,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
         }
       ]
     },
@@ -22427,6 +22483,32 @@
           "residuals_json": "[]",
           "assembled_at": "2026-04-27T13:26:56.437Z",
           "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_969_1777296688476_b0c4q4",
+          "task_id": "20260427-969-enforce-task-lifecycle-snapshot-freshness",
+          "task_number": 969,
+          "report_ids_json": "[]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[]",
+          "changed_files_json": "[]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T13:31:28.476Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_969_1777296689038_7econq",
+          "task_id": "20260427-969-enforce-task-lifecycle-snapshot-freshness",
+          "task_number": 969,
+          "report_ids_json": "[]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[]",
+          "changed_files_json": "[]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T13:31:29.038Z",
+          "assembled_by": "architect"
         }
       ]
     },
@@ -25525,6 +25607,11 @@
           "task_id": "20260427-968-cut-over-task-lifecycle-authority-from-tracked-sqlite-to-tra",
           "record_json": "{\"task_id\":\"20260427-968-cut-over-task-lifecycle-authority-from-tracked-sqlite-to-tra\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T13:23:12.178Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T13:26:57.082Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
           "updated_at": "2026-04-27T13:26:57.345Z"
+        },
+        {
+          "task_id": "20260427-969-enforce-task-lifecycle-snapshot-freshness",
+          "record_json": "{\"task_id\":\"20260427-969-enforce-task-lifecycle-snapshot-freshness\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T13:29:06.245Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T13:31:29.674Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
+          "updated_at": "2026-04-27T13:31:29.902Z"
         }
       ]
     },
@@ -28155,6 +28242,15 @@
           "task_id": "20260427-968-cut-over-task-lifecycle-authority-from-tracked-sqlite-to-tra",
           "agent_id": "architect",
           "claimed_at": "2026-04-27T13:23:12.178Z",
+          "released_at": null,
+          "release_reason": null,
+          "intent": "primary"
+        },
+        {
+          "assignment_id": "assign-20260427-969-enforce-task-lifecycle-snapshot-freshness-architect-1777296546031",
+          "task_id": "20260427-969-enforce-task-lifecycle-snapshot-freshness",
+          "agent_id": "architect",
+          "claimed_at": "2026-04-27T13:29:06.245Z",
           "released_at": null,
           "release_reason": null,
           "intent": "primary"
@@ -40461,6 +40557,19 @@
           "continuation_packet_json": null,
           "updated_at": "2026-04-27T13:26:58.619Z",
           "closure_mode": "operator_direct"
+        },
+        {
+          "task_id": "20260427-969-enforce-task-lifecycle-snapshot-freshness",
+          "task_number": 969,
+          "status": "closed",
+          "governed_by": "task_close:architect",
+          "closed_at": "2026-04-27T13:31:31.057Z",
+          "closed_by": "architect",
+          "reopened_at": null,
+          "reopened_by": null,
+          "continuation_packet_json": null,
+          "updated_at": "2026-04-27T13:31:31.058Z",
+          "closure_mode": "operator_direct"
         }
       ]
     },
@@ -40486,7 +40595,7 @@
       "rows": [
         {
           "singleton": 1,
-          "last_allocated": 968
+          "last_allocated": 969
         }
       ]
     },
@@ -42923,6 +43032,14 @@
           "agent_id": "architect",
           "reported_at": "2026-04-27T13:26:57.082Z",
           "report_json": "{\"report_id\":\"wrr_7e1efbe8_20260427-968-cut-over-task-lifecycle-authority-from-tracked-sqlite-to-tra_architect\",\"task_number\":\"968\",\"task_id\":\"20260427-968-cut-over-task-lifecycle-authority-from-tracked-sqlite-to-tra\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-968-cut-over-task-lifecycle-authority-from-tracked-sqlite-to-tra-2026-04-27T13:23:12.178Z\",\"reported_at\":\"2026-04-27T13:26:57.082Z\",\"summary\":\"Cut over task lifecycle Git posture from tracked SQLite DB to tracked deterministic snapshot with ignored local DB runtime state. Updated guard, docs, deterministic exporter, and focused test; verified live import reconstruction and pnpm verify.\",\"changed_files\":[],\"verification\":[],\"known_residuals\":[],\"ready_for_review\":true,\"report_status\":\"submitted\"}"
+        },
+        {
+          "report_id": "wrr_8aa817b4_20260427-969-enforce-task-lifecycle-snapshot-freshness_architect",
+          "task_id": "20260427-969-enforce-task-lifecycle-snapshot-freshness",
+          "assignment_id": "20260427-969-enforce-task-lifecycle-snapshot-freshness-2026-04-27T13:29:06.245Z",
+          "agent_id": "architect",
+          "reported_at": "2026-04-27T13:31:29.674Z",
+          "report_json": "{\"report_id\":\"wrr_8aa817b4_20260427-969-enforce-task-lifecycle-snapshot-freshness_architect\",\"task_number\":\"969\",\"task_id\":\"20260427-969-enforce-task-lifecycle-snapshot-freshness\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-969-enforce-task-lifecycle-snapshot-freshness-2026-04-27T13:29:06.245Z\",\"reported_at\":\"2026-04-27T13:31:29.674Z\",\"summary\":\"Enforced task lifecycle snapshot freshness in guard and verify, documented the workflow, and verified stale/fresh guard paths plus pnpm verify.\",\"changed_files\":[],\"verification\":[],\"known_residuals\":[],\"ready_for_review\":true,\"report_status\":\"submitted\"}"
         }
       ]
     },
@@ -54934,6 +55051,19 @@
           "acceptance_criteria_json": "[\"Tracked .ai/task-lifecycle.db is removed from the Git index and ignored without deleting the local runtime DB\",\"Tracked .ai/task-lifecycle-snapshot.json is produced through narada task lifecycle export and committed as the portable lifecycle authority handoff\",\"Posture guard accepts the new snapshot-backed posture and rejects missing snapshot state\",\"Documentation states snapshot-backed Git posture\",\"local SQLite runtime posture\",\"and sanctioned refresh/import/export workflow\",\"Verification proves snapshot import can reconstruct a fresh local DB and pnpm verify passes\"]",
           "dependencies_json": "[]",
           "updated_at": "2026-04-27T13:23:03.337Z"
+        },
+        {
+          "task_id": "20260427-969-enforce-task-lifecycle-snapshot-freshness",
+          "task_number": 969,
+          "title": "Enforce task lifecycle snapshot freshness",
+          "chapter_markdown": "Task Lifecycle Snapshot Freshness",
+          "goal_markdown": "Prevent commits and verification from passing when the ignored local task lifecycle SQLite DB has diverged from the tracked task lifecycle snapshot handoff.",
+          "context_markdown": null,
+          "required_work_markdown": "1. TBD",
+          "non_goals_markdown": "- Do not expand scope beyond this task.\n- Do not create derivative task-status files.\n- Do not mutate live external systems unless explicitly authorized.",
+          "acceptance_criteria_json": "[\"task lifecycle posture guard compares a fresh sanctioned export against .ai/task-lifecycle-snapshot.json when local DB exists\",\"guard emits a bounded exact refresh command when the snapshot is stale\",\"pnpm verify runs the task lifecycle snapshot guard after build\",\"docs describe snapshot freshness as enforced posture instead of manual convention\",\"verification covers stale snapshot failure and fresh snapshot success without dumping snapshot contents\"]",
+          "dependencies_json": "[]",
+          "updated_at": "2026-04-27T13:29:05.416Z"
         }
       ]
     },

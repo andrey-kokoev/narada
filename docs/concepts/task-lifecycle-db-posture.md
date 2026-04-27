@@ -42,11 +42,12 @@ Validate repository posture:
 pnpm narada:guard-task-db
 ```
 
+The guard performs a bounded freshness check when a local DB exists: it runs a sanctioned export to a temporary file and byte-compares that export to `.ai/task-lifecycle-snapshot.json`. `pnpm verify` runs this guard after build, so verification fails if local lifecycle state has not been exported into the tracked handoff.
+
 ## Residual Requirements
 
-1. Add automatic snapshot freshness checks that compare local DB state to a freshly generated snapshot without admitting large JSON output.
-2. Add a mutation ledger so sanctioned commands can prove provenance more strongly than filesystem posture.
-3. Decide whether future multi-Site task lifecycle handoffs should use one full snapshot or append-only lifecycle events.
+1. Add a mutation ledger so sanctioned commands can prove provenance more strongly than filesystem posture.
+2. Decide whether future multi-Site task lifecycle handoffs should use one full snapshot or append-only lifecycle events.
 
 ## Provenance Gap
 
