@@ -74,6 +74,7 @@ describe('work-next unified next action', () => {
       action_kind: 'task_work',
       agent_id: 'architect',
       primary: { task_number: 100 },
+      checked: [{ zone: 'task_work', status: 'selected', selected_ref: 'task:100' }],
     });
     expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-test.md'), 'utf8')).toContain('status: claimed');
   });
@@ -124,6 +125,11 @@ describe('work-next unified next action', () => {
       status: 'success',
       action_kind: 'inbox_work',
       agent_id: 'architect',
+      checked: [
+        { zone: 'task_work', status: 'empty', reason: 'no_admissible_task' },
+        { zone: 'review_work', status: 'empty', reason: 'no_reviewable_task' },
+        { zone: 'inbox_work', status: 'selected' },
+      ],
       primary: {
         status: 'handling',
         handling: { handled_by: 'architect' },
@@ -155,6 +161,10 @@ describe('work-next unified next action', () => {
       status: 'success',
       action_kind: 'review_work',
       agent_id: 'architect',
+      checked: [
+        { zone: 'task_work', status: 'empty', reason: 'no_admissible_task' },
+        { zone: 'review_work', status: 'selected', selected_ref: 'task:101' },
+      ],
       primary: {
         task_number: 101,
         status: 'in_review',
@@ -173,6 +183,11 @@ describe('work-next unified next action', () => {
       agent_id: 'architect',
       primary: null,
       reason: 'no_task_or_inbox_work',
+      checked: [
+        { zone: 'task_work', status: 'empty', reason: 'no_admissible_task' },
+        { zone: 'review_work', status: 'empty', reason: 'no_reviewable_task' },
+        { zone: 'inbox_work', status: 'empty' },
+      ],
     });
   });
 
