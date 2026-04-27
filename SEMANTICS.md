@@ -1128,6 +1128,23 @@ This is the portable invariant spine:
 
 Do not identify Narada with the substrate currently carrying it. Cloudflare is a Site substrate, not Narada. Mailbox is a vertical, not Narada. An agent is a principal or charter runner, not Narada. Narada is the invariant control form that remains recognizable as it travels through these carriers.
 
+#### Plural Embodiment, Singular Authority
+
+Narada may be present through many embodiments: Windows and WSL shells, multiple clones, daemons, consoles, scripts, agents, projections, and generated artifacts.
+
+Those embodiments may present, inspect, or assist, but every governed mutation must resolve to exactly one declared authority locus before it occurs. This is the **Plural Embodiment, Singular Authority** discipline:
+
+```text
+Many embodiments may present, inspect, or assist.
+One declared authority locus must own each governed mutation.
+```
+
+An embodiment is a way Narada becomes operationally present. An authority locus is the place where a durable transition becomes true. A clone, shell, UI, or agent session can be an ergonomic embodiment without being mutation authority.
+
+For every mutating command, Narada should classify the authority class, resolve the configured authority locus, check whether the current embodiment is that locus, execute or route explicitly, read back the durable result, and emit audit evidence. Inspection may remain plural when freshness and locus are disclosed; mutation may not.
+
+See [`docs/concepts/plural-embodiment-singular-authority.md`](docs/concepts/plural-embodiment-singular-authority.md).
+
 ### 2.14.6 Canonical Expansion Table
 
 When precision matters — specifications, interfaces, authority boundaries, agent instructions — use the canonical expansion, not the compact term alone.

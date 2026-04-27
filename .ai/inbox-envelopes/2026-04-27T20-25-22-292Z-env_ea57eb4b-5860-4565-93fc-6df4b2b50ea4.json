@@ -1,0 +1,32 @@
+{
+  "envelope_id": "env_ea57eb4b-5860-4565-93fc-6df4b2b50ea4",
+  "received_at": "2026-04-27T20:25:22.292Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:narada-two-clone-authority-routing"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Implement authority-clone routing for Andrey Windows/WSL Narada proper clones",
+    "summary": "Apply Plural Embodiment, Singular Authority to Andrey current Narada proper setup. The WSL clone at /home/andrey/src/narada should be treated as the state-bearing authority clone for Narada proper mutations. The Windows clone at D:\\code\\narada may remain a Windows-optimized embodiment for inspection, development, or invocation, but mutating Narada proper commands should either forward to the WSL authority clone or refuse with a clear routing explanation.",
+    "evidence": [
+      "Current authoritative recent inbox submissions were successfully made from /home/andrey/src/narada using Linux Node via nvm.",
+      "D:\\code\\narada exposed an older CLI surface that did not include canonical inbox commands during the session.",
+      "Prior incident showed that accidental mutation of Narada proper task substrate is high-risk and should be guarded by explicit target locus.",
+      "New doctrine available in thoughts commit 3bd5434: Plural Embodiment, Singular Authority."
+    ],
+    "proposal": [
+      "Add Narada config for authority clone routing, initially setting Narada proper authority_clone = wsl with path /home/andrey/src/narada and registering D:\\code\\narada as a Windows embodiment/read or forwarding clone.",
+      "Mutating commands such as inbox submit/import/triage/promote, task allocate/create/claim/report/review/close, chapter mutation, config mutation, and effect execution should resolve the authority clone before execution.",
+      "When invoked from D:\\code\\narada or any non-authority clone, mutating commands should either forward to /home/andrey/src/narada through a configured WSL invocation or refuse with explicit instructions. They should not silently mutate local state.",
+      "Read-only commands may run from either clone but should disclose current clone, authority clone, HEAD/upstream freshness, CLI build origin, and whether output may be stale.",
+      "narada doctor should surface this routing posture and warn when current clone differs from authority clone or when the CLI surface differs across clones."
+    ],
+    "recommendation": "Promote to a concrete Narada product task for authority-clone routing and cross-environment invocation safety in Andrey Windows/WSL setup."
+  },
+  "status": "received"
+}

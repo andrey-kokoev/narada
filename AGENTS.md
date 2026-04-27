@@ -59,6 +59,7 @@ When describing higher-order architecture, deployment, or design:
 - Prefer the compact tuple **`Aim / Site / Cycle / Act / Trace`** (see [`SEMANTICS.md §2.14`](SEMANTICS.md)) over overloaded generic terms like `operation`.
 - When precision matters — specifications, interfaces, authority boundaries, agent instructions — use the **canonical expansion**: `Operation Specification` / `Runtime Locus` / `Control Cycle` / phase vocabulary / `Evidence Trace` (see [`SEMANTICS.md §2.14.6`](SEMANTICS.md)).
 - Preserve Narada's **portable invariant spine** (see [`SEMANTICS.md §2.14.5`](SEMANTICS.md)): Sites, verticals, and principals may change, but durable boundaries and authority transitions must remain recognizable.
+- Preserve **Plural Embodiment, Singular Authority** (see [`docs/concepts/plural-embodiment-singular-authority.md`](docs/concepts/plural-embodiment-singular-authority.md)): Windows/WSL shells, clones, UIs, daemons, scripts, and agents may present or assist, but every governed mutation must resolve to one declared authority locus.
 - Treat the nine-layer pipeline as a canonical traversal through the zone topology, not as the deeper primitive.
 - Use the **Control Cycle phase vocabulary** (see [`SEMANTICS.md §2.14.7`](SEMANTICS.md)) when describing Cycle internals: Source Read → Fact Admission → Context Formation → Evaluation → Governance → Intent/Handoff → Execution Attempt → Confirmation/Reconciliation → Evidence Trace.
 - Use the **Operation Specification** (not "telos") as the canonical reading of `Aim`. An Aim is inspectable, versionable, and independent of runtime.
@@ -76,6 +77,7 @@ When describing higher-order architecture, deployment, or design:
 ## Target Locus Before Mutation
 
 - Before mutating task, chapter, inbox, roster, lifecycle, dispatch, evidence, or publication state, identify the target locus and path.
+- Treat the current shell, clone, CLI binary, or agent session as an embodiment, not automatically as the authority locus.
 - `/home/andrey/src/narada` defaults to read-only doctrine/tool inspection when the requested work belongs to a local Site, PC Site, client Site, data Site, ELT Site, User Site, or external repo.
 - Mutate Narada proper task/inbox/chapter/lifecycle state only when the Operator explicitly names Narada proper as the target work substrate, or when the active task itself is already a Narada proper task.
 - Treat `task allocate/create/claim/close/confirm/finish`, `chapter init/close/finish-range`, `inbox triage/promote/pending/task`, `task lifecycle import/export`, roster, assignment, dispatch, evidence-admission, and publication commands as authority-affecting surfaces.
@@ -124,6 +126,7 @@ When describing higher-order architecture, deployment, or design:
 | [repo-publication-intent-zone.md](docs/concepts/repo-publication-intent-zone.md) | Repository Publication Intent Zone — governed commit/push publication boundary | Need to separate bundle/patch handoff from confirmed remote publication |
 | [polycentric-site-locus-routing.md](docs/concepts/polycentric-site-locus-routing.md) | Polycentric Site locus routing — authority-based routing across User, PC, Project, Client Service, Data, and ELT loci | Need to decide where client/project/data/ELT observations belong |
 | [inhabited-evolution.md](docs/concepts/inhabited-evolution.md) | Inhabited Evolution — human/AI/trace co-evolution through real operations | Need to guide Narada self-build without speculative machinery |
+| [plural-embodiment-singular-authority.md](docs/concepts/plural-embodiment-singular-authority.md) | Plural Embodiment, Singular Authority — many ergonomic surfaces, one declared mutation locus | Need to reason about Windows/WSL, clones, agents, wrappers, projections, or authority routing |
 | [self-maintenance-coherence-loop.md](docs/concepts/self-maintenance-coherence-loop.md) | Self-Maintenance Coherence Loop — bounded incoherence observation and inbox submission without automatic repair | Need to scan for drift while avoiding autoimmune self-modification |
 | [cloudflare-site-materialization.md](docs/deployment/cloudflare-site-materialization.md) | Cloudflare Site materialization design | Designing or deploying a Cloudflare-backed Narada Site |
 | [bootstrap-contract.md](docs/product/bootstrap-contract.md) | Canonical intent-to-operation bootstrap path | Setting up or onboarding a first-time user |

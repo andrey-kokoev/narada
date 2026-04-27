@@ -1,7 +1,7 @@
 {
   "snapshot_kind": "task_lifecycle_snapshot",
   "snapshot_version": 1,
-  "exported_at": "2026-04-27T20:22:41.352Z",
+  "exported_at": "2026-04-27T20:27:45.052Z",
   "tables": [
     {
       "name": "agent_roster",
@@ -26,7 +26,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 720,
-          "updated_at": "2026-04-27T20:22:41.352Z"
+          "updated_at": "2026-04-27T20:27:45.052Z"
         },
         {
           "agent_id": "a2",
@@ -37,7 +37,7 @@
           "status": "idle",
           "task_number": null,
           "last_done": 886,
-          "updated_at": "2026-04-27T20:22:41.352Z"
+          "updated_at": "2026-04-27T20:27:45.052Z"
         },
         {
           "agent_id": "a3",
@@ -48,7 +48,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 610,
-          "updated_at": "2026-04-27T20:22:41.352Z"
+          "updated_at": "2026-04-27T20:27:45.052Z"
         },
         {
           "agent_id": "a4",
@@ -59,7 +59,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 574,
-          "updated_at": "2026-04-27T20:22:41.352Z"
+          "updated_at": "2026-04-27T20:27:45.052Z"
         },
         {
           "agent_id": "a5",
@@ -70,7 +70,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 551,
-          "updated_at": "2026-04-27T20:22:41.352Z"
+          "updated_at": "2026-04-27T20:27:45.052Z"
         },
         {
           "agent_id": "a6",
@@ -81,18 +81,18 @@
           "status": "done",
           "task_number": null,
           "last_done": 545,
-          "updated_at": "2026-04-27T20:22:41.352Z"
+          "updated_at": "2026-04-27T20:27:45.052Z"
         },
         {
           "agent_id": "architect",
           "role": "implementer",
           "capabilities_json": "[\"derive\",\"propose\",\"claim\",\"execute\",\"resolve\",\"confirm\"]",
           "first_seen_at": "2026-04-26T22:28:56.453Z",
-          "last_active_at": "2026-04-27T20:22:41.352Z",
+          "last_active_at": "2026-04-27T20:27:45.052Z",
           "status": "done",
           "task_number": null,
-          "last_done": 977,
-          "updated_at": "2026-04-27T20:22:41.352Z"
+          "last_done": 978,
+          "updated_at": "2026-04-27T20:27:45.052Z"
         }
       ]
     },
@@ -6083,6 +6083,27 @@
           "confirmation_json": "{\"task_id\":\"20260427-977-default-inbox-arcs-continue-through-commit\",\"task_number\":977,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
           "warnings_json": null,
           "updated_at": "2026-04-27T20:20:38.899Z"
+        },
+        {
+          "request_id": "air_claim_978_architect_1777321512816_d8mx2j",
+          "kind": "claim",
+          "task_id": "20260427-978-admit-plural-embodiment-singular-authority-doctrine",
+          "task_number": 978,
+          "agent_id": "architect",
+          "requested_by": "architect",
+          "requested_at": "2026-04-27T20:25:12.816Z",
+          "reason": null,
+          "no_claim": 0,
+          "status": "applied",
+          "rejection_reason": null,
+          "assignment_id": "assign-20260427-978-admit-plural-embodiment-singular-authority-doctrine-architect-1777321512816",
+          "previous_agent_id": null,
+          "lifecycle_status_before": "opened",
+          "lifecycle_status_after": "claimed",
+          "roster_status_after": "working",
+          "confirmation_json": "{\"task_id\":\"20260427-978-admit-plural-embodiment-singular-authority-doctrine\",\"task_number\":978,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
+          "warnings_json": null,
+          "updated_at": "2026-04-27T20:25:14.213Z"
         }
       ]
     },
@@ -15146,6 +15167,45 @@
           "admitted_at": "2026-04-27T20:22:40.859Z",
           "admitted_by": "architect",
           "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_978_1777321664069_m14ju4",
+          "bundle_id": "evb_978_1777321664069_fxandn",
+          "task_id": "20260427-978-admit-plural-embodiment-singular-authority-doctrine",
+          "task_number": 978,
+          "verdict": "rejected",
+          "methods_json": "[\"review\"]",
+          "blockers_json": "[\"3 acceptance criteria remain unchecked\"]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T20:27:44.069Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_978_1777321664381_hsp5sg",
+          "bundle_id": "evb_978_1777321664381_nbawgy",
+          "task_id": "20260427-978-admit-plural-embodiment-singular-authority-doctrine",
+          "task_number": 978,
+          "verdict": "admitted",
+          "methods_json": "[\"criteria_proof\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T20:27:44.381Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_978_1777321664698_9cwchd",
+          "bundle_id": "evb_978_1777321664698_3ggi9z",
+          "task_id": "20260427-978-admit-plural-embodiment-singular-authority-doctrine",
+          "task_number": 978,
+          "verdict": "admitted",
+          "methods_json": "[\"admission\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": "closed",
+          "admitted_at": "2026-04-27T20:27:44.698Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
         }
       ]
     },
@@ -23250,6 +23310,45 @@
           "residuals_json": "[]",
           "assembled_at": "2026-04-27T20:22:40.859Z",
           "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_978_1777321664069_fxandn",
+          "task_id": "20260427-978-admit-plural-embodiment-singular-authority-doctrine",
+          "task_number": 978,
+          "report_ids_json": "[\"wrr_2701acce_20260427-978-admit-plural-embodiment-singular-authority-doctrine_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":false,\"unchecked_count\":3}",
+          "review_ids_json": "[\"review-20260427-978-admit-plural-embodiment-singular-authority-doctrine-1777321663961\"]",
+          "changed_files_json": "[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/inhabited-evolution.md\",\"docs/concepts/plural-embodiment-singular-authority.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T20:27:44.069Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_978_1777321664381_nbawgy",
+          "task_id": "20260427-978-admit-plural-embodiment-singular-authority-doctrine",
+          "task_number": 978,
+          "report_ids_json": "[\"wrr_2701acce_20260427-978-admit-plural-embodiment-singular-authority-doctrine_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[\"review-20260427-978-admit-plural-embodiment-singular-authority-doctrine-1777321663961\"]",
+          "changed_files_json": "[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/inhabited-evolution.md\",\"docs/concepts/plural-embodiment-singular-authority.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T20:27:44.381Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_978_1777321664698_3ggi9z",
+          "task_id": "20260427-978-admit-plural-embodiment-singular-authority-doctrine",
+          "task_number": 978,
+          "report_ids_json": "[\"wrr_2701acce_20260427-978-admit-plural-embodiment-singular-authority-doctrine_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[\"review-20260427-978-admit-plural-embodiment-singular-authority-doctrine-1777321663961\"]",
+          "changed_files_json": "[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/inhabited-evolution.md\",\"docs/concepts/plural-embodiment-singular-authority.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T20:27:44.698Z",
+          "assembled_by": "architect"
         }
       ]
     },
@@ -26393,6 +26492,11 @@
           "task_id": "20260427-977-default-inbox-arcs-continue-through-commit",
           "record_json": "{\"task_id\":\"20260427-977-default-inbox-arcs-continue-through-commit\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T20:20:37.923Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T20:22:34.421Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
           "updated_at": "2026-04-27T20:22:34.645Z"
+        },
+        {
+          "task_id": "20260427-978-admit-plural-embodiment-singular-authority-doctrine",
+          "record_json": "{\"task_id\":\"20260427-978-admit-plural-embodiment-singular-authority-doctrine\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T20:25:13.247Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T20:27:32.958Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
+          "updated_at": "2026-04-27T20:27:33.432Z"
         }
       ]
     },
@@ -29104,6 +29208,15 @@
           "task_id": "20260427-977-default-inbox-arcs-continue-through-commit",
           "agent_id": "architect",
           "claimed_at": "2026-04-27T20:20:37.923Z",
+          "released_at": null,
+          "release_reason": null,
+          "intent": "primary"
+        },
+        {
+          "assignment_id": "assign-20260427-978-admit-plural-embodiment-singular-authority-doctrine-architect-1777321512816",
+          "task_id": "20260427-978-admit-plural-embodiment-singular-authority-doctrine",
+          "agent_id": "architect",
+          "claimed_at": "2026-04-27T20:25:13.247Z",
           "released_at": null,
           "release_reason": null,
           "intent": "primary"
@@ -41527,6 +41640,19 @@
           "continuation_packet_json": null,
           "updated_at": "2026-04-27T20:22:41.062Z",
           "closure_mode": "agent_finish"
+        },
+        {
+          "task_id": "20260427-978-admit-plural-embodiment-singular-authority-doctrine",
+          "task_number": 978,
+          "status": "closed",
+          "governed_by": "task_close:architect",
+          "closed_at": "2026-04-27T20:27:44.850Z",
+          "closed_by": "architect",
+          "reopened_at": null,
+          "reopened_by": null,
+          "continuation_packet_json": null,
+          "updated_at": "2026-04-27T20:27:44.851Z",
+          "closure_mode": "agent_finish"
         }
       ]
     },
@@ -41552,7 +41678,7 @@
       "rows": [
         {
           "singleton": 1,
-          "last_allocated": 977
+          "last_allocated": 978
         }
       ]
     },
@@ -44061,6 +44187,14 @@
           "agent_id": "architect",
           "reported_at": "2026-04-27T20:22:34.421Z",
           "report_json": "{\"report_id\":\"wrr_fbd52716_20260427-977-default-inbox-arcs-continue-through-commit_architect\",\"task_number\":\"977\",\"task_id\":\"20260427-977-default-inbox-arcs-continue-through-commit\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-977-default-inbox-arcs-continue-through-commit-2026-04-27T20:20:37.923Z\",\"reported_at\":\"2026-04-27T20:22:34.421Z\",\"summary\":\"Documented default inbox arc execution behavior in root AGENTS guidance and the agent task execution contract.\",\"changed_files\":[\"AGENTS.md\",\".ai/task-contracts/agent-task-execution.md\"],\"verification\":[{\"command\":\"pnpm verify\",\"result\":\"passed\"}],\"known_residuals\":[],\"ready_for_review\":true,\"report_status\":\"accepted\"}"
+        },
+        {
+          "report_id": "wrr_2701acce_20260427-978-admit-plural-embodiment-singular-authority-doctrine_architect",
+          "task_id": "20260427-978-admit-plural-embodiment-singular-authority-doctrine",
+          "assignment_id": "20260427-978-admit-plural-embodiment-singular-authority-doctrine-2026-04-27T20:25:13.247Z",
+          "agent_id": "architect",
+          "reported_at": "2026-04-27T20:27:32.958Z",
+          "report_json": "{\"report_id\":\"wrr_2701acce_20260427-978-admit-plural-embodiment-singular-authority-doctrine_architect\",\"task_number\":\"978\",\"task_id\":\"20260427-978-admit-plural-embodiment-singular-authority-doctrine\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-978-admit-plural-embodiment-singular-authority-doctrine-2026-04-27T20:25:13.247Z\",\"reported_at\":\"2026-04-27T20:27:32.958Z\",\"summary\":\"Admitted Plural Embodiment, Singular Authority into Narada proper doctrine as the rule that many embodiments may assist but governed mutation resolves to one authority locus.\",\"changed_files\":[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/inhabited-evolution.md\",\"docs/concepts/plural-embodiment-singular-authority.md\"],\"verification\":[{\"command\":\"pnpm verify\",\"result\":\"passed\"}],\"known_residuals\":[],\"ready_for_review\":true,\"report_status\":\"accepted\"}"
         }
       ]
     },
@@ -44407,6 +44541,14 @@
           "verdict": "accepted",
           "findings_json": null,
           "reviewed_at": "2026-04-27T20:22:40.099Z"
+        },
+        {
+          "review_id": "review-20260427-978-admit-plural-embodiment-singular-authority-doctrine-1777321663961",
+          "task_id": "20260427-978-admit-plural-embodiment-singular-authority-doctrine",
+          "reviewer_agent_id": "architect",
+          "verdict": "accepted",
+          "findings_json": null,
+          "reviewed_at": "2026-04-27T20:27:43.961Z"
         }
       ]
     },
@@ -56229,6 +56371,19 @@
           "acceptance_criteria_json": "[\"Agent execution contract states that actionable inbox work should proceed through task/chapter creation\",\"execution\",\"verification\",\"closure\",\"inbox handling\",\"commit\",\"push\",\"and recheck.\",\"Root AGENTS guidance references the same default without overriding explicit operator constraints or permission boundaries.\",\"The instruction preserves stopping only for real blockers\",\"external permission\",\"destructive risk\",\"or unclear target locus.\",\"Verify with pnpm verify and close this task.\"]",
           "dependencies_json": "[]",
           "updated_at": "2026-04-27T20:20:29.153Z"
+        },
+        {
+          "task_id": "20260427-978-admit-plural-embodiment-singular-authority-doctrine",
+          "task_number": 978,
+          "title": "Admit plural embodiment singular authority doctrine",
+          "chapter_markdown": "doctrine",
+          "goal_markdown": "Admit the earned Plural Embodiment, Singular Authority concept into Narada proper doctrine and operator guidance without over-expanding implementation scope.",
+          "context_markdown": null,
+          "required_work_markdown": "1. TBD",
+          "non_goals_markdown": "- Do not expand scope beyond this task.\n- Do not create derivative task-status files.\n- Do not mutate live external systems unless explicitly authorized.",
+          "acceptance_criteria_json": "[\"Narada semantics documents the distinction between many embodiments and one mutation authority locus;Operator/agent guidance applies the distinction to clone\",\"CLI\",\"and Site mutation safety;The source inbox envelope is handled through a governed pending or archive action;Verification passes\"]",
+          "dependencies_json": "[]",
+          "updated_at": "2026-04-27T20:25:04.506Z"
         }
       ]
     },

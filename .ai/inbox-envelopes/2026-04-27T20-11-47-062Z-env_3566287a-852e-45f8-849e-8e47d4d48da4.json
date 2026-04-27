@@ -1,0 +1,29 @@
+{
+  "envelope_id": "env_3566287a-852e-45f8-849e-8e47d4d48da4",
+  "received_at": "2026-04-27T20:11:47.062Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:narada-resume-command"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Define narada resume as inhabited continuity recovery",
+    "summary": "Operator and architect identified a strong conceptual meaning for a narada resume command: resume an inhabited thread of work from durable traces. The command should recover the appropriate locus, active arc/chapter/task, inbox changes, dirty state, pending decisions, and next coherent action without confusing work continuity with a particular tool process.",
+    "evidence": [
+      "Core semantic distinction: narada resume resumes the inhabited work, not merely an app session or CLI process.",
+      "A resume brief should be produced first: locus, active chapter/task, inbox items, dirty state, pending decisions, and next coherent action.",
+      "Architect CLI hydration is coherent as a second layer: narada resume --with codex or equivalent launches/hydrates the configured architect tool after the continuity brief exists."
+    ],
+    "proposal": [
+      "Add narada resume as a canonical continuity operator that emits a resume brief from durable Site traces before any execution.",
+      "Add optional architect-tool integration, e.g. narada resume --with codex, that starts the configured coding CLI in the right cwd with AGENTS.md/doctrine pointers, active chapter/task context, inbox summary, and explicit locus authority.",
+      "Keep the semantics separated: resume work first; hydrate a tool process second."
+    ],
+    "recommendation": "Promote to Narada product/design task for the resume command surface and architect CLI integration."
+  },
+  "status": "received"
+}

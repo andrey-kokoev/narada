@@ -33,6 +33,7 @@ situated ops
 5. Distinguish inhabited synthesis from ordinary delegation or chat.
 6. Preserve Intelligence-Authority Separation.
 7. Push back against unearned symmetry and speculative machinery.
+8. Preserve Plural Embodiment, Singular Authority: many surfaces may assist, but each governed mutation must resolve to one declared authority locus.
 
 ## Narada Reading
 
@@ -69,6 +70,7 @@ If any condition fails, the material stays as a proposal, possibility, residual,
 | One case becomes universal law | Local pressure can overfit. | Extract invariant only after the originating case survives the lifted form. |
 | Symmetry replaces need | Beautiful parallel machinery can be unearned. | Build the smaller crossing or operator surface that current friction justifies. |
 | Trace becomes decoration | Unused evidence cannot constrain future work. | Trace must be inspectable and capable of changing future Cycles. |
+| Embodiment becomes authority | A convenient shell, clone, UI, or agent session starts mutating as if it owned truth. | Route mutation through the declared authority locus, with read-back and audit evidence. |
 
 ## Relationship To Zones
 

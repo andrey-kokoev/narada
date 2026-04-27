@@ -1,0 +1,37 @@
+{
+  "envelope_id": "env_d28aee89-d6da-4ad3-8765-dd742d70d536",
+  "received_at": "2026-04-27T20:23:40.838Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:thoughts-pesa-concept"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Familiarize Narada with Plural Embodiment, Singular Authority",
+    "summary": "The thoughts repository now contains a new concept document, Plural Embodiment, Singular Authority, naming the discipline of allowing many optimized system embodiments while routing governed mutation through one declared authority locus. The concept arose from Windows/WSL Narada invocation and clone-authority friction and appears directly relevant to Narada proper authority routing, doctor/bootstrap ergonomics, inbox submission, task mutation safety, and architect CLI resume/hydration.",
+    "evidence": [
+      "Thoughts commit pushed: 3bd5434 Add plural embodiment singular authority concept.",
+      "Concept path: /home/andrey/src/thoughts/content/concepts/plural-embodiment-singular-authority.md",
+      "Public repo: https://github.com/andrey-kokoev/thoughts",
+      "Core rule: many embodiments may present, inspect, or assist; one declared authority locus must own each governed mutation."
+    ],
+    "proposal": [
+      "Narada proper should familiarize itself with this concept and evaluate whether it should be admitted into Narada knowledge/doctrine through the appropriate charter or governed knowledge-admission path, if such a charter exists.",
+      "If admitted, use the concept to guide authority-clone routing, cross-environment CLI wrappers, narada doctor reporting, inbox submission preflight, task mutation locus guards, and narada resume --with <architect-tool> semantics."
+    ],
+    "recommendation": "Route to the relevant Narada knowledge/doctrine charter if present; otherwise record as a pending knowledge-admission proposal rather than immediately converting it into an implementation task."
+  },
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_d28aee89-d6da-4ad3-8765-dd742d70d536",
+    "promoted_at": "2026-04-27T20:27:51.590Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "envelope_id": "env_de286616-7c87-4774-82ac-3f6c618240c9",
+  "received_at": "2026-04-27T20:12:55.866Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "codex-session:narada-inbox-submit-ergonomics"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Canonical inbox submission still has cross-environment CLI friction",
+    "summary": "Submitting a Narada inbox proposal from a Windows-hosted Codex session to the WSL Narada proper clone required several environment-discovery attempts. The canonical inbox command worked once invoked directly through Linux Node via nvm, but the obvious pnpm narada path resolved to a Windows-side shim and failed against WSL paths.",
+    "evidence": [
+      "Initial WSL command cd /home/andrey/src/narada && pnpm narada inbox ... failed with MODULE_NOT_FOUND for \\\\wsl.localhost\\Ubuntu-24.04\\home\\andrey\\src\\narada\\node_modules\\@narada2\\cli\\dist\\main.js.",
+      "Direct Windows node against the WSL UNC path failed to resolve package dependencies such as commander.",
+      "D:\\code\\narada had a working older CLI, but it did not expose the canonical inbox command, so it was not the correct target for Narada proper submission.",
+      "The successful invocation was: source ~/.nvm/nvm.sh, cd /home/andrey/src/narada, then node packages/layers/cli/dist/main.js inbox submit-observation ..."
+    ],
+    "proposal": [
+      "Add or document a robust narada doctor/bootstrap path that detects Windows-shim pnpm contamination when operating inside WSL and recommends the correct Linux Node/nvm invocation or repairs the shim.",
+      "Provide a canonical cross-environment inbox submission wrapper that can be safely called from Windows Codex sessions targeting a WSL Narada clone without guessing pnpm/node path semantics.",
+      "Make inbox submit ergonomics include an explicit read-only preflight showing target repo, CLI build origin, Node runtime origin, and whether the invoked CLI actually contains canonical inbox commands before accepting payload input."
+    ],
+    "recommendation": "Promote to Narada ergonomics task for cross-environment CLI invocation reliability around canonical inbox submission."
+  },
+  "status": "received"
+}
