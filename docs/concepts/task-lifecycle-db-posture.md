@@ -23,12 +23,18 @@ The tracked-DB posture is imperfect for merge ergonomics, but it is less incoher
 
 ## Future Cutover
 
-A future cutover may replace the tracked DB with a deterministic export artifact. That requires:
+A future cutover may replace the tracked DB with a deterministic export artifact. The first prerequisite now exists:
 
-1. `narada task lifecycle export` producing a stable durable artifact.
-2. `narada task lifecycle import` reconstructing SQLite authority from that artifact.
-3. Reconciliation checks proving export/import round trip preserves lifecycle, assignments, evidence admissions, reviews, reports, roster, task specs, and reconciliation findings.
-4. An explicit one-time index migration.
+```bash
+narada task lifecycle export --output .ai/task-lifecycle-snapshot.json
+narada task lifecycle import --input .ai/task-lifecycle-snapshot.json
+```
+
+Remaining cutover requirements:
+
+1. Reconciliation checks proving export/import round trip preserves lifecycle, assignments, evidence admissions, reviews, reports, roster, task specs, command runs, verification runs, repo publication rows, and reconciliation findings.
+2. A deterministic policy for when the snapshot is written and committed.
+3. An explicit one-time index migration that removes `.ai/task-lifecycle.db` only after the snapshot artifact is the accepted authority handoff.
 
 ## Provenance Gap
 

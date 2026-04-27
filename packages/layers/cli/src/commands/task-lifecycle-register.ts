@@ -9,6 +9,10 @@ import { taskCloseCommand } from './task-close.js';
 import { taskReopenCommand } from './task-reopen.js';
 import { taskConfirmCommand } from './task-confirm.js';
 import {
+  taskLifecycleExportCommand,
+  taskLifecycleImportCommand,
+} from './task-lifecycle-snapshot.js';
+import {
   directCommandAction,
   resourceScopedDirectCommandAction,
 } from '../lib/command-wrapper.js';
@@ -24,6 +28,44 @@ function closeStore(store: SqliteTaskLifecycleStore): void {
 }
 
 export function registerTaskLifecycleCommands(taskCmd: Command): void {
+  const lifecycleCmd = taskCmd
+    .command('lifecycle')
+    .description('Task lifecycle SQLite authority snapshot operators');
+
+  lifecycleCmd
+    .command('export')
+    .description('Export task lifecycle SQLite authority as a deterministic JSON snapshot')
+    .option('--output <path>', 'Snapshot output path', '.ai/task-lifecycle-snapshot.json')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'task lifecycle export',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => taskLifecycleExportCommand({
+        output: opts.output as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
+
+  lifecycleCmd
+    .command('import')
+    .description('Import task lifecycle SQLite authority from a JSON snapshot')
+    .option('--input <path>', 'Snapshot input path', '.ai/task-lifecycle-snapshot.json')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'task lifecycle import',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => taskLifecycleImportCommand({
+        input: opts.input as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
+
   taskCmd
     .command('claim <task-number>')
     .description('Lifecycle/assignment transition: claim a task for an agent')
