@@ -11,8 +11,9 @@ import {
   sitesLifecyclePreflightCommand,
   sitesLineageEventsCommand,
 } from './sites.js';
-import { silentCommandContext, wrapCommand } from '../lib/command-wrapper.js';
-import { emitFormatterBackedCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
+import { siteMutationAuthorityPreflightCommand } from './site-mutation-authority-preflight.js';
+import { directCommandAction, silentCommandContext, wrapCommand } from '../lib/command-wrapper.js';
+import { emitCommandResult, emitFormatterBackedCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 export function registerSitesCommands(program: Command): void {
   const sitesCmd = program
@@ -109,6 +110,27 @@ export function registerSitesCommands(program: Command): void {
       }, silentCommandContext({ verbose: !!opts.verbose }));
       emitFormatterBackedCommandResult(result, { format: opts.format });
     });
+
+  const authorityCmd = sitesCmd
+    .command('authority')
+    .description('Inspect Site authority locus before sanctioned mutation');
+
+  authorityCmd
+    .command('preflight')
+    .description('Preflight whether a mutation would occur at the declared authority locus')
+    .option('--cwd <path>', 'Working directory to inspect', '.')
+    .option('--mutation-family <family>', 'Mutation family: task_lifecycle, inbox, publication, secret, or site', 'task_lifecycle')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'sites authority preflight',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => siteMutationAuthorityPreflightCommand({
+        cwd: opts.cwd as string | undefined,
+        mutationFamily: opts.mutationFamily as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
 
   sitesCmd
     .command('show <site-id>')

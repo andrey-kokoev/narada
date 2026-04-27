@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-27T21:49:42.550Z
+criteria_proved_by: architect
+criteria_proved_at: 2026-04-27T23:38:57.755Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-27T23:38:58.208Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: agent_finish
 ---
 
 # Add Site mutation authority preflight
@@ -42,8 +51,8 @@ Plural Embodiment, Singular Authority and Authority-Revealing Inversion both poi
 
 ## Acceptance Criteria
 
-- [ ] Preflight can classify the current cwd as authority locus, read-only embodiment, stale clone, or unknown.
-- [ ] Preflight returns bounded JSON/human output with next safe command.
-- [ ] Initial integration covers task lifecycle, inbox, and publication commands or clearly gates them for follow-up.
-- [ ] Tests cover authority locus, stale/unknown locus, and read-only embodiment cases.
-- [ ] `pnpm verify` passes.
+- [x] Preflight can classify the current cwd as authority locus, read-only embodiment, stale clone, or unknown.
+- [x] Preflight returns bounded JSON/human output with next safe command.
+- [x] Initial integration covers task lifecycle, inbox, and publication commands or clearly gates them for follow-up.
+- [x] Tests cover authority locus, stale/unknown locus, and read-only embodiment cases.
+- [x] `pnpm verify` passes.
