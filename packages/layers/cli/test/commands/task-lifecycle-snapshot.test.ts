@@ -4,7 +4,7 @@ vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -180,6 +180,15 @@ describe('task lifecycle snapshot commands', () => {
     });
     expect(exported.exitCode).toBe(ExitCode.SUCCESS);
     expect((exported.result as { snapshot?: unknown }).snapshot).toBeUndefined();
+
+    const secondSnapshotPath = join(sourceDir, '.ai', 'snapshot-again.json');
+    const exportedAgain = await taskLifecycleExportCommand({
+      cwd: sourceDir,
+      output: secondSnapshotPath,
+      format: 'json',
+    });
+    expect(exportedAgain.exitCode).toBe(ExitCode.SUCCESS);
+    expect(readFileSync(secondSnapshotPath, 'utf8')).toBe(readFileSync(snapshotPath, 'utf8'));
 
     const imported = await taskLifecycleImportCommand({
       cwd: targetDir,

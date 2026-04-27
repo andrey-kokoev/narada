@@ -2,39 +2,51 @@
 
 ## Decision
 
-For the Narada self-build Site, `.ai/task-lifecycle.db` is a tracked Site authority artifact.
+For the Narada self-build Site, `.ai/task-lifecycle-snapshot.json` is the tracked Git handoff artifact for task lifecycle authority.
 
-It is not a cache, projection, or disposable test fixture. It carries governed task lifecycle, assignment, evidence, roster, review, report, reconciliation, and execution records for this repository's own buildout.
+The local `.ai/task-lifecycle.db` remains the runtime SQLite authority used by sanctioned Narada commands, but it is ignored Git-local state. It is not a cache, projection, or disposable test fixture while operating locally; it carries governed task lifecycle, assignment, evidence, roster, review, report, reconciliation, and execution records for this repository's own buildout. Git transports that authority through the snapshot artifact, not the binary DB file.
 
 ## Rules
 
 - Do not edit `.ai/task-lifecycle.db` directly with ad hoc SQLite shells or scripts.
 - Mutate it only through sanctioned Narada commands.
+- Before committing lifecycle changes, refresh the tracked handoff with `narada task lifecycle export --output .ai/task-lifecycle-snapshot.json`.
+- On a fresh checkout or after pulling a newer snapshot, reconstruct local runtime state with `narada task lifecycle import --input .ai/task-lifecycle-snapshot.json`.
 - Treat markdown task files under `.ai/do-not-open/tasks/` as compatibility projections unless a command explicitly says it is amending task specification.
-- If the repository later moves to an export/import posture, that change must introduce sanctioned export and import commands before removing the DB from the git index.
-- Do not `git rm --cached .ai/task-lifecycle.db` as a cleanup shortcut.
-- `pnpm narada:guard-task-db` is a posture guard only: it detects tracked/dirty state, but it does not prove whether a dirty DB was changed by sanctioned commands.
+- Do not commit `.ai/task-lifecycle.db`; it is local runtime state.
+- `pnpm narada:guard-task-db` is a posture guard only: it checks tracked snapshot and ignored local DB posture, but it does not prove whether local DB changes came from sanctioned commands.
 
 ## Rationale
 
-Narada is currently using its own task lifecycle as a live Site. Removing the database from versioned state before an equivalent governed export exists would erase the durable authority boundary and push operators back toward direct markdown reconstruction.
+Narada is currently using its own task lifecycle as a live Site. The repository needs a portable authority handoff that avoids binary SQLite merge conflicts without pretending task lifecycle state is disposable.
 
-The tracked-DB posture is imperfect for merge ergonomics, but it is less incoherent than pretending the SQLite authority is disposable while commands already depend on it.
+The snapshot-backed posture keeps local SQLite fast and command-owned, while moving Git synchronization to a deterministic JSON artifact. That aligns task lifecycle state with the same export/import pattern already used for inbox envelopes.
 
-## Future Cutover
+## Snapshot Workflow
 
-A future cutover may replace the tracked DB with a deterministic export artifact. The first prerequisite now exists:
+Refresh the tracked handoff after sanctioned lifecycle mutations:
 
 ```bash
 narada task lifecycle export --output .ai/task-lifecycle-snapshot.json
+```
+
+Reconstruct local runtime state from the tracked handoff:
+
+```bash
 narada task lifecycle import --input .ai/task-lifecycle-snapshot.json
 ```
 
-Remaining cutover requirements:
+Validate repository posture:
 
-1. Reconciliation checks proving export/import round trip preserves lifecycle, assignments, evidence admissions, reviews, reports, roster, task specs, command runs, verification runs, repo publication rows, and reconciliation findings.
-2. A deterministic policy for when the snapshot is written and committed.
-3. An explicit one-time index migration that removes `.ai/task-lifecycle.db` only after the snapshot artifact is the accepted authority handoff.
+```bash
+pnpm narada:guard-task-db
+```
+
+## Residual Requirements
+
+1. Add automatic snapshot freshness checks that compare local DB state to a freshly generated snapshot without admitting large JSON output.
+2. Add a mutation ledger so sanctioned commands can prove provenance more strongly than filesystem posture.
+3. Decide whether future multi-Site task lifecycle handoffs should use one full snapshot or append-only lifecycle events.
 
 ## Provenance Gap
 

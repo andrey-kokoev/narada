@@ -97,21 +97,38 @@ export async function taskLifecycleImportCommand(options: TaskLifecycleSnapshotO
 
 function buildSnapshot(store: SqliteTaskLifecycleStore): TaskLifecycleSnapshot {
   const tableNames = listUserTables(store);
+  const tables = tableNames.map((name) => {
+    const columns = listColumns(store, name);
+    const order = columns.includes('task_number')
+      ? 'task_number, rowid'
+      : columns.includes('requested_at')
+        ? 'requested_at, rowid'
+        : 'rowid';
+    const rows = store.db.prepare(`select * from ${quoteIdent(name)} order by ${order}`).all() as Record<string, unknown>[];
+    return { name, columns, rows };
+  });
   return {
     snapshot_kind: 'task_lifecycle_snapshot',
     snapshot_version: 1,
-    exported_at: new Date().toISOString(),
-    tables: tableNames.map((name) => {
-      const columns = listColumns(store, name);
-      const order = columns.includes('task_number')
-        ? 'task_number, rowid'
-        : columns.includes('requested_at')
-          ? 'requested_at, rowid'
-          : 'rowid';
-      const rows = store.db.prepare(`select * from ${quoteIdent(name)} order by ${order}`).all() as Record<string, unknown>[];
-      return { name, columns, rows };
-    }),
+    exported_at: deriveSnapshotTimestamp(tables),
+    tables,
   };
+}
+
+function deriveSnapshotTimestamp(tables: SnapshotTable[]): string {
+  let latest: string | null = null;
+  for (const table of tables) {
+    const timestampColumns = table.columns.filter((column) => column.endsWith('_at'));
+    for (const row of table.rows) {
+      for (const column of timestampColumns) {
+        const value = row[column];
+        if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
+          if (latest === null || value > latest) latest = value;
+        }
+      }
+    }
+  }
+  return latest ?? '1970-01-01T00:00:00.000Z';
 }
 
 function applySnapshot(store: SqliteTaskLifecycleStore, snapshot: TaskLifecycleSnapshot): void {

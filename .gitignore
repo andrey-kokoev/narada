@@ -17,3 +17,5 @@ config.json
 .ai/publications/
 .ai/inbox.db
 .ai/inbox.db-*
+.ai/task-lifecycle.db
+.ai/task-lifecycle.db-*
