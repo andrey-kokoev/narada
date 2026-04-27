@@ -30,5 +30,13 @@
     ],
     "recommendation": "Promote to Narada product/design task adjacent to Site lifecycle and pub/sub: make User Site the user-locus awareness registry and coordination surface, with awareness explicitly separated from authority."
   },
-  "status": "received"
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_f35fb29e-749f-48c8-bec2-4e7196177bf7",
+    "promoted_at": "2026-04-27T20:58:48.564Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
 }

@@ -1,0 +1,34 @@
+{
+  "envelope_id": "env_6a109d72-3d78-40d0-bb69-36213b7f3ace",
+  "received_at": "2026-04-27T20:56:28.423Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:verifiable-envelope-trust"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Develop verifiable envelope trust and cryptographic provenance for Narada messages",
+    "summary": "Operator and architect identified that Narada telos likely requires verifiable authenticity, integrity, confidentiality, and provenance for messages/envelopes as Sites federate, publish/subscribe, clone, split, migrate, and exchange authority-relevant signals. PGP/GPG is a candidate implementation family, but the doctrine should be verifiable envelope trust rather than premature commitment to one crypto substrate.",
+    "evidence": [
+      "Narada canonical inbox and proposed Site pub/sub rely on typed envelopes crossing loci.",
+      "Site lifecycle and provenance lineage proposals require durable evidence of who authored, forwarded, admitted, or transformed Site events.",
+      "Plural Embodiment, Singular Authority requires distinguishing the principal that requested a mutation from the authority locus that admitted it.",
+      "Portable Git-backed or cloud-synced User Sites create situations where stored messages and artifacts need tamper evidence and provenance after transport."
+    ],
+    "proposal": [
+      "Open a de-arbitrarization/design pass for Narada verifiable envelope trust before choosing PGP/GPG or another substrate.",
+      "Define doctrine-level requirements: message authenticity, payload integrity, optional confidentiality, sender principal identity, Site identity, forwarding provenance, key rotation, revocation, trust policy, and verification status.",
+      "Add signing support for inbox/pubsub envelopes and important lineage/authority-transfer events, with verification status surfaced in inbox list/show/work-next and doctor/preflight.",
+      "Support encrypted payloads for private Site-to-Site or principal-to-Site messages where confidentiality is required.",
+      "Evaluate candidate substrates such as PGP/GPG, age, minisign, SSH signatures, Sigstore, and JWS against Narada loci: Windows, WSL/Linux, Git-backed Sites, cloud workers, agents, and portable offline operation.",
+      "Ensure agents can sign as agent principals without impersonating the human operator, and that operator authorization remains a separate governed crossing.",
+      "Treat signatures as evidence and admission inputs, not as automatic authority to mutate receiving Site state."
+    ],
+    "recommendation": "Promote to Narada doctrine/security design work adjacent to canonical inbox, Site pub/sub, provenance lineage, and authority routing. De-arbitrarize requirements first; choose PGP or another substrate only after forced distinctions are explicit."
+  },
+  "status": "received"
+}

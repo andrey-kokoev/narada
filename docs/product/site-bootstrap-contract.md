@@ -8,6 +8,7 @@
 >
 > For governed Site clone, fork, split, absorb, migrate, re-instantiate, and archive semantics, see [`site-lifecycle-transformations.md`](site-lifecycle-transformations.md).
 > For the durable provenance substrate behind those transformations, see [`site-provenance-lineage.md`](site-provenance-lineage.md).
+> For the user-locus directory of known Sites, see [`user-site-awareness-registry.md`](user-site-awareness-registry.md).
 
 ---
 

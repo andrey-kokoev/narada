@@ -1171,6 +1171,10 @@ This is doctrine, not a new mandatory runtime layer. Existing surfaces may insta
 
 See [`docs/concepts/governed-locus-federation.md`](docs/concepts/governed-locus-federation.md).
 
+The User Site may serve as the user-locus awareness registry for Sites relevant to an operator profile. That awareness supports navigation, status, proposal routing, and subscription coordination, but it does not grant mutation authority over the known Sites.
+
+See [`docs/product/user-site-awareness-registry.md`](docs/product/user-site-awareness-registry.md).
+
 ### 2.14.6 Canonical Expansion Table
 
 When precision matters — specifications, interfaces, authority boundaries, agent instructions — use the canonical expansion, not the compact term alone.

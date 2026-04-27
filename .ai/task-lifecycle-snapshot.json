@@ -1,7 +1,7 @@
 {
   "snapshot_kind": "task_lifecycle_snapshot",
   "snapshot_version": 1,
-  "exported_at": "2026-04-27T20:54:09.336Z",
+  "exported_at": "2026-04-27T20:58:39.214Z",
   "tables": [
     {
       "name": "agent_roster",
@@ -26,7 +26,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 720,
-          "updated_at": "2026-04-27T20:54:09.336Z"
+          "updated_at": "2026-04-27T20:58:39.214Z"
         },
         {
           "agent_id": "a2",
@@ -37,7 +37,7 @@
           "status": "idle",
           "task_number": null,
           "last_done": 886,
-          "updated_at": "2026-04-27T20:54:09.336Z"
+          "updated_at": "2026-04-27T20:58:39.214Z"
         },
         {
           "agent_id": "a3",
@@ -48,7 +48,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 610,
-          "updated_at": "2026-04-27T20:54:09.336Z"
+          "updated_at": "2026-04-27T20:58:39.214Z"
         },
         {
           "agent_id": "a4",
@@ -59,7 +59,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 574,
-          "updated_at": "2026-04-27T20:54:09.336Z"
+          "updated_at": "2026-04-27T20:58:39.214Z"
         },
         {
           "agent_id": "a5",
@@ -70,7 +70,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 551,
-          "updated_at": "2026-04-27T20:54:09.336Z"
+          "updated_at": "2026-04-27T20:58:39.214Z"
         },
         {
           "agent_id": "a6",
@@ -81,18 +81,18 @@
           "status": "done",
           "task_number": null,
           "last_done": 545,
-          "updated_at": "2026-04-27T20:54:09.336Z"
+          "updated_at": "2026-04-27T20:58:39.214Z"
         },
         {
           "agent_id": "architect",
           "role": "implementer",
           "capabilities_json": "[\"derive\",\"propose\",\"claim\",\"execute\",\"resolve\",\"confirm\"]",
           "first_seen_at": "2026-04-26T22:28:56.453Z",
-          "last_active_at": "2026-04-27T20:54:09.336Z",
+          "last_active_at": "2026-04-27T20:58:39.214Z",
           "status": "done",
           "task_number": null,
-          "last_done": 982,
-          "updated_at": "2026-04-27T20:54:09.336Z"
+          "last_done": 983,
+          "updated_at": "2026-04-27T20:58:39.214Z"
         }
       ]
     },
@@ -6167,6 +6167,27 @@
           "confirmation_json": "{\"task_id\":\"20260427-982-crystallize-governed-locus-federation-doctrine\",\"task_number\":982,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
           "warnings_json": null,
           "updated_at": "2026-04-27T20:51:56.502Z"
+        },
+        {
+          "request_id": "air_claim_983_architect_1777323398381_g16tmf",
+          "kind": "claim",
+          "task_id": "20260427-983-define-user-site-awareness-registry",
+          "task_number": 983,
+          "agent_id": "architect",
+          "requested_by": "architect",
+          "requested_at": "2026-04-27T20:56:38.381Z",
+          "reason": null,
+          "no_claim": 0,
+          "status": "applied",
+          "rejection_reason": null,
+          "assignment_id": "assign-20260427-983-define-user-site-awareness-registry-architect-1777323398381",
+          "previous_agent_id": null,
+          "lifecycle_status_before": "opened",
+          "lifecycle_status_after": "claimed",
+          "roster_status_after": "working",
+          "confirmation_json": "{\"task_id\":\"20260427-983-define-user-site-awareness-registry\",\"task_number\":983,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
+          "warnings_json": null,
+          "updated_at": "2026-04-27T20:56:40.654Z"
         }
       ]
     },
@@ -15386,6 +15407,45 @@
           "admitted_at": "2026-04-27T20:54:08.875Z",
           "admitted_by": "architect",
           "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_983_1777323518006_wecw0p",
+          "bundle_id": "evb_983_1777323518006_6i0ppg",
+          "task_id": "20260427-983-define-user-site-awareness-registry",
+          "task_number": 983,
+          "verdict": "rejected",
+          "methods_json": "[\"review\"]",
+          "blockers_json": "[\"10 acceptance criteria remain unchecked\"]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T20:58:38.006Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_983_1777323518374_k5rpz9",
+          "bundle_id": "evb_983_1777323518374_bg45gj",
+          "task_id": "20260427-983-define-user-site-awareness-registry",
+          "task_number": 983,
+          "verdict": "admitted",
+          "methods_json": "[\"criteria_proof\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T20:58:38.374Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_983_1777323518717_wowsad",
+          "bundle_id": "evb_983_1777323518716_ppem69",
+          "task_id": "20260427-983-define-user-site-awareness-registry",
+          "task_number": 983,
+          "verdict": "admitted",
+          "methods_json": "[\"admission\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": "closed",
+          "admitted_at": "2026-04-27T20:58:38.717Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
         }
       ]
     },
@@ -23646,6 +23706,45 @@
           "residuals_json": "[]",
           "assembled_at": "2026-04-27T20:54:08.875Z",
           "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_983_1777323518006_6i0ppg",
+          "task_id": "20260427-983-define-user-site-awareness-registry",
+          "task_number": 983,
+          "report_ids_json": "[\"wrr_e699f152_20260427-983-define-user-site-awareness-registry_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":false,\"unchecked_count\":10}",
+          "review_ids_json": "[\"review-20260427-983-define-user-site-awareness-registry-1777323517912\"]",
+          "changed_files_json": "[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/governed-locus-federation.md\",\"docs/product/site-bootstrap-contract.md\",\"docs/product/user-site-awareness-registry.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T20:58:38.006Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_983_1777323518374_bg45gj",
+          "task_id": "20260427-983-define-user-site-awareness-registry",
+          "task_number": 983,
+          "report_ids_json": "[\"wrr_e699f152_20260427-983-define-user-site-awareness-registry_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[\"review-20260427-983-define-user-site-awareness-registry-1777323517912\"]",
+          "changed_files_json": "[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/governed-locus-federation.md\",\"docs/product/site-bootstrap-contract.md\",\"docs/product/user-site-awareness-registry.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T20:58:38.374Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_983_1777323518716_ppem69",
+          "task_id": "20260427-983-define-user-site-awareness-registry",
+          "task_number": 983,
+          "report_ids_json": "[\"wrr_e699f152_20260427-983-define-user-site-awareness-registry_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[\"review-20260427-983-define-user-site-awareness-registry-1777323517912\"]",
+          "changed_files_json": "[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/governed-locus-federation.md\",\"docs/product/site-bootstrap-contract.md\",\"docs/product/user-site-awareness-registry.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T20:58:38.717Z",
+          "assembled_by": "architect"
         }
       ]
     },
@@ -26809,6 +26908,11 @@
           "task_id": "20260427-982-crystallize-governed-locus-federation-doctrine",
           "record_json": "{\"task_id\":\"20260427-982-crystallize-governed-locus-federation-doctrine\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T20:51:55.496Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T20:53:59.279Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
           "updated_at": "2026-04-27T20:53:59.514Z"
+        },
+        {
+          "task_id": "20260427-983-define-user-site-awareness-registry",
+          "record_json": "{\"task_id\":\"20260427-983-define-user-site-awareness-registry\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T20:56:39.698Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T20:58:27.833Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
+          "updated_at": "2026-04-27T20:58:28.059Z"
         }
       ]
     },
@@ -29556,6 +29660,15 @@
           "task_id": "20260427-982-crystallize-governed-locus-federation-doctrine",
           "agent_id": "architect",
           "claimed_at": "2026-04-27T20:51:55.496Z",
+          "released_at": null,
+          "release_reason": null,
+          "intent": "primary"
+        },
+        {
+          "assignment_id": "assign-20260427-983-define-user-site-awareness-registry-architect-1777323398381",
+          "task_id": "20260427-983-define-user-site-awareness-registry",
+          "agent_id": "architect",
+          "claimed_at": "2026-04-27T20:56:39.698Z",
           "released_at": null,
           "release_reason": null,
           "intent": "primary"
@@ -42044,6 +42157,19 @@
           "continuation_packet_json": null,
           "updated_at": "2026-04-27T20:54:09.056Z",
           "closure_mode": "agent_finish"
+        },
+        {
+          "task_id": "20260427-983-define-user-site-awareness-registry",
+          "task_number": 983,
+          "status": "closed",
+          "governed_by": "task_close:architect",
+          "closed_at": "2026-04-27T20:58:38.905Z",
+          "closed_by": "architect",
+          "reopened_at": null,
+          "reopened_by": null,
+          "continuation_packet_json": null,
+          "updated_at": "2026-04-27T20:58:38.906Z",
+          "closure_mode": "agent_finish"
         }
       ]
     },
@@ -42069,7 +42195,7 @@
       "rows": [
         {
           "singleton": 1,
-          "last_allocated": 982
+          "last_allocated": 983
         }
       ]
     },
@@ -44610,6 +44736,14 @@
           "agent_id": "architect",
           "reported_at": "2026-04-27T20:53:59.279Z",
           "report_json": "{\"report_id\":\"wrr_b1a11a01_20260427-982-crystallize-governed-locus-federation-doctrine_architect\",\"task_number\":\"982\",\"task_id\":\"20260427-982-crystallize-governed-locus-federation-doctrine\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-982-crystallize-governed-locus-federation-doctrine-2026-04-27T20:51:55.496Z\",\"reported_at\":\"2026-04-27T20:53:59.279Z\",\"summary\":\"Crystallized Governed Locus Federation as parent doctrine for plural embodiment, authority routing, Site lifecycle, provenance lineage, pub/sub influence, governed admission, and re-instantiable memory.\",\"changed_files\":[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/governed-locus-federation.md\"],\"verification\":[{\"command\":\"pnpm verify\",\"result\":\"passed\"}],\"known_residuals\":[\"Site pub/sub remains proposal-level; authority-clone routing remains queued as task 979; mutating Site lifecycle and lineage event storage remain deferred.\"],\"ready_for_review\":true,\"report_status\":\"accepted\"}"
+        },
+        {
+          "report_id": "wrr_e699f152_20260427-983-define-user-site-awareness-registry_architect",
+          "task_id": "20260427-983-define-user-site-awareness-registry",
+          "assignment_id": "20260427-983-define-user-site-awareness-registry-2026-04-27T20:56:39.698Z",
+          "agent_id": "architect",
+          "reported_at": "2026-04-27T20:58:27.833Z",
+          "report_json": "{\"report_id\":\"wrr_e699f152_20260427-983-define-user-site-awareness-registry_architect\",\"task_number\":\"983\",\"task_id\":\"20260427-983-define-user-site-awareness-registry\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-983-define-user-site-awareness-registry-2026-04-27T20:56:39.698Z\",\"reported_at\":\"2026-04-27T20:58:27.833Z\",\"summary\":\"Defined User Site awareness registry semantics as user-locus directory and coordination without mutation authority over linked Sites.\",\"changed_files\":[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/governed-locus-federation.md\",\"docs/product/site-bootstrap-contract.md\",\"docs/product/user-site-awareness-registry.md\"],\"verification\":[{\"command\":\"pnpm verify\",\"result\":\"passed\"}],\"known_residuals\":[\"Storage, discovery, subscription management, and command surfaces for the User Site awareness registry remain future work.\"],\"ready_for_review\":true,\"report_status\":\"accepted\"}"
         }
       ]
     },
@@ -44988,6 +45122,14 @@
           "verdict": "accepted",
           "findings_json": null,
           "reviewed_at": "2026-04-27T20:54:08.215Z"
+        },
+        {
+          "review_id": "review-20260427-983-define-user-site-awareness-registry-1777323517912",
+          "task_id": "20260427-983-define-user-site-awareness-registry",
+          "reviewer_agent_id": "architect",
+          "verdict": "accepted",
+          "findings_json": null,
+          "reviewed_at": "2026-04-27T20:58:37.912Z"
         }
       ]
     },
@@ -56875,6 +57017,19 @@
           "acceptance_criteria_json": "[\"Narada doctrine defines governed locus federation or rejects the parent concept with reasons;The concept boundary distinguishes embodiment topology\",\"authority routing\",\"lifecycle transformation\",\"lineage\",\"pub/sub influence\",\"governed admission\",\"and re-instantiation;Docs identify which parts are existing doctrine\",\"which are implemented surfaces\",\"and which remain proposals;The source inbox envelope is handled through a governed pending or archive action;pnpm verify passes\"]",
           "dependencies_json": "[]",
           "updated_at": "2026-04-27T20:51:49.265Z"
+        },
+        {
+          "task_id": "20260427-983-define-user-site-awareness-registry",
+          "task_number": 983,
+          "title": "Define User Site awareness registry",
+          "chapter_markdown": "site-lifecycle",
+          "goal_markdown": "Define the User Site as the user-locus awareness and coordination registry for known Narada Sites while preserving the distinction between awareness, proposal routing, subscription, and mutation authority.",
+          "context_markdown": null,
+          "required_work_markdown": "1. TBD",
+          "non_goals_markdown": "- Do not expand scope beyond this task.\n- Do not create derivative task-status files.\n- Do not mutate live external systems unless explicitly authorized.",
+          "acceptance_criteria_json": "[\"Narada docs define User Site awareness registry semantics;The registry field model distinguishes identity\",\"locus type\",\"roots\",\"authority boundaries\",\"sync posture\",\"capabilities\",\"inbox/subscription endpoints\",\"lineage\",\"freshness\",\"and health;Docs state that User Site awareness does not imply mutation authority over linked Sites;The source inbox envelope is handled through a governed pending or archive action;pnpm verify passes\"]",
+          "dependencies_json": "[]",
+          "updated_at": "2026-04-27T20:56:34.717Z"
         }
       ]
     },
