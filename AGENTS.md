@@ -50,6 +50,8 @@ From that primary shape, the familiar Narada readings follow:
 
 **Terminology**: See [`TERMINOLOGY.md`](TERMINOLOGY.md) for the user-facing vocabulary guide, and [`SEMANTICS.md`](SEMANTICS.md) for the complete system ontology (identity lattice, core abstractions, invariant derivations). In short: users set up and run **operations**; Narada compiles each **operation** into exactly one internal **scope**.
 
+**Self-build Doctrine**: See [`docs/concepts/inhabited-evolution.md`](docs/concepts/inhabited-evolution.md) for Inhabited Evolution: Narada's construction mode for lifting real operational friction into doctrine, tooling, or substrate only after the originating case can run through the lifted form.
+
 ### Semantic Crystallization Guidance
 
 When describing higher-order architecture, deployment, or design:
@@ -60,6 +62,7 @@ When describing higher-order architecture, deployment, or design:
 - Treat the nine-layer pipeline as a canonical traversal through the zone topology, not as the deeper primitive.
 - Use the **Control Cycle phase vocabulary** (see [`SEMANTICS.md §2.14.7`](SEMANTICS.md)) when describing Cycle internals: Source Read → Fact Admission → Context Formation → Evaluation → Governance → Intent/Handoff → Execution Attempt → Confirmation/Reconciliation → Evidence Trace.
 - Use the **Operation Specification** (not "telos") as the canonical reading of `Aim`. An Aim is inspectable, versionable, and independent of runtime.
+- For Narada self-build work, apply **Inhabited Evolution**: build what the operation has earned; record unearned structure as possibility, proposal, or residual; treat Operator correction as part of the control loop.
 - **`operation`** remains current user-facing CLI language. Do not invent new meanings for it.
 - Do not call a user's configured work setup a **Narada instance**. Use **operation** for the configured unit of work, **operation specification** for its written/configured definition, and **runtime / daemon / Site** for deployed machinery.
 - Do not rename CLI flags, database columns, or package APIs as part of this vocabulary shift.
@@ -86,6 +89,7 @@ When describing higher-order architecture, deployment, or design:
 | [SEMANTICS.md](SEMANTICS.md) | **Canonical ontology** — single source of truth for all terms | Need a definition, identity format, or invariant |
 | [SEMANTICS.md §2.13](SEMANTICS.md) | Intelligence-Authority Separation — canonical internal formulation | Need to understand why evaluation ≠ decision and why the control plane owns authority |
 | [SEMANTICS.md §2.14.5](SEMANTICS.md) | Portable invariant spine — how Narada travels across Sites, verticals, and principals | Need to prevent substrate/vertical/agent collapse |
+| [SEMANTICS.md §2.14.9](SEMANTICS.md) | Inhabited Evolution — self-build doctrine for lifting operational friction into durable form | Need to decide whether construction work is earned or speculative |
 | [SEMANTICS.md §2.15](SEMANTICS.md) | Crossing regime — unifying abstraction of zone, boundary, crossing regime, and crossing artifact | Need to reason about boundary crossings generically |
 | [SEMANTICS.md §2.17](SEMANTICS.md) | Zone template taxonomy — reusable zone templates, instance/template/stage distinction | Need to understand which zones share structural roles and invariant authority grammar |
 | [SEMANTICS.md §2.8](SEMANTICS.md) | Re-derivation / recovery operator family | Need to understand replay, preview, recovery, rebuild, or confirm operators |
@@ -103,6 +107,7 @@ When describing higher-order architecture, deployment, or design:
 | [runtime-usc-boundary.md](docs/concepts/runtime-usc-boundary.md) | Runtime / USC / operator ownership boundary | Need to understand which layer owns what |
 | [runtime-usc-boundary.md §Language / Runtime Posture](docs/concepts/runtime-usc-boundary.md#language--runtime-posture) | TypeScript posture vs durable authority boundaries | Need to decide whether types, schemas, runtime checks, or another language own a concern |
 | [command-execution-intent-zone.md](docs/concepts/command-execution-intent-zone.md) | Command Execution Intent Zone — governed non-test command execution boundary | Need to separate command request, execution, result, and output admission |
+| [inhabited-evolution.md](docs/concepts/inhabited-evolution.md) | Inhabited Evolution — human/AI/trace co-evolution through real operations | Need to guide Narada self-build without speculative machinery |
 | [cloudflare-site-materialization.md](docs/deployment/cloudflare-site-materialization.md) | Cloudflare Site materialization design | Designing or deploying a Cloudflare-backed Narada Site |
 | [bootstrap-contract.md](docs/product/bootstrap-contract.md) | Canonical intent-to-operation bootstrap path | Setting up or onboarding a first-time user |
 | [site-bootstrap-contract.md](docs/product/site-bootstrap-contract.md) | Canonical Site first-run path (runtime locus setup) | Setting up a local Site on Windows, macOS, or Linux |

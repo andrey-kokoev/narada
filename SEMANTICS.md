@@ -105,6 +105,7 @@ This is the deepest semantic lens. The other major Narada descriptions are deriv
 - the **deterministic state compiler** description says what the topology does;
 - the **nine-layer pipeline** says one canonical traversal order through the topology;
 - **Aim / Site / Cycle / Act / Trace** gives the operator/runtime reading of the same structure;
+- **Inhabited Evolution** gives the self-build construction posture for lifting real operational friction into doctrine, tooling, or substrate without speculative machinery;
 - **Intelligence-Authority Separation** states one of the topology's core anti-collapse invariants;
 - **crossing regime** names the local law at each governed crossing.
 
@@ -1178,6 +1179,52 @@ An operation becomes better by changing its **Operation Specification** along on
 | **Site constraints** | Runtime locus limits (budget, latency, substrate) | `Site` config | `admin` |
 
 A refined Aim is still an Aim; its `operation specification` has changed. Refinement does not introduce a new ontological layer.
+
+### 2.14.9 Inhabited Evolution
+
+**Inhabited Evolution** is Narada's construction mode for improving the system from inside real operations.
+
+It names a disciplined path:
+
+```text
+situated ops -> friction -> local construction -> trace/evidence -> invariant extraction -> re-instantiation -> doctrine/tooling/substrate lift
+```
+
+Inhabited Evolution is not a new runtime object, zone, or lifecycle state. It is a construction posture that governs when local pressure may become general doctrine or tooling.
+
+| Element | Narada Reading |
+| --- | --- |
+| Situated ops | An Aim-at-Site binding under live pressure |
+| Friction | Operator correction, failed command, rough surface, residual, or Evidence Trace that exposes incoherence |
+| Local construction | A bounded task/chapter change in the current Site |
+| Trace/evidence | Durable task evidence, command result, verification run, review, observation artifact, or commit |
+| Invariant extraction | A rule that remains true beyond the originating case |
+| Re-instantiation | The originating case runs through the lifted form |
+| Lift | Doctrine, CLI, package boundary, Site substrate, or construction-law change |
+
+The lift is admissible only when the originating case can still run through the lifted form. If it cannot, the material remains a possibility, proposal, residual, or local workaround.
+
+#### Operator Correction
+
+Operator correction is part of the control loop, not conversational noise.
+
+- It may expose a violated constraint.
+- It may identify an unearned abstraction.
+- It may redirect the next Cycle.
+- It does not automatically mutate durable state; it must cross through an appropriate command, task, inbox item, decision, or other governed artifact.
+
+#### Anti-Speculation Rule
+
+Do not build symmetry merely because it is aesthetically coherent. Build what the operation has earned.
+
+Unearned structure must be recorded as:
+
+- a possibility, when it may matter later;
+- a proposal, when it needs admission;
+- a residual, when it is known debt;
+- or a rejected path, when the operation disproves it.
+
+This preserves Intelligence-Authority Separation: AI synthesis may identify patterns, but authority to lift them into doctrine or substrate comes from governed admission and durable evidence.
 
 ---
 
