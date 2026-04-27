@@ -9,7 +9,7 @@
     "narada:guard-cli-output": "node scripts/cli-output-admission-guard.mjs",
     "narada:guard-cli-output:report": "node scripts/cli-output-admission-guard.mjs --report",
     "test": "tsx scripts/test-guard.ts",
-    "verify": "tsx scripts/verify.ts",
+    "verify": "node --import tsx scripts/verify.ts",
     "test:unit": "tsx scripts/test-unit.ts",
     "test:integration": "tsx scripts/test-integration.ts",
     "test:full": "tsx scripts/test-full.ts",
