@@ -7,7 +7,7 @@ Inbox envelopes are inert. Submitting an envelope does not create a task, execut
 ## CLI Surface
 
 ```bash
-narada inbox submit --source-kind diagnostic --source-ref site-doctor:desktop-sunroom-2 --kind observation --authority-level system_observed --payload '{"hostname":"desktop-sunroom-2","computer_name":"DESKTOP-SUNROOM"}'
+narada inbox submit --source-kind diagnostic --source-ref site-doctor:desktop-sunroom-2 --kind observation --authority-level system_observed --payload-file /tmp/site-observation.json
 narada inbox work-next --claim --by operator
 narada inbox list
 narada inbox show <envelope-id>
@@ -15,6 +15,8 @@ narada inbox task <envelope-id> --title "Fix PC Site identity policy" --by opera
 narada inbox triage <envelope-id> --action archive --by operator
 narada inbox pending <envelope-id> --to site_config_change:site:desktop-sunroom-2 --by operator
 ```
+
+Prefer `--payload-file` or `--payload-stdin` for non-trivial payloads. Inline JSON is acceptable for tiny POSIX-shell examples, but it is brittle across PowerShell, chat copy/paste, and multi-line payloads.
 
 ## Envelope Axes
 
@@ -72,3 +74,15 @@ If handling must be abandoned without taking an action:
 ```bash
 narada inbox release <envelope-id> --by operator
 ```
+
+## First-Use Ergonomics
+
+Canonical Inbox first use should not require ad hoc repair work.
+
+| Friction | Canonical Surface |
+| --- | --- |
+| Shell-hostile JSON quoting, especially in PowerShell | Use `inbox submit --payload-file <path>` or `--payload-stdin`; avoid inline JSON for real payloads. |
+| Fresh checkout missing dependencies, build output, CLI shim, or native SQLite binding | Run `narada doctor --bootstrap --format json` and follow its `repair_plan`. |
+| Git/worktree uncertainty before publishing an inbox-backed chapter | Run `narada chapter preflight <range> --expect-commit --expect-push`. |
+| Inbox entry is informative but not executable | Use `inbox triage <id> --action archive --by <principal>` after durable guidance or residuals are recorded. |
+| Inbox entry targets a zone without executable promotion | Use `inbox pending <id> --to <kind>:<ref> --by <principal>`; do not report it as enacted. |
