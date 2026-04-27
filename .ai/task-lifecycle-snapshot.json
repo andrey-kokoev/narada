@@ -1,7 +1,7 @@
 {
   "snapshot_kind": "task_lifecycle_snapshot",
   "snapshot_version": 1,
-  "exported_at": "2026-04-27T20:43:01.898Z",
+  "exported_at": "2026-04-27T20:49:28.727Z",
   "tables": [
     {
       "name": "agent_roster",
@@ -26,7 +26,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 720,
-          "updated_at": "2026-04-27T20:43:01.898Z"
+          "updated_at": "2026-04-27T20:49:28.727Z"
         },
         {
           "agent_id": "a2",
@@ -37,7 +37,7 @@
           "status": "idle",
           "task_number": null,
           "last_done": 886,
-          "updated_at": "2026-04-27T20:43:01.898Z"
+          "updated_at": "2026-04-27T20:49:28.727Z"
         },
         {
           "agent_id": "a3",
@@ -48,7 +48,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 610,
-          "updated_at": "2026-04-27T20:43:01.898Z"
+          "updated_at": "2026-04-27T20:49:28.727Z"
         },
         {
           "agent_id": "a4",
@@ -59,7 +59,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 574,
-          "updated_at": "2026-04-27T20:43:01.898Z"
+          "updated_at": "2026-04-27T20:49:28.727Z"
         },
         {
           "agent_id": "a5",
@@ -70,7 +70,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 551,
-          "updated_at": "2026-04-27T20:43:01.898Z"
+          "updated_at": "2026-04-27T20:49:28.727Z"
         },
         {
           "agent_id": "a6",
@@ -81,18 +81,18 @@
           "status": "done",
           "task_number": null,
           "last_done": 545,
-          "updated_at": "2026-04-27T20:43:01.898Z"
+          "updated_at": "2026-04-27T20:49:28.727Z"
         },
         {
           "agent_id": "architect",
           "role": "implementer",
           "capabilities_json": "[\"derive\",\"propose\",\"claim\",\"execute\",\"resolve\",\"confirm\"]",
           "first_seen_at": "2026-04-26T22:28:56.453Z",
-          "last_active_at": "2026-04-27T20:43:01.898Z",
+          "last_active_at": "2026-04-27T20:49:28.727Z",
           "status": "done",
           "task_number": null,
-          "last_done": 980,
-          "updated_at": "2026-04-27T20:43:01.898Z"
+          "last_done": 981,
+          "updated_at": "2026-04-27T20:49:28.727Z"
         }
       ]
     },
@@ -6125,6 +6125,27 @@
           "confirmation_json": "{\"task_id\":\"20260427-980-define-site-lifecycle-transformation-machinery\",\"task_number\":980,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
           "warnings_json": null,
           "updated_at": "2026-04-27T20:34:55.282Z"
+        },
+        {
+          "request_id": "air_claim_981_architect_1777322745006_u2pyzf",
+          "kind": "claim",
+          "task_id": "20260427-981-define-site-provenance-lineage-construct",
+          "task_number": 981,
+          "agent_id": "architect",
+          "requested_by": "architect",
+          "requested_at": "2026-04-27T20:45:45.006Z",
+          "reason": null,
+          "no_claim": 0,
+          "status": "applied",
+          "rejection_reason": null,
+          "assignment_id": "assign-20260427-981-define-site-provenance-lineage-construct-architect-1777322745006",
+          "previous_agent_id": null,
+          "lifecycle_status_before": "opened",
+          "lifecycle_status_after": "claimed",
+          "roster_status_after": "working",
+          "confirmation_json": "{\"task_id\":\"20260427-981-define-site-provenance-lineage-construct\",\"task_number\":981,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
+          "warnings_json": null,
+          "updated_at": "2026-04-27T20:45:46.496Z"
         }
       ]
     },
@@ -15266,6 +15287,45 @@
           "admitted_at": "2026-04-27T20:43:01.566Z",
           "admitted_by": "architect",
           "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_981_1777322967367_h93vws",
+          "bundle_id": "evb_981_1777322967367_k7wst6",
+          "task_id": "20260427-981-define-site-provenance-lineage-construct",
+          "task_number": 981,
+          "verdict": "rejected",
+          "methods_json": "[\"review\"]",
+          "blockers_json": "[\"5 acceptance criteria remain unchecked\"]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T20:49:27.367Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_981_1777322967687_tenc4j",
+          "bundle_id": "evb_981_1777322967687_1kicsf",
+          "task_id": "20260427-981-define-site-provenance-lineage-construct",
+          "task_number": 981,
+          "verdict": "admitted",
+          "methods_json": "[\"criteria_proof\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T20:49:27.687Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_981_1777322968013_62p9mq",
+          "bundle_id": "evb_981_1777322968013_9mnuum",
+          "task_id": "20260427-981-define-site-provenance-lineage-construct",
+          "task_number": 981,
+          "verdict": "admitted",
+          "methods_json": "[\"admission\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": "closed",
+          "admitted_at": "2026-04-27T20:49:28.013Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
         }
       ]
     },
@@ -23448,6 +23508,45 @@
           "residuals_json": "[]",
           "assembled_at": "2026-04-27T20:43:01.566Z",
           "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_981_1777322967367_k7wst6",
+          "task_id": "20260427-981-define-site-provenance-lineage-construct",
+          "task_number": 981,
+          "report_ids_json": "[\"wrr_786bc1f7_20260427-981-define-site-provenance-lineage-construct_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":false,\"unchecked_count\":5}",
+          "review_ids_json": "[\"review-20260427-981-define-site-provenance-lineage-construct-1777322967185\"]",
+          "changed_files_json": "[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/product/site-bootstrap-contract.md\",\"docs/product/site-lifecycle-transformations.md\",\"docs/product/site-provenance-lineage.md\",\"packages/layers/cli/src/commands/sites.ts\",\"packages/layers/cli/src/commands/sites-register.ts\",\"packages/layers/cli/test/commands/sites.test.ts\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T20:49:27.367Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_981_1777322967687_1kicsf",
+          "task_id": "20260427-981-define-site-provenance-lineage-construct",
+          "task_number": 981,
+          "report_ids_json": "[\"wrr_786bc1f7_20260427-981-define-site-provenance-lineage-construct_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[\"review-20260427-981-define-site-provenance-lineage-construct-1777322967185\"]",
+          "changed_files_json": "[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/product/site-bootstrap-contract.md\",\"docs/product/site-lifecycle-transformations.md\",\"docs/product/site-provenance-lineage.md\",\"packages/layers/cli/src/commands/sites.ts\",\"packages/layers/cli/src/commands/sites-register.ts\",\"packages/layers/cli/test/commands/sites.test.ts\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T20:49:27.687Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_981_1777322968013_9mnuum",
+          "task_id": "20260427-981-define-site-provenance-lineage-construct",
+          "task_number": 981,
+          "report_ids_json": "[\"wrr_786bc1f7_20260427-981-define-site-provenance-lineage-construct_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[\"review-20260427-981-define-site-provenance-lineage-construct-1777322967185\"]",
+          "changed_files_json": "[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/product/site-bootstrap-contract.md\",\"docs/product/site-lifecycle-transformations.md\",\"docs/product/site-provenance-lineage.md\",\"packages/layers/cli/src/commands/sites.ts\",\"packages/layers/cli/src/commands/sites-register.ts\",\"packages/layers/cli/test/commands/sites.test.ts\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T20:49:28.013Z",
+          "assembled_by": "architect"
         }
       ]
     },
@@ -26601,6 +26700,11 @@
           "task_id": "20260427-980-define-site-lifecycle-transformation-machinery",
           "record_json": "{\"task_id\":\"20260427-980-define-site-lifecycle-transformation-machinery\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T20:34:54.282Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T20:42:44.178Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
           "updated_at": "2026-04-27T20:42:44.548Z"
+        },
+        {
+          "task_id": "20260427-981-define-site-provenance-lineage-construct",
+          "record_json": "{\"task_id\":\"20260427-981-define-site-provenance-lineage-construct\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T20:45:45.368Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T20:49:14.905Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
+          "updated_at": "2026-04-27T20:49:15.148Z"
         }
       ]
     },
@@ -29330,6 +29434,15 @@
           "task_id": "20260427-980-define-site-lifecycle-transformation-machinery",
           "agent_id": "architect",
           "claimed_at": "2026-04-27T20:34:54.282Z",
+          "released_at": null,
+          "release_reason": null,
+          "intent": "primary"
+        },
+        {
+          "assignment_id": "assign-20260427-981-define-site-provenance-lineage-construct-architect-1777322745006",
+          "task_id": "20260427-981-define-site-provenance-lineage-construct",
+          "agent_id": "architect",
+          "claimed_at": "2026-04-27T20:45:45.368Z",
           "released_at": null,
           "release_reason": null,
           "intent": "primary"
@@ -41792,6 +41905,19 @@
           "continuation_packet_json": null,
           "updated_at": "2026-04-27T20:43:01.703Z",
           "closure_mode": "agent_finish"
+        },
+        {
+          "task_id": "20260427-981-define-site-provenance-lineage-construct",
+          "task_number": 981,
+          "status": "closed",
+          "governed_by": "task_close:architect",
+          "closed_at": "2026-04-27T20:49:28.226Z",
+          "closed_by": "architect",
+          "reopened_at": null,
+          "reopened_by": null,
+          "continuation_packet_json": null,
+          "updated_at": "2026-04-27T20:49:28.226Z",
+          "closure_mode": "agent_finish"
         }
       ]
     },
@@ -41817,7 +41943,7 @@
       "rows": [
         {
           "singleton": 1,
-          "last_allocated": 980
+          "last_allocated": 981
         }
       ]
     },
@@ -44342,6 +44468,14 @@
           "agent_id": "architect",
           "reported_at": "2026-04-27T20:42:44.178Z",
           "report_json": "{\"report_id\":\"wrr_74dd05c6_20260427-980-define-site-lifecycle-transformation-machinery_architect\",\"task_number\":\"980\",\"task_id\":\"20260427-980-define-site-lifecycle-transformation-machinery\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-980-define-site-lifecycle-transformation-machinery-2026-04-27T20:34:54.282Z\",\"reported_at\":\"2026-04-27T20:42:44.178Z\",\"summary\":\"Defined Site lifecycle transformations as governed Site machinery and added read-only/preflight CLI support for clone, fork, split, absorb, migrate, re-instantiate, and archive.\",\"changed_files\":[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/product/site-bootstrap-contract.md\",\"docs/product/site-lifecycle-transformations.md\",\"packages/layers/cli/src/commands/sites.ts\",\"packages/layers/cli/src/commands/sites-register.ts\",\"packages/layers/cli/test/commands/sites.test.ts\"],\"verification\":[{\"command\":\"pnpm --filter @narada2/cli exec vitest run test/commands/sites.test.ts --pool=forks\",\"result\":\"passed: 15/15\"},{\"command\":\"pnpm typecheck\",\"result\":\"passed\"},{\"command\":\"pnpm --filter @narada2/cli build\",\"result\":\"passed\"},{\"command\":\"narada sites lifecycle preflight clone --source-site user --target-site user-copy --authority-mode read_only --format json\",\"result\":\"passed: ready, mutation_performed false\"},{\"command\":\"narada sites lifecycle preflight archive --source-site old --authority-mode authority_migration --format json\",\"result\":\"passed: blocked, mutation_performed false\"},{\"command\":\"pnpm verify\",\"result\":\"passed\"}],\"known_residuals\":[\"Mutating Site lifecycle operators are intentionally not implemented in this slice; future commands must consume the same transformation grammar and produce durable transformation artifacts before changing Site state.\"],\"ready_for_review\":true,\"report_status\":\"accepted\"}"
+        },
+        {
+          "report_id": "wrr_786bc1f7_20260427-981-define-site-provenance-lineage-construct_architect",
+          "task_id": "20260427-981-define-site-provenance-lineage-construct",
+          "assignment_id": "20260427-981-define-site-provenance-lineage-construct-2026-04-27T20:45:45.368Z",
+          "agent_id": "architect",
+          "reported_at": "2026-04-27T20:49:14.905Z",
+          "report_json": "{\"report_id\":\"wrr_786bc1f7_20260427-981-define-site-provenance-lineage-construct_architect\",\"task_number\":\"981\",\"task_id\":\"20260427-981-define-site-provenance-lineage-construct\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-981-define-site-provenance-lineage-construct-2026-04-27T20:45:45.368Z\",\"reported_at\":\"2026-04-27T20:49:14.905Z\",\"summary\":\"Defined Site provenance lineage as an append-only event log with graph projections, documented authority-vs-influence separation, and added read-only lineage event vocabulary CLI.\",\"changed_files\":[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/product/site-bootstrap-contract.md\",\"docs/product/site-lifecycle-transformations.md\",\"docs/product/site-provenance-lineage.md\",\"packages/layers/cli/src/commands/sites.ts\",\"packages/layers/cli/src/commands/sites-register.ts\",\"packages/layers/cli/test/commands/sites.test.ts\"],\"verification\":[{\"command\":\"pnpm --filter @narada2/cli exec vitest run test/commands/sites.test.ts --pool=forks\",\"result\":\"passed: 16/16\"},{\"command\":\"pnpm --filter @narada2/cli build\",\"result\":\"passed\"},{\"command\":\"narada sites lineage events --format json\",\"result\":\"passed: event_log_with_graph_projection, mutation_performed false\"},{\"command\":\"pnpm verify\",\"result\":\"passed\"}],\"known_residuals\":[\"Lineage event storage and mutating Site transformation writes are intentionally deferred; this task defines the vocabulary and read-only inspection boundary.\"],\"ready_for_review\":true,\"report_status\":\"accepted\"}"
         }
       ]
     },
@@ -44704,6 +44838,14 @@
           "verdict": "accepted",
           "findings_json": null,
           "reviewed_at": "2026-04-27T20:43:00.923Z"
+        },
+        {
+          "review_id": "review-20260427-981-define-site-provenance-lineage-construct-1777322967185",
+          "task_id": "20260427-981-define-site-provenance-lineage-construct",
+          "reviewer_agent_id": "architect",
+          "verdict": "accepted",
+          "findings_json": null,
+          "reviewed_at": "2026-04-27T20:49:27.184Z"
         }
       ]
     },
@@ -56565,6 +56707,19 @@
           "acceptance_criteria_json": "[\"Narada doctrine defines Site lifecycle transformations and their authority/provenance rules;Operator-facing documentation distinguishes Site clone/fork/split/absorb/migrate/re-instantiate/archive from raw filesystem copy;CLI exposes an inspection/preflight surface for Site lifecycle transformation kinds without performing unsafe mutation;The source inbox envelope is handled through a governed pending or archive action;Focused tests cover the new inspection/preflight surface;pnpm verify passes\"]",
           "dependencies_json": "[]",
           "updated_at": "2026-04-27T20:34:20.177Z"
+        },
+        {
+          "task_id": "20260427-981-define-site-provenance-lineage-construct",
+          "task_number": 981,
+          "title": "Define Site provenance lineage construct",
+          "chapter_markdown": "site-lifecycle",
+          "goal_markdown": "De-arbitrarize the Site provenance lineage construct required by Site lifecycle transformations and pub/sub influence, separating lineage, authority transfer, subscription influence, and re-instantiation evidence before implementation.",
+          "context_markdown": null,
+          "required_work_markdown": "1. TBD",
+          "non_goals_markdown": "- Do not expand scope beyond this task.\n- Do not create derivative task-status files.\n- Do not mutate live external systems unless explicitly authorized.",
+          "acceptance_criteria_json": "[\"Narada doctrine defines Site provenance lineage and distinguishes event log\",\"projection\",\"chain\",\"DAG\",\"and graph readings;Site lifecycle docs identify lineage events and required evidence fields;Site pub/sub or influence edges are explicitly distinguished from mutation-authority edges;CLI inspection/preflight exposes the lineage event vocabulary without mutating Site state;Focused tests cover the lineage inspection surface;The source inbox envelope is handled through a governed pending or archive action;pnpm verify passes\"]",
+          "dependencies_json": "[]",
+          "updated_at": "2026-04-27T20:45:35.491Z"
         }
       ]
     },

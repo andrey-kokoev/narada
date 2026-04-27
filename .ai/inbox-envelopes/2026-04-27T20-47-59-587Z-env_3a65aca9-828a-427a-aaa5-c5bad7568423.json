@@ -1,0 +1,34 @@
+{
+  "envelope_id": "env_3a65aca9-828a-427a-aaa5-c5bad7568423",
+  "received_at": "2026-04-27T20:47:59.587Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:governed-locus-federation"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Recognize governed locus federation as emerging Narada concept cluster",
+    "summary": "Operator and architect identified a larger adjacent concept cluster behind recent proposals: governed continuity across evolving loci. Site lifecycle transformations, Site pub/sub, provenance lineage, authority-clone routing, and Plural Embodiment/Singular Authority appear to be facets of a broader Narada doctrine that might be called Governed Locus Federation or Governed Federated Self-Reinstantiation.",
+    "evidence": [
+      "Authority routing: commands may originate from many embodiments, but governed mutation resolves to one locus.",
+      "Locus lifecycle: Sites can be born, cloned, split, absorbed, migrated, archived, and re-instantiated.",
+      "Lineage graph: Site transformations need durable provenance edges with authority and evidence semantics.",
+      "Federated awareness: Sites publish and subscribe to typed signals without automatic authority transfer.",
+      "Governed admission: incoming signals, tools, knowledge, templates, and proposals enter as inert candidates before promotion.",
+      "Operational self-reproduction: Narada should be able to create more Narada loci while preserving doctrine, authority, and trace."
+    ],
+    "proposal": [
+      "Open a doctrine/design investigation into the parent concept above Site lifecycle, pub/sub, provenance, and plural embodiment: possible names include Governed Locus Federation or Governed Federated Self-Reinstantiation.",
+      "De-arbitrarize the concept boundary: distinguish embodiment topology, authority routing, locus lifecycle, lineage/provenance, pub/sub influence, governed admission, authority migration, and re-instantiable memory.",
+      "Decide whether this should become Narada doctrine, a Site architecture arc, a substrate package, or a set of coordinated but separate features.",
+      "Use existing proposals as originating cases: two-clone authority routing, Site lifecycle transformations, Site pub/sub, Site provenance lineage, and thoughts concept Plural Embodiment/Singular Authority.",
+      "Avoid premature implementation until the parent concept clarifies which structures are forced, which are policy, and which are merely adjacent."
+    ],
+    "recommendation": "Promote to a PDA/CIPDA doctrine/design chapter or arc before product machinery. This seems like an organizing concept for Narada as a self-extending network of governed loci."
+  },
+  "status": "received"
+}

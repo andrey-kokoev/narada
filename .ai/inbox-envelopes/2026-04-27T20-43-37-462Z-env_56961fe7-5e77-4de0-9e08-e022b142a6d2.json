@@ -1,0 +1,41 @@
+{
+  "envelope_id": "env_56961fe7-5e77-4de0-9e08-e022b142a6d2",
+  "received_at": "2026-04-27T20:43:37.462Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:site-provenance-lineage"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Introduce Site provenance lineage construct, pending de-arbitrarization",
+    "summary": "Operator and architect identified that once Narada Sites can be cloned, split, absorbed, migrated, re-instantiated, and connected by pub/sub, a durable provenance construct becomes forced. Narada likely needs a Site lineage graph or provenance chain recording where Sites came from, which transformations occurred, which authority moved or did not move, and what evidence justified each transition. This should not be implemented immediately without a de-arbitrarization pass.",
+    "evidence": [
+      "Site lifecycle proposal requires clone, fork, split, absorb, migrate, re-instantiate, and archive operations; each operation needs durable continuity and authority history.",
+      "Site pub/sub proposal creates influence and subscription edges across Sites that must be distinguishable from ownership or mutation-authority edges.",
+      "Plural Embodiment, Singular Authority requires authority transfers, refusals, and forwarding policies to be explicit and auditable.",
+      "Constructive Universalization by Re-instantiation requires lifted templates and machinery to remember originating cases and prove re-instantiation."
+    ],
+    "proposal": [
+      "Create a de-arbitrarization/design pass for a Site Provenance Lineage construct before implementation.",
+      "Clarify whether the core object is a chain, DAG, general graph, event log, or projection over lifecycle events.",
+      "Separate edge types before implementation: derivation, clone/fork, split, absorb, migration, authority transfer, template application, pub/sub influence, knowledge admission, tool admission, and re-instantiation proof.",
+      "Define minimal lifecycle event vocabulary such as site.created, site.cloned, site.forked, site.split, site.absorbed, site.migrated, site.reinstantiated, site.template_applied, site.authority_transferred, site.authority_refused, site.subscribed, site.published, site.knowledge_admitted, and site.tool_admitted.",
+      "Require each lineage event to carry provenance, authority effect, evidence references, operator/agent principal, source and target Site identity, and re-instantiation or rollback posture where applicable.",
+      "Use lineage as governed continuity substrate for Site lifecycle machinery and pub/sub, but avoid smearing influence/subscription edges into mutation-authority edges."
+    ],
+    "recommendation": "Promote first to a PDA/CIPDA design chapter or task, not direct implementation. The construct is likely necessary, but its graph shape and authority semantics need de-arbitrarization before machinery is built."
+  },
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_56961fe7-5e77-4de0-9e08-e022b142a6d2",
+    "promoted_at": "2026-04-27T20:49:42.993Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
+}

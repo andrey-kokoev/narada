@@ -35,6 +35,8 @@ export interface SitesLifecyclePreflightOptions extends SitesOptions {
   authorityMode?: string;
 }
 
+export interface SitesLineageEventsOptions extends SitesOptions {}
+
 interface SiteListEntry {
   siteId: string;
   variant: string;
@@ -115,6 +117,99 @@ const SITE_LIFECYCLE_KINDS = [
   },
 ] as const;
 
+const SITE_LINEAGE_EVENTS = [
+  {
+    event: 'site.created',
+    edge_type: 'origin',
+    authority_effect: 'establishes_site_authority',
+    description: 'A Site is first created or admitted as a runtime locus.',
+  },
+  {
+    event: 'site.cloned',
+    edge_type: 'clone',
+    authority_effect: 'preserve_or_route_authority',
+    description: 'A new Site embodiment is derived from a source Site.',
+  },
+  {
+    event: 'site.forked',
+    edge_type: 'fork',
+    authority_effect: 'creates_independent_authority_lineage',
+    description: 'A Site lineage intentionally diverges from its source.',
+  },
+  {
+    event: 'site.split',
+    edge_type: 'split',
+    authority_effect: 'partial_transfer_or_residual_linkage',
+    description: 'A sub-locus is extracted from a source Site.',
+  },
+  {
+    event: 'site.absorbed',
+    edge_type: 'absorption',
+    authority_effect: 'admission_without_implicit_ownership',
+    description: 'Sidecar or local Site material is admitted into a target Site or Narada proper.',
+  },
+  {
+    event: 'site.migrated',
+    edge_type: 'migration',
+    authority_effect: 'authority_transfer',
+    description: 'A Site authority or substrate changes locus through a cutover.',
+  },
+  {
+    event: 'site.reinstantiated',
+    edge_type: 're_instantiation',
+    authority_effect: 'reconstruction_proof',
+    description: 'A Site is rebuilt from template, trace, config, and evidence.',
+  },
+  {
+    event: 'site.archived',
+    edge_type: 'retirement',
+    authority_effect: 'retired_non_authority',
+    description: 'A Site is retired while preserving trace and non-authority posture.',
+  },
+  {
+    event: 'site.authority_transferred',
+    edge_type: 'authority',
+    authority_effect: 'authority_transfer',
+    description: 'Mutation authority for one or more classes moves between loci.',
+  },
+  {
+    event: 'site.authority_refused',
+    edge_type: 'authority',
+    authority_effect: 'authority_refusal',
+    description: 'A proposed authority move is explicitly refused or blocked.',
+  },
+  {
+    event: 'site.subscribed',
+    edge_type: 'subscription',
+    authority_effect: 'influence_only',
+    description: 'A Site subscribes to another Site signal stream without accepting mutation authority.',
+  },
+  {
+    event: 'site.published',
+    edge_type: 'publication',
+    authority_effect: 'influence_only',
+    description: 'A Site publishes a typed signal for possible governed admission elsewhere.',
+  },
+  {
+    event: 'site.knowledge_admitted',
+    edge_type: 'knowledge_admission',
+    authority_effect: 'local_admission',
+    description: 'A Site admits knowledge from another locus under its own authority.',
+  },
+  {
+    event: 'site.tool_admitted',
+    edge_type: 'tool_admission',
+    authority_effect: 'local_admission',
+    description: 'A Site admits a tool or tool binding under its own authority.',
+  },
+  {
+    event: 'site.template_applied',
+    edge_type: 'template',
+    authority_effect: 'template_application',
+    description: 'A Site applies a template while preserving local authority boundaries.',
+  },
+] as const;
+
 type SiteLifecycleKind = (typeof SITE_LIFECYCLE_KINDS)[number];
 type SiteLifecycleKindName = SiteLifecycleKind['kind'];
 
@@ -146,6 +241,48 @@ function siteLifecycleArtifacts(kind: SiteLifecycleKindName): string[] {
     case 'archive':
       return ['source_site_ref', 'archive_manifest', 'authority_retirement_record', 'trace_preservation_record'];
   }
+}
+
+export async function sitesLineageEventsCommand(
+  options: SitesLineageEventsOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
+  const requiredFields = [
+    'event_id',
+    'event_type',
+    'source_site_ref',
+    'target_site_ref',
+    'principal',
+    'authority_effect',
+    'evidence_refs',
+    'occurred_at',
+    'rollback_or_residual_posture',
+  ];
+  const events = SITE_LINEAGE_EVENTS.map((entry) => ({ ...entry }));
+
+  if (fmt.getFormat() === 'human') {
+    fmt.section('Site Lineage Event Vocabulary');
+    fmt.table(
+      [
+        { key: 'event', label: 'Event', width: 28 },
+        { key: 'edge_type', label: 'Edge', width: 20 },
+        { key: 'authority_effect', label: 'Authority Effect', width: 30 },
+      ],
+      events,
+    );
+  }
+
+  return {
+    exitCode: ExitCode.SUCCESS,
+    result: {
+      status: 'success',
+      mutation_performed: false,
+      lineage_shape: 'event_log_with_graph_projection',
+      required_fields: requiredFields,
+      events,
+    },
+  };
 }
 
 async function openRegistry() {

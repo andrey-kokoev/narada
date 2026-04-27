@@ -13,6 +13,8 @@ A Site transformation must preserve or explicitly change:
 - derived projections;
 - re-instantiation proof where a reusable form is being lifted.
 
+The continuity record for those changes is Site provenance lineage. See [`site-provenance-lineage.md`](site-provenance-lineage.md).
+
 ## Transformation Kinds
 
 | Kind | Meaning | Authority Rule |
@@ -39,6 +41,8 @@ Before any transformation mutates filesystem, registry, config, task lifecycle, 
 8. read-back confirmation method;
 9. rollback or refusal posture;
 10. evidence required for closure.
+
+The plan must also name the lineage event or events it will produce. Lifecycle commands may use graph views for inspection, but the authority-bearing record is the append-only lineage event log.
 
 ## CLI Surface
 

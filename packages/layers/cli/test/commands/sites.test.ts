@@ -80,6 +80,7 @@ const {
   sitesTaskLifecycleInitCommand,
   sitesLifecycleKindsCommand,
   sitesLifecyclePreflightCommand,
+  sitesLineageEventsCommand,
 } = await import('../../src/commands/sites.js');
 
 describe('sites commands', () => {
@@ -377,6 +378,29 @@ describe('sites commands', () => {
       expect(data.status).toBe('blocked');
       expect(data.checks).toEqual(expect.arrayContaining([
         expect.objectContaining({ name: 'authority_mode_supported', status: 'fail' }),
+      ]));
+    });
+  });
+
+  describe('sites lineage commands', () => {
+    it('lists Site lineage events and separates influence from authority', async () => {
+      const ctx = createMockContext();
+      const result = await sitesLineageEventsCommand({ format: 'json' }, ctx);
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      const data = result.result as {
+        mutation_performed: boolean;
+        lineage_shape: string;
+        required_fields: string[];
+        events: Array<{ event: string; edge_type: string; authority_effect: string }>;
+      };
+      expect(data.mutation_performed).toBe(false);
+      expect(data.lineage_shape).toBe('event_log_with_graph_projection');
+      expect(data.required_fields).toEqual(expect.arrayContaining(['authority_effect', 'evidence_refs']));
+      expect(data.events).toEqual(expect.arrayContaining([
+        expect.objectContaining({ event: 'site.migrated', authority_effect: 'authority_transfer' }),
+        expect.objectContaining({ event: 'site.subscribed', authority_effect: 'influence_only' }),
+        expect.objectContaining({ event: 'site.published', authority_effect: 'influence_only' }),
       ]));
     });
   });

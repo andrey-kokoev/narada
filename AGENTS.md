@@ -135,6 +135,7 @@ When describing higher-order architecture, deployment, or design:
 | [first-operation-proof.md](docs/product/first-operation-proof.md) | Canonical mailbox operation product proof | Understanding what is proven and how to verify it |
 | [operator-loop.md](docs/product/operator-loop.md) | Minimal operator rhythm for live operations | Running day-to-day operations |
 | [site-lifecycle-transformations.md](docs/product/site-lifecycle-transformations.md) | Governed Site lifecycle transformations — clone, fork, split, absorb, migrate, re-instantiate, archive | Need to transform Sites without smearing authority or provenance |
+| [site-provenance-lineage.md](docs/product/site-provenance-lineage.md) | Site provenance lineage — append-only lineage events with graph projections | Need to distinguish authority transfer, provenance, template application, and pub/sub influence |
 
 ---
 

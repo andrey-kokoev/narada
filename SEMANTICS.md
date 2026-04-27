@@ -1157,6 +1157,10 @@ The initial CLI surface is read-only/preflight: `narada sites lifecycle kinds` a
 
 See [`docs/product/site-lifecycle-transformations.md`](docs/product/site-lifecycle-transformations.md).
 
+Site provenance lineage is the durable continuity substrate for these transformations. Its authority-bearing shape is an append-only event log; chain, DAG, and general graph readings are projections over that log. Lineage events distinguish authority transfer from influence-only subscription/publication edges, local knowledge/tool admission, template application, and re-instantiation proof.
+
+See [`docs/product/site-provenance-lineage.md`](docs/product/site-provenance-lineage.md).
+
 ### 2.14.6 Canonical Expansion Table
 
 When precision matters — specifications, interfaces, authority boundaries, agent instructions — use the canonical expansion, not the compact term alone.

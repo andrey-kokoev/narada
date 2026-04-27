@@ -7,6 +7,7 @@
 > This document uses the crystallized vocabulary from [`SEMANTICS.md §2.14`](../../SEMANTICS.md): **Aim / Site / Cycle / Act / Trace**.
 >
 > For governed Site clone, fork, split, absorb, migrate, re-instantiate, and archive semantics, see [`site-lifecycle-transformations.md`](site-lifecycle-transformations.md).
+> For the durable provenance substrate behind those transformations, see [`site-provenance-lineage.md`](site-provenance-lineage.md).
 
 ---
 

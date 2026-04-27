@@ -9,6 +9,7 @@ import {
   sitesTaskLifecycleInitCommand,
   sitesLifecycleKindsCommand,
   sitesLifecyclePreflightCommand,
+  sitesLineageEventsCommand,
 } from './sites.js';
 import { silentCommandContext, wrapCommand } from '../lib/command-wrapper.js';
 import { emitFormatterBackedCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
@@ -86,6 +87,23 @@ export function registerSitesCommands(program: Command): void {
         sourceSite: opts.sourceSite as string | undefined,
         targetSite: opts.targetSite as string | undefined,
         authorityMode: opts.authorityMode as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitFormatterBackedCommandResult(result, { format: opts.format });
+    });
+
+  const lineageCmd = sitesCmd
+    .command('lineage')
+    .description('Inspect governed Site provenance lineage vocabulary');
+
+  lineageCmd
+    .command('events')
+    .description('List Site provenance lineage event types and authority effects')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (opts: Record<string, unknown>) => {
+      const result = await sitesLineageEventsCommand({
         format: resolveCommandFormat(opts.format, 'auto'),
         verbose: opts.verbose as boolean | undefined,
       }, silentCommandContext({ verbose: !!opts.verbose }));
