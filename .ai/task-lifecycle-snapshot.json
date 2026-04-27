@@ -1,7 +1,7 @@
 {
   "snapshot_kind": "task_lifecycle_snapshot",
   "snapshot_version": 1,
-  "exported_at": "2026-04-27T20:49:28.727Z",
+  "exported_at": "2026-04-27T20:54:09.336Z",
   "tables": [
     {
       "name": "agent_roster",
@@ -26,7 +26,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 720,
-          "updated_at": "2026-04-27T20:49:28.727Z"
+          "updated_at": "2026-04-27T20:54:09.336Z"
         },
         {
           "agent_id": "a2",
@@ -37,7 +37,7 @@
           "status": "idle",
           "task_number": null,
           "last_done": 886,
-          "updated_at": "2026-04-27T20:49:28.727Z"
+          "updated_at": "2026-04-27T20:54:09.336Z"
         },
         {
           "agent_id": "a3",
@@ -48,7 +48,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 610,
-          "updated_at": "2026-04-27T20:49:28.727Z"
+          "updated_at": "2026-04-27T20:54:09.336Z"
         },
         {
           "agent_id": "a4",
@@ -59,7 +59,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 574,
-          "updated_at": "2026-04-27T20:49:28.727Z"
+          "updated_at": "2026-04-27T20:54:09.336Z"
         },
         {
           "agent_id": "a5",
@@ -70,7 +70,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 551,
-          "updated_at": "2026-04-27T20:49:28.727Z"
+          "updated_at": "2026-04-27T20:54:09.336Z"
         },
         {
           "agent_id": "a6",
@@ -81,18 +81,18 @@
           "status": "done",
           "task_number": null,
           "last_done": 545,
-          "updated_at": "2026-04-27T20:49:28.727Z"
+          "updated_at": "2026-04-27T20:54:09.336Z"
         },
         {
           "agent_id": "architect",
           "role": "implementer",
           "capabilities_json": "[\"derive\",\"propose\",\"claim\",\"execute\",\"resolve\",\"confirm\"]",
           "first_seen_at": "2026-04-26T22:28:56.453Z",
-          "last_active_at": "2026-04-27T20:49:28.727Z",
+          "last_active_at": "2026-04-27T20:54:09.336Z",
           "status": "done",
           "task_number": null,
-          "last_done": 981,
-          "updated_at": "2026-04-27T20:49:28.727Z"
+          "last_done": 982,
+          "updated_at": "2026-04-27T20:54:09.336Z"
         }
       ]
     },
@@ -6146,6 +6146,27 @@
           "confirmation_json": "{\"task_id\":\"20260427-981-define-site-provenance-lineage-construct\",\"task_number\":981,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
           "warnings_json": null,
           "updated_at": "2026-04-27T20:45:46.496Z"
+        },
+        {
+          "request_id": "air_claim_982_architect_1777323115258_hy7icx",
+          "kind": "claim",
+          "task_id": "20260427-982-crystallize-governed-locus-federation-doctrine",
+          "task_number": 982,
+          "agent_id": "architect",
+          "requested_by": "architect",
+          "requested_at": "2026-04-27T20:51:55.258Z",
+          "reason": null,
+          "no_claim": 0,
+          "status": "applied",
+          "rejection_reason": null,
+          "assignment_id": "assign-20260427-982-crystallize-governed-locus-federation-doctrine-architect-1777323115258",
+          "previous_agent_id": null,
+          "lifecycle_status_before": "opened",
+          "lifecycle_status_after": "claimed",
+          "roster_status_after": "working",
+          "confirmation_json": "{\"task_id\":\"20260427-982-crystallize-governed-locus-federation-doctrine\",\"task_number\":982,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
+          "warnings_json": null,
+          "updated_at": "2026-04-27T20:51:56.502Z"
         }
       ]
     },
@@ -15326,6 +15347,45 @@
           "admitted_at": "2026-04-27T20:49:28.013Z",
           "admitted_by": "architect",
           "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_982_1777323248298_5pgihd",
+          "bundle_id": "evb_982_1777323248298_ydriiv",
+          "task_id": "20260427-982-crystallize-governed-locus-federation-doctrine",
+          "task_number": 982,
+          "verdict": "rejected",
+          "methods_json": "[\"review\"]",
+          "blockers_json": "[\"9 acceptance criteria remain unchecked\"]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T20:54:08.298Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_982_1777323248536_2oqsie",
+          "bundle_id": "evb_982_1777323248536_h5sr6v",
+          "task_id": "20260427-982-crystallize-governed-locus-federation-doctrine",
+          "task_number": 982,
+          "verdict": "admitted",
+          "methods_json": "[\"criteria_proof\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T20:54:08.536Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_982_1777323248875_j2i13g",
+          "bundle_id": "evb_982_1777323248875_ii2j73",
+          "task_id": "20260427-982-crystallize-governed-locus-federation-doctrine",
+          "task_number": 982,
+          "verdict": "admitted",
+          "methods_json": "[\"admission\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": "closed",
+          "admitted_at": "2026-04-27T20:54:08.875Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
         }
       ]
     },
@@ -23547,6 +23607,45 @@
           "residuals_json": "[]",
           "assembled_at": "2026-04-27T20:49:28.013Z",
           "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_982_1777323248298_ydriiv",
+          "task_id": "20260427-982-crystallize-governed-locus-federation-doctrine",
+          "task_number": 982,
+          "report_ids_json": "[\"wrr_b1a11a01_20260427-982-crystallize-governed-locus-federation-doctrine_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":false,\"unchecked_count\":9}",
+          "review_ids_json": "[\"review-20260427-982-crystallize-governed-locus-federation-doctrine-1777323248215\"]",
+          "changed_files_json": "[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/governed-locus-federation.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T20:54:08.298Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_982_1777323248536_h5sr6v",
+          "task_id": "20260427-982-crystallize-governed-locus-federation-doctrine",
+          "task_number": 982,
+          "report_ids_json": "[\"wrr_b1a11a01_20260427-982-crystallize-governed-locus-federation-doctrine_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[\"review-20260427-982-crystallize-governed-locus-federation-doctrine-1777323248215\"]",
+          "changed_files_json": "[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/governed-locus-federation.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T20:54:08.536Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_982_1777323248875_ii2j73",
+          "task_id": "20260427-982-crystallize-governed-locus-federation-doctrine",
+          "task_number": 982,
+          "report_ids_json": "[\"wrr_b1a11a01_20260427-982-crystallize-governed-locus-federation-doctrine_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[\"review-20260427-982-crystallize-governed-locus-federation-doctrine-1777323248215\"]",
+          "changed_files_json": "[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/governed-locus-federation.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T20:54:08.875Z",
+          "assembled_by": "architect"
         }
       ]
     },
@@ -26705,6 +26804,11 @@
           "task_id": "20260427-981-define-site-provenance-lineage-construct",
           "record_json": "{\"task_id\":\"20260427-981-define-site-provenance-lineage-construct\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T20:45:45.368Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T20:49:14.905Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
           "updated_at": "2026-04-27T20:49:15.148Z"
+        },
+        {
+          "task_id": "20260427-982-crystallize-governed-locus-federation-doctrine",
+          "record_json": "{\"task_id\":\"20260427-982-crystallize-governed-locus-federation-doctrine\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T20:51:55.496Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T20:53:59.279Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
+          "updated_at": "2026-04-27T20:53:59.514Z"
         }
       ]
     },
@@ -29443,6 +29547,15 @@
           "task_id": "20260427-981-define-site-provenance-lineage-construct",
           "agent_id": "architect",
           "claimed_at": "2026-04-27T20:45:45.368Z",
+          "released_at": null,
+          "release_reason": null,
+          "intent": "primary"
+        },
+        {
+          "assignment_id": "assign-20260427-982-crystallize-governed-locus-federation-doctrine-architect-1777323115258",
+          "task_id": "20260427-982-crystallize-governed-locus-federation-doctrine",
+          "agent_id": "architect",
+          "claimed_at": "2026-04-27T20:51:55.496Z",
           "released_at": null,
           "release_reason": null,
           "intent": "primary"
@@ -41918,6 +42031,19 @@
           "continuation_packet_json": null,
           "updated_at": "2026-04-27T20:49:28.226Z",
           "closure_mode": "agent_finish"
+        },
+        {
+          "task_id": "20260427-982-crystallize-governed-locus-federation-doctrine",
+          "task_number": 982,
+          "status": "closed",
+          "governed_by": "task_close:architect",
+          "closed_at": "2026-04-27T20:54:09.056Z",
+          "closed_by": "architect",
+          "reopened_at": null,
+          "reopened_by": null,
+          "continuation_packet_json": null,
+          "updated_at": "2026-04-27T20:54:09.056Z",
+          "closure_mode": "agent_finish"
         }
       ]
     },
@@ -41943,7 +42069,7 @@
       "rows": [
         {
           "singleton": 1,
-          "last_allocated": 981
+          "last_allocated": 982
         }
       ]
     },
@@ -44476,6 +44602,14 @@
           "agent_id": "architect",
           "reported_at": "2026-04-27T20:49:14.905Z",
           "report_json": "{\"report_id\":\"wrr_786bc1f7_20260427-981-define-site-provenance-lineage-construct_architect\",\"task_number\":\"981\",\"task_id\":\"20260427-981-define-site-provenance-lineage-construct\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-981-define-site-provenance-lineage-construct-2026-04-27T20:45:45.368Z\",\"reported_at\":\"2026-04-27T20:49:14.905Z\",\"summary\":\"Defined Site provenance lineage as an append-only event log with graph projections, documented authority-vs-influence separation, and added read-only lineage event vocabulary CLI.\",\"changed_files\":[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/product/site-bootstrap-contract.md\",\"docs/product/site-lifecycle-transformations.md\",\"docs/product/site-provenance-lineage.md\",\"packages/layers/cli/src/commands/sites.ts\",\"packages/layers/cli/src/commands/sites-register.ts\",\"packages/layers/cli/test/commands/sites.test.ts\"],\"verification\":[{\"command\":\"pnpm --filter @narada2/cli exec vitest run test/commands/sites.test.ts --pool=forks\",\"result\":\"passed: 16/16\"},{\"command\":\"pnpm --filter @narada2/cli build\",\"result\":\"passed\"},{\"command\":\"narada sites lineage events --format json\",\"result\":\"passed: event_log_with_graph_projection, mutation_performed false\"},{\"command\":\"pnpm verify\",\"result\":\"passed\"}],\"known_residuals\":[\"Lineage event storage and mutating Site transformation writes are intentionally deferred; this task defines the vocabulary and read-only inspection boundary.\"],\"ready_for_review\":true,\"report_status\":\"accepted\"}"
+        },
+        {
+          "report_id": "wrr_b1a11a01_20260427-982-crystallize-governed-locus-federation-doctrine_architect",
+          "task_id": "20260427-982-crystallize-governed-locus-federation-doctrine",
+          "assignment_id": "20260427-982-crystallize-governed-locus-federation-doctrine-2026-04-27T20:51:55.496Z",
+          "agent_id": "architect",
+          "reported_at": "2026-04-27T20:53:59.279Z",
+          "report_json": "{\"report_id\":\"wrr_b1a11a01_20260427-982-crystallize-governed-locus-federation-doctrine_architect\",\"task_number\":\"982\",\"task_id\":\"20260427-982-crystallize-governed-locus-federation-doctrine\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-982-crystallize-governed-locus-federation-doctrine-2026-04-27T20:51:55.496Z\",\"reported_at\":\"2026-04-27T20:53:59.279Z\",\"summary\":\"Crystallized Governed Locus Federation as parent doctrine for plural embodiment, authority routing, Site lifecycle, provenance lineage, pub/sub influence, governed admission, and re-instantiable memory.\",\"changed_files\":[\"AGENTS.md\",\"SEMANTICS.md\",\"docs/concepts/governed-locus-federation.md\"],\"verification\":[{\"command\":\"pnpm verify\",\"result\":\"passed\"}],\"known_residuals\":[\"Site pub/sub remains proposal-level; authority-clone routing remains queued as task 979; mutating Site lifecycle and lineage event storage remain deferred.\"],\"ready_for_review\":true,\"report_status\":\"accepted\"}"
         }
       ]
     },
@@ -44846,6 +44980,14 @@
           "verdict": "accepted",
           "findings_json": null,
           "reviewed_at": "2026-04-27T20:49:27.184Z"
+        },
+        {
+          "review_id": "review-20260427-982-crystallize-governed-locus-federation-doctrine-1777323248215",
+          "task_id": "20260427-982-crystallize-governed-locus-federation-doctrine",
+          "reviewer_agent_id": "architect",
+          "verdict": "accepted",
+          "findings_json": null,
+          "reviewed_at": "2026-04-27T20:54:08.215Z"
         }
       ]
     },
@@ -56720,6 +56862,19 @@
           "acceptance_criteria_json": "[\"Narada doctrine defines Site provenance lineage and distinguishes event log\",\"projection\",\"chain\",\"DAG\",\"and graph readings;Site lifecycle docs identify lineage events and required evidence fields;Site pub/sub or influence edges are explicitly distinguished from mutation-authority edges;CLI inspection/preflight exposes the lineage event vocabulary without mutating Site state;Focused tests cover the lineage inspection surface;The source inbox envelope is handled through a governed pending or archive action;pnpm verify passes\"]",
           "dependencies_json": "[]",
           "updated_at": "2026-04-27T20:45:35.491Z"
+        },
+        {
+          "task_id": "20260427-982-crystallize-governed-locus-federation-doctrine",
+          "task_number": 982,
+          "title": "Crystallize governed locus federation doctrine",
+          "chapter_markdown": "site-lifecycle",
+          "goal_markdown": "De-arbitrarize the parent doctrine connecting plural embodiment, authority routing, Site lifecycle, provenance lineage, pub/sub influence, governed admission, and re-instantiable memory without prematurely implementing new machinery.",
+          "context_markdown": null,
+          "required_work_markdown": "1. TBD",
+          "non_goals_markdown": "- Do not expand scope beyond this task.\n- Do not create derivative task-status files.\n- Do not mutate live external systems unless explicitly authorized.",
+          "acceptance_criteria_json": "[\"Narada doctrine defines governed locus federation or rejects the parent concept with reasons;The concept boundary distinguishes embodiment topology\",\"authority routing\",\"lifecycle transformation\",\"lineage\",\"pub/sub influence\",\"governed admission\",\"and re-instantiation;Docs identify which parts are existing doctrine\",\"which are implemented surfaces\",\"and which remain proposals;The source inbox envelope is handled through a governed pending or archive action;pnpm verify passes\"]",
+          "dependencies_json": "[]",
+          "updated_at": "2026-04-27T20:51:49.265Z"
         }
       ]
     },

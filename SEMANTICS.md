@@ -1161,6 +1161,16 @@ Site provenance lineage is the durable continuity substrate for these transforma
 
 See [`docs/product/site-provenance-lineage.md`](docs/product/site-provenance-lineage.md).
 
+#### Governed Locus Federation
+
+Governed Locus Federation is the parent doctrine for continuity across multiple evolving Narada-capable loci without collapsing them into one authority domain.
+
+It connects plural embodiment, authority routing, Site lifecycle transformations, provenance lineage, pub/sub influence, governed admission, and re-instantiable memory. Its rule is: federate awareness, govern admission, preserve singular mutation authority, record lineage, and prove re-instantiation before lifting.
+
+This is doctrine, not a new mandatory runtime layer. Existing surfaces may instantiate parts of it incrementally. Any implementation must preserve the boundary between influence and authority: publication/subscription may carry signals, but the receiving locus owns admission and mutation.
+
+See [`docs/concepts/governed-locus-federation.md`](docs/concepts/governed-locus-federation.md).
+
 ### 2.14.6 Canonical Expansion Table
 
 When precision matters — specifications, interfaces, authority boundaries, agent instructions — use the canonical expansion, not the compact term alone.

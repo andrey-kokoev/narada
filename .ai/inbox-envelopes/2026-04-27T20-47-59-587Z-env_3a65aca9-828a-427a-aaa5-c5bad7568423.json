@@ -30,5 +30,13 @@
     ],
     "recommendation": "Promote to a PDA/CIPDA doctrine/design chapter or arc before product machinery. This seems like an organizing concept for Narada as a self-extending network of governed loci."
   },
-  "status": "received"
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_3a65aca9-828a-427a-aaa5-c5bad7568423",
+    "promoted_at": "2026-04-27T20:54:16.403Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
 }

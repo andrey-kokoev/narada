@@ -1,0 +1,34 @@
+{
+  "envelope_id": "env_f35fb29e-749f-48c8-bec2-4e7196177bf7",
+  "received_at": "2026-04-27T20:51:48.054Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:user-site-awareness-registry"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Define User Site as user-locus Site awareness and coordination registry",
+    "summary": "Operator and architect clarified that a top-level Narada architect working in the User Site should know about all Narada Sites relevant to the user profile. The User Site should serve as the user-locus awareness directory and coordination surface for project, client, data, ELT, PC, and Narada proper Sites, while not automatically claiming mutation authority over those Sites.",
+    "evidence": [
+      "Current C:\\Users\\Andrey\\Narada\\config.json already contains manual linked_sites for Narada source clones, narada.sonar, thoughts, thoughts .narada, Staccato client service, Staccato data, and Staccato ELT side.",
+      "Current User Site config also has pc_locus pointing to C:\\ProgramData\\Narada\\sites\\pc\\desktop-sunroom-2.",
+      "This partially implements the stance but only as a manual linked-sites map, not as a governed awareness registry/discovery/subscription surface.",
+      "Plural Embodiment, Singular Authority requires awareness to remain distinct from mutation authority.",
+      "Site pub/sub proposal suggests Sites should exchange typed signals while preserving governed local admission."
+    ],
+    "proposal": [
+      "Define the User Site as the operator-level Site directory and coordination locus for the user's Narada world.",
+      "Add first-class User Site awareness registry semantics for Sites relevant to the user: project Sites, client/service Sites, data Sites, ELT Sites, PC Sites, Narada proper clones/embodiments, and message/intake routes.",
+      "For each known Site, record identity, roots, locus type, authority boundaries, sync posture, readable/proposable/forwardable/mutable capabilities, inbox endpoint, subscription topics, lineage/provenance, and freshness/health posture.",
+      "User Site awareness should enable discovery, status, routing, proposal submission, subscription management, and cross-locus navigation, but not imply authority to mutate another Site.",
+      "narada sites/list/doctor or a User Site specific command should surface this registry and distinguish linked, discovered, subscribed, stale, missing, and authority-bearing Sites.",
+      "Integrate this with future Site lifecycle, pub/sub, and provenance lineage machinery so the User Site can remain aware of cloned/split/absorbed/re-instantiated Sites without becoming their owner."
+    ],
+    "recommendation": "Promote to Narada product/design task adjacent to Site lifecycle and pub/sub: make User Site the user-locus awareness registry and coordination surface, with awareness explicitly separated from authority."
+  },
+  "status": "received"
+}
