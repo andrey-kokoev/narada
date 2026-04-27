@@ -270,6 +270,9 @@ narada task graph --format json --range 429-454
 
 # Check chapter publication authority before doing chapter work that must commit/push
 narada chapter preflight 912-916 --expect-commit --expect-push
+
+# Ask for the next admissible agent action across task and inbox work
+narada work-next --agent architect
 ```
 
 ### `recover` vs `derive-work`
