@@ -69,6 +69,10 @@
     "./task-spec": {
       "types": "./dist/task-spec.d.ts",
       "import": "./dist/task-spec.js"
+    },
+    "./mutation-evidence": {
+      "types": "./dist/mutation-evidence.d.ts",
+      "import": "./dist/mutation-evidence.js"
     }
   },
   "scripts": {

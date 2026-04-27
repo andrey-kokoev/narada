@@ -28,6 +28,33 @@ A mutation evidence artifact must identify:
 - the confirmation or read-back evidence;
 - enough payload to replay or reconcile the local runtime substrate.
 
+The v1 record schema is represented in `@narada2/task-governance/mutation-evidence`.
+
+```ts
+interface MutationEvidenceRecord {
+  schema: 'https://narada.dev/schemas/mutation-evidence/v1';
+  version: 1;
+  operation_id: string;
+  family: 'task_lifecycle' | 'inbox';
+  authority_class: 'claim' | 'execute' | 'resolve' | 'confirm' | 'admin';
+  command: string;
+  locus: string;
+  principal: string;
+  subject: { kind: string; id: string; number?: number | null };
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  occurred_at: string;
+  confirmation: {
+    kind: 'read_back' | 'self_certifying' | 'review' | 'operator_confirmation' | 'import_replay';
+    status: 'confirmed' | 'pending' | 'not_applicable';
+    detail?: string | null;
+  };
+  replay_payload: Record<string, unknown>;
+}
+```
+
+`operation_id` is deterministic from the stable operation payload. Serialization sorts object keys and writes exactly one final newline so Git-visible records can be compared and replayed predictably.
+
 Current partial examples include:
 
 | Surface | Current Evidence | Posture |

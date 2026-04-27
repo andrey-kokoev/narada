@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-27T21:49:38.841Z
+criteria_proved_by: architect
+criteria_proved_at: 2026-04-27T22:14:28.731Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-27T22:14:29.238Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: agent_finish
 ---
 
 # Define mutation evidence record schema
@@ -42,8 +51,8 @@ Canonical Mutation Evidence says SQLite is local runtime substrate and Git shoul
 
 ## Acceptance Criteria
 
-- [ ] Schema includes operation id, authority class, command/operator, locus, principal, subject identity, before/after state, timestamp, confirmation/read-back, and replay payload.
-- [ ] Types and validators exist in the appropriate CLI/task-governance package boundary.
-- [ ] Docs classify snapshots as transitional projection guards and mutation records as intended append-only evidence.
-- [ ] Focused tests validate record shape and stable serialization.
-- [ ] `pnpm verify` passes.
+- [x] Schema includes operation id, authority class, command/operator, locus, principal, subject identity, before/after state, timestamp, confirmation/read-back, and replay payload.
+- [x] Types and validators exist in the appropriate CLI/task-governance package boundary.
+- [x] Docs classify snapshots as transitional projection guards and mutation records as intended append-only evidence.
+- [x] Focused tests validate record shape and stable serialization.
+- [x] `pnpm verify` passes.
