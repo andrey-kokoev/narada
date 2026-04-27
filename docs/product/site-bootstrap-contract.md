@@ -5,6 +5,8 @@
 > For the operation bootstrap path (expressing intent and configuring work objectives), see [`bootstrap-contract.md`](bootstrap-contract.md).
 >
 > This document uses the crystallized vocabulary from [`SEMANTICS.md §2.14`](../../SEMANTICS.md): **Aim / Site / Cycle / Act / Trace**.
+>
+> For governed Site clone, fork, split, absorb, migrate, re-instantiate, and archive semantics, see [`site-lifecycle-transformations.md`](site-lifecycle-transformations.md).
 
 ---
 

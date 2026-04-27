@@ -1145,6 +1145,18 @@ For every mutating command, Narada should classify the authority class, resolve 
 
 See [`docs/concepts/plural-embodiment-singular-authority.md`](docs/concepts/plural-embodiment-singular-authority.md).
 
+#### Site Lifecycle Transformations
+
+Sites are runtime loci, so changing a Site is an authority-bearing transformation, not a raw filesystem operation.
+
+Narada recognizes seven Site lifecycle transformation kinds: `clone`, `fork`, `split`, `absorb`, `migrate`, `re-instantiate`, and `archive`.
+
+Each transformation must declare its source locus, target locus when applicable, authority mode, provenance, included state classes, excluded state classes, residual links, read-back confirmation, and evidence required for closure. A transformation that changes mutation authority must make that authority migration explicit before state changes.
+
+The initial CLI surface is read-only/preflight: `narada sites lifecycle kinds` and `narada sites lifecycle preflight <kind>`. Mutating Site lifecycle operators must consume the same transformation grammar and produce durable transformation artifacts before changing Site files, registries, inboxes, task lifecycle stores, or operation bindings.
+
+See [`docs/product/site-lifecycle-transformations.md`](docs/product/site-lifecycle-transformations.md).
+
 ### 2.14.6 Canonical Expansion Table
 
 When precision matters — specifications, interfaces, authority boundaries, agent instructions — use the canonical expansion, not the compact term alone.

@@ -1,0 +1,33 @@
+{
+  "envelope_id": "env_ab0d1436-6621-421b-bfdb-b15fbf2918ba",
+  "received_at": "2026-04-27T20:39:05.286Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:site-pubsub-topology"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Add Site pub/sub as typed signal exchange with governed admission",
+    "summary": "Operator and architect identified that Narada Sites likely want pub/sub as an information-flow topology. Sites should be able to publish typed signals and subscribe to relevant signals from other Sites, while preserving local authority over what is admitted, promoted, executed, or made canonical. Pub/sub should not imply automatic state replication or authority transfer.",
+    "evidence": [
+      "Recent Site work involved User, PC, Thoughts, Client Service, Data, and ELT loci, with information needing to flow among all relevant Sites rather than only through hierarchy.",
+      "Earlier discussion described this flow as non-hierarchical/all-relevant; pub/sub gives it a more precise topology.",
+      "Plural Embodiment, Singular Authority requires that multiple listening/publishing embodiments do not create duplicate mutation authority.",
+      "Canonical Inbox already gives Narada a typed-envelope intake model that could serve as a governed admission boundary for subscribed signals."
+    ],
+    "proposal": [
+      "Introduce Narada Site pub/sub doctrine and machinery for typed signal exchange among Sites: observations, proposals, health signals, task reports, doctrine updates, template releases, knowledge candidates, and Site lifecycle events.",
+      "Subscriptions should deliver signals into an inert intake boundary, likely canonical inbox or a sibling typed signal inbox, rather than mutating local Site state directly.",
+      "Receiving Sites should govern admission through explicit promotion/crossing operators: archive, task, knowledge candidate, site config change, template update, authority migration proposal, etc.",
+      "Support routing policies such as all-relevant, topic-based, locus-based, authority-class-based, and explicit subscription declarations.",
+      "Make pub/sub compatible with Site lifecycle machinery: cloned/split Sites can remain aware through subscriptions; absorption or re-instantiation can consume published templates/evidence; authority remains singular per mutation class.",
+      "doctor/preflight should report subscription health, pending subscribed signals, stale upstreams, and unsafe auto-admission attempts."
+    ],
+    "recommendation": "Promote to Narada architecture/product proposal adjacent to Site lifecycle machinery and canonical inbox evolution: implement pub/sub as typed envelope exchange plus governed admission, not automatic replication."
+  },
+  "status": "received"
+}

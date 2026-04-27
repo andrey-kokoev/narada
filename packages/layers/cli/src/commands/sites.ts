@@ -26,6 +26,15 @@ export interface SitesTaskLifecycleInitOptions extends SitesOptions {
   dryRun?: boolean;
 }
 
+export interface SitesLifecycleKindsOptions extends SitesOptions {}
+
+export interface SitesLifecyclePreflightOptions extends SitesOptions {
+  kind?: string;
+  sourceSite?: string;
+  targetSite?: string;
+  authorityMode?: string;
+}
+
 interface SiteListEntry {
   siteId: string;
   variant: string;
@@ -53,6 +62,91 @@ const SITE_SUBDIRECTORIES = [
   'logs',
   'traces',
 ] as const;
+
+const SITE_LIFECYCLE_KINDS = [
+  {
+    kind: 'clone',
+    purpose: 'Create another Site embodiment from an existing Site while declaring whether mutation authority stays, migrates, or forwards.',
+    sourceRequired: true,
+    targetRequired: true,
+    authorityModes: ['read_only', 'forwarding', 'authority_migration'],
+  },
+  {
+    kind: 'fork',
+    purpose: 'Create a divergent Site lineage with explicit provenance and independent future authority.',
+    sourceRequired: true,
+    targetRequired: true,
+    authorityModes: ['new_authority'],
+  },
+  {
+    kind: 'split',
+    purpose: 'Extract a sub-locus from a Site with traceable provenance and explicit authority transfer or residual linkage.',
+    sourceRequired: true,
+    targetRequired: true,
+    authorityModes: ['partial_transfer', 'residual_linkage'],
+  },
+  {
+    kind: 'absorb',
+    purpose: 'Admit sidecar or local Site knowledge, machinery, or trace into a broader Site or Narada proper.',
+    sourceRequired: true,
+    targetRequired: true,
+    authorityModes: ['admission_review'],
+  },
+  {
+    kind: 'migrate',
+    purpose: 'Move Site authority or substrate while preserving identity, provenance, config, trace, and read-back confirmation.',
+    sourceRequired: true,
+    targetRequired: true,
+    authorityModes: ['authority_migration'],
+  },
+  {
+    kind: 're-instantiate',
+    purpose: 'Rebuild a Site from template, durable trace, config, and evidence, then prove the originating case still runs.',
+    sourceRequired: true,
+    targetRequired: true,
+    authorityModes: ['reconstruction_proof'],
+  },
+  {
+    kind: 'archive',
+    purpose: 'Retire a Site from active operation while preserving trace, provenance, and explicit non-authority posture.',
+    sourceRequired: true,
+    targetRequired: false,
+    authorityModes: ['retired_non_authority'],
+  },
+] as const;
+
+type SiteLifecycleKind = (typeof SITE_LIFECYCLE_KINDS)[number];
+type SiteLifecycleKindName = SiteLifecycleKind['kind'];
+
+function findSiteLifecycleKind(kind: string | undefined): SiteLifecycleKind | undefined {
+  return SITE_LIFECYCLE_KINDS.find((entry) => entry.kind === kind);
+}
+
+function siteLifecycleArtifacts(kind: SiteLifecycleKindName): string[] {
+  const base = [
+    'source_site_ref',
+    'provenance_record',
+    'authority_map',
+    'trace_handoff',
+    'read_back_confirmation',
+  ];
+  switch (kind) {
+    case 'clone':
+      return [...base, 'embodiment_policy'];
+    case 'fork':
+      return [...base, 'lineage_boundary'];
+    case 'split':
+      return [...base, 'extraction_manifest', 'residual_linkage'];
+    case 'absorb':
+      return [...base, 'admission_bundle', 're_instantiation_evidence'];
+    case 'migrate':
+      return [...base, 'migration_plan', 'cutover_confirmation'];
+    case 're-instantiate':
+      return [...base, 'template_ref', 'reconstruction_proof'];
+    case 'archive':
+      return ['source_site_ref', 'archive_manifest', 'authority_retirement_record', 'trace_preservation_record'];
+  }
+}
 
 async function openRegistry() {
   const {
@@ -300,6 +394,133 @@ export async function sitesTaskLifecycleInitCommand(
       created: !existed,
       tables_initialized: [],
     },
+  };
+}
+
+export async function sitesLifecycleKindsCommand(
+  options: SitesLifecycleKindsOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
+  const kinds = SITE_LIFECYCLE_KINDS.map((entry) => ({
+    kind: entry.kind,
+    purpose: entry.purpose,
+    source_required: entry.sourceRequired,
+    target_required: entry.targetRequired,
+    authority_modes: [...entry.authorityModes],
+    artifacts: siteLifecycleArtifacts(entry.kind),
+  }));
+
+  if (fmt.getFormat() === 'human') {
+    fmt.section('Site Lifecycle Transformation Kinds');
+    fmt.table(
+      [
+        { key: 'kind', label: 'Kind', width: 16 },
+        { key: 'source_required', label: 'Source', width: 8 },
+        { key: 'target_required', label: 'Target', width: 8 },
+        { key: 'authority_modes', label: 'Authority Modes', width: 36 },
+      ],
+      kinds.map((entry) => ({
+        kind: entry.kind,
+        source_required: entry.source_required ? 'yes' : 'no',
+        target_required: entry.target_required ? 'yes' : 'no',
+        authority_modes: entry.authority_modes.join(', '),
+      })),
+    );
+  }
+
+  return {
+    exitCode: ExitCode.SUCCESS,
+    result: {
+      status: 'success',
+      mutation_performed: false,
+      kinds,
+    },
+  };
+}
+
+export async function sitesLifecyclePreflightCommand(
+  options: SitesLifecyclePreflightOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
+  const kind = findSiteLifecycleKind(options.kind);
+  if (!kind) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        status: 'error',
+        error: `Unsupported Site lifecycle transformation: "${options.kind ?? ''}"`,
+        allowed_kinds: SITE_LIFECYCLE_KINDS.map((entry) => entry.kind),
+      },
+    };
+  }
+
+  const checks: SiteDoctorCheck[] = [];
+  addCheck(
+    checks,
+    'source_site_declared',
+    options.sourceSite || !kind.sourceRequired ? 'pass' : 'fail',
+    options.sourceSite ? `Source Site: ${options.sourceSite}` : 'Source Site is required',
+    `Provide --source-site <site-id-or-path> for ${kind.kind}`,
+  );
+  addCheck(
+    checks,
+    'target_site_declared',
+    options.targetSite || !kind.targetRequired ? 'pass' : 'fail',
+    options.targetSite ? `Target Site: ${options.targetSite}` : kind.targetRequired ? 'Target Site is required' : 'Target Site is not required',
+    `Provide --target-site <site-id-or-path> for ${kind.kind}`,
+  );
+  addCheck(
+    checks,
+    'authority_mode_declared',
+    options.authorityMode ? 'pass' : 'fail',
+    options.authorityMode ? `Authority mode: ${options.authorityMode}` : 'Authority mode is required',
+    `Choose one of: ${kind.authorityModes.join(', ')}`,
+  );
+  addCheck(
+    checks,
+    'authority_mode_supported',
+    options.authorityMode && (kind.authorityModes as readonly string[]).includes(options.authorityMode) ? 'pass' : 'fail',
+    options.authorityMode
+      ? `Authority mode ${options.authorityMode} ${((kind.authorityModes as readonly string[]).includes(options.authorityMode)) ? 'is supported' : 'is not supported for this transformation'}`
+      : 'Authority mode was not provided',
+    `Choose one of: ${kind.authorityModes.join(', ')}`,
+  );
+
+  const failed = checks.filter((check) => check.status === 'fail');
+  const ready = failed.length === 0;
+  const result = {
+    status: ready ? 'ready' : 'blocked',
+    mutation_performed: false,
+    kind: kind.kind,
+    purpose: kind.purpose,
+    source_site: options.sourceSite ?? null,
+    target_site: options.targetSite ?? null,
+    authority_mode: options.authorityMode ?? null,
+    required_artifacts: siteLifecycleArtifacts(kind.kind),
+    checks,
+    next_step: ready
+      ? 'Create a governed transformation plan artifact before any Site filesystem, registry, config, inbox, task, or authority mutation.'
+      : 'Resolve failed checks before creating a transformation plan.',
+  };
+
+  if (fmt.getFormat() === 'human') {
+    fmt.section(`Site Lifecycle Preflight — ${kind.kind}`);
+    fmt.kv('Status', result.status);
+    fmt.kv('Mutation Performed', 'false');
+    for (const check of checks) {
+      const prefix = check.status === 'pass' ? '[pass]' : '[fail]';
+      fmt.message(`${prefix} ${check.name}: ${check.message}`, check.status === 'pass' ? 'success' : 'error');
+      if (check.remediation && options.verbose) {
+        fmt.message(`  remediation: ${check.remediation}`, 'info');
+      }
+    }
+  }
+
+  return {
+    exitCode: ExitCode.SUCCESS,
+    result,
   };
 }
 

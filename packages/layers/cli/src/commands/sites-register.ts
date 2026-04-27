@@ -7,6 +7,8 @@ import {
   sitesInitCommand,
   sitesEnableCommand,
   sitesTaskLifecycleInitCommand,
+  sitesLifecycleKindsCommand,
+  sitesLifecyclePreflightCommand,
 } from './sites.js';
 import { silentCommandContext, wrapCommand } from '../lib/command-wrapper.js';
 import { emitFormatterBackedCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
@@ -47,6 +49,43 @@ export function registerSitesCommands(program: Command): void {
       const result = await sitesTaskLifecycleInitCommand({
         site: opts.site as string | undefined,
         dryRun: opts.dryRun as boolean | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitFormatterBackedCommandResult(result, { format: opts.format });
+    });
+
+  const lifecycleCmd = sitesCmd
+    .command('lifecycle')
+    .description('Inspect governed Site lifecycle transformation machinery');
+
+  lifecycleCmd
+    .command('kinds')
+    .description('List governed Site lifecycle transformation kinds')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (opts: Record<string, unknown>) => {
+      const result = await sitesLifecycleKindsCommand({
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitFormatterBackedCommandResult(result, { format: opts.format });
+    });
+
+  lifecycleCmd
+    .command('preflight <kind>')
+    .description('Preflight a Site lifecycle transformation without mutation')
+    .option('--source-site <ref>', 'Source Site id or path')
+    .option('--target-site <ref>', 'Target Site id or path')
+    .option('--authority-mode <mode>', 'Authority mode for this transformation')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (kind: string, opts: Record<string, unknown>) => {
+      const result = await sitesLifecyclePreflightCommand({
+        kind,
+        sourceSite: opts.sourceSite as string | undefined,
+        targetSite: opts.targetSite as string | undefined,
+        authorityMode: opts.authorityMode as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
         verbose: opts.verbose as boolean | undefined,
       }, silentCommandContext({ verbose: !!opts.verbose }));

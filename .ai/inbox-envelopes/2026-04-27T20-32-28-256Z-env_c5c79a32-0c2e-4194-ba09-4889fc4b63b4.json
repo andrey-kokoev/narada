@@ -1,0 +1,43 @@
+{
+  "envelope_id": "env_c5c79a32-0c2e-4194-ba09-4889fc4b63b4",
+  "received_at": "2026-04-27T20:32:28.256Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:site-lifecycle-transformations"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Treat Site lifecycle transformations as first-class Narada machinery",
+    "summary": "Operator and architect identified that Narada telos points toward governed Site lifecycle operations: absorb, split off, clone, fork, migrate, and re-instantiate Sites. This appears as important as task arc/chapter machinery because Sites are operational loci whose authority, provenance, trace, and re-instantiation semantics must remain coherent under transformation.",
+    "evidence": [
+      "Current work created PC, User, Thoughts, Client Service, Data, and ELT Narada Sites or Site candidates, exposing repeated questions of where authority lives and how Site knowledge/machinery should travel.",
+      "Plural Embodiment, Singular Authority clarified that cloning or multiple embodiments must not imply duplicate mutation authority.",
+      "Inhabited Evolution clarified that Sites emerge from real operations and may later lift, split, or merge only when earned by pressure and evidence.",
+      "Constructive Universalization by Re-instantiation implies Site templates and absorbed machinery should prove they can re-host originating cases."
+    ],
+    "proposal": [
+      "Create a Narada product/design arc or equivalent governed effort for Site lifecycle transformations: clone, fork, split, absorb, migrate, re-instantiate, and archive.",
+      "Define Site lifecycle operations as governed transformations over loci, authority maps, provenance, config, evidence, inbox/task state, templates, and derived projections, not raw folder copy/move operations.",
+      "Each transformation should declare whether it preserves, transfers, duplicates, or refuses mutation authority for each mutation class.",
+      "Site clone should support embodiment/read-only/forwarding/authority-bearing modes under explicit policy.",
+      "Site split should extract a sub-locus with traceable provenance and explicit authority migration or residual linkage.",
+      "Site absorb should merge local/sidecar Site knowledge or machinery into a broader Site or Narada proper only through governed admission and re-instantiation evidence.",
+      "Site re-instantiation should rebuild a Site from template + durable trace + config + evidence and verify that the originating case still runs through the lifted form.",
+      "Treat this as potentially comparable in importance to task lifecycle machinery because it governs how Narada operational loci themselves evolve."
+    ],
+    "recommendation": "Promote to important Narada architecture/product arc for first-class Site lifecycle machinery, with doctrine, command surface, config schema, doctor/preflight checks, and re-instantiation proofs."
+  },
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_c5c79a32-0c2e-4194-ba09-4889fc4b63b4",
+    "promoted_at": "2026-04-27T20:43:19.916Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
+}

@@ -78,6 +78,8 @@ const {
   sitesRemoveCommand,
   sitesInitCommand,
   sitesTaskLifecycleInitCommand,
+  sitesLifecycleKindsCommand,
+  sitesLifecyclePreflightCommand,
 } = await import('../../src/commands/sites.js');
 
 describe('sites commands', () => {
@@ -313,6 +315,69 @@ describe('sites commands', () => {
       } finally {
         rmSync(siteRoot, { recursive: true, force: true });
       }
+    });
+  });
+
+  describe('sites lifecycle commands', () => {
+    it('lists Site lifecycle transformation kinds without mutation', async () => {
+      const ctx = createMockContext();
+      const result = await sitesLifecycleKindsCommand({ format: 'json' }, ctx);
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      const data = result.result as {
+        mutation_performed: boolean;
+        kinds: Array<{ kind: string; artifacts: string[]; authority_modes: string[] }>;
+      };
+      expect(data.mutation_performed).toBe(false);
+      expect(data.kinds.map((entry) => entry.kind)).toEqual([
+        'clone',
+        'fork',
+        'split',
+        'absorb',
+        'migrate',
+        're-instantiate',
+        'archive',
+      ]);
+      expect(data.kinds.find((entry) => entry.kind === 'clone')?.authority_modes).toContain('forwarding');
+    });
+
+    it('preflights a ready Site clone transformation without mutation', async () => {
+      const ctx = createMockContext();
+      const result = await sitesLifecyclePreflightCommand({
+        kind: 'clone',
+        sourceSite: 'user-site',
+        targetSite: 'pc-site-copy',
+        authorityMode: 'read_only',
+        format: 'json',
+      }, ctx);
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      expect(result.result).toMatchObject({
+        status: 'ready',
+        mutation_performed: false,
+        kind: 'clone',
+        source_site: 'user-site',
+        target_site: 'pc-site-copy',
+        authority_mode: 'read_only',
+      });
+      expect((result.result as { required_artifacts: string[] }).required_artifacts).toContain('authority_map');
+    });
+
+    it('blocks preflight when a required authority mode is unsupported', async () => {
+      const ctx = createMockContext();
+      const result = await sitesLifecyclePreflightCommand({
+        kind: 'archive',
+        sourceSite: 'old-site',
+        authorityMode: 'authority_migration',
+        format: 'json',
+      }, ctx);
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      const data = result.result as { status: string; checks: Array<{ name: string; status: string }> };
+      expect(data.status).toBe('blocked');
+      expect(data.checks).toEqual(expect.arrayContaining([
+        expect.objectContaining({ name: 'authority_mode_supported', status: 'fail' }),
+      ]));
     });
   });
 });

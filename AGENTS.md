@@ -134,6 +134,7 @@ When describing higher-order architecture, deployment, or design:
 | [tool-catalog-binding.md](docs/product/tool-catalog-binding.md) | Tool Locality Doctrine and operation-to-system tool binding | Binding diagnostic tools from an app/system repo into an operation |
 | [first-operation-proof.md](docs/product/first-operation-proof.md) | Canonical mailbox operation product proof | Understanding what is proven and how to verify it |
 | [operator-loop.md](docs/product/operator-loop.md) | Minimal operator rhythm for live operations | Running day-to-day operations |
+| [site-lifecycle-transformations.md](docs/product/site-lifecycle-transformations.md) | Governed Site lifecycle transformations — clone, fork, split, absorb, migrate, re-instantiate, archive | Need to transform Sites without smearing authority or provenance |
 
 ---
 
