@@ -46,5 +46,13 @@
       "reason": "The failure mode can silently mutate ignored local SQLite state without git-visible evidence, so prevention must be instruction-level or command-level, not memory-only."
     }
   },
-  "status": "received"
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_796f9b43-a2a9-4b20-ab4b-cb1ec3a7a501",
+    "promoted_at": "2026-04-27T20:05:15.434Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
 }

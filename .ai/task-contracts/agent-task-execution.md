@@ -58,6 +58,28 @@ Architect/operator assignment text should usually be only `execute N` or `review
 - Do not commit secrets, credentials, tokens, private mailbox contents, or private operational data to the public repo.
 - Prefer fixture-backed or mock-backed verification for live-operation work unless live access is explicitly required.
 
+## Target Locus Before Mutation
+
+Before any task, chapter, inbox, roster, lifecycle, or publication mutation, the agent must know the target locus and path. If the requested work belongs to a local Site, PC Site, client Site, data Site, ELT Site, User Site, or external repository, `/home/andrey/src/narada` is read-only doctrine/tooling reference unless the Operator explicitly names Narada proper as the mutation target.
+
+Authority-affecting Narada proper surfaces include, at minimum:
+
+- `narada task allocate`, `task create`, `task claim`, `task close`, `task confirm`, `task finish`
+- `narada chapter init`, `chapter close`, `chapter finish-range`
+- `narada inbox triage`, `inbox promote`, `inbox pending`, `inbox task`
+- `narada task lifecycle import`, `task lifecycle export`
+- roster, assignment, dispatch, publication, and evidence-admission commands
+
+If the target locus is unclear, stop before mutation and ask for the target locus/path. Use read-only or dry-run inspection only until the locus is explicit.
+
+If accidental Narada proper task/lifecycle mutation occurs, remediate narrowly:
+
+- inspect tracked state with `git status --short`;
+- identify untracked or ignored local residue separately from tracked files;
+- repair only the residue introduced by the accidental command;
+- verify with bounded evidence such as dry-run allocation, guard output, or task evidence;
+- do not use broad revert/reset commands.
+
 ## Operator Input Format
 
 - When asking for operator input, number the question and letter the options.

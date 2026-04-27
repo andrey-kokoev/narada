@@ -1,7 +1,7 @@
 {
   "snapshot_kind": "task_lifecycle_snapshot",
   "snapshot_version": 1,
-  "exported_at": "2026-04-27T20:00:04.467Z",
+  "exported_at": "2026-04-27T20:05:03.393Z",
   "tables": [
     {
       "name": "agent_roster",
@@ -26,7 +26,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 720,
-          "updated_at": "2026-04-27T20:00:04.467Z"
+          "updated_at": "2026-04-27T20:05:03.393Z"
         },
         {
           "agent_id": "a2",
@@ -37,7 +37,7 @@
           "status": "idle",
           "task_number": null,
           "last_done": 886,
-          "updated_at": "2026-04-27T20:00:04.467Z"
+          "updated_at": "2026-04-27T20:05:03.393Z"
         },
         {
           "agent_id": "a3",
@@ -48,7 +48,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 610,
-          "updated_at": "2026-04-27T20:00:04.467Z"
+          "updated_at": "2026-04-27T20:05:03.393Z"
         },
         {
           "agent_id": "a4",
@@ -59,7 +59,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 574,
-          "updated_at": "2026-04-27T20:00:04.467Z"
+          "updated_at": "2026-04-27T20:05:03.393Z"
         },
         {
           "agent_id": "a5",
@@ -70,7 +70,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 551,
-          "updated_at": "2026-04-27T20:00:04.467Z"
+          "updated_at": "2026-04-27T20:05:03.393Z"
         },
         {
           "agent_id": "a6",
@@ -81,18 +81,18 @@
           "status": "done",
           "task_number": null,
           "last_done": 545,
-          "updated_at": "2026-04-27T20:00:04.467Z"
+          "updated_at": "2026-04-27T20:05:03.393Z"
         },
         {
           "agent_id": "architect",
           "role": "implementer",
           "capabilities_json": "[\"derive\",\"propose\",\"claim\",\"execute\",\"resolve\",\"confirm\"]",
           "first_seen_at": "2026-04-26T22:28:56.453Z",
-          "last_active_at": "2026-04-27T20:00:04.467Z",
+          "last_active_at": "2026-04-27T20:05:03.393Z",
           "status": "done",
           "task_number": null,
-          "last_done": 974,
-          "updated_at": "2026-04-27T20:00:04.467Z"
+          "last_done": 975,
+          "updated_at": "2026-04-27T20:05:03.393Z"
         }
       ]
     },
@@ -6020,6 +6020,27 @@
           "confirmation_json": "{\"task_id\":\"20260427-974-portable-site-task-lifecycle-initializer\",\"task_number\":974,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
           "warnings_json": null,
           "updated_at": "2026-04-27T19:57:14.960Z"
+        },
+        {
+          "request_id": "air_claim_975_architect_1777320170837_dso2hn",
+          "kind": "claim",
+          "task_id": "20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus",
+          "task_number": 975,
+          "agent_id": "architect",
+          "requested_by": "architect",
+          "requested_at": "2026-04-27T20:02:50.837Z",
+          "reason": null,
+          "no_claim": 0,
+          "status": "applied",
+          "rejection_reason": null,
+          "assignment_id": "assign-20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus-architect-1777320170836",
+          "previous_agent_id": null,
+          "lifecycle_status_before": "opened",
+          "lifecycle_status_after": "claimed",
+          "roster_status_after": "working",
+          "confirmation_json": "{\"task_id\":\"20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus\",\"task_number\":975,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
+          "warnings_json": null,
+          "updated_at": "2026-04-27T20:02:52.067Z"
         }
       ]
     },
@@ -14966,6 +14987,45 @@
           "admitted_at": "2026-04-27T20:00:04.055Z",
           "admitted_by": "architect",
           "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_975_1777320302376_3ebwlc",
+          "bundle_id": "evb_975_1777320302376_w67xf6",
+          "task_id": "20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus",
+          "task_number": 975,
+          "verdict": "rejected",
+          "methods_json": "[\"review\"]",
+          "blockers_json": "[\"19 acceptance criteria remain unchecked\"]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T20:05:02.376Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_975_1777320302637_p8n70n",
+          "bundle_id": "evb_975_1777320302637_ndqpq4",
+          "task_id": "20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus",
+          "task_number": 975,
+          "verdict": "admitted",
+          "methods_json": "[\"criteria_proof\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T20:05:02.637Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_975_1777320302948_9kfptu",
+          "bundle_id": "evb_975_1777320302948_6u38jn",
+          "task_id": "20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus",
+          "task_number": 975,
+          "verdict": "admitted",
+          "methods_json": "[\"admission\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": "closed",
+          "admitted_at": "2026-04-27T20:05:02.948Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
         }
       ]
     },
@@ -22953,6 +23013,45 @@
           "residuals_json": "[]",
           "assembled_at": "2026-04-27T20:00:04.055Z",
           "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_975_1777320302376_w67xf6",
+          "task_id": "20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus",
+          "task_number": 975,
+          "report_ids_json": "[\"wrr_61b21adb_20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":false,\"unchecked_count\":19}",
+          "review_ids_json": "[\"review-20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus-1777320302277\"]",
+          "changed_files_json": "[\"AGENTS.md\",\".ai/task-contracts/agent-task-execution.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T20:05:02.376Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_975_1777320302637_ndqpq4",
+          "task_id": "20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus",
+          "task_number": 975,
+          "report_ids_json": "[\"wrr_61b21adb_20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[\"review-20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus-1777320302277\"]",
+          "changed_files_json": "[\"AGENTS.md\",\".ai/task-contracts/agent-task-execution.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T20:05:02.637Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_975_1777320302948_6u38jn",
+          "task_id": "20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus",
+          "task_number": 975,
+          "report_ids_json": "[\"wrr_61b21adb_20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[\"review-20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus-1777320302277\"]",
+          "changed_files_json": "[\"AGENTS.md\",\".ai/task-contracts/agent-task-execution.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T20:05:02.948Z",
+          "assembled_by": "architect"
         }
       ]
     },
@@ -26081,6 +26180,11 @@
           "task_id": "20260427-974-portable-site-task-lifecycle-initializer",
           "record_json": "{\"task_id\":\"20260427-974-portable-site-task-lifecycle-initializer\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T19:57:12.086Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T19:59:50.783Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
           "updated_at": "2026-04-27T19:59:51.005Z"
+        },
+        {
+          "task_id": "20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus",
+          "record_json": "{\"task_id\":\"20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T20:02:51.083Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T20:04:49.755Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
+          "updated_at": "2026-04-27T20:04:49.992Z"
         }
       ]
     },
@@ -28765,6 +28869,15 @@
           "task_id": "20260427-974-portable-site-task-lifecycle-initializer",
           "agent_id": "architect",
           "claimed_at": "2026-04-27T19:57:12.086Z",
+          "released_at": null,
+          "release_reason": null,
+          "intent": "primary"
+        },
+        {
+          "assignment_id": "assign-20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus-architect-1777320170836",
+          "task_id": "20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus",
+          "agent_id": "architect",
+          "claimed_at": "2026-04-27T20:02:51.083Z",
           "released_at": null,
           "release_reason": null,
           "intent": "primary"
@@ -41149,6 +41262,19 @@
           "continuation_packet_json": null,
           "updated_at": "2026-04-27T20:00:04.209Z",
           "closure_mode": "agent_finish"
+        },
+        {
+          "task_id": "20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus",
+          "task_number": 975,
+          "status": "closed",
+          "governed_by": "task_close:architect",
+          "closed_at": "2026-04-27T20:05:03.113Z",
+          "closed_by": "architect",
+          "reopened_at": null,
+          "reopened_by": null,
+          "continuation_packet_json": null,
+          "updated_at": "2026-04-27T20:05:03.113Z",
+          "closure_mode": "agent_finish"
         }
       ]
     },
@@ -41174,7 +41300,7 @@
       "rows": [
         {
           "singleton": 1,
-          "last_allocated": 974
+          "last_allocated": 975
         }
       ]
     },
@@ -43659,6 +43785,14 @@
           "agent_id": "architect",
           "reported_at": "2026-04-27T19:59:50.783Z",
           "report_json": "{\"report_id\":\"wrr_b80874d1_20260427-974-portable-site-task-lifecycle-initializer_architect\",\"task_number\":\"974\",\"task_id\":\"20260427-974-portable-site-task-lifecycle-initializer\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-974-portable-site-task-lifecycle-initializer-2026-04-27T19:57:12.086Z\",\"reported_at\":\"2026-04-27T19:59:50.783Z\",\"summary\":\"Added portable Site-local task lifecycle initialization via narada sites task-lifecycle init --site <path>.\",\"changed_files\":[\"packages/layers/cli/src/commands/sites.ts\",\"packages/layers/cli/src/commands/sites-register.ts\",\"packages/layers/cli/test/commands/sites.test.ts\",\"docs/concepts/task-lifecycle-db-posture.md\"],\"verification\":[{\"command\":\"pnpm --filter @narada2/cli typecheck\",\"result\":\"passed\"},{\"command\":\"pnpm --filter @narada2/cli exec vitest run test/commands/sites.test.ts --pool=forks\",\"result\":\"passed 12/12\"},{\"command\":\"pnpm --filter @narada2/cli build\",\"result\":\"passed\"},{\"command\":\"narada sites task-lifecycle init --site /tmp/narada-site-lifecycle-proof-974 --format json\",\"result\":\"passed; created .ai/task-lifecycle.db with 22 tables\"},{\"command\":\"narada sites task-lifecycle init --site /tmp/narada-site-lifecycle-proof-974 --format json\",\"result\":\"passed; idempotent created=false\"},{\"command\":\"find /tmp/narada-site-lifecycle-proof-974 -maxdepth 4 -type d -print\",\"result\":\"only site root and .ai directory created; no .ai/do-not-open/tasks\"},{\"command\":\"pnpm verify\",\"result\":\"passed\"}],\"known_residuals\":[\"The Staccato envelope also exposed inbox import duplicate handling; that is a separate inbox idempotency bug, not part of Site task lifecycle initialization.\"],\"ready_for_review\":true,\"report_status\":\"accepted\"}"
+        },
+        {
+          "report_id": "wrr_61b21adb_20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus_architect",
+          "task_id": "20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus",
+          "assignment_id": "20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus-2026-04-27T20:02:51.083Z",
+          "agent_id": "architect",
+          "reported_at": "2026-04-27T20:04:49.755Z",
+          "report_json": "{\"report_id\":\"wrr_61b21adb_20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus_architect\",\"task_number\":\"975\",\"task_id\":\"20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus-2026-04-27T20:02:51.083Z\",\"reported_at\":\"2026-04-27T20:04:49.755Z\",\"summary\":\"Added target-locus-before-mutation guard to root AGENTS guidance and the agent task execution contract.\",\"changed_files\":[\"AGENTS.md\",\".ai/task-contracts/agent-task-execution.md\"],\"verification\":[{\"command\":\"pnpm verify\",\"result\":\"passed\"}],\"known_residuals\":[],\"ready_for_review\":true,\"report_status\":\"accepted\"}"
         }
       ]
     },
@@ -43981,6 +44115,14 @@
           "verdict": "accepted",
           "findings_json": null,
           "reviewed_at": "2026-04-27T20:00:02.929Z"
+        },
+        {
+          "review_id": "review-20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus-1777320302277",
+          "task_id": "20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus",
+          "reviewer_agent_id": "architect",
+          "verdict": "accepted",
+          "findings_json": null,
+          "reviewed_at": "2026-04-27T20:05:02.277Z"
         }
       ]
     },
@@ -55764,6 +55906,19 @@
           "acceptance_criteria_json": "[\"Add a Site-local task lifecycle init command that accepts an explicit Site path and initializes the lifecycle database/schema there.\",\"Do not require the target Site to be the Narada proper repo or to contain .ai/do-not-open/tasks.\",\"Use existing task lifecycle schema initialization code rather than duplicating a divergent schema.\",\"Return bounded JSON/human output with site path\",\"database path\",\"tables initialized\",\"and whether the DB was created or already existed.\",\"Add focused tests covering a temp external Site path\",\"idempotent re-run\",\"and no mutation of Narada proper task state.\",\"Document the command in the Site/task lifecycle docs or relevant product concept.\",\"Handle source inbox envelope env_e50511ac-f65e-4f59-ac84-98bbe27107f6.\"]",
           "dependencies_json": "[]",
           "updated_at": "2026-04-27T19:55:12.983Z"
+        },
+        {
+          "task_id": "20260427-975-guard-narada-proper-task-substrate-mutations-by-target-locus",
+          "task_number": 975,
+          "title": "Guard Narada proper task substrate mutations by target locus",
+          "chapter_markdown": "Agent locus mutation discipline",
+          "goal_markdown": "Prevent agents from using Narada proper task/inbox/chapter machinery as the work substrate for local Site or external repo work unless the operator explicitly names Narada proper as the target locus.",
+          "context_markdown": null,
+          "required_work_markdown": "1. TBD",
+          "non_goals_markdown": "- Do not expand scope beyond this task.\n- Do not create derivative task-status files.\n- Do not mutate live external systems unless explicitly authorized.",
+          "acceptance_criteria_json": "[\"Add agent-facing doctrine requiring explicit target locus/path before mutating task\",\"chapter\",\"inbox\",\"roster\",\"or lifecycle state.\",\"State that /home/andrey/src/narada defaults to read-only doctrine/tool inspection when the requested work belongs to a local Site\",\"PC Site\",\"client Site\",\"data Site\",\"ELT Site\",\"or external repo.\",\"Classify task allocate/create/claim/close/confirm\",\"chapter init/close\",\"inbox triage/promote/pending/task\",\"and lifecycle import/export as mutating or authority-affecting surfaces for this rule.\",\"Add a concise remediation rule: if accidental allocation or lifecycle mutation happens\",\"inspect git status and repair only the local mutation residue with bounded evidence.\",\"Document the rule in the execution contract or AGENTS-facing guidance without changing CLI flags or database schemas.\",\"Handle source inbox envelope env_796f9b43-a2a9-4b20-ab4b-cb1ec3a7a501.\"]",
+          "dependencies_json": "[]",
+          "updated_at": "2026-04-27T20:02:36.126Z"
         }
       ]
     },
