@@ -1,0 +1,43 @@
+{
+  "envelope_id": "env_abd1f7d2-3c50-463d-8c50-d85bc250ee5e",
+  "received_at": "2026-04-27T05:32:22.560Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "codex-session:staccato-polycentric-routing"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "codex"
+  },
+  "payload": {
+    "title": "Client work reveals polycentric locus routing across service, data, and ELT Sites",
+    "summary": "The Staccato setup showed that client work naturally wants multiple authority loci: client service, local data, ELT, User Site, and Narada proper. A single client Site would smear authority; the coherent flow is polycentric locus routing.",
+    "originating_case": {
+      "client": "Staccato",
+      "client_service_repo": "C:/Users/Andrey/OneDrive - Global Maxima LLC/!Business/!Clients/Staccato",
+      "data_site": "D:/data/staccato/.narada",
+      "elt_side": "D:/data/elt/staccato/.narada",
+      "user_site_intake": "C:/Users/Andrey/Narada/messages/staccato"
+    },
+    "observations": [
+      "Client work naturally wants multiple loci: client-service, data, ELT, User Site, and Narada proper.",
+      "Information flow is polycentric and locus-routed, not hierarchical.",
+      "All relevant loci must not become broadcast semantics; route to the locus whose authority can interpret or act.",
+      "Client-sensitive folders need defensive Git defaults: deny by default, then explicitly admit governance paths.",
+      "Local data and ELT Sites may need Narada metadata without becoming Git repos.",
+      "Operator/agent help should route to a durable User Site intake path, not to a specific assistant identity.",
+      "Simple authored Markdown envelopes remain the right initial substrate when canonical Site-local inbox/task machinery is not yet installed.",
+      "The repeating pattern across project, client-service, data, and ELT loci suggests Narada proper wants a documented Site-locus taxonomy and setup templates, but not necessarily new machinery yet."
+    ],
+    "routing_rule": "Route each observation, request, or proposal to the locus whose authority can interpret or act on it. Do not broadcast everywhere.",
+    "candidate_future_work": [
+      "Document a Site-locus taxonomy covering User, PC, Project, Client Service, Data, and ELT loci.",
+      "Provide setup templates for client-service repos, local data Sites, and ELT sides.",
+      "Keep template output markdown-first and defensive around client-sensitive artifacts.",
+      "Avoid implementing heavier Site-local inbox/task machinery until the workflow earns it or Narada proper exposes a stable substrate."
+    ],
+    "posture": "observation_not_proposal"
+  },
+  "status": "received"
+}
