@@ -63,6 +63,12 @@ It is a review lens that supports:
 - **Intelligence-Authority Separation**: recognition and synthesis do not grant decision or mutation authority.
 - **Zone and crossing discipline**: artifacts crossing boundaries must carry an explicit regime and confirmation rule.
 
+## Implementation Inventory
+
+Narada keeps a bounded, machine-readable inventory of artifact-first authority risks in [`authority-inversion-inventory.json`](authority-inversion-inventory.json).
+
+The inventory is not a repair mechanism. It is input for coherence scanning, review prompts, and future implementation tasks. Each entry names the visible artifact, hidden authority structure, current guard, remaining gap, severity, and recommended follow-up.
+
 ## Practical Agent Rule
 
 When a task asks for a direct fix, an ergonomic wrapper, a migration, a document, or a new operator surface, first perform the inversion:

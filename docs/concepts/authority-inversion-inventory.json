@@ -1,0 +1,119 @@
+{
+  "schema": "https://narada.dev/schemas/authority-inversion-inventory/v1",
+  "version": 1,
+  "updated_at": "2026-04-27T00:00:00.000Z",
+  "doctrine": "authority-revealing-inversion",
+  "purpose": "Bounded inventory of visible artifacts that can be mistaken for authority. Scanner and review surfaces consume these categories to produce observations or advisory warnings.",
+  "findings": [
+    {
+      "finding_id": "task-markdown-projection-authority",
+      "surface": "task_lifecycle",
+      "visible_artifact": ".ai/do-not-open/tasks/*.md",
+      "hidden_authority_structure": "Task lifecycle and task spec authority are command-mediated, SQLite-backed where migrated, and evidenced through reports/reviews/admissions.",
+      "current_guard": "Task file guard, task lifecycle snapshot guard, task amend/create/report/finish commands.",
+      "gap": "Markdown remains inspectable and can still look like the source of lifecycle truth to agents or scripts.",
+      "severity": "warning",
+      "recommended_follow_up": "Teach coherence scan and task finish review to warn when lifecycle/spec files are treated as direct authority instead of command-mediated projections.",
+      "candidate_tasks": [992, 993]
+    },
+    {
+      "finding_id": "task-lifecycle-sqlite-substrate-authority",
+      "surface": "task_lifecycle",
+      "visible_artifact": ".ai/task-lifecycle.db",
+      "hidden_authority_structure": "SQLite is local runtime substrate; portable authority should be canonical mutation evidence plus tracked snapshots during transition.",
+      "current_guard": "DB ignored from Git and tracked .ai/task-lifecycle-snapshot.json freshness guard.",
+      "gap": "Snapshot proves freshness but does not yet provide append-only replayable mutation evidence.",
+      "severity": "warning",
+      "recommended_follow_up": "Implement canonical mutation evidence records for lifecycle mutations and replay/reconcile local SQLite from those records.",
+      "candidate_tasks": [994, 995, 997]
+    },
+    {
+      "finding_id": "inbox-db-envelope-authority",
+      "surface": "inbox",
+      "visible_artifact": ".ai/inbox.db and .ai/inbox-envelopes/*.json",
+      "hidden_authority_structure": "Inbox envelopes are inert intake artifacts; status transitions and promotions are governed crossings with principal and read-back evidence.",
+      "current_guard": "Inbox import/export, work-next, triage, pending, task promotion, and doctor surfaces.",
+      "gap": "Exported envelopes are close to mutation evidence, but transition evidence is not yet normalized across submit/claim/triage/promotion/import.",
+      "severity": "warning",
+      "recommended_follow_up": "Emit inbox mutation evidence for status and promotion transitions; classify imports as replay rather than new mutations.",
+      "candidate_tasks": [996, 997]
+    },
+    {
+      "finding_id": "resume-tool-process-authority",
+      "surface": "resume_work_next",
+      "visible_artifact": "narada resume --with codex advisory command",
+      "hidden_authority_structure": "Resume continuity is read-only trace recovery; launching or hydrating a tool is command execution and belongs in CEIZ.",
+      "current_guard": "narada resume is read-only and --with codex is advisory only.",
+      "gap": "No executed hydration crossing exists yet; future execution must not bypass CEIZ or output admission.",
+      "severity": "info",
+      "recommended_follow_up": "Enrich resume brief, then route explicit hydration execution through CEIZ.",
+      "candidate_tasks": [998, 999, 1000]
+    },
+    {
+      "finding_id": "publication-commit-authority",
+      "surface": "publication",
+      "visible_artifact": "Git commit, branch, and push output",
+      "hidden_authority_structure": "Publication is a governed crossing from local patch bundle to remote-visible repository state with confirmation.",
+      "current_guard": "Publication intent zone and chapter preflight surfaces.",
+      "gap": "Not every commit/push path is forced through publication preflight or explicit publication evidence.",
+      "severity": "warning",
+      "recommended_follow_up": "Surface publication preflight in work-next/doctrine guards before mutation work that expects commit or push.",
+      "candidate_tasks": [1001, 1002]
+    },
+    {
+      "finding_id": "cli-output-artifact-authority",
+      "surface": "cli_output_admission",
+      "visible_artifact": "Large CLI stdout/stderr transcripts",
+      "hidden_authority_structure": "CLI output must pass bounded output admission; long transcripts are artifacts to store or summarize, not automatically admitted chat evidence.",
+      "current_guard": "CLI output admission guard and finite/interactive/long-lived output helpers.",
+      "gap": "Command authors can still add surfaces that produce unbounded output or bypass formatter/admission helpers.",
+      "severity": "warning",
+      "recommended_follow_up": "Add coherence checks for commands that bypass CLI output admission or expose unbounded JSON by default.",
+      "candidate_tasks": [992, 993]
+    },
+    {
+      "finding_id": "site-registry-locus-authority",
+      "surface": "site_registry",
+      "visible_artifact": "Site registry rows, config files, cwd, and clone path",
+      "hidden_authority_structure": "A Site mutation must resolve to the declared authority locus; other clones/shells are read embodiments unless routed.",
+      "current_guard": "Site doctor, governed locus federation doctrine, plural embodiment doctrine.",
+      "gap": "Mutation commands do not yet share a common preflight that classifies cwd as authority locus, stale clone, read-only embodiment, or unknown.",
+      "severity": "warning",
+      "recommended_follow_up": "Add Site mutation authority preflight and wire it into task/inbox/publication guard paths.",
+      "candidate_tasks": [1001, 1002]
+    },
+    {
+      "finding_id": "secret-value-capability-authority",
+      "surface": "secrets",
+      "visible_artifact": "Secret strings, env vars, redacted output, and copied tokens",
+      "hidden_authority_structure": "Secret authority belongs to capability lifecycle: creation, reveal, use, rotation, revocation, and audit.",
+      "current_guard": "Capability-governed secret management doctrine and redaction posture.",
+      "gap": "Secret values can still appear in command history, logs, or chat if command/output admission does not classify them as capabilities.",
+      "severity": "warning",
+      "recommended_follow_up": "Extend authority inversion scanner to flag obvious secret-value artifacts and route to capability lifecycle guidance.",
+      "candidate_tasks": [992]
+    },
+    {
+      "finding_id": "test-output-admission-authority",
+      "surface": "tests",
+      "visible_artifact": "Vitest/pnpm output and ad hoc test transcripts",
+      "hidden_authority_structure": "Test output is admission evidence only when requested through TIZ or recorded as bounded verification evidence.",
+      "current_guard": "Testing Intent Zone doctrine, verification records, task report verification JSON.",
+      "gap": "Some verification still happens as direct command output rather than explicit test intent/result records.",
+      "severity": "info",
+      "recommended_follow_up": "Prefer TIZ-backed verification and surface non-TIZ test transcript use as advisory until full cutover.",
+      "candidate_tasks": [992, 993]
+    },
+    {
+      "finding_id": "generated-review-evidence-authority",
+      "surface": "generated_artifacts",
+      "visible_artifact": ".ai/reviews/*.json, work result reports, evidence admissions",
+      "hidden_authority_structure": "Generated artifacts become authority only through lifecycle admission rules, reviewer identity, and task evidence verdict.",
+      "current_guard": "task report, task review, task finish, task evidence admit/prove-criteria.",
+      "gap": "Review artifacts can look self-authorizing unless task evidence/closure status is checked.",
+      "severity": "warning",
+      "recommended_follow_up": "Task finish/review output should remind agents that generated review artifacts require evidence admission and closure state.",
+      "candidate_tasks": [993]
+    }
+  ]
+}

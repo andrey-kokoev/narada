@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-27T21:49:37.177Z
+criteria_proved_by: architect
+criteria_proved_at: 2026-04-27T21:56:01.041Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-27T21:56:01.538Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: agent_finish
 ---
 
 # Inventory artifact-first authority leaks
@@ -42,8 +51,8 @@ Authority-Revealing Inversion is now doctrine. The next executable step is to fi
 
 ## Acceptance Criteria
 
-- [ ] Inventory covers task lifecycle, inbox, resume/work-next, publication, CLI output admission, Site registry, secrets, tests, and generated artifacts.
-- [ ] Each finding names visible artifact, hidden authority structure, current guard, gap, severity, and recommended executable follow-up.
-- [ ] Inventory is bounded and machine-readable enough for future coherence scan integration.
-- [ ] No target authority surfaces are mutated except the inventory artifact and task evidence.
-- [ ] `pnpm verify` passes.
+- [x] Inventory covers task lifecycle, inbox, resume/work-next, publication, CLI output admission, Site registry, secrets, tests, and generated artifacts.
+- [x] Each finding names visible artifact, hidden authority structure, current guard, gap, severity, and recommended executable follow-up.
+- [x] Inventory is bounded and machine-readable enough for future coherence scan integration.
+- [x] No target authority surfaces are mutated except the inventory artifact and task evidence.
+- [x] `pnpm verify` passes.
