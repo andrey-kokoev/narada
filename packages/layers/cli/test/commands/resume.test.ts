@@ -5,7 +5,7 @@ vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -242,5 +242,42 @@ describe('resume continuity brief', () => {
     } finally {
       rmSync(noRepo, { recursive: true, force: true });
     }
+  });
+
+  it('writes a bounded resume handoff artifact with stable digest', async () => {
+    const first = await resumeCommand({
+      agent: 'architect',
+      cwd: tempDir,
+      writeHandoff: true,
+      format: 'json',
+    });
+    const second = await resumeCommand({
+      agent: 'architect',
+      cwd: tempDir,
+      writeHandoff: true,
+      format: 'json',
+    });
+
+    expect(first.exitCode).toBe(ExitCode.SUCCESS);
+    expect(second.exitCode).toBe(ExitCode.SUCCESS);
+    const firstHandoff = (first.result as { handoff: { path: string; brief_digest: string; read_only_input: boolean } }).handoff;
+    const secondHandoff = (second.result as { handoff: { path: string; brief_digest: string } }).handoff;
+    expect(firstHandoff.brief_digest).toBe(secondHandoff.brief_digest);
+    expect(firstHandoff.path).toBe(secondHandoff.path);
+    expect(firstHandoff.read_only_input).toBe(true);
+    expect(existsSync(firstHandoff.path)).toBe(true);
+
+    const artifact = JSON.parse(readFileSync(firstHandoff.path, 'utf8')) as {
+      schema: string;
+      brief_digest: string;
+      source_command: string[];
+      read_only_input: boolean;
+      brief: { agent_id: string; next_action: string };
+    };
+    expect(artifact.schema).toBe('https://narada.dev/schemas/resume-handoff/v1');
+    expect(artifact.brief_digest).toBe(firstHandoff.brief_digest);
+    expect(artifact.source_command).toContain('--write-handoff');
+    expect(artifact.read_only_input).toBe(true);
+    expect(artifact.brief.agent_id).toBe('architect');
   });
 });

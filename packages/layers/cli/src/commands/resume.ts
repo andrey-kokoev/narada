@@ -1,5 +1,7 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { SqliteInboxStore, type InboxEnvelope } from '@narada2/control-plane';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
@@ -13,6 +15,8 @@ export interface ResumeOptions {
   cwd?: string;
   withTool?: string;
   executeTool?: boolean;
+  writeHandoff?: boolean;
+  handoffDir?: string;
   format?: CliFormat;
 }
 
@@ -182,6 +186,97 @@ function stringField(record: Record<string, unknown>, key: string): string | nul
   return typeof record[key] === 'string' ? String(record[key]) : null;
 }
 
+async function writeResumeHandoffArtifact(
+  result: Record<string, unknown>,
+  options: ResumeOptions & { cwd: string },
+): Promise<Record<string, unknown>> {
+  const brief = {
+    agent_id: result.agent_id,
+    cwd: result.cwd,
+    locus: result.locus,
+    repo: stableRepoRef(asRecord(result.repo)),
+    tasks: result.tasks,
+    inbox: result.inbox,
+    next_action: result.next_action,
+    next_work: boundedNextWork(asRecord(result.next_work)),
+    tool_hydration: result.tool_hydration,
+  };
+  const briefDigest = sha256(stableStringify(brief));
+  const outDir = resolve(options.cwd, options.handoffDir ?? join('.ai', 'resume-handoffs'));
+  await mkdir(outDir, { recursive: true });
+  const artifact = {
+    schema: 'https://narada.dev/schemas/resume-handoff/v1',
+    version: 1,
+    handoff_id: `resume_${briefDigest.slice(0, 24)}`,
+    brief_digest: briefDigest,
+    generated_at: new Date().toISOString(),
+    principal: options.agent ?? null,
+    source_command: sourceCommand(options),
+    read_only_input: true,
+    brief,
+  };
+  const path = join(outDir, `${artifact.handoff_id}.json`);
+  await writeFile(path, `${JSON.stringify(artifact, null, 2)}\n`, 'utf8');
+  return {
+    status: 'written',
+    path,
+    handoff_id: artifact.handoff_id,
+    brief_digest: briefDigest,
+    read_only_input: true,
+  };
+}
+
+function stableRepoRef(repo: Record<string, unknown>): Record<string, unknown> {
+  return {
+    repo_root: repo.repo_root ?? null,
+    branch: repo.branch ?? null,
+    head_commit: repo.head_commit ?? null,
+    upstream: repo.upstream ?? null,
+    unpushed_commits: repo.unpushed_commits ?? null,
+  };
+}
+
+function boundedNextWork(nextWork: Record<string, unknown>): Record<string, unknown> {
+  return {
+    status: nextWork.status ?? null,
+    action_kind: nextWork.action_kind ?? null,
+    primary: nextWork.primary ?? null,
+    next_step: nextWork.next_step ?? null,
+  };
+}
+
+function sourceCommand(options: ResumeOptions & { cwd: string }): string[] {
+  return [
+    'narada',
+    'resume',
+    '--agent',
+    options.agent ?? '',
+    '--cwd',
+    options.cwd,
+    ...(options.withTool ? ['--with', options.withTool] : []),
+    ...(options.executeTool ? ['--execute-tool'] : []),
+    '--write-handoff',
+  ];
+}
+
+function stableStringify(value: unknown): string {
+  return JSON.stringify(sortForStableStringify(value));
+}
+
+function sortForStableStringify(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortForStableStringify);
+  if (!value || typeof value !== 'object') return value;
+  const sorted: Record<string, unknown> = {};
+  for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+    sorted[key] = sortForStableStringify((value as Record<string, unknown>)[key]);
+  }
+  return sorted;
+}
+
+function sha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
+
 export async function resumeCommand(options: ResumeOptions): Promise<CommandEnvelope> {
   if (!options.agent) {
     return {
@@ -277,6 +372,9 @@ export async function resumeCommand(options: ResumeOptions): Promise<CommandEnve
       ceiz: commandRunResult,
       note: 'Tool process launch is routed through CEIZ; process_control is policy-blocked unless separately approved.',
     };
+  }
+  if (options.writeHandoff) {
+    result.handoff = await writeResumeHandoffArtifact(result, { ...options, cwd });
   }
 
   return {

@@ -1,8 +1,17 @@
 ---
-status: opened
+status: closed
 depends_on: [998]
 amended_by: architect
 amended_at: 2026-04-27T21:49:41.992Z
+criteria_proved_by: architect
+criteria_proved_at: 2026-04-27T22:58:30.668Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-27T22:58:31.189Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: agent_finish
 ---
 
 # Add resume handoff artifact
@@ -43,8 +52,8 @@ Resume continuity should preserve durable trace. A handoff artifact lets a later
 
 ## Acceptance Criteria
 
-- [ ] `narada resume` can write a bounded handoff artifact under a governed path.
-- [ ] Artifact records brief digest, locus, next action, generated_at, principal, and source command.
-- [ ] Artifact is read-only input for later hydration and does not mutate task/inbox state.
-- [ ] Tests cover artifact creation and stable digest behavior.
-- [ ] `pnpm verify` passes.
+- [x] `narada resume` can write a bounded handoff artifact under a governed path.
+- [x] Artifact records brief digest, locus, next action, generated_at, principal, and source command.
+- [x] Artifact is read-only input for later hydration and does not mutate task/inbox state.
+- [x] Tests cover artifact creation and stable digest behavior.
+- [x] `pnpm verify` passes.
