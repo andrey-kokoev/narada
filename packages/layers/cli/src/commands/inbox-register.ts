@@ -2,6 +2,8 @@ import type { Command } from 'commander';
 import {
   inboxClaimCommand,
   inboxDoctorCommand,
+  inboxExportCommand,
+  inboxImportCommand,
   inboxListCommand,
   inboxNextCommand,
   inboxPendingCommand,
@@ -62,6 +64,46 @@ export function registerInboxCommands(program: Command): void {
         payload: opts.payload as string | undefined,
         payloadFile: opts.payloadFile as string | undefined,
         payloadStdin: opts.payloadStdin as boolean | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
+
+  inboxCmd
+    .command('export')
+    .description('Export inbox envelopes as append-only JSON artifacts')
+    .option('--status <status>', 'Filter by status')
+    .option('--kind <kind>', 'Filter by envelope kind')
+    .option('--out-dir <path>', 'Output directory', '.ai/inbox-envelopes')
+    .option('--limit <n>', 'Maximum envelopes', '200')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'inbox export',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => inboxExportCommand({
+        status: opts.status as string | undefined,
+        kind: opts.kind as string | undefined,
+        outDir: opts.outDir as string | undefined,
+        limit: opts.limit ? Number(opts.limit) : undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
+
+  inboxCmd
+    .command('import')
+    .description('Import append-only JSON inbox envelope artifacts')
+    .option('--from-dir <path>', 'Input directory', '.ai/inbox-envelopes')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'inbox import',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => inboxImportCommand({
+        fromDir: opts.fromDir as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }),

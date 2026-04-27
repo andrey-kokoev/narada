@@ -14,6 +14,8 @@ import { SqliteInboxStore } from '@narada2/control-plane';
 import {
   inboxClaimCommand,
   inboxDoctorCommand,
+  inboxExportCommand,
+  inboxImportCommand,
   inboxListCommand,
   inboxNextCommand,
   inboxPendingCommand,
@@ -163,6 +165,60 @@ describe('Canonical Inbox CLI commands', () => {
     ]));
     const after = await inboxListCommand({ cwd: tempDir, format: 'json' });
     expect((after.result as { count: number }).count).toBe((before.result as { count: number }).count);
+  });
+
+  it('exports and imports inbox envelopes idempotently through append-only artifacts', async () => {
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual:portable',
+      kind: 'observation',
+      authorityLevel: 'operator_confirmed',
+      payload: JSON.stringify({ title: 'Portable envelope' }),
+    });
+    expect(submitted.exitCode).toBe(ExitCode.SUCCESS);
+
+    const exportDir = join(tempDir, 'exports');
+    const exported = await inboxExportCommand({
+      cwd: tempDir,
+      format: 'json',
+      outDir: exportDir,
+    });
+    expect(exported.exitCode).toBe(ExitCode.SUCCESS);
+    expect((exported.result as { count: number }).count).toBe(1);
+    expect(readdirSync(exportDir).filter((name) => name.endsWith('.json'))).toHaveLength(1);
+
+    const importedDir = mkdtempSync(join(tmpdir(), 'narada-inbox-import-'));
+    try {
+      const imported = await inboxImportCommand({
+        cwd: importedDir,
+        format: 'json',
+        fromDir: exportDir,
+      });
+      expect(imported.exitCode).toBe(ExitCode.SUCCESS);
+      expect(imported.result).toMatchObject({ imported: 1, skipped: 0 });
+
+      const repeated = await inboxImportCommand({
+        cwd: importedDir,
+        format: 'json',
+        fromDir: exportDir,
+      });
+      expect(repeated.exitCode).toBe(ExitCode.SUCCESS);
+      expect(repeated.result).toMatchObject({ imported: 0, skipped: 1 });
+    } finally {
+      rmSync(importedDir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports conflict-safe local DB posture in doctor delivery coordinates', async () => {
+    setupGitRepo(tempDir);
+    const doctor = await inboxDoctorCommand({ cwd: tempDir, format: 'json' });
+    const delivery = (doctor.result as { delivery: Record<string, unknown> }).delivery;
+    expect(delivery).toMatchObject({
+      export_dir: join(tempDir, '.ai', 'inbox-envelopes'),
+      git_conflict_posture: 'local sqlite db ignored; use inbox export/import for portable envelopes',
+    });
   });
 
   it('rejects ambiguous payload sources', async () => {

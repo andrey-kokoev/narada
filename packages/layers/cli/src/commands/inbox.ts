@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import {
   type InboxAuthorityLevel,
@@ -82,6 +82,17 @@ export interface InboxPendingOptions extends InboxCommandOptions {
 
 export interface InboxDoctorOptions extends InboxCommandOptions {}
 
+export interface InboxExportOptions extends InboxCommandOptions {
+  status?: string;
+  kind?: string;
+  outDir?: string;
+  limit?: number;
+}
+
+export interface InboxImportOptions extends InboxCommandOptions {
+  fromDir?: string;
+}
+
 export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
   const sourceKind = parseSourceKind(options.sourceKind);
   const kind = parseEnvelopeKind(options.kind);
@@ -154,6 +165,104 @@ export async function inboxDoctorCommand(options: InboxDoctorOptions): Promise<{
     ],
     options.format,
   );
+}
+
+export async function inboxExportCommand(options: InboxExportOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const status = options.status ? parseStatus(options.status) : undefined;
+  const kind = options.kind ? parseEnvelopeKind(options.kind) : undefined;
+  if (options.status && !status) return errorResult(`Invalid status: ${options.status}`);
+  if (options.kind && !kind) return errorResult(`Invalid kind: ${options.kind}`);
+  const cwd = options.cwd ?? process.cwd();
+  const outDir = resolve(cwd, options.outDir ?? join('.ai', 'inbox-envelopes'));
+  return withInboxStoreAsync(options, async (store) => {
+    const envelopes = selectEnvelopes(store, { status, kind, limit: options.limit ?? 200 });
+    await mkdir(outDir, { recursive: true });
+    const files: string[] = [];
+    for (const envelope of envelopes) {
+      const fileName = `${envelope.received_at.replace(/[:.]/g, '-')}-${envelope.envelope_id}.json`;
+      const path = join(outDir, fileName);
+      await writeFile(path, `${JSON.stringify(envelope, null, 2)}\n`, 'utf8');
+      files.push(path);
+    }
+    return okResult(
+      {
+        status: 'success',
+        count: envelopes.length,
+        out_dir: outDir,
+        files,
+      },
+      [
+        `Inbox envelopes exported: ${envelopes.length}`,
+        `Output: ${outDir}`,
+      ],
+      options.format,
+    );
+  });
+}
+
+export async function inboxImportCommand(options: InboxImportOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const cwd = options.cwd ?? process.cwd();
+  const fromDir = resolve(cwd, options.fromDir ?? join('.ai', 'inbox-envelopes'));
+  return withInboxStoreAsync(options, async (store) => {
+    let names: string[];
+    try {
+      names = (await readdir(fromDir)).filter((name) => name.endsWith('.json')).sort();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return errorResult(`Failed to read inbox import directory: ${message}`);
+    }
+    let imported = 0;
+    let skipped = 0;
+    const files: string[] = [];
+    for (const name of names) {
+      const path = join(fromDir, name);
+      const parsed = parsePayload(await readFile(path, 'utf8'));
+      if (parsed instanceof Error) return errorResult(`Invalid exported envelope ${name}: ${parsed.message}`);
+      const envelope = parsed as InboxEnvelope;
+      if (!isValidExportedEnvelope(envelope)) return errorResult(`Invalid exported envelope shape: ${name}`);
+      if (store.get(envelope.envelope_id)) {
+        skipped += 1;
+        continue;
+      }
+      const inserted = store.insert({
+        envelope_id: envelope.envelope_id,
+        received_at: envelope.received_at,
+        source: envelope.source,
+        kind: envelope.kind,
+        authority: envelope.authority,
+        payload: envelope.payload,
+      });
+      if (envelope.status === 'archived') {
+        store.archive(inserted.envelope_id, envelope.promotion ?? {
+          target_kind: 'archive',
+          target_ref: `archive:${inserted.envelope_id}`,
+          promoted_at: new Date().toISOString(),
+          promoted_by: 'inbox import',
+          enactment_status: 'recorded',
+          note: 'Imported archived envelope without original promotion metadata.',
+        });
+      } else if (envelope.status === 'promoted' && envelope.promotion) {
+        store.promote(inserted.envelope_id, envelope.promotion);
+      }
+      imported += 1;
+      files.push(path);
+    }
+    return okResult(
+      {
+        status: 'success',
+        imported,
+        skipped,
+        from_dir: fromDir,
+        files,
+      },
+      [
+        `Inbox envelopes imported: ${imported}`,
+        `Skipped existing: ${skipped}`,
+        `Source: ${fromDir}`,
+      ],
+      options.format,
+    );
+  });
 }
 
 export async function inboxListCommand(options: InboxListOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
@@ -684,7 +793,9 @@ function inspectInboxDelivery(cwdInput: string): Record<string, unknown> {
     head_matches_remote: headCommit && upstreamCommit ? headCommit === upstreamCommit : null,
     worktree_dirty: dirty,
     inbox_db_path: join(cwd, '.ai', 'inbox.db'),
+    export_dir: join(cwd, '.ai', 'inbox-envelopes'),
     merge_or_replay_required: headCommit && upstreamCommit ? headCommit !== upstreamCommit : null,
+    git_conflict_posture: 'local sqlite db ignored; use inbox export/import for portable envelopes',
   };
 }
 
@@ -818,6 +929,16 @@ function parsePendingTo(value: string): { targetKind: InboxPromotionTargetKind; 
   const targetKind = parsePromotionTargetKind(value.slice(0, index));
   if (!targetKind || targetKind === 'task' || targetKind === 'archive') return undefined;
   return { targetKind, targetRef: value.slice(index + 1) };
+}
+
+function isValidExportedEnvelope(value: unknown): value is InboxEnvelope {
+  const record = asRecord(value);
+  return typeof record.envelope_id === 'string'
+    && typeof record.received_at === 'string'
+    && parseEnvelopeKind(record.kind as string | undefined) !== undefined
+    && parseStatus(record.status as string | undefined) !== undefined
+    && typeof record.source === 'object'
+    && typeof record.payload !== 'undefined';
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

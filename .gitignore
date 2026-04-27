@@ -15,3 +15,5 @@ config.json
 .ai/metrics/
 .ai/agents/roster.json
 .ai/publications/
+.ai/inbox.db
+.ai/inbox.db-*
