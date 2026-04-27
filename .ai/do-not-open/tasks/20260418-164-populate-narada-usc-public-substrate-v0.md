@@ -1,3 +1,16 @@
+---
+status: closed
+criteria_proved_by: architect
+criteria_proved_at: 2026-04-27T23:42:27.402Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-27T23:42:27.955Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: agent_finish
+---
+
 # Task 164: Populate `narada.usc` Public Substrate v0
 
 ## Context
@@ -214,6 +227,22 @@ git status --short
 
 No new dependencies added.
 
+## Closure Verification
+
+```bash
+cd /home/andrey/src/narada.usc
+pnpm validate
+# Result: All validations passed.
+
+find packages examples -name '*.json' -print0 | xargs -0 -n1 node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))'
+# Result: 107 JSON files parsed successfully.
+
+git status --short --branch
+# Result: ## main...origin/main
+```
+
+The older root-level `schemas` path in the original verification block is stale; current schemas live under `packages/core/schemas` and domain-pack schema directories. `pnpm validate` is the current canonical validation surface.
+
 ## Output
 
 Committed in `/home/andrey/src/narada.usc`.
@@ -224,6 +253,7 @@ Committed in `/home/andrey/src/narada.usc`.
 ## Files Added/Changed
 
 ### New directories
+
 - `templates/` -- 6 artifact templates
 - `examples/full-cycle/` -- 9 files demonstrating complete USC cycle
 - `protocols/authority-loci.md`
@@ -238,6 +268,7 @@ Committed in `/home/andrey/src/narada.usc`.
 - `schemas/task.schema.json`
 
 ### Modified
+
 - `README.md` -- clarified repo role, boundaries, quick start
 - `AGENTS.md` -- added schema validation command, boundary rules
 - `schemas/construction-state.schema.json` -- strengthened with typed fields, residuals
@@ -246,6 +277,7 @@ Committed in `/home/andrey/src/narada.usc`.
 ## Residual Work
 
 None. All 8 deliverables completed. Future work (out of scope for this task):
+
 - CLI tooling for template instantiation
 - JSON Schema structural validation beyond parse-check
 - Additional vertical-specific examples
