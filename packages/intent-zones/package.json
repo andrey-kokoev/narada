@@ -17,6 +17,10 @@
     "./command-execution-intent": {
       "types": "./dist/command-execution-intent.d.ts",
       "import": "./dist/command-execution-intent.js"
+    },
+    "./repo-publication-intent": {
+      "types": "./dist/repo-publication-intent.d.ts",
+      "import": "./dist/repo-publication-intent.js"
     }
   },
   "scripts": {

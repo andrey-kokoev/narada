@@ -23,6 +23,10 @@ import type {
   CommandSideEffectClass,
   CommandStdinPolicy,
 } from "@narada2/intent-zones/command-execution-intent";
+import type {
+  RepoPublicationRow,
+  RepoPublicationStatus,
+} from "@narada2/intent-zones/repo-publication-intent";
 
 type Db = Database.Database;
 
@@ -354,6 +358,10 @@ export interface TaskLifecycleStore {
   updateCommandRun(runId: string, updates: Partial<Omit<CommandRunRow, 'run_id'>>): void;
   getCommandRun(runId: string): CommandRunRow | undefined;
   listCommandRuns(limit: number, taskId?: string | null, agentId?: string | null): CommandRunRow[];
+  // Repository publication intents
+  upsertRepoPublication(publication: RepoPublicationRow): void;
+  getRepoPublication(publicationId: string): RepoPublicationRow | undefined;
+  listRepoPublications(limit: number, status?: RepoPublicationStatus | null): RepoPublicationRow[];
   // Agent roster (Task 611 — SQLite authority)
   getRoster(): AgentRosterRow[];
   getRosterEntry(agentId: string): AgentRosterRow | undefined;
@@ -487,6 +495,28 @@ function rowToEvidenceAdmissionResult(row: Record<string, unknown>): EvidenceAdm
     admitted_at: String(row.admitted_at),
     admitted_by: String(row.admitted_by),
     confirmation_json: String(row.confirmation_json),
+  };
+}
+
+function rowToRepoPublication(row: Record<string, unknown>): RepoPublicationRow {
+  return {
+    publication_id: String(row.publication_id),
+    repo_root: String(row.repo_root),
+    branch: String(row.branch),
+    remote: String(row.remote),
+    commit_hash: String(row.commit_hash),
+    base_ref: row.base_ref ? String(row.base_ref) : null,
+    bundle_path: String(row.bundle_path),
+    patch_path: row.patch_path ? String(row.patch_path) : null,
+    task_number: row.task_number !== null && row.task_number !== undefined ? Number(row.task_number) : null,
+    requester_id: String(row.requester_id),
+    requested_at: String(row.requested_at),
+    status: String(row.status) as RepoPublicationStatus,
+    pushed_at: row.pushed_at ? String(row.pushed_at) : null,
+    confirmed_by: row.confirmed_by ? String(row.confirmed_by) : null,
+    confirmation_json: row.confirmation_json ? String(row.confirmation_json) : null,
+    failure_reason: row.failure_reason ? String(row.failure_reason) : null,
+    updated_at: String(row.updated_at),
   };
 }
 
@@ -631,7 +661,12 @@ function hasCurrentLifecycleSchema(db: Db): boolean {
     .prepare("select name from sqlite_master where type = 'table'")
     .all() as Array<{ name?: string }>;
   const tableNames = new Set(tables.map((table) => table.name));
-  if (!tableNames.has('task_lifecycle') || !tableNames.has('task_specs') || !tableNames.has('criteria_proofs')) return false;
+  if (
+    !tableNames.has('task_lifecycle')
+    || !tableNames.has('task_specs')
+    || !tableNames.has('criteria_proofs')
+    || !tableNames.has('repo_publications')
+  ) return false;
   const lifecycleColumns = db
     .prepare('pragma table_info(task_lifecycle)')
     .all() as Array<{ name?: string }>;
@@ -1007,6 +1042,32 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
 
       create index if not exists idx_command_runs_requested_at
         on command_runs(requested_at);
+
+      create table if not exists repo_publications (
+        publication_id text primary key,
+        repo_root text not null,
+        branch text not null,
+        remote text not null,
+        commit_hash text not null,
+        base_ref text,
+        bundle_path text not null,
+        patch_path text,
+        task_number integer,
+        requester_id text not null,
+        requested_at text not null,
+        status text not null,
+        pushed_at text,
+        confirmed_by text,
+        confirmation_json text,
+        failure_reason text,
+        updated_at text not null
+      );
+
+      create index if not exists idx_repo_publications_status
+        on repo_publications(status);
+
+      create index if not exists idx_repo_publications_requested_at
+        on repo_publications(requested_at);
 
       create table if not exists agent_roster (
         agent_id text primary key,
@@ -2088,6 +2149,72 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
     `;
     const rows = this.db.prepare(sql).all(...values) as Record<string, unknown>[];
     return rows.map(rowToCommandRun);
+  }
+
+  // Repository publication intents
+  upsertRepoPublication(publication: RepoPublicationRow): void {
+    const stmt = this.db.prepare(`
+      insert into repo_publications (
+        publication_id, repo_root, branch, remote, commit_hash, base_ref,
+        bundle_path, patch_path, task_number, requester_id, requested_at,
+        status, pushed_at, confirmed_by, confirmation_json, failure_reason, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      on conflict(publication_id) do update set
+        repo_root = excluded.repo_root,
+        branch = excluded.branch,
+        remote = excluded.remote,
+        commit_hash = excluded.commit_hash,
+        base_ref = excluded.base_ref,
+        bundle_path = excluded.bundle_path,
+        patch_path = excluded.patch_path,
+        task_number = excluded.task_number,
+        requester_id = excluded.requester_id,
+        requested_at = excluded.requested_at,
+        status = excluded.status,
+        pushed_at = excluded.pushed_at,
+        confirmed_by = excluded.confirmed_by,
+        confirmation_json = excluded.confirmation_json,
+        failure_reason = excluded.failure_reason,
+        updated_at = excluded.updated_at
+    `);
+    stmt.run(
+      publication.publication_id,
+      publication.repo_root,
+      publication.branch,
+      publication.remote,
+      publication.commit_hash,
+      publication.base_ref,
+      publication.bundle_path,
+      publication.patch_path,
+      publication.task_number,
+      publication.requester_id,
+      publication.requested_at,
+      publication.status,
+      publication.pushed_at,
+      publication.confirmed_by,
+      publication.confirmation_json,
+      publication.failure_reason,
+      publication.updated_at,
+    );
+  }
+
+  getRepoPublication(publicationId: string): RepoPublicationRow | undefined {
+    const row = this.db
+      .prepare("select * from repo_publications where publication_id = ?")
+      .get(publicationId) as Record<string, unknown> | undefined;
+    return row ? rowToRepoPublication(row) : undefined;
+  }
+
+  listRepoPublications(limit: number, status?: RepoPublicationStatus | null): RepoPublicationRow[] {
+    const boundedLimit = Math.max(1, Math.min(limit, 100));
+    const rows = status
+      ? this.db
+        .prepare("select * from repo_publications where status = ? order by requested_at desc limit ?")
+        .all(status, boundedLimit) as Record<string, unknown>[]
+      : this.db
+        .prepare("select * from repo_publications order by requested_at desc limit ?")
+        .all(boundedLimit) as Record<string, unknown>[];
+    return rows.map(rowToRepoPublication);
   }
 
   // Agent roster (Task 611 — SQLite authority)

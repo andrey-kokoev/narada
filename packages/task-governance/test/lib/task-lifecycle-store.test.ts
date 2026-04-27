@@ -50,6 +50,7 @@ describe('SqliteTaskLifecycleStore', () => {
       expect(tables).toContain('task_reports');
       expect(tables).toContain('task_reviews');
       expect(tables).toContain('task_number_sequence');
+      expect(tables).toContain('repo_publications');
     });
 
     it('initializes task_number_sequence with singleton row', () => {

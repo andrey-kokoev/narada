@@ -107,6 +107,7 @@ When describing higher-order architecture, deployment, or design:
 | [runtime-usc-boundary.md](docs/concepts/runtime-usc-boundary.md) | Runtime / USC / operator ownership boundary | Need to understand which layer owns what |
 | [runtime-usc-boundary.md §Language / Runtime Posture](docs/concepts/runtime-usc-boundary.md#language--runtime-posture) | TypeScript posture vs durable authority boundaries | Need to decide whether types, schemas, runtime checks, or another language own a concern |
 | [command-execution-intent-zone.md](docs/concepts/command-execution-intent-zone.md) | Command Execution Intent Zone — governed non-test command execution boundary | Need to separate command request, execution, result, and output admission |
+| [repo-publication-intent-zone.md](docs/concepts/repo-publication-intent-zone.md) | Repository Publication Intent Zone — governed commit/push publication boundary | Need to separate bundle/patch handoff from confirmed remote publication |
 | [inhabited-evolution.md](docs/concepts/inhabited-evolution.md) | Inhabited Evolution — human/AI/trace co-evolution through real operations | Need to guide Narada self-build without speculative machinery |
 | [cloudflare-site-materialization.md](docs/deployment/cloudflare-site-materialization.md) | Cloudflare Site materialization design | Designing or deploying a Cloudflare-backed Narada Site |
 | [bootstrap-contract.md](docs/product/bootstrap-contract.md) | Canonical intent-to-operation bootstrap path | Setting up or onboarding a first-time user |

@@ -8,6 +8,7 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { SqliteInboxStore } from '@narada2/control-plane';
 import {
   inboxClaimCommand,
   inboxListCommand,
@@ -489,6 +490,101 @@ describe('Canonical Inbox CLI commands', () => {
       enactment_status: 'pending',
       pending_kind: 'recorded_pending_crossing',
       target_mutation: false,
+    });
+  });
+
+  it('enacts the User Site PC template materialization site config crossing', async () => {
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'agent_report',
+      sourceRef: 'branch:test:env_source',
+      kind: 'proposal',
+      authorityLevel: 'agent_reported',
+      principal: 'architect',
+      payload: JSON.stringify({
+        original_envelope_id: 'env_source',
+        summary: 'Materialize User Site PC templates into concrete local PC Sites.',
+      }),
+    });
+    const envelope = (submitted.result as { envelope: { envelope_id: string } }).envelope;
+
+    const promoted = await inboxPromoteCommand({
+      cwd: tempDir,
+      format: 'json',
+      envelopeId: envelope.envelope_id,
+      targetKind: 'site_config_change',
+      targetRef: 'user-pc-template-materialization-workflow',
+      by: 'architect',
+    });
+
+    expect(promoted.exitCode).toBe(ExitCode.SUCCESS);
+    expect(promoted.result).toMatchObject({
+      enactment_status: 'enacted',
+      target_mutation: true,
+      target: {
+        artifact_path: 'docs/product/user-pc-template-materialization-workflow.md',
+        created: true,
+      },
+      envelope: {
+        status: 'promoted',
+        promotion: {
+          target_kind: 'site_config_change',
+          target_ref: 'user-pc-template-materialization-workflow',
+          enactment_status: 'enacted',
+        },
+      },
+    });
+    const artifact = readFileSync(join(tempDir, 'docs', 'product', 'user-pc-template-materialization-workflow.md'), 'utf8');
+    expect(artifact).toContain('User Site PC Template Materialization Workflow');
+    expect(artifact).toContain('env_source');
+  });
+
+  it('upgrades an existing pending User Site PC template materialization crossing to enacted', async () => {
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'agent_report',
+      sourceRef: 'branch:test:env_pending',
+      kind: 'proposal',
+      authorityLevel: 'agent_reported',
+      principal: 'architect',
+      payload: JSON.stringify({ original_envelope_id: 'env_pending' }),
+    });
+    const envelope = (submitted.result as { envelope: { envelope_id: string } }).envelope;
+    const store = new SqliteInboxStore(join(tempDir, '.ai', 'inbox.db'));
+    try {
+      store.promote(envelope.envelope_id, {
+        target_kind: 'site_config_change',
+        target_ref: 'user-pc-template-materialization-workflow',
+        promoted_at: '2026-01-01T00:00:00.000Z',
+        promoted_by: 'architect',
+        enactment_status: 'pending',
+        note: 'seeded pending crossing from old CLI behavior',
+      });
+    } finally {
+      store.close();
+    }
+
+    const enacted = await inboxPromoteCommand({
+      cwd: tempDir,
+      format: 'json',
+      envelopeId: envelope.envelope_id,
+      targetKind: 'site_config_change',
+      targetRef: 'user-pc-template-materialization-workflow',
+      by: 'architect',
+    });
+
+    expect(enacted.exitCode).toBe(ExitCode.SUCCESS);
+    expect(enacted.result).toMatchObject({
+      enactment_status: 'enacted',
+      target_mutation: true,
+      envelope: {
+        promotion: {
+          enactment_status: 'enacted',
+          target_command: 'site_config_change:user-pc-template-materialization-workflow',
+        },
+      },
     });
   });
 

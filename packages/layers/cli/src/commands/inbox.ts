@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   type InboxAuthorityLevel,
@@ -13,6 +13,9 @@ import {
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { taskCreateCommand } from './task-create.js';
+
+const USER_PC_TEMPLATE_WORKFLOW_REF = 'user-pc-template-materialization-workflow';
+const USER_PC_TEMPLATE_WORKFLOW_PATH = 'docs/product/user-pc-template-materialization-workflow.md';
 
 export interface InboxCommandOptions {
   cwd?: string;
@@ -276,7 +279,13 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
   return withInboxStoreAsync(options, async (store) => {
     const existing = store.get(options.envelopeId!);
     if (!existing) return errorResult(`Inbox envelope not found: ${options.envelopeId}`);
-    if (existing.promotion?.target_kind === targetKind) {
+    const canUpgradePendingPromotion =
+      existing.promotion?.target_kind === targetKind
+      && existing.promotion.target_ref === options.targetRef
+      && existing.promotion.enactment_status === 'pending'
+      && targetKind === 'site_config_change'
+      && options.targetRef === USER_PC_TEMPLATE_WORKFLOW_REF;
+    if (existing.promotion?.target_kind === targetKind && !canUpgradePendingPromotion) {
       return okResult(
         {
           status: 'success',
@@ -349,6 +358,35 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
         );
       }
 
+      if (targetKind === 'site_config_change' && options.targetRef === USER_PC_TEMPLATE_WORKFLOW_REF) {
+        const target = await enactUserPcTemplateMaterializationWorkflow(existing, options);
+        const envelope = store.promote(options.envelopeId!, {
+          target_kind: 'site_config_change',
+          target_ref: USER_PC_TEMPLATE_WORKFLOW_REF,
+          promoted_at: new Date().toISOString(),
+          promoted_by: options.by!,
+          enactment_status: 'enacted',
+          target_command: 'site_config_change:user-pc-template-materialization-workflow',
+          target_result: target,
+        });
+        return okResult(
+          {
+            status: 'success',
+            enactment_status: 'enacted',
+            target_mutation: target.created,
+            target,
+            envelope,
+          },
+          [
+            `Inbox envelope enacted: ${envelope.envelope_id}`,
+            `Target: site_config_change:${USER_PC_TEMPLATE_WORKFLOW_REF}`,
+            `Artifact: ${target.artifact_path}`,
+            `Promoted by: ${options.by}`,
+          ],
+          options.format,
+        );
+      }
+
       const envelope = store.promote(options.envelopeId!, {
         target_kind: targetKind,
         target_ref: options.targetRef!,
@@ -378,6 +416,80 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
       return errorResult(message);
     }
   });
+}
+
+async function enactUserPcTemplateMaterializationWorkflow(
+  envelope: InboxEnvelope,
+  options: InboxPromoteOptions,
+): Promise<{ artifact_path: string; created: boolean; source_envelope_id: string }> {
+  const cwd = options.cwd ?? process.cwd();
+  const artifactPath = join(cwd, USER_PC_TEMPLATE_WORKFLOW_PATH);
+  let created = false;
+  try {
+    await access(artifactPath);
+  } catch {
+    await mkdir(join(cwd, 'docs', 'product'), { recursive: true });
+    await writeFile(artifactPath, renderUserPcTemplateMaterializationWorkflow(envelope), 'utf8');
+    created = true;
+  }
+  return {
+    artifact_path: USER_PC_TEMPLATE_WORKFLOW_PATH,
+    created,
+    source_envelope_id: envelope.envelope_id,
+  };
+}
+
+function renderUserPcTemplateMaterializationWorkflow(envelope: InboxEnvelope): string {
+  const payload = envelope.payload && typeof envelope.payload === 'object'
+    ? envelope.payload as Record<string, unknown>
+    : {};
+  const summary = typeof payload.summary === 'string'
+    ? payload.summary
+    : 'Materialize GitHub-backed User Site PC templates into concrete local PC Sites.';
+  const originalEnvelopeId = typeof payload.original_envelope_id === 'string'
+    ? payload.original_envelope_id
+    : envelope.envelope_id;
+
+  return `# User Site PC Template Materialization Workflow
+
+This workflow materializes User Site PC templates into concrete local PC-locus Sites.
+
+## Source
+
+- Inbox envelope: ${envelope.envelope_id}
+- Original branch envelope: ${originalEnvelopeId}
+- Source ref: ${envelope.source.kind}:${envelope.source.ref}
+
+## Goal
+
+${summary}
+
+## Workflow
+
+1. Select the User Site template that describes the PC-facing capability.
+2. Resolve the target PC identity from explicit Site configuration, not from hostname guesswork alone.
+3. Create or update the PC-locus Site under the authority-locus root policy:
+   - Windows native PC locus: \`%ProgramData%\\Narada\\sites\\pc\\{site_id}\`
+   - WSL or other substrate loci must use their documented Site roots.
+4. Materialize the template into the PC Site using sanctioned Site commands and checked-in artifacts.
+5. Run \`narada sites doctor <site-id> --authority-locus\` to validate root policy, registry entry, config identity, and lifecycle schema.
+6. Record residuals as Canonical Inbox envelopes or task-governance tasks instead of editing Site state directly.
+
+## Authority Rules
+
+- User-locus Sites own operator memory, preferences, and user-scoped tool policy.
+- PC-locus Sites own machine/session state such as display topology, services, scheduled tasks, drivers, and recovery actions.
+- Template materialization is a Site configuration crossing; it must leave a durable artifact and a validation trace.
+- A hostname / COMPUTERNAME mismatch is an observation, not corruption by itself. The configured Site identity remains the authority.
+
+## Completion Signal
+
+The crossing is complete when the concrete PC Site can pass:
+
+\`\`\`bash
+narada sites doctor <site-id> --authority-locus
+\`\`\`
+`;
 }
 
 export async function inboxTaskCommand(options: Omit<InboxPromoteOptions, 'targetKind'>): Promise<{ exitCode: ExitCode; result: unknown }> {
