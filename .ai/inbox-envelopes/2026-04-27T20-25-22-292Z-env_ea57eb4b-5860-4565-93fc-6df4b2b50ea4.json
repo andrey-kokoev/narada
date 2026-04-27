@@ -28,5 +28,13 @@
     ],
     "recommendation": "Promote to a concrete Narada product task for authority-clone routing and cross-environment invocation safety in Andrey Windows/WSL setup."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "site_config_change",
+    "target_ref": "authority-clone-routing",
+    "promoted_at": "2026-04-27T20:31:13.703Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'site_config_change' is not implemented yet."
+  }
 }
