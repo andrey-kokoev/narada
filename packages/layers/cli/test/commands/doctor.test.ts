@@ -269,4 +269,37 @@ describe('doctor command', () => {
     const result = await doctorCommand({ format: 'json' }, context);
     expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
   });
+
+  it('reports bootstrap readiness checks without requiring config', async () => {
+    vol.fromJSON({
+      '/repo/package.json': '{}',
+      '/repo/pnpm-lock.yaml': '',
+      '/repo/node_modules/.bin/narada': '',
+      '/repo/packages/layers/cli/dist/main.js': '',
+    });
+
+    const result = await doctorCommand({ bootstrap: true, cwd: '/repo', format: 'json' }, createMockContext());
+
+    const report = result.result as { status: string; checks: Array<{ name: string; status: string }> };
+    expect(['healthy', 'degraded']).toContain(report.status);
+    expect(report.checks.find((check) => check.name === 'package-manifest')?.status).toBe('pass');
+    expect(report.checks.find((check) => check.name === 'dependencies-installed')?.status).toBe('pass');
+    expect(report.checks.find((check) => check.name === 'cli-built')?.status).toBe('pass');
+    expect(report.checks.find((check) => check.name === 'better-sqlite3-native')).toBeDefined();
+  });
+
+  it('reports degraded bootstrap readiness with bounded remediations', async () => {
+    vol.fromJSON({
+      '/repo/package.json': '{}',
+    });
+
+    const result = await doctorCommand({ bootstrap: true, cwd: '/repo', format: 'json' }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    const report = result.result as { status: string; checks: Array<{ name: string; status: string; remediation?: string }> };
+    expect(report.status).toBe('degraded');
+    expect(report.checks.find((check) => check.name === 'pnpm-lockfile')?.status).toBe('fail');
+    expect(report.checks.find((check) => check.name === 'dependencies-installed')?.remediation).toContain('pnpm install');
+    expect(report.checks.find((check) => check.name === 'cli-built')?.remediation).toContain('pnpm -r build');
+  });
 });

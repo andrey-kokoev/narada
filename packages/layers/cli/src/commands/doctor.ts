@@ -1,5 +1,6 @@
+import { createRequire } from 'node:module';
 import { dirname, resolve, join } from 'node:path';
-import { readFile, stat } from 'node:fs/promises';
+import { access, readFile, stat } from 'node:fs/promises';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
@@ -13,6 +14,8 @@ export interface DoctorOptions {
   staleThresholdMinutes?: number;
   site?: string;
   mode?: string;
+  bootstrap?: boolean;
+  cwd?: string;
 }
 
 interface DoctorCheck {
@@ -36,6 +39,127 @@ interface DoctorReport {
     pass: number;
     fail: number;
     warn: number;
+  };
+}
+
+interface BootstrapDoctorReport {
+  status: 'healthy' | 'degraded';
+  checks: DoctorCheck[];
+  summary: {
+    pass: number;
+    fail: number;
+    warn: number;
+  };
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function doctorBootstrap(
+  cwd: string,
+  fmt: ReturnType<typeof createFormatter>,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const root = resolve(cwd);
+  const checks: DoctorCheck[] = [];
+  const nodeMajor = Number(process.versions.node.split('.')[0] ?? '0');
+
+  checks.push({
+    name: 'node-version',
+    status: nodeMajor >= 20 ? 'pass' : 'fail',
+    detail: `Node ${process.versions.node}`,
+    remediation: nodeMajor >= 20 ? undefined : 'Use Node 20 or newer before installing/building Narada.',
+  });
+
+  const packageJson = join(root, 'package.json');
+  checks.push({
+    name: 'package-manifest',
+    status: await pathExists(packageJson) ? 'pass' : 'fail',
+    detail: await pathExists(packageJson) ? 'package.json exists' : 'package.json is missing',
+    remediation: 'Run from the Narada repository root.',
+  });
+
+  const lockfile = join(root, 'pnpm-lock.yaml');
+  checks.push({
+    name: 'pnpm-lockfile',
+    status: await pathExists(lockfile) ? 'pass' : 'fail',
+    detail: await pathExists(lockfile) ? 'pnpm-lock.yaml exists' : 'pnpm-lock.yaml is missing',
+    remediation: 'Run from a complete Narada checkout.',
+  });
+
+  const nodeModules = join(root, 'node_modules');
+  checks.push({
+    name: 'dependencies-installed',
+    status: await pathExists(nodeModules) ? 'pass' : 'fail',
+    detail: await pathExists(nodeModules) ? 'node_modules exists' : 'node_modules is missing',
+    remediation: 'Run `pnpm install` from the repository root.',
+  });
+
+  const cliMain = join(root, 'packages', 'layers', 'cli', 'dist', 'main.js');
+  checks.push({
+    name: 'cli-built',
+    status: await pathExists(cliMain) ? 'pass' : 'fail',
+    detail: await pathExists(cliMain) ? 'CLI dist entry exists' : 'CLI dist entry is missing',
+    remediation: 'Run `pnpm -r build` from the repository root.',
+  });
+
+  const naradaBin = join(root, 'node_modules', '.bin', 'narada');
+  checks.push({
+    name: 'narada-bin-linked',
+    status: await pathExists(naradaBin) ? 'pass' : 'warn',
+    detail: await pathExists(naradaBin) ? 'node_modules/.bin/narada exists' : 'node_modules/.bin/narada is missing',
+    remediation: 'Run `pnpm install`; for shell-level access run `pnpm run narada:install-shim`.',
+  });
+
+  try {
+    const requireFromRoot = createRequire(join(root, 'package.json'));
+    const Database = requireFromRoot('better-sqlite3') as typeof import('better-sqlite3');
+    const db = new Database(':memory:');
+    db.close();
+    checks.push({
+      name: 'better-sqlite3-native',
+      status: 'pass',
+      detail: 'better-sqlite3 native binding loads',
+    });
+  } catch (error) {
+    checks.push({
+      name: 'better-sqlite3-native',
+      status: 'fail',
+      detail: error instanceof Error ? error.message : String(error),
+      remediation: 'Run `pnpm rebuild better-sqlite3` or reinstall with native build scripts enabled.',
+    });
+  }
+
+  const pass = checks.filter((check) => check.status === 'pass').length;
+  const fail = checks.filter((check) => check.status === 'fail').length;
+  const warn = checks.filter((check) => check.status === 'warn').length;
+  const status: BootstrapDoctorReport['status'] = fail > 0 ? 'degraded' : 'healthy';
+  const report: BootstrapDoctorReport = { status, checks, summary: { pass, fail, warn } };
+
+  if (fmt.getFormat() === 'json') {
+    return {
+      exitCode: status === 'healthy' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
+      result: report,
+    };
+  }
+
+  fmt.message(`Bootstrap Doctor: ${status.toUpperCase()}`, status === 'healthy' ? 'success' : 'error');
+  fmt.message(`${pass} pass, ${fail} fail, ${warn} warn`, 'info');
+  for (const check of checks) {
+    const icon = check.status === 'pass' ? '✓' : check.status === 'warn' ? '⚠' : '✗';
+    const fmtType = check.status === 'pass' ? 'success' : check.status === 'fail' ? 'error' : 'warning';
+    fmt.message(`${icon} ${check.name}: ${check.detail}`, fmtType);
+    if (check.remediation) fmt.message(`  → ${check.remediation}`, 'info');
+  }
+
+  return {
+    exitCode: status === 'healthy' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
+    result: report,
   };
 }
 
@@ -387,6 +511,10 @@ export async function doctorCommand(
   const { configPath, verbose, logger } = context;
   const fmt = createFormatter({ format: options.format, verbose });
   const staleThresholdMinutes = options.staleThresholdMinutes ?? 60;
+
+  if (options.bootstrap) {
+    return doctorBootstrap(options.cwd ?? process.cwd(), fmt);
+  }
 
   // Site path: --site takes precedence over config
   if (options.site) {
