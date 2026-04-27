@@ -105,6 +105,38 @@ describe('work-next unified next action', () => {
     });
   });
 
+  it('returns review work before inbox fallback', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-101-review.md'),
+      '---\ntask_id: 101\nstatus: in_review\n---\n\n# Task 101\n\n## Goal\nReview me.\n',
+    );
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      sourceKind: 'user_chat',
+      sourceRef: 'chat:review-fallback',
+      kind: 'task_candidate',
+      authorityLevel: 'operator_confirmed',
+      principal: 'operator',
+      payload: '{"title":"Inbox work","goal":"Handle inbox."}',
+      format: 'json',
+    });
+    expect(submitted.exitCode).toBe(ExitCode.SUCCESS);
+
+    const result = await workNextCommand({ agent: 'architect', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      action_kind: 'review_work',
+      agent_id: 'architect',
+      primary: {
+        task_number: 101,
+        status: 'in_review',
+        command_args: ['task', 'review', '101', '--agent', 'architect', '--verdict', 'accepted'],
+      },
+    });
+  });
+
   it('returns idle when no task or inbox work exists', async () => {
     const result = await workNextCommand({ agent: 'architect', cwd: tempDir, format: 'json' });
 
