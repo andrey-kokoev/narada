@@ -107,6 +107,7 @@ This is the deepest semantic lens. The other major Narada descriptions are deriv
 - **Aim / Site / Cycle / Act / Trace** gives the operator/runtime reading of the same structure;
 - **Inhabited Evolution** gives the self-build construction posture for lifting real operational friction into doctrine, tooling, or substrate without speculative machinery;
 - **Authority-Revealing Inversion** gives the review lens for turning artifact-first proposals back toward the authority, lifecycle, evidence, locus, admission, or capability structure that makes the artifact meaningful;
+- **Canonical Mutation Evidence** gives the SQLite/Git authority posture: fast local runtime substrate is distinct from portable mergeable mutation evidence;
 - **Intelligence-Authority Separation** states one of the topology's core anti-collapse invariants;
 - **crossing regime** names the local law at each governed crossing.
 
@@ -123,6 +124,24 @@ To avoid confusion between roles and implementations, Narada distinguishes three
 A principle describes what must remain true regardless of substrate. A logical system implements the principles in code and state machines. A substrate provides the durable storage and compute that the logical system uses.
 
 > **Do not identify Narada with its current substrate.** SQLite is a substrate, not Narada. TypeScript is the current implementation language, not the authority boundary. Cloudflare is a Site substrate, not a zone.
+
+#### Canonical Mutation Evidence
+
+For Git-backed Sites and SQLite-backed local state, raw SQLite files are not the portable authority artifact. Governed mutations should emit canonical, mergeable evidence that can be imported, replayed, or reconciled into local SQLite.
+
+```text
+governed mutation -> canonical mutation evidence -> local SQLite projection/reconciliation
+```
+
+SQLite remains appropriate for fast local runtime state. Git should carry evidence that records which governed operation happened, under which authority, against which target, with what confirmation. Snapshot exports are transitional projection guards when append-only mutation evidence is not yet available.
+
+The rule is:
+
+```text
+No governed SQLite mutation without canonical mutation evidence.
+```
+
+This rule is introduced per authority surface; it must not be faked by treating an opaque database merge as governance.
 
 ### 2.1 The Nine-Layer Pipeline
 

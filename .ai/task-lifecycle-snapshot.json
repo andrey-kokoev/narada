@@ -1,7 +1,7 @@
 {
   "snapshot_kind": "task_lifecycle_snapshot",
   "snapshot_version": 1,
-  "exported_at": "2026-04-27T21:28:15.180Z",
+  "exported_at": "2026-04-27T21:34:09.333Z",
   "tables": [
     {
       "name": "agent_roster",
@@ -26,7 +26,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 720,
-          "updated_at": "2026-04-27T21:28:15.180Z"
+          "updated_at": "2026-04-27T21:34:09.333Z"
         },
         {
           "agent_id": "a2",
@@ -37,7 +37,7 @@
           "status": "idle",
           "task_number": null,
           "last_done": 886,
-          "updated_at": "2026-04-27T21:28:15.180Z"
+          "updated_at": "2026-04-27T21:34:09.333Z"
         },
         {
           "agent_id": "a3",
@@ -48,7 +48,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 610,
-          "updated_at": "2026-04-27T21:28:15.180Z"
+          "updated_at": "2026-04-27T21:34:09.333Z"
         },
         {
           "agent_id": "a4",
@@ -59,7 +59,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 574,
-          "updated_at": "2026-04-27T21:28:15.180Z"
+          "updated_at": "2026-04-27T21:34:09.333Z"
         },
         {
           "agent_id": "a5",
@@ -70,7 +70,7 @@
           "status": "done",
           "task_number": null,
           "last_done": 551,
-          "updated_at": "2026-04-27T21:28:15.180Z"
+          "updated_at": "2026-04-27T21:34:09.333Z"
         },
         {
           "agent_id": "a6",
@@ -81,18 +81,18 @@
           "status": "done",
           "task_number": null,
           "last_done": 545,
-          "updated_at": "2026-04-27T21:28:15.180Z"
+          "updated_at": "2026-04-27T21:34:09.333Z"
         },
         {
           "agent_id": "architect",
           "role": "implementer",
           "capabilities_json": "[\"derive\",\"propose\",\"claim\",\"execute\",\"resolve\",\"confirm\"]",
           "first_seen_at": "2026-04-26T22:28:56.453Z",
-          "last_active_at": "2026-04-27T21:28:15.180Z",
+          "last_active_at": "2026-04-27T21:34:09.333Z",
           "status": "done",
           "task_number": null,
-          "last_done": 988,
-          "updated_at": "2026-04-27T21:28:15.180Z"
+          "last_done": 989,
+          "updated_at": "2026-04-27T21:34:09.333Z"
         }
       ]
     },
@@ -6293,6 +6293,27 @@
           "confirmation_json": "{\"task_id\":\"20260427-988-admit-authority-revealing-inversion-doctrine\",\"task_number\":988,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
           "warnings_json": null,
           "updated_at": "2026-04-27T21:25:25.321Z"
+        },
+        {
+          "request_id": "air_claim_989_architect_1777325483484_buf404",
+          "kind": "claim",
+          "task_id": "20260427-989-crystallize-canonical-mutation-evidence-doctrine",
+          "task_number": 989,
+          "agent_id": "architect",
+          "requested_by": "architect",
+          "requested_at": "2026-04-27T21:31:23.484Z",
+          "reason": null,
+          "no_claim": 0,
+          "status": "applied",
+          "rejection_reason": null,
+          "assignment_id": "assign-20260427-989-crystallize-canonical-mutation-evidence-doctrine-architect-1777325483484",
+          "previous_agent_id": null,
+          "lifecycle_status_before": "opened",
+          "lifecycle_status_after": "claimed",
+          "roster_status_after": "working",
+          "confirmation_json": "{\"task_id\":\"20260427-989-crystallize-canonical-mutation-evidence-doctrine\",\"task_number\":989,\"lifecycle_status\":\"claimed\",\"roster_status\":\"working\",\"assignment_record_agent_id\":\"architect\"}",
+          "warnings_json": null,
+          "updated_at": "2026-04-27T21:31:24.718Z"
         }
       ]
     },
@@ -15746,6 +15767,45 @@
           "admitted_at": "2026-04-27T21:28:14.751Z",
           "admitted_by": "architect",
           "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_989_1777325647974_xfmp53",
+          "bundle_id": "evb_989_1777325647974_pigdnp",
+          "task_id": "20260427-989-crystallize-canonical-mutation-evidence-doctrine",
+          "task_number": 989,
+          "verdict": "rejected",
+          "methods_json": "[\"review\"]",
+          "blockers_json": "[\"8 acceptance criteria remain unchecked\"]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T21:34:07.974Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_989_1777325648472_zb3w8o",
+          "bundle_id": "evb_989_1777325648472_6o7ghv",
+          "task_id": "20260427-989-crystallize-canonical-mutation-evidence-doctrine",
+          "task_number": 989,
+          "verdict": "admitted",
+          "methods_json": "[\"criteria_proof\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": null,
+          "admitted_at": "2026-04-27T21:34:08.472Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
+        },
+        {
+          "admission_id": "ear_989_1777325648761_4pwab1",
+          "bundle_id": "evb_989_1777325648761_1k051b",
+          "task_id": "20260427-989-crystallize-canonical-mutation-evidence-doctrine",
+          "task_number": 989,
+          "verdict": "admitted",
+          "methods_json": "[\"admission\"]",
+          "blockers_json": "[]",
+          "lifecycle_eligible_status": "closed",
+          "admitted_at": "2026-04-27T21:34:08.761Z",
+          "admitted_by": "architect",
+          "confirmation_json": "{\"has_report\":true,\"has_review\":true,\"has_verification_notes\":true,\"verification_run_ids\":[],\"observation_output_counted\":false}"
         }
       ]
     },
@@ -24240,6 +24300,45 @@
           "residuals_json": "[]",
           "assembled_at": "2026-04-27T21:28:14.751Z",
           "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_989_1777325647974_pigdnp",
+          "task_id": "20260427-989-crystallize-canonical-mutation-evidence-doctrine",
+          "task_number": 989,
+          "report_ids_json": "[\"wrr_2da2e17e_20260427-989-crystallize-canonical-mutation-evidence-doctrine_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":false,\"unchecked_count\":8}",
+          "review_ids_json": "[\"review-20260427-989-crystallize-canonical-mutation-evidence-doctrine-1777325646997\"]",
+          "changed_files_json": "[\"docs/concepts/canonical-mutation-evidence.md\",\"AGENTS.md\",\"SEMANTICS.md\",\".ai/do-not-open/tasks/20260427-989-crystallize-canonical-mutation-evidence-doctrine.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T21:34:07.974Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_989_1777325648472_6o7ghv",
+          "task_id": "20260427-989-crystallize-canonical-mutation-evidence-doctrine",
+          "task_number": 989,
+          "report_ids_json": "[\"wrr_2da2e17e_20260427-989-crystallize-canonical-mutation-evidence-doctrine_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[\"review-20260427-989-crystallize-canonical-mutation-evidence-doctrine-1777325646997\"]",
+          "changed_files_json": "[\"docs/concepts/canonical-mutation-evidence.md\",\"AGENTS.md\",\"SEMANTICS.md\",\".ai/do-not-open/tasks/20260427-989-crystallize-canonical-mutation-evidence-doctrine.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T21:34:08.472Z",
+          "assembled_by": "architect"
+        },
+        {
+          "bundle_id": "evb_989_1777325648761_1k051b",
+          "task_id": "20260427-989-crystallize-canonical-mutation-evidence-doctrine",
+          "task_number": 989,
+          "report_ids_json": "[\"wrr_2da2e17e_20260427-989-crystallize-canonical-mutation-evidence-doctrine_architect\"]",
+          "verification_run_ids_json": "[]",
+          "acceptance_criteria_json": "{\"all_checked\":true,\"unchecked_count\":0}",
+          "review_ids_json": "[\"review-20260427-989-crystallize-canonical-mutation-evidence-doctrine-1777325646997\"]",
+          "changed_files_json": "[\"docs/concepts/canonical-mutation-evidence.md\",\"AGENTS.md\",\"SEMANTICS.md\",\".ai/do-not-open/tasks/20260427-989-crystallize-canonical-mutation-evidence-doctrine.md\"]",
+          "residuals_json": "[]",
+          "assembled_at": "2026-04-27T21:34:08.761Z",
+          "assembled_by": "architect"
         }
       ]
     },
@@ -27433,6 +27532,11 @@
           "task_id": "20260427-988-admit-authority-revealing-inversion-doctrine",
           "record_json": "{\"task_id\":\"20260427-988-admit-authority-revealing-inversion-doctrine\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T21:25:24.298Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T21:28:06.359Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
           "updated_at": "2026-04-27T21:28:06.773Z"
+        },
+        {
+          "task_id": "20260427-989-crystallize-canonical-mutation-evidence-doctrine",
+          "record_json": "{\"task_id\":\"20260427-989-crystallize-canonical-mutation-evidence-doctrine\",\"assignments\":[{\"agent_id\":\"architect\",\"claimed_at\":\"2026-04-27T21:31:23.792Z\",\"claim_context\":null,\"released_at\":\"2026-04-27T21:33:51.162Z\",\"release_reason\":\"completed\",\"intent\":\"primary\"}]}",
+          "updated_at": "2026-04-27T21:33:52.060Z"
         }
       ]
     },
@@ -30234,6 +30338,15 @@
           "task_id": "20260427-988-admit-authority-revealing-inversion-doctrine",
           "agent_id": "architect",
           "claimed_at": "2026-04-27T21:25:24.298Z",
+          "released_at": null,
+          "release_reason": null,
+          "intent": "primary"
+        },
+        {
+          "assignment_id": "assign-20260427-989-crystallize-canonical-mutation-evidence-doctrine-architect-1777325483484",
+          "task_id": "20260427-989-crystallize-canonical-mutation-evidence-doctrine",
+          "agent_id": "architect",
+          "claimed_at": "2026-04-27T21:31:23.792Z",
           "released_at": null,
           "release_reason": null,
           "intent": "primary"
@@ -42800,6 +42913,19 @@
           "continuation_packet_json": null,
           "updated_at": "2026-04-27T21:28:14.947Z",
           "closure_mode": "agent_finish"
+        },
+        {
+          "task_id": "20260427-989-crystallize-canonical-mutation-evidence-doctrine",
+          "task_number": 989,
+          "status": "closed",
+          "governed_by": "task_close:architect",
+          "closed_at": "2026-04-27T21:34:08.903Z",
+          "closed_by": "architect",
+          "reopened_at": null,
+          "reopened_by": null,
+          "continuation_packet_json": null,
+          "updated_at": "2026-04-27T21:34:08.904Z",
+          "closure_mode": "agent_finish"
         }
       ]
     },
@@ -42825,7 +42951,7 @@
       "rows": [
         {
           "singleton": 1,
-          "last_allocated": 988
+          "last_allocated": 989
         }
       ]
     },
@@ -45414,6 +45540,14 @@
           "agent_id": "architect",
           "reported_at": "2026-04-27T21:28:06.359Z",
           "report_json": "{\"report_id\":\"wrr_a33c1821_20260427-988-admit-authority-revealing-inversion-doctrine_architect\",\"task_number\":\"988\",\"task_id\":\"20260427-988-admit-authority-revealing-inversion-doctrine\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-988-admit-authority-revealing-inversion-doctrine-2026-04-27T21:25:24.298Z\",\"reported_at\":\"2026-04-27T21:28:06.359Z\",\"summary\":\"Admitted Authority-Revealing Inversion as Narada-local review doctrine, linked it from agent and semantic guidance, and verified the repo.\",\"changed_files\":[\"docs/concepts/authority-revealing-inversion.md\",\"AGENTS.md\",\"SEMANTICS.md\",\".ai/do-not-open/tasks/20260427-988-admit-authority-revealing-inversion-doctrine.md\"],\"verification\":[{\"command\":\"pnpm verify\",\"result\":\"all 8 steps passed\"}],\"known_residuals\":[],\"ready_for_review\":true,\"report_status\":\"accepted\"}"
+        },
+        {
+          "report_id": "wrr_2da2e17e_20260427-989-crystallize-canonical-mutation-evidence-doctrine_architect",
+          "task_id": "20260427-989-crystallize-canonical-mutation-evidence-doctrine",
+          "assignment_id": "20260427-989-crystallize-canonical-mutation-evidence-doctrine-2026-04-27T21:31:23.792Z",
+          "agent_id": "architect",
+          "reported_at": "2026-04-27T21:33:51.162Z",
+          "report_json": "{\"report_id\":\"wrr_2da2e17e_20260427-989-crystallize-canonical-mutation-evidence-doctrine_architect\",\"task_number\":\"989\",\"task_id\":\"20260427-989-crystallize-canonical-mutation-evidence-doctrine\",\"agent_id\":\"architect\",\"assignment_id\":\"20260427-989-crystallize-canonical-mutation-evidence-doctrine-2026-04-27T21:31:23.792Z\",\"reported_at\":\"2026-04-27T21:33:51.162Z\",\"summary\":\"Crystallized Canonical Mutation Evidence doctrine for SQLite/Git authority, linked it from agent and semantic guidance, and classified current snapshots as transitional guards.\",\"changed_files\":[\"docs/concepts/canonical-mutation-evidence.md\",\"AGENTS.md\",\"SEMANTICS.md\",\".ai/do-not-open/tasks/20260427-989-crystallize-canonical-mutation-evidence-doctrine.md\"],\"verification\":[{\"command\":\"pnpm verify\",\"result\":\"all 8 steps passed\"}],\"known_residuals\":[],\"ready_for_review\":true,\"report_status\":\"accepted\"}"
         }
       ]
     },
@@ -45840,6 +45974,14 @@
           "verdict": "accepted",
           "findings_json": null,
           "reviewed_at": "2026-04-27T21:28:13.997Z"
+        },
+        {
+          "review_id": "review-20260427-989-crystallize-canonical-mutation-evidence-doctrine-1777325646997",
+          "task_id": "20260427-989-crystallize-canonical-mutation-evidence-doctrine",
+          "reviewer_agent_id": "architect",
+          "verdict": "accepted",
+          "findings_json": null,
+          "reviewed_at": "2026-04-27T21:34:06.997Z"
         }
       ]
     },
@@ -57805,6 +57947,19 @@
           "acceptance_criteria_json": "[\"Narada has a concept document defining Authority-Revealing Inversion in local terms.\",\"AGENTS or SEMANTICS points agents to the doctrine as a review lens without inventing new runtime objects.\",\"The source inbox envelope is archived or otherwise governed after admission.\",\"pnpm verify passes.\"]",
           "dependencies_json": "[]",
           "updated_at": "2026-04-27T21:25:17.086Z"
+        },
+        {
+          "task_id": "20260427-989-crystallize-canonical-mutation-evidence-doctrine",
+          "task_number": 989,
+          "title": "Crystallize canonical mutation evidence doctrine",
+          "chapter_markdown": "sqlite-git-authority",
+          "goal_markdown": "Make the SQLite-in-Git resolution explicit: SQLite is local runtime substrate, Git carries canonical mergeable mutation evidence, and reconciliation must replay admitted operations rather than merge opaque SQLite files.",
+          "context_markdown": null,
+          "required_work_markdown": "1. TBD",
+          "non_goals_markdown": "- Do not expand scope beyond this task.\n- Do not create derivative task-status files.\n- Do not mutate live external systems unless explicitly authorized.",
+          "acceptance_criteria_json": "[\"Narada docs define canonical mutation evidence and its relationship to SQLite\",\"Git\",\"snapshots\",\"exports\",\"and replay.\",\"Core guidance links the doctrine where agents and semantic readers will see it.\",\"The source inbox envelope is handled through a governed archive or pending action.\",\"pnpm verify passes.\"]",
+          "dependencies_json": "[]",
+          "updated_at": "2026-04-27T21:31:19.811Z"
         }
       ]
     },

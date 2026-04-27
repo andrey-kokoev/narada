@@ -54,6 +54,8 @@ From that primary shape, the familiar Narada readings follow:
 
 **Authority-Revealing Inversion**: See [`docs/concepts/authority-revealing-inversion.md`](docs/concepts/authority-revealing-inversion.md) for the review lens that turns artifact-first proposals back toward the authority, lifecycle, evidence, locus, admission, or capability structure that makes the artifact meaningful.
 
+**Canonical Mutation Evidence**: See [`docs/concepts/canonical-mutation-evidence.md`](docs/concepts/canonical-mutation-evidence.md) for the SQLite/Git authority posture: SQLite is local runtime substrate, while Git carries mergeable mutation evidence that can be replayed or reconciled into that substrate.
+
 ### Semantic Crystallization Guidance
 
 When describing higher-order architecture, deployment, or design:
@@ -67,6 +69,7 @@ When describing higher-order architecture, deployment, or design:
 - Use the **Operation Specification** (not "telos") as the canonical reading of `Aim`. An Aim is inspectable, versionable, and independent of runtime.
 - For Narada self-build work, apply **Inhabited Evolution**: build what the operation has earned; record unearned structure as possibility, proposal, or residual; treat Operator correction as part of the control loop.
 - Apply **Authority-Revealing Inversion** when an artifact, tool, folder, repo, UI, command, or agent action appears primary: identify the governing authority/lifecycle/evidence/locus before letting convenience become authority.
+- For SQLite-backed task/inbox/Site mutations, preserve **Canonical Mutation Evidence**: do not make raw SQLite merge the governing invariant; emit or preserve Git-visible evidence that can rebuild or reconcile local SQLite.
 - **`operation`** remains current user-facing CLI language. Do not invent new meanings for it.
 - Do not call a user's configured work setup a **Narada instance**. Use **operation** for the configured unit of work, **operation specification** for its written/configured definition, and **runtime / daemon / Site** for deployed machinery.
 - Do not rename CLI flags, database columns, or package APIs as part of this vocabulary shift.
@@ -126,6 +129,7 @@ When describing higher-order architecture, deployment, or design:
 | [runtime-usc-boundary.md](docs/concepts/runtime-usc-boundary.md) | Runtime / USC / operator ownership boundary | Need to understand which layer owns what |
 | [runtime-usc-boundary.md §Language / Runtime Posture](docs/concepts/runtime-usc-boundary.md#language--runtime-posture) | TypeScript posture vs durable authority boundaries | Need to decide whether types, schemas, runtime checks, or another language own a concern |
 | [authority-revealing-inversion.md](docs/concepts/authority-revealing-inversion.md) | Authority-Revealing Inversion — review lens for artifact-first regressions | Need to identify what authority/lifecycle/evidence/locus an artifact actually embodies |
+| [canonical-mutation-evidence.md](docs/concepts/canonical-mutation-evidence.md) | Canonical Mutation Evidence — SQLite/Git authority posture | Need to decide what portable evidence a local SQLite mutation must emit |
 | [command-execution-intent-zone.md](docs/concepts/command-execution-intent-zone.md) | Command Execution Intent Zone — governed non-test command execution boundary | Need to separate command request, execution, result, and output admission |
 | [repo-publication-intent-zone.md](docs/concepts/repo-publication-intent-zone.md) | Repository Publication Intent Zone — governed commit/push publication boundary | Need to separate bundle/patch handoff from confirmed remote publication |
 | [polycentric-site-locus-routing.md](docs/concepts/polycentric-site-locus-routing.md) | Polycentric Site locus routing — authority-based routing across User, PC, Project, Client Service, Data, and ELT loci | Need to decide where client/project/data/ELT observations belong |

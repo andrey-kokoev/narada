@@ -21,5 +21,13 @@
     ],
     "recommendation": "Adopt the doctrine: SQLite is the fast local runtime substrate; Git carries canonical mutation evidence; reconciliation happens by replaying admitted operations, not by merging opaque SQLite files. Prioritize guards so no governed DB mutation can occur without its exported canonical delta."
   },
-  "status": "received"
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_d8603149-9dd8-4210-94a6-1bec77aca92c",
+    "promoted_at": "2026-04-27T21:33:51.112Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
 }
