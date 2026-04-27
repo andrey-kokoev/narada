@@ -3,6 +3,7 @@ import { vi } from 'vitest';
 vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
 
+import { Readable } from 'node:stream';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -72,6 +73,61 @@ describe('Canonical Inbox CLI commands', () => {
     expect(promotedEnvelope.source).toEqual(
       expect.objectContaining({ kind: 'diagnostic', ref: 'site-doctor:desktop-sunroom-2' }),
     );
+  });
+
+  it('submits payload from file for shell-safe ingestion', async () => {
+    const payloadPath = join(tempDir, 'payload.json');
+    writeFileSync(payloadPath, JSON.stringify({ title: 'From file', nested: { ok: true } }));
+
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual:file',
+      kind: 'proposal',
+      authorityLevel: 'operator_confirmed',
+      payloadFile: payloadPath,
+    });
+
+    expect(submitted.exitCode).toBe(ExitCode.SUCCESS);
+    const envelope = (submitted.result as { envelope: { payload: unknown } }).envelope;
+    expect(envelope.payload).toEqual({ title: 'From file', nested: { ok: true } });
+  });
+
+  it('submits payload from stdin for pipe-safe ingestion', async () => {
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual:stdin',
+      kind: 'proposal',
+      authorityLevel: 'operator_confirmed',
+      payloadStdin: true,
+      stdin: Readable.from([JSON.stringify({ title: 'From stdin' })]),
+    });
+
+    expect(submitted.exitCode).toBe(ExitCode.SUCCESS);
+    const envelope = (submitted.result as { envelope: { payload: unknown } }).envelope;
+    expect(envelope.payload).toEqual({ title: 'From stdin' });
+  });
+
+  it('rejects ambiguous payload sources', async () => {
+    const payloadPath = join(tempDir, 'payload.json');
+    writeFileSync(payloadPath, '{}');
+
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual:ambiguous',
+      kind: 'proposal',
+      authorityLevel: 'operator_confirmed',
+      payload: '{}',
+      payloadFile: payloadPath,
+    });
+
+    expect(submitted.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect((submitted.result as { error: string }).error).toContain('Use only one payload source');
   });
 
   it('enacts task promotion through the sanctioned task create command and is idempotent', async () => {

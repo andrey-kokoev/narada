@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   type InboxAuthorityLevel,
@@ -26,6 +27,9 @@ export interface InboxSubmitOptions extends InboxCommandOptions {
   authorityLevel?: string;
   principal?: string;
   payload?: string;
+  payloadFile?: string;
+  payloadStdin?: boolean;
+  stdin?: NodeJS.ReadableStream;
 }
 
 export interface InboxListOptions extends InboxCommandOptions {
@@ -79,7 +83,9 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
   if (!sourceKind || !kind || !authorityLevel || !sourceRef) {
     return errorResult('Missing or invalid --source-kind, --source-ref, --kind, or --authority-level');
   }
-  const payload = parsePayload(options.payload);
+  const payloadText = await resolvePayloadText(options);
+  if (payloadText instanceof Error) return errorResult(payloadText.message);
+  const payload = parsePayload(payloadText);
   if (payload instanceof Error) return errorResult(payload.message);
 
   return withInboxStoreAsync(options, async (store) => {
@@ -527,6 +533,42 @@ function okResult(result: Record<string, unknown>, human: string[], format: CliF
 
 function errorResult(error: string): { exitCode: ExitCode; result: unknown } {
   return { exitCode: ExitCode.GENERAL_ERROR, result: { status: 'error', error } };
+}
+
+async function resolvePayloadText(options: InboxSubmitOptions): Promise<string | Error> {
+  const sources = [
+    options.payload !== undefined ? '--payload' : null,
+    options.payloadFile ? '--payload-file' : null,
+    options.payloadStdin ? '--payload-stdin' : null,
+  ].filter(Boolean);
+  if (sources.length > 1) {
+    return new Error(`Use only one payload source: ${sources.join(', ')}`);
+  }
+  if (options.payloadFile) {
+    try {
+      return await readFile(options.payloadFile, 'utf8');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return new Error(`Failed to read --payload-file: ${message}`);
+    }
+  }
+  if (options.payloadStdin) {
+    try {
+      return await readStream(options.stdin ?? process.stdin);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return new Error(`Failed to read --payload-stdin: ${message}`);
+    }
+  }
+  return options.payload ?? '{}';
+}
+
+async function readStream(stream: NodeJS.ReadableStream): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+  }
+  return Buffer.concat(chunks).toString('utf8');
 }
 
 function parsePayload(payload: string | undefined): unknown | Error {

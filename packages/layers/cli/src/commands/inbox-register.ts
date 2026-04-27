@@ -28,7 +28,9 @@ export function registerInboxCommands(program: Command): void {
     .requiredOption('--kind <kind>', 'Envelope kind')
     .requiredOption('--authority-level <level>', 'Authority level')
     .option('--principal <id>', 'Principal associated with authority')
-    .option('--payload <json>', 'JSON payload', '{}')
+    .option('--payload <json>', 'JSON payload')
+    .option('--payload-file <path>', 'Read JSON payload from a file')
+    .option('--payload-stdin', 'Read JSON payload from stdin', false)
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[Record<string, unknown>]>({
@@ -42,6 +44,8 @@ export function registerInboxCommands(program: Command): void {
         authorityLevel: opts.authorityLevel as string | undefined,
         principal: opts.principal as string | undefined,
         payload: opts.payload as string | undefined,
+        payloadFile: opts.payloadFile as string | undefined,
+        payloadStdin: opts.payloadStdin as boolean | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }),
