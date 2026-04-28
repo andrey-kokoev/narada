@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T18:37:22.160Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
+---
+
 # Task 277: Correct Task 255 Init Setup Review Findings
 
 ## Chapter
@@ -127,6 +135,16 @@ pnpm --filter @narada2/ops-kit exec vitest run test/unit/ops-kit.test.ts
 # Test Files  1 passed (1)
 # Tests  13 passed (13)
 ```
+
+## Verification
+
+- `narada test-run run --task 277 --requester architect --scope focused --timeout 120 --cmd <daemon logging, Task 255 evidence, and focused vitest checks>` — passed as TIZ run `run_1777401397789_almev1` in 2701ms.
+- The TIZ check verified:
+  - `packages/layers/daemon/src/index.ts` contains startup `Using config:` output
+  - Task 255 notes contain `Baseline Verification`, `Focused Verification`, and `Package-level Escalation Checks`
+  - Task 255 notes explicitly preserve the backward-compatible modern-config write after deprecation guidance
+  - `@narada2/cli` focused command tests `doctor.test.ts` and `config.test.ts` pass
+  - `@narada2/ops-kit` focused `ops-kit.test.ts` passes
 
 ## Acceptance Criteria
 
