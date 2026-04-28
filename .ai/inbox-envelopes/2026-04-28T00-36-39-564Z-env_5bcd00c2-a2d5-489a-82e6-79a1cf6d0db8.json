@@ -1,0 +1,25 @@
+{
+  "envelope_id": "env_5bcd00c2-a2d5-489a-82e6-79a1cf6d0db8",
+  "received_at": "2026-04-28T00:36:39.564Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:canonical-admission-rejection-ledger-execution-20260427"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "andrey"
+  },
+  "payload": {
+    "title": "Canonical Admission and Rejection Ledger should be implemented",
+    "summary": "Narada needs a canonical ledger for admission and rejection decisions. Rejection should not be represented by silence or disappearance. File drops, mailbox filters, proposals, Site absorption, routing choices, and task/knowledge promotions all need durable evidence for what was considered, admitted, rejected, deferred, or superseded.",
+    "evidence": [
+      "Human file-drop intake and Staccato mailbox filtering both require rejecting candidate material safely while preserving why. Canonical Inbox currently stores admitted envelopes and promotion status, but the broader system needs a principled way to record rejected candidates and admission decisions before or around envelope creation."
+    ],
+    "proposal": [
+      "Implement a Canonical Admission/Rejection Ledger with candidate id, source, observed_at, parser/filter used, decision, reason codes, evidence refs, deciding principal or system rule, authority level, resulting envelope id when admitted, and supersession/retry links. The ledger should cover file-drop candidates, mailbox message candidates, inbox promotions, outbox route validation, Site absorption candidates, and knowledge/task admission where applicable."
+    ],
+    "recommendation": "Start by using the ledger for human file-drop intake and mailbox participant-domain filtering. Dry-run should produce candidate decisions without mutation; admit should record durable decisions and create canonical envelopes only for admitted candidates."
+  },
+  "status": "received"
+}

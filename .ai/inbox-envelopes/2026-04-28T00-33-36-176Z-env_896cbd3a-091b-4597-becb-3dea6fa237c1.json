@@ -1,0 +1,25 @@
+{
+  "envelope_id": "env_896cbd3a-091b-4597-becb-3dea6fa237c1",
+  "received_at": "2026-04-28T00:33:36.176Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:canonical-outbox-immediate-scope-20260427"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "andrey"
+  },
+  "payload": {
+    "title": "Canonical Outbox should govern outbound effects across transports",
+    "summary": "Narada needs a Canonical Outbox as an immediate execution priority. It should not be merely an outgoing-message folder or a mirror of the Inbox. It should be the canonical queue of governed outbound effects: intent to send, publish, notify, hand off, propose to another Site, create external issue/comment, write a filesystem drop, call a webhook, or otherwise cross from Narada into another locus or transport.",
+    "evidence": [
+      "The need emerged naturally from Canonical Inbox work, human file-drop intake, Site-to-Site proposals, Staccato mailbox sync, and repeated friction around whether a message was actually delivered, merely recorded, pending, or addressed to the wrong authority. Incoming intent now has a canonical envelope model; outgoing effects need the same discipline before execution becomes ambiguous or unsafe."
+    ],
+    "proposal": [
+      "Introduce Canonical Outbox as a first-class construct. An outbox item should be inert until execution, carry target locus/recipient, transport, payload, authority, approval requirement, dry-run rendering, execution status, delivery confirmation, retry/supersession data, and evidence of the external effect. Supported target kinds should include site_inbox, email, github_issue, github_pr_comment, filesystem_drop, human_notification, webhook, chat, and publication. The model should separate compose, validate, approve, execute, confirm, retry, supersede, and archive."
+    ],
+    "recommendation": "Treat this as important for immediate execution. Start with the smallest coherent vertical: Site-to-Site and filesystem-drop delivery, because they avoid external credentials while exercising the full authority model. Then add email/GitHub transports behind the same outbox lifecycle. Provide CLI surfaces such as outbox compose, outbox preview, outbox approve, outbox send, outbox confirm, and outbox work-next, with Git-visible outbox envelope artifacts analogous to inbox-envelopes."
+  },
+  "status": "received"
+}

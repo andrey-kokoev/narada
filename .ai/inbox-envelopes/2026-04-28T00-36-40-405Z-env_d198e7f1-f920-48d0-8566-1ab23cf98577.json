@@ -1,0 +1,25 @@
+{
+  "envelope_id": "env_d198e7f1-f920-48d0-8566-1ab23cf98577",
+  "received_at": "2026-04-28T00:36:40.405Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:canonical-capability-consent-registry-execution-20260427"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "andrey"
+  },
+  "payload": {
+    "title": "Canonical Capability and Consent Registry should be implemented",
+    "summary": "Narada needs a canonical registry for capabilities, consent, and authorization before real mailbox, outbox, GitHub, webhook, filesystem-write, or Site-to-Site operations become routine. The registry should state what has been granted, by whom, to which Site or agent, for what scope, with what expiry and revocation path.",
+    "evidence": [
+      "Recent work touched mailbox sync, Site-to-Site absorption, proposals to Narada proper, potential outbox delivery, GitHub-backed Sites, and local filesystem automation. Each requires a way to distinguish configured intent from granted capability and from executed authority. Without a registry, transport execution risks becoming ad hoc and unsafe."
+    ],
+    "proposal": [
+      "Implement a Canonical Capability/Consent Registry covering principals, Sites, agents, transports, scopes, credentials references, allowed actions, denied actions, expiry, revocation, evidence of grant, and current status. Outbox execution, mailbox sync activation, external API calls, and cross-Site writes should consult it before mutation. The registry should avoid storing secrets while referencing secret-store locations or credential handles."
+    ],
+    "recommendation": "Start with local filesystem and Site-to-Site delivery capabilities, then add mailbox Graph/Gmail, GitHub, email send, and webhook capabilities. Provide CLI surfaces to grant, inspect, revoke, and explain capabilities before activation."
+  },
+  "status": "received"
+}

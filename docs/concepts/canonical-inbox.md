@@ -10,6 +10,8 @@ Inbox envelopes are inert. Submitting an envelope does not create a task, execut
 narada inbox doctor
 narada inbox submit-observation --source-ref codex-session:pc-friction --title "PC Site identity mismatch" --summary "hostname and COMPUTERNAME differ" --evidence "hostname=desktop-sunroom-2" --evidence "COMPUTERNAME=DESKTOP-SUNROOM" --principal architect
 narada inbox submit --source-kind diagnostic --source-ref site-doctor:desktop-sunroom-2 --kind observation --authority-level system_observed --payload-file /tmp/site-observation.json
+narada inbox ingest-files --from .ai/inbox-drop
+narada inbox ingest-files --from .ai/inbox-drop --admit --by operator
 narada inbox work-next --claim --by operator
 narada inbox list
 narada inbox show <envelope-id>
@@ -23,6 +25,31 @@ Prefer `submit-observation` for routine observations from chat, diagnostics, and
 Use low-level `submit` when the caller already has a complete typed envelope payload. Prefer `--payload-file` or `--payload-stdin` for non-trivial payloads. Inline JSON is acceptable for tiny POSIX-shell examples, but it is brittle across PowerShell, chat copy/paste, and multi-line payloads. Empty object payloads are rejected for observations and task candidates unless `--allow-empty-payload` is explicit.
 
 Run `narada inbox doctor` before cross-environment submission or publication. It reports the working directory, Git delivery coordinates, inbox DB accessibility, Node executable, CLI entrypoint, platform/WSL posture, package root, repository dist entrypoint, and whether canonical inbox commands are available from the current runtime.
+
+## Human File-Drop Intake
+
+`narada inbox ingest-files` is the human-authored file-drop adapter. It treats a configured folder as a source surface, not as a second inbox authority.
+
+By default it is read-only:
+
+```bash
+narada inbox ingest-files --from .ai/inbox-drop
+```
+
+Mutation requires explicit admission:
+
+```bash
+narada inbox ingest-files --from .ai/inbox-drop --admit --by operator
+```
+
+Each candidate item must be named `YYYYMMDD-NNN-slug`. An item may be:
+
+| Item | Admission rule |
+|------|----------------|
+| `.md` or `.txt` file | The file body becomes one envelope payload. Optional front matter may set `kind`, `title`, `summary`, `authority_level`, or `principal`. |
+| Folder | The folder is one message. `README.md`, `message.md`, or `intent.md` supplies the body. Other child files are recorded as supporting-file metadata. |
+
+Admission writes exactly one `file_drop` envelope per item path and content digest. Re-running admission skips already-admitted path/digest pairs. Invalid names, unsupported file extensions, empty bodies, and folders without a canonical body file are reported as rejected candidates in dry-run output.
 
 ## Envelope Axes
 
@@ -89,6 +116,7 @@ Canonical Inbox first use should not require ad hoc repair work.
 | --- | --- |
 | Shell-hostile JSON quoting, especially in PowerShell | Use `inbox submit-observation` for observations, or `inbox submit --payload-file <path>` / `--payload-stdin` for low-level typed envelopes; avoid inline JSON for real payloads. |
 | Submission succeeds but semantic payload was lost | Use `submit-observation` for read-back payload confirmation; low-level `submit` rejects empty observation/task-candidate payloads by default. |
+| Human wants to leave a message without JSON or shell quoting | Put a dated numbered file or folder in `.ai/inbox-drop`, run `inbox ingest-files` for dry-run, then rerun with `--admit --by <principal>`. |
 | Windows/WSL shell uses the wrong `narada`, `node`, or package shim | Run `narada inbox doctor` and inspect `Node`, `CLI entrypoint`, `Platform`, and `Runtime posture` before submitting or publishing envelopes. |
 | Fresh checkout missing dependencies, build output, CLI shim, or native SQLite binding | Run `narada doctor --bootstrap --format json` and follow its `repair_plan`. |
 | Git/worktree uncertainty before publishing an inbox-backed chapter | Run `narada chapter preflight <range> --expect-commit --expect-push`. |

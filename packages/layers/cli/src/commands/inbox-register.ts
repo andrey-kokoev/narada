@@ -3,6 +3,7 @@ import {
   inboxClaimCommand,
   inboxDoctorCommand,
   inboxExportCommand,
+  inboxIngestFilesCommand,
   inboxImportCommand,
   inboxListCommand,
   inboxNextCommand,
@@ -145,6 +146,29 @@ export function registerInboxCommands(program: Command): void {
       format: (opts: Record<string, unknown>) => opts.format,
       invocation: (opts) => inboxImportCommand({
         fromDir: opts.fromDir as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
+
+  inboxCmd
+    .command('ingest-files')
+    .description('Dry-run or admit dated numbered human file-drop items into the Canonical Inbox')
+    .option('--from <path>', 'File-drop directory', '.ai/inbox-drop')
+    .option('--admit', 'Admit admissible candidates into the Canonical Inbox', false)
+    .option('--by <principal>', 'Principal admitting candidates; required with --admit')
+    .option('--authority-level <level>', 'Default authority level for admitted envelopes', 'user_statement')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'inbox ingest-files',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => inboxIngestFilesCommand({
+        fromDir: opts.from as string | undefined,
+        admit: opts.admit as boolean | undefined,
+        by: opts.by as string | undefined,
+        authorityLevel: opts.authorityLevel as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }),

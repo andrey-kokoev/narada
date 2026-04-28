@@ -1,8 +1,8 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { access, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { access, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import {
   type InboxAuthorityLevel,
   type InboxEnvelope,
@@ -15,6 +15,7 @@ import {
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { taskCreateCommand } from './task-create.js';
+import { parseFrontMatter } from '../lib/task-governance.js';
 import {
   inboxEnvelopeToEvidenceState,
   writeInboxMutationEvidence,
@@ -127,6 +128,13 @@ export interface InboxExportOptions extends InboxCommandOptions {
 
 export interface InboxImportOptions extends InboxCommandOptions {
   fromDir?: string;
+}
+
+export interface InboxIngestFilesOptions extends InboxCommandOptions {
+  fromDir?: string;
+  admit?: boolean;
+  by?: string;
+  authorityLevel?: string;
 }
 
 export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
@@ -247,6 +255,98 @@ export async function inboxSubmitObservationCommand(
         `Title: ${payload.title}`,
         'Read-back confirmation: payload equivalent',
         `Export visibility: ${exportCommand}`,
+      ],
+      options.format,
+    );
+  });
+}
+
+export async function inboxIngestFilesCommand(options: InboxIngestFilesOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const cwd = options.cwd ?? process.cwd();
+  const fromDir = resolve(cwd, options.fromDir ?? join('.ai', 'inbox-drop'));
+  const authorityLevel = parseAuthorityLevel(options.authorityLevel ?? 'user_statement');
+  if (!authorityLevel) return errorResult(invalidValueMessage('--authority-level', options.authorityLevel, AUTHORITY_LEVELS));
+  if (options.admit && !cleanString(options.by)) return errorResult('--by is required with --admit');
+
+  let candidates: FileDropCandidate[];
+  try {
+    candidates = await inspectFileDropCandidates(cwd, fromDir, authorityLevel, options.by);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return errorResult(`Failed to inspect file-drop intake: ${message}`);
+  }
+
+  return withInboxStoreAsync(options, async (store) => {
+    const existingRefs = new Set(
+      store
+        .list({ limit: 200 })
+        .filter((envelope) => envelope.source.kind === 'file_drop')
+        .map((envelope) => envelope.source.ref),
+    );
+    const results: Array<Record<string, unknown>> = [];
+    for (const candidate of candidates) {
+      if (!candidate.admissible) {
+        results.push(candidateResult(candidate, 'rejected', candidate.reason));
+        continue;
+      }
+      if (existingRefs.has(candidate.source_ref)) {
+        results.push(candidateResult(candidate, 'skipped', 'Envelope already exists for this item path and content digest.'));
+        continue;
+      }
+      if (!options.admit) {
+        results.push(candidateResult(candidate, 'admissible', 'Dry-run only; pass --admit to mutate the Canonical Inbox.'));
+        continue;
+      }
+
+      const envelope = store.insert({
+        envelope_id: `env_${randomUUID()}`,
+        received_at: new Date().toISOString(),
+        source: { kind: 'file_drop', ref: candidate.source_ref },
+        kind: candidate.kind,
+        authority: {
+          level: candidate.authority_level,
+          ...(candidate.principal ? { principal: candidate.principal } : {}),
+        },
+        payload: candidate.payload,
+      });
+      existingRefs.add(candidate.source_ref);
+      await writeInboxMutationEvidence({
+        cwd,
+        command: 'inbox ingest-files',
+        principal: candidate.principal,
+        authorityClass: 'claim',
+        before: null,
+        after: inboxEnvelopeToEvidenceState(store.get(envelope.envelope_id)),
+        result: { status: 'success', envelope, candidate: candidateResult(candidate, 'admitted', 'Envelope admitted.') },
+        occurredAt: envelope.received_at,
+      });
+      results.push({ ...candidateResult(candidate, 'admitted', 'Envelope admitted.'), envelope_id: envelope.envelope_id });
+    }
+
+    const admitted = results.filter((item) => item.status === 'admitted').length;
+    const admissible = results.filter((item) => item.status === 'admissible').length;
+    const skipped = results.filter((item) => item.status === 'skipped').length;
+    const rejected = results.filter((item) => item.status === 'rejected').length;
+    return okResult(
+      {
+        status: 'success',
+        mode: options.admit ? 'admit' : 'dry_run',
+        from_dir: fromDir,
+        count: results.length,
+        admitted,
+        admissible,
+        skipped,
+        rejected,
+        candidates: results,
+      },
+      [
+        `Inbox file-drop intake: ${options.admit ? 'admit' : 'dry-run'}`,
+        `Source: ${fromDir}`,
+        `Candidates: ${results.length}`,
+        `Admitted: ${admitted}`,
+        `Admissible: ${admissible}`,
+        `Skipped: ${skipped}`,
+        `Rejected: ${rejected}`,
       ],
       options.format,
     );
@@ -904,6 +1004,242 @@ function selectEnvelopes(
 
 function clampLimit(limit: number): number {
   return Math.max(1, Math.min(limit, 50));
+}
+
+interface FileDropCandidate {
+  item_name: string;
+  item_path: string;
+  item_kind: 'file' | 'folder';
+  source_ref: string;
+  digest: string;
+  admissible: boolean;
+  reason: string;
+  title: string | null;
+  kind: InboxEnvelopeKind;
+  authority_level: InboxAuthorityLevel;
+  principal: string | undefined;
+  payload: Record<string, unknown>;
+  supporting_file_count: number;
+}
+
+const FILE_DROP_ITEM_RE = /^\d{8}-\d{3}-.+/;
+const FILE_DROP_BODY_FILES = ['README.md', 'message.md', 'intent.md'];
+
+async function inspectFileDropCandidates(
+  cwd: string,
+  fromDir: string,
+  defaultAuthorityLevel: InboxAuthorityLevel,
+  defaultPrincipal: string | undefined,
+): Promise<FileDropCandidate[]> {
+  const names = (await readdir(fromDir)).filter((name) => !name.startsWith('.')).sort();
+  const candidates: FileDropCandidate[] = [];
+  for (const name of names) {
+    const itemPath = join(fromDir, name);
+    const itemStat = await stat(itemPath);
+    const itemKind = itemStat.isDirectory() ? 'folder' : 'file';
+    if (!itemStat.isFile() && !itemStat.isDirectory()) {
+      candidates.push(rejectedFileDropCandidate(cwd, fromDir, name, itemPath, itemKind, 'Only files and folders are supported.'));
+      continue;
+    }
+    if (!FILE_DROP_ITEM_RE.test(name)) {
+      candidates.push(rejectedFileDropCandidate(cwd, fromDir, name, itemPath, itemKind, 'Item name must match YYYYMMDD-NNN-slug.'));
+      continue;
+    }
+    if (itemKind === 'file' && !['.md', '.txt'].includes(extname(name).toLowerCase())) {
+      candidates.push(rejectedFileDropCandidate(cwd, fromDir, name, itemPath, itemKind, 'File-drop files must be .md or .txt.'));
+      continue;
+    }
+    const parsed = itemKind === 'folder'
+      ? await parseFileDropFolder(cwd, fromDir, name, itemPath)
+      : await parseFileDropFile(cwd, fromDir, name, itemPath);
+    if (!parsed.admissible) {
+      candidates.push(parsed);
+      continue;
+    }
+    const payload = buildFileDropPayload(parsed, defaultAuthorityLevel, defaultPrincipal);
+    candidates.push({
+      ...parsed,
+      kind: payload.kind,
+      authority_level: payload.authority_level,
+      principal: payload.principal,
+      payload: payload.payload,
+    });
+  }
+  return candidates;
+}
+
+async function parseFileDropFile(cwd: string, fromDir: string, name: string, itemPath: string): Promise<FileDropCandidate> {
+  const bodyText = await readFile(itemPath, 'utf8');
+  return buildParsedFileDropCandidate(cwd, fromDir, name, itemPath, 'file', bodyText, [], []);
+}
+
+async function parseFileDropFolder(cwd: string, fromDir: string, name: string, itemPath: string): Promise<FileDropCandidate> {
+  const childNames = (await readdir(itemPath)).filter((entry) => !entry.startsWith('.')).sort();
+  const bodyName = FILE_DROP_BODY_FILES.find((candidate) => childNames.includes(candidate));
+  if (!bodyName) {
+    return rejectedFileDropCandidate(cwd, fromDir, name, itemPath, 'folder', `Folder item must contain one of: ${FILE_DROP_BODY_FILES.join(', ')}.`);
+  }
+  const bodyPath = join(itemPath, bodyName);
+  const bodyText = await readFile(bodyPath, 'utf8');
+  const supportingFiles = await supportingFileDigests(itemPath, childNames.filter((entry) => entry !== bodyName));
+  return buildParsedFileDropCandidate(cwd, fromDir, name, itemPath, 'folder', bodyText, supportingFiles, [bodyName]);
+}
+
+async function supportingFileDigests(itemPath: string, names: string[]): Promise<string[]> {
+  const values: string[] = [];
+  for (const name of names) {
+    const childPath = join(itemPath, name);
+    const childStat = await stat(childPath);
+    if (childStat.isFile()) {
+      values.push(`${normalizeRelativePath(name)}#sha256:${digestBuffer(await readFile(childPath))}`);
+    } else {
+      values.push(`${normalizeRelativePath(name)}#${childStat.isDirectory() ? 'directory' : 'unsupported'}`);
+    }
+  }
+  return values;
+}
+
+function buildParsedFileDropCandidate(
+  cwd: string,
+  fromDir: string,
+  name: string,
+  itemPath: string,
+  itemKind: 'file' | 'folder',
+  rawBody: string,
+  supportingFiles: string[],
+  bodyFiles: string[],
+): FileDropCandidate {
+  const parsed = parseFileDropBody(rawBody);
+  const digest = digestText(JSON.stringify({ name, itemKind, rawBody, supportingFiles, bodyFiles }));
+  const sourceRef = `${normalizeRelativePath(relative(cwd, itemPath))}#sha256:${digest}`;
+  const title = stringField(parsed.frontMatter, 'title') ?? firstMarkdownHeading(parsed.body) ?? titleFromItemName(name);
+  const kind = parseEnvelopeKind(stringField(parsed.frontMatter, 'kind')) ?? 'observation';
+  const authorityLevel = parseAuthorityLevel(stringField(parsed.frontMatter, 'authority_level')) ?? 'user_statement';
+  const principal = stringField(parsed.frontMatter, 'principal');
+  const payload = {
+    title,
+    summary: stringField(parsed.frontMatter, 'summary') ?? excerptText(parsed.body),
+    body: parsed.body.trim(),
+    source_item: normalizeRelativePath(relative(cwd, itemPath)),
+    source_root: normalizeRelativePath(relative(cwd, fromDir)),
+    item_name: name,
+    item_kind: itemKind,
+    content_digest: `sha256:${digest}`,
+    supporting_files: supportingFiles.map((entry) => normalizeRelativePath(entry)),
+    body_files: bodyFiles.map((entry) => normalizeRelativePath(entry)),
+    front_matter: parsed.frontMatter,
+  };
+  return {
+    item_name: name,
+    item_path: itemPath,
+    item_kind: itemKind,
+    source_ref: sourceRef,
+    digest,
+    admissible: parsed.body.trim().length > 0,
+    reason: parsed.body.trim().length > 0 ? 'Ready for admission.' : 'Body is empty.',
+    title,
+    kind,
+    authority_level: authorityLevel,
+    principal,
+    payload,
+    supporting_file_count: supportingFiles.length,
+  };
+}
+
+function buildFileDropPayload(
+  candidate: FileDropCandidate,
+  defaultAuthorityLevel: InboxAuthorityLevel,
+  defaultPrincipal: string | undefined,
+): Pick<FileDropCandidate, 'kind' | 'authority_level' | 'principal' | 'payload'> {
+  const frontMatter = asRecord(candidate.payload.front_matter);
+  return {
+    kind: parseEnvelopeKind(stringField(frontMatter, 'kind')) ?? candidate.kind,
+    authority_level: parseAuthorityLevel(stringField(frontMatter, 'authority_level')) ?? defaultAuthorityLevel,
+    principal: stringField(frontMatter, 'principal') ?? defaultPrincipal,
+    payload: candidate.payload,
+  };
+}
+
+function parseFileDropBody(rawBody: string): { frontMatter: Record<string, unknown>; body: string } {
+  try {
+    const parsed = parseFrontMatter(rawBody);
+    return { frontMatter: parsed.frontMatter, body: parsed.body };
+  } catch {
+    return { frontMatter: {}, body: rawBody };
+  }
+}
+
+function rejectedFileDropCandidate(
+  cwd: string,
+  fromDir: string,
+  name: string,
+  itemPath: string,
+  itemKind: 'file' | 'folder',
+  reason: string,
+): FileDropCandidate {
+  const sourcePath = normalizeRelativePath(relative(cwd, itemPath));
+  return {
+    item_name: name,
+    item_path: itemPath,
+    item_kind: itemKind,
+    source_ref: sourcePath,
+    digest: '',
+    admissible: false,
+    reason,
+    title: null,
+    kind: 'observation',
+    authority_level: 'none',
+    principal: undefined,
+    payload: {
+      source_item: sourcePath,
+      source_root: normalizeRelativePath(relative(cwd, fromDir)),
+      item_name: name,
+      item_kind: itemKind,
+      rejection_reason: reason,
+    },
+    supporting_file_count: 0,
+  };
+}
+
+function candidateResult(candidate: FileDropCandidate, status: string, reason: string): Record<string, unknown> {
+  return {
+    item_name: candidate.item_name,
+    item_kind: candidate.item_kind,
+    source_ref: candidate.source_ref,
+    status,
+    reason,
+    kind: candidate.kind,
+    authority_level: candidate.authority_level,
+    principal: candidate.principal ?? null,
+    title: candidate.title,
+    supporting_file_count: candidate.supporting_file_count,
+  };
+}
+
+function digestText(value: string): string {
+  return createHash('sha256').update(value).digest('hex').slice(0, 32);
+}
+
+function digestBuffer(value: Buffer): string {
+  return createHash('sha256').update(value).digest('hex').slice(0, 32);
+}
+
+function firstMarkdownHeading(body: string): string | undefined {
+  const line = body.split(/\r?\n/).find((entry) => /^#\s+/.test(entry));
+  return line ? line.replace(/^#\s+/, '').trim() : undefined;
+}
+
+function titleFromItemName(name: string): string {
+  const withoutExt = name.replace(/\.[^.]+$/, '');
+  return withoutExt.replace(/^\d{8}-\d{3}-/, '').replace(/[-_]+/g, ' ').trim() || basename(withoutExt);
+}
+
+function excerptText(value: string): string {
+  return value.trim().replace(/\s+/g, ' ').slice(0, 240);
+}
+
+function normalizeRelativePath(value: string): string {
+  return value.split('\\').join('/');
 }
 
 async function createTaskFromEnvelope(
