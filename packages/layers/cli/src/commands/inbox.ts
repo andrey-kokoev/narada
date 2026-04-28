@@ -24,6 +24,9 @@ import { inspectAuthorityClonePosture, type SiteEmbodimentPosture } from '../lib
 
 const USER_PC_TEMPLATE_WORKFLOW_REF = 'user-pc-template-materialization-workflow';
 const USER_PC_TEMPLATE_WORKFLOW_PATH = 'docs/product/user-pc-template-materialization-workflow.md';
+const INBOX_PUBLISH_EXECUTE_COMMAND = 'narada inbox publish --execute';
+const INBOX_PUBLISH_EXECUTE_PUSH_COMMAND = 'narada inbox publish --execute --push';
+const INBOX_PUBLICATION_RPIZ_NOTE = 'Inbox publication is a Repository Publication Intent Zone crossing; commit/push are substrate operations, not raw authority.';
 
 export interface InboxCommandOptions {
   cwd?: string;
@@ -279,6 +282,8 @@ export async function inboxSubmitObservationCommand(
         },
         next_steps: {
           export_command: exportCommand,
+          publish_command: INBOX_PUBLISH_EXECUTE_COMMAND,
+          publish_push_command: INBOX_PUBLISH_EXECUTE_PUSH_COMMAND,
           git_visible_handoff: result.portable_artifact,
         },
       },
@@ -428,7 +433,9 @@ export async function inboxDoctorCommand(options: InboxDoctorOptions): Promise<{
       `Runtime posture: ${runtime.runtime_posture}`,
       `Inbox publication: ${publication.status}`,
       `Export refresh: ${refresh.imported} imported, ${refresh.skipped} already present, ${refresh.exported_count} artifacts`,
-      ...checks.map((check) => `${check.ok ? 'ok' : 'warn'} ${check.name}: ${check.detail}`),
+      `Checks: ${checks.filter((check) => check.ok).length}/${checks.length} ok`,
+      ...checks.filter((check) => !check.ok).map((check) => `warn ${check.name}: ${check.detail}`),
+      ...(Array.isArray(publication.next_steps) && publication.next_steps.length > 0 ? [`Next: ${publication.next_steps[0]}`] : []),
     ],
     options.format,
   );
@@ -491,15 +498,24 @@ export async function inboxPublishCommand(options: InboxPublishOptions): Promise
           would_stage: ['.ai/inbox-envelopes'],
           would_commit: envelopes.length > 0 || Number(beforePublication.uncommitted_envelope_artifacts_count ?? 0) > 0,
           would_push: Boolean(options.push),
+          repository_publication_crossing: {
+            zone: 'Repository Publication Intent Zone',
+            posture: 'dry_run',
+            note: INBOX_PUBLICATION_RPIZ_NOTE,
+          },
           publication: beforePublication,
-          next_steps: ['Run narada inbox publish --execute to export, stage, and commit portable inbox envelope artifacts.'],
+          next_steps: [
+            INBOX_PUBLISH_EXECUTE_COMMAND,
+            INBOX_PUBLISH_EXECUTE_PUSH_COMMAND,
+          ],
         },
         [
           'Inbox publish dry-run.',
           `Would export: ${envelopes.length}`,
           'Would stage: .ai/inbox-envelopes',
           `Would push: ${options.push ? 'yes' : 'no'}`,
-          'Mutation: pass --execute',
+          `Crossing: ${INBOX_PUBLICATION_RPIZ_NOTE}`,
+          `Next: ${INBOX_PUBLISH_EXECUTE_COMMAND}`,
         ],
         options.format,
       );
@@ -524,6 +540,11 @@ export async function inboxPublishCommand(options: InboxPublishOptions): Promise
           exported_files: exportedFiles,
           staged_files: [],
           commit: null,
+          repository_publication_crossing: {
+            zone: 'Repository Publication Intent Zone',
+            posture: 'noop',
+            note: INBOX_PUBLICATION_RPIZ_NOTE,
+          },
           publication: inspectInboxPublication(repoRoot),
           next_steps: ['No inbox envelope artifact changes needed publication.'],
         },
@@ -560,8 +581,16 @@ export async function inboxPublishCommand(options: InboxPublishOptions): Promise
         staged_files: stagedFiles,
         commit,
         pushed: Boolean(options.push),
+        repository_publication_crossing: {
+          zone: 'Repository Publication Intent Zone',
+          posture: options.push ? 'confirmed_pushed' : 'committed_not_pushed',
+          note: INBOX_PUBLICATION_RPIZ_NOTE,
+          confirmation_command: options.push
+            ? 'Remote publication confirmed by successful push.'
+            : 'narada publication confirm <publication-id> --status pushed --by <principal> --remote-ref origin/main',
+        },
         publication: inspectInboxPublication(repoRoot),
-        next_steps: options.push ? [] : ['Run git push so other embodiments can import the published inbox envelope artifacts.'],
+        next_steps: options.push ? [] : [INBOX_PUBLISH_EXECUTE_PUSH_COMMAND],
       },
       [
         `Inbox envelope artifacts ${options.push ? 'committed and pushed' : 'committed'}.`,
@@ -569,6 +598,7 @@ export async function inboxPublishCommand(options: InboxPublishOptions): Promise
         `Committed files: ${stagedFiles.length}`,
         `Commit: ${commit ?? 'unknown'}`,
         `Pushed: ${options.push ? 'yes' : 'no'}`,
+        `Crossing: ${INBOX_PUBLICATION_RPIZ_NOTE}`,
       ],
       options.format,
     );
@@ -1541,7 +1571,7 @@ function inspectInboxDelivery(cwdInput: string): Record<string, unknown> {
     inbox_db_path: join(cwd, '.ai', 'inbox.db'),
     export_dir: join(cwd, '.ai', 'inbox-envelopes'),
     merge_or_replay_required: headCommit && upstreamCommit ? headCommit !== upstreamCommit : null,
-    git_conflict_posture: 'local sqlite db ignored; use inbox export/import for portable envelopes',
+    git_conflict_posture: 'local sqlite db ignored; use inbox publish/export/import for portable envelopes',
   };
 }
 
@@ -1575,10 +1605,10 @@ function inspectInboxPublication(cwdInput: string): Record<string, unknown> {
   const aheadCount = aheadCountRaw && Number.isFinite(Number(aheadCountRaw)) ? Number(aheadCountRaw) : 0;
   const nextSteps: string[] = [];
   if (uncommitted.length > 0) {
-    nextSteps.push('Review and commit .ai/inbox-envelopes/*.json artifacts that should be visible to other embodiments.');
+    nextSteps.push(INBOX_PUBLISH_EXECUTE_COMMAND);
   }
   if (aheadCount > 0) {
-    nextSteps.push('Push the current branch so committed inbox envelope artifacts are visible to other embodiments.');
+    nextSteps.push(INBOX_PUBLISH_EXECUTE_PUSH_COMMAND);
   }
 
   return {

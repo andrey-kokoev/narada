@@ -38,6 +38,8 @@ Successful `inbox submit` and `inbox submit-observation` write two surfaces:
 
 If another embodiment, clone, or Site actor must see the inbox item, publish the exported `.ai/inbox-envelopes/*.json` artifact. `narada inbox publish` is dry-run by default; `narada inbox publish --execute` exports/replays local envelopes, stages only `.ai/inbox-envelopes`, and commits those portable artifacts. `narada inbox publish --execute --push` also pushes. The command refuses raw `.ai/inbox.db` publication because the SQLite database is local runtime substrate, not merge authority.
 
+`inbox publish` is an ergonomic helper for the Repository Publication Intent Zone posture. Its commit/push steps are substrate operations for the inbox-envelope handoff crossing; they do not make raw Git the governing authority. For broader code, task, or doctrine changes, use the normal repo publication path rather than treating `inbox publish` as a generic commit command.
+
 Running `narada inbox export --format json` remains valid and idempotent as a bulk/replay export for older or repaired local SQLite rows, but normal submission writes the per-envelope artifact immediately to avoid local-only invisible work.
 
 For pre-fix or externally created envelopes that exist only in `.ai/inbox.db`, run:
@@ -58,6 +60,17 @@ narada inbox work-next
 `narada inbox doctor` reports whether `.ai/inbox-envelopes/*.json` artifacts are uncommitted or whether the current branch has unpushed commits that may contain portable inbox artifacts.
 
 Run `narada inbox doctor` before cross-environment submission or publication. It reports the working directory, Git delivery coordinates, inbox DB accessibility, Node executable, CLI entrypoint, platform/WSL posture, package root, repository dist entrypoint, and whether canonical inbox commands are available from the current runtime.
+
+Command responsibilities:
+
+| Command | Responsibility |
+| --- | --- |
+| `narada inbox submit` / `submit-observation` | Admit an inert typed envelope into local inbox substrate and write its portable artifact. |
+| `narada inbox export` | Bulk/replay generation of portable artifacts from local SQLite rows. |
+| `narada inbox publish` | Bounded handoff helper: export/replay, stage `.ai/inbox-envelopes`, commit, and optionally push. |
+| `narada inbox import` | Replay portable artifacts from Git-visible handoff into local inbox substrate. |
+| `narada inbox doctor` | Inspect local delivery, runtime, import refresh, and publication posture without publishing. |
+| `narada publication *` | General Repository Publication Intent Zone handoff/confirmation for broader repo mutation bundles. |
 
 ## Human File-Drop Intake
 

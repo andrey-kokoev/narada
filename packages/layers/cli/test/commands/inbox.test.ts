@@ -140,7 +140,7 @@ describe('Canonical Inbox CLI commands', () => {
     const result = submitted.result as {
       envelope: { envelope_id: string; kind: string; source: { kind: string }; payload: Record<string, unknown> };
       confirmation: { read_back_envelope_id: string; payload_equivalent: boolean };
-      next_steps: { export_command: string; git_visible_handoff: string };
+      next_steps: { export_command: string; publish_command: string; publish_push_command: string; git_visible_handoff: string };
     };
     expect(result.envelope.kind).toBe('observation');
     expect(result.envelope.source.kind).toBe('user_chat');
@@ -156,6 +156,8 @@ describe('Canonical Inbox CLI commands', () => {
       payload_equivalent: true,
     });
     expect(result.next_steps.export_command).toBe('narada inbox export --format json');
+    expect(result.next_steps.publish_command).toBe('narada inbox publish --execute');
+    expect(result.next_steps.publish_push_command).toBe('narada inbox publish --execute --push');
     expect(result.next_steps.git_visible_handoff).toContain(result.envelope.envelope_id);
   });
 
@@ -400,7 +402,7 @@ describe('Canonical Inbox CLI commands', () => {
     const delivery = result.delivery;
     expect(delivery).toMatchObject({
       export_dir: join(tempDir, '.ai', 'inbox-envelopes'),
-      git_conflict_posture: 'local sqlite db ignored; use inbox export/import for portable envelopes',
+      git_conflict_posture: 'local sqlite db ignored; use inbox publish/export/import for portable envelopes',
     });
     expect(result.publication).toMatchObject({
       status: 'published_or_no_artifacts_pending',
@@ -437,7 +439,7 @@ describe('Canonical Inbox CLI commands', () => {
     expect(result.publication.status).toBe('publication_pending');
     expect(result.publication.uncommitted_envelope_artifacts_count).toBe(1);
     expect(result.publication.uncommitted_envelope_artifacts[0]).toContain('.ai/inbox-envelopes');
-    expect(result.publication.next_steps.join('\n')).toContain('commit .ai/inbox-envelopes');
+    expect(result.publication.next_steps).toContain('narada inbox publish --execute');
     expect(result.checks.find((check) => check.name === 'inbox_envelope_artifacts_committed')).toMatchObject({
       ok: false,
       detail: '1 uncommitted inbox envelope artifact(s)',
@@ -466,6 +468,11 @@ describe('Canonical Inbox CLI commands', () => {
       execute_required: true,
       would_export_count: 1,
       would_stage: ['.ai/inbox-envelopes'],
+      next_steps: ['narada inbox publish --execute', 'narada inbox publish --execute --push'],
+      repository_publication_crossing: {
+        zone: 'Repository Publication Intent Zone',
+        posture: 'dry_run',
+      },
     });
     expect(() => readdirSync(join(tempDir, '.ai', 'inbox-envelopes'))).toThrow();
     const staged = execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['diff', '--cached', '--name-only'], {
@@ -503,6 +510,8 @@ describe('Canonical Inbox CLI commands', () => {
       staged_files: string[];
       commit: string;
       pushed: boolean;
+      next_steps: string[];
+      repository_publication_crossing: { zone: string; posture: string };
     };
     expect(result.status).toBe('committed');
     expect(result.exported_count).toBe(1);
@@ -510,6 +519,11 @@ describe('Canonical Inbox CLI commands', () => {
     expect(result.staged_files[0]).toContain('.ai/inbox-envelopes');
     expect(result.commit).toMatch(/^[0-9a-f]+$/);
     expect(result.pushed).toBe(false);
+    expect(result.next_steps).toEqual(['narada inbox publish --execute --push']);
+    expect(result.repository_publication_crossing).toMatchObject({
+      zone: 'Repository Publication Intent Zone',
+      posture: 'committed_not_pushed',
+    });
 
     const trackedDb = execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['ls-files', '--', '.ai/inbox.db'], {
       cwd: tempDir,
