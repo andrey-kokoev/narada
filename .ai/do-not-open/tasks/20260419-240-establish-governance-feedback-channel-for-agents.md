@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T16:22:11.323Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: peer_reviewed
+---
+
 # Task 240: Establish Governance Feedback Channel For Agents
 
 ## Why
@@ -141,3 +149,7 @@ If Task 239 has already landed by the time this task is executed, cross-referenc
 
 - `.ai/task-contracts/agent-task-execution.md`
 - `.ai/task-contracts/question-escalation.md`
+
+## Verification
+
+<!-- Record commands run, results observed, and how correctness was checked. -->
