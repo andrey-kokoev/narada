@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T19:48:54.759Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
+---
+
 # Task 304: CLI and Daemon Should Auto-Load `.env`
 
 ## Chapter
@@ -78,4 +86,5 @@ No dedicated entrypoint wiring tests were added. The call sites in `main.ts` and
 
 - **Typecheck**: `pnpm typecheck` passes across all packages.
 - **Build**: `pnpm build` passes across all packages.
+- **TIZ focused run**: `run_1777405684679_660rze` passed in 20.6s and verified `loadEnvFile` exists, CLI/daemon entrypoints call it, dotenv unit tests pass, and typecheck/build pass.
 - **Ops repo (redacted)**: `cd narada.sonar && pnpm narada doctor` with `.env` containing `NARADA_KIMI_API_KEY=<key>` returned `charterRuntimeHealthy: true` without requiring `source .env`. Prior to the fix, the same command reported `charterRuntimeHealthy: false` with `NARADA_KIMI_API_KEY not resolved`.
