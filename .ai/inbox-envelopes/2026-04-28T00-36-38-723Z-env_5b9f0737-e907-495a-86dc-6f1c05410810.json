@@ -21,5 +21,13 @@
     ],
     "recommendation": "Start with filesystem/Site-to-Site routing for known local Sites, then extend to email, GitHub, webhook, and human notification transports. Make outbox send require an explicit route resolution or an operator-approved direct target."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "site_config_change",
+    "target_ref": "task-1015-routing-addressing-registry",
+    "promoted_at": "2026-04-28T03:07:35.792Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'site_config_change' is not implemented yet."
+  }
 }
