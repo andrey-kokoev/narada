@@ -1,33 +1,26 @@
 ---
-status: opened
+status: closed
 depends_on: [1047]
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-28T23:21:11.582Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Focused tests now cover generated Architect and Builder sections, governance agent_role_contracts for exactly architect and builder, read-only role-bootstrap command output for both roles, rejection of unknown roles, and no generated inspector/superintendent role admission. Focused tests and pnpm verify passed after lifecycle export.
+closed_at: 2026-04-28T23:21:20.458Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Task 1048 — Verify role bootstrap doctrine, generation, and CLI surface
 
-## Execution Mode
+## Goal
 
-Proceed directly. This is a narrow corrective task; use focused edits only.
-
-## Assignment
-
-<!-- Assignment placeholder -->
-
-## Required Reading
-
-- packages/layers/cli/test/commands/sites-init.test.ts
-- packages/layers/cli/test/commands/sites-client-bootstrap.test.ts
-- packages/layers/cli/test/commands/sites-project-bootstrap.test.ts
-- packages/layers/cli/test/commands/resume.test.ts
-- docs/concepts/inhabited-evolution.md
+Add focused tests and evidence for the role-specific AI thread bootstrap chapter.
 
 ## Context
 
 The role split should not remain prose-only. Tests should prove that Site bootstrap emits both role contracts, governance coordinates expose the role shape, and the CLI inspection surface is bounded and rejects non-admitted roles.
-
-## Goal
-
-Add focused tests and evidence for the role-specific AI thread bootstrap chapter.
 
 ## Required Work
 
@@ -42,24 +35,6 @@ Add focused tests and evidence for the role-specific AI thread bootstrap chapter
 - Do not expand the role set
 - Do not test speculative future roles
 
-## Crossing Regime
-
-<!--
-Fill in ONLY if this task introduces a new durable authority-changing boundary.
-If the task uses an existing canonical crossing (e.g., Source → Fact, Decision → Intent),
-leave this section commented and delete it before closing.
-
-See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
-
-- source_zone:
-- destination_zone:
-- authority_owner:
-- admissibility_regime:
-- crossing_artifact:
-- confirmation_rule:
-- anti_collapse_invariant:
--->
-
 ## Execution Notes
 
 <!-- Record what was done, decisions made, and files changed during execution. -->
@@ -70,7 +45,7 @@ See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
 
 ## Acceptance Criteria
 
-- [ ] Focused tests cover Architect and Builder generated bootstrap sections
-- [ ] Focused tests cover the read-only bootstrap command for both roles and unknown-role rejection
-- [ ] pnpm verify passes or any blocker is recorded with exact unrelated cause
-- [ ] Chapter tasks are evidence-complete before closure
+- [x] Focused tests cover Architect and Builder generated bootstrap sections
+- [x] Focused tests cover the read-only bootstrap command for both roles and unknown-role rejection
+- [x] pnpm verify passes or any blocker is recorded with exact unrelated cause
+- [x] Chapter tasks are evidence-complete before closure

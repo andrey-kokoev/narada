@@ -3,6 +3,7 @@ import { vol } from 'memfs';
 import {
   sitesInitCommand,
   sitesBootstrapWindowsCommand,
+  sitesAgentBootstrapCommand,
 } from '../../src/commands/sites.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
@@ -131,10 +132,114 @@ describe('sitesInitCommand', () => {
     expect(files['/tmp/linux-user/test-site/config.json']).toBeDefined();
     const agents = files['/tmp/linux-user/test-site/AGENTS.md'];
     expect(agents).toContain('You are `architect`.');
+    expect(agents).toContain('You are `builder`.');
+    expect(agents).toContain('## Architect Thread Bootstrap');
+    expect(agents).toContain('## Builder Thread Bootstrap');
     expect(agents).toContain('The human is `Operator`.');
     expect(agents).toContain('This Site is governed by Narada law.');
-    expect(agents).toContain('Treat this file as the Site-local execution contract for fresh architects.');
+    expect(agents).toContain('Treat this file as the Site-local execution contract for fresh Architect and Builder threads.');
     expect(agents).toContain('site_kind: linux-user');
+    expect(agents).not.toContain('inspector');
+    expect(agents).not.toContain('superintendent');
+  });
+
+  it('returns bounded Architect bootstrap text without mutation', async () => {
+    const ctx = createMockContext();
+    await sitesInitCommand('test-site', {
+      substrate: 'linux-user',
+      format: 'json',
+    }, ctx);
+
+    const result = await sitesAgentBootstrapCommand('/tmp/linux-user/test-site', {
+      role: 'architect',
+      format: 'json',
+    }, ctx);
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const data = result.result as {
+      mutation_performed: boolean;
+      role: string;
+      section_title: string;
+      bootstrap_text: string;
+      agents_path: string;
+    };
+    expect(data.mutation_performed).toBe(false);
+    expect(data.role).toBe('architect');
+    expect(data.section_title).toBe('Architect Thread Bootstrap');
+    expect(data.agents_path).toBe('/tmp/linux-user/test-site/AGENTS.md');
+    expect(data.bootstrap_text).toContain('You are `architect`.');
+    expect(data.bootstrap_text).toContain('Interpret Operator pressure into governed work packages.');
+    expect(data.bootstrap_text).not.toContain('## Builder Thread Bootstrap');
+    expect(data.bootstrap_text).not.toContain('You are `builder`.');
+  });
+
+  it('returns distinct Builder bootstrap text from contained workspace root', async () => {
+    const ctx = createMockContext();
+    vol.mkdirSync('/tmp/project/.narada', { recursive: true });
+    vol.writeFileSync('/tmp/project/.narada/config.json', JSON.stringify({
+      site_id: 'project-site',
+    }, null, 2));
+    vol.writeFileSync('/tmp/project/.narada/AGENTS.md', [
+      '# AGENTS.md',
+      '',
+      '## Architect Thread Bootstrap',
+      '',
+      'You are `architect`.',
+      '',
+      '- Draft the work package.',
+      '',
+      '## Builder Thread Bootstrap',
+      '',
+      'You are `builder`.',
+      '',
+      '- Execute approved local work packages within their accepted scope.',
+      '',
+      '## Standing Rules',
+      '',
+      '- Preserve authority.',
+      '',
+    ].join('\n'));
+
+    const result = await sitesAgentBootstrapCommand('/tmp/project', {
+      role: 'builder',
+      format: 'json',
+    }, ctx);
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const data = result.result as {
+      mutation_performed: boolean;
+      role: string;
+      site_id: string;
+      site_root: string;
+      bootstrap_text: string;
+    };
+    expect(data.mutation_performed).toBe(false);
+    expect(data.role).toBe('builder');
+    expect(data.site_id).toBe('project-site');
+    expect(data.site_root).toBe('/tmp/project/.narada');
+    expect(data.bootstrap_text).toContain('You are `builder`.');
+    expect(data.bootstrap_text).toContain('Execute approved local work packages');
+    expect(data.bootstrap_text).not.toContain('You are `architect`.');
+  });
+
+  it('rejects unknown bootstrap roles without fallback', async () => {
+    const ctx = createMockContext();
+    const result = await sitesAgentBootstrapCommand('/tmp/linux-user/test-site', {
+      role: 'inspector',
+      format: 'json',
+    }, ctx);
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    const data = result.result as {
+      status: string;
+      error: string;
+      allowed_roles: string[];
+      mutation_performed: boolean;
+    };
+    expect(data.status).toBe('error');
+    expect(data.error).toContain('Unsupported agent role');
+    expect(data.allowed_roles).toEqual(['architect', 'builder']);
+    expect(data.mutation_performed).toBe(false);
   });
 
   it('creates Linux system site', async () => {

@@ -86,6 +86,7 @@ describe('sitesBootstrapClientCommand', () => {
         authority_locus: { locus_kind: string; mutation_policy: string };
         effect_authority_policy: string;
         agent_identity_contract: { default_agent_name: string; operator_label: string };
+        agent_role_contracts: Record<string, unknown> & { admitted_roles: string[]; architect: { role_id: string }; builder: { role_id: string } };
       };
     };
     expect(config.governance.governing_law_source.source_site_id).toBe('narada-proper');
@@ -94,6 +95,11 @@ describe('sitesBootstrapClientCommand', () => {
     expect(config.governance.effect_authority_policy).toBe('metadata_only');
     expect(config.governance.agent_identity_contract.default_agent_name).toBe('architect');
     expect(config.governance.agent_identity_contract.operator_label).toBe('Operator');
+    expect(config.governance.agent_role_contracts.admitted_roles).toEqual(['architect', 'builder']);
+    expect(config.governance.agent_role_contracts.architect.role_id).toBe('architect');
+    expect(config.governance.agent_role_contracts.builder.role_id).toBe('builder');
+    expect(config.governance.agent_role_contracts).not.toHaveProperty('inspector');
+    expect(config.governance.agent_role_contracts).not.toHaveProperty('superintendent');
 
     const doctor = await sitesDoctorCommand('utz', {
       kind: 'client',
@@ -108,12 +114,17 @@ describe('sitesBootstrapClientCommand', () => {
 
     const agents = await readFile(join(workspace, '.narada', 'AGENTS.md'), 'utf8');
     expect(agents).toContain('You are `architect`.');
+    expect(agents).toContain('You are `builder`.');
+    expect(agents).toContain('## Architect Thread Bootstrap');
+    expect(agents).toContain('## Builder Thread Bootstrap');
     expect(agents).toContain('The human is `Operator`.');
     expect(agents).toContain('This Site is governed by Narada law.');
     expect(agents).toContain(`workspace_root: ${workspace}`);
     expect(agents).toContain(`site_root: ${join(workspace, '.narada')}`);
-    expect(agents).toContain('Treat this file as the Site-local execution contract for fresh architects.');
+    expect(agents).toContain('Treat this file as the Site-local execution contract for fresh Architect and Builder threads.');
     expect(agents).toContain('Client/business artifacts outside `site_root` are not Narada knowledge, evidence, or authority unless explicitly admitted');
+    expect(agents).not.toContain('inspector');
+    expect(agents).not.toContain('superintendent');
   });
 
   it('client doctor fails when the canonical inbox drop is missing', async () => {

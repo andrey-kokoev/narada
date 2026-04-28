@@ -10,6 +10,7 @@ import {
   sitesBootstrapProjectCommand,
   sitesBootstrapWindowsCommand,
   sitesEnableCommand,
+  sitesAgentBootstrapCommand,
   sitesTaskLifecycleInitCommand,
   sitesLifecycleExecuteAbsorbCommand,
   sitesLifecycleKindsCommand,
@@ -45,6 +46,21 @@ export function registerSitesCommands(program: Command): void {
     .option('-v, --verbose', 'Enable verbose output', false)
     .action(wrapCommand('sites-discover', (opts, ctx) =>
       sitesDiscoverCommand({ format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto', verbose: opts.verbose }, ctx)));
+
+  sitesCmd
+    .command('agent-bootstrap <site-id-or-root>')
+    .description('Show the bounded Architect or Builder bootstrap contract for a Site')
+    .requiredOption('--role <role>', 'Role to inspect: architect or builder')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (siteIdOrRoot: string, opts: Record<string, unknown>) => {
+      const result = await sitesAgentBootstrapCommand(siteIdOrRoot, {
+        role: opts.role as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitFormatterBackedCommandResult(result, { format: opts.format });
+    });
 
   const taskLifecycleCmd = sitesCmd
     .command('task-lifecycle')

@@ -78,17 +78,23 @@ describe('sitesBootstrapProjectCommand', () => {
     expect(existsSync(join(workspace, '.narada', 'config.json'))).toBe(true);
     const agents = await readFile(join(workspace, '.narada', 'AGENTS.md'), 'utf8');
     expect(agents).toContain('You are `architect`.');
+    expect(agents).toContain('You are `builder`.');
+    expect(agents).toContain('## Architect Thread Bootstrap');
+    expect(agents).toContain('## Builder Thread Bootstrap');
     expect(agents).toContain('The human is `Operator`.');
     expect(agents).toContain('This Site is governed by Narada law.');
     expect(agents).toContain('project-local governance');
-    expect(agents).toContain('Treat this file as the Site-local execution contract for fresh architects.');
+    expect(agents).toContain('Treat this file as the Site-local execution contract for fresh Architect and Builder threads.');
     expect(agents).toContain('Project code and artifacts outside `site_root` are not Narada knowledge');
+    expect(agents).not.toContain('inspector');
+    expect(agents).not.toContain('superintendent');
     const config = JSON.parse(await readFile(join(workspace, '.narada', 'config.json'), 'utf8')) as {
       governance: {
         governing_law_source: { source_site_id: string; mode: string };
         authority_locus: { locus_kind: string; mutation_policy: string };
         mutation_evidence_locus: { kind: string; path: string };
         federation_policy: { posture: string; admission: string };
+        agent_role_contracts: Record<string, unknown> & { admitted_roles: string[]; architect: { role_id: string }; builder: { role_id: string } };
       };
     };
     expect(config.governance.governing_law_source.source_site_id).toBe('narada-proper');
@@ -99,6 +105,11 @@ describe('sitesBootstrapProjectCommand', () => {
     expect(config.governance.mutation_evidence_locus.path).toBe(join(workspace, '.narada'));
     expect(config.governance.federation_policy.posture).toBe('receive_only');
     expect(config.governance.federation_policy.admission).toBe('local_admission_required');
+    expect(config.governance.agent_role_contracts.admitted_roles).toEqual(['architect', 'builder']);
+    expect(config.governance.agent_role_contracts.architect.role_id).toBe('architect');
+    expect(config.governance.agent_role_contracts.builder.role_id).toBe('builder');
+    expect(config.governance.agent_role_contracts).not.toHaveProperty('inspector');
+    expect(config.governance.agent_role_contracts).not.toHaveProperty('superintendent');
 
     const doctor = await sitesDoctorCommand('smart-scheduling', {
       kind: 'project',

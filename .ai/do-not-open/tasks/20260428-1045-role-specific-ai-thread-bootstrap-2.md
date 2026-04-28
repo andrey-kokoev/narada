@@ -1,31 +1,26 @@
 ---
-status: opened
+status: closed
 depends_on: [1044]
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-28T23:11:06.357Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Site governance docs now include agent_role_contracts for architect and builder, preserve agent_identity_contract as legacy shorthand, make anti-collapse limits explicit, and keep deferred roles non-admitted; lifecycle export and pnpm verify passed.
+closed_at: 2026-04-28T23:11:15.259Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Task 1045 — Add Site governance shape for agent role contracts
 
-## Execution Mode
+## Goal
 
-Proceed directly. This is a narrow corrective task; use focused edits only.
-
-## Assignment
-
-<!-- Assignment placeholder -->
-
-## Required Reading
-
-- docs/product/site-governance-coordinates.md
-- docs/product/site-bootstrap-contract.md
-- docs/concepts/plural-embodiment-singular-authority.md
+Extend Site governance coordinates to describe role-specific agent bootstrap contracts without changing runtime authority by implication.
 
 ## Context
 
 Site governance coordinates currently contain agent_identity_contract with a default architect name. That is insufficient for a Site that can deliberately initiate either Architect or Builder threads. The structure must remain declarative: it orients agents but does not grant mutation authority.
-
-## Goal
-
-Extend Site governance coordinates to describe role-specific agent bootstrap contracts without changing runtime authority by implication.
 
 ## Required Work
 
@@ -41,24 +36,6 @@ Extend Site governance coordinates to describe role-specific agent bootstrap con
 - Do not add a PM/inspector/clerk role
 - Do not require existing Sites to migrate immediately
 
-## Crossing Regime
-
-<!--
-Fill in ONLY if this task introduces a new durable authority-changing boundary.
-If the task uses an existing canonical crossing (e.g., Source → Fact, Decision → Intent),
-leave this section commented and delete it before closing.
-
-See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
-
-- source_zone:
-- destination_zone:
-- authority_owner:
-- admissibility_regime:
-- crossing_artifact:
-- confirmation_rule:
-- anti_collapse_invariant:
--->
-
 ## Execution Notes
 
 <!-- Record what was done, decisions made, and files changed during execution. -->
@@ -69,7 +46,7 @@ See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
 
 ## Acceptance Criteria
 
-- [ ] Site governance docs include role-specific agent contract shape for architect and builder
-- [ ] Existing agent_identity_contract semantics remain understandable and backward-compatible
-- [ ] Authority anti-collapse rules are explicit for role contracts
-- [ ] Deferred roles remain documented as not admitted
+- [x] Site governance docs include role-specific agent contract shape for architect and builder
+- [x] Existing agent_identity_contract semantics remain understandable and backward-compatible
+- [x] Authority anti-collapse rules are explicit for role contracts
+- [x] Deferred roles remain documented as not admitted

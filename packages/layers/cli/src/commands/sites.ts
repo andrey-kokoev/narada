@@ -93,6 +93,10 @@ export interface SitesRelationExplainOptions extends SitesOptions {
   relationId?: string;
 }
 
+export interface SitesAgentBootstrapOptions extends SitesOptions {
+  role?: string;
+}
+
 interface SiteListEntry {
   siteId: string;
   variant: string;
@@ -747,6 +751,89 @@ export async function sitesTaskLifecycleInitCommand(
       tables_initialized: [],
     },
   };
+}
+
+export async function sitesAgentBootstrapCommand(
+  siteIdOrRoot: string,
+  options: SitesAgentBootstrapOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
+  const role = normalizeBootstrapRole(options.role);
+  if (!role) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        status: 'error',
+        error: `Unsupported agent role: "${options.role ?? ''}"`,
+        allowed_roles: ['architect', 'builder'],
+        mutation_performed: false,
+      },
+    };
+  }
+
+  try {
+    const resolvedSite = await resolveSiteRootForBootstrap(siteIdOrRoot);
+    const agentsText = await readFile(resolvedSite.agentsPath, 'utf8');
+    let config: Record<string, unknown> | null = null;
+    if (existsSync(resolvedSite.configPath)) {
+      const rawConfig = await readFile(resolvedSite.configPath, 'utf8');
+      config = JSON.parse(rawConfig) as Record<string, unknown>;
+    }
+
+    const sectionTitle = bootstrapSectionTitle(role);
+    const bootstrapText = extractMarkdownSection(agentsText, sectionTitle);
+    if (!bootstrapText) {
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: {
+          status: 'error',
+          error: `AGENTS.md does not contain section: ${sectionTitle}`,
+          role,
+          site_root: resolvedSite.siteRoot,
+          agents_path: resolvedSite.agentsPath,
+          mutation_performed: false,
+        },
+      };
+    }
+
+    const configSiteId = typeof config?.site_id === 'string' ? config.site_id : null;
+    const result = {
+      status: 'success',
+      mutation_performed: false,
+      role,
+      site_id: resolvedSite.siteId ?? configSiteId,
+      site_root: resolvedSite.siteRoot,
+      config_path: existsSync(resolvedSite.configPath) ? resolvedSite.configPath : null,
+      agents_path: resolvedSite.agentsPath,
+      section_title: sectionTitle,
+      bootstrap_text: bootstrapText,
+    };
+
+    if (fmt.getFormat() === 'human') {
+      fmt.section(`Site Agent Bootstrap — ${role}`);
+      fmt.kv('Mutation Performed', 'false');
+      if (result.site_id) {
+        fmt.kv('Site', result.site_id);
+      }
+      fmt.kv('Site Root', result.site_root);
+      fmt.kv('Source', result.agents_path);
+      fmt.section(sectionTitle);
+      fmt.message(bootstrapText, 'info');
+    }
+
+    return { exitCode: ExitCode.SUCCESS, result };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: {
+        status: 'error',
+        error: message,
+        mutation_performed: false,
+      },
+    };
+  }
 }
 
 export async function sitesLifecycleKindsCommand(
@@ -1750,6 +1837,82 @@ function clientSiteRootFromWorkspace(workspaceRoot: string): string {
   return join(workspaceRoot, '.narada');
 }
 
+function normalizeBootstrapRole(role?: string): 'architect' | 'builder' | null {
+  if (role === 'architect' || role === 'builder') {
+    return role;
+  }
+  return null;
+}
+
+function bootstrapSectionTitle(role: 'architect' | 'builder'): string {
+  return role === 'architect' ? 'Architect Thread Bootstrap' : 'Builder Thread Bootstrap';
+}
+
+function extractMarkdownSection(markdown: string, sectionTitle: string): string | null {
+  const lines = markdown.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim() === `## ${sectionTitle}`);
+  if (start === -1) {
+    return null;
+  }
+
+  const body: string[] = [];
+  for (let index = start + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line.startsWith('## ')) {
+      break;
+    }
+    body.push(line);
+  }
+
+  return body.join('\n').trim();
+}
+
+async function resolveSiteRootForBootstrap(siteIdOrRoot: string): Promise<{
+  siteId: string | null;
+  siteRoot: string;
+  configPath: string;
+  agentsPath: string;
+}> {
+  const directRoot = resolve(siteIdOrRoot);
+  const directAgentsPath = join(directRoot, 'AGENTS.md');
+  if (existsSync(directAgentsPath)) {
+    return {
+      siteId: null,
+      siteRoot: directRoot,
+      configPath: join(directRoot, 'config.json'),
+      agentsPath: directAgentsPath,
+    };
+  }
+
+  const containedRoot = join(directRoot, '.narada');
+  const containedAgentsPath = join(containedRoot, 'AGENTS.md');
+  if (existsSync(containedAgentsPath)) {
+    return {
+      siteId: null,
+      siteRoot: containedRoot,
+      configPath: join(containedRoot, 'config.json'),
+      agentsPath: containedAgentsPath,
+    };
+  }
+
+  const registry = await openRegistry();
+  try {
+    const site = registry.getSite(siteIdOrRoot);
+    if (site) {
+      return {
+        siteId: site.siteId,
+        siteRoot: site.siteRoot,
+        configPath: join(site.siteRoot, 'config.json'),
+        agentsPath: join(site.siteRoot, 'AGENTS.md'),
+      };
+    }
+  } finally {
+    registry.close();
+  }
+
+  throw new Error(`Site not found or missing AGENTS.md: ${siteIdOrRoot}`);
+}
+
 function siteAgentsContract(args: {
   siteId: string;
   siteKind: string;
@@ -1764,9 +1927,9 @@ function siteAgentsContract(args: {
   const lines = [
     `# AGENTS.md - ${args.siteId} ${args.siteKind} Site`,
     '',
-    '## Standing Identity',
+    '## Common Site Identity',
     '',
-    'You are `architect`.',
+    'You are either `architect` or `builder`, as assigned by the Operator.',
     'The human is `Operator`.',
     'This Site is governed by Narada law.',
     '',
@@ -1784,9 +1947,35 @@ function siteAgentsContract(args: {
     '',
     args.nonAuthoritySummary,
     '',
+    '## Architect Thread Bootstrap',
+    '',
+    'You are `architect`.',
+    '',
+    '- Interpret Operator pressure into governed work packages.',
+    '- Preserve Narada doctrine, topology, authority boundaries, and Site-local law.',
+    '- Draft or refine specs, acceptance criteria, task shape, and review posture.',
+    '- Inspect task, inbox, lifecycle, and evidence posture before proposing construction.',
+    '- Do not become builder merely because execution is convenient.',
+    '- Do not grant yourself Operator authority or admit consequences outside the configured evidence path.',
+    '',
+    'Default first actions: read this contract, identify the target locus, inspect current task/inbox/evidence posture, formulate or refine the governed work package, and name acceptance criteria before construction.',
+    '',
+    '## Builder Thread Bootstrap',
+    '',
+    'You are `builder`.',
+    '',
+    '- Execute approved local work packages within their accepted scope.',
+    '- Choose means and methods inside the approved spec.',
+    '- Run verification and preserve evidence before reporting completion.',
+    '- Report changed files, verification, residuals, blockers, and field conditions.',
+    '- Do not silently redesign doctrine, widen scope, or expand the active role set.',
+    '- Do not admit or close your own work without evidence and the configured review path.',
+    '',
+    'Default first actions: read this contract, confirm the assigned task and acceptance criteria, inspect the minimum implementation context needed, execute the approved work, verify, and report evidence.',
+    '',
     '## Standing Rules',
     '',
-    '- Treat this file as the Site-local execution contract for fresh architects.',
+    '- Treat this file as the Site-local execution contract for fresh Architect and Builder threads.',
     '- Do not infer authority from the current shell, clone, process, MCP facade, path, or convenience surface.',
     '- Do not mutate outside the declared authority locus without a governed crossing.',
     '- Use canonical inbox, task, lifecycle, command, evidence, and publication surfaces instead of direct state edits.',
@@ -1881,6 +2070,58 @@ function siteGovernanceCoordinates(args: {
       default_agent_name: 'architect',
       operator_label: 'Operator',
       contract_path: join(args.siteRoot, 'AGENTS.md'),
+      compatibility: 'legacy shorthand for agent_role_contracts.architect',
+    },
+    agent_role_contracts: {
+      admitted_roles: ['architect', 'builder'],
+      architect: {
+        role_id: 'architect',
+        bootstrap_contract: {
+          path: join(args.siteRoot, 'AGENTS.md'),
+          section: 'Architect Thread Bootstrap',
+        },
+        default_first_actions: [
+          'read_site_contract',
+          'identify_target_locus',
+          'inspect_task_inbox_evidence_posture',
+          'formulate_or_refine_spec_and_acceptance_criteria',
+        ],
+        authority_limits: [
+          'does_not_inherit_operator_authority',
+          'does_not_execute_by_convenience',
+          'uses_sanctioned_mutation_surfaces_only',
+        ],
+        handoff_obligations: [
+          'produce_governed_work_package',
+          'name_acceptance_criteria',
+          'review_or_admit_only_through_configured_evidence_path',
+        ],
+      },
+      builder: {
+        role_id: 'builder',
+        bootstrap_contract: {
+          path: join(args.siteRoot, 'AGENTS.md'),
+          section: 'Builder Thread Bootstrap',
+        },
+        default_first_actions: [
+          'read_site_contract',
+          'confirm_assigned_task_and_acceptance_criteria',
+          'inspect_minimum_required_implementation_context',
+          'execute_approved_work_package',
+          'run_verification',
+        ],
+        authority_limits: [
+          'does_not_redesign_by_convenience',
+          'does_not_admit_own_work_without_evidence',
+          'does_not_expand_active_role_set',
+        ],
+        handoff_obligations: [
+          'report_changed_files',
+          'report_verification',
+          'report_residuals_and_blockers',
+          'return_field_conditions_to_architect_or_operator',
+        ],
+      },
     },
     local_overlays: [
       {

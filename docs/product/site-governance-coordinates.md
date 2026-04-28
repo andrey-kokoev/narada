@@ -21,6 +21,7 @@ They do not grant runtime authority by themselves. They make authority inspectab
 | `readiness_phase` | Bootstrap, inhabited onboarding, steady state, or archived. | Readiness must be declared; do not infer from folder existence. |
 | `operator_identity` | Principal label for human authority. | Chat labels should resolve to a declared principal. |
 | `agent_identity_contract` | Stable orientation for fresh architects. | Agent memory or chat habit is not the contract. |
+| `agent_role_contracts` | Role-specific bootstrap contracts for currently inhabited AI roles. | Role orientation metadata does not grant mutation, effect, or admission authority. |
 | `local_overlays` | Site-local law, guidance, or policy overlays. | Local additions must not silently fork global doctrine. |
 | `federation_policy` | Receive/publish posture with peer Sites. | Federation is influence and handoff, not authority replication. |
 
@@ -91,7 +92,60 @@ They do not grant runtime authority by themselves. They make authority inspectab
     "agent_identity_contract": {
       "default_agent_name": "architect",
       "operator_label": "Operator",
-      "contract_path": "/repo/.narada/AGENTS.md"
+      "contract_path": "/repo/.narada/AGENTS.md",
+      "compatibility": "legacy shorthand for agent_role_contracts.architect"
+    },
+    "agent_role_contracts": {
+      "admitted_roles": ["architect", "builder"],
+      "deferred_roles": ["inspector", "clerk", "superintendent", "project_manager"],
+      "architect": {
+        "role_id": "architect",
+        "bootstrap_contract": {
+          "path": "/repo/.narada/AGENTS.md",
+          "section": "Architect Thread Bootstrap"
+        },
+        "default_first_actions": [
+          "read_site_contract",
+          "identify_target_locus",
+          "inspect_task_inbox_evidence_posture",
+          "formulate_or_refine_spec_and_acceptance_criteria"
+        ],
+        "authority_limits": [
+          "does_not_inherit_operator_authority",
+          "does_not_execute_by_convenience",
+          "uses_sanctioned_mutation_surfaces_only"
+        ],
+        "handoff_obligations": [
+          "produce_governed_work_package",
+          "name_acceptance_criteria",
+          "review_or_admit_only_through_configured_evidence_path"
+        ]
+      },
+      "builder": {
+        "role_id": "builder",
+        "bootstrap_contract": {
+          "path": "/repo/.narada/AGENTS.md",
+          "section": "Builder Thread Bootstrap"
+        },
+        "default_first_actions": [
+          "read_site_contract",
+          "confirm_assigned_task_and_acceptance_criteria",
+          "inspect_minimum_required_implementation_context",
+          "execute_approved_work_package",
+          "run_verification"
+        ],
+        "authority_limits": [
+          "does_not_redesign_by_convenience",
+          "does_not_admit_own_work_without_evidence",
+          "does_not_expand_active_role_set"
+        ],
+        "handoff_obligations": [
+          "report_changed_files",
+          "report_verification",
+          "report_residuals_and_blockers",
+          "return_field_conditions_to_architect_or_operator"
+        ]
+      }
     },
     "local_overlays": [
       {
@@ -127,3 +181,17 @@ This means the Site follows Narada law and may carry Site-local overlays such as
 
 Commands may use these coordinates for preflight, routing, and explanation. A coordinate declaration alone must not execute effects, reveal secrets, repair state, or mutate another Site.
 
+## Agent Role Contracts
+
+`agent_role_contracts` is orientation metadata for fresh AI threads. It is not an authorization table and must not be treated as proof that a role may mutate, execute effects, admit evidence, or close work.
+
+The currently admitted role keys are:
+
+| Role key | Bootstrap section | Responsibility |
+| --- | --- | --- |
+| `architect` | `Architect Thread Bootstrap` | Interpret Operator pressure into governed work, preserve topology/doctrine, specify and review. |
+| `builder` | `Builder Thread Bootstrap` | Execute approved work packages, verify, and report changed files, field conditions, residuals, and blockers. |
+
+`agent_identity_contract` remains as a backward-compatible shorthand for legacy consumers that expect one default agent identity. New consumers should read `agent_role_contracts.architect` for the default architect bootstrap and `agent_role_contracts.builder` when the Operator explicitly starts a builder thread.
+
+Deferred roles are intentionally listed only as non-admitted names. A Site may record them as proposals or residuals, but they are not valid bootstrap roles until inhabited operation evidence admits them.

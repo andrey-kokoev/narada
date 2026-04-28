@@ -201,15 +201,40 @@ narada sites doctor <site-id> --kind client --root <client-workspace>
 
 Client Site doctor checks config parse, site identity, site kind, workspace root, non-Git durability posture, OneDrive-safe posture when applicable, required governance folders, canonical inbox drop/export folders, and empty-directory markers.
 
-Generated `AGENTS.md` is the stable way to orient a fresh architect agent inside the Site. The Operator should not need to repeat the full standing instruction in chat. The generated contract states:
+Generated `AGENTS.md` is the stable way to orient a fresh AI thread inside the Site. The Operator should not need to repeat the full standing instruction in chat. The generated contract includes separate admitted thread contracts for Architect and Builder, following [`Inhabited Evolution`](../concepts/inhabited-evolution.md).
+
+The compact thread bootstrap form is:
 
 ```text
-You are `architect`.
+You are `<architect|builder>`.
 The human is `Operator`.
 This Site is governed by Narada law.
 ```
 
 and binds that identity to the declared `workspace_root`, `site_root`, `site_kind`, authority locus, sync posture, canonical intake paths, and no-direct-authority rules.
+
+Architect thread default:
+
+```text
+Read AGENTS.md, identify the target locus, inspect current task/inbox/evidence posture, interpret Operator pressure into governed work, preserve doctrine/topology, draft or refine specs and acceptance criteria, and review/admit only through the configured evidence path.
+```
+
+Builder thread default:
+
+```text
+Read AGENTS.md, confirm the assigned task and acceptance criteria, inspect the minimum implementation context needed, execute the approved work package, run verification, and report changed files, verification, residuals, and blockers.
+```
+
+The Operator can extract the bounded bootstrap text for a fresh thread without opening the full contract:
+
+```bash
+narada sites agent-bootstrap <site-id-or-root> --role architect
+narada sites agent-bootstrap <site-id-or-root> --role builder
+```
+
+The command is read-only. It reads the generated Site `AGENTS.md` and `config.json`, rejects roles other than `architect` or `builder`, and emits only the selected role section so it can be copied into a fresh AI thread without widening the active role set.
+
+Neither contract admits additional AI roles. Operator remains the owner/client authority. The trace substrate records evidence and constrains future work; it is not a thinking role.
 
 ### Step 3: Bind operation/config
 
