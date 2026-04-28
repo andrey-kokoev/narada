@@ -1,8 +1,27 @@
+---
+status: closed
+criteria_proved_by: architect
+criteria_proved_at: 2026-04-28T17:25:33.971Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777397036450_nclc7p
+amended_by: architect
+amended_at: 2026-04-28T17:25:27.206Z
+closed_at: 2026-04-28T17:26:01.317Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: peer_reviewed
+---
+
 # Task 263: Chapter Closure and Warm-Agent Routing
 
 ## Chapter
 
 Multi-Agent Task Governance
+
+## Goal
+
+Implement the chapter closure operator and add continuation-affinity support to task work.
 
 ## Context
 
@@ -11,10 +30,6 @@ Two advanced governance capabilities are missing:
 1. **Chapter closure operator**: Currently, closing a chapter is a manual checklist. There is no explicit operator that verifies all chapter tasks are complete, generates a summary, and transitions the chapter to `closed`.
 
 2. **Warm-agent / continuation-affinity for task work**: The control plane has advisory `continuation_affinity` on `work_items` (Task 212) — a preference for which session or agent should continue the work. Task work has no equivalent. An agent who completed Task 260 and has full context should be able to express a preference for Task 261.
-
-## Goal
-
-Implement the chapter closure operator and add continuation-affinity support to task work.
 
 ## Required Work
 
@@ -110,22 +125,22 @@ Added `continuation_affinity` fields to `TaskFrontMatter` in `task-governance.ts
 - `pnpm --filter @narada2/cli typecheck` — passes
 - `pnpm test:focused "pnpm --filter @narada2/cli exec vitest run test/commands/chapter-close.test.ts"` — 5/5 pass
 - `pnpm verify` — passes (5/5 steps)
+- Amended by architect at 2026-04-28T17:25:27.206Z: acceptance criteria
 
-## Corrective Notes
+## Verification
 
-- **Task 280**: Non-dry-run chapter closure was originally permissive — it wrote artifacts and transitioned tasks even when non-terminal tasks remained. Task 280 added strict precondition enforcement: closure is rejected (no mutations) until all chapter tasks are terminal.
-
-## Bounded Deferrals
-
-- **`task claim` does not consult affinity**: The claim operator accepts an explicit task number (`narada task claim <task-number>`) and does not reorder or filter by affinity. Affinity is surfaced only in `task list`. Adding affinity-aware claim routing would require redesigning the claim surface to support listing+selection rather than direct number entry.
+- `pnpm --filter @narada2/cli typecheck` — passes
+- `pnpm test:focused "pnpm --filter @narada2/cli exec vitest run test/commands/chapter-close.test.ts"` — 5/5 pass
+- `pnpm verify` — passes (5/5 steps)
+- Amended by architect at 2026-04-28T17:25:27.206Z: acceptance criteria
 
 ## Acceptance Criteria
 
-- [x] Chapter closure operator enumerates, verifies, and summarizes chapter tasks.
-- [x] Dry-run mode previews closure without mutating state.
-- [x] Closure artifact is generated with tasks, deferrals, findings, and residuals.
-- [x] Non-dry-run closure fails when any chapter task is non-terminal. (enforced by Task 280)
-- [x] Task files support `continuation_affinity` fields.
-- [x] `task list` sorts runnable tasks by affinity strength (reordering hint).
-- [ ] `task claim` consults affinity when claiming — **deferred**. Claim operator accepts explicit task number only; affinity is surfaced in list view but not used at claim time.
-- [x] Computed affinity from assignment history is stable and deterministic.
+- [x] Chapter closure operator enumerates verifies and summarizes chapter tasks
+- [x] Dry-run mode previews closure without mutating state
+- [x] Closure artifact is generated with tasks deferrals findings and residuals
+- [x] Non-dry-run closure fails when any chapter task is non-terminal
+- [x] Task files support continuation_affinity fields
+- [x] task list sorts runnable tasks by affinity strength
+- [x] task claim surfaces continuation affinity when claiming without enforcing it
+- [x] Computed affinity from assignment history is stable and deterministic

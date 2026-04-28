@@ -38,6 +38,7 @@ export interface ClaimTaskServiceResult {
   agent_id?: string;
   claimed_at?: string;
   assignment_intent_id?: string;
+  warnings?: string[];
   error?: string;
 }
 
@@ -192,6 +193,7 @@ export async function claimTaskService(
       lifecycleStatusAfter: 'claimed',
       rosterStatusAfter: 'working',
       assignmentId: admission.intent.assignment_id,
+      warnings: admission.warnings,
       confirmation: {
         task_id: taskFile.taskId,
         task_number: parsedTaskNumber,
@@ -217,6 +219,7 @@ export async function claimTaskService(
       agent_id: agentId,
       claimed_at: now,
       assignment_intent_id: admission.intent.request_id,
+      warnings: admission.warnings.length > 0 ? admission.warnings : undefined,
     },
   };
 }

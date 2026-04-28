@@ -94,6 +94,33 @@ describe('task claim operator', () => {
     }
   });
 
+  it('surfaces manual continuation affinity when claiming without enforcing it', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
+      '---\ntask_id: 999\nstatus: opened\ncontinuation_affinity:\n  preferred_agent_id: warm-agent\n  affinity_strength: 3\n  affinity_reason: Prior context\n---\n\n# Task 999: Test Task\n',
+    );
+
+    const result = await taskClaimCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const parsed = result.result as { warnings?: string[]; assignment_intent_id: string };
+    expect(parsed.warnings?.[0]).toContain('Continuation affinity (manual) prefers another agent');
+    expect(parsed.warnings?.[0]).toContain('preferred_agent_id=warm-agent');
+
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      const intent = store.getAssignmentIntent(parsed.assignment_intent_id);
+      expect(intent?.warnings_json).toContain('preferred_agent_id=warm-agent');
+    } finally {
+      store.db.close();
+    }
+  });
+
   it('records a rejected assignment intent without mutating lifecycle, roster, or assignments', async () => {
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-blocker.md'),

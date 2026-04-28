@@ -129,6 +129,49 @@ function readLifecycleStatus(store: TaskLifecycleStore, taskId: string): string 
   return store.getLifecycle(taskId)?.status;
 }
 
+async function computeClaimAffinityWarning(
+  cwd: string,
+  agentId: string,
+  frontMatter: TaskFrontMatter,
+): Promise<string | null> {
+  const manual = frontMatter.continuation_affinity;
+  let preferredAgentId: string | null = manual?.preferred_agent_id ?? null;
+  let affinityReason: string | null = manual?.affinity_reason ?? null;
+  let affinitySource: 'manual' | 'history' = 'manual';
+
+  if (!preferredAgentId) {
+    const deps = Array.isArray(frontMatter.depends_on) ? frontMatter.depends_on : [];
+    const completionCounts = new Map<string, number>();
+    for (const dep of deps) {
+      const depTask = await findTaskFile(cwd, String(dep));
+      if (!depTask) continue;
+      const assignment = await loadAssignment(cwd, depTask.taskId);
+      if (!assignment) continue;
+      for (const item of assignment.assignments) {
+        if (item.release_reason === 'completed') {
+          completionCounts.set(item.agent_id, (completionCounts.get(item.agent_id) ?? 0) + 1);
+        }
+      }
+    }
+
+    let bestCount = 0;
+    for (const [candidateAgentId, count] of completionCounts) {
+      if (count > bestCount) {
+        preferredAgentId = candidateAgentId;
+        bestCount = count;
+      }
+    }
+    if (preferredAgentId) {
+      affinitySource = 'history';
+      affinityReason = `Completed ${bestCount} prerequisite task${bestCount > 1 ? 's' : ''}`;
+    }
+  }
+
+  if (!preferredAgentId) return null;
+  const match = preferredAgentId === agentId ? 'matches' : 'prefers another agent';
+  return `Continuation affinity (${affinitySource}) ${match}: preferred_agent_id=${preferredAgentId}${affinityReason ? `; reason=${affinityReason}` : ''}`;
+}
+
 export async function admitAssignmentIntent(
   cwd: string,
   request: AssignmentAdmissionRequest,
@@ -248,6 +291,10 @@ export async function admitAssignmentIntent(
         lifecycle_status_before: currentStatus ?? null,
         previous_agent_id: active.agent_id,
       });
+    }
+    const affinityWarning = await computeClaimAffinityWarning(cwd, request.agentId, frontMatter);
+    if (affinityWarning) {
+      warnings.push(affinityWarning);
     }
     shouldClaim = true;
     assignmentId = generateAssignmentId(taskFile.taskId, request.agentId);
