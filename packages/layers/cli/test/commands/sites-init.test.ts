@@ -129,6 +129,12 @@ describe('sitesInitCommand', () => {
     // Config file should be written
     const files = vol.toJSON();
     expect(files['/tmp/linux-user/test-site/config.json']).toBeDefined();
+    const agents = files['/tmp/linux-user/test-site/AGENTS.md'];
+    expect(agents).toContain('You are `architect`.');
+    expect(agents).toContain('The human is `Operator`.');
+    expect(agents).toContain('This Site is governed by Narada law.');
+    expect(agents).toContain('Treat this file as the Site-local execution contract for fresh architects.');
+    expect(agents).toContain('site_kind: linux-user');
   });
 
   it('creates Linux system site', async () => {

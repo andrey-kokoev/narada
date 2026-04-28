@@ -93,9 +93,13 @@ describe('sitesBootstrapClientCommand', () => {
     expect(doctorData.checks.find((check) => check.name === 'dir__ai_inbox_drop')?.status).toBe('pass');
 
     const agents = await readFile(join(workspace, '.narada', 'AGENTS.md'), 'utf8');
+    expect(agents).toContain('You are `architect`.');
+    expect(agents).toContain('The human is `Operator`.');
+    expect(agents).toContain('This Site is governed by Narada law.');
     expect(agents).toContain(`workspace_root: ${workspace}`);
     expect(agents).toContain(`site_root: ${join(workspace, '.narada')}`);
-    expect(agents).toContain('outside site_root are not Narada knowledge, evidence, or authority unless explicitly admitted');
+    expect(agents).toContain('Treat this file as the Site-local execution contract for fresh architects.');
+    expect(agents).toContain('Client/business artifacts outside `site_root` are not Narada knowledge, evidence, or authority unless explicitly admitted');
   });
 
   it('client doctor fails when the canonical inbox drop is missing', async () => {

@@ -1750,6 +1750,61 @@ function clientSiteRootFromWorkspace(workspaceRoot: string): string {
   return join(workspaceRoot, '.narada');
 }
 
+function siteAgentsContract(args: {
+  siteId: string;
+  siteKind: string;
+  workspaceRoot?: string;
+  siteRoot: string;
+  authorityLocus?: string;
+  syncPosture?: string;
+  ownershipSummary: string;
+  nonAuthoritySummary: string;
+  extraRules?: string[];
+}): string {
+  const lines = [
+    `# AGENTS.md - ${args.siteId} ${args.siteKind} Site`,
+    '',
+    '## Standing Identity',
+    '',
+    'You are `architect`.',
+    'The human is `Operator`.',
+    'This Site is governed by Narada law.',
+    '',
+    '## Target Locus',
+    '',
+    ...(args.workspaceRoot ? [`workspace_root: ${args.workspaceRoot}`] : []),
+    `site_root: ${args.siteRoot}`,
+    `site_kind: ${args.siteKind}`,
+    ...(args.authorityLocus ? [`authority_locus: ${args.authorityLocus}`] : []),
+    ...(args.syncPosture ? [`sync_posture: ${args.syncPosture}`] : []),
+    '',
+    '## Site Authority',
+    '',
+    args.ownershipSummary,
+    '',
+    args.nonAuthoritySummary,
+    '',
+    '## Standing Rules',
+    '',
+    '- Treat this file as the Site-local execution contract for fresh architects.',
+    '- Do not infer authority from the current shell, clone, process, MCP facade, path, or convenience surface.',
+    '- Do not mutate outside the declared authority locus without a governed crossing.',
+    '- Use canonical inbox, task, lifecycle, command, evidence, and publication surfaces instead of direct state edits.',
+    '- Intelligence proposes and constructs; authority admits consequence.',
+    '- If blocked, record an observation, residual, or task proposal instead of inventing authority.',
+    '- Keep Narada proper doctrine, User Site memory, PC recovery authority, client artifacts, project code, and external capabilities separate unless explicitly admitted.',
+    ...(args.extraRules ?? []),
+    '',
+    '## Intake',
+    '',
+    '- Use `.ai/inbox-drop` for human-authored inbound messages.',
+    '- Use `.ai/inbox-envelopes` for canonical exported envelopes.',
+    '- Incoming material is inert until admitted by this Site authority.',
+    '',
+  ];
+  return `${lines.join('\n')}\n`;
+}
+
 function clientSiteConfig(args: {
   siteId: string;
   workspaceRoot: string;
@@ -2135,6 +2190,19 @@ export async function sitesInitCommand(
 
       if (!dryRun) {
         await writeFile(configPath, JSON.stringify(configContent, null, 2) + '\n', 'utf8');
+        await writeFile(pathLib.join(siteRoot, 'AGENTS.md'), siteAgentsContract({
+          siteId,
+          siteKind: authorityLocus === 'pc' ? 'pc' : 'user',
+          siteRoot,
+          authorityLocus,
+          syncPosture,
+          ownershipSummary: authorityLocus === 'pc'
+            ? 'This Site owns PC-locus governance, machine/session recovery memory, local diagnostics, recovery tools, and PC-scoped observations inside `site_root`.'
+            : 'This Site owns user-locus governance, Operator memory, preferences, user-scoped tool policy, inbox intake, observations, decisions, tasks, chapters, KB, and requests inside `site_root`.',
+          nonAuthoritySummary: authorityLocus === 'pc'
+            ? 'This Site does not own Operator personal memory, project governance, Narada proper doctrine, or external capabilities unless explicitly admitted through governed crossings.'
+            : 'This Site does not own PC recovery authority, project governance, Narada proper doctrine, client artifacts, or external capabilities unless explicitly admitted through governed crossings.',
+        }), 'utf8');
 
         // Register in Windows SiteRegistry
         const registry = await openRegistry();
@@ -2179,6 +2247,14 @@ export async function sitesInitCommand(
 
       if (!dryRun) {
         await writeFile(configPath, JSON.stringify(configContent, null, 2) + '\n', 'utf8');
+        await writeFile(join(siteRoot, 'AGENTS.md'), siteAgentsContract({
+          siteId,
+          siteKind: 'macos',
+          siteRoot,
+          authorityLocus: 'macos',
+          ownershipSummary: 'This Site owns macOS-locus governance, local runtime memory, inbox intake, observations, decisions, tasks, chapters, KB, and requests inside `site_root`.',
+          nonAuthoritySummary: 'This Site does not own Narada proper doctrine, other Sites, project code, or external capabilities unless explicitly admitted through governed crossings.',
+        }), 'utf8');
       }
     } else {
       // linux-user or linux-system
@@ -2209,6 +2285,16 @@ export async function sitesInitCommand(
 
       if (!dryRun) {
         await writeFile(configPath, JSON.stringify(configContent, null, 2) + '\n', 'utf8');
+        await writeFile(join(siteRoot, 'AGENTS.md'), siteAgentsContract({
+          siteId,
+          siteKind: mode === 'user' ? 'linux-user' : 'linux-system',
+          siteRoot,
+          authorityLocus: mode,
+          ownershipSummary: mode === 'user'
+            ? 'This Site owns Linux user-locus governance, local runtime memory, inbox intake, observations, decisions, tasks, chapters, KB, and requests inside `site_root`.'
+            : 'This Site owns Linux system-locus governance, system runtime memory, inbox intake, observations, decisions, tasks, chapters, KB, and requests inside `site_root`.',
+          nonAuthoritySummary: 'This Site does not own Narada proper doctrine, other Sites, project code, or external capabilities unless explicitly admitted through governed crossings.',
+        }), 'utf8');
 
         // Register in SiteRegistry
         const registry = await openRegistry();
@@ -2348,7 +2434,17 @@ export async function sitesBootstrapClientCommand(
       ].join('\n'),
       'utf8',
     );
-    await writeFile(join(siteRoot, 'AGENTS.md'), `# AGENTS.md - ${siteId} client Site\n\nworkspace_root: ${workspaceRoot}\nsite_root: ${siteRoot}\n\nThis workspace keeps client-visible material at workspace_root and Narada governance inside site_root (.narada).\n\nClient/business artifacts outside site_root are not Narada knowledge, evidence, or authority unless explicitly admitted through a governed intake path.\n\nDo not initialize Git or external sync for this Site unless the Operator explicitly changes the durability posture.\nUse .ai/inbox-drop for human-authored inbound messages and .ai/inbox-envelopes for canonical exported envelopes.\n`, 'utf8');
+    await writeFile(join(siteRoot, 'AGENTS.md'), siteAgentsContract({
+      siteId,
+      siteKind: 'client',
+      workspaceRoot,
+      siteRoot,
+      authorityLocus: 'client_service',
+      syncPosture: sync,
+      ownershipSummary: 'This Site owns client-service governance, construction memory, inbox intake, observations, decisions, tasks, chapters, KB, and requests inside `site_root`.',
+      nonAuthoritySummary: 'Client/business artifacts outside `site_root` are not Narada knowledge, evidence, or authority unless explicitly admitted through a governed intake path.',
+      extraRules: ['- Do not initialize Git or external sync for this Site unless the Operator explicitly changes the durability posture.'],
+    }), 'utf8');
     await writeFile(join(siteRoot, '.ai', 'inbox-drop', '.gitkeep'), '', 'utf8');
     await writeFile(join(siteRoot, '.ai', 'inbox-envelopes', '.gitkeep'), '', 'utf8');
   }
@@ -2437,7 +2533,16 @@ export async function sitesBootstrapProjectCommand(
       ].join('\n'),
       'utf8',
     );
-    await writeFile(join(siteRoot, 'AGENTS.md'), `# AGENTS.md - ${siteId} project Site\n\nworkspace_root: ${workspaceRoot}\nsite_root: ${siteRoot}\n\nThis project repository keeps implementation code at workspace_root and Narada governance inside site_root (.narada).\n\nThis Site owns project-local governance, construction memory, inbox intake, observations, decisions, tasks, chapters, KB, and requests.\n\nThis Site does not own Narada proper doctrine, User Site memory, PC recovery authority, client-owned external artifacts, or external capabilities unless those are explicitly admitted through governed crossings.\n\nProject code outside site_root is not Narada knowledge, evidence, or authority merely because the Site inhabits the repository.\nUse .ai/inbox-drop for human-authored inbound messages and .ai/inbox-envelopes for canonical exported envelopes.\n`, 'utf8');
+    await writeFile(join(siteRoot, 'AGENTS.md'), siteAgentsContract({
+      siteId,
+      siteKind: 'project',
+      workspaceRoot,
+      siteRoot,
+      authorityLocus: 'project',
+      syncPosture: sync,
+      ownershipSummary: 'This Site owns project-local governance, construction memory, inbox intake, observations, decisions, tasks, chapters, KB, and requests inside `site_root`.',
+      nonAuthoritySummary: 'Project code and artifacts outside `site_root` are not Narada knowledge, evidence, or authority merely because the Site inhabits the repository.',
+    }), 'utf8');
     await writeFile(join(siteRoot, '.ai', 'inbox-drop', '.gitkeep'), '', 'utf8');
     await writeFile(join(siteRoot, '.ai', 'inbox-envelopes', '.gitkeep'), '', 'utf8');
   }

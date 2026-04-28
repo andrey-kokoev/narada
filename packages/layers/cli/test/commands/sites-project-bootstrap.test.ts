@@ -77,8 +77,12 @@ describe('sitesBootstrapProjectCommand', () => {
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(existsSync(join(workspace, '.narada', 'config.json'))).toBe(true);
     const agents = await readFile(join(workspace, '.narada', 'AGENTS.md'), 'utf8');
+    expect(agents).toContain('You are `architect`.');
+    expect(agents).toContain('The human is `Operator`.');
+    expect(agents).toContain('This Site is governed by Narada law.');
     expect(agents).toContain('project-local governance');
-    expect(agents).toContain('does not own Narada proper doctrine');
+    expect(agents).toContain('Treat this file as the Site-local execution contract for fresh architects.');
+    expect(agents).toContain('Project code and artifacts outside `site_root` are not Narada knowledge');
 
     const doctor = await sitesDoctorCommand('smart-scheduling', {
       kind: 'project',

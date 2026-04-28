@@ -177,7 +177,7 @@ The created client Site includes:
 |------|---------|
 | `.narada/config.json` | Client Site identity, visible workspace root, sync posture, and inbox paths |
 | `.narada/README.md` | Operator-facing Site orientation |
-| `.narada/AGENTS.md` | Agent execution guidance for this client Site |
+| `.narada/AGENTS.md` | Site-local fresh architect execution contract: `architect` / `Operator` identity, target locus, authority boundaries, and standing Narada-law rules |
 | `.narada/.ai/inbox-drop/` | Human-authored file-drop intake |
 | `.narada/.ai/inbox-envelopes/` | Exported canonical inbox envelopes |
 | `.narada/chapters`, `.narada/tasks`, `.narada/decisions`, `.narada/kb`, `.narada/observations`, `.narada/friction`, `.narada/requests` | Durable Site-local governance surfaces |
@@ -189,6 +189,16 @@ narada sites doctor <site-id> --kind client --root <client-workspace>
 ```
 
 Client Site doctor checks config parse, site identity, site kind, workspace root, non-Git durability posture, OneDrive-safe posture when applicable, required governance folders, canonical inbox drop/export folders, and empty-directory markers.
+
+Generated `AGENTS.md` is the stable way to orient a fresh architect agent inside the Site. The Operator should not need to repeat the full standing instruction in chat. The generated contract states:
+
+```text
+You are `architect`.
+The human is `Operator`.
+This Site is governed by Narada law.
+```
+
+and binds that identity to the declared `workspace_root`, `site_root`, `site_kind`, authority locus, sync posture, canonical intake paths, and no-direct-authority rules.
 
 ### Step 3: Bind operation/config
 
