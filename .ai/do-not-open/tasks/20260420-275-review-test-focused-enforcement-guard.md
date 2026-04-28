@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T18:34:00.137Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
+---
+
 # Task 275: Review Test-Focused Enforcement Guard
 
 ## Chapter
@@ -106,3 +114,14 @@ Rejected preflight attempts are recorded in `.ai/metrics/test-runtimes.json` wit
 
 - `pnpm test:control-plane` is caught by `looksLikeFullSuite` because `\bpnpm\s+test\b` matches the `test:` prefix. This is acceptable — package-level suites should be run directly, not wrapped in `test:focused`.
 - Glob patterns are treated as single-file references by the regex. Fixing this would require vitest glob resolution and is out of scope for this review.
+
+## Verification
+
+- `narada test-run run --task 275 --requester architect --scope focused --timeout 90 --cmd <focused guard behavior script>` — passed as TIZ run `run_1777401108711_ttg05t` in 1054ms.
+- The focused guard script verified:
+  - single-file focused commands remain allowed
+  - multi-file focused commands are rejected without `ALLOW_MULTI_FILE_FOCUSED=1`
+  - package-level focused commands are rejected without `ALLOW_PACKAGE_FOCUSED=1`
+  - full-suite commands are rejected when wrapped in `pnpm test:focused`
+  - explicit multi-file and package overrides work
+  - rejected preflight attempts are recorded in `.ai/metrics/test-runtimes.json`
