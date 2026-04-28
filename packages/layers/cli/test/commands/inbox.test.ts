@@ -55,6 +55,10 @@ describe('Canonical Inbox CLI commands', () => {
     expect(submitted.exitCode).toBe(ExitCode.SUCCESS);
     const envelope = (submitted.result as { envelope: { envelope_id: string; payload: unknown } }).envelope;
     expect(envelope.envelope_id).toMatch(/^env_/);
+    const submitResult = submitted.result as { portable_artifact: string; next_steps: { git_visible_handoff: string } };
+    expect(submitResult.portable_artifact).toContain(join(tempDir, '.ai', 'inbox-envelopes'));
+    expect(submitResult.next_steps.git_visible_handoff).toBe(submitResult.portable_artifact);
+    expect(readdirSync(join(tempDir, '.ai', 'inbox-envelopes')).filter((name) => name.includes(envelope.envelope_id))).toHaveLength(1);
 
     const listed = await inboxListCommand({ cwd: tempDir, format: 'json', limit: 10 });
     expect(listed.exitCode).toBe(ExitCode.SUCCESS);
@@ -135,7 +139,7 @@ describe('Canonical Inbox CLI commands', () => {
     const result = submitted.result as {
       envelope: { envelope_id: string; kind: string; source: { kind: string }; payload: Record<string, unknown> };
       confirmation: { read_back_envelope_id: string; payload_equivalent: boolean };
-      next_steps: { export_command: string };
+      next_steps: { export_command: string; git_visible_handoff: string };
     };
     expect(result.envelope.kind).toBe('observation');
     expect(result.envelope.source.kind).toBe('user_chat');
@@ -151,6 +155,7 @@ describe('Canonical Inbox CLI commands', () => {
       payload_equivalent: true,
     });
     expect(result.next_steps.export_command).toBe('narada inbox export --format json');
+    expect(result.next_steps.git_visible_handoff).toContain(result.envelope.envelope_id);
   });
 
   it('rejects empty observation payloads unless explicitly allowed', async () => {

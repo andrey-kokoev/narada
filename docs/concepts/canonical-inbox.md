@@ -22,9 +22,18 @@ narada inbox triage <envelope-id> --action archive --by operator
 narada inbox pending <envelope-id> --to site_config_change:site:desktop-sunroom-2 --by operator
 ```
 
-Prefer `submit-observation` for routine observations from chat, diagnostics, and agent reports. It builds the typed payload from flags, writes the envelope, reads it back, confirms payload equivalence, and returns the exact export command for portable visibility.
+Prefer `submit-observation` for routine observations from chat, diagnostics, and agent reports. It builds the typed payload from flags, writes the envelope, reads it back, confirms payload equivalence, and returns the Git-visible envelope artifact path for portable visibility.
 
 Use low-level `submit` when the caller already has a complete typed envelope payload. Prefer `--payload-file` or `--payload-stdin` for non-trivial payloads. Inline JSON is acceptable for tiny POSIX-shell examples, but it is brittle across PowerShell, chat copy/paste, and multi-line payloads. Empty object payloads are rejected for observations and task candidates unless `--allow-empty-payload` is explicit.
+
+Successful `inbox submit` and `inbox submit-observation` write two surfaces:
+
+| Surface | Role |
+| --- | --- |
+| `.ai/inbox.db` | Local runtime substrate for the current embodiment. It is ignored and must not be merged as authority. |
+| `.ai/inbox-envelopes/*.json` | Git-visible portable handoff artifact. Other embodiments see the envelope by importing these artifacts. |
+
+If another embodiment, clone, or Site actor must see the inbox item, commit and push the exported `.ai/inbox-envelopes/*.json` artifact. Running `narada inbox export --format json` remains valid and idempotent, but normal submission writes the per-envelope artifact immediately to avoid local-only invisible work.
 
 Run `narada inbox doctor` before cross-environment submission or publication. It reports the working directory, Git delivery coordinates, inbox DB accessibility, Node executable, CLI entrypoint, platform/WSL posture, package root, repository dist entrypoint, and whether canonical inbox commands are available from the current runtime.
 
@@ -213,6 +222,7 @@ Canonical Inbox first use should not require ad hoc repair work.
 | --- | --- |
 | Shell-hostile JSON quoting, especially in PowerShell | Use `inbox submit-observation` for observations, or `inbox submit --payload-file <path>` / `--payload-stdin` for low-level typed envelopes; avoid inline JSON for real payloads. |
 | Submission succeeds but semantic payload was lost | Use `submit-observation` for read-back payload confirmation; low-level `submit` rejects empty observation/task-candidate payloads by default. |
+| Submission exists in one embodiment but not another | Commit and push the generated `.ai/inbox-envelopes/*.json` artifact, then run `narada inbox import` or any inbox read command in the receiving embodiment. Do not copy or merge `.ai/inbox.db`. |
 | Human wants to leave a message without JSON or shell quoting | Put a dated numbered file or folder in `.ai/inbox-drop`, run `inbox ingest-files` for dry-run, then rerun with `--admit --by <principal>`. |
 | Windows/WSL shell uses the wrong `narada`, `node`, or package shim | Run `narada inbox doctor` and inspect `Node`, `CLI entrypoint`, `Platform`, and `Runtime posture` before submitting or publishing envelopes. |
 | Fresh checkout missing dependencies, build output, CLI shim, or native SQLite binding | Run `narada doctor --bootstrap --format json` and follow its `repair_plan`. |

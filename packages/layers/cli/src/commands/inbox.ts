@@ -182,6 +182,7 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
       },
       payload,
     });
+    const portableArtifact = await writePortableInboxEnvelope(cwd, envelope);
     await writeInboxMutationEvidence({
       cwd,
       command: 'inbox submit',
@@ -189,17 +190,27 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
       authorityClass: 'claim',
       before: null,
       after: inboxEnvelopeToEvidenceState(store.get(envelope.envelope_id)),
-      result: { status: 'success', envelope },
+      result: { status: 'success', envelope, portable_artifact: portableArtifact },
       occurredAt: envelope.received_at,
     });
     return okResult(
-      { status: 'success', envelope, delivery },
+      {
+        status: 'success',
+        envelope,
+        delivery,
+        portable_artifact: portableArtifact,
+        next_steps: {
+          git_visible_handoff: portableArtifact,
+          commit_and_push: 'Commit and push the exported envelope artifact when another embodiment must see this inbox item.',
+        },
+      },
       [
         `Inbox envelope received: ${envelope.envelope_id}`,
         `Kind: ${envelope.kind}`,
         `Source: ${envelope.source.kind}:${envelope.source.ref}`,
         `Status: ${envelope.status}`,
         `Inbox DB: ${delivery.inbox_db_path}`,
+        `Portable artifact: ${portableArtifact}`,
         `Repo: ${delivery.repo_root ?? 'unknown'} @ ${delivery.branch ?? 'unknown'} ${delivery.head_commit ?? 'unknown'}`,
         `Visible on remote: ${delivery.head_matches_remote === true ? 'yes' : delivery.head_matches_remote === false ? 'no' : 'unknown'}`,
       ],
@@ -237,6 +248,7 @@ export async function inboxSubmitObservationCommand(
   const result = submitted.result as {
     envelope?: InboxEnvelope;
     delivery?: Record<string, unknown>;
+    portable_artifact?: string;
   };
   const envelopeId = result.envelope?.envelope_id;
   if (!envelopeId) return errorResult('Submitted envelope did not return an envelope_id');
@@ -258,13 +270,14 @@ export async function inboxSubmitObservationCommand(
         },
         next_steps: {
           export_command: exportCommand,
+          git_visible_handoff: result.portable_artifact,
         },
       },
       [
         `Inbox observation received: ${readBack.envelope_id}`,
         `Title: ${payload.title}`,
         'Read-back confirmation: payload equivalent',
-        `Export visibility: ${exportCommand}`,
+        `Portable artifact: ${result.portable_artifact ?? exportCommand}`,
       ],
       options.format,
     );
@@ -438,6 +451,15 @@ export async function inboxExportCommand(options: InboxExportOptions): Promise<{
       options.format,
     );
   });
+}
+
+async function writePortableInboxEnvelope(cwdInput: string, envelope: InboxEnvelope): Promise<string> {
+  const outDir = resolve(cwdInput, '.ai', 'inbox-envelopes');
+  await mkdir(outDir, { recursive: true });
+  const fileName = `${envelope.received_at.replace(/[:.]/g, '-')}-${envelope.envelope_id}.json`;
+  const path = join(outDir, fileName);
+  await writeFile(path, `${JSON.stringify(envelope, null, 2)}\n`, 'utf8');
+  return path;
 }
 
 export async function inboxImportCommand(options: InboxImportOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
