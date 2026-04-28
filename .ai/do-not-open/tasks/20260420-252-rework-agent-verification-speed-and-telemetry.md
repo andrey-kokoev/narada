@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T16:48:57.803Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: peer_reviewed
+---
+
 # Task 252: Rework Agent Verification Speed And Telemetry
 
 ## Chapter
@@ -126,3 +134,7 @@ Use current telemetry values or avoid precise promises if they are unstable.
 - `pnpm typecheck` passes across all packages.
 - `pnpm control-plane-lint` passes.
 - Telemetry distinguishes broad wrappers (`pnpm verify`) from focused commands in `.ai/metrics/test-runtimes.json`.
+
+## Verification
+
+<!-- Record commands run, results observed, and how correctness was checked. -->
