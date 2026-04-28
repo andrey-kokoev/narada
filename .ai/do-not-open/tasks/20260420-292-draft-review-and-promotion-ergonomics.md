@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T19:22:08.623Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
+---
+
 # Task 292: Draft Review And Promotion Ergonomics
 
 ## Chapter
@@ -68,7 +76,7 @@ Add or refine focused tests around the operator-facing draft review / approval l
    - Fixed the `ops` suggested action to reference `narada show-draft <outbound-id>` instead of the non-existent `narada show decision <id>`.
    - Registered `show-draft` in `main.ts`.
 
-3. **Operator docs** (`docs/operator-loop.md`)
+3. **Operator docs** (`docs/product/operator-loop.md`)
    - Updated the "Actions on drafts" block to correctly distinguish `mark-reviewed` (records review) from `approve-draft-for-send` (promotes to send).
    - Added the promotion flow diagram (`draft_ready` → review → approve/reject/externally-handled).
    - Added `narada show-draft` as the inspection step.
@@ -80,3 +88,12 @@ Add or refine focused tests around the operator-facing draft review / approval l
 ### Bug fixes discovered during execution
 - Fixed pre-existing SQL in `ops.ts` using non-existent columns `command_id` / `current_version` (corrected to `outbound_id` / `latest_version`).
 - Fixed pre-existing type mismatch: `retry_auth_failed` was missing from `OperatorActionRequest.action_type` union.
+
+## Verification
+
+| Check | Result |
+| --- | --- |
+| TIZ focused run `run_1777404062096_c5t08k` | Passed in 42.2s |
+| Observability query tests | `packages/layers/control-plane/test/unit/observability/queries.test.ts` passed |
+| Draft inspection CLI tests | `packages/layers/cli/test/commands/show-draft.test.ts` passed |
+| Operator docs smoke check | Confirmed `narada show-draft <outbound-id>` and `narada approve-draft-for-send <outbound-id>` in `docs/product/operator-loop.md` |
