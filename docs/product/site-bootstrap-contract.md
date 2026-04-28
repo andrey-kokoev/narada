@@ -148,6 +148,15 @@ narada sites bootstrap-client --workspace <client-workspace> [--site-id <id>] [-
 
 `bootstrap-client` is dry-run by default and requires `--execute` to create files. It preserves the visible client workspace and places Narada governance under `<client-workspace>/.narada`.
 
+For client, business, document, or OneDrive folders, this containment is the default rule:
+
+```text
+workspace_root = visible client/business folder
+site_root = workspace_root/.narada
+```
+
+Client artifacts at `workspace_root` are outside Narada unless explicitly admitted. Narada governance files at the visible workspace root are treated as placement drift unless the Operator explicitly chooses root-level Site materialization.
+
 The created client Site includes:
 
 | Path | Purpose |

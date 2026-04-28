@@ -21,5 +21,13 @@
     ],
     "recommendation": "Update Site bootstrap/doctor guidance to warn when governance files are placed at the root of a client/business workspace containing non-Narada artifacts. Prefer workspace_root plus site_root fields in config for inhabited workspaces. Treat client/business artifacts as outside Narada unless explicitly admitted."
   },
-  "status": "received"
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_9774e06d-964b-41f7-b100-6882ab17db47",
+    "promoted_at": "2026-04-28T03:41:33.813Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
 }

@@ -1021,6 +1021,19 @@ async function sitesClientDoctorCommand(
     addCheck(checks, 'client_site_root_exists', 'fail', `Client Site root is missing: ${siteRoot}`, 'Run narada sites bootstrap-client --workspace <path> --execute');
   }
 
+  const misplacedGovernance = ['config.json', 'AGENTS.md', 'README.md', '.ai']
+    .map((entry) => join(workspaceRoot, entry))
+    .filter((pathValue) => existsSync(pathValue));
+  addCheck(
+    checks,
+    'client_workspace_containment',
+    misplacedGovernance.length === 0 ? 'pass' : 'warn',
+    misplacedGovernance.length === 0
+      ? `Visible workspace root is free of Narada governance artifacts; Site root is ${siteRoot}`
+      : `Visible workspace root contains Narada-looking governance artifacts outside .narada: ${misplacedGovernance.join(', ')}`,
+    'Move Narada governance under <workspace>/.narada or explicitly admit the root-level artifacts.',
+  );
+
   if (existsSync(configPath)) {
     addCheck(checks, 'config_exists', 'pass', `Config exists: ${configPath}`);
     try {
@@ -2018,7 +2031,7 @@ export async function sitesBootstrapClientCommand(
       ].join('\n'),
       'utf8',
     );
-    await writeFile(join(siteRoot, 'AGENTS.md'), `# AGENTS.md - ${siteId} client Site\n\nThis workspace keeps client-visible material at the workspace root and Narada governance inside .narada.\n\nDo not initialize Git or external sync for this Site unless the Operator explicitly changes the durability posture.\nUse .ai/inbox-drop for human-authored inbound messages and .ai/inbox-envelopes for canonical exported envelopes.\n`, 'utf8');
+    await writeFile(join(siteRoot, 'AGENTS.md'), `# AGENTS.md - ${siteId} client Site\n\nworkspace_root: ${workspaceRoot}\nsite_root: ${siteRoot}\n\nThis workspace keeps client-visible material at workspace_root and Narada governance inside site_root (.narada).\n\nClient/business artifacts outside site_root are not Narada knowledge, evidence, or authority unless explicitly admitted through a governed intake path.\n\nDo not initialize Git or external sync for this Site unless the Operator explicitly changes the durability posture.\nUse .ai/inbox-drop for human-authored inbound messages and .ai/inbox-envelopes for canonical exported envelopes.\n`, 'utf8');
     await writeFile(join(siteRoot, '.ai', 'inbox-drop', '.gitkeep'), '', 'utf8');
     await writeFile(join(siteRoot, '.ai', 'inbox-envelopes', '.gitkeep'), '', 'utf8');
   }

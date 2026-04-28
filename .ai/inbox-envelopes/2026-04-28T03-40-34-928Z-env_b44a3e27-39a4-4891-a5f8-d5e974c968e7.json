@@ -1,0 +1,25 @@
+{
+  "envelope_id": "env_b44a3e27-39a4-4891-a5f8-d5e974c968e7",
+  "received_at": "2026-04-28T03:40:34.928Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:governed-crossing-concept-20260428"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "andrey"
+  },
+  "payload": {
+    "title": "New thoughts concept: Governed Crossing",
+    "summary": "A new thoughts concept page has been added at /home/andrey/src/thoughts/content/concepts/governed-crossing.md. It names Governed Crossing as the primitive by which an intent, observation, judgment, command, message, signal, artifact, or effect request crosses an authority boundary only through governed admission, rejection, routing, transformation, deferral, quarantine, or residual.",
+    "evidence": [
+      "The concept was derived while asking for Narada's smallest irreducible core. It states the rule: arrival is not admission; capability is not authority; crossing is governed before consequence. It positions inbox, task lifecycle, command execution intent zone, pub/sub, outbox, Site lineage, evidence admission, and operator approval as specialized machinery around repeated governed crossings. It has been linked in the thoughts corpus from Authority-Revealing Inversion, Intelligence-Authority Separation, Plural Embodiment Singular Authority, CIPDA, Inhabited Evolution, and the concepts index."
+    ],
+    "proposal": [
+      "Review Narada docs and link or incorporate Governed Crossing where appropriate. Likely locations include docs/concepts/authority-revealing-inversion.md, docs/concepts/plural-embodiment-singular-authority.md, docs/concepts/narada-mcp-facade.md, docs/concepts/command-execution-intent-zone.md, docs/concepts/canonical-mutation-evidence.md, docs/product/site-bootstrap-contract.md, docs/product/site-pubsub-signal-exchange.md, docs/product/site-provenance-lineage.md, docs/product/user-site-awareness-registry.md, docs/product/operator-console-site-registry.md, docs/product/site-lifecycle-transformations.md, and canonical inbox / admission docs. The goal is not to duplicate the thoughts page, but to use Governed Crossing as the compact primitive that unifies inbox, outbox, task lifecycle, pub/sub, command execution, Site interface, and lineage language."
+    ],
+    "recommendation": "Treat this as a doctrine-linking and vocabulary-normalization task. Acceptance should include: 1. at least one Narada docs page linking to the new thoughts concept; 2. identification of the most central Narada-native doc where Governed Crossing should be summarized; 3. a pass over Site factorization and command/inbox docs to avoid inconsistent vocabulary around admission, routing, residual, projection, and authority boundary; 4. no machinery changes unless the documentation pass reveals a forced implementation gap."
+  },
+  "status": "received"
+}

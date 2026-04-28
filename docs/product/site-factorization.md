@@ -101,3 +101,12 @@ The User Site may know about the PC Site. It does not become the PC Site's mutat
 Existing docs, configs, and commands may still use `site_root` or "runtime locus" as shorthand. That is acceptable for CLI compatibility.
 
 New doctrine and operator-facing explanations should preserve the factorization: `site_root` is a realization coordinate, not the Site's complete identity.
+
+For client/business workspaces, the default realization coordinate is contained:
+
+```text
+workspace_root = visible client/business folder
+site_root = workspace_root/.narada
+```
+
+The workspace may contain contracts, reports, PBIX files, spreadsheets, code, or other business artifacts. Those artifacts are not Narada knowledge, evidence, or authority merely because a Site inhabits the workspace.
