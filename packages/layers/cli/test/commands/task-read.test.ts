@@ -160,6 +160,42 @@ describe('task read operator', () => {
     expect(evidence.unchecked_count).toBe(1);
   });
 
+  it('does not count placeholder comments as execution notes or verification', async () => {
+    const taskId = '20260420-210-test';
+    seedTaskFromRaw(
+      tempDir,
+      taskId,
+      210,
+      `---\ntask_id: 210\nstatus: closed\n---\n
+# Task 210: Placeholder Evidence
+
+## Goal
+Check evidence materiality.
+
+## Required Work
+1. Do the work.
+
+## Acceptance Criteria
+- [x] Do thing A
+
+## Execution Notes
+<!-- Record what was done, decisions made, and files changed during execution. -->
+
+## Verification
+<!-- Record commands run, results observed, and how correctness was checked. -->
+`,
+      'closed',
+    );
+
+    const result = await taskReadCommand({ taskNumber: '210', cwd: tempDir, format: 'json' });
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const parsed = result.result as { task: { evidence: { has_execution_notes: boolean; has_verification: boolean }; warnings: string[] } };
+    expect(parsed.task.evidence.has_execution_notes).toBe(false);
+    expect(parsed.task.evidence.has_verification).toBe(false);
+    expect(parsed.task.warnings).toContain('Task is terminal but lacks execution evidence (report or notes)');
+    expect(parsed.task.warnings).toContain('Task is terminal but lacks verification notes');
+  });
+
   it('backfills missing task spec from an existing markdown projection', async () => {
     const taskId = '20260420-209-test';
     seedTaskFileOnly(

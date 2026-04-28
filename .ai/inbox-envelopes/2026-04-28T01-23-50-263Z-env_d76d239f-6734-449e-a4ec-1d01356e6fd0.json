@@ -1,0 +1,25 @@
+{
+  "envelope_id": "env_d76d239f-6734-449e-a4ec-1d01356e6fd0",
+  "received_at": "2026-04-28T01:23:50.263Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:wsl-assisted-defaulting-rule-20260427"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "andrey"
+  },
+  "payload": {
+    "title": "WSL-assisted execution should default only from runtime plus target locus",
+    "summary": "When bootstrapping or upgrading Windows Sites, Narada should default to wsl_assisted if the executor is WSL and the target is a Windows user-locus or PC-locus Site. It should not default from WSL detection alone, because WSL may also host WSL/Linux-locus Sites that own Linux-side state.",
+    "evidence": [
+      "Our current workflow runs Narada proper from WSL while targeting Windows paths such as C:/Users/Andrey/Narada and ProgramData PC Site roots. In that case wsl_assisted is the ergonomic default. But a WSL runtime targeting /home or /var roots should be treated as WSL/Linux native, not as a Windows-assisted mutation."
+    ],
+    "proposal": [
+      "Implement execution surface inference from executor runtime plus target authority/root. If executor_runtime=wsl and target_authority_locus is windows_user or windows_pc, infer execution_surface=wsl_assisted. If executor_runtime=wsl and target_authority_locus is wsl or linux_user/linux_system, infer wsl_native or linux_user/linux_system as appropriate. If executor_runtime=windows, infer windows_native. Ambiguous cases should require an explicit --execution-surface flag."
+    ],
+    "recommendation": "Dry-run output should state inferred execution surface loudly before mutation, for example: Detected WSL executor targeting Windows user Site; defaulting execution_surface=wsl_assisted; target authority remains windows_user. This keeps the ergonomic default while preserving the authority/execution split."
+  },
+  "status": "received"
+}

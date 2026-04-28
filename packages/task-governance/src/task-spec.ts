@@ -31,6 +31,13 @@ export function extractSection(body: string, heading: string): string | null {
   return text.length > 0 ? text : null;
 }
 
+export function hasMaterialSection(body: string, heading: string): boolean {
+  const section = extractSection(body, heading);
+  if (section === null) return false;
+  const withoutHtmlComments = section.replace(/<!--[\s\S]*?-->/g, '').trim();
+  return withoutHtmlComments.length > 0;
+}
+
 export function extractTitle(body: string, fallback: string): string {
   const match = body.match(/^#\s+(.+)$/m);
   return match?.[1]?.trim() || fallback;

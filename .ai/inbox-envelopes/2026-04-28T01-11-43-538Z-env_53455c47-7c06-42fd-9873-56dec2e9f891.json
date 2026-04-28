@@ -1,0 +1,25 @@
+{
+  "envelope_id": "env_53455c47-7c06-42fd-9873-56dec2e9f891",
+  "received_at": "2026-04-28T01:11:43.538Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:utz-client-site-bootstrap-observation-20260427"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Client Site bootstrap pattern stabilized through Utz setup",
+    "summary": "Creating the Utz client-service Site went substantially cleaner than the earlier Staccato setup because the de-arbitrized pattern had become clear: keep the visible client workspace intact, place Narada governance inside .narada, install canonical inbox file-drop from the start, avoid mailbox/Git assumptions until warranted, and validate immediately.",
+    "evidence": [
+      "The Utz workspace already contained data/ and model/ folders and was not a Git repo. The Site was created at C:/Users/Andrey/OneDrive - Global Maxima LLC/!Business/!Clients/Utz/.narada with AGENTS.md, config.json, README, chapters, tasks, decisions, KB, inbox, observations, friction, requests, and .ai/inbox-drop plus .ai/inbox-envelopes. JSON parse passed and narada inbox ingest-files --from .ai/inbox-drop dry-run succeeded with zero candidates."
+    ],
+    "proposal": [
+      "Capture this as the standard client-service Site bootstrap path: inspect workspace, preserve existing client material, create contained .narada Site, install canonical inbox file-drop, record routing/data-handling guidance, and validate with config parse plus inbox dry-run. Do not initialize Git, mailbox sync, data Site, or ELT Site unless the workspace and operator intent justify them."
+    ],
+    "recommendation": "Add or update a Narada client Site bootstrap template/command so this pattern can be executed directly. Remaining friction: empty directory creation and boilerplate files still require manual setup; the bootstrap command should create durable directories, .ai/inbox-drop, .ai/inbox-envelopes, guidance docs, and validation output in one governed operation."
+  },
+  "status": "received"
+}

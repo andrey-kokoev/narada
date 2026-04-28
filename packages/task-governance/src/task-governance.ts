@@ -9,7 +9,7 @@ import { readFile, writeFile, readdir, rename, open, unlink } from 'node:fs/prom
 import { join, resolve, dirname } from 'node:path';
 import type { TaskLifecycleStore, AgentRosterRow } from './task-lifecycle-store.js';
 import { openTaskLifecycleStore } from './task-lifecycle-store.js';
-import { parseTaskSpecFromMarkdown } from './task-spec.js';
+import { hasMaterialSection, parseTaskSpecFromMarkdown } from './task-spec.js';
 
 export interface AgentRosterEntry {
   agent_id: string;
@@ -652,15 +652,15 @@ export async function inspectTaskEvidence(
   }
 
   const criteria = countUncheckedCriteria(body);
-  const hasExecutionNotes = /##\s*Execution Notes\s*\n/i.test(body);
-  const hasMarkdownVerification = /##\s*Verification\s*\n/i.test(body);
+  const hasExecutionNotes = hasMaterialSection(body, 'Execution Notes');
+  const hasMarkdownVerification = hasMaterialSection(body, 'Verification');
+  const reports = await listReportsForTask(cwd, taskFile.taskId);
+  const hasReport = reports.length > 0;
+  const hasReportVerification = reports.some((report) => report.verification.length > 0);
   const hasGovernedVerificationRuns = store && taskFile?.taskId
     ? store.hasVerificationRunsForTask(taskFile.taskId)
     : false;
-  const hasVerification = hasMarkdownVerification || hasGovernedVerificationRuns;
-
-  const reports = await listReportsForTask(cwd, taskFile.taskId);
-  const hasReport = reports.length > 0;
+  const hasVerification = hasMarkdownVerification || hasGovernedVerificationRuns || hasReportVerification;
 
   const reviews = await listReviewsForTask(cwd, taskFile.taskId);
   const hasReview = reviews.length > 0;
@@ -1834,7 +1834,7 @@ export async function lintTaskFiles(cwd: string): Promise<{
           detail: `Task ${num} is ${status} but ${criteria.unchecked} acceptance criteria remain unchecked`,
         });
       }
-      const hasExecutionNotes = /##\s*Execution Notes\s*\n/i.test(body);
+      const hasExecutionNotes = hasMaterialSection(body, 'Execution Notes');
       if (!hasExecutionNotes) {
         issues.push({
           type: 'terminal_without_execution_notes',
@@ -1842,7 +1842,7 @@ export async function lintTaskFiles(cwd: string): Promise<{
           detail: `Task ${num} is ${status} but lacks execution notes`,
         });
       }
-      const hasVerification = /##\s*Verification\s*\n/i.test(body);
+      const hasVerification = hasMaterialSection(body, 'Verification');
       if (!hasVerification) {
         issues.push({
           type: 'terminal_without_verification',
@@ -2044,7 +2044,7 @@ export async function lintTaskFilesForRange(
           detail: `Task ${taskNumber} is ${status} but ${criteria.unchecked} acceptance criteria remain unchecked`,
         });
       }
-      const hasExecutionNotes = /##\s*Execution Notes\s*\n/i.test(body);
+      const hasExecutionNotes = hasMaterialSection(body, 'Execution Notes');
       if (!hasExecutionNotes) {
         issues.push({
           type: 'terminal_without_execution_notes',
@@ -2052,7 +2052,7 @@ export async function lintTaskFilesForRange(
           detail: `Task ${taskNumber} is ${status} but lacks execution notes`,
         });
       }
-      const hasVerification = /##\s*Verification\s*\n/i.test(body);
+      const hasVerification = hasMaterialSection(body, 'Verification');
       if (!hasVerification) {
         issues.push({
           type: 'terminal_without_verification',

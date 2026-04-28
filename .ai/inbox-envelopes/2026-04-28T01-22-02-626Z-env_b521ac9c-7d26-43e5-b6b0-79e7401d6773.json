@@ -1,0 +1,25 @@
+{
+  "envelope_id": "env_b521ac9c-7d26-43e5-b6b0-79e7401d6773",
+  "received_at": "2026-04-28T01:22:02.626Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:wsl-assisted-windows-site-bootstrap-upgrade-20260427"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "andrey"
+  },
+  "payload": {
+    "title": "Windows Site bootstrap and upgrade should model WSL-assisted execution explicitly",
+    "summary": "Narada's Windows bootstrap and upgrade machinery should explicitly distinguish authority locus from execution surface. WSL may run Narada commands against Windows User or PC Site roots, but WSL does not thereby own those Sites. It is an execution surface or facade, while Windows user-locus and PC-locus remain the authority owners.",
+    "evidence": [
+      "In current practice, Narada proper and the working CLI live in WSL at /home/andrey/src/narada, while target Sites live in Windows paths such as C:/Users/Andrey/Narada and %ProgramData%/Narada/sites/pc/{site_id}. We often operate on Windows paths through /mnt/c from WSL. Without an explicit model, this can blur WSL clone authority, Windows User Site authority, and Windows PC Site authority."
+    ],
+    "proposal": [
+      "Extend Windows bootstrap/upgrade planning to include both target authority locus and execution surface. Supported execution surfaces should include windows_native and wsl_assisted. A wsl_assisted plan should record Windows target root, WSL translated path, executor repo/root, required privileges, path translation, and where mutation evidence is written. If the target is PC-locus under ProgramData, preflight permission boundaries explicitly. WSL-locus Sites should remain separate and only own WSL/Linux state such as WSL services, cron/systemd, Linux toolchains, and WSL-local files."
+    ],
+    "recommendation": "Add fields such as authority_locus, execution_surface, target_root, executor_root, and path_translation to Windows Site bootstrap/upgrade evidence. Provide command flags like --execution-surface windows-native and --execution-surface wsl-assisted. Ensure docs and doctor/preflight output state that WSL can execute a governed Act against a Windows Site, but does not become that Site's authority locus."
+  },
+  "status": "received"
+}

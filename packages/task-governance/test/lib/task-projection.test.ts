@@ -97,6 +97,74 @@ describe('task projection layer', () => {
     db.close();
   });
 
+  it('does not count placeholder comments as material notes or verification', async () => {
+    createTask(
+      tempDir,
+      107,
+      'closed',
+      '## Execution Notes\n<!-- Record what was done. -->\n\n## Verification\n<!-- Record verification. -->\n',
+    );
+
+    const db = new Database(':memory:');
+    const store = new SqliteTaskLifecycleStore({ db });
+    store.initSchema();
+    store.upsertLifecycle({
+      task_id: '20260420-107-test',
+      task_number: 107,
+      status: 'closed',
+      governed_by: 'task_close:agent-a',
+      closed_at: new Date().toISOString(),
+      closed_by: 'agent-a',
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: new Date().toISOString(),
+    });
+
+    const result = await inspectTaskEvidenceWithProjection(tempDir, '107', store);
+    expect(result).not.toBeNull();
+    expect(result!.has_execution_notes).toBe(false);
+    expect(result!.has_verification).toBe(false);
+    expect(result!.violations).toContain('terminal_without_execution_notes');
+    expect(result!.violations).toContain('terminal_without_verification');
+    db.close();
+  });
+
+  it('counts WorkResultReport verification as verification evidence', async () => {
+    createTask(tempDir, 108, 'closed', '## Execution Notes\nDone.\n\n## Verification\n<!-- placeholder only -->\n');
+
+    const db = new Database(':memory:');
+    const store = new SqliteTaskLifecycleStore({ db });
+    store.initSchema();
+    store.upsertLifecycle({
+      task_id: '20260420-108-test',
+      task_number: 108,
+      status: 'closed',
+      governed_by: 'task_close:agent-a',
+      closed_at: new Date().toISOString(),
+      closed_by: 'agent-a',
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: new Date().toISOString(),
+    });
+    store.insertReport({
+      report_id: 'report-108',
+      task_id: '20260420-108-test',
+      agent_id: 'agent-a',
+      summary: 'Done',
+      changed_files_json: JSON.stringify([]),
+      verification_json: JSON.stringify([{ command: 'pnpm verify', result: 'passed' }]),
+      submitted_at: new Date().toISOString(),
+    });
+
+    const result = await inspectTaskEvidenceWithProjection(tempDir, '108', store);
+    expect(result).not.toBeNull();
+    expect(result!.has_verification).toBe(true);
+    expect(result!.violations).not.toContain('terminal_without_verification');
+    db.close();
+  });
+
   it('uses SQLite status over markdown frontmatter status', async () => {
     // Markdown says 'opened', SQLite says 'closed'
     writeFileSync(

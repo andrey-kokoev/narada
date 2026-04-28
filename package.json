@@ -25,7 +25,8 @@
     "release": "tsx scripts/publish-local.ts",
     "control-plane-lint": "tsx scripts/control-plane-lint.ts",
     "prepublish-check": "tsx scripts/prepublish-check.ts",
-    "pack:check": "tsx scripts/prepublish-check.ts --pack-only"
+    "pack:check": "tsx scripts/prepublish-check.ts --pack-only",
+    "toolchain:oxbuild-probe": "node scripts/oxbuild-probe.mjs"
   },
   "config": {
     "uscVersion": "^1.0.0"
@@ -35,6 +36,7 @@
     "@narada2/cli": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.10.0",
+    "oxbuild": "^0.1.5",
     "tsx": "^4.7.0",
     "typescript": "^5.3.0",
     "vitest": "^1.0.0"

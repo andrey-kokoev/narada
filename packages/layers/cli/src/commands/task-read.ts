@@ -86,6 +86,11 @@ function countUncheckedCriteria(
   return { allChecked: unchecked === 0, unchecked };
 }
 
+function hasMaterialSectionText(section: string | null): boolean {
+  if (section === null) return false;
+  return section.replace(/<!--[\s\S]*?-->/g, '').trim().length > 0;
+}
+
 function truncate(text: string | null, maxLines: number): string | null {
   if (!text) return null;
   const lines = text.split('\n');
@@ -219,12 +224,14 @@ export async function taskReadCommand(
     report_id: string;
     agent_id: string;
     submitted_at: string;
+    verification_json: string | null;
   }> = [];
   let sqliteReviews: Array<{
     review_id: string;
     reviewer_agent_id: string;
     verdict: string;
   }> = [];
+  let hasGovernedVerificationRuns = false;
 
   if (store) {
     try {
@@ -240,6 +247,7 @@ export async function taskReadCommand(
       sqliteAssignments = store.getAssignments(taskId);
       sqliteReports = store.listReports(taskId);
       sqliteReviews = store.listReviews(taskId);
+      hasGovernedVerificationRuns = store.hasVerificationRunsForTask(taskId);
     } catch {
       // SQLite error — fall through to markdown
     } finally {
@@ -314,9 +322,20 @@ export async function taskReadCommand(
 
   // Evidence posture
   const criteria = countUncheckedCriteria(acceptanceCriteria);
-  const hasExecutionNotes = projectionSections.executionNotes !== null;
-  const hasVerification = projectionSections.verification !== null;
+  const hasExecutionNotes = hasMaterialSectionText(projectionSections.executionNotes);
+  const hasMarkdownVerification = hasMaterialSectionText(projectionSections.verification);
   const hasReport = reports.length > 0;
+  const hasReportVerification = sqliteReports.length > 0
+    ? sqliteReports.some((report) => {
+        try {
+          return JSON.parse(report.verification_json ?? '[]').length > 0;
+        } catch {
+          return false;
+        }
+      })
+    : false;
+  const hasVerification = hasMarkdownVerification || hasGovernedVerificationRuns || hasReportVerification;
+  const hasExecutionEvidence = hasReport || hasExecutionNotes;
   const hasReview = reviews.length > 0;
 
   const mergedFrontMatter: TaskFrontMatter = {
@@ -335,8 +354,8 @@ export async function taskReadCommand(
     if (criteria.allChecked === false) {
       warnings.push(`${criteria.unchecked} acceptance criteria remain unchecked`);
     }
-    if (!hasExecutionNotes) {
-      warnings.push('Task is terminal but lacks execution notes');
+    if (!hasExecutionEvidence) {
+      warnings.push('Task is terminal but lacks execution evidence (report or notes)');
     }
     if (!hasVerification) {
       warnings.push('Task is terminal but lacks verification notes');

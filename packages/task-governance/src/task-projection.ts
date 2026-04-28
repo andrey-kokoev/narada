@@ -38,6 +38,7 @@ import {
   type RunnableTask,
   type TaskContinuationAffinity,
 } from './task-governance.js';
+import { hasMaterialSection } from './task-spec.js';
 
 export function getTaskLifecycleDbPath(cwd: string): string {
   return join(resolve(cwd), '.ai', 'task-lifecycle.db');
@@ -163,10 +164,8 @@ export async function inspectTaskEvidenceWithProjection(
       }
     }
   }
-  const hasExecutionNotes = /##\s*Execution Notes\s*\n/i.test(body);
-  const hasMarkdownVerification = /##\s*Verification\s*\n/i.test(body);
-  const hasGovernedVerificationRuns = lifecycleStore.hasVerificationRunsForTask(taskFile.taskId);
-  const hasVerification = hasMarkdownVerification || hasGovernedVerificationRuns;
+  const hasExecutionNotes = hasMaterialSection(body, 'Execution Notes');
+  const hasMarkdownVerification = hasMaterialSection(body, 'Verification');
 
   // Read durable state from SQLite (authoritative)
   const assignments = lifecycleStore.getAssignments(taskFile.taskId);
@@ -175,6 +174,15 @@ export async function inspectTaskEvidenceWithProjection(
   const reviews = lifecycleStore.listReviews(taskFile.taskId);
 
   const hasReport = reports.length > 0;
+  const hasReportVerification = reports.some((report) => {
+    try {
+      return JSON.parse(report.verification_json ?? '[]').length > 0;
+    } catch {
+      return false;
+    }
+  });
+  const hasGovernedVerificationRuns = lifecycleStore.hasVerificationRunsForTask(taskFile.taskId);
+  const hasVerification = hasMarkdownVerification || hasGovernedVerificationRuns || hasReportVerification;
   const hasReview = reviews.length > 0;
   const hasAcceptedReview = reviews.some(
     (r) => r.verdict === 'accepted',
