@@ -10,6 +10,7 @@
 > For the durable provenance substrate behind those transformations, see [`site-provenance-lineage.md`](site-provenance-lineage.md).
 > For the user-locus directory of known Sites, see [`user-site-awareness-registry.md`](user-site-awareness-registry.md).
 > For the factorization of Site authority object, realization, interface, projection, crossing, and lineage, see [`site-factorization.md`](site-factorization.md).
+> For explicit Site-level law source, authority locus, embodiment, evidence, capability, readiness, and federation coordinates, see [`site-governance-coordinates.md`](site-governance-coordinates.md).
 > For the maturation phase after first-run setup, see [`inhabited-onboarding.md`](inhabited-onboarding.md).
 
 ---
@@ -126,6 +127,7 @@ narada sites init <site-id> --substrate <substrate> [--operation <operation-id>]
 This creates:
 - The Site root directory (substrate-specific path)
 - A minimal Site `config.json` with metadata
+- A `governance` coordinate object declaring law source, authority locus, embodiments, mutation evidence locus, intake/outbox posture, effect authority policy, readiness phase, and agent/operator identity contract
 - Standard subdirectories (`state/`, `messages/`, `db/`, `logs/`, `traces/`)
 - For Windows: a registry entry in the Site registry
 - An `execution` record containing `surface`, `executor_runtime`, `target_authority_locus`, `target_root`, `executor_root`, `path_translation`, `permission_posture`, `mutation_evidence_locus`, and inference rationale

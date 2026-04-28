@@ -80,6 +80,20 @@ describe('sitesBootstrapClientCommand', () => {
     expect(existsSync(join(workspace, '.narada', 'config.json'))).toBe(true);
     expect(existsSync(join(workspace, '.narada', '.ai', 'inbox-drop', '.gitkeep'))).toBe(true);
     expect(existsSync(join(workspace, '.narada', '.ai', 'inbox-envelopes', '.gitkeep'))).toBe(true);
+    const config = JSON.parse(await readFile(join(workspace, '.narada', 'config.json'), 'utf8')) as {
+      governance: {
+        governing_law_source: { source_site_id: string };
+        authority_locus: { locus_kind: string; mutation_policy: string };
+        effect_authority_policy: string;
+        agent_identity_contract: { default_agent_name: string; operator_label: string };
+      };
+    };
+    expect(config.governance.governing_law_source.source_site_id).toBe('narada-proper');
+    expect(config.governance.authority_locus.locus_kind).toBe('client_service');
+    expect(config.governance.authority_locus.mutation_policy).toBe('direct_only_at_locus');
+    expect(config.governance.effect_authority_policy).toBe('metadata_only');
+    expect(config.governance.agent_identity_contract.default_agent_name).toBe('architect');
+    expect(config.governance.agent_identity_contract.operator_label).toBe('Operator');
 
     const doctor = await sitesDoctorCommand('utz', {
       kind: 'client',

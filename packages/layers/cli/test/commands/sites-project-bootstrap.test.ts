@@ -83,6 +83,22 @@ describe('sitesBootstrapProjectCommand', () => {
     expect(agents).toContain('project-local governance');
     expect(agents).toContain('Treat this file as the Site-local execution contract for fresh architects.');
     expect(agents).toContain('Project code and artifacts outside `site_root` are not Narada knowledge');
+    const config = JSON.parse(await readFile(join(workspace, '.narada', 'config.json'), 'utf8')) as {
+      governance: {
+        governing_law_source: { source_site_id: string; mode: string };
+        authority_locus: { locus_kind: string; mutation_policy: string };
+        mutation_evidence_locus: { kind: string; path: string };
+        federation_policy: { posture: string; admission: string };
+      };
+    };
+    expect(config.governance.governing_law_source.source_site_id).toBe('narada-proper');
+    expect(config.governance.governing_law_source.mode).toBe('inherited');
+    expect(config.governance.authority_locus.locus_kind).toBe('project');
+    expect(config.governance.authority_locus.mutation_policy).toBe('direct_only_at_locus');
+    expect(config.governance.mutation_evidence_locus.kind).toBe('git');
+    expect(config.governance.mutation_evidence_locus.path).toBe(join(workspace, '.narada'));
+    expect(config.governance.federation_policy.posture).toBe('receive_only');
+    expect(config.governance.federation_policy.admission).toBe('local_admission_required');
 
     const doctor = await sitesDoctorCommand('smart-scheduling', {
       kind: 'project',

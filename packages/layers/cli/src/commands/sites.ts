@@ -1805,6 +1805,97 @@ function siteAgentsContract(args: {
   return `${lines.join('\n')}\n`;
 }
 
+function siteGovernanceCoordinates(args: {
+  siteId: string;
+  siteKind: 'client_service' | 'project';
+  workspaceRoot: string;
+  siteRoot: string;
+  syncPosture: string;
+}): Record<string, unknown> {
+  return {
+    governing_law_source: {
+      source_site_id: 'narada-proper',
+      law_artifacts: [
+        'AGENTS.md',
+        'SEMANTICS.md',
+        'docs/product/site-factorization.md',
+        'docs/product/site-bootstrap-contract.md',
+      ],
+      mode: 'inherited',
+      admission: 'declared',
+    },
+    law_admission_mode: 'local_overlay',
+    authority_locus: {
+      locus_kind: args.siteKind,
+      authority_site_id: args.siteId,
+      mutation_policy: 'direct_only_at_locus',
+    },
+    embodiments: [
+      {
+        embodiment_id: 'contained-site-root',
+        role: 'authority',
+        root: args.siteRoot,
+        substrate: 'filesystem',
+        mutation_policy: 'may_mutate_at_authority_locus',
+      },
+      {
+        embodiment_id: 'visible-workspace',
+        role: 'read_only',
+        root: args.workspaceRoot,
+        substrate: 'filesystem',
+        mutation_policy: 'read_only',
+      },
+    ],
+    mutation_evidence_locus: {
+      kind: args.syncPosture === 'git_backed_project_repo' ? 'git' : 'filesystem',
+      path: args.siteRoot,
+      required: true,
+    },
+    inbox_sources: [
+      {
+        source_id: 'canonical-file-drop',
+        kind: 'file_drop',
+        path: join(args.siteRoot, '.ai', 'inbox-drop'),
+        admission: 'inert_until_promoted',
+      },
+    ],
+    outbox_targets: [
+      {
+        target_id: 'canonical-envelope-export',
+        kind: 'git_export',
+        authority: 'handoff_only',
+      },
+    ],
+    effect_authority_policy: 'metadata_only',
+    capability_grants: [],
+    lineage_source: {
+      kind: 'operator_declaration',
+      path: join(args.siteRoot, 'config.json'),
+    },
+    readiness_phase: 'bootstrap',
+    operator_identity: {
+      principal_id: 'operator',
+      role: 'Operator',
+    },
+    agent_identity_contract: {
+      default_agent_name: 'architect',
+      operator_label: 'Operator',
+      contract_path: join(args.siteRoot, 'AGENTS.md'),
+    },
+    local_overlays: [
+      {
+        overlay_id: 'site-local-agents-contract',
+        path: join(args.siteRoot, 'AGENTS.md'),
+        admission: 'site_local',
+      },
+    ],
+    federation_policy: {
+      posture: 'receive_only',
+      admission: 'local_admission_required',
+    },
+  };
+}
+
 function clientSiteConfig(args: {
   siteId: string;
   workspaceRoot: string;
@@ -1837,6 +1928,13 @@ function clientSiteConfig(args: {
       runtime_state_git_ignored: true,
       empty_directory_markers: '.gitkeep',
     },
+    governance: siteGovernanceCoordinates({
+      siteId: args.siteId,
+      siteKind: 'client_service',
+      workspaceRoot: args.workspaceRoot,
+      siteRoot: args.siteRoot,
+      syncPosture: args.sync,
+    }),
   };
 }
 
@@ -1872,6 +1970,13 @@ function projectSiteConfig(args: {
       governance_contained_in_dot_narada: true,
       project_artifacts_external_until_admitted: true,
     },
+    governance: siteGovernanceCoordinates({
+      siteId: args.siteId,
+      siteKind: 'project',
+      workspaceRoot: args.workspaceRoot,
+      siteRoot: args.siteRoot,
+      syncPosture: args.sync,
+    }),
   };
 }
 

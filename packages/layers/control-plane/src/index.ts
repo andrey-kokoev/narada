@@ -16,6 +16,10 @@ export {
   AimSchema,
   CloudflareBindingsSchema,
   SitePolicySchema,
+  SiteGovernanceCoordinatesSchema,
+  SiteGoverningLawSourceSchema,
+  SiteAuthorityLocusSchema,
+  SiteEmbodimentSchema,
   validateSiteManifest,
   validateSiteManifestOrThrow,
   isValidSiteManifest,
@@ -23,6 +27,10 @@ export {
   type Aim,
   type CloudflareBindings,
   type SitePolicy,
+  type SiteGovernanceCoordinates,
+  type SiteGoverningLawSource,
+  type SiteAuthorityLocus,
+  type SiteEmbodiment,
   type SiteValidationResult,
 } from "./config/site-manifest.js";
 export type {

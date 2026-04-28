@@ -6,6 +6,8 @@ This document separates the dimensions that often collapse into the word "Site."
 
 The admissible-crossing language is grounded in Governed Crossing: arrival is not admission, capability is not authority, and crossing is governed before consequence. See [`../concepts/governed-crossing.md`](../concepts/governed-crossing.md).
 
+For the structured config grammar that declares law source, authority locus, embodiments, evidence locus, capability posture, readiness phase, and federation posture, see [`site-governance-coordinates.md`](site-governance-coordinates.md).
+
 ## Ten-Part Factorization
 
 | Dimension | Meaning | Not The Same As |
@@ -28,6 +30,8 @@ When a Site has multiple concrete presences, its config or authority-routing fil
 `embodiments` describes static topology: roots, roles, and mutation policy. It does not store dynamic sync state. Preflight commands observe freshness, pending inbox-drop files, dirty trees, and ahead/behind posture at runtime.
 
 For Narada proper, this means the WSL authority clone and Windows clone are both Site embodiments, but only the declared authority embodiment may admit governed mutations directly.
+
+`embodiments` belongs under the broader `governance` coordinates object when a Site config supports it. That object also declares `governing_law_source`, `authority_locus`, `mutation_evidence_locus`, `effect_authority_policy`, and federation/intake posture so a fresh agent does not infer authority from the current path or shell.
 
 ## Core Rule
 

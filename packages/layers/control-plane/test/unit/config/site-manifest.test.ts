@@ -4,6 +4,7 @@ import {
   validateSiteManifestOrThrow,
   isValidSiteManifest,
   SiteManifestSchema,
+  SiteGovernanceCoordinatesSchema,
 } from "../../../src/config/site-manifest.js";
 
 const validManifest = {
@@ -35,6 +36,82 @@ const validManifest = {
   ],
 };
 
+const validGovernance = {
+  governing_law_source: {
+    source_site_id: "narada-proper",
+    law_artifacts: ["AGENTS.md", "SEMANTICS.md"],
+    mode: "inherited" as const,
+    admission: "declared" as const,
+  },
+  law_admission_mode: "local_overlay" as const,
+  authority_locus: {
+    locus_kind: "project" as const,
+    authority_site_id: "help-global-maxima",
+    mutation_policy: "direct_only_at_locus" as const,
+  },
+  embodiments: [
+    {
+      embodiment_id: "wsl-authority",
+      role: "authority" as const,
+      root: "/home/andrey/src/site",
+      substrate: "filesystem",
+      mutation_policy: "may_mutate_at_authority_locus" as const,
+    },
+  ],
+  mutation_evidence_locus: {
+    kind: "git" as const,
+    path: ".",
+  },
+  inbox_sources: [
+    {
+      source_id: "canonical-file-drop",
+      kind: "file_drop" as const,
+      path: ".ai/inbox-drop",
+      admission: "inert_until_promoted" as const,
+    },
+  ],
+  outbox_targets: [
+    {
+      target_id: "canonical-envelope-export",
+      kind: "git_export" as const,
+      authority: "handoff_only" as const,
+    },
+  ],
+  effect_authority_policy: "metadata_only" as const,
+  capability_grants: [
+    {
+      capability_id: "mail-draft",
+      source: "credential_store" as const,
+      scope: "draft_reply",
+    },
+  ],
+  lineage_source: {
+    kind: "git_history" as const,
+    path: ".git",
+  },
+  readiness_phase: "inhabited_onboarding" as const,
+  operator_identity: {
+    principal_id: "operator",
+    role: "Operator" as const,
+  },
+  agent_identity_contract: {
+    default_agent_name: "architect",
+    operator_label: "Operator",
+    contract_path: "AGENTS.md",
+  },
+  local_overlays: [
+    {
+      overlay_id: "site-local-contract",
+      path: "AGENTS.md",
+      admission: "site_local" as const,
+    },
+  ],
+  federation_policy: {
+    posture: "receive_only" as const,
+    admission: "local_admission_required" as const,
+  },
+};
+
 describe("SiteManifest validation", () => {
   it("accepts a valid manifest", () => {
     const result = validateSiteManifest(validManifest);
@@ -46,6 +123,30 @@ describe("SiteManifest validation", () => {
       expect(result.data.cloudflare.cron_schedule).toBe("*/5 * * * *");
       expect(result.data.policy.allowed_actions).toContain("draft_reply");
     }
+  });
+
+  it("accepts explicit Site governance coordinates", () => {
+    const result = validateSiteManifest({
+      ...validManifest,
+      governance: validGovernance,
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.governance?.governing_law_source.source_site_id).toBe("narada-proper");
+      expect(result.data.governance?.effect_authority_policy).toBe("metadata_only");
+      expect(result.data.governance?.mutation_evidence_locus.required).toBe(true);
+      expect(result.data.governance?.capability_grants[0]?.grants_effect_authority).toBe(false);
+    }
+  });
+
+  it("rejects arbitrary governance coordinate values", () => {
+    const result = SiteGovernanceCoordinatesSchema.safeParse({
+      ...validGovernance,
+      readiness_phase: "whatever-next",
+    });
+
+    expect(result.success).toBe(false);
   });
 
   it("rejects an invalid substrate", () => {
