@@ -28,6 +28,7 @@ import { registerPublicationCommands } from './commands/publication-register.js'
 import { registerObservationCommands } from './commands/observation-register.js';
 import { registerOpsKitCommands } from './commands/ops-kit-register.js';
 import { registerInboxCommands } from './commands/inbox-register.js';
+import { registerAdmissionCommands } from './commands/admission-register.js';
 import { registerCoherenceCommands } from './commands/coherence-register.js';
 import { registerCapabilityCommands } from './commands/capability-register.js';
 import { registerBackupCommands } from './commands/backup-register.js';
@@ -91,6 +92,7 @@ registerTaskReconcileCommands(taskCmd);
 registerPostureCommands(program);
 registerObservationCommands(program);
 registerInboxCommands(program);
+registerAdmissionCommands(program);
 registerMutationEvidenceCommands(program);
 registerCapabilityCommands(program);
 registerCoherenceCommands(program);
