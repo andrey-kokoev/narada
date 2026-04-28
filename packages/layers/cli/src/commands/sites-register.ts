@@ -13,6 +13,10 @@ import {
   sitesLifecycleKindsCommand,
   sitesLifecyclePreflightCommand,
   sitesLineageEventsCommand,
+  sitesRelationExplainCommand,
+  sitesRelationListCommand,
+  sitesRelationRecordCommand,
+  sitesRelationValidateCommand,
 } from './sites.js';
 import { siteMutationAuthorityPreflightCommand } from './site-mutation-authority-preflight.js';
 import { directCommandAction, silentCommandContext, wrapCommand } from '../lib/command-wrapper.js';
@@ -113,6 +117,101 @@ export function registerSitesCommands(program: Command): void {
       }, silentCommandContext({ verbose: !!opts.verbose }));
       emitFormatterBackedCommandResult(result, { format: opts.format });
     });
+
+  const relationCmd = sitesCmd
+    .command('relation')
+    .description('Record and validate durable Site relation evidence');
+
+  relationCmd
+    .command('record')
+    .description('Record a Site relation edge without mutating Site authority or config')
+    .requiredOption('--kind <kind>', 'Relation kind: absorbed, absorbed_by, references, routes_to, subscribes_to, publishes_to')
+    .requiredOption('--source-site <ref>', 'Source Site reference')
+    .requiredOption('--target-site <ref>', 'Target Site reference')
+    .option('--authority-effect <effect>', 'Authority effect, defaults from relation kind')
+    .option('--admitted-material <csv>', 'Comma-separated material admitted or referenced')
+    .option('--evidence-ref <csv>', 'Comma-separated evidence references')
+    .option('--lineage-event-ref <csv>', 'Comma-separated lineage event references')
+    .option('--reciprocal-required', 'Require a reciprocal active relation edge', false)
+    .option('--reciprocal-relation-id <id>', 'Explicit reciprocal relation id')
+    .requiredOption('--by <id>', 'Principal recording the relation')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'sites relation record',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => sitesRelationRecordCommand({
+        kind: opts.kind as string | undefined,
+        sourceSite: opts.sourceSite as string | undefined,
+        targetSite: opts.targetSite as string | undefined,
+        authorityEffect: opts.authorityEffect as string | undefined,
+        admittedMaterial: opts.admittedMaterial as string | undefined,
+        evidenceRef: opts.evidenceRef as string | undefined,
+        lineageEventRef: opts.lineageEventRef as string | undefined,
+        reciprocalRequired: opts.reciprocalRequired as boolean | undefined,
+        reciprocalRelationId: opts.reciprocalRelationId as string | undefined,
+        by: opts.by as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  relationCmd
+    .command('list')
+    .description('List durable Site relation records')
+    .option('--kind <kind>', 'Filter by relation kind')
+    .option('--source-site <ref>', 'Filter by source Site')
+    .option('--target-site <ref>', 'Filter by target Site')
+    .option('--status <status>', 'Filter by status')
+    .option('--limit <n>', 'Maximum relations', '20')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'sites relation list',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => sitesRelationListCommand({
+        kind: opts.kind as string | undefined,
+        sourceSite: opts.sourceSite as string | undefined,
+        targetSite: opts.targetSite as string | undefined,
+        status: opts.status as string | undefined,
+        limit: opts.limit ? Number(opts.limit) : undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  relationCmd
+    .command('validate')
+    .description('Validate reciprocal and authority posture of Site relation records')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'sites relation validate',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => sitesRelationValidateCommand({
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  relationCmd
+    .command('explain <relation-id>')
+    .description('Explain a Site relation authority and reciprocal posture')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[string, Record<string, unknown>]>({
+      command: 'sites relation explain',
+      emit: emitCommandResult,
+      format: (_relationId: string, opts: Record<string, unknown>) => opts.format,
+      invocation: (relationId, opts) => sitesRelationExplainCommand({
+        relationId,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
 
   const authorityCmd = sitesCmd
     .command('authority')

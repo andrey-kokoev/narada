@@ -1,0 +1,25 @@
+{
+  "envelope_id": "env_5a8bf5ca-c9cb-430c-b7b7-581b1761fc1b",
+  "received_at": "2026-04-28T03:23:00.503Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:site-category-factorization-20260428"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "andrey"
+  },
+  "payload": {
+    "title": "Tighten Site doctrine around governed authority objects",
+    "summary": "Current Narada Site doctrine is pragmatically useful but category-theoretically loose. The proposed tightening is to treat a Site as a governed authority object with concrete realizations and declared interfaces, rather than primarily as a runtime locus or filesystem place.",
+    "evidence": [
+      "Discussion surfaced recurring collapse risks: folder equals Site, Git repo equals authority, registry equals owner, runtime equals authority, inbox message equals admitted knowledge, subscription equals trust, clone equals second authority, and console action equals direct mutation. Existing doctrine already points in this direction through plural embodiment singular authority, governed locus federation, Site lifecycle transformations, provenance lineage, pub/sub, and User Site awareness, but the core Site definition still says runtime locus."
+    ],
+    "proposal": [
+      "Run a doctrinal and machinery pass that factorizes Site into: 1. Authority Object: owns truth for declared transition classes. 2. Realization: concrete embodiment such as filesystem root, Git repo, SQLite DB, Cloudflare Durable Object, WSL daemon, Windows scheduled task, or hosted service. 3. Interface: admissible arrows into or out of the authority object, such as inbox submit, task lifecycle command, file-drop ingest, pub/sub receive, operator control API, or effect queue. 4. Projection: read-only or advisory representation of one authority object in another surface, such as User Site awareness, operator console, dashboard, Git clone, or Windows/WSL path view. 5. Crossing: typed morphism with authority semantics, such as propose, publish, subscribe, absorb, clone, migrate, route, admit, execute, verify, or refuse. 6. Lineage: durable append-only record of crossings that change object relationships or authority posture. Update Site Bootstrap Contract, Operator Console / Site Registry, User Site Awareness Registry, Site Lifecycle Transformations, Site Provenance Lineage, Site Pub/Sub, and substrate materialization docs to preserve this vocabulary. Concretely consider replacing the core wording 'A Site is a runtime locus' with 'A Site is a governed authority object with one or more concrete realizations and declared interfaces for admissible crossings.' Then define runtime locus as a realization through which a Site executes bounded Cycles."
+    ],
+    "recommendation": "Treat this as execution-worthy doctrine work, not just terminology cleanup. Use narada.sonar as the first review case: describe its authority object as Sonar support operation locus; realization as WSL Git repo plus mailbox state root plus daemon; interfaces as repo-local CLI, config, drafts, supervisor, and currently missing canonical inbox; projections as User Site awareness and possible console registry row; crossings as Sonar tool catalog binding, Narada proper proposals, and User Site review notes; lineage as currently implicit and needing explicit records. Acceptance should include updated docs, an inventory of affected code/config fields, and at least one migration note for existing Sites that currently identify Site with root/runtime."
+  },
+  "status": "received"
+}

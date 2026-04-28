@@ -21,5 +21,13 @@
     ],
     "recommendation": "Treat these as one coherent product cluster under Site lifecycle and inhabited workspace support. The immediate priority remains executing absorb machinery, but workspace_root/site_root support and reciprocal-edge validation should be considered part of making absorb safe in real client workspaces."
   },
-  "status": "received"
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_c929ffef-534e-4bcb-9f43-beee7c26be62",
+    "promoted_at": "2026-04-28T03:31:57.659Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
 }

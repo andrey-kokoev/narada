@@ -12,8 +12,18 @@ import { hostname } from 'node:os';
 import { promisify } from 'node:util';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
+import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { createFormatter } from '../lib/formatter.js';
 import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
+import {
+  explainSiteRelation,
+  makeSiteRelationRecord,
+  parseCsv,
+  readSiteRelationRegistry,
+  siteRelationRegistryPath,
+  validateSiteRelations,
+  writeSiteRelationRegistry,
+} from '../lib/site-relation-registry.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -37,6 +47,38 @@ export interface SitesLifecyclePreflightOptions extends SitesOptions {
 }
 
 export interface SitesLineageEventsOptions extends SitesOptions {}
+
+export interface SitesRelationRecordOptions extends SitesOptions {
+  cwd?: string;
+  kind?: string;
+  sourceSite?: string;
+  targetSite?: string;
+  authorityEffect?: string;
+  admittedMaterial?: string;
+  evidenceRef?: string;
+  lineageEventRef?: string;
+  reciprocalRequired?: boolean;
+  reciprocalRelationId?: string;
+  by?: string;
+}
+
+export interface SitesRelationListOptions extends SitesOptions {
+  cwd?: string;
+  kind?: string;
+  sourceSite?: string;
+  targetSite?: string;
+  status?: string;
+  limit?: number;
+}
+
+export interface SitesRelationValidateOptions extends SitesOptions {
+  cwd?: string;
+}
+
+export interface SitesRelationExplainOptions extends SitesOptions {
+  cwd?: string;
+  relationId?: string;
+}
 
 interface SiteListEntry {
   siteId: string;
@@ -283,6 +325,165 @@ export async function sitesLineageEventsCommand(
       required_fields: requiredFields,
       events,
     },
+  };
+}
+
+function requireOption(value: string | undefined, name: string): string {
+  const trimmed = value?.trim();
+  if (!trimmed) throw new Error(`${name} is required`);
+  return trimmed;
+}
+
+function normalizeSiteRelationError(error: unknown): { exitCode: ExitCode; result: unknown } {
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    exitCode: ExitCode.INVALID_CONFIG,
+    result: { status: 'error', error: message },
+  };
+}
+
+function relationHumanLines(title: string, rows: string[]): string {
+  return [title, ...rows.map((row) => `- ${row}`)].join('\n');
+}
+
+export async function sitesRelationRecordCommand(
+  options: SitesRelationRecordOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  try {
+    const cwd = options.cwd ?? '.';
+    const record = makeSiteRelationRecord({
+      relationKind: requireOption(options.kind, '--kind'),
+      sourceSite: options.sourceSite ?? '',
+      targetSite: options.targetSite ?? '',
+      authorityEffect: options.authorityEffect,
+      admittedMaterial: parseCsv(options.admittedMaterial),
+      evidenceRefs: parseCsv(options.evidenceRef),
+      lineageEventRefs: parseCsv(options.lineageEventRef),
+      reciprocalRequired: options.reciprocalRequired ?? false,
+      reciprocalRelationId: options.reciprocalRelationId,
+      createdBy: options.by ?? '',
+    });
+    const registry = await readSiteRelationRegistry(cwd);
+    registry.relations.push(record);
+    const registryPath = await writeSiteRelationRegistry(cwd, registry);
+    const result = {
+      status: 'success',
+      mutation_performed: true,
+      authority_moved: false,
+      config_mutated: false,
+      registry_path: registryPath,
+      relation: record,
+    };
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: formattedResult(
+        result,
+        relationHumanLines('Site relation recorded', [
+          `relation_id: ${record.relation_id}`,
+          `kind: ${record.relation_kind}`,
+          `edge: ${record.source_site_ref} -> ${record.target_site_ref}`,
+          `authority_effect: ${record.authority_effect}`,
+          'authority_moved: false',
+        ]),
+        (options.format ?? 'auto') as CliFormat,
+      ),
+    };
+  } catch (error) {
+    return normalizeSiteRelationError(error);
+  }
+}
+
+export async function sitesRelationListCommand(
+  options: SitesRelationListOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const cwd = options.cwd ?? '.';
+  const registry = await readSiteRelationRegistry(cwd);
+  const limit = options.limit ?? 20;
+  const relations = registry.relations
+    .filter((relation) => !options.kind || relation.relation_kind === options.kind)
+    .filter((relation) => !options.sourceSite || relation.source_site_ref === options.sourceSite)
+    .filter((relation) => !options.targetSite || relation.target_site_ref === options.targetSite)
+    .filter((relation) => !options.status || relation.status === options.status)
+    .slice(0, limit);
+  const result = {
+    status: 'success',
+    mutation_performed: false,
+    registry_path: siteRelationRegistryPath(cwd),
+    count: relations.length,
+    limit,
+    relations,
+  };
+  return {
+    exitCode: ExitCode.SUCCESS,
+    result: formattedResult(
+      result,
+      relationHumanLines('Site relations', relations.map((relation) => `${relation.relation_id}: ${relation.relation_kind} ${relation.source_site_ref} -> ${relation.target_site_ref}`)),
+      (options.format ?? 'auto') as CliFormat,
+    ),
+  };
+}
+
+export async function sitesRelationValidateCommand(
+  options: SitesRelationValidateOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const cwd = options.cwd ?? '.';
+  const registry = await readSiteRelationRegistry(cwd);
+  const issues = validateSiteRelations(registry);
+  const errors = issues.filter((issue) => issue.severity === 'error');
+  const result = {
+    status: errors.length === 0 ? 'success' : 'error',
+    mutation_performed: false,
+    registry_path: siteRelationRegistryPath(cwd),
+    relation_count: registry.relations.length,
+    valid: errors.length === 0,
+    issues,
+  };
+  return {
+    exitCode: errors.length === 0 ? ExitCode.SUCCESS : ExitCode.INVALID_CONFIG,
+    result: formattedResult(
+      result,
+      relationHumanLines(errors.length === 0 ? 'Site relation registry valid' : 'Site relation registry invalid', issues.map((issue) => `${issue.severity} ${issue.code}: ${issue.message}`)),
+      (options.format ?? 'auto') as CliFormat,
+    ),
+  };
+}
+
+export async function sitesRelationExplainCommand(
+  options: SitesRelationExplainOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const cwd = options.cwd ?? '.';
+  const relationId = requireOption(options.relationId, '<relation-id>');
+  const registry = await readSiteRelationRegistry(cwd);
+  const explanation = explainSiteRelation(registry, relationId);
+  if (!explanation.relation) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: { status: 'error', error: `Site relation not found: ${relationId}` },
+    };
+  }
+  const result = {
+    status: explanation.blockers.length === 0 ? 'success' : 'error',
+    mutation_performed: false,
+    registry_path: siteRelationRegistryPath(cwd),
+    ...explanation,
+  };
+  return {
+    exitCode: explanation.blockers.length === 0 ? ExitCode.SUCCESS : ExitCode.INVALID_CONFIG,
+    result: formattedResult(
+      result,
+      relationHumanLines('Site relation explanation', [
+        `relation_id: ${explanation.relation.relation_id}`,
+        `authority_moving: ${String(explanation.authority_moving)}`,
+        `evidence_only: ${String(explanation.evidence_only)}`,
+        `reciprocal_satisfied: ${String(explanation.reciprocal_satisfied)}`,
+        `blockers: ${explanation.blockers.length === 0 ? 'none' : explanation.blockers.join('; ')}`,
+      ]),
+      (options.format ?? 'auto') as CliFormat,
+    ),
   };
 }
 

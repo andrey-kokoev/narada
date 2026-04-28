@@ -15,6 +15,8 @@ A Site transformation must preserve or explicitly change:
 
 The continuity record for those changes is Site provenance lineage. See [`site-provenance-lineage.md`](site-provenance-lineage.md).
 
+Relation evidence is recorded separately from lifecycle mutation. See [`site-relation-ledger.md`](site-relation-ledger.md).
+
 ## Transformation Kinds
 
 | Kind | Meaning | Authority Rule |
@@ -51,9 +53,11 @@ The initial command surface is intentionally inspection/preflight only:
 ```bash
 narada sites lifecycle kinds
 narada sites lifecycle preflight clone --source-site user --target-site user-copy --authority-mode read_only
+narada sites relation record --kind absorbed --source-site sidecar --target-site narada-proper --by architect
+narada sites relation validate
 ```
 
-These commands do not mutate Site state. They make the transformation grammar explicit and force authority-mode declaration before any future mutation command exists.
+These commands do not mutate Site state. Lifecycle preflight makes the transformation grammar explicit and forces authority-mode declaration before any future mutation command exists. Relation commands record durable edge evidence without moving authority or editing Site configs.
 
 ## Relation To Plural Embodiment
 

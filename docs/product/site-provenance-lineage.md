@@ -10,6 +10,8 @@ append-only lineage events -> graph projection for inspection
 
 The event log is the authority-bearing record. Chain, DAG, and general graph views are projections over that log.
 
+Durable current-state relation evidence is tracked by the Site relation ledger. See [`site-relation-ledger.md`](site-relation-ledger.md). Relation records may reference lineage events, but they do not replace the append-only lineage event log.
+
 ## Why It Exists
 
 Site clone, fork, split, absorb, migrate, re-instantiate, archive, pub/sub, knowledge admission, and tool admission all create relationships between Sites. Those relationships are not all authority relationships.
@@ -79,6 +81,8 @@ The initial CLI surface is read-only:
 
 ```bash
 narada sites lineage events
+narada sites relation list
+narada sites relation validate
 ```
 
-It exposes the vocabulary and required fields without creating lineage records. Future mutating Site lifecycle and pub/sub commands must write lineage events before changing authority-bearing Site state.
+The lineage surface exposes the vocabulary and required fields without creating lineage records. The relation surface records evidence edges without changing Site authority. Future mutating Site lifecycle and pub/sub commands must write lineage events before changing authority-bearing Site state.

@@ -148,6 +148,7 @@ When describing higher-order architecture, deployment, or design:
 | [cloudflare-site-materialization.md](docs/deployment/cloudflare-site-materialization.md) | Cloudflare Site materialization design | Designing or deploying a Cloudflare-backed Narada Site |
 | [bootstrap-contract.md](docs/product/bootstrap-contract.md) | Canonical intent-to-operation bootstrap path | Setting up or onboarding a first-time user |
 | [site-bootstrap-contract.md](docs/product/site-bootstrap-contract.md) | Canonical Site first-run path (runtime locus setup) | Setting up a local Site on Windows, macOS, or Linux |
+| [site-relation-ledger.md](docs/product/site-relation-ledger.md) | Durable Site relation evidence without authority movement | Recording absorption, reference, routing, subscription, or publication edges before lifecycle mutation |
 | [tool-catalog-binding.md](docs/product/tool-catalog-binding.md) | Tool Locality Doctrine and operation-to-system tool binding | Binding diagnostic tools from an app/system repo into an operation |
 | [first-operation-proof.md](docs/product/first-operation-proof.md) | Canonical mailbox operation product proof | Understanding what is proven and how to verify it |
 | [operator-loop.md](docs/product/operator-loop.md) | Minimal operator rhythm for live operations | Running day-to-day operations |
@@ -317,6 +318,10 @@ narada task graph --format json --range 429-454
 
 # Check chapter publication authority before doing chapter work that must commit/push
 narada chapter preflight 912-916 --expect-commit --expect-push
+
+# Record and validate Site relation evidence without moving authority
+narada sites relation record --kind absorbed --source-site sidecar --target-site narada-proper --by architect
+narada sites relation validate
 
 # Ask for the next admissible agent action across task and inbox work
 narada work-next --agent architect
