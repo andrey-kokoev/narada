@@ -1,3 +1,7 @@
+---
+status: opened
+---
+
 # Task 232: Live Operation Smoke Test and Acceptance Verification
 
 ## Chapter
