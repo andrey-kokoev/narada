@@ -57,9 +57,21 @@ narada sites lifecycle kinds
 narada sites lifecycle preflight clone --source-site user --target-site user-copy --authority-mode read_only
 narada sites relation record --kind absorbed --source-site sidecar --target-site narada-proper --by architect
 narada sites relation validate
+narada sites lifecycle execute absorb --source-site sidecar --target-site narada-proper --by architect
+narada sites lifecycle execute absorb --source-site sidecar --target-site narada-proper --by architect --execute
 ```
 
-These commands do not mutate Site state. Lifecycle preflight makes the transformation grammar explicit and forces authority-mode declaration before any future mutation command exists. Relation commands record durable edge evidence without moving authority or editing Site configs.
+Lifecycle preflight makes the transformation grammar explicit and forces authority-mode declaration.
+
+Relation commands record durable edge evidence without moving authority or editing Site configs.
+
+`sites lifecycle execute absorb` v0 is the first sanctioned execution surface for absorption. It is dry-run by default. With `--execute`, it writes:
+
+- a transformation plan artifact under `.ai/site-lifecycle/plans/`;
+- a `site.absorbed` lineage event artifact under `.ai/site-lineage-events/`;
+- reciprocal Site relation ledger records (`absorbed` and `absorbed_by`).
+
+It does **not** transfer authority, edit source/target Site configs, move files, or mutate runtime state. Those remain future lifecycle phases that must consume the v0 artifacts rather than bypass them.
 
 ## Relation To Plural Embodiment
 
@@ -71,4 +83,4 @@ Site absorption and re-instantiation are admissible only when the originating ca
 
 ## Current Boundary
 
-This document and the `sites lifecycle` CLI define the transformation grammar and preflight boundary. They do not yet implement mutating lifecycle operators. Future mutation commands must consume the same kind taxonomy and must produce durable transformation artifacts before changing Site state.
+This document and the `sites lifecycle` CLI define the transformation grammar, preflight boundary, and absorb v0 artifact execution. Future authority-moving mutation commands must consume the same kind taxonomy and must produce durable transformation artifacts before changing Site state.

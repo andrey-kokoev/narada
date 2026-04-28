@@ -10,6 +10,7 @@ import { execFile } from 'node:child_process';
 import { join, posix, resolve, win32 } from 'node:path';
 import { hostname } from 'node:os';
 import { promisify } from 'node:util';
+import { randomUUID } from 'node:crypto';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
@@ -44,6 +45,18 @@ export interface SitesLifecyclePreflightOptions extends SitesOptions {
   sourceSite?: string;
   targetSite?: string;
   authorityMode?: string;
+}
+
+export interface SitesLifecycleExecuteAbsorbOptions extends SitesOptions {
+  cwd?: string;
+  sourceSite?: string;
+  targetSite?: string;
+  authorityMode?: string;
+  admittedMaterial?: string;
+  evidenceRef?: string;
+  retainedAuthority?: string;
+  by?: string;
+  execute?: boolean;
 }
 
 export interface SitesLineageEventsOptions extends SitesOptions {}
@@ -861,6 +874,141 @@ export async function sitesLifecyclePreflightCommand(
     exitCode: ExitCode.SUCCESS,
     result,
   };
+}
+
+export async function sitesLifecycleExecuteAbsorbCommand(
+  options: SitesLifecycleExecuteAbsorbOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  try {
+    const cwd = options.cwd ?? '.';
+    const sourceSite = requireOption(options.sourceSite, '--source-site');
+    const targetSite = requireOption(options.targetSite, '--target-site');
+    const by = requireOption(options.by, '--by');
+    const authorityMode = options.authorityMode ?? 'admission_review';
+    if (authorityMode !== 'admission_review') {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          error: `Site absorb v0 only supports authority mode admission_review, got: ${authorityMode}`,
+          mutation_performed: false,
+          supported_authority_modes: ['admission_review'],
+        },
+      };
+    }
+
+    const now = new Date().toISOString();
+    const transformationId = `site_absorb_${randomUUID()}`;
+    const admittedMaterial = parseCsv(options.admittedMaterial);
+    const evidenceRefs = parseCsv(options.evidenceRef);
+    const retainedAuthority = parseCsv(options.retainedAuthority);
+    const plan = {
+      transformation_id: transformationId,
+      kind: 'absorb',
+      source_site_ref: sourceSite,
+      target_site_ref: targetSite,
+      authority_mode: authorityMode,
+      authority_moved: false,
+      config_mutated: false,
+      admitted_material: admittedMaterial,
+      evidence_refs: evidenceRefs,
+      retained_authority: retainedAuthority,
+      required_artifacts: siteLifecycleArtifacts('absorb'),
+      created_by: by,
+      created_at: now,
+      v0_boundary: 'writes plan, lineage event, and relation records only; no Site config mutation or authority transfer',
+    };
+    const lineageEvent = {
+      event_id: `lineage_${randomUUID()}`,
+      event_type: 'site.absorbed',
+      source_site_ref: sourceSite,
+      target_site_ref: targetSite,
+      principal: by,
+      authority_effect: 'admission_without_implicit_ownership',
+      evidence_refs: evidenceRefs,
+      occurred_at: now,
+      rollback_or_residual_posture: 'relation records may be superseded; no authority was transferred by v0 execution',
+      transformation_id: transformationId,
+    };
+
+    const planPath = join(resolve(cwd), '.ai', 'site-lifecycle', 'plans', `${transformationId}.json`);
+    const lineagePath = join(resolve(cwd), '.ai', 'site-lineage-events', `${lineageEvent.event_id}.json`);
+    const execute = options.execute ?? false;
+    let relationIds: string[] = [];
+
+    if (execute) {
+      await mkdir(join(resolve(cwd), '.ai', 'site-lifecycle', 'plans'), { recursive: true });
+      await mkdir(join(resolve(cwd), '.ai', 'site-lineage-events'), { recursive: true });
+      await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`, 'utf8');
+      await writeFile(lineagePath, `${JSON.stringify(lineageEvent, null, 2)}\n`, 'utf8');
+
+      const registry = await readSiteRelationRegistry(cwd);
+      const forward = makeSiteRelationRecord({
+        relationKind: 'absorbed',
+        sourceSite,
+        targetSite,
+        authorityEffect: 'admission_without_implicit_ownership',
+        admittedMaterial,
+        evidenceRefs,
+        lineageEventRefs: [lineageEvent.event_id],
+        reciprocalRequired: true,
+        createdBy: by,
+      });
+      const reverse = makeSiteRelationRecord({
+        relationKind: 'absorbed_by',
+        sourceSite: targetSite,
+        targetSite: sourceSite,
+        authorityEffect: 'admission_without_implicit_ownership',
+        admittedMaterial,
+        evidenceRefs,
+        lineageEventRefs: [lineageEvent.event_id],
+        reciprocalRequired: false,
+        reciprocalRelationId: forward.relation_id,
+        createdBy: by,
+      });
+      forward.reciprocal_relation_id = reverse.relation_id;
+      registry.relations.push(forward, reverse);
+      await writeSiteRelationRegistry(cwd, registry);
+      relationIds = [forward.relation_id, reverse.relation_id];
+    }
+
+    const result = {
+      status: execute ? 'success' : 'dry_run',
+      mutation_performed: execute,
+      plan,
+      lineage_event: lineageEvent,
+      plan_path: planPath,
+      lineage_event_path: lineagePath,
+      relation_registry_path: siteRelationRegistryPath(cwd),
+      relation_ids: relationIds,
+      read_back_confirmed: execute
+        ? existsSync(planPath) && existsSync(lineagePath) && relationIds.length === 2
+        : false,
+      authority_moved: false,
+      config_mutated: false,
+    };
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: formattedResult(
+        result,
+        [
+          execute ? 'Site absorb v0 executed' : 'Dry run - Site absorb v0 plan',
+          `source_site: ${sourceSite}`,
+          `target_site: ${targetSite}`,
+          `authority_mode: ${authorityMode}`,
+          `mutation_performed: ${String(execute)}`,
+          `authority_moved: false`,
+          `config_mutated: false`,
+          `plan_path: ${planPath}`,
+          `lineage_event_path: ${lineagePath}`,
+        ],
+        (options.format ?? 'auto') as CliFormat,
+      ),
+    };
+  } catch (error) {
+    return normalizeSiteRelationError(error);
+  }
 }
 
 export async function sitesShowCommand(

@@ -10,6 +10,7 @@ import {
   sitesBootstrapWindowsCommand,
   sitesEnableCommand,
   sitesTaskLifecycleInitCommand,
+  sitesLifecycleExecuteAbsorbCommand,
   sitesLifecycleKindsCommand,
   sitesLifecyclePreflightCommand,
   sitesLineageEventsCommand,
@@ -100,6 +101,43 @@ export function registerSitesCommands(program: Command): void {
       }, silentCommandContext({ verbose: !!opts.verbose }));
       emitFormatterBackedCommandResult(result, { format: opts.format });
     });
+
+  const executeCmd = lifecycleCmd
+    .command('execute')
+    .description('Execute governed Site lifecycle transformations as durable artifacts');
+
+  executeCmd
+    .command('absorb')
+    .description('Execute Site absorption v0 by writing plan, lineage, and relation artifacts')
+    .requiredOption('--source-site <ref>', 'Source Site id or path')
+    .requiredOption('--target-site <ref>', 'Target Site id or path')
+    .option('--authority-mode <mode>', 'Authority mode for absorb v0', 'admission_review')
+    .option('--admitted-material <csv>', 'Comma-separated material admitted or referenced')
+    .option('--evidence-ref <csv>', 'Comma-separated evidence references')
+    .option('--retained-authority <csv>', 'Comma-separated authority classes retained by source')
+    .requiredOption('--by <id>', 'Principal executing the lifecycle transform')
+    .option('--execute', 'Write durable artifacts; omitted means dry-run', false)
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'sites lifecycle execute absorb',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => sitesLifecycleExecuteAbsorbCommand({
+        sourceSite: opts.sourceSite as string | undefined,
+        targetSite: opts.targetSite as string | undefined,
+        authorityMode: opts.authorityMode as string | undefined,
+        admittedMaterial: opts.admittedMaterial as string | undefined,
+        evidenceRef: opts.evidenceRef as string | undefined,
+        retainedAuthority: opts.retainedAuthority as string | undefined,
+        by: opts.by as string | undefined,
+        execute: opts.execute as boolean | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose })),
+    }));
 
   const lineageCmd = sitesCmd
     .command('lineage')

@@ -68,13 +68,21 @@ narada sites relation explain <relation-id>
 
 `validate` fails when a relation requiring reciprocal evidence lacks an active reverse relation.
 
+Site absorption v0 can create reciprocal relation records through:
+
+```bash
+narada sites lifecycle execute absorb --source-site sidecar --target-site narada-proper --by architect --execute
+```
+
+That command writes relation evidence, a transformation plan, and a lineage event. It does not transfer authority or edit Site configs.
+
 ## Relationship To Site Lifecycle
 
 `narada sites lifecycle preflight` names the transformation grammar and required artifacts.
 
 `narada sites relation record` records durable relation evidence before or alongside transformation work.
 
-Future mutating lifecycle commands must write lineage events and may reference relation records, but the relation ledger remains a pre-mutation evidence surface.
+Absorb v0 writes lineage and relation records but does not move authority. Future authority-moving lifecycle commands must write lineage events and may reference relation records, but the relation ledger remains a pre-mutation evidence surface.
 
 ## Relationship To Site Provenance Lineage
 

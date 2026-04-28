@@ -21,5 +21,13 @@
     ],
     "recommendation": "Prioritize absorb execution because Site absorption is now needed in lived Staccato work. Preserve current preflight as mandatory first phase. Execution should be split into intent/preflight/plan/approval/apply/read-back so future operators cannot mistake manual config edits for admitted lifecycle transformations."
   },
-  "status": "received"
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_f75fbd9e-131e-4a76-a05a-ec74ed49148a",
+    "promoted_at": "2026-04-28T03:59:11.559Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
 }
