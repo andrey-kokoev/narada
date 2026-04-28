@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T17:32:09.883Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: peer_reviewed
+---
+
 # Task 267: Correct Task 238 Draft Disposition Operator Path
 
 ## Chapter
@@ -158,3 +166,7 @@ pnpm --filter @narada2/daemon typecheck
 - [x] A rejection path is audited or a documented limitation is added with rationale.
 - [x] Task 238 notes reference this corrective follow-up.
 - [x] No `*-EXECUTED`, `*-DONE`, `*-RESULT`, `*-FINAL`, or `*-SUPERSEDED` files are created.
+
+## Verification
+
+<!-- Record commands run, results observed, and how correctness was checked. -->
