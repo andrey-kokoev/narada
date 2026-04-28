@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T16:20:09.605Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: peer_reviewed
+---
+
 # Task 239: Lift Question Escalation Protocol Into narada.usc
 
 ## Why
@@ -179,3 +187,11 @@ pnpm usc -- init /tmp/test-usc-init --name test-init --principal "Test" --intent
   - `.ai/task-contracts/agent-task-execution.md`
   - `.ai/task-contracts/chapter-planning.md`
   - `.ai/task-contracts/question-escalation.md`
+
+## Execution Notes
+
+<!-- Record what was done, decisions made, and files changed. -->
+
+## Verification
+
+<!-- Record commands run, results observed, and how correctness was checked. -->
