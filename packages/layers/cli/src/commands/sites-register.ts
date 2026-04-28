@@ -5,6 +5,7 @@ import {
   sitesShowCommand,
   sitesRemoveCommand,
   sitesInitCommand,
+  sitesBootstrapWindowsCommand,
   sitesEnableCommand,
   sitesTaskLifecycleInitCommand,
   sitesLifecycleKindsCommand,
@@ -180,6 +181,29 @@ export function registerSitesCommands(program: Command): void {
         executionSurface: opts.executionSurface as string | undefined,
         dryRun: opts.dryRun as boolean | undefined,
         format: resolveCommandFormat(),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitFormatterBackedCommandResult(result, { format: opts.format });
+    });
+
+  sitesCmd
+    .command('bootstrap-windows')
+    .description('Plan or execute paired Windows User and PC Site bootstrap')
+    .option('--user-site-id <id>', 'Windows user-locus Site id')
+    .option('--pc-site-id <id>', 'Windows PC-locus Site id')
+    .option('--sync <posture>', 'Windows User Site sync posture', 'hybrid_capable_plain_folder')
+    .option('--execution-surface <surface>', 'Execution surface override')
+    .option('--execute', 'Perform mutations; default is dry-run', false)
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (opts: Record<string, unknown>) => {
+      const result = await sitesBootstrapWindowsCommand({
+        userSiteId: opts.userSiteId as string | undefined,
+        pcSiteId: opts.pcSiteId as string | undefined,
+        sync: opts.sync as string | undefined,
+        executionSurface: opts.executionSurface as string | undefined,
+        execute: opts.execute as boolean | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
         verbose: opts.verbose as boolean | undefined,
       }, silentCommandContext({ verbose: !!opts.verbose }));
       emitFormatterBackedCommandResult(result, { format: opts.format });

@@ -122,6 +122,23 @@ This creates:
 
 Use `--dry-run` to preview without filesystem mutation.
 
+For a Windows operator machine, the paired first-run path is:
+
+```bash
+narada sites bootstrap-windows [--user-site-id <id>] [--pc-site-id <id>] [--sync <posture>] [--execution-surface <surface>]
+```
+
+`bootstrap-windows` is dry-run by default. It plans the user-locus Site and the PC-locus Site together, records the same execution-surface coordinates as `sites init`, and prints the validation commands for both loci. Use `--execute` only when the target Windows roots and required permissions are intentionally available.
+
+Default identities:
+
+| Site | Default |
+|------|---------|
+| User Site | `current-user` |
+| PC Site | `%COMPUTERNAME%` lowercased, falling back to host name |
+
+The paired command exists because a Windows Narada installation normally needs two different authority loci: the User Site for operator memory and personal control, and the PC Site for machine/session recovery. Creating them together prevents accidental collapse of user authority into PC authority, or PC recovery state into user memory.
+
 ### Step 3: Bind operation/config
 
 If `--operation` was not provided during `sites init`, bind the operation now:

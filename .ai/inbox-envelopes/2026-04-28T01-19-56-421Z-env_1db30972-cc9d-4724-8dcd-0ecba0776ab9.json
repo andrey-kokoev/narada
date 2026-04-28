@@ -21,5 +21,13 @@
     ],
     "recommendation": "Add a surface such as narada windows bootstrap --user-site --pc-site --dry-run and --execute, or narada sites bootstrap-windows --user current --pc current. Also update sites init to expose the documented --authority-locus and --sync posture flags or document their replacement. Treat this as a priority because it removes repeated manual setup and prevents user/PC authority collapse on Windows."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "site_config_change",
+    "target_ref": "task-1011-windows-paired-bootstrap",
+    "promoted_at": "2026-04-28T01:44:36.122Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'site_config_change' is not implemented yet."
+  }
 }

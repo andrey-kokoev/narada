@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { vol } from 'memfs';
 import {
   sitesInitCommand,
+  sitesBootstrapWindowsCommand,
 } from '../../src/commands/sites.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
@@ -81,6 +82,8 @@ describe('sitesInitCommand', () => {
     vol.reset();
     vol.mkdirSync('/tmp', { recursive: true });
     delete process.env.NARADA_EXECUTOR_RUNTIME;
+    delete process.env.COMPUTERNAME;
+    delete process.env.HOSTNAME;
     process.env.USERPROFILE = 'C:\\Users\\Andrey';
     process.env.USERNAME = 'Andrey';
   });
@@ -300,5 +303,94 @@ describe('sitesInitCommand', () => {
     expect(data.nextSteps).toContain('narada doctor --site test-site');
     expect(data.nextSteps).toContain('narada cycle --site test-site');
     expect(data.nextSteps).toContain('narada sites enable test-site');
+  });
+
+  it('dry-runs paired Windows User and PC Site bootstrap with WSL-assisted execution coordinates', async () => {
+    process.env.NARADA_EXECUTOR_RUNTIME = 'wsl';
+    process.env.COMPUTERNAME = 'DESKTOP-SUNROOM';
+    const ctx = createMockContext();
+    const result = await sitesBootstrapWindowsCommand({
+      userSiteId: 'andrey-user',
+      format: 'json',
+    }, ctx);
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const data = result.result as {
+      status: string;
+      mutation_performed: boolean;
+      plan_kind: string;
+      user_site_id: string;
+      pc_site_id: string;
+      pc_identity_source: string;
+      validation_commands: string[];
+      user: { config: { locus: { authority_locus: string }; sync: { posture: string }; execution: { surface: string; target_authority_locus: string } } };
+      pc: { config: { locus: { authority_locus: string }; execution: { surface: string; target_authority_locus: string; path_translation: { wsl_path: string }; permission_posture: string } } };
+    };
+    expect(data.status).toBe('dry_run');
+    expect(data.mutation_performed).toBe(false);
+    expect(data.plan_kind).toBe('paired_windows_user_pc_site_bootstrap');
+    expect(data.user_site_id).toBe('andrey-user');
+    expect(data.pc_site_id).toBe('desktop-sunroom');
+    expect(data.pc_identity_source).toBe('computer_name');
+    expect(data.user.config.locus.authority_locus).toBe('user');
+    expect(data.user.config.sync.posture).toBe('hybrid_capable_plain_folder');
+    expect(data.user.config.execution.surface).toBe('wsl_assisted');
+    expect(data.user.config.execution.target_authority_locus).toBe('windows_user');
+    expect(data.pc.config.locus.authority_locus).toBe('pc');
+    expect(data.pc.config.execution.surface).toBe('wsl_assisted');
+    expect(data.pc.config.execution.target_authority_locus).toBe('windows_pc');
+    expect(data.pc.config.execution.path_translation.wsl_path).toBe('/mnt/c/ProgramData/Narada/sites/pc/desktop-sunroom');
+    expect(data.pc.config.execution.permission_posture).toBe('pc_locus_programdata_write_required');
+    expect(data.validation_commands).toEqual([
+      'narada sites doctor andrey-user --authority-locus user',
+      'narada sites doctor desktop-sunroom --authority-locus pc',
+    ]);
+    expect(mockRegistry.registerSite).not.toHaveBeenCalled();
+  });
+
+  it('honors explicit PC Site id and execution surface in paired Windows bootstrap', async () => {
+    process.env.NARADA_EXECUTOR_RUNTIME = 'wsl';
+    process.env.COMPUTERNAME = 'DESKTOP-SUNROOM';
+    const ctx = createMockContext();
+    const result = await sitesBootstrapWindowsCommand({
+      pcSiteId: 'desktop-sunroom-2',
+      executionSurface: 'windows_native',
+      format: 'json',
+    }, ctx);
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const data = result.result as {
+      user_site_id: string;
+      pc_site_id: string;
+      pc_identity_source: string;
+      user: { config: { execution: { surface: string; inferred: boolean } } };
+      pc: { config: { execution: { surface: string; inferred: boolean } } };
+    };
+    expect(data.user_site_id).toBe('current-user');
+    expect(data.pc_site_id).toBe('desktop-sunroom-2');
+    expect(data.pc_identity_source).toBe('explicit');
+    expect(data.user.config.execution.surface).toBe('windows_native');
+    expect(data.user.config.execution.inferred).toBe(false);
+    expect(data.pc.config.execution.surface).toBe('windows_native');
+    expect(data.pc.config.execution.inferred).toBe(false);
+  });
+
+  it('uses a WSL-safe default Windows user root when USERPROFILE is absent', async () => {
+    process.env.NARADA_EXECUTOR_RUNTIME = 'wsl';
+    process.env.COMPUTERNAME = 'DESKTOP-SUNROOM';
+    delete process.env.USERPROFILE;
+    delete process.env.USERNAME;
+    process.env.USER = 'andrey';
+    const ctx = createMockContext();
+    const result = await sitesBootstrapWindowsCommand({ format: 'json' }, ctx);
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const data = result.result as {
+      user: { config: { site_root: string; locus: { principal: { windows_user_profile: string; username: string } }; execution: { path_translation: { wsl_path: string } } } };
+    };
+    expect(data.user.config.site_root).toBe('C:\\Users\\andrey\\Narada');
+    expect(data.user.config.locus.principal.windows_user_profile).toBe('C:\\Users\\andrey');
+    expect(data.user.config.locus.principal.username).toBe('andrey');
+    expect(data.user.config.execution.path_translation.wsl_path).toBe('/mnt/c/Users/andrey/Narada');
   });
 });

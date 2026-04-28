@@ -8,6 +8,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { join, posix, resolve, win32 } from 'node:path';
+import { hostname } from 'node:os';
 import { promisify } from 'node:util';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
@@ -1087,6 +1088,14 @@ export interface SitesInitOptions extends SitesOptions {
   dryRun?: boolean;
 }
 
+export interface SitesBootstrapWindowsOptions extends SitesOptions {
+  userSiteId?: string;
+  pcSiteId?: string;
+  sync?: string;
+  executionSurface?: string;
+  execute?: boolean;
+}
+
 const VALID_SUBSTRATES = [
   'windows-native',
   'windows-wsl',
@@ -1263,6 +1272,12 @@ function buildExecutionRecord(args: {
   };
 }
 
+function inferWindowsUserProfileFromSiteRoot(siteRoot: string): string {
+  const normalized = win32.normalize(siteRoot);
+  const suffix = `${win32.sep}Narada`;
+  return normalized.endsWith(suffix) ? normalized.slice(0, -suffix.length) : '';
+}
+
 export async function sitesInitCommand(
   siteId: string,
   options: SitesInitOptions,
@@ -1370,8 +1385,8 @@ export async function sitesInitCommand(
           ? {
               authority_locus: 'user',
               principal: {
-                windows_user_profile: process.env.USERPROFILE ?? '',
-                username: process.env.USERNAME ?? '',
+                windows_user_profile: process.env.USERPROFILE ?? inferWindowsUserProfileFromSiteRoot(siteRoot),
+                username: process.env.USERNAME ?? process.env.USER ?? '',
               },
             }
           : {
@@ -1543,6 +1558,113 @@ export async function sitesInitCommand(
       ],
     },
   };
+}
+
+function defaultWindowsUserSiteId(): string {
+  return 'current-user';
+}
+
+function defaultWindowsUserSiteRoot(): string | undefined {
+  if (process.env.USERPROFILE) return undefined;
+  const userName = process.env.USERNAME ?? process.env.USER;
+  if (!userName || !userName.trim()) return undefined;
+  return win32.join('C:\\Users', userName.trim(), 'Narada');
+}
+
+function defaultWindowsPcSiteId(): { siteId: string; source: string } {
+  const fromComputerName = process.env.COMPUTERNAME;
+  if (fromComputerName?.trim()) {
+    return { siteId: fromComputerName.trim().toLowerCase(), source: 'computer_name' };
+  }
+  const fromHostName = process.env.HOSTNAME;
+  if (fromHostName?.trim()) {
+    return { siteId: fromHostName.trim().toLowerCase(), source: 'hostname_env' };
+  }
+  return { siteId: hostname().toLowerCase(), source: 'hostname_fallback' };
+}
+
+export async function sitesBootstrapWindowsCommand(
+  options: SitesBootstrapWindowsOptions,
+  context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
+  const userSiteId = options.userSiteId ?? defaultWindowsUserSiteId();
+  const pcDefault = defaultWindowsPcSiteId();
+  const pcSiteId = options.pcSiteId ?? pcDefault.siteId;
+  const execute = options.execute === true;
+  const sync = options.sync ?? 'hybrid_capable_plain_folder';
+
+  const userResult = await sitesInitCommand(userSiteId, {
+    substrate: 'windows-native',
+    authorityLocus: 'user',
+    sync,
+    root: defaultWindowsUserSiteRoot(),
+    executionSurface: options.executionSurface,
+    dryRun: !execute,
+    format: 'json',
+    verbose: options.verbose,
+  }, context);
+  if (userResult.exitCode !== ExitCode.SUCCESS) {
+    return {
+      exitCode: userResult.exitCode,
+      result: {
+        status: 'error',
+        phase: 'user_site',
+        error: (userResult.result as { error?: string }).error ?? 'Failed to plan Windows User Site',
+        user: userResult.result,
+      },
+    };
+  }
+
+  const pcResult = await sitesInitCommand(pcSiteId, {
+    substrate: 'windows-native',
+    authorityLocus: 'pc',
+    executionSurface: options.executionSurface,
+    dryRun: !execute,
+    format: 'json',
+    verbose: options.verbose,
+  }, context);
+  if (pcResult.exitCode !== ExitCode.SUCCESS) {
+    return {
+      exitCode: pcResult.exitCode,
+      result: {
+        status: 'error',
+        phase: 'pc_site',
+        error: (pcResult.result as { error?: string }).error ?? 'Failed to plan Windows PC Site',
+        user: userResult.result,
+        pc: pcResult.result,
+      },
+    };
+  }
+
+  const result = {
+    status: execute ? 'success' : 'dry_run',
+    mutation_performed: execute,
+    plan_kind: 'paired_windows_user_pc_site_bootstrap',
+    user_site_id: userSiteId,
+    pc_site_id: pcSiteId,
+    pc_identity_source: options.pcSiteId ? 'explicit' : pcDefault.source,
+    user: userResult.result,
+    pc: pcResult.result,
+    validation_commands: [
+      `narada sites doctor ${userSiteId} --authority-locus user`,
+      `narada sites doctor ${pcSiteId} --authority-locus pc`,
+    ],
+  };
+
+  if (fmt.getFormat() === 'human') {
+    fmt.message(execute ? 'Bootstrapped paired Windows Sites' : 'Dry run - paired Windows Site bootstrap plan', 'success');
+    fmt.kv('User Site', userSiteId);
+    fmt.kv('PC Site', pcSiteId);
+    fmt.kv('PC identity source', result.pc_identity_source);
+    fmt.kv('Mutation', execute ? 'executed' : 'not executed');
+    fmt.section('Validation');
+    for (const command of result.validation_commands) {
+      fmt.message(command, 'info');
+    }
+  }
+
+  return { exitCode: ExitCode.SUCCESS, result };
 }
 
 // ---------------------------------------------------------------------------
