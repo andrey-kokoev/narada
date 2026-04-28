@@ -1,0 +1,25 @@
+{
+  "envelope_id": "env_f75fbd9e-131e-4a76-a05a-ec74ed49148a",
+  "received_at": "2026-04-27T21:53:23.050Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:staccato-site-absorb-execution-gap"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Implement executing Site absorb command beyond lifecycle preflight",
+    "summary": "A real Staccato operation exposed that Narada has Site lifecycle absorb doctrine and preflight, but no executing absorb command. The operator asked to have the OneDrive Staccato client-service Site absorb the local data and ELT Sites. We could run , but had to manually materialize  /  config and KB/decision artifacts.",
+    "evidence": [
+      "Preflights for  and  both returned status ready, mutation_performed false, authority_mode admission_review. Narada named required artifacts: source_site_ref, provenance_record, authority_map, trace_handoff, read_back_confirmation, admission_bundle, re_instantiation_evidence. There is no  command that creates/adopts these artifacts or records a site.absorbed lineage event."
+    ],
+    "proposal": [
+      "Implement governed Site lifecycle execution for absorption, likely  or . It should take source Site, target Site, authority mode admission_review, absorption policy, retained-authority map, and evidence refs; create a transformation plan/admission bundle; update source and target Site configs or registry projections as appropriate; emit/read back a site.absorbed lineage event; and refuse any absorption that collapses raw data/runtime/task/inbox authority into the target without explicit authority transfer machinery."
+    ],
+    "recommendation": "Prioritize absorb execution because Site absorption is now needed in lived Staccato work. Preserve current preflight as mandatory first phase. Execution should be split into intent/preflight/plan/approval/apply/read-back so future operators cannot mistake manual config edits for admitted lifecycle transformations."
+  },
+  "status": "received"
+}

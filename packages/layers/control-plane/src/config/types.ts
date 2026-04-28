@@ -72,6 +72,24 @@ export interface MailAdmissionConfig {
   allowed_sender_addresses?: string[];
   allowed_sender_domains?: string[];
   unknown_sender_behavior?: "ignore" | "admit";
+  predicates?: MailAdmissionPredicatesConfig;
+}
+
+export type MailParticipantField = "from" | "sender" | "to" | "cc" | "bcc" | "any_participant";
+
+export interface MailParticipantPredicateConfig {
+  kind: "participant";
+  fields?: MailParticipantField[];
+  addresses?: string[];
+  domains?: string[];
+}
+
+export type MailAdmissionPredicateConfig = MailParticipantPredicateConfig;
+
+export interface MailAdmissionPredicatesConfig {
+  include?: MailAdmissionPredicateConfig[];
+  exclude?: MailAdmissionPredicateConfig[];
+  unknown_participant_behavior?: "ignore" | "admit";
 }
 
 export interface AdmissionConfig {

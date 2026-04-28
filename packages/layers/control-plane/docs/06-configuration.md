@@ -124,6 +124,47 @@ const config = await loadConfig({ path: "./config.json" });
 - Wrong type → throws with expected type
 - Empty string → treated as missing
 
+### Mail Admission Predicates
+
+`admission.mail` controls which synced mail facts may produce work. Folder refs
+gate container admission. Predicate filters gate message admission after
+normalization.
+
+Legacy sender allowlists remain supported:
+
+```json
+"admission": {
+  "mail": {
+    "allowed_sender_domains": ["example.com"],
+    "unknown_sender_behavior": "ignore"
+  }
+}
+```
+
+For client correspondence, prefer the predicate model so sent and copied mail can
+match by any participant, not only by sender:
+
+```json
+"admission": {
+  "mail": {
+    "predicates": {
+      "include": [
+        {
+          "kind": "participant",
+          "fields": ["from", "sender", "to", "cc", "bcc"],
+          "domains": ["staccato2011.com"]
+        }
+      ],
+      "unknown_participant_behavior": "ignore"
+    }
+  }
+}
+```
+
+`include` admits when at least one predicate matches. `exclude` rejects when any
+predicate matches. Participant predicates may use `addresses`, `domains`, and
+the fields `from`, `sender`, `to`, `cc`, `bcc`, or `any_participant`.
+
 ---
 
 ## Legacy Bridge

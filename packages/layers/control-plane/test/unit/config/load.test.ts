@@ -549,6 +549,57 @@ describe("loadConfig", () => {
     expect(scope.admission?.mail?.excluded_folder_refs).toEqual(["junkemail"]);
   });
 
+  it("accepts mail admission participant predicate filters", async () => {
+    const path = await writeConfigFile({
+      mailbox_id: "mailbox_primary",
+      root_dir: "./data/mail-sync",
+      graph: {
+        user_id: "user@example.com",
+        prefer_immutable_ids: true,
+      },
+      scope: {
+        included_container_refs: ["inbox", "sentitems"],
+        included_item_kinds: ["message"],
+      },
+      admission: {
+        mail: {
+          predicates: {
+            include: [
+              {
+                kind: "participant",
+                fields: ["from", "sender", "to", "cc", "bcc"],
+                domains: ["staccato2011.com"],
+              },
+            ],
+            exclude: [
+              {
+                kind: "participant",
+                fields: ["bcc"],
+                addresses: ["blocked@staccato2011.com"],
+              },
+            ],
+            unknown_participant_behavior: "ignore",
+          },
+        },
+      },
+    });
+    createdPaths.push(path);
+
+    const config = await loadConfig({ path });
+    const predicates = config.scopes[0]!.admission?.mail?.predicates;
+    expect(predicates?.include?.[0]).toMatchObject({
+      kind: "participant",
+      fields: ["from", "sender", "to", "cc", "bcc"],
+      domains: ["staccato2011.com"],
+    });
+    expect(predicates?.exclude?.[0]).toMatchObject({
+      kind: "participant",
+      fields: ["bcc"],
+      addresses: ["blocked@staccato2011.com"],
+    });
+    expect(predicates?.unknown_participant_behavior).toBe("ignore");
+  });
+
   it("rejects invalid campaign_request_lookback_days", async () => {
     const path = await writeConfigFile({
       mailbox_id: "mailbox_primary",

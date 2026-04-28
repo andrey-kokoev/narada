@@ -401,6 +401,27 @@ source scope for thread context and restrict mail admission to incoming folders:
 }
 ```
 
+For client/project correspondence where the relevant domain may appear on the
+sender or any receiver, use a participant predicate instead of a sender-only
+allowlist:
+
+```json
+"admission": {
+  "mail": {
+    "predicates": {
+      "include": [
+        {
+          "kind": "participant",
+          "fields": ["from", "sender", "to", "cc", "bcc"],
+          "domains": ["staccato2011.com"]
+        }
+      ],
+      "unknown_participant_behavior": "ignore"
+    }
+  }
+}
+```
+
 ### Lock timeout
 
 Another process is running, or a previous run crashed without releasing lock. Wait 5 minutes (stale lock detection) or manually remove `data/state/sync.lock/`.

@@ -7,7 +7,7 @@
  */
 
 import type { Fact } from "../facts/types.js";
-import type { MailAdmissionConfig } from "../config/types.js";
+import type { MailAdmissionConfig, MailAdmissionPredicateConfig, MailParticipantField } from "../config/types.js";
 import { MailboxContextStrategy } from "./mailbox/context-strategy.js";
 
 export interface PolicyContext {
@@ -64,6 +64,52 @@ function extractMailSenderEmail(fact: Fact): string | null {
   }
 }
 
+function addEmailValue(value: unknown, target: Set<string>): void {
+  if (typeof value === "string" && value.includes("@")) {
+    target.add(value.trim().toLowerCase());
+    return;
+  }
+  if (value && typeof value === "object") {
+    const email = (value as Record<string, unknown>).email;
+    if (typeof email === "string" && email.includes("@")) {
+      target.add(email.trim().toLowerCase());
+    }
+  }
+}
+
+function addEmailValues(value: unknown, target: Set<string>): void {
+  if (Array.isArray(value)) {
+    for (const item of value) addEmailValue(item, target);
+    return;
+  }
+  addEmailValue(value, target);
+}
+
+function extractMailParticipantEmails(fact: Fact, fields: MailParticipantField[]): Set<string> {
+  const emails = new Set<string>();
+  const requested = new Set(
+    fields.includes("any_participant")
+      ? ["from", "sender", "to", "cc", "bcc"]
+      : fields,
+  );
+
+  try {
+    const payload = JSON.parse(fact.payload_json) as Record<string, unknown>;
+    const event = payload.event as Record<string, unknown> | undefined;
+    if (!event || typeof event !== "object") return emails;
+    const normalizedPayload = event.payload as Record<string, unknown> | undefined;
+
+    for (const field of requested) {
+      addEmailValues(event[field], emails);
+      addEmailValues(normalizedPayload?.[field], emails);
+    }
+  } catch {
+    return emails;
+  }
+
+  return emails;
+}
+
 function addString(value: unknown, target: Set<string>): void {
   if (typeof value === "string" && value.trim()) {
     target.add(value.trim().toLowerCase());
@@ -104,6 +150,48 @@ function senderDomain(email: string): string | null {
   return email.slice(at + 1).toLowerCase();
 }
 
+function predicateMatches(fact: Fact, predicate: MailAdmissionPredicateConfig): boolean | "unknown" {
+  if (predicate.kind !== "participant") return false;
+  const emails = extractMailParticipantEmails(fact, predicate.fields ?? ["any_participant"]);
+  if (emails.size === 0) return "unknown";
+
+  const addresses = new Set((predicate.addresses ?? []).map((s) => s.toLowerCase()));
+  const domains = new Set((predicate.domains ?? []).map((s) => s.toLowerCase()));
+  if (addresses.size === 0 && domains.size === 0) return true;
+
+  for (const email of emails) {
+    const domain = senderDomain(email);
+    if (addresses.has(email) || (domain !== null && domains.has(domain))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function mailFactPassesPredicateAdmission(fact: Fact, admission: MailAdmissionConfig): boolean {
+  const predicates = admission.predicates;
+  if (!predicates) return true;
+
+  const unknownBehavior = predicates.unknown_participant_behavior ?? admission.unknown_sender_behavior ?? "ignore";
+  const exclude = predicates.exclude ?? [];
+  for (const predicate of exclude) {
+    const result = predicateMatches(fact, predicate);
+    if (result === true || (result === "unknown" && unknownBehavior === "admit")) {
+      return false;
+    }
+  }
+
+  const include = predicates.include ?? [];
+  if (include.length === 0) return true;
+  let sawUnknown = false;
+  for (const predicate of include) {
+    const result = predicateMatches(fact, predicate);
+    if (result === true) return true;
+    if (result === "unknown") sawUnknown = true;
+  }
+  return sawUnknown && unknownBehavior === "admit";
+}
+
 function mailFactPassesAdmission(fact: Fact, admission?: MailAdmissionConfig): boolean {
   if (!admission || fact.fact_type !== "mail.message.discovered") {
     return true;
@@ -116,6 +204,10 @@ function mailFactPassesAdmission(fact: Fact, admission?: MailAdmissionConfig): b
     return false;
   }
   if (includedFolders.size > 0 && ![...folderRefs].some((ref) => includedFolders.has(ref))) {
+    return false;
+  }
+
+  if (!mailFactPassesPredicateAdmission(fact, admission)) {
     return false;
   }
 

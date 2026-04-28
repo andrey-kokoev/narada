@@ -1,0 +1,33 @@
+{
+  "envelope_id": "env_391173e5-d88b-4ca2-95a3-50f1f568afae",
+  "received_at": "2026-04-28T00:18:31.812Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:staccato-mailbox-filtering-principled-20260427"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "andrey"
+  },
+  "payload": {
+    "title": "Mailbox sync needs principled filtering, not one-off sender patch",
+    "summary": "The Staccato mailbox gap should be closed as a serious filtering capability, not merely by patching allowed_sender_domains into a sender-or-receiver special case. Client Sites need to declare what mail belongs to the Site by participant, folder, thread, subject, date, labels/categories, attachments, and possibly account-local provenance, while preserving previewability and auditability before materialization.",
+    "evidence": [
+      "The Staccato Site needs correspondence from andrey@kokoev.name where any sender or receiver has domain staccato2011.com. Current sender-only admission is both underpowered and unsafe as a substitute. This exposed a broader design need: filtering must be first-class at the mailbox boundary and should be explainable before sync writes local state."
+    ],
+    "proposal": [
+      "Design canonical mailbox selection/filtering as a composable predicate model. It should support participant predicates over from, sender, to, cc, bcc; folder/container predicates; time windows; thread/conversation predicates; subject/body metadata predicates where appropriate; attachment metadata predicates; include/exclude composition; and explicit unknown-field behavior. The same predicate should drive dry-run preview, adapter-level remote narrowing where possible, local admission after normalization, and recorded sync evidence."
+    ],
+    "recommendation": "Treat participant-domain filtering as the first required predicate, but implement it through the general filtering model. Require a dry-run report showing matched counts and exclusion reasons before a Site may activate mailbox sync."
+  },
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_391173e5-d88b-4ca2-95a3-50f1f568afae",
+    "promoted_at": "2026-04-28T00:26:21.389Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
+}

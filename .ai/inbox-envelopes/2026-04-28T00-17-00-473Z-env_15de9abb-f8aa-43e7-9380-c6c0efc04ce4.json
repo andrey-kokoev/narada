@@ -1,0 +1,33 @@
+{
+  "envelope_id": "env_15de9abb-f8aa-43e7-9380-c6c0efc04ce4",
+  "received_at": "2026-04-28T00:17:00.473Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:staccato-mailbox-participant-domain-20260427"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Mailbox admission needs participant-domain filtering",
+    "summary": "While configuring the Staccato client-service Site to sync correspondence from andrey@kokoev.name, we needed admission for messages where sender or any receiver has domain staccato2011.com. Current Narada mail admission appears to support allowed sender addresses and sender domains, which is insufficient for client correspondence because sent mail and copied threads may carry the client domain only in recipient fields.",
+    "evidence": [
+      "Staccato Site recorded a configured-not-activated mailbox scope and non-executable candidate config rather than activating a whole-mailbox sync or substituting sender-only admission. Relevant Site files: .narada/config.json, .narada/mailboxes/staccato-correspondence/README.md, .narada/config/mailbox-sync.staccato-correspondence.candidate.json."
+    ],
+    "proposal": [
+      "Add canonical participant-domain mail admission for sender-or-recipient matching. The primitive should inspect from, sender, to, cc, bcc where available, use explicit match modes such as sender_only and sender_or_receiver, and be usable both by context admission and by adapter-level preview or query filtering when possible."
+    ],
+    "recommendation": "Prioritize this before activating client correspondence sync. It prevents both under-admission of sent/client-copied correspondence and over-admission of unrelated private mailbox material."
+  },
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_15de9abb-f8aa-43e7-9380-c6c0efc04ce4",
+    "promoted_at": "2026-04-28T00:26:21.841Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
+}

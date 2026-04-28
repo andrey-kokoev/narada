@@ -122,6 +122,21 @@ const MailAdmissionSchema = z.object({
   allowed_sender_addresses: z.array(z.string().email()).optional(),
   allowed_sender_domains: z.array(z.string().min(1)).optional(),
   unknown_sender_behavior: z.enum(['ignore', 'admit']).optional(),
+  predicates: z.object({
+    include: z.array(z.object({
+      kind: z.literal('participant'),
+      fields: z.array(z.enum(['from', 'sender', 'to', 'cc', 'bcc', 'any_participant'])).optional(),
+      addresses: z.array(z.string().email()).optional(),
+      domains: z.array(z.string().min(1)).optional(),
+    })).optional(),
+    exclude: z.array(z.object({
+      kind: z.literal('participant'),
+      fields: z.array(z.enum(['from', 'sender', 'to', 'cc', 'bcc', 'any_participant'])).optional(),
+      addresses: z.array(z.string().email()).optional(),
+      domains: z.array(z.string().min(1)).optional(),
+    })).optional(),
+    unknown_participant_behavior: z.enum(['ignore', 'admit']).optional(),
+  }).optional(),
 });
 
 const AdmissionSchema = z.object({

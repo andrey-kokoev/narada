@@ -1,0 +1,25 @@
+{
+  "envelope_id": "env_197759ff-101f-4a00-9ffb-0c86740a1515",
+  "received_at": "2026-04-27T21:53:41.872Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:staccato-site-absorb-execution-gap-corrected"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Corrected proposal: implement executing Site absorb command",
+    "summary": "Correction to envelope env_f75fbd9e-131e-4a76-a05a-ec74ed49148a, whose text was partially mangled by shell backtick interpretation during submission. A real Staccato operation exposed that Narada has Site lifecycle absorb doctrine and preflight, but no executing absorb command. The operator asked to have the OneDrive Staccato client-service Site absorb the local data and ELT Sites. We could run Narada lifecycle preflight for absorb, but had to manually materialize absorbed_sites and absorbed_by config plus KB/decision artifacts.",
+    "evidence": [
+      "Preflights for staccato-data to staccato-client-service and staccato-elt to staccato-client-service both returned status ready, mutation_performed false, authority_mode admission_review. Narada named required artifacts: source_site_ref, provenance_record, authority_map, trace_handoff, read_back_confirmation, admission_bundle, re_instantiation_evidence. There is no executing narada sites absorb command, nor a lifecycle execute absorb command, that creates or adopts these artifacts and records a site.absorbed lineage event."
+    ],
+    "proposal": [
+      "Implement governed Site lifecycle execution for absorption, likely as narada sites absorb or narada sites lifecycle execute absorb. It should take source Site, target Site, authority mode admission_review, absorption policy, retained-authority map, and evidence refs; create a transformation plan and admission bundle; update source and target Site configs or registry projections as appropriate; emit and read back a site.absorbed lineage event; and refuse any absorption that collapses raw data, runtime, task, or inbox authority into the target without explicit authority transfer machinery."
+    ],
+    "recommendation": "Prioritize absorb execution because Site absorption is now needed in lived Staccato work. Preserve current preflight as mandatory first phase. Execution should be split into intent, preflight, plan, approval, apply, and read-back so future operators cannot mistake manual config edits for admitted lifecycle transformations. Mark env_f75fbd9e-131e-4a76-a05a-ec74ed49148a as superseded by this corrected envelope if inbox workflow supports supersession."
+  },
+  "status": "received"
+}

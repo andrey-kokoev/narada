@@ -1,0 +1,25 @@
+{
+  "envelope_id": "env_80c6fc2a-e1de-440f-9cdc-3d4918b757e9",
+  "received_at": "2026-04-28T00:30:42.712Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:human-file-drop-numbered-items-correction-20260427"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "andrey"
+  },
+  "payload": {
+    "title": "File-drop inbox intake should use dated numbered files or folders as intent messages",
+    "summary": "Correction to the human file-drop inbox proposal: the intake item should be a filesystem item named in the form YYYYMMDD-NNN-slug. It may be a text/Markdown file, or it may be a folder. A folder should count as an intent message too, not merely as a container for other messages.",
+    "evidence": [
+      "The operator clarified that Narada should accept both files and folders as human-created intent messages. The folder case is important because some human intentions need a small bundle of material: a README/body, evidence files, screenshots, exported logs, or draft artifacts. The folder's name and body file together identify one candidate message."
+    ],
+    "proposal": [
+      "Revise canonical file-drop intake around numbered intake items. Accept items matching YYYYMMDD-NNN-slug as candidate messages. For files, parse the file body plus optional front matter. For folders, treat the folder itself as one candidate message; parse a canonical body file such as README.md, message.md, or intent.md when present, and treat remaining child files as attachments/evidence/supporting material. Admission should create exactly one canonical inbox envelope per intake item, with source.kind=file_drop and source.ref pointing to the file or folder path. Repeated scans must be idempotent by stable item identity and content hash."
+    ],
+    "recommendation": "Use the dated numbered name as the human-facing ordering and anti-collision convention. Dry-run should list every candidate item, whether file or folder, with parsed title/kind/authority, supporting-file count for folders, and admit/reject reason. This supersedes any interpretation that only .md/.txt files are accepted."
+  },
+  "status": "received"
+}

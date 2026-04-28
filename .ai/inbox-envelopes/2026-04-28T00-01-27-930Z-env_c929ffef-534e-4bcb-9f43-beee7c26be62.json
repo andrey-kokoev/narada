@@ -1,0 +1,25 @@
+{
+  "envelope_id": "env_c929ffef-534e-4bcb-9f43-beee7c26be62",
+  "received_at": "2026-04-28T00:01:27.930Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:staccato-site-absorption-followup-observations"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Follow-up observations from Staccato Site absorption and .narada migration",
+    "summary": "The Staccato Site absorption and subsequent migration of the client-service Site into .narada exposed several adjacent product and doctrine gaps: lifecycle preflight was remembered after manual edits; absorption edge schema is ad hoc; workspace_root and site_root can differ; client artifact admission needs machinery; reciprocal Site references are manually fragile; and AGENTS.md must surface non-obvious containment and authority boundaries.",
+    "evidence": [
+      "During the Staccato operation, we first materialized absorbed_sites and absorbed_by manually, then discovered and ran Narada sites lifecycle preflight absorb. The service Site was then moved from the client workspace root into a .narada subfolder, requiring manual edits to service, data, and ELT configs plus AGENTS/README updates. The parent folder remained a Git repo tracking only the .narada governance layer while ignoring client artifacts such as agreements and PBIX files."
+    ],
+    "proposal": [
+      "1. Make lifecycle transform workflows start from intent/preflight/plan/apply/read-back so agents check existing Narada machinery before manual projection. 2. Standardize absorption edge schema, including source, target, authority retained, admitted material, evidence, and lineage event. 3. Explicitly support workspace_root not equal to site_root in Site config, doctor, path resolution, and bootstrap guidance. 4. Add client artifact admission records for paths, classification, reason, handling policy, tracking/copy/reference posture, and retention. 5. Add reciprocal relation validation/update tooling for Site relation changes. 6. Require AGENTS.md to name workspace_root, site_root, authority locus, and forbidden collapses whenever containment is non-obvious."
+    ],
+    "recommendation": "Treat these as one coherent product cluster under Site lifecycle and inhabited workspace support. The immediate priority remains executing absorb machinery, but workspace_root/site_root support and reciprocal-edge validation should be considered part of making absorb safe in real client workspaces."
+  },
+  "status": "received"
+}

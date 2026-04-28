@@ -1,6 +1,12 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import type { ExchangeFsSyncConfig, ScopeConfig } from "./types.js";
+import type {
+  ExchangeFsSyncConfig,
+  MailAdmissionPredicateConfig,
+  MailAdmissionPredicatesConfig,
+  MailParticipantField,
+  ScopeConfig,
+} from "./types.js";
 import type { ChangeType } from "../adapter/graph/subscription.js";
 import {
   DEFAULT_EXCHANGE_FS_SYNC_CONFIG,
@@ -65,6 +71,58 @@ function expectStringArray(value: unknown, path: string): string[] {
   return value.map((item, index) =>
     expectString(item, `${path}[${index}]`),
   );
+}
+
+function expectMailParticipantFields(value: unknown, path: string): MailParticipantField[] {
+  const allowed = new Set(["from", "sender", "to", "cc", "bcc", "any_participant"]);
+  const values = expectStringArray(value, path);
+  for (const field of values) {
+    if (!allowed.has(field)) {
+      throw new Error(`${path} contains invalid participant field: ${field}`);
+    }
+  }
+  return values as MailParticipantField[];
+}
+
+function normalizeMailAdmissionPredicate(value: unknown, path: string): MailAdmissionPredicateConfig {
+  const predicate = expectObject(value, path);
+  const kind = expectString(predicate.kind, `${path}.kind`);
+  if (kind !== "participant") {
+    throw new Error(`${path}.kind must be participant`);
+  }
+  return {
+    kind: "participant",
+    ...(Array.isArray(predicate.fields)
+      ? { fields: expectMailParticipantFields(predicate.fields, `${path}.fields`) }
+      : {}),
+    ...(Array.isArray(predicate.addresses)
+      ? { addresses: expectStringArray(predicate.addresses, `${path}.addresses`) }
+      : {}),
+    ...(Array.isArray(predicate.domains)
+      ? { domains: expectStringArray(predicate.domains, `${path}.domains`) }
+      : {}),
+  };
+}
+
+function normalizeMailAdmissionPredicateArray(value: unknown, path: string): MailAdmissionPredicateConfig[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`${path} must be an array`);
+  }
+  return value.map((item, index) => normalizeMailAdmissionPredicate(item, `${path}[${index}]`));
+}
+
+function normalizeMailAdmissionPredicates(value: Record<string, unknown>, path: string): MailAdmissionPredicatesConfig {
+  return {
+    ...(Array.isArray(value.include)
+      ? { include: normalizeMailAdmissionPredicateArray(value.include, `${path}.include`) }
+      : {}),
+    ...(Array.isArray(value.exclude)
+      ? { exclude: normalizeMailAdmissionPredicateArray(value.exclude, `${path}.exclude`) }
+      : {}),
+    ...(value.unknown_participant_behavior === "ignore" || value.unknown_participant_behavior === "admit"
+      ? { unknown_participant_behavior: value.unknown_participant_behavior }
+      : {}),
+  };
 }
 
 function expectAttachmentPolicy(
@@ -361,6 +419,14 @@ function loadScopeConfig(rawScope: unknown, pathPrefix: string): ScopeConfig {
             : {}),
           ...(mailAdmissionRaw.unknown_sender_behavior === "ignore" || mailAdmissionRaw.unknown_sender_behavior === "admit"
             ? { unknown_sender_behavior: mailAdmissionRaw.unknown_sender_behavior }
+            : {}),
+          ...(mailAdmissionRaw.predicates && isObject(mailAdmissionRaw.predicates)
+            ? {
+                predicates: normalizeMailAdmissionPredicates(
+                  mailAdmissionRaw.predicates,
+                  `${pathPrefix}.admission.mail.predicates`,
+                ),
+              }
             : {}),
         },
       }

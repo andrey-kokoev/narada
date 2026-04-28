@@ -42,6 +42,9 @@ function makeNormalizedMailFact(
     folderRefs?: string[];
     parentFolderId?: string;
     queriedFolderRef?: string;
+    to?: string[];
+    cc?: string[];
+    bcc?: string[];
   },
 ): Omit<Fact, "created_at"> {
   const graphExtensions: Record<string, string> = {};
@@ -63,6 +66,9 @@ function makeNormalizedMailFact(
         conversation_id: conversationId,
         from: { email: senderEmail, display_name: "Sender" },
         sender: { email: senderEmail, display_name: "Sender" },
+        to: (options?.to ?? []).map((email) => ({ email, display_name: email })),
+        cc: (options?.cc ?? []).map((email) => ({ email, display_name: email })),
+        bcc: (options?.bcc ?? []).map((email) => ({ email, display_name: email })),
         folder_refs: options?.folderRefs ?? [],
         ...(Object.keys(graphExtensions).length
           ? {
@@ -203,6 +209,62 @@ describe("AdmittedMailContextStrategy", () => {
     const contexts = strategy.formContexts(facts, "scope-1");
     expect(contexts).toHaveLength(1);
     expect(contexts[0]!.context_id).toBe("conv-exact");
+  });
+
+  it("admits mail when any configured participant domain matches a recipient", () => {
+    const strategy = new AdmittedMailContextStrategy({
+      predicates: {
+        include: [
+          {
+            kind: "participant",
+            fields: ["from", "sender", "to", "cc", "bcc"],
+            domains: ["staccato2011.com"],
+          },
+        ],
+        unknown_participant_behavior: "ignore",
+      },
+    });
+
+    const facts = [
+      {
+        ...makeNormalizedMailFact("conv-recipient", "rec-recipient", "andrey@kokoev.name", {
+          to: ["partner@staccato2011.com"],
+        }),
+        created_at: new Date().toISOString(),
+      },
+      {
+        ...makeNormalizedMailFact("conv-blocked", "rec-blocked", "andrey@kokoev.name", {
+          to: ["friend@example.net"],
+        }),
+        created_at: new Date().toISOString(),
+      },
+    ] as Fact[];
+
+    const contexts = strategy.formContexts(facts, "scope-1");
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]!.context_id).toBe("conv-recipient");
+  });
+
+  it("excludes mail when an exclude participant predicate matches", () => {
+    const strategy = new AdmittedMailContextStrategy({
+      predicates: {
+        include: [{ kind: "participant", fields: ["any_participant"], domains: ["staccato2011.com"] }],
+        exclude: [{ kind: "participant", fields: ["cc"], addresses: ["blocked@staccato2011.com"] }],
+        unknown_participant_behavior: "ignore",
+      },
+    });
+
+    const facts = [
+      {
+        ...makeNormalizedMailFact("conv-excluded", "rec-excluded", "andrey@kokoev.name", {
+          to: ["partner@staccato2011.com"],
+          cc: ["blocked@staccato2011.com"],
+        }),
+        created_at: new Date().toISOString(),
+      },
+    ] as Fact[];
+
+    expect(strategy.formContexts(facts, "scope-1")).toHaveLength(0);
   });
 
   it("admits mail only from configured folder refs when present", () => {
