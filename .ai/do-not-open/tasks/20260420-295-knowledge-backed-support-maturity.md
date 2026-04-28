@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T19:30:09.086Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
+---
+
 # Task 295: Knowledge-Backed Support Maturity
 
 ## Chapter
@@ -54,16 +62,16 @@ Knowledge may inform evaluation quality, but it must not become a hidden authori
 
 ### Deliverables
 
-1. **`docs/mailbox-knowledge-model.md`** (new) — Canonical document defining:
+1. **`docs/concepts/mailbox-knowledge-model.md`** (new) — Canonical document defining:
    - Three-layer placement model: public repo (contracts/types), private ops repo (domain content), charter runtime (consumption)
    - Knowledge flow: `knowledge/*.md` → `MailboxContextMaterializer` → `context_materialization` → system prompt → charter output
    - Proof vs Knowledge distinction table and explanation
    - Three compact support playbook examples (login/access, billing, escalation-worthy complaints)
    - Authority and secrecy boundary rules
 
-2. **`docs/first-operation-proof.md`** — Updated with:
+2. **`docs/product/first-operation-proof.md`** — Updated with:
    - New "Proof vs Knowledge" section (lines 239–254) explaining that the fixture-backed proof verifies pipeline wiring, not support wisdom
-   - Cross-reference to `docs/mailbox-knowledge-model.md`
+   - Cross-reference to `docs/concepts/mailbox-knowledge-model.md`
    - Updated Non-Goals and Related Documents sections
 
 3. **`packages/ops-kit/src/lib/scaffold.ts`** — Updated with:
@@ -92,7 +100,7 @@ $ cd packages/layers/control-plane && npx vitest run test/unit/charter/mailbox-m
       Tests  2 passed (2)
 ```
 
-**Typecheck note:** Pre-existing typecheck errors in `packages/layers/control-plane/src/observability/queries.ts` and `operator-actions/executor.ts` are unrelated to this task; no control-plane source files were modified.
+**TIZ verification:** `run_1777404569347_j0s7ng` passed in 2.0s and verified the knowledge model doc, first-operation proof cross-reference, scaffold sample playbook hook, ops-kit scaffold tests, and mailbox materializer tests.
 
 ### Boundary Preservation
 
