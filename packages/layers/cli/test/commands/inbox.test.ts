@@ -395,13 +395,52 @@ describe('Canonical Inbox CLI commands', () => {
   it('reports conflict-safe local DB posture in doctor delivery coordinates', async () => {
     setupGitRepo(tempDir);
     const doctor = await inboxDoctorCommand({ cwd: tempDir, format: 'json' });
-    const result = doctor.result as { delivery: Record<string, unknown>; refresh: Record<string, unknown> };
+    const result = doctor.result as { delivery: Record<string, unknown>; refresh: Record<string, unknown>; publication: Record<string, unknown> };
     const delivery = result.delivery;
     expect(delivery).toMatchObject({
       export_dir: join(tempDir, '.ai', 'inbox-envelopes'),
       git_conflict_posture: 'local sqlite db ignored; use inbox export/import for portable envelopes',
     });
+    expect(result.publication).toMatchObject({
+      status: 'published_or_no_artifacts_pending',
+      uncommitted_envelope_artifacts_count: 0,
+      unpushed_commit_count: 0,
+    });
     expect(result.refresh).toMatchObject({ imported: 0, skipped: 0, exported_count: 0 });
+  });
+
+  it('doctor reports uncommitted portable inbox envelope artifacts', async () => {
+    setupGitRepo(tempDir);
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual:publication',
+      kind: 'observation',
+      authorityLevel: 'operator_confirmed',
+      payload: JSON.stringify({ title: 'Publication pending' }),
+    });
+    expect(submitted.exitCode).toBe(ExitCode.SUCCESS);
+
+    const doctor = await inboxDoctorCommand({ cwd: tempDir, format: 'json' });
+    const result = doctor.result as {
+      publication: {
+        status: string;
+        uncommitted_envelope_artifacts_count: number;
+        uncommitted_envelope_artifacts: string[];
+        next_steps: string[];
+      };
+      checks: Array<{ name: string; ok: boolean; detail: string }>;
+    };
+
+    expect(result.publication.status).toBe('publication_pending');
+    expect(result.publication.uncommitted_envelope_artifacts_count).toBe(1);
+    expect(result.publication.uncommitted_envelope_artifacts[0]).toContain('.ai/inbox-envelopes');
+    expect(result.publication.next_steps.join('\n')).toContain('commit .ai/inbox-envelopes');
+    expect(result.checks.find((check) => check.name === 'inbox_envelope_artifacts_committed')).toMatchObject({
+      ok: false,
+      detail: '1 uncommitted inbox envelope artifact(s)',
+    });
   });
 
   it('rejects ambiguous payload sources', async () => {

@@ -33,7 +33,26 @@ Successful `inbox submit` and `inbox submit-observation` write two surfaces:
 | `.ai/inbox.db` | Local runtime substrate for the current embodiment. It is ignored and must not be merged as authority. |
 | `.ai/inbox-envelopes/*.json` | Git-visible portable handoff artifact. Other embodiments see the envelope by importing these artifacts. |
 
-If another embodiment, clone, or Site actor must see the inbox item, commit and push the exported `.ai/inbox-envelopes/*.json` artifact. Running `narada inbox export --format json` remains valid and idempotent, but normal submission writes the per-envelope artifact immediately to avoid local-only invisible work.
+If another embodiment, clone, or Site actor must see the inbox item, commit and push the exported `.ai/inbox-envelopes/*.json` artifact. Running `narada inbox export --format json` remains valid and idempotent as a bulk/replay export for older or repaired local SQLite rows, but normal submission writes the per-envelope artifact immediately to avoid local-only invisible work.
+
+For pre-fix or externally created envelopes that exist only in `.ai/inbox.db`, run:
+
+```bash
+narada inbox export --format json
+git add .ai/inbox-envelopes
+git commit -m "Export inbox envelope artifacts"
+git push
+```
+
+Then, in the receiving embodiment:
+
+```bash
+git pull
+narada inbox import
+narada inbox work-next
+```
+
+`narada inbox doctor` reports whether `.ai/inbox-envelopes/*.json` artifacts are uncommitted or whether the current branch has unpushed commits that may contain portable inbox artifacts.
 
 Run `narada inbox doctor` before cross-environment submission or publication. It reports the working directory, Git delivery coordinates, inbox DB accessibility, Node executable, CLI entrypoint, platform/WSL posture, package root, repository dist entrypoint, and whether canonical inbox commands are available from the current runtime.
 
@@ -227,5 +246,6 @@ Canonical Inbox first use should not require ad hoc repair work.
 | Windows/WSL shell uses the wrong `narada`, `node`, or package shim | Run `narada inbox doctor` and inspect `Node`, `CLI entrypoint`, `Platform`, and `Runtime posture` before submitting or publishing envelopes. |
 | Fresh checkout missing dependencies, build output, CLI shim, or native SQLite binding | Run `narada doctor --bootstrap --format json` and follow its `repair_plan`. |
 | Git/worktree uncertainty before publishing an inbox-backed chapter | Run `narada chapter preflight <range> --expect-commit --expect-push`. |
+| Unsure whether inbox artifacts are visible to another embodiment | Run `narada inbox doctor`; inspect `publication.uncommitted_envelope_artifacts_count`, `publication.unpushed_commit_count`, and `publication.next_steps`. |
 | Inbox entry is informative but not executable | Use `inbox triage <id> --action archive --by <principal>` after durable guidance or residuals are recorded. |
 | Inbox entry targets a zone without executable promotion | Use `inbox pending <id> --to <kind>:<ref> --by <principal>`; do not report it as enacted. |

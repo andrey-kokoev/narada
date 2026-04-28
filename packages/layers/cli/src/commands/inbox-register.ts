@@ -113,7 +113,7 @@ export function registerInboxCommands(program: Command): void {
 
   inboxCmd
     .command('export')
-    .description('Export inbox envelopes as append-only JSON artifacts')
+    .description('Bulk/replay export inbox envelopes as append-only JSON artifacts')
     .option('--status <status>', 'Filter by status')
     .option('--kind <kind>', 'Filter by envelope kind')
     .option('--out-dir <path>', 'Output directory', '.ai/inbox-envelopes')

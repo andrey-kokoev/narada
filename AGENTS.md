@@ -893,6 +893,10 @@ pnpm test:focused "pnpm --dir packages/layers/daemon exec vitest run test/unit/o
 # Example: direct bounded run if package-level scripts ignore or broaden filters
 pnpm --dir packages/layers/cli exec vitest run test/commands/task-report.test.ts
 
+# Canonical Inbox command tests are integration-heavy and can take about a minute.
+# Keep them bounded to the specific inbox files instead of using package test scripts.
+pnpm --dir packages/layers/cli exec vitest run test/commands/inbox.test.ts test/commands/inbox-mutation-evidence.test.ts
+
 # Example: package-level focused run, only when explicitly justified
 ALLOW_PACKAGE_FOCUSED=1 pnpm test:focused "pnpm --filter @narada2/charters test"
 

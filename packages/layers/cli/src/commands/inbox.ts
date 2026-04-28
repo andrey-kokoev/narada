@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { access, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import {
@@ -381,6 +381,7 @@ export async function inboxDoctorCommand(options: InboxDoctorOptions): Promise<{
   const delivery = inspectInboxDelivery(cwd);
   const readiness = inspectInboxReadiness(cwd, delivery.inbox_db_path);
   const runtime = inspectInboxRuntime(cwd);
+  const publication = inspectInboxPublication(cwd);
   const refresh = await refreshInboxFromExports(new SqliteInboxStore(String(delivery.inbox_db_path)), cwd, { closeStore: true });
   const checks = [
     { name: 'repo_detected', ok: delivery.repo_root !== null, detail: delivery.repo_root ?? 'not a git worktree' },
@@ -390,6 +391,8 @@ export async function inboxDoctorCommand(options: InboxDoctorOptions): Promise<{
     { name: 'node_runtime_origin', ok: true, detail: runtime.runtime_origin_detail },
     { name: 'cli_entrypoint_exists', ok: runtime.cli_entrypoint_exists, detail: runtime.cli_entrypoint ?? 'no CLI entrypoint recorded' },
     { name: 'canonical_inbox_commands_available', ok: runtime.canonical_inbox_commands_available, detail: runtime.canonical_inbox_commands_detail },
+    { name: 'inbox_envelope_artifacts_committed', ok: publication.uncommitted_envelope_artifacts_count === 0, detail: publication.uncommitted_envelope_artifacts_count === 0 ? 'no uncommitted inbox envelope artifacts' : `${publication.uncommitted_envelope_artifacts_count} uncommitted inbox envelope artifact(s)` },
+    { name: 'inbox_envelope_artifacts_pushed', ok: publication.unpushed_commit_count === 0, detail: publication.unpushed_commit_count === 0 ? 'no unpushed commits detected' : `${publication.unpushed_commit_count} unpushed commit(s) may contain portable inbox artifacts` },
   ];
   const ok = checks.every((check) => check.ok);
   return okResult(
@@ -399,6 +402,7 @@ export async function inboxDoctorCommand(options: InboxDoctorOptions): Promise<{
       delivery,
       readiness,
       runtime,
+      publication,
       refresh,
       checks,
     },
@@ -413,6 +417,7 @@ export async function inboxDoctorCommand(options: InboxDoctorOptions): Promise<{
       `CLI entrypoint: ${runtime.cli_entrypoint}`,
       `Platform: ${runtime.node_platform}/${process.arch}${runtime.is_wsl ? ` (WSL${runtime.wsl_distro ? ` ${runtime.wsl_distro}` : ''})` : ''}`,
       `Runtime posture: ${runtime.runtime_posture}`,
+      `Inbox publication: ${publication.status}`,
       `Export refresh: ${refresh.imported} imported, ${refresh.skipped} already present, ${refresh.exported_count} artifacts`,
       ...checks.map((check) => `${check.ok ? 'ok' : 'warn'} ${check.name}: ${check.detail}`),
     ],
@@ -445,7 +450,7 @@ export async function inboxExportCommand(options: InboxExportOptions): Promise<{
         files,
       },
       [
-        `Inbox envelopes exported: ${envelopes.length}`,
+        `Inbox envelopes bulk/replay exported: ${envelopes.length}`,
         `Output: ${outDir}`,
       ],
       options.format,
@@ -1406,6 +1411,71 @@ function inspectInboxDelivery(cwdInput: string): Record<string, unknown> {
     merge_or_replay_required: headCommit && upstreamCommit ? headCommit !== upstreamCommit : null,
     git_conflict_posture: 'local sqlite db ignored; use inbox export/import for portable envelopes',
   };
+}
+
+function inspectInboxPublication(cwdInput: string): Record<string, unknown> {
+  const cwd = resolve(cwdInput);
+  const repoRoot = git(cwd, ['rev-parse', '--show-toplevel']);
+  if (!repoRoot) {
+    return {
+      status: 'unknown',
+      uncommitted_envelope_artifacts_count: 0,
+      uncommitted_envelope_artifacts: [],
+      unpushed_commit_count: 0,
+      next_steps: ['Run from a Git worktree to inspect inbox envelope publication posture.'],
+    };
+  }
+
+  const artifactFiles = listInboxEnvelopeArtifactFiles(repoRoot);
+  const tracked = new Set((git(repoRoot, ['ls-files', '--', '.ai/inbox-envelopes']) ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean));
+  const porcelain = new Set((git(repoRoot, ['status', '--porcelain', '--', '.ai/inbox-envelopes']) ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/^[ MARCUD?!]{1,2}\s+/, '')));
+  const uncommitted = artifactFiles.filter((file) => !tracked.has(file) || porcelain.has(file));
+
+  const upstream = git(repoRoot, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
+  const aheadCountRaw = upstream ? git(repoRoot, ['rev-list', '--count', `${upstream}..HEAD`]) : null;
+  const aheadCount = aheadCountRaw && Number.isFinite(Number(aheadCountRaw)) ? Number(aheadCountRaw) : 0;
+  const nextSteps: string[] = [];
+  if (uncommitted.length > 0) {
+    nextSteps.push('Review and commit .ai/inbox-envelopes/*.json artifacts that should be visible to other embodiments.');
+  }
+  if (aheadCount > 0) {
+    nextSteps.push('Push the current branch so committed inbox envelope artifacts are visible to other embodiments.');
+  }
+
+  return {
+    status: uncommitted.length > 0 || aheadCount > 0 ? 'publication_pending' : 'published_or_no_artifacts_pending',
+    uncommitted_envelope_artifacts_count: uncommitted.length,
+    uncommitted_envelope_artifacts: uncommitted,
+    unpushed_commit_count: aheadCount,
+    upstream,
+    next_steps: nextSteps,
+  };
+}
+
+function listInboxEnvelopeArtifactFiles(repoRoot: string): string[] {
+  const root = join(repoRoot, '.ai', 'inbox-envelopes');
+  if (!existsSync(root)) return [];
+  const files: string[] = [];
+  const visit = (dir: string): void => {
+    for (const name of readdirSync(dir)) {
+      const path = join(dir, name);
+      const stat = statSync(path);
+      if (stat.isDirectory()) {
+        visit(path);
+      } else if (name.endsWith('.json')) {
+        files.push(relative(repoRoot, path));
+      }
+    }
+  };
+  visit(root);
+  return files.sort();
 }
 
 function inspectInboxReadiness(cwdInput: string, inboxDbPath: unknown): Record<string, unknown> {
