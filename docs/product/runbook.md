@@ -337,7 +337,7 @@ This composes health, recent activity, attention queue, and drafts pending revie
 Run the fixture-based smoke test to verify the pipeline without live credentials:
 
 ```bash
-pnpm test:control-plane -- test/integration/live-operation/smoke-test.test.ts
+pnpm --filter @narada2/control-plane exec vitest run test/integration/live-operation/smoke-test.test.ts
 ```
 
 This test:

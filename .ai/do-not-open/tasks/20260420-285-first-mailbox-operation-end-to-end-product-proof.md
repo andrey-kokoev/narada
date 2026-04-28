@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T19:09:07.452Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
+---
+
 # Task 285: First Mailbox Operation End-to-End Product Proof
 
 ## Chapter
@@ -52,7 +60,7 @@ Task executed in a single pass with planning mode approval.
 
 The public proof surface delivered is documentation and packaging of existing test artifacts, not new test code or new runtime behavior.
 
-1. Created `docs/first-operation-proof.md` — the canonical product proof document defining:
+1. Created `docs/product/first-operation-proof.md` — the canonical product proof document defining:
    - Canonical proof case: support mailbox (`help@global-maxima.com`), `support_steward` charter, `draft-only` posture
    - Operation shape with JSON config example
    - Charter profile and expected operator loop
@@ -62,9 +70,9 @@ The public proof surface delivered is documentation and packaging of existing te
    - Inspection checkpoints for every pipeline stage (SQL queries + CLI commands)
    - Public repo vs private ops repo boundary table
 
-2. Updated `docs/runbook.md` — smoke test section now cross-references `docs/first-operation-proof.md`.
+2. Updated `docs/product/runbook.md` — smoke test section now cross-references `docs/product/first-operation-proof.md`.
 
-3. Updated `AGENTS.md` — added `docs/first-operation-proof.md` to Documentation Index and "Where to Find Things".
+3. Updated `AGENTS.md` — added `docs/product/first-operation-proof.md` to Documentation Index and "Where to Find Things".
 
 4. Updated `CHANGELOG.md` — added `## Operation Realization` chapter entry summarizing Tasks 283 and 285.
 
@@ -72,14 +80,18 @@ What existed before this task and was documented, not created:
 - `smoke-test.test.ts` and `draft-proposal-pipeline.test.ts` (Task 230)
 - `support_steward` charter (Task 229)
 - `explain`/`preflight`/`show` commands (Tasks 231, 234, 236)
-- `docs/runbook.md` (Task 237)
+- `docs/product/runbook.md` (Task 237)
 
-## Verification Evidence
+## Verification
 
-- `pnpm verify` — 5/5 steps pass
-- `pnpm test:control-plane -- test/integration/live-operation/smoke-test.test.ts` — fixture-backed proof runs (verified prior to task)
-- `pnpm test:control-plane -- test/integration/live-operation/draft-proposal-pipeline.test.ts` — pipeline proof runs (verified prior to task)
-- Visual inspection of `docs/first-operation-proof.md` for coherence and completeness
+- `narada test-run run --task 285 --requester architect --scope focused --timeout 180 --cmd <first-operation proof doc and fixture test checks>` — passed as TIZ run `run_1777403301889_b08k5h` in 6,941ms.
+- The TIZ check verified:
+  - `docs/product/first-operation-proof.md` exists and defines the canonical support mailbox product proof.
+  - The proof document separates fixture-backed and live-backed responsibilities.
+  - The proof document uses current `narada show <type> <id>` CLI syntax.
+  - `docs/product/runbook.md` links to `docs/product/first-operation-proof.md`.
+  - `AGENTS.md` indexes the product proof.
+  - `pnpm --filter @narada2/control-plane exec vitest run test/integration/live-operation/draft-proposal-pipeline.test.ts` passes.
 
 ## Bounded Deferrals
 

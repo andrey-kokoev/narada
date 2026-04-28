@@ -50,7 +50,7 @@ The `support_steward` charter is a dedicated system prompt (not a generic fallba
 2. Narada syncs the message, creates a fact, opens a work item
 3. Charter evaluates the context and proposes a `draft_reply`
 4. Foreman creates an outbound command (with `require_human_approval: true`, the decision is `pending_approval`)
-5. Operator inspects the draft via CLI (`narada show --type decision`) or UI
+5. Operator inspects the draft via CLI (`narada show decision <decision-id>`) or UI
 6. Operator approves or rejects the draft
 7. On approval, send-reply worker creates the Graph draft; on rejection, command is cancelled
 
@@ -76,13 +76,13 @@ The fixture-backed proof runs entirely without live credentials. It uses a synth
 
 ```bash
 # Full fixture-backed smoke test (proves pipeline through draft creation)
-pnpm test:control-plane -- test/integration/live-operation/smoke-test.test.ts
+pnpm --filter @narada2/control-plane exec vitest run test/integration/live-operation/smoke-test.test.ts
 
 # Pipeline-focused proof (proves through outbound command creation)
-pnpm test:control-plane -- test/integration/live-operation/draft-proposal-pipeline.test.ts
+pnpm --filter @narada2/control-plane exec vitest run test/integration/live-operation/draft-proposal-pipeline.test.ts
 
 # Daemon-level dispatch proof (proves scheduler + execution + foreman resolution)
-pnpm test:daemon -- test/integration/dispatch.test.ts
+pnpm --filter @narada2/daemon exec vitest run test/integration/dispatch.test.ts
 ```
 
 ### Expected Outputs
@@ -204,7 +204,7 @@ sqlite3 <rootDir>/.narada/coordinator.db \
 
 ```bash
 # Evaluation persisted?
-narada show --type evaluation --id <evaluation-id>
+narada show evaluation <evaluation-id>
 
 # Or query directly
 sqlite3 <rootDir>/.narada/coordinator.db \
@@ -215,7 +215,7 @@ sqlite3 <rootDir>/.narada/coordinator.db \
 
 ```bash
 # Decision recorded?
-narada show --type decision --id <decision-id>
+narada show decision <decision-id>
 
 # Outbound command created?
 sqlite3 <rootDir>/.narada/coordinator.db \
