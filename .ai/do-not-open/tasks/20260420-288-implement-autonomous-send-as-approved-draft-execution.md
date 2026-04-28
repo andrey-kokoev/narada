@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T19:17:52.703Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
+---
+
 # Task 288: Implement Autonomous Send as Approved-Draft Execution
 
 ## Chapter
@@ -122,3 +130,21 @@ The plan must name:
 - [x] Retryable vs terminal send failure is durably represented.
 - [x] Docs reflect the updated outbound lifecycle and authority boundaries.
 - [x] Focused verification covers the new send path and boundary behavior.
+
+## Execution Notes
+
+1. Confirmed the durable approval boundary already exists in `packages/layers/control-plane/src/outbound/types.ts`: `draft_ready` is not sendable, `approved_for_send` is the explicit sendable state, `approved_at` records the promotion time, and the valid transition chain preserves `draft_ready -> approved_for_send -> sending -> submitted -> confirmed`.
+2. Confirmed dedicated send execution lives outside charter runtime in `packages/layers/control-plane/src/outbound/send-execution-worker.ts` and daemon wiring in `packages/layers/daemon/src/service.ts`. The worker only processes approved send commands, checks retry cooldown, preserves managed draft identity, applies participant policy, records `sending`, records `submitted` after Graph acceptance, and durably separates retryable from terminal failures.
+3. Confirmed reconciliation remains the confirmation boundary. `submitted` commands are not marked confirmed by send execution; reconciliation owns `confirmed` and retry handling for ambiguous confirmation outcomes.
+4. Confirmed the operator promotion surface exists through `narada approve-draft-for-send`, backed by the canonical operator action executor. Approval records an audited `approve_draft_for_send` action and is distinct from actual send execution.
+5. Added focused command-level regression coverage in `packages/layers/cli/test/commands/approve-draft-for-send.test.ts` for successful `draft_ready -> approved_for_send` promotion, `approved_at`, transition evidence, operator-action audit, and rejection when the command is not in `draft_ready`.
+
+## Verification
+
+| Check | Result |
+| --- | --- |
+| TIZ focused run `run_1777403767959_gzglq2` | Passed in 34.4s |
+| CLI command coverage | `packages/layers/cli/test/commands/approve-draft-for-send.test.ts` passed |
+| Control-plane outbound coverage | `types.test.ts`, `send-execution-worker.test.ts`, `reconciler-and-non-send.test.ts`, and `operator-actions/executor.test.ts` passed |
+
+The focused verification proves the approval boundary, operator-action audit, send execution state machine, retry/terminal behavior, and reconciliation separation without routing send authority through an agent or charter runtime.
