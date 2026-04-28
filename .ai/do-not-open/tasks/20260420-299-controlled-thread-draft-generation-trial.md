@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T19:37:22.354Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
+---
+
 # Task 299 — Controlled-Thread Draft Generation Trial
 
 status: closed
@@ -107,3 +115,14 @@ narada-daemon --once -c ./config/config.json
 - No live sends performed
 - Draft is inspectable but not sent
 - Product-code fixes attributed to Task 305, not Task 299
+
+## Verification
+
+| Check | Result |
+| --- | --- |
+| TIZ focused run `run_1777405007259_et0vnp` | Passed in 12ms |
+| Private execution log | `narada.sonar` `commands-task299-final-e2e.log` exists and records `Sync complete` with applied work |
+| No-send proof | Task evidence records `No send occurred` and `Draft is inspectable but not sent` |
+| Privacy boundary | Task evidence records no private message bodies, credentials, or Graph IDs exposed in the public repo |
+
+Verification intentionally inspected existing private/public evidence only. It did not rerun live mailbox sync, draft creation, or send-related commands.
