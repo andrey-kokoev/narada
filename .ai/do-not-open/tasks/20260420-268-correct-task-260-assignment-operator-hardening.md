@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T17:35:10.976Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: peer_reviewed
+---
+
 # Task 268: Correct Task 260 Assignment Operator Hardening
 
 ## Chapter
@@ -192,3 +200,7 @@ Added a "Corrective Notes (Task 268)" section to `.ai/do-not-open/tasks/20260420
 - [x] Focused tests cover the new hardening cases.
 - [x] Task 260 notes are corrected.
 - [x] No `*-EXECUTED`, `*-DONE`, `*-RESULT`, `*-FINAL`, or `*-SUPERSEDED` files are created.
+
+## Verification
+
+<!-- Record commands run, results observed, and how correctness was checked. -->
