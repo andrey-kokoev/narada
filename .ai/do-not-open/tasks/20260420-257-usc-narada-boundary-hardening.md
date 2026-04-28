@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T17:00:08.318Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: peer_reviewed
+---
+
 # Task 257: USC/Narada Boundary Hardening
 
 ## Chapter
