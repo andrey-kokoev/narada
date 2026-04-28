@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T18:35:31.627Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
+---
+
 # Task 276: Verification State Service and Suggestion Operator
 
 ## Chapter
