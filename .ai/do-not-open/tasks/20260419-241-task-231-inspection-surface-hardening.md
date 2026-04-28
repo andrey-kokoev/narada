@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T16:24:52.061Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: peer_reviewed
+---
+
 # Task 241: Task 231 Inspection Surface Hardening
 
 ## Chapter
