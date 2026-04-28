@@ -20,6 +20,7 @@ import {
   sitesRelationRecordCommand,
   sitesRelationValidateCommand,
 } from './sites.js';
+import { siteImmuneScanCommand } from './site-immune-scan.js';
 import { siteMutationAuthorityPreflightCommand } from './site-mutation-authority-preflight.js';
 import { directCommandAction, silentCommandContext, wrapCommand } from '../lib/command-wrapper.js';
 import { emitCommandResult, emitFormatterBackedCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
@@ -269,6 +270,27 @@ export function registerSitesCommands(program: Command): void {
       invocation: (opts) => siteMutationAuthorityPreflightCommand({
         cwd: opts.cwd as string | undefined,
         mutationFamily: opts.mutationFamily as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
+
+  const immuneCmd = sitesCmd
+    .command('immune')
+    .description('Observe Site authority zones for tamper-suspected posture without repair');
+
+  immuneCmd
+    .command('scan')
+    .description('Read-only immune sensing over Site authority surfaces')
+    .option('--cwd <path>', 'Site root to inspect', '.')
+    .option('--limit <n>', 'Maximum findings to return', '50')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'sites immune scan',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => siteImmuneScanCommand({
+        cwd: opts.cwd as string | undefined,
+        limit: Number(opts.limit),
         format: resolveCommandFormat(opts.format, 'auto'),
       }),
     }));
