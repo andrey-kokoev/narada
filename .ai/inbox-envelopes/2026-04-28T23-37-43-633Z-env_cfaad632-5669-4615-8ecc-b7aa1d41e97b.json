@@ -23,5 +23,13 @@
     ],
     "recommendation": "Promote as task_candidate for inbox submit-observation CLI ergonomics"
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "decision",
+    "target_ref": "created-task-1055-inbox-principal-flag-ergonomics",
+    "promoted_at": "2026-04-28T23:43:02.965Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'decision' is not implemented yet."
+  }
 }
