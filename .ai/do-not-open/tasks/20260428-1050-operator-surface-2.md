@@ -1,32 +1,26 @@
 ---
-status: opened
+status: closed
 depends_on: [1049]
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-28T23:47:33.168Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Site governance docs now include operator_surfaces and session_bindings with minimal fields, explicit advisory/materialization posture, adapter/channel examples, and no authority/capability grant. Generated Site config remains backward compatible by declaring empty arrays for Sites without surfaces or bindings. Focused tests and pnpm verify passed.
+closed_at: 2026-04-28T23:47:42.210Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Task 1050 — Add Site operator surface declaration shape
 
-## Execution Mode
+## Goal
 
-Proceed directly. This is a narrow corrective task; use focused edits only.
-
-## Assignment
-
-<!-- Assignment placeholder -->
-
-## Required Reading
-
-- docs/product/site-governance-coordinates.md
-- docs/product/site-bootstrap-contract.md
-- docs/product/site-factorization.md
-- docs/concepts/canonical-routing-addressing.md
+Extend Site governance/product documentation with declarative operator_surfaces and session binding metadata that remain orientation and recovery metadata, not authority.
 
 ## Context
 
 Once Operator Surface and SessionBinding are defined, Sites need a declarative place to say which surfaces are expected or preferred for a role/workflow and how agent runtimes/channels bind to them. This should sit adjacent to embodiments and agent role contracts, not replace them.
-
-## Goal
-
-Extend Site governance/product documentation with declarative operator_surfaces and session binding metadata that remain orientation and recovery metadata, not authority.
 
 ## Required Work
 
@@ -44,24 +38,6 @@ Extend Site governance/product documentation with declarative operator_surfaces 
 - Do not build adapter-specific schema exhaustively
 - Do not require every agent runtime to have a spatial UI surface
 
-## Crossing Regime
-
-<!--
-Fill in ONLY if this task introduces a new durable authority-changing boundary.
-If the task uses an existing canonical crossing (e.g., Source → Fact, Decision → Intent),
-leave this section commented and delete it before closing.
-
-See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
-
-- source_zone:
-- destination_zone:
-- authority_owner:
-- admissibility_regime:
-- crossing_artifact:
-- confirmation_rule:
-- anti_collapse_invariant:
--->
-
 ## Execution Notes
 
 <!-- Record what was done, decisions made, and files changed during execution. -->
@@ -72,8 +48,8 @@ See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
 
 ## Acceptance Criteria
 
-- [ ] Site governance docs include operator_surfaces shape with minimal fields
-- [ ] Site governance docs include session binding shape or explicitly defer it with a precise residual
-- [ ] Docs state surfaces do not grant mutation, effect, or capability authority
-- [ ] Docs distinguish surface/session declaration from adapter materialization and runtime authority
-- [ ] Existing Site governance examples remain coherent for Sites without surfaces
+- [x] Site governance docs include operator_surfaces shape with minimal fields
+- [x] Site governance docs include session binding shape or explicitly defer it with a precise residual
+- [x] Docs state surfaces do not grant mutation, effect, or capability authority
+- [x] Docs distinguish surface/session declaration from adapter materialization and runtime authority
+- [x] Existing Site governance examples remain coherent for Sites without surfaces

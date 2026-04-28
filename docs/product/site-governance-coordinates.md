@@ -12,6 +12,8 @@ They do not grant runtime authority by themselves. They make authority inspectab
 | `law_admission_mode` | How law is admitted: inherited, overlaid, federated, or referenced. | Local overlays must be explicit. |
 | `authority_locus` | The Site locus that owns governed mutation. | Current shell, clone, or process is not authority by convenience. |
 | `embodiments` | Known concrete presences: roots, runtimes, projections, forwarding surfaces. | Multiple embodiments do not create multiple authorities. |
+| `operator_surfaces` | Optional addressable interfaces for inhabiting or observing Site work. | Surfaces improve launch/focus/recovery; they do not grant mutation, effect, or capability authority. |
+| `session_bindings` | Optional continuity links between role, runtime, channel, surface, task/chapter, and trace references. | Session continuity does not claim work, admit evidence, or prove completion. |
 | `mutation_evidence_locus` | Where mergeable/replayable mutation evidence is recorded. | Raw SQLite is runtime substrate, not portable authority by itself. |
 | `inbox_sources` | Inbound intake surfaces and their admission posture. | Arrival is inert until admitted or promoted. |
 | `outbox_targets` | Outbound handoff surfaces and their authority posture. | Sending a handoff is not confirmation of external effect. |
@@ -56,6 +58,68 @@ They do not grant runtime authority by themselves. They make authority inspectab
         "root": "/repo",
         "substrate": "filesystem",
         "mutation_policy": "read_only"
+      }
+    ],
+    "operator_surfaces": [
+      {
+        "surface_id": "smart-scheduling-architect",
+        "purpose": "Project Site architect work surface",
+        "site_id": "smart-scheduling",
+        "role_id": "architect",
+        "workflow_binding": "project_governance",
+        "locus_binding": "project",
+        "embodiment_id": "visible-workspace",
+        "adapter": {
+          "kind": "vscode_workspace",
+          "materialization": "manual_or_external"
+        },
+        "launch": {
+          "command": "code /repo",
+          "identity": "smart-scheduling.code-workspace"
+        },
+        "focus_identity": {
+          "kind": "workspace",
+          "value": "smart-scheduling"
+        },
+        "placement_hints": {
+          "desktop": "Narada",
+          "workspace": "Project"
+        },
+        "recovery_posture": "focus_if_present",
+        "authority_limits": [
+          "surface_is_not_authority_locus",
+          "surface_does_not_grant_effect_capability",
+          "surface_does_not_grant_operator_authority"
+        ]
+      }
+    ],
+    "session_bindings": [
+      {
+        "binding_id": "smart-scheduling-architect-current",
+        "site_id": "smart-scheduling",
+        "role_id": "architect",
+        "surface_id": "smart-scheduling-architect",
+        "agent_runtime": {
+          "runtime_id": "architect-cli",
+          "runtime_kind": "codex_cli",
+          "principal_ref": "architect"
+        },
+        "control_channel": {
+          "channel_id": "architect-terminal",
+          "channel_kind": "terminal",
+          "admission_posture": "messages_are_advisory_until_sanctioned_command"
+        },
+        "continuity_refs": {
+          "task_refs": [],
+          "chapter_refs": [],
+          "trace_refs": ["AGENTS.md", ".ai/task-lifecycle-snapshot.json"]
+        },
+        "continuity_posture": "recoverable",
+        "authority_limits": [
+          "binding_does_not_claim_work",
+          "binding_does_not_admit_evidence",
+          "binding_does_not_close_tasks"
+        ]
       }
     ],
     "mutation_evidence_locus": {
@@ -195,3 +259,37 @@ The currently admitted role keys are:
 `agent_identity_contract` remains as a backward-compatible shorthand for legacy consumers that expect one default agent identity. New consumers should read `agent_role_contracts.architect` for the default architect bootstrap and `agent_role_contracts.builder` when the Operator explicitly starts a builder thread.
 
 Deferred roles are intentionally listed only as non-admitted names. A Site may record them as proposals or residuals, but they are not valid bootstrap roles until inhabited operation evidence admits them.
+
+## Operator Surfaces And Session Bindings
+
+`operator_surfaces` and `session_bindings` are optional orientation and recovery metadata. Sites that do not declare them remain coherent; callers should treat missing arrays as `[]`.
+
+`operator_surfaces` names addressable interfaces such as Windows Terminal profiles, Komorebi window identities, YASB buttons, VS Code workspaces, browser profiles, MCP consoles, daemon panels, or HTTP consoles. These are adapter examples. The primitive is the [`Operator Surface`](../concepts/operator-surface.md): a stable way to inhabit or observe a Site/role/workflow.
+
+`session_bindings` names continuity relationships across role, task/chapter context, AgentRuntime, ControlChannel, Operator Surface, and trace references. API conversations, transcripts, inbox envelopes, file drops, and MCP tool calls may appear here as control-channel or trace references without requiring a spatial UI surface.
+
+Declarations are advisory unless a separate governed command admits or materializes them. For example:
+
+- a Windows Terminal profile is materialized only by a future adapter/materializer command;
+- a Komorebi rule is an external window-management adapter, not Site truth;
+- a YASB launch button is an operator convenience, not effect authority;
+- an MCP console is a facade/control channel, not a second Site authority;
+- a transcript or inbox envelope is trace/control-channel material, not a runtime by itself.
+
+Surface and session declarations must not contain raw secrets. If a surface needs an executable capability, the capability belongs in `capability_grants` or a capability registry, not in the surface declaration.
+
+The authority rule is unchanged:
+
+```text
+Surface may focus.
+Runtime may reason.
+Channel may carry.
+Binding may resume.
+Only the declared Site authority locus admits governed mutation.
+```
+
+Inspection commands for these declarations should be read-only and bounded. They may list or show declared surfaces and bindings, but must not launch adapters, focus windows, mutate profile files, hydrate runtimes, or persist live session state.
+
+Materialization commands are future governed crossings. They should default to dry-run, require explicit `--execute`, route adapter side effects through CEIZ or an equivalent governed execution boundary, and write mutation evidence with read-back confirmation. Until such commands exist, `operator_surfaces` and `session_bindings` are declarations only.
+
+For the first concrete spatial adapter posture on Windows, see [`windows-operator-surface-adapter-path.md`](windows-operator-surface-adapter-path.md). That plan treats Windows Terminal, Komorebi, YASB, and AHK as adapters owned by the Windows User or PC authority locus, not by Narada proper by convenience.

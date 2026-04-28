@@ -1,33 +1,26 @@
 ---
-status: opened
+status: closed
 depends_on: []
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-28T23:45:11.066Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Docs now define Operator Surface as a first-class concept distinct from adapters, define AgentRuntime/ControlChannel/SessionBinding, preserve Site authority and plural embodiment/singular authority, include minimal field grammar and anti-collapse rules, connect to Site embodiments/resume/MCP/API/role bootstrap, and implement no adapter materializer or mutation behavior. pnpm verify passed after lifecycle export.
+closed_at: 2026-04-28T23:45:19.254Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Task 1049 — Define Operator Surface doctrine
 
-## Execution Mode
+## Goal
 
-Proceed directly. This is a narrow corrective task; use focused edits only.
-
-## Assignment
-
-<!-- Assignment placeholder -->
-
-## Required Reading
-
-- docs/product/site-factorization.md
-- docs/product/site-bootstrap-contract.md
-- docs/product/resume-continuity.md
-- docs/concepts/plural-embodiment-singular-authority.md
-- docs/concepts/inhabited-evolution.md
+Define Operator Surface, AgentRuntime, ControlChannel, and SessionBinding as a coherent inhabited-work topology while preserving Site authority, embodiment, and Intelligence-Authority Separation.
 
 ## Context
 
 The Windows User Site proposal env_7b649a68 observed stable Windows Terminal titles, Komorebi targeting, YASB/AHK launch/focus paths, and recurring Narada role windows. The follow-up proposal env_903bef3d showed the missing adjacent topology: CLI agents are spatially embodied in terminal Operator Surfaces, while API agents may have no spatial surface but still act through transcripts, inbox envelopes, task files, logs, and console projections. The earned concept is not a terminal profile; it is a surface/channel/runtime/session topology for inhabited work. This task is doctrine/specification only.
-
-## Goal
-
-Define Operator Surface, AgentRuntime, ControlChannel, and SessionBinding as a coherent inhabited-work topology while preserving Site authority, embodiment, and Intelligence-Authority Separation.
 
 ## Required Work
 
@@ -45,24 +38,6 @@ Define Operator Surface, AgentRuntime, ControlChannel, and SessionBinding as a c
 - Do not make surfaces authority-bearing
 - Do not collapse API conversation threads into terminal Operator Surfaces
 
-## Crossing Regime
-
-<!--
-Fill in ONLY if this task introduces a new durable authority-changing boundary.
-If the task uses an existing canonical crossing (e.g., Source → Fact, Decision → Intent),
-leave this section commented and delete it before closing.
-
-See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
-
-- source_zone:
-- destination_zone:
-- authority_owner:
-- admissibility_regime:
-- crossing_artifact:
-- confirmation_rule:
-- anti_collapse_invariant:
--->
-
 ## Execution Notes
 
 <!-- Record what was done, decisions made, and files changed during execution. -->
@@ -73,9 +48,9 @@ See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
 
 ## Acceptance Criteria
 
-- [ ] Docs define Operator Surface as a first-class concept distinct from adapters like Windows Terminal or Komorebi
-- [ ] Docs define AgentRuntime, ControlChannel, and SessionBinding and relate them to Operator Surface
-- [ ] Docs preserve Site authority and Plural Embodiment, Singular Authority
-- [ ] Docs define minimal field grammar and anti-collapse rules for surfaces, runtimes, channels, and bindings
-- [ ] Docs connect Operator Surface to Site embodiments and resume continuity
-- [ ] No adapter materializer, session registry, or CLI mutation behavior is implemented by this task
+- [x] Docs define Operator Surface as a first-class concept distinct from adapters like Windows Terminal or Komorebi
+- [x] Docs define AgentRuntime, ControlChannel, and SessionBinding and relate them to Operator Surface
+- [x] Docs preserve Site authority and Plural Embodiment, Singular Authority
+- [x] Docs define minimal field grammar and anti-collapse rules for surfaces, runtimes, channels, and bindings
+- [x] Docs connect Operator Surface to Site embodiments and resume continuity
+- [x] No adapter materializer, session registry, or CLI mutation behavior is implemented by this task

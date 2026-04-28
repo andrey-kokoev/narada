@@ -4,6 +4,8 @@
 
 It resumes inhabited work from durable traces. It does not resume a terminal process, agent process, chat thread, or CLI session.
 
+If a Site declares an [`Operator Surface`](../concepts/operator-surface.md), resume output may use it as a focus or launch hint. That hint is ergonomic continuity only: focusing a surface does not claim work, hydrate authority, or admit evidence.
+
 ## Contract
 
 ```bash

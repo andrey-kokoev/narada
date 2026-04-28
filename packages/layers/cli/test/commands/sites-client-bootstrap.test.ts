@@ -87,6 +87,8 @@ describe('sitesBootstrapClientCommand', () => {
         effect_authority_policy: string;
         agent_identity_contract: { default_agent_name: string; operator_label: string };
         agent_role_contracts: Record<string, unknown> & { admitted_roles: string[]; architect: { role_id: string }; builder: { role_id: string } };
+        operator_surfaces: unknown[];
+        session_bindings: unknown[];
       };
     };
     expect(config.governance.governing_law_source.source_site_id).toBe('narada-proper');
@@ -100,6 +102,8 @@ describe('sitesBootstrapClientCommand', () => {
     expect(config.governance.agent_role_contracts.builder.role_id).toBe('builder');
     expect(config.governance.agent_role_contracts).not.toHaveProperty('inspector');
     expect(config.governance.agent_role_contracts).not.toHaveProperty('superintendent');
+    expect(config.governance.operator_surfaces).toEqual([]);
+    expect(config.governance.session_bindings).toEqual([]);
 
     const doctor = await sitesDoctorCommand('utz', {
       kind: 'client',

@@ -4,6 +4,8 @@ Narada MCP is a typed agent-facing facade over Narada's canonical application se
 
 It is not a second authority surface. MCP tools must delegate to the same command/service functions used by CLI operators, return the same canonical identifiers, and preserve mutation evidence whenever a tool mutates durable state.
 
+In the [`Operator Surface`](operator-surface.md) topology, an MCP facade is usually a non-spatial `ControlChannel` and may be presented through an Operator Surface such as a console. The facade, channel, and presentation surface remain separate from the target Site authority locus.
+
 This facade participates in the scale-recursive topology described by the external concept note [`Scale-Relative Operation Topology`](../../../thoughts/content/concepts/scale-relative-operation-topology.md): MCP fabric is a governed traversal medium, while each addressed Site remains the local authority locus.
 
 ## Boundary

@@ -1,32 +1,26 @@
 ---
-status: opened
+status: closed
 depends_on: [1051]
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-28T23:51:34.300Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Docs now include a concrete Windows adapter posture for Site declaration -> Windows Terminal profile -> stable title -> Komorebi -> YASB/AHK, distinguish CLI terminal-bound runtimes from API/control-channel-bound runtimes, make Windows User/PC authority locus explicit rather than Narada proper, define materializer evidence/read-back requirements, and record risks/residuals. pnpm verify passed.
+closed_at: 2026-04-28T23:51:43.721Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Task 1052 — Plan Windows operator surface adapter path
 
-## Execution Mode
+## Goal
 
-Proceed directly. This is a narrow corrective task; use focused edits only.
-
-## Assignment
-
-<!-- Assignment placeholder -->
-
-## Required Reading
-
-- docs/product/user-pc-template-materialization-workflow.md
-- docs/product/site-bootstrap-contract.md
-- docs/concepts/polycentric-site-locus-routing.md
-- docs/concepts/plural-embodiment-singular-authority.md
+Produce a bounded implementation plan for Windows Terminal, Komorebi, and YASB Operator Surface adapters without building them yet.
 
 ## Context
 
 The originating evidence comes from Windows Terminal profiles and Komorebi/YASB operator workflow, then expanded to CLI/API agent runtime and control-channel differences. The Windows adapter path should be planned as the first concrete spatial realization, but not collapsed into the Operator Surface primitive or the whole session-binding model.
-
-## Goal
-
-Produce a bounded implementation plan for Windows Terminal, Komorebi, and YASB Operator Surface adapters without building them yet.
 
 ## Required Work
 
@@ -44,24 +38,6 @@ Produce a bounded implementation plan for Windows Terminal, Komorebi, and YASB O
 - Do not assume this WSL clone owns Windows User Site authority
 - Do not require API agents to have a native window identity
 
-## Crossing Regime
-
-<!--
-Fill in ONLY if this task introduces a new durable authority-changing boundary.
-If the task uses an existing canonical crossing (e.g., Source → Fact, Decision → Intent),
-leave this section commented and delete it before closing.
-
-See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
-
-- source_zone:
-- destination_zone:
-- authority_owner:
-- admissibility_regime:
-- crossing_artifact:
-- confirmation_rule:
-- anti_collapse_invariant:
--->
-
 ## Execution Notes
 
 <!-- Record what was done, decisions made, and files changed during execution. -->
@@ -72,8 +48,8 @@ See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
 
 ## Acceptance Criteria
 
-- [ ] Docs include a concrete Windows adapter posture that remains adapter-specific
-- [ ] Docs distinguish CLI terminal-bound agents from API conversation-bound agents
-- [ ] Authority locus for Windows materialization is explicit and not assumed to be Narada proper
-- [ ] Required evidence for adapter materialization and session-binding read-back is defined
-- [ ] Risks and residuals are recorded
+- [x] Docs include a concrete Windows adapter posture that remains adapter-specific
+- [x] Docs distinguish CLI terminal-bound agents from API conversation-bound agents
+- [x] Authority locus for Windows materialization is explicit and not assumed to be Narada proper
+- [x] Required evidence for adapter materialization and session-binding read-back is defined
+- [x] Risks and residuals are recorded

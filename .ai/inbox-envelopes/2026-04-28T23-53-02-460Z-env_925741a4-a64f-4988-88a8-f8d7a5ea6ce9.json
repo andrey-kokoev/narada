@@ -1,0 +1,26 @@
+{
+  "envelope_id": "env_925741a4-a64f-4988-88a8-f8d7a5ea6ce9",
+  "received_at": "2026-04-28T23:53:02.460Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada.builder:operator-surface-residual-routing"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "builder"
+  },
+  "payload": {
+    "title": "Windows Operator Surface adapter materializers belong to Windows User or PC Site authority",
+    "summary": "The Operator Surface architecture chapter defined the primitive and Windows adapter path, but did not implement materializers. Windows Terminal profile writes, Komorebi rules, YASB buttons, and AHK launch/focus scripts are Windows User Site or PC Site adapter mutations, not Narada proper mutations by convenience.",
+    "evidence": [
+      "Narada proper docs now define Operator Surface, AgentRuntime, ControlChannel, SessionBinding, operator_surfaces, session_bindings, inspection posture, and Windows adapter plan.",
+      "Adapter materialization would mutate Windows Terminal, Komorebi, YASB, or AHK configuration and must run at the owning Windows User/PC authority locus."
+    ],
+    "proposal": [
+      "Route future implementation to the Windows User Site or PC Site inbox as dry-run-first materializer tasks with CEIZ/equivalent command execution and mutation evidence."
+    ],
+    "recommendation": "Record as pending site_config_change for windows-operator-surface-adapter-materializers"
+  },
+  "status": "received"
+}

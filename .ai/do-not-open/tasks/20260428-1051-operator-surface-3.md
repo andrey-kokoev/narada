@@ -1,32 +1,26 @@
 ---
-status: opened
+status: closed
 depends_on: [1050]
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-28T23:49:25.921Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Docs specify read-only list/show posture for Operator Surfaces and SessionBindings, require bounded no-secret output, define materialization as future dry-run-first governed crossing with explicit --execute and CEIZ/equivalent routing for adapter side effects, and explicitly defer adapter materializers/session registry mutation. pnpm verify passed.
+closed_at: 2026-04-28T23:49:36.148Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Task 1051 — Specify Operator Surface inspection and materialization posture
 
-## Execution Mode
+## Goal
 
-Proceed directly. This is a narrow corrective task; use focused edits only.
-
-## Assignment
-
-<!-- Assignment placeholder -->
-
-## Required Reading
-
-- docs/concepts/command-execution-intent-zone.md
-- docs/concepts/repo-publication-intent-zone.md
-- docs/product/site-bootstrap-contract.md
-- packages/layers/cli/src/commands/sites.ts
+Define the CLI posture for inspecting surfaces/session bindings and later materializing Operator Surfaces without creating hidden authority or autonomous UI mutation.
 
 ## Context
 
 Operator Surfaces and SessionBindings are useful only if Operators and agents can inspect what surfaces, runtimes, channels, and bindings exist and eventually materialize adapters. The first coherent surface should be read-only inspection; materialization should be deferred or dry-run unless explicitly earned.
-
-## Goal
-
-Define the CLI posture for inspecting surfaces/session bindings and later materializing Operator Surfaces without creating hidden authority or autonomous UI mutation.
 
 ## Required Work
 
@@ -43,24 +37,6 @@ Define the CLI posture for inspecting surfaces/session bindings and later materi
 - Do not auto-edit terminal profiles
 - Do not persist or mutate live API/CLI session bindings in this task
 
-## Crossing Regime
-
-<!--
-Fill in ONLY if this task introduces a new durable authority-changing boundary.
-If the task uses an existing canonical crossing (e.g., Source → Fact, Decision → Intent),
-leave this section commented and delete it before closing.
-
-See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
-
-- source_zone:
-- destination_zone:
-- authority_owner:
-- admissibility_regime:
-- crossing_artifact:
-- confirmation_rule:
-- anti_collapse_invariant:
--->
-
 ## Execution Notes
 
 <!-- Record what was done, decisions made, and files changed during execution. -->
@@ -71,7 +47,7 @@ See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
 
 ## Acceptance Criteria
 
-- [ ] Docs specify read-only inspection posture for Operator Surfaces and SessionBindings
-- [ ] Docs define materialization as a future governed crossing, not implicit Site bootstrap side effect
-- [ ] Docs require bounded output and no raw secrets in surface/channel/session metadata
-- [ ] Deferred adapter implementation is explicit
+- [x] Docs specify read-only inspection posture for Operator Surfaces and SessionBindings
+- [x] Docs define materialization as a future governed crossing, not implicit Site bootstrap side effect
+- [x] Docs require bounded output and no raw secrets in surface/channel/session metadata
+- [x] Deferred adapter implementation is explicit

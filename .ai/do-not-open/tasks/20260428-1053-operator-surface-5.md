@@ -1,32 +1,26 @@
 ---
-status: opened
+status: closed
 depends_on: [1052]
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-28T23:54:14.838Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Verification passed. Implementation residuals were routed via pending inbox crossing env_925741a4 to site_config_change:windows-operator-surface-adapter-materializers rather than hidden in prose. Source envelopes env_7b649a68 and env_903bef3d are sanctioned promoted pending decision crossings for the chapter. Chapter docs are ready for review and future Builder implementation tasks at the right authority locus.
+closed_at: 2026-04-28T23:54:25.501Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Task 1053 — Verify Operator Surface architecture and route implementation residuals
 
-## Execution Mode
+## Goal
 
-Proceed directly. This is a narrow corrective task; use focused edits only.
-
-## Assignment
-
-<!-- Assignment placeholder -->
-
-## Required Reading
-
-- docs/concepts/inhabited-evolution.md
-- docs/concepts/canonical-inbox.md
-- docs/product/site-governance-coordinates.md
-- docs/product/site-bootstrap-contract.md
+Verify the Operator Surface chapter artifacts and route any build work to Builder-owned tasks or external Site inboxes.
 
 ## Context
 
 Architect should produce the chapter/spec and evidence, then Builder should build any implementation tasks. This closing task verifies that the architecture is coherent, bounded, and routed to the right authority loci, including the adjacent AgentRuntime / ControlChannel / SessionBinding model.
-
-## Goal
-
-Verify the Operator Surface chapter artifacts and route any build work to Builder-owned tasks or external Site inboxes.
 
 ## Required Work
 
@@ -43,24 +37,6 @@ Verify the Operator Surface chapter artifacts and route any build work to Builde
 - Do not treat architecture approval as implementation completion
 - Do not treat session-binding architecture as a live session registry implementation
 
-## Crossing Regime
-
-<!--
-Fill in ONLY if this task introduces a new durable authority-changing boundary.
-If the task uses an existing canonical crossing (e.g., Source → Fact, Decision → Intent),
-leave this section commented and delete it before closing.
-
-See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
-
-- source_zone:
-- destination_zone:
-- authority_owner:
-- admissibility_regime:
-- crossing_artifact:
-- confirmation_rule:
-- anti_collapse_invariant:
--->
-
 ## Execution Notes
 
 <!-- Record what was done, decisions made, and files changed during execution. -->
@@ -71,7 +47,7 @@ See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
 
 ## Acceptance Criteria
 
-- [ ] Verification passes or blockers are recorded precisely
-- [ ] Implementation residuals are routed to Builder/external Site rather than hidden in prose
-- [ ] The source inbox envelopes are handled through sanctioned inbox transitions
-- [ ] Chapter is ready for Builder implementation and Inspector review
+- [x] Verification passes or blockers are recorded precisely
+- [x] Implementation residuals are routed to Builder/external Site rather than hidden in prose
+- [x] The source inbox envelopes are handled through sanctioned inbox transitions
+- [x] Chapter is ready for Builder implementation and Inspector review

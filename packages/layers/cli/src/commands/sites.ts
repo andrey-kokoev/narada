@@ -2035,6 +2035,8 @@ function siteGovernanceCoordinates(args: {
         mutation_policy: 'read_only',
       },
     ],
+    operator_surfaces: [],
+    session_bindings: [],
     mutation_evidence_locus: {
       kind: args.syncPosture === 'git_backed_project_repo' ? 'git' : 'filesystem',
       path: args.siteRoot,

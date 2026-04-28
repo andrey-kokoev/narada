@@ -17,6 +17,8 @@ An authority locus is the place where a durable transition becomes true: a Site 
 
 The same physical thing may carry both roles, but the roles must not be collapsed. A clone can be useful for inspection without being the task mutation authority. A UI can request a change without owning truth. An agent can formulate a command without becoming the authority for its effect.
 
+An [`Operator Surface`](operator-surface.md) is a named way to inhabit or observe work through an embodiment, such as a stable terminal profile, console, MCP facade, or browser workspace. It improves addressability and recovery but does not add authority beyond the declared Site locus.
+
 ## Mutation Routing
 
 Every mutating surface should follow this sequence:
