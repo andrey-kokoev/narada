@@ -39,6 +39,7 @@ import { registerRederivationCommands } from './commands/rederivation-register.j
 import { registerOutboundActionCommands } from './commands/outbound-action-register.js';
 import { registerPostureCommands } from './commands/posture-register.js';
 import { registerMutationEvidenceCommands } from './commands/mutation-evidence-register.js';
+import { registerMcpCommands } from './commands/mcp-register.js';
 
 loadEnvFile('./.env');
 
@@ -76,6 +77,7 @@ registerInspectionAdminCommands(program);
 registerSitesCommands(program);
 registerConsoleCommands(program);
 registerWorkbenchCommands(program);
+registerMcpCommands(program);
 registerResumeCommands(program);
 registerWorkNextCommands(program);
 registerPrincipalCommands(program);

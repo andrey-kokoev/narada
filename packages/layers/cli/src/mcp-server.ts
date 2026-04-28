@@ -1,4 +1,6 @@
-import { stdin as defaultStdin, stdout as defaultStdout } from 'node:process';
+import { existsSync, readFileSync } from 'node:fs';
+import { basename, resolve } from 'node:path';
+import { cwd as processCwd, stdin as defaultStdin, stdout as defaultStdout } from 'node:process';
 import {
   inboxDoctorCommand,
   inboxListCommand,
@@ -28,9 +30,32 @@ interface McpToolResult {
   isError?: boolean;
 }
 
+export interface McpServerOptions {
+  stdin?: NodeJS.ReadableStream;
+  stdout?: NodeJS.WritableStream;
+  cwd?: string;
+  siteRoot?: string;
+  siteId?: string;
+  siteKind?: string;
+}
+
+export interface McpSiteContext {
+  site_id: string;
+  site_kind: string;
+  site_root: string;
+  workspace_root?: string;
+  authority_locus: string;
+  source: 'config' | 'options' | 'cwd';
+}
+
 const PROTOCOL_VERSION = '2024-11-05';
 
 export const NARADA_MCP_TOOLS: McpTool[] = [
+  {
+    name: 'narada_site_context',
+    description: 'Inspect the Site context that scopes this MCP facade.',
+    inputSchema: objectSchema({}),
+  },
   {
     name: 'narada_inbox_doctor',
     description: 'Inspect Canonical Inbox delivery coordinates and local runtime readiness.',
@@ -86,10 +111,14 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
   },
 ];
 
-export async function handleMcpRequest(request: JsonRpcRequest): Promise<Record<string, unknown> | null> {
+export async function handleMcpRequest(
+  request: JsonRpcRequest,
+  options: McpServerOptions = {},
+): Promise<Record<string, unknown> | null> {
   if (!request.id && request.method.startsWith('notifications/')) return null;
   try {
-    const result = await dispatchMcpMethod(request.method, request.params);
+    const siteContext = resolveMcpSiteContext(options);
+    const result = await dispatchMcpMethod(request.method, request.params, siteContext);
     return { jsonrpc: '2.0', id: request.id ?? null, result };
   } catch (error) {
     return {
@@ -103,10 +132,7 @@ export async function handleMcpRequest(request: JsonRpcRequest): Promise<Record<
   }
 }
 
-export async function runMcpServer(options: {
-  stdin?: NodeJS.ReadableStream;
-  stdout?: NodeJS.WritableStream;
-} = {}): Promise<void> {
+export async function runMcpServer(options: McpServerOptions = {}): Promise<void> {
   const input = options.stdin ?? defaultStdin;
   const output = options.stdout ?? defaultStdout;
   let buffer = '';
@@ -115,51 +141,59 @@ export async function runMcpServer(options: {
     const parsed = drainJsonRpcFrames(buffer);
     buffer = parsed.remaining;
     for (const request of parsed.requests) {
-      const response = await handleMcpRequest(request);
+      const response = await handleMcpRequest(request, options);
       if (response) output.write(`${JSON.stringify(response)}\n`);
     }
   }
   const trailing = buffer.trim();
   if (trailing.length > 0) {
     for (const request of parseJsonRpcInput(trailing)) {
-      const response = await handleMcpRequest(request);
+      const response = await handleMcpRequest(request, options);
       if (response) output.write(`${JSON.stringify(response)}\n`);
     }
   }
 }
 
-async function dispatchMcpMethod(method: string, params: unknown): Promise<unknown> {
+async function dispatchMcpMethod(method: string, params: unknown, siteContext: McpSiteContext): Promise<unknown> {
   switch (method) {
     case 'initialize':
       return {
         protocolVersion: PROTOCOL_VERSION,
         capabilities: { tools: {} },
-        serverInfo: { name: 'narada-mcp', version: '0.1.0' },
+        serverInfo: {
+          name: `narada-mcp:${siteContext.site_id}`,
+          version: '0.1.0',
+          site: siteContext,
+          authority_posture: 'facade_only',
+        },
       };
     case 'tools/list':
-      return { tools: NARADA_MCP_TOOLS };
+      return { tools: NARADA_MCP_TOOLS, site: siteContext, authority_posture: 'facade_only' };
     case 'tools/call':
-      return callTool(params);
+      return callTool(params, siteContext);
     default:
       throw new Error(`Unsupported MCP method: ${method}`);
   }
 }
 
-async function callTool(params: unknown): Promise<McpToolResult> {
+async function callTool(params: unknown, siteContext: McpSiteContext): Promise<McpToolResult> {
   const record = asRecord(params);
   const name = stringField(record, 'name');
   const args = asRecord(record.arguments);
   if (!name) throw new Error('tools/call requires params.name');
+  const scopedCwd = stringField(args, 'cwd') ?? siteContext.site_root;
 
   switch (name) {
+    case 'narada_site_context':
+      return jsonToolResult({ status: 'success', site: siteContext, authority_posture: 'facade_only' });
     case 'narada_inbox_doctor':
       return commandToolResult(await inboxDoctorCommand({
-        cwd: stringField(args, 'cwd'),
+        cwd: scopedCwd,
         format: 'json',
       }));
     case 'narada_inbox_work_next':
       return commandToolResult(await inboxWorkNextCommand({
-        cwd: stringField(args, 'cwd'),
+        cwd: scopedCwd,
         status: stringField(args, 'status'),
         kind: stringField(args, 'kind'),
         limit: numberField(args, 'limit'),
@@ -169,7 +203,7 @@ async function callTool(params: unknown): Promise<McpToolResult> {
       }));
     case 'narada_inbox_list':
       return commandToolResult(await inboxListCommand({
-        cwd: stringField(args, 'cwd'),
+        cwd: scopedCwd,
         status: stringField(args, 'status'),
         kind: stringField(args, 'kind'),
         limit: numberField(args, 'limit'),
@@ -177,13 +211,13 @@ async function callTool(params: unknown): Promise<McpToolResult> {
       }));
     case 'narada_inbox_show':
       return commandToolResult(await inboxShowCommand({
-        cwd: stringField(args, 'cwd'),
+        cwd: scopedCwd,
         envelopeId: requiredString(args, 'envelope_id'),
         format: 'json',
       }));
     case 'narada_inbox_submit_observation':
       return commandToolResult(await inboxSubmitObservationCommand({
-        cwd: stringField(args, 'cwd'),
+        cwd: scopedCwd,
         sourceRef: requiredString(args, 'source_ref'),
         title: requiredString(args, 'title'),
         summary: stringField(args, 'summary'),
@@ -200,12 +234,48 @@ async function callTool(params: unknown): Promise<McpToolResult> {
   }
 }
 
+export function resolveMcpSiteContext(options: Pick<McpServerOptions, 'cwd' | 'siteRoot' | 'siteId' | 'siteKind'> = {}): McpSiteContext {
+  const root = resolve(options.siteRoot ?? options.cwd ?? processCwd());
+  const configPath = resolve(root, 'config.json');
+  const config = readJsonObject(configPath);
+  const locus = asRecord(config?.locus);
+  const configuredSiteRoot = stringField(config ?? {}, 'site_root');
+  const siteRoot = resolve(configuredSiteRoot ?? root);
+  const siteId = options.siteId ?? stringField(config ?? {}, 'site_id') ?? basename(siteRoot) ?? 'unknown-site';
+  const siteKind = options.siteKind ?? stringField(config ?? {}, 'site_kind') ?? 'unspecified';
+  const authorityLocus = stringField(locus, 'authority_locus') ?? siteKind;
+  const workspaceRoot = stringField(config ?? {}, 'workspace_root');
+
+  return {
+    site_id: siteId,
+    site_kind: siteKind,
+    site_root: siteRoot,
+    ...(workspaceRoot ? { workspace_root: workspaceRoot } : {}),
+    authority_locus: authorityLocus,
+    source: config ? 'config' : (options.siteId || options.siteKind || options.siteRoot ? 'options' : 'cwd'),
+  };
+}
+
+function jsonToolResult(value: unknown): McpToolResult {
+  return { content: [{ type: 'text', text: JSON.stringify(value, null, 2) }] };
+}
+
 function commandToolResult(envelope: { exitCode: ExitCode; result: unknown }): McpToolResult {
   const text = JSON.stringify(envelope.result, null, 2);
   return {
     content: [{ type: 'text', text }],
     ...(envelope.exitCode === ExitCode.SUCCESS ? {} : { isError: true }),
   };
+}
+
+function readJsonObject(path: string): Record<string, unknown> | undefined {
+  if (!existsSync(path)) return undefined;
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as unknown;
+    return asRecord(parsed);
+  } catch {
+    return undefined;
+  }
 }
 
 function parseJsonRpcInput(input: string): JsonRpcRequest[] {
