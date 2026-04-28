@@ -187,9 +187,12 @@ export {
   WebhookContextStrategy,
   FilesystemContextStrategy,
   CampaignRequestContextFormation,
+  OperationIntakeContextFormation,
   resolveContextStrategy,
 } from "./foreman/context.js";
 export type { CampaignRequestConfig } from "./foreman/context.js";
+export { buildMissingInformationDraftReply } from "./foreman/operation-intake.js";
+export type { MissingInformationDraftReplyInput } from "./foreman/operation-intake.js";
 export type {
   ForemanFacade,
   SyncCompletionSignal,

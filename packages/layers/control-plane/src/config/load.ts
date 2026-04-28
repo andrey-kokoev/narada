@@ -5,6 +5,8 @@ import type {
   MailAdmissionPredicateConfig,
   MailAdmissionPredicatesConfig,
   MailParticipantField,
+  OperationIntakeConfig,
+  OperationIntakeRouteConfig,
   ScopeConfig,
 } from "./types.js";
 import type { ChangeType } from "../adapter/graph/subscription.js";
@@ -195,6 +197,43 @@ function expectAllowedActions(value: unknown, path: string): ScopeConfig["policy
     throw new Error(`${path} must contain at least one allowed action`);
   }
   return actions;
+}
+
+function buildOperationIntakeRoute(value: unknown, path: string): OperationIntakeRouteConfig {
+  const route = expectObject(value, path);
+  const match = expectObject(route.match, `${path}.match`);
+  const normalizedMatch = {
+    ...(Array.isArray(match.sender_addresses)
+      ? { sender_addresses: expectStringArray(match.sender_addresses, `${path}.match.sender_addresses`) }
+      : {}),
+    ...(Array.isArray(match.sender_domains)
+      ? { sender_domains: expectStringArray(match.sender_domains, `${path}.match.sender_domains`) }
+      : {}),
+    ...(Array.isArray(match.subject_keywords)
+      ? { subject_keywords: expectStringArray(match.subject_keywords, `${path}.match.subject_keywords`) }
+      : {}),
+    ...(Array.isArray(match.body_keywords)
+      ? { body_keywords: expectStringArray(match.body_keywords, `${path}.match.body_keywords`) }
+      : {}),
+  };
+  if (Object.keys(normalizedMatch).length === 0) {
+    throw new Error(`${path}.match must declare at least one sender, domain, subject, or body signal`);
+  }
+  return {
+    route_id: expectString(route.route_id, `${path}.route_id`),
+    target_scope_id: expectString(route.target_scope_id, `${path}.target_scope_id`),
+    match: normalizedMatch,
+  };
+}
+
+function buildOperationIntakeConfig(value: unknown, path: string): OperationIntakeConfig {
+  const config = expectObject(value, path);
+  if (!Array.isArray(config.routes) || config.routes.length === 0) {
+    throw new Error(`${path}.routes must contain at least one route`);
+  }
+  return {
+    routes: config.routes.map((route, index) => buildOperationIntakeRoute(route, `${path}.routes[${index}]`)),
+  };
 }
 
 /**
@@ -481,6 +520,9 @@ function loadScopeConfig(rawScope: unknown, pathPrefix: string): ScopeConfig {
     scope.campaign_request_lookback_days !== undefined
       ? expectNumber(scope.campaign_request_lookback_days, `${pathPrefix}.campaign_request_lookback_days`)
       : undefined;
+  const operationIntake = scope.operation_intake !== undefined
+    ? buildOperationIntakeConfig(scope.operation_intake, `${pathPrefix}.operation_intake`)
+    : undefined;
 
   // Operator contacts
   const operatorContactsRaw = Array.isArray(scope.operator_contacts) ? scope.operator_contacts : [];
@@ -535,6 +577,7 @@ function loadScopeConfig(rawScope: unknown, pathPrefix: string): ScopeConfig {
     ...(operational_trust ? { operational_trust } : {}),
     ...(campaignRequestSenders ? { campaign_request_senders: campaignRequestSenders } : {}),
     ...(campaignRequestLookbackDays !== undefined ? { campaign_request_lookback_days: campaignRequestLookbackDays } : {}),
+    ...(operationIntake ? { operation_intake: operationIntake } : {}),
     ...(operator_contacts ? { operator_contacts: operator_contacts } : {}),
     ...(confirmation_providers ? { confirmation_providers: confirmation_providers } : {}),
     ...(graph ? { graph } : {}),
@@ -859,6 +902,7 @@ export async function loadConfig(
       executors: root.executors,
       campaign_request_senders: root.campaign_request_senders,
       campaign_request_lookback_days: root.campaign_request_lookback_days,
+      operation_intake: root.operation_intake,
     };
 
     scopes = [loadScopeConfig(legacyScope, "config(legacy)")];

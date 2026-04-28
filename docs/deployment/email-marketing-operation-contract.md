@@ -116,6 +116,43 @@ In crystallized vocabulary:
 - **Work opening**: One `work_item` per open context with no existing non-terminal work item.
 - **Reuse**: Same `context_records` / `work_items` schema as helpdesk. Different formation strategy.
 
+#### Shared Mailbox Intake Bridge
+
+When campaign requests arrive through a shared/client-service mailbox rather than a dedicated campaign mailbox, the shared mailbox scope may use `context_strategy: "operation_intake"` with `operation_intake.routes[]`.
+
+Each route declares inert matching signals (`sender_addresses`, `sender_domains`, `subject_keywords`, `body_keywords`) and a `target_scope_id`. All configured signal groups on a route must match; omitted groups are ignored. A matched `mail.message.discovered` fact opens work in the target operation scope. The source mailbox remains the arrival locus; the target scope's own policy and charter own evaluation.
+
+Example:
+
+```json
+{
+  "context_strategy": "operation_intake",
+  "operation_intake": {
+    "routes": [
+      {
+        "route_id": "campaign-intake",
+        "target_scope_id": "email-marketing",
+        "match": {
+          "sender_domains": ["client.example"],
+          "subject_keywords": ["campaign", "test"],
+          "body_keywords": ["email campaign"]
+        }
+      }
+    ]
+  }
+}
+```
+
+This bridge does not grant new effect authority. Campaign sends, Klaviyo mutation, and customer-list mutation remain forbidden unless a separate activation decision grants those effects.
+
+If routed mail is missing required operation inputs, the operation may map that gap to a governed `draft_reply` proposal, for example:
+
+```text
+I assume you mean you want to test the email campaign creation workflow. To proceed, please provide campaign goal, audience or segment, desired send timing, approval owner.
+```
+
+That draft is an outbound proposal only. It does not send until the normal outbound approval/effect path admits it.
+
 ### 5.4 Charter Evaluation
 
 - **Charter**: `campaign-production` charter (resides in ops repo, not public Narada packages).

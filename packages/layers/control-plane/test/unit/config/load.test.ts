@@ -520,6 +520,49 @@ describe("loadConfig", () => {
     expect(scope.policy.allowed_actions).toContain("campaign_brief");
   });
 
+  it("accepts operation_intake routing for shared mailbox scopes", async () => {
+    const path = await writeConfigFile({
+      mailbox_id: "shared_mailbox",
+      root_dir: "./data/mail-sync",
+      graph: {
+        user_id: "shared@example.com",
+        prefer_immutable_ids: true,
+      },
+      context_strategy: "operation_intake",
+      scope: {
+        included_container_refs: ["inbox"],
+        included_item_kinds: ["message"],
+      },
+      operation_intake: {
+        routes: [
+          {
+            route_id: "campaign-intake",
+            target_scope_id: "email-marketing",
+            match: {
+              sender_domains: ["client.example"],
+              subject_keywords: ["campaign", "test"],
+              body_keywords: ["email campaign"],
+            },
+          },
+        ],
+      },
+    });
+    createdPaths.push(path);
+
+    const config = await loadConfig({ path });
+    const scope = config.scopes[0]!;
+    expect(scope.context_strategy).toBe("operation_intake");
+    expect(scope.operation_intake?.routes[0]).toEqual({
+      route_id: "campaign-intake",
+      target_scope_id: "email-marketing",
+      match: {
+        sender_domains: ["client.example"],
+        subject_keywords: ["campaign", "test"],
+        body_keywords: ["email campaign"],
+      },
+    });
+  });
+
   it("accepts mail admission folder filters", async () => {
     const path = await writeConfigFile({
       mailbox_id: "mailbox_primary",

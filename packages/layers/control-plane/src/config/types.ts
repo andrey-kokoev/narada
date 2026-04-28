@@ -96,6 +96,23 @@ export interface AdmissionConfig {
   mail?: MailAdmissionConfig;
 }
 
+export interface OperationIntakeRouteMatchConfig {
+  sender_addresses?: string[];
+  sender_domains?: string[];
+  subject_keywords?: string[];
+  body_keywords?: string[];
+}
+
+export interface OperationIntakeRouteConfig {
+  route_id: string;
+  target_scope_id: string;
+  match: OperationIntakeRouteMatchConfig;
+}
+
+export interface OperationIntakeConfig {
+  routes: OperationIntakeRouteConfig[];
+}
+
 /** Source configuration for a scope (e.g. Graph API, timer, webhook) */
 export interface SourceConfig {
   type: 'graph' | 'timer' | 'webhook' | 'mock';
@@ -169,6 +186,9 @@ export interface ScopeConfig {
 
   /** Campaign request lookback window in days (default: 7) */
   campaign_request_lookback_days?: number;
+
+  /** Shared mailbox intake routes into subordinate operation scopes. */
+  operation_intake?: OperationIntakeConfig;
 
   /** Operator contacts who may open pending operator requests by email */
   operator_contacts?: OperatorContact[];

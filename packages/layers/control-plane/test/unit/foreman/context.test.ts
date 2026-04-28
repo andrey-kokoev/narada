@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { MailboxContextStrategy } from "../../../src/foreman/mailbox/context-strategy.js";
-import { AdmittedMailContextStrategy, TimerContextStrategy, CampaignRequestContextFormation } from "../../../src/foreman/context.js";
+import {
+  AdmittedMailContextStrategy,
+  TimerContextStrategy,
+  CampaignRequestContextFormation,
+  OperationIntakeContextFormation,
+  resolveContextStrategy,
+} from "../../../src/foreman/context.js";
+import { buildMissingInformationDraftReply } from "../../../src/foreman/operation-intake.js";
 import type { Fact } from "../../../src/facts/types.js";
 
 function makeMailFact(
@@ -569,5 +576,126 @@ describe("CampaignRequestContextFormation", () => {
     const contexts = strategy.formContexts(facts, "scope-1");
     expect(contexts).toHaveLength(1);
     expect(contexts[0]!.context_id).toBe("conv-campaign-domain");
+  });
+});
+
+describe("OperationIntakeContextFormation", () => {
+  function makeSharedMailboxFact(
+    conversationId: string,
+    senderEmail: string,
+    subject: string,
+    bodyText: string,
+  ): Fact {
+    const receivedAt = new Date().toISOString();
+    const payload = {
+      record_id: `rec-${conversationId}`,
+      ordinal: receivedAt,
+      event: {
+        event_id: `rec-${conversationId}`,
+        event_kind: "created",
+        conversation_id: conversationId,
+        thread_id: conversationId,
+        from: { email: senderEmail, display_name: "Sender" },
+        subject,
+        body: { text: bodyText, preview: bodyText.slice(0, 100) },
+        received_at: receivedAt,
+      },
+    };
+    return {
+      fact_id: `fact_shared_${conversationId}_${senderEmail}`,
+      fact_type: "mail.message.discovered",
+      provenance: {
+        source_id: "exchange:test",
+        source_record_id: `rec-${conversationId}`,
+        source_version: null,
+        source_cursor: "cursor-1",
+        observed_at: receivedAt,
+      },
+      payload_json: JSON.stringify(payload),
+      created_at: receivedAt,
+    };
+  }
+
+  it("routes a shared mailbox message into the configured subordinate operation scope", () => {
+    const strategy = new OperationIntakeContextFormation({
+      routes: [
+        {
+          route_id: "campaign-intake",
+          target_scope_id: "email-marketing",
+          match: {
+            sender_domains: ["client.example"],
+            subject_keywords: ["campaign", "test"],
+            body_keywords: ["email campaign"],
+          },
+        },
+      ],
+    });
+
+    const contexts = strategy.formContexts([
+      makeSharedMailboxFact(
+        "conv-shared-1",
+        "willem@client.example",
+        "test",
+        "I want to test email campaign creation.",
+      ),
+    ], "shared-mailbox");
+
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]!.scope_id).toBe("email-marketing");
+    expect(contexts[0]!.context_id).toBe("email-marketing:conv-shared-1");
+    expect(contexts[0]!.change_kinds).toContain("operation_intake:campaign-intake");
+  });
+
+  it("does not route unmatched mailbox messages", () => {
+    const strategy = new OperationIntakeContextFormation({
+      routes: [
+        {
+          route_id: "campaign-intake",
+          target_scope_id: "email-marketing",
+          match: { subject_keywords: ["campaign"] },
+        },
+      ],
+    });
+
+    const contexts = strategy.formContexts([
+      makeSharedMailboxFact("conv-support", "user@example.com", "Login help", "I cannot sign in."),
+    ], "shared-mailbox");
+
+    expect(contexts).toHaveLength(0);
+  });
+
+  it("resolves operation_intake strategy from scope config", () => {
+    const strategy = resolveContextStrategy("operation_intake", {
+      operation_intake: {
+        routes: [
+          {
+            route_id: "campaign-intake",
+            target_scope_id: "email-marketing",
+            match: { body_keywords: ["campaign"] },
+          },
+        ],
+      },
+    });
+
+    expect(strategy).toBeInstanceOf(OperationIntakeContextFormation);
+  });
+
+  it("maps missing operation inputs to a governed draft_reply proposal", () => {
+    const action = buildMissingInformationDraftReply({
+      assumed_intent: "test the email campaign creation workflow",
+      required_inputs: [
+        "campaign goal",
+        "audience or segment",
+        "desired send timing",
+        "approval owner",
+      ],
+    });
+
+    expect(action.action_type).toBe("draft_reply");
+    expect(action.authority).toBe("recommended");
+    expect(JSON.parse(action.payload_json)).toEqual({
+      body_text: "I assume you mean you want to test the email campaign creation workflow. To proceed, please provide campaign goal, audience or segment, desired send timing, approval owner.",
+    });
+    expect(action.rationale).toContain("no external operation effect");
   });
 });

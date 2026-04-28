@@ -7,7 +7,13 @@
  */
 
 import type { Fact } from "../facts/types.js";
-import type { MailAdmissionConfig, MailAdmissionPredicateConfig, MailParticipantField } from "../config/types.js";
+import type {
+  MailAdmissionConfig,
+  MailAdmissionPredicateConfig,
+  MailParticipantField,
+  OperationIntakeConfig,
+  OperationIntakeRouteConfig,
+} from "../config/types.js";
 import { MailboxContextStrategy } from "./mailbox/context-strategy.js";
 
 export interface PolicyContext {
@@ -61,6 +67,49 @@ function extractMailSenderEmail(fact: Fact): string | null {
     return email ? email.toLowerCase() : null;
   } catch {
     return null;
+  }
+}
+
+function extractMailTextSignals(fact: Fact): {
+  conversation_id: string | null;
+  sender_email: string | null;
+  subject: string;
+  body_text: string;
+} {
+  try {
+    const payload = JSON.parse(fact.payload_json) as Record<string, unknown>;
+    const event = payload.event as Record<string, unknown> | undefined;
+    if (!event || typeof event !== "object") {
+      return { conversation_id: null, sender_email: null, subject: "", body_text: "" };
+    }
+    const normalizedPayload = event.payload as Record<string, unknown> | undefined;
+    const body =
+      (event.body as Record<string, unknown> | undefined) ??
+      (normalizedPayload?.body as Record<string, unknown> | undefined);
+    const bodyText =
+      typeof body?.text === "string"
+        ? body.text
+        : typeof body?.preview === "string"
+          ? body.preview
+          : typeof normalizedPayload?.body_text === "string"
+            ? normalizedPayload.body_text
+            : "";
+    return {
+      conversation_id: typeof event.conversation_id === "string"
+        ? event.conversation_id
+        : typeof normalizedPayload?.conversation_id === "string"
+          ? normalizedPayload.conversation_id
+          : null,
+      sender_email: extractMailSenderEmail(fact),
+      subject: typeof event.subject === "string"
+        ? event.subject
+        : typeof normalizedPayload?.subject === "string"
+          ? normalizedPayload.subject
+          : "",
+      body_text: bodyText,
+    };
+  } catch {
+    return { conversation_id: null, sender_email: null, subject: "", body_text: "" };
   }
 }
 
@@ -525,6 +574,80 @@ export class CampaignRequestContextFormation implements ContextFormationStrategy
   }
 }
 
+function keywordMatches(value: string, keywords: string[] | undefined): boolean {
+  if (!keywords || keywords.length === 0) return false;
+  const lower = value.toLowerCase();
+  return keywords.some((keyword) => lower.includes(keyword.toLowerCase()));
+}
+
+function routeMatchesFact(route: OperationIntakeRouteConfig, fact: Fact): { conversation_id: string | null; matched: boolean } {
+  const signals = extractMailTextSignals(fact);
+  const sender = signals.sender_email?.toLowerCase() ?? null;
+  const match = route.match;
+  const hasSenderSignals = Boolean(match.sender_addresses?.length || match.sender_domains?.length);
+  const senderMatched = !hasSenderSignals || (sender !== null && (
+    match.sender_addresses?.some((address) => address.toLowerCase() === sender) ||
+    match.sender_domains?.some((domain) => sender.endsWith(`@${domain.toLowerCase()}`))
+  ));
+  const subjectMatched = !match.subject_keywords?.length || keywordMatches(signals.subject, match.subject_keywords);
+  const bodyMatched = !match.body_keywords?.length || keywordMatches(signals.body_text, match.body_keywords);
+  const matched = Boolean(senderMatched) && subjectMatched && bodyMatched;
+  return { conversation_id: signals.conversation_id, matched };
+}
+
+/**
+ * Shared mailbox operation-intake bridge.
+ *
+ * The source mailbox remains the arrival locus. A matched route opens work in
+ * the target operation scope, letting that operation's policy/charter own
+ * evaluation and outbound handoff.
+ */
+export class OperationIntakeContextFormation implements ContextFormationStrategy {
+  constructor(private readonly config: OperationIntakeConfig) {}
+
+  formContexts(
+    facts: Fact[],
+    _scopeId: string,
+    options?: {
+      getLatestRevisionOrdinal?: (contextId: string) => number | null;
+    },
+  ): PolicyContext[] {
+    const groups = new Map<string, { route: OperationIntakeRouteConfig; facts: Fact[] }>();
+
+    for (const fact of facts) {
+      if (fact.fact_type !== "mail.message.discovered") continue;
+
+      for (const route of this.config.routes) {
+        const result = routeMatchesFact(route, fact);
+        if (!result.matched || !result.conversation_id) continue;
+        const contextId = `${route.target_scope_id}:${result.conversation_id}`;
+        const group = groups.get(contextId) ?? { route, facts: [] };
+        group.facts.push(fact);
+        groups.set(contextId, group);
+        break;
+      }
+    }
+
+    const now = new Date().toISOString();
+    const contexts: PolicyContext[] = [];
+    for (const [contextId, group] of groups) {
+      const previousOrdinal = options?.getLatestRevisionOrdinal?.(contextId) ?? null;
+      const currentOrdinal = (previousOrdinal ?? 0) + 1;
+      contexts.push({
+        context_id: contextId,
+        scope_id: group.route.target_scope_id,
+        revision_id: makeRevisionId(contextId, currentOrdinal),
+        previous_revision_ordinal: previousOrdinal,
+        current_revision_ordinal: currentOrdinal,
+        change_kinds: ["operation_intake", `operation_intake:${group.route.route_id}`],
+        facts: group.facts,
+        synced_at: now,
+      });
+    }
+    return contexts;
+  }
+}
+
 /** Simple v0 keyword-based campaign field extraction */
 function extractCampaignFields(subject: string, bodyText: string) {
   const subjLower = subject.toLowerCase();
@@ -605,6 +728,16 @@ export function resolveContextStrategy(
         );
       }
       return new CampaignRequestContextFormation(campaignConfig);
+    }
+    case "operation_intake": {
+      const intakeConfig = config as { operation_intake?: OperationIntakeConfig } | OperationIntakeConfig | undefined;
+      const operationIntake = intakeConfig && "routes" in intakeConfig
+        ? intakeConfig
+        : intakeConfig?.operation_intake;
+      if (!operationIntake || !Array.isArray(operationIntake.routes)) {
+        throw new Error(`operation_intake context strategy requires operation_intake.routes config`);
+      }
+      return new OperationIntakeContextFormation(operationIntake);
     }
     case "timer":
       return new TimerContextStrategy();
