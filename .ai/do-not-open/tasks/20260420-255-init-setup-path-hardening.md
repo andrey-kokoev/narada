@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T16:57:33.327Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: peer_reviewed
+---
+
 # Task 255: Init and Setup Path Hardening
 
 ## Chapter
@@ -148,3 +156,7 @@ pnpm --filter @narada2/ops-kit test
 
 - Task 254 (Operation/Scope Surface Alignment) — `want-mailbox`, `init-repo`, and `doctor` should use "operation" terminology.
 - Task 252 (Agent Verification Speed & Telemetry) — `pnpm verify` and test commands must be stable before adding new CLI tests.
+
+## Verification
+
+<!-- Record commands run, results observed, and how correctness was checked. -->
