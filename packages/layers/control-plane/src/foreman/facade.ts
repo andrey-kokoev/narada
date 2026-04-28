@@ -494,15 +494,7 @@ export class DefaultForemanFacade implements ForemanFacade {
     }
 
     if (governance.outcome === "clarification_needed") {
-      this.deps.coordinatorStore.updateWorkItemStatus(workItem.work_item_id, "failed_retryable", {
-        error_message: governance.reason,
-        updated_at: new Date().toISOString(),
-      });
-      const session = this.deps.coordinatorStore.getSessionForWorkItem(workItem.work_item_id);
-      if (session) {
-        this.deps.coordinatorStore.updateAgentSessionStatus(session.session_id, "idle");
-        this.deps.coordinatorStore.updateAgentSessionResumeHint(session.session_id, `Clarification needed: ${governance.reason}`);
-      }
+      this.failWorkItem(workItem.work_item_id, governance.reason, true);
       return { success: false, resolution_outcome: "failed", error: governance.reason };
     }
 

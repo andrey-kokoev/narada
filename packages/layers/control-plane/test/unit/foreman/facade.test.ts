@@ -1115,6 +1115,47 @@ describe("DefaultForemanFacade", () => {
       const commands = db.prepare("select count(*) as c from outbound_commands where conversation_id = ?").get("conv-lowconf") as { c: number };
       expect(commands.c).toBe(0);
     });
+
+    it("backs off charter clarification instead of making it immediately runnable", async () => {
+      insertConversation("conv-clarify");
+      const workItem = insertWorkItem("conv-clarify", "executing", "rev-1");
+      const executionId = "ex-clarify-1";
+      insertExecutionAttempt(workItem.work_item_id, executionId, {
+        execution_id: executionId,
+        work_item_id: workItem.work_item_id,
+        conversation_id: "conv-clarify",
+        charter_id: "support_steward",
+        role: "primary",
+        allowed_actions: ["draft_reply", "no_action"],
+        available_tools: [],
+      });
+
+      const evaluation = makeEvaluation(workItem.work_item_id, executionId, {
+        context_id: workItem.context_id,
+        outcome: "clarification_needed",
+        proposed_actions: [],
+        summary: "Need more information before acting.",
+      });
+      insertEvaluation(evaluation);
+
+      const result = await facade.resolveWorkItem({
+        work_item_id: workItem.work_item_id,
+        execution_id: executionId,
+        evaluation_id: evaluation.evaluation_id,
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.resolution_outcome).toBe("failed");
+      expect(result.error).toBe("Charter declared clarification_needed");
+
+      const updated = coordinatorStore.getWorkItem(workItem.work_item_id);
+      expect(updated!.status).toBe("failed_retryable");
+      expect(updated!.retry_count).toBe(1);
+      expect(updated!.next_retry_at).not.toBeNull();
+
+      const commands = db.prepare("select count(*) as c from outbound_commands where conversation_id = ?").get("conv-clarify") as { c: number };
+      expect(commands.c).toBe(0);
+    });
   });
 
   describe("failWorkItem", () => {
