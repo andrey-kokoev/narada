@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T16:44:34.670Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: peer_reviewed
+---
+
 # Task 248: Correct Operator Audit Surface Edge Cases
 
 ## Chapter
@@ -91,3 +99,7 @@ Add a focused assertion for human output if feasible. If not feasible, document 
 - [x] CLI audit test coverage is tightened or the limitation is explicitly documented.
 - [x] Task `236` is updated with corrective notes if needed.
 - [x] No `*-EXECUTED`, `*-DONE`, `*-RESULT`, `*-FINAL`, or `*-SUPERSEDED` files are created.
+
+## Verification
+
+<!-- Record commands run, results observed, and how correctness was checked. -->
