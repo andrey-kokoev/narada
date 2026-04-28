@@ -1,0 +1,33 @@
+{
+  "envelope_id": "env_56ba701d-977c-496a-a61a-9083d5be5a70",
+  "received_at": "2026-04-28T00:47:18.275Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:narada-mcp-facade-execution-20260427"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "andrey"
+  },
+  "payload": {
+    "title": "Narada should implement MCP as typed authority-preserving facade",
+    "summary": "Narada should implement an MCP server soon as an execution priority. Multi-agent and multi-Site workflows are already encountering shell quoting friction, Windows/WSL crossing friction, rich envelope payloads, and the need for typed discoverable operations. MCP should not become a second authority surface; it should be a thin typed facade over Narada's canonical application services.",
+    "evidence": [
+      "Recent work repeatedly used CLI commands to submit inbox envelopes, but the ergonomics were fragile: shell quoting, enum mistakes, runtime posture checks, and cross-environment command construction. Upcoming canonical inbox/outbox/routing/capability/file-drop workflows will have richer schemas and are natural MCP tools for agents. The CLI remains trustworthy, but agent ergonomics now need a typed protocol surface."
+    ],
+    "proposal": [
+      "Add a Narada MCP server that exposes canonical operations such as inbox submit/list/work-next/promote, outbox compose/preview/approve/send/confirm, task/chapter operations, Site registry/routing lookup, capability inspection, and admission dry-run. The MCP tools must call the same application services as CLI commands, return the same envelope ids and mutation evidence, and never write through a side implementation. MCP should expose schemas and dry-run/approval/execution separation explicitly."
+    ],
+    "recommendation": "Start with read-only and low-risk tools: doctor/status, inbox submit-observation with read-back confirmation, inbox work-next, and Site registry lookup. Then add mutation tools only when they emit the same canonical evidence as CLI. Keep CLI as the durable operator/admin surface and MCP as the typed agent-facing facade."
+  },
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_56ba701d-977c-496a-a61a-9083d5be5a70",
+    "promoted_at": "2026-04-28T00:54:50.338Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
+}

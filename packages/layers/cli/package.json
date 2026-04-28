@@ -6,7 +6,8 @@
   "types": "./dist/index.d.ts",
   "type": "module",
   "bin": {
-    "narada": "./dist/main.js"
+    "narada": "./dist/main.js",
+    "narada-mcp": "./dist/mcp-main.js"
   },
   "files": [
     "dist/",
