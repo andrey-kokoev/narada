@@ -276,6 +276,7 @@ Properties:
 - All side effects (mail sends, process spawns, future automations) must be represented as an Intent before execution
 - Idempotency is enforced at `idempotency_key`
 - No `Intent` may be created outside the foreman's atomic handoff transaction
+- Withdrawal is not deletion: after an `Intent` is admitted, cancellation or supersession is a governed lifecycle disposition owned by the target authority, not erasure by the submitter
 
 #### `execution`
 
@@ -1072,6 +1073,7 @@ A **governed effect** produced within a Cycle. An Act is realized through three 
 - A `draft_reply` proposed by a charter is an Effect Intent.
 - An `outbound_command` confirmed after worker execution is a Confirmed Act.
 - Acts may not bypass governance. Every Act originates from a decision and is recorded as an intent.
+- A withdrawn Effect Intent remains part of durable history. Before admission, withdrawal may cause rejection, archival, deferral, or supersession. After admission, it may cause cancellation or supersession only if the lifecycle permits. During execution, cancellation is bounded by executor safety. After confirmation, withdrawal can only become a new compensating, reversing, or explanatory Act.
 
 > **Precision rule**: When describing a specific phase, use the phase name (`Effect Intent`, `Effect Attempt`, `Confirmation`). Do not use `Act` to mean a single phase. `Act` is a family name, not a phase name.
 

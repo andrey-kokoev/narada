@@ -14,6 +14,28 @@ Crossing is governed before consequence.
 
 The thing crossing is inert before admission. It may be admitted, rejected, routed, transformed, deferred, quarantined, or recorded as residual.
 
+## Withdrawal Rule
+
+Withdrawal is not deletion.
+
+Once a payload has crossed into a target authority zone, the source no longer owns erasure of that crossing. The source may submit a withdrawal, correction, or replacement request, but that request is itself a new governed crossing. The target authority owns the resulting disposition.
+
+Canonical dispositions include:
+
+| Phase | Withdrawal Meaning |
+| --- | --- |
+| Before admission | The target may reject, archive, defer, or supersede the original candidate. |
+| After admission as durable intent | The target may cancel or supersede the admitted intent only if its lifecycle permits and no irreversible effect has occurred. |
+| During execution attempt | The target may cancel only if the executor can still halt safely; otherwise the attempt must complete, fail, or be reconciled. |
+| After confirmation | The original crossing remains true history; correction requires a new compensating, reversing, or explanatory crossing. |
+
+Therefore:
+
+```text
+Withdrawal is a governed request for disposition.
+It is not authority to erase, un-admit, or un-confirm.
+```
+
 ## Shape
 
 ```text
@@ -61,6 +83,7 @@ Repeated governed crossings stabilize into Narada machinery:
 8. Repeated friction around a crossing is candidate doctrine or machinery.
 9. Lineage records crossings that change authority relationships.
 10. The target authority can read back what became true.
+11. Withdrawal after crossing is represented as a new governed crossing, not deletion of the original trace.
 
 ## Anti-Collapse Examples
 

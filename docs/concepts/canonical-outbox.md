@@ -4,6 +4,19 @@ Canonical Outbox is the Site-local authority record for outbound effect intents.
 
 Outbox items are inert until an executor performs a transport-specific crossing under its own law. The v0 command surface records, previews, approves, confirms, archives, supersedes, and exports outbox items without sending email, calling webhooks, writing remote GitHub comments, or mutating external systems.
 
+## Withdrawal And Disposition
+
+Submitting an outbox item places an outbound effect intent under Site-local authority. The submitter cannot withdraw it by deleting history. A withdrawal, correction, or replacement is recorded as a disposition request and resolved by the Site authority through the outbox lifecycle.
+
+| State | Admissible Withdrawal Disposition |
+| --- | --- |
+| `composed` | Archive or supersede before approval. |
+| `approved` | Archive, supersede, or require operator confirmation before execution. |
+| Transport execution in progress | Cancel only if the executor can halt safely; otherwise record the attempt and reconcile. |
+| `confirmed` | Do not withdraw; create a new compensating, reversing, or explanatory outbound item. |
+
+`archived` and `superseded` are not erasure. They are terminal or redirecting records that preserve what was proposed, who proposed it, and why it no longer proceeds.
+
 ## Command Surface
 
 ```bash
