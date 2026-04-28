@@ -21,5 +21,13 @@
     ],
     "recommendation": "Treat as documentation/product execution. Acceptance should include: README segmentation section; blocked-reader route; dedicated agent reconstruction specification; links from docs/README.md and AGENTS.md if appropriate; a short copy-paste prompt for a reader's internal agent; and explicit warning that reconstruction should preserve Narada invariants rather than mimic package names or internal implementation details. No runtime machinery is required unless docs reveal a forced support command."
   },
-  "status": "received"
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_3fbcef07-10d6-4288-8cc1-4997791de3a5",
+    "promoted_at": "2026-04-28T03:50:58.103Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
 }

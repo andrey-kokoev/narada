@@ -101,6 +101,20 @@ Narada offers three entry paths, ordered from safest to live:
 
 See [QUICKSTART.md](QUICKSTART.md) for the full gold-path guide.
 
+## Choose Your Route
+
+Narada can be consumed as runnable software, reference doctrine, or an agent reconstruction specification.
+
+| Reader | Route | Start Here |
+| --- | --- | --- |
+| Runnable evaluator | You can install packages and run local commands. | `narada demo`, then `narada init-repo --demo ~/src/my-tryout`. |
+| Live operator | You can provide credentials and run an operation. | `narada init-repo ~/src/my-ops`, then [`docs/product/bootstrap-contract.md`](docs/product/bootstrap-contract.md). |
+| Architect / doctrine reader | You cannot or do not want to run code yet. | [`docs/concepts/system.md`](docs/concepts/system.md), [`SEMANTICS.md`](SEMANTICS.md), [`packages/layers/control-plane/docs/00-kernel.md`](packages/layers/control-plane/docs/00-kernel.md). |
+| Corporate or perimeter-blocked reader | You cannot install packages, access npm/GitHub freely, use Graph credentials, or execute arbitrary code. | Read the doctrine path and use [`docs/product/agent-reconstruction-specification.md`](docs/product/agent-reconstruction-specification.md). |
+| Agent-assisted builder | You want an internal agent to rebuild a Narada-compatible local kernel inside your own environment. | Give the agent the prompt in [`docs/product/agent-reconstruction-specification.md`](docs/product/agent-reconstruction-specification.md#copy-paste-agent-prompt). |
+
+If you cannot run this repo, do not treat package names or file layout as the essence of Narada. Preserve the invariants: governed crossings, zone authority, intelligence-authority separation, explicit admission, durable evidence, intent before execution, confirmation after execution, projections not authority, capability/secret separation, and Site factorization.
+
 ## CLI Commands
 
 ### Operation Shaping (ops-kit)
