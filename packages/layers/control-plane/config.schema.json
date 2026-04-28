@@ -31,7 +31,8 @@
                   "enum": [
                     "graph",
                     "timer",
-                    "webhook"
+                    "webhook",
+                    "mock"
                   ]
                 },
                 "tenant_id": {
@@ -236,6 +237,7 @@
                     "set_categories",
                     "extract_obligations",
                     "create_followup",
+                    "campaign_brief",
                     "tool_request",
                     "no_action"
                   ]
@@ -799,6 +801,72 @@
               }
             },
             "additionalProperties": false
+          },
+          "operation_intake": {
+            "type": "object",
+            "properties": {
+              "routes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "route_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "target_scope_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "match": {
+                      "type": "object",
+                      "properties": {
+                        "sender_addresses": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "sender_domains": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "subject_keywords": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "body_keywords": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "route_id",
+                    "target_scope_id",
+                    "match"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "routes"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
@@ -1181,6 +1249,7 @@
               "set_categories",
               "extract_obligations",
               "create_followup",
+              "campaign_brief",
               "tool_request",
               "no_action"
             ]

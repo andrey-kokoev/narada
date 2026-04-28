@@ -98,6 +98,7 @@ const AllowedActionSchema = z.enum([
   'set_categories',
   'extract_obligations',
   'create_followup',
+  'campaign_brief',
   'tool_request',
   'no_action',
 ]);
@@ -169,9 +170,33 @@ const WebhookConfigSchema = z.object({
   message: 'public_url, port, and client_state are required when webhook is enabled',
 });
 
+const OperationIntakeRouteMatchSchema = z.object({
+  sender_addresses: z.array(z.string().min(1)).optional(),
+  sender_domains: z.array(z.string().min(1)).optional(),
+  subject_keywords: z.array(z.string().min(1)).optional(),
+  body_keywords: z.array(z.string().min(1)).optional(),
+}).refine((value) => (
+  Boolean(value.sender_addresses?.length) ||
+  Boolean(value.sender_domains?.length) ||
+  Boolean(value.subject_keywords?.length) ||
+  Boolean(value.body_keywords?.length)
+), {
+  message: 'At least one operation intake match signal is required',
+});
+
+const OperationIntakeRouteSchema = z.object({
+  route_id: z.string().min(1),
+  target_scope_id: z.string().min(1),
+  match: OperationIntakeRouteMatchSchema,
+});
+
+const OperationIntakeSchema = z.object({
+  routes: z.array(OperationIntakeRouteSchema).min(1),
+});
+
 // Source configuration schema
 const SourceConfigSchema = z.object({
-  type: z.enum(['graph', 'timer', 'webhook']),
+  type: z.enum(['graph', 'timer', 'webhook', 'mock']),
   tenant_id: z.string().min(1).optional(),
   client_id: z.string().min(1).optional(),
   client_secret: z.string().min(1).optional(),
@@ -262,6 +287,7 @@ const ScopeConfigSchema = z.object({
   operational_trust: OperationalTrustConfigSchema.optional(),
   operator_contacts: z.array(OperatorContactSchema).optional(),
   confirmation_providers: ConfirmationProvidersSchema.optional(),
+  operation_intake: OperationIntakeSchema.optional(),
 });
 
 // Main configuration schema

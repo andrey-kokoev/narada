@@ -439,7 +439,7 @@ export interface ShutdownSignal {
 
 async function createDispatchContext(
   scope: ScopeConfig,
-  _globalConfig: ExchangeFsSyncConfig,
+  globalConfig: ExchangeFsSyncConfig,
   opts: SyncServiceConfig,
   logger: ReturnType<typeof createLogger>,
   graphHttpClient?: GraphHttpClient,
@@ -511,9 +511,12 @@ async function createDispatchContext(
     const factStore = new SqliteFactStore({ db: factDb });
     factStore.initSchema();
 
-    const getRuntimePolicy = (_scopeId: string) => {
-      const policy = scope.policy;
-      if (scope.charter?.degraded_mode === "draft_only") {
+    const scopeById = new Map(globalConfig.scopes.map((configuredScope) => [configuredScope.scope_id, configuredScope]));
+
+    const getRuntimePolicy = (scopeId: string) => {
+      const policyScope = scopeById.get(scopeId) ?? scope;
+      const policy = policyScope.policy;
+      if (policyScope.charter?.degraded_mode === "draft_only") {
         return { ...policy, require_human_approval: true };
       }
       return policy;
@@ -549,6 +552,7 @@ async function createDispatchContext(
                 campaign_request_lookback_days: scope.campaign_request_lookback_days,
               }
             : {}),
+          ...(scope.operation_intake ? { operation_intake: scope.operation_intake } : {}),
         },
       ),
     });
