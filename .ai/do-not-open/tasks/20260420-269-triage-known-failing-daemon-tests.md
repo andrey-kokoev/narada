@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T17:40:00.187Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: peer_reviewed
+---
+
 # Task 269: Triage Known Failing Daemon Tests
 
 ## Chapter
@@ -149,3 +157,7 @@ None reproducible with focused commands. If flakiness resurfaces, agents should:
 - [x] Remaining failures, if any, are documented with exact commands and guidance.
 - [x] Verification guidance is updated if daemon broad tests remain unsuitable.
 - [x] No `*-EXECUTED`, `*-DONE`, `*-RESULT`, `*-FINAL`, or `*-SUPERSEDED` files are created.
+
+## Verification
+
+<!-- Record commands run, results observed, and how correctness was checked. -->

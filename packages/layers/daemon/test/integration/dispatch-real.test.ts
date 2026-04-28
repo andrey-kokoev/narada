@@ -42,42 +42,49 @@ describe("daemon dispatch phase with real charter runner (mocked api)", { timeou
     const conversationId = "conv-real-456";
     const mockAdapter = createMockAdapterForConversation(conversationId);
 
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      text: async () => "",
-      json: async () => ({
-        choices: [
-          {
-            message: {
-              content: JSON.stringify({
-                output_version: "2.0",
-                execution_id: "will-be-patched",
-                charter_id: "support_steward",
-                role: "primary",
-                analyzed_at: new Date().toISOString(),
-                outcome: "complete",
-                confidence: { overall: "high", uncertainty_flags: [] },
-                summary: "Real runner test evaluation",
-                classifications: [],
-                facts: [],
-                recommended_action_class: "send_reply",
-                proposed_actions: [
-                  {
-                    action_type: "send_reply",
-                    authority: "recommended",
-                    payload_json: JSON.stringify({ body_text: "Hello from real runner", to: ["test@example.com"] }),
-                    rationale: "Test real runtime path",
-                  },
-                ],
-                tool_requests: [],
-                escalations: [],
-              }),
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => "",
+        json: async () => ({ data: [{ id: "gpt-4o-mini" }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => "",
+        json: async () => ({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  output_version: "2.0",
+                  execution_id: "will-be-patched",
+                  charter_id: "support_steward",
+                  role: "primary",
+                  analyzed_at: new Date().toISOString(),
+                  outcome: "complete",
+                  confidence: { overall: "high", uncertainty_flags: [] },
+                  summary: "Real runner test evaluation",
+                  classifications: [],
+                  facts: [],
+                  recommended_action_class: "send_reply",
+                  proposed_actions: [
+                    {
+                      action_type: "send_reply",
+                      authority: "recommended",
+                      payload_json: JSON.stringify({ body_text: "Hello from real runner", to: ["test@example.com"] }),
+                      rationale: "Test real runtime path",
+                    },
+                  ],
+                  tool_requests: [],
+                  escalations: [],
+                }),
+              },
             },
-          },
-        ],
-      }),
-    });
+          ],
+        }),
+      });
 
     service = await createSyncService({
       configPath,
