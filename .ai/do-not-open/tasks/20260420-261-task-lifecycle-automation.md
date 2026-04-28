@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T17:08:30.605Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: peer_reviewed
+---
+
 # Task 261: Task Lifecycle Automation
 
 ## Chapter
@@ -170,3 +178,7 @@ All operators (`claim`, `release`, `review`) now call `isValidTransition()` befo
 - [x] Continuation packets are required for `budget_exhausted` releases.
 - [x] Continuation affinity prefers but does not require the same agent to resume.
 - [x] No `*-EXECUTED`, `*-DONE`, `*-RESULT`, `*-FINAL`, or `*-SUPERSEDED` files are created.
+
+## Verification
+
+<!-- Record commands run, results observed, and how correctness was checked. -->
