@@ -8,7 +8,9 @@ import {
   inboxSubmitObservationCommand,
   inboxWorkNextCommand,
 } from './commands/inbox.js';
+import { grantEffectiveStatus, readCapabilityRegistry } from './lib/capability-consent-registry.js';
 import { ExitCode } from './lib/exit-codes.js';
+import { readRoutingRegistry, resolveRoute, type RouteAddressRecord } from './lib/routing-addressing-registry.js';
 
 type JsonRpcId = string | number | null;
 
@@ -28,6 +30,28 @@ interface McpTool {
 interface McpToolResult {
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
+}
+
+interface McpTarget {
+  kind: 'site';
+  ref?: string;
+  site_root?: string;
+}
+
+interface McpTraversalContext {
+  source_site: McpSiteContext;
+  target_site: McpSiteContext;
+  target: McpTarget | null;
+  route: RouteAddressRecord | null;
+  alternatives_count: number;
+  authority_posture: 'facade_only';
+  resolution: 'source_site' | 'explicit_site_root' | 'routing_registry';
+  cross_site: boolean;
+  mutation_attempted: boolean;
+  required_capability_kind: string | null;
+  capability_grant_id: string | null;
+  capability_status: 'not_required' | 'active' | 'missing';
+  tool: string;
 }
 
 export interface McpServerOptions {
@@ -54,13 +78,23 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
   {
     name: 'narada_site_context',
     description: 'Inspect the Site context that scopes this MCP facade.',
-    inputSchema: objectSchema({}),
+    inputSchema: objectSchema({
+      target: targetSchema(),
+    }),
+  },
+  {
+    name: 'narada_mcp_fabric_context',
+    description: 'Inspect the governed MCP fabric posture and optional target Site resolution without mutating.',
+    inputSchema: objectSchema({
+      target: targetSchema(),
+    }),
   },
   {
     name: 'narada_inbox_doctor',
     description: 'Inspect Canonical Inbox delivery coordinates and local runtime readiness.',
     inputSchema: objectSchema({
       cwd: stringSchema('Working directory; defaults to current process cwd.'),
+      target: targetSchema(),
     }),
   },
   {
@@ -73,6 +107,7 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
       limit: numberSchema('Maximum envelopes including alternatives.'),
       claim: booleanSchema('Claim the selected envelope before returning it.'),
       by: stringSchema('Principal for claim=true.'),
+      target: targetSchema(),
     }),
   },
   {
@@ -83,6 +118,7 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
       status: stringSchema('Optional inbox status filter.'),
       kind: stringSchema('Optional envelope kind filter.'),
       limit: numberSchema('Maximum envelopes to return.'),
+      target: targetSchema(),
     }),
   },
   {
@@ -91,6 +127,7 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
     inputSchema: objectSchema({
       cwd: stringSchema('Working directory; defaults to current process cwd.'),
       envelope_id: { type: 'string', description: 'Envelope id to inspect.' },
+      target: targetSchema(),
     }, ['envelope_id']),
   },
   {
@@ -107,6 +144,7 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
       evidence: arrayStringSchema('Evidence lines.'),
       proposal: arrayStringSchema('Proposal lines.'),
       recommendation: stringSchema('Recommended handling.'),
+      target: targetSchema(),
     }, ['source_ref', 'title']),
   },
 ];
@@ -181,16 +219,46 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
   const name = stringField(record, 'name');
   const args = asRecord(record.arguments);
   if (!name) throw new Error('tools/call requires params.name');
-  const scopedCwd = stringField(args, 'cwd') ?? siteContext.site_root;
+  const mutationAttempted = name === 'narada_inbox_submit_observation'
+    || (name === 'narada_inbox_work_next' && booleanField(args, 'claim') === true);
+  const traversal = await resolveMcpTraversal({
+    sourceSite: siteContext,
+    tool: name,
+    args,
+    mutationAttempted,
+  });
+  const scopedCwd = stringField(args, 'cwd') ?? traversal.target_site.site_root;
+
+  if (mutationAttempted && traversal.cross_site) {
+    return jsonToolResult({
+      status: 'error',
+      error: 'Cross-Site MCP mutation is not admitted in v1 fabric proof.',
+      traversal,
+      required_next_step: 'Use the target Site authority surface directly or add a capability-governed cross-Site mutation path.',
+    }, true);
+  }
 
   switch (name) {
     case 'narada_site_context':
-      return jsonToolResult({ status: 'success', site: siteContext, authority_posture: 'facade_only' });
+      return jsonToolResult({
+        status: 'success',
+        site: traversal.target_site,
+        source_site: traversal.source_site,
+        authority_posture: 'facade_only',
+        traversal,
+      });
+    case 'narada_mcp_fabric_context':
+      return jsonToolResult({
+        status: 'success',
+        fabric_posture: 'governed_traversal_facade',
+        rule: 'MCP fabric may route typed requests; target Site authority admits consequence.',
+        traversal,
+      });
     case 'narada_inbox_doctor':
       return commandToolResult(await inboxDoctorCommand({
         cwd: scopedCwd,
         format: 'json',
-      }));
+      }), traversal);
     case 'narada_inbox_work_next':
       return commandToolResult(await inboxWorkNextCommand({
         cwd: scopedCwd,
@@ -200,7 +268,7 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
         claim: booleanField(args, 'claim'),
         by: stringField(args, 'by'),
         format: 'json',
-      }));
+      }), traversal);
     case 'narada_inbox_list':
       return commandToolResult(await inboxListCommand({
         cwd: scopedCwd,
@@ -208,13 +276,13 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
         kind: stringField(args, 'kind'),
         limit: numberField(args, 'limit'),
         format: 'json',
-      }));
+      }), traversal);
     case 'narada_inbox_show':
       return commandToolResult(await inboxShowCommand({
         cwd: scopedCwd,
         envelopeId: requiredString(args, 'envelope_id'),
         format: 'json',
-      }));
+      }), traversal);
     case 'narada_inbox_submit_observation':
       return commandToolResult(await inboxSubmitObservationCommand({
         cwd: scopedCwd,
@@ -228,10 +296,93 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
         proposal: stringArrayField(args, 'proposal'),
         recommendation: stringField(args, 'recommendation'),
         format: 'json',
-      }));
+      }), traversal);
     default:
       throw new Error(`Unknown Narada MCP tool: ${name}`);
   }
+}
+
+async function resolveMcpTraversal(args: {
+  sourceSite: McpSiteContext;
+  tool: string;
+  args: Record<string, unknown>;
+  mutationAttempted: boolean;
+}): Promise<McpTraversalContext> {
+  const target = parseTarget(args.args);
+  let targetSite = args.sourceSite;
+  let route: RouteAddressRecord | null = null;
+  let alternativesCount = 0;
+  let resolution: McpTraversalContext['resolution'] = 'source_site';
+
+  if (target?.site_root) {
+    targetSite = resolveMcpSiteContext({ siteRoot: target.site_root });
+    resolution = 'explicit_site_root';
+  } else if (target?.ref) {
+    const registry = await readRoutingRegistry(args.sourceSite.site_root);
+    const resolved = resolveRoute(registry.routes, target.kind, target.ref);
+    route = resolved.selected;
+    alternativesCount = resolved.alternatives.length;
+    if (!route) throw new Error(`No active MCP fabric route for target ${target.kind}:${target.ref}`);
+    if (!['site_root', 'narada_site_root'].includes(route.address_kind)) {
+      throw new Error(`MCP fabric route ${route.route_id} uses unsupported address_kind ${route.address_kind}; expected site_root`);
+    }
+    if (route.transport !== 'filesystem') {
+      throw new Error(`MCP fabric route ${route.route_id} uses unsupported transport ${route.transport}; expected filesystem`);
+    }
+    targetSite = resolveMcpSiteContext({ siteRoot: route.address_ref });
+    resolution = 'routing_registry';
+  }
+
+  const requiredCapabilityKind = args.mutationAttempted && route?.capability_kind ? route.capability_kind : null;
+  const grant = requiredCapabilityKind
+    ? await findActiveCapabilityGrant(args.sourceSite.site_root, {
+      siteId: targetSite.site_id,
+      capabilityKind: requiredCapabilityKind,
+      action: args.tool,
+    })
+    : null;
+
+  return {
+    source_site: args.sourceSite,
+    target_site: targetSite,
+    target,
+    route,
+    alternatives_count: alternativesCount,
+    authority_posture: 'facade_only',
+    resolution,
+    cross_site: targetSite.site_root !== args.sourceSite.site_root,
+    mutation_attempted: args.mutationAttempted,
+    required_capability_kind: requiredCapabilityKind,
+    capability_grant_id: grant?.grant_id ?? null,
+    capability_status: requiredCapabilityKind ? (grant ? 'active' : 'missing') : 'not_required',
+    tool: args.tool,
+  };
+}
+
+async function findActiveCapabilityGrant(cwd: string, args: {
+  siteId: string;
+  capabilityKind: string;
+  action: string;
+}): Promise<{ grant_id: string } | null> {
+  const registry = await readCapabilityRegistry(cwd);
+  return registry.grants.find((grant) => {
+    if (grant.site_id !== args.siteId) return false;
+    if (grant.capability_kind !== args.capabilityKind) return false;
+    if (grantEffectiveStatus(grant) !== 'active') return false;
+    if (grant.denied_actions.includes(args.action)) return false;
+    return grant.allowed_actions.includes(args.action) || grant.allowed_actions.includes('*');
+  }) ?? null;
+}
+
+function parseTarget(args: Record<string, unknown>): McpTarget | null {
+  const target = asRecord(args.target);
+  if (Object.keys(target).length === 0) return null;
+  const kind = stringField(target, 'kind');
+  if (kind && kind !== 'site') throw new Error(`Unsupported MCP target kind: ${kind}`);
+  const ref = stringField(target, 'ref');
+  const siteRoot = stringField(target, 'site_root');
+  if (!ref && !siteRoot) throw new Error('MCP target requires ref or site_root');
+  return { kind: 'site', ...(ref ? { ref } : {}), ...(siteRoot ? { site_root: siteRoot } : {}) };
 }
 
 export function resolveMcpSiteContext(options: Pick<McpServerOptions, 'cwd' | 'siteRoot' | 'siteId' | 'siteKind'> = {}): McpSiteContext {
@@ -256,16 +407,24 @@ export function resolveMcpSiteContext(options: Pick<McpServerOptions, 'cwd' | 's
   };
 }
 
-function jsonToolResult(value: unknown): McpToolResult {
-  return { content: [{ type: 'text', text: JSON.stringify(value, null, 2) }] };
+function jsonToolResult(value: unknown, isError = false): McpToolResult {
+  return { content: [{ type: 'text', text: JSON.stringify(value, null, 2) }], ...(isError ? { isError: true } : {}) };
 }
 
-function commandToolResult(envelope: { exitCode: ExitCode; result: unknown }): McpToolResult {
-  const text = JSON.stringify(envelope.result, null, 2);
+function commandToolResult(envelope: { exitCode: ExitCode; result: unknown }, traversal?: McpTraversalContext): McpToolResult {
+  const result = traversal ? attachTraversal(envelope.result, traversal) : envelope.result;
+  const text = JSON.stringify(result, null, 2);
   return {
     content: [{ type: 'text', text }],
     ...(envelope.exitCode === ExitCode.SUCCESS ? {} : { isError: true }),
   };
+}
+
+function attachTraversal(result: unknown, traversal: McpTraversalContext): unknown {
+  if (result && typeof result === 'object' && !Array.isArray(result)) {
+    return { ...(result as Record<string, unknown>), traversal };
+  }
+  return { result, traversal };
 }
 
 function readJsonObject(path: string): Record<string, unknown> | undefined {
@@ -360,6 +519,14 @@ function booleanSchema(description: string): Record<string, unknown> {
 
 function arrayStringSchema(description: string): Record<string, unknown> {
   return { type: 'array', items: { type: 'string' }, description };
+}
+
+function targetSchema(): Record<string, unknown> {
+  return objectSchema({
+    kind: { type: 'string', enum: ['site'], description: 'Target kind; only site is supported in v1.' },
+    ref: stringSchema('Target Site reference resolved through the source Site routing registry.'),
+    site_root: stringSchema('Explicit target Site root; path fallback for local proof and tests.'),
+  });
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

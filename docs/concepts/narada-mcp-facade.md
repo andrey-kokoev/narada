@@ -65,6 +65,29 @@ Site-scoped MCP means:
 
 This allows a User Site, PC Site, Project Site, Client Service Site, or future Site kind to publish an agent-facing protocol surface while preserving the Site's existing authority grammar.
 
+## Fabric v1
+
+The first MCP fabric step is read-only governed traversal, not cross-Site mutation.
+
+Fabric v1 adds:
+
+| Surface | Role |
+|---------|------|
+| `narada_mcp_fabric_context` | Read-only fabric posture and target resolution inspection. |
+| `target: { kind: "site", ref: "..." }` | Target Site resolution through the source Site's routing-addressing registry. |
+| `target: { kind: "site", site_root: "..." }` | Explicit local proof path for a known Site root. |
+| `traversal` response block | Source Site, target Site, route, authority posture, mutation posture, and capability posture. |
+
+Read-only MCP tools may traverse to an explicitly resolved target Site. Mutating cross-Site calls are refused in v1 and return the traversal/capability posture needed to explain why consequence was not admitted.
+
+This preserves the scale-relative topology:
+
+```text
+MCP fabric routes.
+Target Site admits.
+Trace explains.
+```
+
 ## Expansion Rule
 
 Add MCP tools only when all of these are true:
