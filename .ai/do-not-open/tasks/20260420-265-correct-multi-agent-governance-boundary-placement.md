@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T17:27:30.854Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: peer_reviewed
+---
+
 # Task 265: Correct Multi-Agent Governance Boundary Placement
 
 ## Chapter
