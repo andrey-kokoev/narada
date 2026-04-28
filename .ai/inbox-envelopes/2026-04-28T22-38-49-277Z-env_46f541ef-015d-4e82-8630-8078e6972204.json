@@ -1,0 +1,40 @@
+{
+  "envelope_id": "env_46f541ef-015d-4e82-8630-8078e6972204",
+  "received_at": "2026-04-28T22:38:49.277Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "staccato:willem-email-intake-clarification-draft"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "codex"
+  },
+  "payload": {
+    "title": "Pending-approval clarification drafts lack a materialization path",
+    "summary": "During Staccato email-marketing onboarding, a safe missing-information draft_reply for Willem Driessen's underspecified campaign request was repeatedly converted to a pending_approval foreman decision because Kimi emitted content-uncertainty flags. Narada has draft approval operators only after an outbound command exists, but no governed operator path to approve a pending foreman decision into an outbound draft.",
+    "observed_at": "2026-04-28",
+    "source_site": "staccato-client-service",
+    "evidence": {
+      "staccato_commit": "6ba48dd Record Staccato email intake blocker",
+      "task_file": "C:/Users/Andrey/OneDrive - Global Maxima LLC/!Business/!Clients/Staccato/.narada/tasks/20260428-willem-email-intake-clarification-draft.md",
+      "friction_file": "C:/Users/Andrey/OneDrive - Global Maxima LLC/!Business/!Clients/Staccato/.narada/friction/20260428-pending-approval-clarification-draft.md",
+      "latest_work_item": "wi_dc60631b-95a6-4d4c-b699-8cd363939320",
+      "latest_foreman_decision": "pending_approval",
+      "proposed_action": "draft_reply",
+      "tool_requests": []
+    },
+    "impact": "A client-service Site cannot complete a safe clarification draft through the canonical path even though the charter produced one valid draft_reply action. Operators are forced either to bypass Narada or leave the work blocked.",
+    "proposed_direction": "Dearbitrate whether safe clarification draft_reply actions should bypass content uncertainty approval, or add a governed operator action that approves a pending foreman decision and materializes its proposed outbound command. Existing approve-draft-for-send is too late because it requires an outbound command that does not yet exist.",
+    "classification": "governance_operator_gap"
+  },
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_46f541ef-015d-4e82-8630-8078e6972204",
+    "promoted_at": "2026-04-28T22:48:32.772Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
+}

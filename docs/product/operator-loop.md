@@ -132,7 +132,18 @@ narada reject-draft <outbound-id> --rationale "Incorrect response"
 narada handled-externally <outbound-id> --ref ticket-123
 ```
 
+**Actions before a draft exists:**
+
+If governance stopped at a `pending_approval` foreman decision, no outbound command exists yet, so `approve-draft-for-send` is too late. First approve the pending decision into the durable outbound-command boundary:
+
+```bash
+narada approve-pending-decision <decision-id> --by <principal>
+```
+
+For `draft_reply`, this creates a pending outbound command only. The outbound worker still owns managed draft creation; this command does not send mail.
+
 **Promotion flow:**
+- `pending_approval` decision → approve (`approve-pending-decision`) → outbound command exists
 - `draft_ready` → review (`mark-reviewed`) → approve (`approve-draft-for-send`) → worker sends → `submitted` → inbound reconciliation → `confirmed`
 - `draft_ready` → review (`mark-reviewed`) → reject (`reject-draft`) → `cancelled`
 - `draft_ready` → handled externally (`handled-externally`) → `cancelled`

@@ -76,6 +76,7 @@ export const DEFAULT_COMMAND_GROUPS: CommandGroup[] = [
     commands: [
       'drafts',
       'show-draft',
+      'approve-pending-decision',
       'approve-draft-for-send',
       'reject-draft',
       'mark-reviewed',

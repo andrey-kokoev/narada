@@ -452,7 +452,10 @@ export class DefaultForemanFacade implements ForemanFacade {
           scope_id: workItem.scope_id,
           source_charter_ids_json: JSON.stringify([evaluation.charter_id]),
           approved_action: "pending_approval",
-          payload_json: JSON.stringify({ reason: governance.reason }),
+          payload_json: JSON.stringify({
+            reason: governance.reason,
+            proposed_action: governance.governed_action ?? null,
+          }),
           rationale: evaluation.summary,
           decided_at: now,
           outbound_id: null,

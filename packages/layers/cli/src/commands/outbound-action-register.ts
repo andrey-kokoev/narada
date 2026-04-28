@@ -5,6 +5,7 @@ import { handledExternallyCommand } from './handled-externally.js';
 import { showDraftCommand } from './show-draft.js';
 import { draftsCommand } from './drafts.js';
 import { approveDraftForSendCommand } from './approve-draft-for-send.js';
+import { approvePendingDecisionCommand } from './approve-pending-decision.js';
 import { retryAuthFailedCommand } from './retry-auth-failed.js';
 import { acknowledgeAlertCommand } from './acknowledge-alert.js';
 import { wrapCommand } from '../lib/command-wrapper.js';
@@ -95,6 +96,22 @@ export function registerOutboundActionCommands(program: Command): void {
           format: outputFormat(),
           outboundId,
         }, ctx))({ ...opts, outboundId }));
+
+  program
+    .command('approve-pending-decision')
+    .description('Approve a pending foreman decision and materialize its outbound command')
+    .argument('<decision-id>', 'Pending foreman decision ID to approve')
+    .requiredOption('--by <principal>', 'Operator or agent approving the pending decision')
+    .option('-c, --config <path>', 'Path to config file', './config.json')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action((decisionId: string, opts: Record<string, unknown>) =>
+      wrapCommand<WrappedOptions>('approve-pending-decision', (merged, ctx) =>
+        approvePendingDecisionCommand({
+          ...merged,
+          format: outputFormat(),
+          decisionId,
+          by: merged.by as string | undefined,
+        }, ctx))({ ...opts, decisionId }));
 
   program
     .command('approve-draft-for-send')
