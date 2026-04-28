@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T16:27:16.007Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: peer_reviewed
+---
+
 # Task 243: Expose USC Escalation Schema In Registry
 
 ## Chapter
