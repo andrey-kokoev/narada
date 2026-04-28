@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T18:39:13.155Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
+---
+
 # Task 278: Correct Task 256 Daemon Vertical Neutrality Gaps
 
 ## Chapter
@@ -60,6 +68,18 @@ Proceed directly. This is a narrow corrective task; use focused edits only.
 - Do not add new vertical projector logic.
 - Do not run broad/full test suites.
 - Do not create derivative task-status files.
+
+## Execution Notes
+
+- Verified `packages/layers/control-plane/config.example.json` includes the filesystem scope example alongside timer and webhook examples.
+- Verified the filesystem example includes `scope_id`, `root_dir`, `sources: [{ "type": "filesystem" }]`, `context_strategy`, and the minimal scope/normalize/runtime/charter/policy shape already used by the surrounding examples.
+- Verified `.ai/do-not-open/tasks/20260420-256-daemon-vertical-neutrality.md` now states that timer, webhook, and filesystem examples are present.
+- No code changes were required in this closeout pass; the task had already been materially implemented but lacked execution and verification evidence.
+
+## Verification
+
+- `narada test-run run --task 278 --requester architect --scope focused --timeout 60 --cmd <filesystem config and Task 256 artifact check>` — passed as TIZ run `run_1777401522581_9wg2cm` in 33ms.
+- The check asserted that `config.example.json` contains the filesystem-watch scope and coherent filesystem source shape, and that Task 256 notes mention timer, webhook, and filesystem examples.
 
 ## Acceptance Criteria
 
