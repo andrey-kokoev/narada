@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T19:50:43.395Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
+---
+
 # Task 305 — Kimi API Charter Evaluation Schema Validation Failure
 
 status: closed
@@ -178,3 +186,13 @@ Task 299 re-ran successfully with all fixes applied:
 - `~/src/narada.sonar/evidence/297-302-mailbox-operational-trial/commands-task305-verify.log`
 - `~/src/narada.sonar/evidence/297-302-mailbox-operational-trial/commands-task305-e2e-verify2.log`
 - Pre-fix model output captured in task notes above
+
+### TIZ Closure Verification
+
+`run_1777405804734_4ngfih` passed in 902ms and verified:
+- private Task 305 evidence logs exist,
+- task evidence records no schema validation errors,
+- incomplete proposed actions are dropped rather than fabricated,
+- prompts explicitly use `body_text`,
+- `packages/domains/charters/test/runtime/runner.test.ts` passes,
+- `packages/domains/charters/test/runtime/prompts.test.ts` passes.
