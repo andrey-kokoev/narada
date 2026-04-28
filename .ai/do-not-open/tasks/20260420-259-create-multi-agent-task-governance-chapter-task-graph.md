@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T17:02:19.865Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: peer_reviewed
+---
+
 # Task 259: Create Multi-Agent Task Governance Chapter Task Graph
 
 ## Chapter
@@ -100,3 +108,11 @@ It should require:
 - [x] The task set includes a chapter closure task.
 - [x] Dependencies on prior chapters are explicit but compressed.
 - [x] No `*-EXECUTED`, `*-DONE`, `*-RESULT`, `*-FINAL`, or `*-SUPERSEDED` files are created.
+
+## Execution Notes
+
+<!-- Record what was done, decisions made, and files changed. -->
+
+## Verification
+
+<!-- Record commands run, results observed, and how correctness was checked. -->
