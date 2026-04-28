@@ -1,0 +1,78 @@
+{
+  "envelope_id": "env_7b649a68-e706-45d7-88de-f6b1b1c42d8a",
+  "received_at": "2026-04-28T23:20:53.927Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "windows-user-site:operator-surface"
+  },
+  "kind": "proposal",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "codex"
+  },
+  "payload": {
+    "title": "Introduce Operator Surface as a first-class Narada construct",
+    "summary": "While stabilizing the Windows operator workflow, we discovered that Windows Terminal profiles with explicit tabTitle and suppressApplicationTitle provide durable, addressable windows that Komorebi/YASB/AHK can target. The underlying Narada concept is not a terminal profile, but an Operator Surface: a durable, addressable interface through which a human operator or agent inhabits a Site, role, or workflow.",
+    "observed_at": "2026-04-28",
+    "source_site": "windows-user-site",
+    "concept_name": "Operator Surface",
+    "evidence": {
+      "concrete_adapter": "Windows Terminal profile",
+      "profile_example": {
+        "name": "Narada Andrey",
+        "tabTitle": "narada-andrey",
+        "suppressApplicationTitle": true,
+        "launch_command": "wt -p \"Narada Andrey\""
+      },
+      "komorebi_effect": "Komorebi can address the resulting window by stable title instead of unstable HWND or prompt-mutated shell title.",
+      "operator_need": "Narada operator work involves recurring role windows such as narada-proper, narada-andrey, staccato-narada, thoughts-architect, and client-service Sites. These should be stable launchable surfaces rather than incidental terminal tabs."
+    },
+    "proposal": {
+      "class": "OperatorSurface",
+      "definition": "A durable, addressable interface through which a human operator or agent inhabits a Narada Site, role, workflow, or operational locus.",
+      "not_adapter_specific": true,
+      "possible_adapters": [
+        "windows_terminal_profile",
+        "komorebi_window_rule",
+        "yasb_button_or_panel",
+        "vscode_workspace",
+        "browser_profile_or_tab_group",
+        "mcp_console",
+        "daemon_status_panel"
+      ],
+      "candidate_fields": {
+        "id": "narada-proper",
+        "kind": "terminal",
+        "site": "narada-proper",
+        "role": "architect",
+        "embodiment": "windows-user",
+        "launch": {
+          "adapter": "windows-terminal",
+          "profile": "Narada Proper",
+          "command": "wt -p \"Narada Proper\"",
+          "starting_directory": "/home/andrey/src/narada"
+        },
+        "window_identity": {
+          "title": "narada-proper",
+          "suppress_application_title": true
+        },
+        "placement": {
+          "desktop": "Narada",
+          "komorebi_workspace": "I"
+        }
+      }
+    },
+    "doctrinal_relevance": "Narada continuity is not only textual or database state; inhabited work also has spatial and UI embodiment. Site embodiments and resume machinery should be able to name, launch, focus, and recover the operator surfaces where work is inhabited.",
+    "proposed_direction": "Document Operator Surface in Narada proper, relate it to Site embodiments/resume/console/operator ergonomics, and consider machinery that lets Sites declare operator surfaces with adapter-specific materializers for Windows Terminal, Komorebi, YASB, and future environments.",
+    "classification": "concept_and_machinery_proposal"
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "decision",
+    "target_ref": "operator-surface-architecture-chapter-1049-1053",
+    "promoted_at": "2026-04-28T23:27:30.102Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'decision' is not implemented yet."
+  }
+}
