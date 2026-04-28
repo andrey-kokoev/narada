@@ -136,6 +136,15 @@ export interface InboxExportOptions extends InboxCommandOptions {
   limit?: number;
 }
 
+export interface InboxPublishOptions extends InboxCommandOptions {
+  status?: string;
+  kind?: string;
+  limit?: number;
+  execute?: boolean;
+  push?: boolean;
+  message?: string;
+}
+
 export interface InboxImportOptions extends InboxCommandOptions {
   fromDir?: string;
 }
@@ -434,14 +443,7 @@ export async function inboxExportCommand(options: InboxExportOptions): Promise<{
   const outDir = resolve(cwd, options.outDir ?? join('.ai', 'inbox-envelopes'));
   return withInboxStoreAsync(options, async (store) => {
     const envelopes = selectEnvelopes(store, { status, kind, limit: options.limit ?? 200 });
-    await mkdir(outDir, { recursive: true });
-    const files: string[] = [];
-    for (const envelope of envelopes) {
-      const fileName = `${envelope.received_at.replace(/[:.]/g, '-')}-${envelope.envelope_id}.json`;
-      const path = join(outDir, fileName);
-      await writeFile(path, `${JSON.stringify(envelope, null, 2)}\n`, 'utf8');
-      files.push(path);
-    }
+    const files = await exportInboxEnvelopeArtifacts(envelopes, outDir);
     return okResult(
       {
         status: 'success',
@@ -458,13 +460,143 @@ export async function inboxExportCommand(options: InboxExportOptions): Promise<{
   });
 }
 
+export async function inboxPublishCommand(options: InboxPublishOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const status = options.status ? parseStatus(options.status) : undefined;
+  const kind = options.kind ? parseEnvelopeKind(options.kind) : undefined;
+  if (options.status && !status) return errorResult(`Invalid status: ${options.status}`);
+  if (options.kind && !kind) return errorResult(`Invalid kind: ${options.kind}`);
+
+  const cwd = options.cwd ?? process.cwd();
+  const repoRoot = git(cwd, ['rev-parse', '--show-toplevel']);
+  if (!repoRoot) return errorResult('inbox publish must run from a Git worktree');
+  const trackedInboxDb = (git(repoRoot, ['ls-files', '--', '.ai/inbox.db']) ?? '').trim();
+  if (trackedInboxDb) {
+    return errorResult('Refusing to publish raw .ai/inbox.db; remove it from Git and publish .ai/inbox-envelopes artifacts instead.');
+  }
+
+  const outDir = join(repoRoot, '.ai', 'inbox-envelopes');
+  const limit = options.limit ?? 200;
+  return withInboxStoreAsync({ ...options, cwd: repoRoot }, async (store) => {
+    const envelopes = selectEnvelopes(store, { status, kind, limit });
+    const plannedFiles = envelopes.map((envelope) => relative(repoRoot, inboxEnvelopeArtifactPath(outDir, envelope)));
+    const beforePublication = inspectInboxPublication(repoRoot);
+
+    if (!options.execute) {
+      return okResult(
+        {
+          status: 'dry_run',
+          execute_required: true,
+          would_export_count: envelopes.length,
+          would_export_files: plannedFiles,
+          would_stage: ['.ai/inbox-envelopes'],
+          would_commit: envelopes.length > 0 || Number(beforePublication.uncommitted_envelope_artifacts_count ?? 0) > 0,
+          would_push: Boolean(options.push),
+          publication: beforePublication,
+          next_steps: ['Run narada inbox publish --execute to export, stage, and commit portable inbox envelope artifacts.'],
+        },
+        [
+          'Inbox publish dry-run.',
+          `Would export: ${envelopes.length}`,
+          'Would stage: .ai/inbox-envelopes',
+          `Would push: ${options.push ? 'yes' : 'no'}`,
+          'Mutation: pass --execute',
+        ],
+        options.format,
+      );
+    }
+
+    const exportedFiles = await exportInboxEnvelopeArtifacts(envelopes, outDir);
+    try {
+      runGit(repoRoot, ['add', '--', '.ai/inbox-envelopes']);
+    } catch (error) {
+      return errorResult(`Failed to stage inbox envelope artifacts: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    const stagedFiles = (git(repoRoot, ['diff', '--cached', '--name-only', '--', '.ai/inbox-envelopes']) ?? '')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (stagedFiles.length === 0) {
+      return okResult(
+        {
+          status: 'noop',
+          exported_count: exportedFiles.length,
+          exported_files: exportedFiles,
+          staged_files: [],
+          commit: null,
+          publication: inspectInboxPublication(repoRoot),
+          next_steps: ['No inbox envelope artifact changes needed publication.'],
+        },
+        [
+          'Inbox publish noop.',
+          `Exported/confirmed artifacts: ${exportedFiles.length}`,
+          'No staged inbox envelope changes.',
+        ],
+        options.format,
+      );
+    }
+
+    const message = cleanString(options.message) ?? 'Publish inbox envelope artifacts';
+    try {
+      runGit(repoRoot, ['commit', '-m', message]);
+    } catch (error) {
+      return errorResult(`Failed to commit inbox envelope artifacts: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    const commit = git(repoRoot, ['rev-parse', '--short', 'HEAD']);
+
+    if (options.push) {
+      try {
+        runGit(repoRoot, ['push']);
+      } catch (error) {
+        return errorResult(`Committed inbox envelope artifacts but failed to push: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    return okResult(
+      {
+        status: options.push ? 'pushed' : 'committed',
+        exported_count: exportedFiles.length,
+        exported_files: exportedFiles,
+        staged_files: stagedFiles,
+        commit,
+        pushed: Boolean(options.push),
+        publication: inspectInboxPublication(repoRoot),
+        next_steps: options.push ? [] : ['Run git push so other embodiments can import the published inbox envelope artifacts.'],
+      },
+      [
+        `Inbox envelope artifacts ${options.push ? 'committed and pushed' : 'committed'}.`,
+        `Exported/confirmed artifacts: ${exportedFiles.length}`,
+        `Committed files: ${stagedFiles.length}`,
+        `Commit: ${commit ?? 'unknown'}`,
+        `Pushed: ${options.push ? 'yes' : 'no'}`,
+      ],
+      options.format,
+    );
+  });
+}
+
 async function writePortableInboxEnvelope(cwdInput: string, envelope: InboxEnvelope): Promise<string> {
   const outDir = resolve(cwdInput, '.ai', 'inbox-envelopes');
   await mkdir(outDir, { recursive: true });
-  const fileName = `${envelope.received_at.replace(/[:.]/g, '-')}-${envelope.envelope_id}.json`;
-  const path = join(outDir, fileName);
+  const path = inboxEnvelopeArtifactPath(outDir, envelope);
   await writeFile(path, `${JSON.stringify(envelope, null, 2)}\n`, 'utf8');
   return path;
+}
+
+async function exportInboxEnvelopeArtifacts(envelopes: InboxEnvelope[], outDir: string): Promise<string[]> {
+  await mkdir(outDir, { recursive: true });
+  const files: string[] = [];
+  for (const envelope of envelopes) {
+    const path = inboxEnvelopeArtifactPath(outDir, envelope);
+    await writeFile(path, `${JSON.stringify(envelope, null, 2)}\n`, 'utf8');
+    files.push(path);
+  }
+  return files;
+}
+
+function inboxEnvelopeArtifactPath(outDir: string, envelope: InboxEnvelope): string {
+  const fileName = `${envelope.received_at.replace(/[:.]/g, '-')}-${envelope.envelope_id}.json`;
+  return join(outDir, fileName);
 }
 
 export async function inboxImportCommand(options: InboxImportOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
@@ -1629,6 +1761,14 @@ function git(cwd: string, args: string[]): string | null {
   } catch {
     return null;
   }
+}
+
+function runGit(cwd: string, args: string[]): string {
+  return execFileSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim();
 }
 
 async function withInboxStoreAsync(

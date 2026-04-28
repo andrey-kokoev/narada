@@ -8,6 +8,7 @@ import {
   inboxListCommand,
   inboxNextCommand,
   inboxPendingCommand,
+  inboxPublishCommand,
   inboxPromoteCommand,
   inboxReleaseCommand,
   inboxShowCommand,
@@ -129,6 +130,33 @@ export function registerInboxCommands(program: Command): void {
         kind: opts.kind as string | undefined,
         outDir: opts.outDir as string | undefined,
         limit: opts.limit ? Number(opts.limit) : undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
+
+  inboxCmd
+    .command('publish')
+    .description('Dry-run or publish Git-visible inbox envelope artifacts')
+    .option('--status <status>', 'Filter by status')
+    .option('--kind <kind>', 'Filter by envelope kind')
+    .option('--limit <n>', 'Maximum envelopes', '200')
+    .option('--execute', 'Export, stage, and commit inbox envelope artifacts', false)
+    .option('--push', 'Push after committing; only used with --execute', false)
+    .option('--message <text>', 'Commit message', 'Publish inbox envelope artifacts')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'inbox publish',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => inboxPublishCommand({
+        status: opts.status as string | undefined,
+        kind: opts.kind as string | undefined,
+        limit: opts.limit ? Number(opts.limit) : undefined,
+        execute: opts.execute as boolean | undefined,
+        push: opts.push as boolean | undefined,
+        message: opts.message as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }),

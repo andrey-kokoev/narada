@@ -19,6 +19,7 @@ import {
   inboxListCommand,
   inboxNextCommand,
   inboxPendingCommand,
+  inboxPublishCommand,
   inboxPromoteCommand,
   inboxReleaseCommand,
   inboxShowCommand,
@@ -441,6 +442,85 @@ describe('Canonical Inbox CLI commands', () => {
       ok: false,
       detail: '1 uncommitted inbox envelope artifact(s)',
     });
+  });
+
+  it('dry-runs inbox publication without exporting or staging artifacts', async () => {
+    setupGitRepo(tempDir);
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual:publish-dry-run',
+      kind: 'observation',
+      authorityLevel: 'operator_confirmed',
+      payload: JSON.stringify({ title: 'Dry-run publication' }),
+    });
+    expect(submitted.exitCode).toBe(ExitCode.SUCCESS);
+    rmSync(join(tempDir, '.ai', 'inbox-envelopes'), { recursive: true, force: true });
+
+    const published = await inboxPublishCommand({ cwd: tempDir, format: 'json' });
+
+    expect(published.exitCode).toBe(ExitCode.SUCCESS);
+    expect(published.result).toMatchObject({
+      status: 'dry_run',
+      execute_required: true,
+      would_export_count: 1,
+      would_stage: ['.ai/inbox-envelopes'],
+    });
+    expect(() => readdirSync(join(tempDir, '.ai', 'inbox-envelopes'))).toThrow();
+    const staged = execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['diff', '--cached', '--name-only'], {
+      cwd: tempDir,
+      encoding: 'utf8',
+    }).trim();
+    expect(staged).toBe('');
+  });
+
+  it('executes inbox publication by exporting, staging, and committing only portable artifacts', async () => {
+    setupGitRepo(tempDir);
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual:publish-execute',
+      kind: 'observation',
+      authorityLevel: 'operator_confirmed',
+      payload: JSON.stringify({ title: 'Execute publication' }),
+    });
+    expect(submitted.exitCode).toBe(ExitCode.SUCCESS);
+    rmSync(join(tempDir, '.ai', 'inbox-envelopes'), { recursive: true, force: true });
+
+    const published = await inboxPublishCommand({
+      cwd: tempDir,
+      format: 'json',
+      execute: true,
+      message: 'Publish test inbox artifacts',
+    });
+
+    expect(published.exitCode).toBe(ExitCode.SUCCESS);
+    const result = published.result as {
+      status: string;
+      exported_count: number;
+      staged_files: string[];
+      commit: string;
+      pushed: boolean;
+    };
+    expect(result.status).toBe('committed');
+    expect(result.exported_count).toBe(1);
+    expect(result.staged_files).toHaveLength(1);
+    expect(result.staged_files[0]).toContain('.ai/inbox-envelopes');
+    expect(result.commit).toMatch(/^[0-9a-f]+$/);
+    expect(result.pushed).toBe(false);
+
+    const trackedDb = execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['ls-files', '--', '.ai/inbox.db'], {
+      cwd: tempDir,
+      encoding: 'utf8',
+    }).trim();
+    expect(trackedDb).toBe('');
+    const subject = execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['log', '-1', '--pretty=%s'], {
+      cwd: tempDir,
+      encoding: 'utf8',
+    }).trim();
+    expect(subject).toBe('Publish test inbox artifacts');
   });
 
   it('rejects ambiguous payload sources', async () => {

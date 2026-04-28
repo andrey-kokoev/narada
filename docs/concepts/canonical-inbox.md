@@ -14,6 +14,9 @@ narada inbox submit-observation --source-ref codex-session:pc-friction --title "
 narada inbox submit --source-kind diagnostic --source-ref site-doctor:desktop-sunroom-2 --kind observation --authority-level system_observed --payload-file /tmp/site-observation.json
 narada inbox ingest-files --from .ai/inbox-drop
 narada inbox ingest-files --from .ai/inbox-drop --admit --by operator
+narada inbox publish
+narada inbox publish --execute
+narada inbox publish --execute --push
 narada inbox work-next --claim --by operator
 narada inbox list
 narada inbox show <envelope-id>
@@ -33,15 +36,15 @@ Successful `inbox submit` and `inbox submit-observation` write two surfaces:
 | `.ai/inbox.db` | Local runtime substrate for the current embodiment. It is ignored and must not be merged as authority. |
 | `.ai/inbox-envelopes/*.json` | Git-visible portable handoff artifact. Other embodiments see the envelope by importing these artifacts. |
 
-If another embodiment, clone, or Site actor must see the inbox item, commit and push the exported `.ai/inbox-envelopes/*.json` artifact. Running `narada inbox export --format json` remains valid and idempotent as a bulk/replay export for older or repaired local SQLite rows, but normal submission writes the per-envelope artifact immediately to avoid local-only invisible work.
+If another embodiment, clone, or Site actor must see the inbox item, publish the exported `.ai/inbox-envelopes/*.json` artifact. `narada inbox publish` is dry-run by default; `narada inbox publish --execute` exports/replays local envelopes, stages only `.ai/inbox-envelopes`, and commits those portable artifacts. `narada inbox publish --execute --push` also pushes. The command refuses raw `.ai/inbox.db` publication because the SQLite database is local runtime substrate, not merge authority.
+
+Running `narada inbox export --format json` remains valid and idempotent as a bulk/replay export for older or repaired local SQLite rows, but normal submission writes the per-envelope artifact immediately to avoid local-only invisible work.
 
 For pre-fix or externally created envelopes that exist only in `.ai/inbox.db`, run:
 
 ```bash
-narada inbox export --format json
-git add .ai/inbox-envelopes
-git commit -m "Export inbox envelope artifacts"
-git push
+narada inbox publish
+narada inbox publish --execute --push
 ```
 
 Then, in the receiving embodiment:
