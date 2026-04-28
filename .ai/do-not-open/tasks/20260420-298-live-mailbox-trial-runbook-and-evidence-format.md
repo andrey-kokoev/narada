@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T19:34:01.665Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
+---
+
 # Task 298 — Live Mailbox Trial Runbook and Evidence Format
 
 status: closed
@@ -63,7 +71,7 @@ Create the live mailbox trial runbook and private evidence schema for `help@glob
 
 ### Deliverables
 
-1. **Public trial runbook** — `docs/live-trial-runbook.md` (new):
+1. **Public trial runbook** — `docs/product/live-trial-runbook.md` (new):
    - Condensed 10-step operator sequence
    - References `docs/live-graph-proof.md` for detailed stage mechanics
    - Defines evidence format and private template location
@@ -71,8 +79,8 @@ Create the live mailbox trial runbook and private evidence schema for `help@glob
    - States human approval requirement before send
    - Public/private boundary table
 
-2. **Updated public proof doc** — `docs/live-graph-proof.md`:
-   - Cross-references to `docs/live-trial-runbook.md` added in intro and Related Documents sections
+2. **Updated public proof doc** — `docs/product/live-graph-proof.md`:
+   - Cross-references to `docs/product/live-trial-runbook.md` added in intro and Related Documents sections
 
 3. **Private evidence template** — `~/src/narada.sonar/evidence/297-302-mailbox-operational-trial/evidence-template.md`:
    - Structured markdown template with stages 0–6 + shutdown
@@ -86,9 +94,9 @@ Create the live mailbox trial runbook and private evidence schema for `help@glob
    - Redaction rules repeated for operator convenience
    - Evidence checklist
 
-### Alignment with `docs/live-graph-proof.md`
+### Alignment with `docs/product/live-graph-proof.md`
 
-- Private runbook mirrors the 6 proof stages from live-graph-proof.md without contradiction
+- Private runbook mirrors the 6 proof stages from `docs/product/live-graph-proof.md` without contradiction
 - Stage numbering and state machine references are consistent
 - SQL query shapes match those in live-graph-proof.md
 - No duplicate detailed mechanics; private runbook adds exact commands and evidence capture
@@ -99,3 +107,12 @@ Create the live mailbox trial runbook and private evidence schema for `help@glob
 - No real mailbox data in public artifacts
 - Evidence template and filled records live only in `narada.sonar`
 - Redaction policy explicitly forbids message bodies, email addresses, Graph IDs, secrets, and personal data in public artifacts
+
+## Verification
+
+| Check | Result |
+| --- | --- |
+| TIZ focused run `run_1777404751362_70y66e` | Passed in 9ms |
+| Public runbook | `docs/product/live-trial-runbook.md` exists and requires human approval before send |
+| Public proof references | `docs/product/live-graph-proof.md` points to `docs/product/live-trial-runbook.md` |
+| Private evidence shape | `narada.sonar` trial evidence template and private runbook exist with redaction rules |
