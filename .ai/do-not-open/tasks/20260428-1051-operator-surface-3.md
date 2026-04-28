@@ -22,25 +22,26 @@ Proceed directly. This is a narrow corrective task; use focused edits only.
 
 ## Context
 
-Operator Surfaces are useful only if Operators and agents can inspect what surfaces exist and eventually materialize adapters. The first coherent surface should be read-only inspection; materialization should be deferred or dry-run unless explicitly earned.
+Operator Surfaces and SessionBindings are useful only if Operators and agents can inspect what surfaces, runtimes, channels, and bindings exist and eventually materialize adapters. The first coherent surface should be read-only inspection; materialization should be deferred or dry-run unless explicitly earned.
 
 ## Goal
 
-Define the CLI posture for inspecting and later materializing Operator Surfaces without creating hidden authority or autonomous UI mutation.
+Define the CLI posture for inspecting surfaces/session bindings and later materializing Operator Surfaces without creating hidden authority or autonomous UI mutation.
 
 ## Required Work
 
-1. Specify read-only commands such as narada sites surface list/show for declared Operator Surfaces.
+1. Specify read-only commands such as narada sites surface list/show and session binding inspection for declared Operator Surfaces and bindings.
 2. Specify future materialization commands as governed crossings with dry-run first and explicit --execute if implemented later.
-3. Define output bounds and no-secret rules for launch/focus metadata.
-4. State how adapter-specific side effects must pass through CEIZ or another governed execution boundary.
-5. Record adapter materializers as deferred unless Builder is explicitly assigned an implementation task.
+3. Define output bounds and no-secret rules for launch/focus/channel/session metadata.
+4. State how adapter-specific side effects and session/runtime mutation must pass through CEIZ or another governed execution boundary.
+5. Record adapter materializers and session registry mutation as deferred unless Builder is explicitly assigned an implementation task.
 
 ## Non-Goals
 
 - Do not implement the CLI command in this architecture task
 - Do not run Windows or Komorebi commands
 - Do not auto-edit terminal profiles
+- Do not persist or mutate live API/CLI session bindings in this task
 
 ## Crossing Regime
 
@@ -70,7 +71,7 @@ See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
 
 ## Acceptance Criteria
 
-- [ ] Docs specify read-only inspection posture for Operator Surfaces
+- [ ] Docs specify read-only inspection posture for Operator Surfaces and SessionBindings
 - [ ] Docs define materialization as a future governed crossing, not implicit Site bootstrap side effect
-- [ ] Docs require bounded output and no raw secrets in surface metadata
+- [ ] Docs require bounded output and no raw secrets in surface/channel/session metadata
 - [ ] Deferred adapter implementation is explicit

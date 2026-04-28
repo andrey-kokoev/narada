@@ -22,25 +22,27 @@ Proceed directly. This is a narrow corrective task; use focused edits only.
 
 ## Context
 
-Once Operator Surface is defined, Sites need a declarative place to say which surfaces are expected or preferred for a role/workflow. This should sit adjacent to embodiments and agent role contracts, not replace them.
+Once Operator Surface and SessionBinding are defined, Sites need a declarative place to say which surfaces are expected or preferred for a role/workflow and how agent runtimes/channels bind to them. This should sit adjacent to embodiments and agent role contracts, not replace them.
 
 ## Goal
 
-Extend Site governance/product documentation with declarative operator_surfaces that remain orientation and recovery metadata, not authority.
+Extend Site governance/product documentation with declarative operator_surfaces and session binding metadata that remain orientation and recovery metadata, not authority.
 
 ## Required Work
 
 1. Design an operator_surfaces coordinate or equivalent shape for Site governance examples.
-2. Include fields for id, purpose, site_id, role_id, workflow/locus binding, embodiment_id, adapter, launch, focus/window identity, placement hints, and recovery posture.
-3. Document that the declaration is advisory/orienting unless admitted through a separate materialization command or external adapter.
-4. Show how Windows Terminal, Komorebi, YASB, VS Code, browser profile, MCP console, and daemon panels are adapter examples, not the primitive.
-5. Preserve backward compatibility for Sites without declared surfaces.
+2. Design an optional session_bindings or equivalent shape relating AgentRuntime, ControlChannel, OperatorSurface, Site, role, task/chapter, and continuity references.
+3. Include fields for id, purpose, site_id, role_id, workflow/locus binding, embodiment_id, adapter, launch, focus/window identity, placement hints, recovery posture, runtime id, channel kind, and continuity artifacts.
+4. Document that declarations are advisory/orienting unless admitted through a separate materialization command, session lifecycle command, or external adapter.
+5. Show how Windows Terminal, Komorebi, YASB, VS Code, browser profile, MCP console, daemon panels, API conversations, transcripts, and inbox envelopes are adapter/channel examples, not the primitive.
+6. Preserve backward compatibility for Sites without declared surfaces or session bindings.
 
 ## Non-Goals
 
 - Do not require every Site to declare surfaces
 - Do not add secrets or capabilities to surface declarations
 - Do not build adapter-specific schema exhaustively
+- Do not require every agent runtime to have a spatial UI surface
 
 ## Crossing Regime
 
@@ -71,6 +73,7 @@ See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
 ## Acceptance Criteria
 
 - [ ] Site governance docs include operator_surfaces shape with minimal fields
+- [ ] Site governance docs include session binding shape or explicitly defer it with a precise residual
 - [ ] Docs state surfaces do not grant mutation, effect, or capability authority
-- [ ] Docs distinguish surface declaration from adapter materialization
+- [ ] Docs distinguish surface/session declaration from adapter materialization and runtime authority
 - [ ] Existing Site governance examples remain coherent for Sites without surfaces
