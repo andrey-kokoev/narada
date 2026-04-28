@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T19:11:28.382Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
+---
+
 # Task 286: Operator Live-Loop Ergonomics
 
 ## Chapter
@@ -41,7 +49,7 @@ Document the normal operating rhythm and the minimal troubleshooting rhythm for 
 
 Task executed in a single pass with planning mode approval.
 
-1. Created `docs/operator-loop.md` — the canonical five-step operator loop document:
+1. Created `docs/product/operator-loop.md` — the canonical five-step operator loop document:
    - Step 1: Is it healthy? (`narada ops`, `narada doctor`)
    - Step 2: What happened? (`narada ops` recent activity, `narada show`)
    - Step 3: What needs attention? (`narada ops` attention queue, `narada status --verbose`)
@@ -62,9 +70,18 @@ Task executed in a single pass with planning mode approval.
 
 4. Updated `packages/layers/cli/src/lib/formatter.ts` — added `getFormat()` method for conditional human output.
 
-5. Updated `docs/runbook.md` — added "Operator Daily Loop" section referencing `narada ops` and `docs/operator-loop.md`.
+5. Updated `docs/product/runbook.md` — added "Operator Daily Loop" section referencing `narada ops` and `docs/product/operator-loop.md`.
 
 6. Updated `AGENTS.md` — added operator loop to Documentation Index and "Where to Find Things".
+
+## Verification
+
+- `narada test-run run --task 286 --requester architect --scope focused --timeout 120 --cmd <operator-loop docs and ops command tests>` — passed as TIZ run `run_1777403449705_j70qqa` in 1,893ms.
+- The TIZ check verified:
+  - `docs/product/operator-loop.md` defines the five-step loop and troubleshooting rhythm.
+  - `docs/product/runbook.md` links to the operator-loop document.
+  - `AGENTS.md` indexes the operator-loop document.
+  - `packages/layers/cli/test/commands/ops.test.ts` passes.
 
 ## Verification Evidence
 
