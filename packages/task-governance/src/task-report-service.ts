@@ -170,7 +170,14 @@ function parseVerification(value: string | undefined): ReportTaskServiceResponse
     const msg = error instanceof Error ? error.message : String(error);
     return {
       exitCode: ExitCode.GENERAL_ERROR,
-      result: { status: 'error', error: `Failed to parse verification: ${msg}` },
+      result: {
+        status: 'error',
+        error: [
+          `Failed to parse verification: ${msg}`,
+          'Expected --verification to be a JSON array of {command, result} objects.',
+          'Example: --verification \'[{"command":"pnpm verify","result":"passed"}]\'',
+        ].join('\n'),
+      },
     };
   }
 }

@@ -88,6 +88,8 @@ export async function taskCloseCommand(
       for (const warning of warnings) {
         fmt.message(`  ! ${String(warning)}`, 'warning');
       }
+      fmt.message('Close modes: operator_direct, peer_reviewed, agent_finish, emergency.', 'info');
+      fmt.message('If a peer review accepted the report, `narada task review <n> --verdict accepted` may already have closed the task.', 'info');
     }
   }
 

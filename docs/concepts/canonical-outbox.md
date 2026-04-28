@@ -8,6 +8,16 @@ Outbox items are inert until an executor performs a transport-specific crossing 
 
 Submitting an outbox item places an outbound effect intent under Site-local authority. The submitter cannot withdraw it by deleting history. A withdrawal, correction, or replacement is recorded as a disposition request and resolved by the Site authority through the outbox lifecycle.
 
+Use the disposition terms precisely:
+
+| Term | Meaning |
+| --- | --- |
+| Withdraw | Source asks the target authority to stop, replace, or dispose of a submitted intent. It is a request, not a status. |
+| Cancel | Target authority halts an admitted or in-flight item before irreversible external effect. |
+| Archive | Target authority records that a composed item will not proceed, while preserving history. |
+| Supersede | Target authority redirects attention from one item to a replacement item. |
+| Compensate | Target authority creates a new item after confirmation to reverse, repair, or explain an already-realized effect. |
+
 | State | Admissible Withdrawal Disposition |
 | --- | --- |
 | `composed` | Archive or supersede before approval. |

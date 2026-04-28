@@ -240,7 +240,10 @@ describe('task report operator', () => {
     });
 
     expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
-    expect((result.result as { error: string }).error).toContain('Failed to parse verification');
+    const error = (result.result as { error: string }).error;
+    expect(error).toContain('Failed to parse verification');
+    expect(error).toContain('Expected --verification to be a JSON array');
+    expect(error).toContain('Example: --verification');
   });
 
   it('fails with invalid residuals JSON', async () => {

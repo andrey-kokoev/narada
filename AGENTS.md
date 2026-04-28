@@ -293,6 +293,9 @@ pnpm test:integration
 # Focused test with telemetry recording
 pnpm test:focused "pnpm --filter <pkg> exec vitest run <path>"
 
+# Direct bounded Vitest invocation when package scripts broaden or overrun filters
+pnpm --dir packages/layers/cli exec vitest run test/commands/foo.test.ts
+
 # Package-scoped tests
 pnpm test:control-plane
 pnpm test:daemon
@@ -874,6 +877,7 @@ The suggestion surface:
 4. **Prefer focused commands for package-local changes.** Use `pnpm --filter <pkg> typecheck` and `pnpm test:focused` for the specific file covering the behavior you changed. This is faster than broad suites and avoids known teardown noise.
 5. **Escalate only when needed.** Run package-scoped broader tests (`pnpm test:control-plane`, `pnpm test:daemon`) only when the change justifies it.
 6. **Full suite requires `ALLOW_FULL_TESTS=1`.** This guard prevents accidental expensive runs.
+7. **If a package script broadens a file-filtered test request, stop it and run direct bounded Vitest from the package directory:** `pnpm --dir <package> exec vitest run <test-file>`.
 
 ### Focused Test Commands
 
@@ -885,6 +889,9 @@ pnpm test:focused "pnpm --filter @narada2/control-plane exec vitest run test/uni
 
 # Example: run a specific daemon test file (preferred over broad suite)
 pnpm test:focused "pnpm --dir packages/layers/daemon exec vitest run test/unit/observation-server.test.ts"
+
+# Example: direct bounded run if package-level scripts ignore or broaden filters
+pnpm --dir packages/layers/cli exec vitest run test/commands/task-report.test.ts
 
 # Example: package-level focused run, only when explicitly justified
 ALLOW_PACKAGE_FOCUSED=1 pnpm test:focused "pnpm --filter @narada2/charters test"

@@ -114,7 +114,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .requiredOption('--agent <id>', 'Reporting agent ID from roster')
     .requiredOption('--summary <text>', 'Human-readable result summary')
     .option('--changed-files <csv>', 'Comma-separated list of changed file paths')
-    .option('--verification <json>', 'JSON array of {command, result} objects')
+    .option('--verification <json>', 'JSON array of {command, result} objects, e.g. \'[{"command":"pnpm verify","result":"passed"}]\'')
     .option('--residuals <json>', 'JSON array of known residual strings')
     .option('--principal-state-dir <path>', 'Directory containing PrincipalRuntime state file')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
@@ -221,9 +221,9 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
 
   taskCmd
     .command('close <task-number>')
-    .description('Lifecycle transition: close by consuming latest admitted evidence')
+    .description('Operator closure: close by consuming latest admitted evidence; peer review may auto-close via task review --verdict accepted')
     .requiredOption('--by <id>', 'Operator or agent ID performing the close')
-    .requiredOption('--mode <mode>', 'Closure mode: operator_direct, peer_reviewed, agent_finish, emergency')
+    .requiredOption('--mode <mode>', 'Closure mode: operator_direct, peer_reviewed, agent_finish, emergency. Use peer_reviewed only for explicit review-driven closure; task review --verdict accepted normally handles that path.')
     .option('--format <fmt>', 'Output format: json or human', 'human')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .action(resourceScopedDirectCommandAction<SqliteTaskLifecycleStore, [string, Record<string, unknown>]>({
