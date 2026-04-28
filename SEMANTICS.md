@@ -1037,12 +1037,15 @@ The **inspectable, versionable specification of desired outcome** for an operati
 
 #### `Site`
 
-The **anchored place** where state, substrate bindings, and runtime context live. Also called the **Runtime Locus** when substrate-neutrality matters.
+The **governed authority object** that owns truth for declared transition classes through one or more concrete realizations and declared interfaces.
 
-- A local filesystem root with a SQLite coordinator is a Site.
-- A Cloudflare-backed runtime with Durable Objects and R2 is a Site.
-- A Windows process with a local coordinator is a Site.
-- A Site materializes an Aim into a concrete execution context.
+- A local filesystem root with a SQLite coordinator is a Site realization.
+- A Cloudflare-backed runtime with Durable Objects and R2 is a hosted realization.
+- A Windows process with a local coordinator is an execution surface and realization.
+- A Site materializes an Aim into a concrete execution context without becoming identical to that context.
+- A Runtime Locus is the realization where bounded Cycles execute; it is not the full Site definition.
+
+For the factorization of Site into authority object, realization, operation binding, interface, projection, crossing, lineage, sync posture, execution surface, and governance materializations, see [`docs/product/site-factorization.md`](docs/product/site-factorization.md).
 
 #### `Cycle`
 
@@ -1167,7 +1170,7 @@ See [`docs/concepts/plural-embodiment-singular-authority.md`](docs/concepts/plur
 
 #### Site Lifecycle Transformations
 
-Sites are runtime loci, so changing a Site is an authority-bearing transformation, not a raw filesystem operation.
+Sites are governed authority objects with concrete realizations, so changing a Site relation, realization, or authority posture is an authority-bearing transformation, not a raw filesystem operation.
 
 Narada recognizes seven Site lifecycle transformation kinds: `clone`, `fork`, `split`, `absorb`, `migrate`, `re-instantiate`, and `archive`.
 

@@ -1,0 +1,33 @@
+{
+  "envelope_id": "env_c6faa40c-1871-4af8-bece-c05d87ecd588",
+  "received_at": "2026-04-28T03:33:29.583Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:site-factorization-documentation-20260428"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "andrey"
+  },
+  "payload": {
+    "title": "Document Site factorization explicitly",
+    "summary": "Narada should document Site factorization directly, not only through scattered Site bootstrap, registry, lifecycle, pub/sub, and substrate documents.",
+    "evidence": [
+      "Recent review showed that Site is currently discussed as runtime locus, authority locus, substrate materialization, operation binding, registry awareness, lifecycle lineage, pub/sub endpoint, sync posture, execution surface, and local governance surface. These are coherent but distributed. The same discussion produced a cleaner categorical shape: Site as governed authority object; runtime locus as realization; interfaces as admissible crossings; registries and awareness as projections; lifecycle and lineage as structured morphisms over Sites."
+    ],
+    "proposal": [
+      "Add a dedicated doctrine/product document, or a prominent section in Site Bootstrap Contract, that names the factorization of Site into: 1. Authority object: owns truth for declared transition classes. 2. Realization/runtime locus: concrete embodiment such as filesystem root, Git repo, SQLite DB, Cloudflare Durable Object, WSL daemon, Windows scheduled task, or hosted service through which cycles may execute. 3. Operation binding: what Aim or Operation the Site currently hosts. 4. Interface: admissible arrows into/out of the authority object, including inbox submit, task lifecycle command, file-drop ingest, pub/sub receive, operator control API, and effect queues. 5. Projection: read-only/advisory views such as User Site awareness, operator console, dashboard, Git clone, or Windows/WSL path view. 6. Crossing: typed morphism with authority semantics, such as propose, publish, subscribe, absorb, clone, migrate, route, admit, execute, verify, refuse. 7. Lineage: durable append-only record of crossings that change object relationships or authority posture. 8. Sync posture: how portable handoff happens, distinct from authority. 9. Execution surface: where a command is run, distinct from target authority. 10. Local governance surfaces: config, inbox, tasks, chapters, arcs, KB, traces, logs, runtime DBs, templates, and tools as materializations rather than the definition of Site."
+    ],
+    "recommendation": "Make this documentation an explicit normalization pass over existing Site docs. Acceptance should include: Site factorization doc or section; updated glossary language distinguishing authority object from realization/runtime locus; links from Site Bootstrap Contract, Operator Console / Site Registry, User Site Awareness Registry, Site Lifecycle Transformations, Site Provenance Lineage, and Site Pub/Sub; and one worked example using narada.sonar plus one Windows User/PC Site pair."
+  },
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_c6faa40c-1871-4af8-bece-c05d87ecd588",
+    "promoted_at": "2026-04-28T03:37:29.966Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
+}

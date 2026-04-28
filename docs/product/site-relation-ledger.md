@@ -4,6 +4,8 @@ The Site relation ledger is the durable evidence surface for relationships betwe
 
 It records edges such as absorption, reverse absorption, references, routing, subscription, and publication without moving mutation authority or editing Site config.
 
+In the Site factorization, relation records are evidence over crossings between Site authority objects. They are not the authority objects themselves. See [`site-factorization.md`](site-factorization.md).
+
 ## Why It Exists
 
 Site lifecycle work often needs to say "these Sites now relate" before a mutating lifecycle operator exists.

@@ -4,6 +4,8 @@ Site pub/sub is Narada's doctrine for typed signal exchange among Sites.
 
 It is not automatic replication, shared ownership, or remote mutation.
 
+In the Site factorization, pub/sub is an interface and crossing family between Site authority objects. Delivery creates an inert signal, not admission. See [`site-factorization.md`](site-factorization.md).
+
 ## Rule
 
 ```text

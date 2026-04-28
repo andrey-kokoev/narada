@@ -3,6 +3,7 @@
 > Design for an operator-facing surface that discovers, inspects, and routes control requests across multiple Narada Sites without becoming hidden authority.
 >
 > Uses the crystallized vocabulary from [`SEMANTICS.md §2.14`](../../SEMANTICS.md): **Aim / Site / Cycle / Act / Trace**.
+> For the factorization of Site authority object, realization, projection, interface, and crossing, see [`site-factorization.md`](site-factorization.md).
 
 ---
 
@@ -30,7 +31,7 @@ The console is an **operator surface** that aggregates read-only observation and
 
 ## 2. What the Site Registry Owns
 
-The **Site Registry** is the durable inventory of Sites known to the console. It owns:
+The **Site Registry** is a projection and routing inventory of Sites known to the console. It owns:
 
 | Concern | Ownership |
 |---------|-----------|

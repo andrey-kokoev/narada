@@ -147,7 +147,8 @@ When describing higher-order architecture, deployment, or design:
 | [canonical-routing-addressing.md](docs/concepts/canonical-routing-addressing.md) | Canonical Routing and Addressing — target/address resolution without authority collapse | Need to decide which Site, locus, human, or transport should receive a handoff |
 | [cloudflare-site-materialization.md](docs/deployment/cloudflare-site-materialization.md) | Cloudflare Site materialization design | Designing or deploying a Cloudflare-backed Narada Site |
 | [bootstrap-contract.md](docs/product/bootstrap-contract.md) | Canonical intent-to-operation bootstrap path | Setting up or onboarding a first-time user |
-| [site-bootstrap-contract.md](docs/product/site-bootstrap-contract.md) | Canonical Site first-run path (runtime locus setup) | Setting up a local Site on Windows, macOS, or Linux |
+| [site-factorization.md](docs/product/site-factorization.md) | Site as governed authority object with realizations, interfaces, projections, crossings, and lineage | Need to avoid collapsing Site into folder, runtime, registry row, Git repo, or console projection |
+| [site-bootstrap-contract.md](docs/product/site-bootstrap-contract.md) | Canonical Site first-run path (realization/runtime locus setup) | Setting up a local Site on Windows, macOS, or Linux |
 | [site-relation-ledger.md](docs/product/site-relation-ledger.md) | Durable Site relation evidence without authority movement | Recording absorption, reference, routing, subscription, or publication edges before lifecycle mutation |
 | [tool-catalog-binding.md](docs/product/tool-catalog-binding.md) | Tool Locality Doctrine and operation-to-system tool binding | Binding diagnostic tools from an app/system repo into an operation |
 | [first-operation-proof.md](docs/product/first-operation-proof.md) | Canonical mailbox operation product proof | Understanding what is proven and how to verify it |

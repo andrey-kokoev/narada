@@ -2,6 +2,8 @@
 
 Site lifecycle transformations are governed changes to Narada runtime loci. They are not raw folder copy, rename, sync, or delete operations.
 
+In the Site factorization, lifecycle transformations are governed crossings over Site authority objects and their realizations. See [`site-factorization.md`](site-factorization.md).
+
 A Site transformation must preserve or explicitly change:
 
 - authority locus;

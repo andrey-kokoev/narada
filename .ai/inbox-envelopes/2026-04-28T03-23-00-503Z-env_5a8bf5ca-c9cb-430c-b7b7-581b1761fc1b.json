@@ -21,5 +21,13 @@
     ],
     "recommendation": "Treat this as execution-worthy doctrine work, not just terminology cleanup. Use narada.sonar as the first review case: describe its authority object as Sonar support operation locus; realization as WSL Git repo plus mailbox state root plus daemon; interfaces as repo-local CLI, config, drafts, supervisor, and currently missing canonical inbox; projections as User Site awareness and possible console registry row; crossings as Sonar tool catalog binding, Narada proper proposals, and User Site review notes; lineage as currently implicit and needing explicit records. Acceptance should include updated docs, an inventory of affected code/config fields, and at least one migration note for existing Sites that currently identify Site with root/runtime."
   },
-  "status": "received"
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_5a8bf5ca-c9cb-430c-b7b7-581b1761fc1b",
+    "promoted_at": "2026-04-28T03:37:30.427Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
 }

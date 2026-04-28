@@ -2,6 +2,8 @@
 
 Site provenance lineage is the durable continuity substrate for Site lifecycle transformations and cross-Site signal influence.
 
+It records crossings over Site authority objects, not raw folder relationships. For the Site authority object / realization / projection factorization, see [`site-factorization.md`](site-factorization.md).
+
 Its canonical shape is:
 
 ```text

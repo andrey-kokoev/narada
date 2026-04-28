@@ -1,6 +1,6 @@
 # Site Bootstrap Contract
 
-> Canonical first-run path for creating a Narada **Site** — a runtime locus where bounded Cycles execute.
+> Canonical first-run path for creating a Narada **Site** realization where bounded Cycles execute.
 >
 > For the operation bootstrap path (expressing intent and configuring work objectives), see [`bootstrap-contract.md`](bootstrap-contract.md).
 >
@@ -9,18 +9,19 @@
 > For governed Site clone, fork, split, absorb, migrate, re-instantiate, and archive semantics, see [`site-lifecycle-transformations.md`](site-lifecycle-transformations.md).
 > For the durable provenance substrate behind those transformations, see [`site-provenance-lineage.md`](site-provenance-lineage.md).
 > For the user-locus directory of known Sites, see [`user-site-awareness-registry.md`](user-site-awareness-registry.md).
+> For the factorization of Site authority object, realization, interface, projection, crossing, and lineage, see [`site-factorization.md`](site-factorization.md).
 
 ---
 
 ## 1. Overview
 
-A Narada **Site** is a runtime locus — a place where bounded Cycles execute. It is not an operation, not a deployment target in the infrastructure sense, and not a vertical. A Site holds state, substrate bindings, and runtime context for one or more operations.
+A Narada **Site** is a governed authority object with one or more concrete realizations and declared interfaces for admissible crossings. A runtime locus is one realization: the place where bounded Cycles execute and substrate bindings live. A Site is not an operation, not merely a deployment target, not a vertical, and not identical to its filesystem root.
 
 The Site bootstrap path is **separate from and composes with** the operation bootstrap path:
 
 | Concern | Operation Bootstrap | Site Bootstrap |
 |---------|--------------------|----------------|
-| **What it creates** | Configured work objective (mailbox, workflow) | Runtime locus (filesystem, scheduler, credentials) |
+| **What it creates** | Configured work objective (mailbox, workflow) | Site realization/runtime locus (filesystem, scheduler, credentials) |
 | **Entry command** | `narada want-mailbox`, `narada want-workflow` | `narada sites init` |
 | **Artifact** | `config/config.json` with scopes, sources, charters | `{siteRoot}/config.json` with Site metadata |
 | **Authority** | Operator declares intent | Substrate provides execution environment |

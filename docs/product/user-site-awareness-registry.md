@@ -4,6 +4,8 @@ The User Site awareness registry is the user-locus directory and coordination su
 
 It lets a top-level Narada architect know which Narada-capable loci exist without making the User Site the owner of those loci.
 
+In the Site factorization, awareness entries are projections over Site authority objects, not authority objects themselves. See [`site-factorization.md`](site-factorization.md).
+
 ## Rule
 
 ```text
