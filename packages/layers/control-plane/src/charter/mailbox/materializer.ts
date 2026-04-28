@@ -58,6 +58,14 @@ async function getThreadMessageIds(rootDir: string, conversationId: string): Pro
   }
 }
 
+function routedConversationId(contextId: string): string | null {
+  const separator = contextId.indexOf(":");
+  if (separator <= 0 || separator === contextId.length - 1) {
+    return null;
+  }
+  return contextId.slice(separator + 1);
+}
+
 /**
  * Mailbox-specific context materializer.
  *
@@ -71,7 +79,13 @@ export class MailboxContextMaterializer implements ContextMaterializer {
   ) {}
 
   async materialize(context: PolicyContext): Promise<unknown> {
-    const messageIds = await getThreadMessageIds(this.rootDir, context.context_id);
+    let messageIds = await getThreadMessageIds(this.rootDir, context.context_id);
+    if (messageIds.length === 0 && context.change_kinds.some((kind) => kind.startsWith("operation_intake"))) {
+      const sourceConversationId = routedConversationId(context.context_id);
+      if (sourceConversationId) {
+        messageIds = await getThreadMessageIds(this.rootDir, sourceConversationId);
+      }
+    }
     const messages: NormalizedMessage[] = [];
     for (const messageId of messageIds) {
       const record = await this.messageStore.readRecord(messageId);
@@ -105,6 +119,10 @@ export function normalizeMessageForEnvelope(msg: NormalizedMessage): NormalizedM
     typeof msg.body === "object" && msg.body && "text" in msg.body
       ? (msg.body as { text?: string }).text?.slice(0, 200) ?? null
       : null;
+  const bodyPreview =
+    typeof msg.body === "object" && msg.body && "preview" in msg.body
+      ? (msg.body as { preview?: string }).preview ?? null
+      : null;
   const mapAddr = (a: { email?: string; display_name?: string }): { email: string | null; name: string | null } => ({
     email: a.email ?? null,
     name: a.display_name ?? null,
@@ -112,7 +130,7 @@ export function normalizeMessageForEnvelope(msg: NormalizedMessage): NormalizedM
   return {
     ...msg,
     internet_message_id: (r.internet_message_id as string | undefined) ?? null,
-    body_preview: (r.body_preview as string | undefined) ?? bodyText,
+    body_preview: (r.body_preview as string | undefined) ?? bodyPreview ?? bodyText,
     from: Array.isArray(msg.from) ? msg.from.map(mapAddr) : msg.from ? [mapAddr(msg.from)] : [],
     to: (msg.to ?? []).map(mapAddr),
     cc: (msg.cc ?? []).map(mapAddr),

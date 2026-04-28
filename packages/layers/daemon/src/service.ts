@@ -709,7 +709,7 @@ async function createDispatchContext(
           description: 'Creates drafts for reply messages via Graph API',
         },
         fn: async () => {
-          const result = await sendReplyWorker.processNext(scope.scope_id);
+          const result = await sendReplyWorker.processNext();
           return { processed: result.processed, execution_id: result.outboundId };
         },
       });
@@ -722,7 +722,7 @@ async function createDispatchContext(
           description: 'Executes approved send commands via Graph API',
         },
         fn: async () => {
-          const result = await sendExecutionWorker.processNext(scope.scope_id);
+          const result = await sendExecutionWorker.processNext();
           return { processed: result.processed, execution_id: result.outboundId };
         },
       });
@@ -737,7 +737,7 @@ async function createDispatchContext(
         fn: async () => {
           const actionTypes = ['mark_read', 'move_message', 'set_categories'] as const;
           for (const actionType of actionTypes) {
-            const result = await nonSendWorker.processNext(actionType, scope.scope_id);
+            const result = await nonSendWorker.processNext(actionType);
             if (result.processed) {
               return { processed: true, execution_id: result.outboundId };
             }
@@ -754,7 +754,7 @@ async function createDispatchContext(
           description: 'Reconciles submitted outbound commands with remote mailbox state',
         },
         fn: async () => {
-          const result = await reconciler.processNext(scope.scope_id);
+          const result = await reconciler.processNext();
           return { processed: result.processed, execution_id: result.outboundId };
         },
       });
@@ -979,13 +979,13 @@ async function createDispatchContext(
       });
     }
 
-    while (!executionBlocked && !principalBlocked && !deps.scheduler.isQuiescent(scope.scope_id)) {
+    while (!executionBlocked && !principalBlocked && !deps.scheduler.isQuiescent()) {
       if (shutdownSignal?.shuttingDown) {
         logger.info('Dispatch phase interrupted by shutdown', { scope: scope.scope_id });
         break;
       }
 
-      const runnable = deps.scheduler.scanForRunnableWork(scope.scope_id, 1);
+      const runnable = deps.scheduler.scanForRunnableWork(undefined, 1);
       if (runnable.length === 0) {
         break;
       }
@@ -1011,7 +1011,18 @@ async function createDispatchContext(
       await opts.dispatchHooks?.afterLeaseAcquired?.(workItem, leaseResult);
 
       const envelope = await buildInvocationEnvelope(
-        { coordinatorStore: deps.coordinatorStore, materializerRegistry, rootDir, getRuntimePolicy: (_scopeId: string) => scope.policy },
+        {
+          coordinatorStore: deps.coordinatorStore,
+          materializerRegistry,
+          rootDir,
+          getRuntimePolicy: (scopeId: string) => {
+            const policyScope = globalConfig.scopes.find((configuredScope) => configuredScope.scope_id === scopeId) ?? scope;
+            if (policyScope.charter?.degraded_mode === "draft_only") {
+              return { ...policyScope.policy, require_human_approval: true };
+            }
+            return policyScope.policy;
+          },
+        },
         { executionId: `ex_${workItem.work_item_id}_${Date.now()}`, workItem, tools: deps.toolCatalog },
       );
 
@@ -1055,7 +1066,7 @@ async function createDispatchContext(
         });
 
         // Persist evaluation before foreman resolution (runtime responsibility)
-        persistEvaluation(evaluation, deps.coordinatorStore, scope.scope_id);
+        persistEvaluation(evaluation, deps.coordinatorStore, workItem.scope_id);
 
         await opts.dispatchHooks?.beforeResolveWorkItem?.(workItem, attempt, evaluation);
 

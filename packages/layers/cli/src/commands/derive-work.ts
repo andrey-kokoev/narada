@@ -4,7 +4,7 @@ import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig } from '@narada2/control-plane';
-import type { AllowedAction, RuntimePolicy } from '@narada2/control-plane';
+import type { AllowedAction, RuntimePolicy, ScopeConfig } from '@narada2/control-plane';
 
 export interface DeriveWorkOptions {
   config?: string;
@@ -79,7 +79,7 @@ export async function deriveWorkCommand(
     };
   }
 
-  return deriveForScope(scope.scope_id, resolve(scope.root_dir), options, fmt, logger, scope.policy);
+  return deriveForScope(scope.scope_id, resolve(scope.root_dir), options, fmt, logger, scope.policy, scope, config.scopes);
 }
 
 async function deriveForScope(
@@ -89,13 +89,15 @@ async function deriveForScope(
   fmt: ReturnType<typeof createFormatter>,
   logger: CommandContext['logger'],
   policy?: RuntimePolicy,
+  scope?: ScopeConfig,
+  scopes?: ScopeConfig[],
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const dbDir = join(rootDir, '.narada');
   const coordinatorDbPath = join(dbDir, 'coordinator.db');
   const factsDbPath = join(dbDir, 'facts.db');
 
   // Lazy-load better-sqlite3 to avoid eager native-module load
-  const { Database, SqliteCoordinatorStore, SqliteOutboundStore, SqliteIntentStore, SqliteFactStore, DefaultForemanFacade, MailboxContextStrategy } = await import(
+  const { Database, SqliteCoordinatorStore, SqliteOutboundStore, SqliteIntentStore, SqliteFactStore, DefaultForemanFacade, MailboxContextStrategy, resolveContextStrategy } = await import(
     '@narada2/control-plane'
   );
 
@@ -108,10 +110,16 @@ async function deriveForScope(
     const intentStore = new SqliteIntentStore({ db });
     const factStore = new SqliteFactStore({ db: factDb });
 
-    const getRuntimePolicy = () => {
-      // Use the scope's configured policy from the config file, matching
-      // daemon behavior (service.ts: getRuntimePolicy = (_scopeId) => scope.policy).
-      // This ensures replay-derived contexts bind to the correct charter.
+    const scopeById = new Map((scopes ?? (scope ? [scope] : [])).map((configuredScope) => [configuredScope.scope_id, configuredScope]));
+
+    const getRuntimePolicy = (requestedScopeId: string) => {
+      const policyScope = scopeById.get(requestedScopeId);
+      if (policyScope) {
+        if (policyScope.charter?.degraded_mode === "draft_only") {
+          return { ...policyScope.policy, require_human_approval: true };
+        }
+        return policyScope.policy;
+      }
       if (policy) {
         return policy;
       }
@@ -132,6 +140,22 @@ async function deriveForScope(
       };
     };
 
+    const contextFormationStrategy = scope
+      ? resolveContextStrategy(
+          scope.context_strategy ?? 'mail',
+          {
+            admission: scope.admission,
+            ...(scope.campaign_request_senders
+              ? {
+                  campaign_request_senders: scope.campaign_request_senders,
+                  campaign_request_lookback_days: scope.campaign_request_lookback_days,
+                }
+              : {}),
+            ...(scope.operation_intake ? { operation_intake: scope.operation_intake } : {}),
+          },
+        )
+      : new MailboxContextStrategy();
+
     const foreman = new DefaultForemanFacade({
       coordinatorStore,
       outboundStore,
@@ -139,7 +163,7 @@ async function deriveForScope(
       db,
       foremanId: scopeId,
       getRuntimePolicy,
-      contextFormationStrategy: new MailboxContextStrategy(),
+      contextFormationStrategy,
     });
 
     const facts = factStore.getFactsByScope(scopeId, {

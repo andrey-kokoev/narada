@@ -396,6 +396,18 @@ export function governEvaluation(
     };
   }
   if (outcome === "clarification_needed") {
+    if (firstAcceptableAction?.action_type === "draft_reply") {
+      const effectiveRequiresApproval = firstAcceptableRequiresApproval || anyToolRequiresApproval;
+      return {
+        outcome: "accept",
+        governed_action: firstAcceptableAction,
+        reason: effectiveRequiresApproval
+          ? "Clarification draft valid but requires human approval"
+          : "Clarification draft passed governance",
+        approval_required: effectiveRequiresApproval,
+        governance_errors: [],
+      };
+    }
     return {
       outcome: "clarification_needed",
       reason: "Charter declared clarification_needed",
