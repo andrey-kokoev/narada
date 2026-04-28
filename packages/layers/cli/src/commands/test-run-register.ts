@@ -15,7 +15,8 @@ export function registerTestRunCommands(program: Command): void {
   testRunCmd
     .command('run')
     .description('Request and execute a governed test run')
-    .requiredOption('--cmd <command>', 'Test command to run')
+    .option('--cmd <command>', 'Test command to run')
+    .option('--cmd-file <path>', 'Read test command from a file, avoiding shell quoting friction')
     .option('--task <number>', 'Link to a task number')
     .option('--timeout <seconds>', 'Timeout in seconds')
     .option('--scope <scope>', 'Scope: focused or full')
@@ -27,6 +28,7 @@ export function registerTestRunCommands(program: Command): void {
       emit: emitCommandResult,
       invocation: (opts) => testRunCommand({
         cmd: opts.cmd as string | undefined,
+        cmdFile: opts.cmdFile as string | undefined,
         taskNumber: opts.task ? Number(opts.task) : undefined,
         timeout: opts.timeout ? Number(opts.timeout) : undefined,
         scope: opts.scope as 'focused' | 'full' | undefined,

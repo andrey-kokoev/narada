@@ -523,6 +523,31 @@ describe('lintTaskFiles', () => {
     expect(result.ok).toBe(false);
     expect(result.issues.some((i) => i.type === 'broken_dependency')).toBe(true);
   });
+
+  it('detects malformed acceptance criteria fragments', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-101-fragmented.md'),
+      `---\ntask_id: 101\nstatus: opened\n---\n\n# Task 101\n\n## Acceptance Criteria\n- [ ] Tests pass;Docs updated\n- [ ] lifecycle\n`,
+    );
+
+    const result = await lintTaskFiles(tempDir);
+
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((i) => i.type === 'malformed_acceptance_criteria' && i.detail.includes('semicolon'))).toBe(true);
+    expect(result.issues.some((i) => i.type === 'malformed_acceptance_criteria' && i.detail.includes('fragmentary'))).toBe(true);
+  });
+
+  it('detects missing paths referenced from execution evidence', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-102-stale-evidence.md'),
+      `---\ntask_id: 102\nstatus: opened\n---\n\n# Task 102\n\n## Acceptance Criteria\n- [ ] Keep evidence references valid\n\n## Verification\nChecked docs/no-longer-present.md.\n`,
+    );
+
+    const result = await lintTaskFiles(tempDir);
+
+    expect(result.ok).toBe(false);
+    expect(result.issues.some((i) => i.type === 'missing_evidence_path' && i.detail.includes('docs/no-longer-present.md'))).toBe(true);
+  });
 });
 
 describe('extractTaskRefsFromBody', () => {

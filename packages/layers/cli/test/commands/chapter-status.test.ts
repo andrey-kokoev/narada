@@ -136,6 +136,30 @@ describe('chapter status operator', () => {
     expect(r.blockers[0].status).toBe('claimed');
   });
 
+  it('reports evidence-complete non-terminal tasks as ready', async () => {
+    writeTask(
+      tempDir,
+      '20260420-100-a.md',
+      'task_id: 100\nstatus: in_review\n',
+      'Task 100 — A',
+      '\n## Acceptance Criteria\n- [x] Implemented\n\n## Execution Notes\nDone.\n\n## Verification\nFocused check passed.\n',
+    );
+    writeTask(
+      tempDir,
+      '20260420-101-b.md',
+      'task_id: 101\nstatus: claimed\n',
+      'Task 101 — B',
+      '\n## Acceptance Criteria\n- [ ] Pending\n\n## Execution Notes\nPartial.\n',
+    );
+
+    const result = await chapterStatusCommand({ range: '100-101', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const r = result.result as { ready_tasks: Array<{ task_number: number; ready_for: string }> };
+    expect(r.ready_tasks).toHaveLength(1);
+    expect(r.ready_tasks[0]).toMatchObject({ task_number: 100, ready_for: 'closure' });
+  });
+
   it('warns when tasks are missing from range', async () => {
     writeTask(tempDir, '20260420-100-a.md', 'task_id: 100\nstatus: opened\n', 'Task 100 — A');
     // Missing 101 and 102

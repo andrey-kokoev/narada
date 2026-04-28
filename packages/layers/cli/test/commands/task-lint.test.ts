@@ -149,4 +149,31 @@ describe('task lint tool', () => {
     const issues = (result.result as { issues: Array<{ type: string }> }).issues;
     expect(issues.some((i) => i.type === 'terminal_without_governed_provenance')).toBe(true);
   });
+
+  it('detects malformed acceptance criteria fragments', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-109-fragmented.md'),
+      `---\ntask_id: 109\nstatus: opened\n---\n\n# Task 109\n\n## Acceptance Criteria\n- [ ] Tests pass;Documentation updated\n- [ ] lifecycle\n`,
+    );
+
+    const result = await taskLintCommand({ cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    const issues = (result.result as { issues: Array<{ type: string; detail: string }> }).issues;
+    expect(issues.some((i) => i.type === 'malformed_acceptance_criteria' && i.detail.includes('semicolon'))).toBe(true);
+    expect(issues.some((i) => i.type === 'malformed_acceptance_criteria' && i.detail.includes('fragmentary'))).toBe(true);
+  });
+
+  it('detects missing evidence paths in execution evidence sections', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-110-stale-evidence.md'),
+      `---\ntask_id: 110\nstatus: opened\n---\n\n# Task 110\n\n## Acceptance Criteria\n- [ ] Keep evidence paths valid\n\n## Execution Notes\nChanged docs/missing-operator-loop.md during implementation.\n`,
+    );
+
+    const result = await taskLintCommand({ cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    const issues = (result.result as { issues: Array<{ type: string; detail: string }> }).issues;
+    expect(issues.some((i) => i.type === 'missing_evidence_path' && i.detail.includes('docs/missing-operator-loop.md'))).toBe(true);
+  });
 });

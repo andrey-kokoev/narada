@@ -7,7 +7,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { testRunCommand, testRunInspectCommand, testRunListCommand } from '../../src/commands/test-run.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { SqliteTaskLifecycleStore, openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from "better-sqlite3";
@@ -80,6 +80,23 @@ describe('test-run command', () => {
     const commandRun = store.getCommandRun(metrics.command_run_id!);
     expect(commandRun).toBeDefined();
     expect(commandRun!.status).toBe('succeeded');
+  });
+
+  it('reads command from --cmd-file', async () => {
+    writeFileSync(join(tempDir, 'verify-command.sh'), 'echo file-command\n');
+
+    const result = await testRunCommand({
+      cwd: tempDir,
+      store,
+      cmdFile: 'verify-command.sh',
+      scope: 'focused',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const r = result.result as { run_id: string };
+    const run = store.getVerificationRun(r.run_id);
+    expect(run!.target_command).toBe('echo file-command');
+    expect(run!.status).toBe('passed');
   });
 
   it('links run to task when taskNumber is provided', async () => {

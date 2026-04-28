@@ -121,6 +121,9 @@ Static grammar may define what a task, finding, roster entry, or chapter is. Ope
 ## Verification
 
 - **Prefer the suggestion surface first.** Before deciding verification scope manually, run `narada verify suggest --files <changed-files>` to get the smallest plausible command.
+- Use the Testing Intent Zone for task evidence: `narada test-run run --task <n> --cmd "<focused command>" --scope focused --requester <agent>`.
+- If shell quoting becomes fragile, write the exact command to a temporary file and use `narada test-run run --task <n> --cmd-file <path> --scope focused --requester <agent>`.
+- For live-effect tasks, prefer existing-evidence verification over rerunning the effect. A valid no-live-effect verification command is a read-only evidence/admission check, for example `narada task evidence <n>` or a focused fixture/static check recorded through TIZ.
 - Use focused verification first.
 - Do not run the full suite unless the task or user explicitly requests it.
 - If verification cannot be run, record why in the original task file.

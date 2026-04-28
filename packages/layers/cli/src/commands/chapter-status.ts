@@ -7,7 +7,7 @@
 
 import { resolve, join } from 'node:path';
 import { readdir, readFile, stat } from 'node:fs/promises';
-import { scanTasksByRange, lintTaskFiles, type ChapterTaskInfo } from '../lib/task-governance.js';
+import { parseFrontMatter, scanTasksByRange, type ChapterTaskInfo } from '../lib/task-governance.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 
@@ -25,6 +25,14 @@ export type ChapterState =
   | 'closing'
   | 'closed'
   | 'committed';
+
+export interface ChapterReadyTask {
+  task_number: number;
+  task_id: string;
+  status: string | undefined;
+  ready_for: 'review_or_close' | 'closure';
+  reason: string;
+}
 
 function parseRange(range: string): { start: number; end: number } | null {
   const singleMatch = range.match(/^(\d+)$/);
@@ -79,6 +87,58 @@ function deriveChapterState(
   return 'proposed';
 }
 
+function countUncheckedCriteria(body: string): { allChecked: boolean | null; unchecked: number } {
+  const acMatch = body.match(/##\s*Acceptance Criteria\s*\n/i);
+  if (!acMatch) return { allChecked: null, unchecked: 0 };
+  const startIdx = acMatch.index! + acMatch[0].length;
+  const nextHeading = body.slice(startIdx).match(/\n##\s/);
+  const sectionEnd = nextHeading ? startIdx + nextHeading.index! : body.length;
+  const section = body.slice(startIdx, sectionEnd);
+  const items = section.match(/^\s*-\s+\[[xX ]\]/gm) ?? [];
+  if (items.length === 0) return { allChecked: null, unchecked: 0 };
+  const unchecked = items.filter((item) => item.includes('[ ]')).length;
+  return { allChecked: unchecked === 0, unchecked };
+}
+
+function hasMaterialSection(body: string, heading: string): boolean {
+  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`^##\\s+${escaped}\\s*\\n([\\s\\S]*?)(?=^##\\s+|$)`, 'im');
+  const match = body.match(re);
+  if (!match) return false;
+  return match[1]
+    .split('\n')
+    .map((line) => line.trim())
+    .some((line) => line.length > 0 && !line.startsWith('<!--'));
+}
+
+async function findReadyTasks(cwd: string, tasks: ChapterTaskInfo[]): Promise<ChapterReadyTask[]> {
+  const ready: ChapterReadyTask[] = [];
+  const dir = join(cwd, '.ai', 'do-not-open', 'tasks');
+
+  for (const task of tasks) {
+    if (task.taskNumber === null) continue;
+    if (['closed', 'accepted', 'deferred', 'confirmed'].includes(task.status ?? '')) continue;
+
+    const content = await readFile(join(dir, task.fileName), 'utf8');
+    const { body } = parseFrontMatter(content);
+    const criteria = countUncheckedCriteria(body);
+    const hasEvidence = hasMaterialSection(body, 'Execution Notes') || hasMaterialSection(body, 'Outcome');
+    const hasVerification = hasMaterialSection(body, 'Verification');
+
+    if (criteria.allChecked === true && hasEvidence && hasVerification) {
+      ready.push({
+        task_number: task.taskNumber,
+        task_id: task.taskId,
+        status: task.status,
+        ready_for: task.status === 'in_review' ? 'closure' : 'review_or_close',
+        reason: 'All criteria are checked and execution plus verification evidence exists.',
+      });
+    }
+  }
+
+  return ready;
+}
+
 export async function chapterStatusCommand(
   options: ChapterStatusOptions,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
@@ -106,6 +166,7 @@ export async function chapterStatusCommand(
   const blockers = tasks
     .filter((t) => !['closed', 'accepted', 'deferred', 'confirmed'].includes(t.status ?? ''))
     .map((t) => ({ task_number: t.taskNumber, task_id: t.taskId, status: t.status }));
+  const readyTasks = await findReadyTasks(cwd, tasks);
 
   // Check for closure decision artifacts
   const decisionsDir = join(cwd, '.ai', 'decisions');
@@ -172,6 +233,7 @@ export async function chapterStatusCommand(
         tasks_found: tasks.length,
         counts,
         blockers,
+        ready_tasks: readyTasks,
         closure_draft_exists: closureDraftExists,
         closure_decision_exists: closureDecisionExists,
         closure_decision_age_hours: closureDecisionAgeHours,
@@ -193,6 +255,12 @@ export async function chapterStatusCommand(
     fmt.message(`Blockers (${blockers.length} non-terminal task(s)):`, 'warning');
     for (const b of blockers) {
       fmt.message(`  - Task ${b.task_number} (${b.task_id}): ${b.status}`, 'warning');
+    }
+  }
+  if (readyTasks.length > 0) {
+    fmt.message(`Ready tasks (${readyTasks.length} evidence-complete non-terminal task(s)):`, 'success');
+    for (const ready of readyTasks) {
+      fmt.message(`  - Task ${ready.task_number} (${ready.task_id}): ${ready.ready_for}`, 'success');
     }
   }
   if (closureDraftExists) {
@@ -217,6 +285,7 @@ export async function chapterStatusCommand(
       tasks_found: tasks.length,
       counts,
       blockers,
+      ready_tasks: readyTasks,
       closure_draft_exists: closureDraftExists,
       closure_decision_exists: closureDecisionExists,
       closure_decision_age_hours: closureDecisionAgeHours,

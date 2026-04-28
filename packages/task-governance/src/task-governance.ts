@@ -5,7 +5,7 @@
  * They are operators: explicit state transitions on static task-governance artifacts.
  */
 
-import { readFile, writeFile, readdir, rename, open, unlink } from 'node:fs/promises';
+import { readFile, writeFile, readdir, rename, open, unlink, stat } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import type { TaskLifecycleStore, AgentRosterRow } from './task-lifecycle-store.js';
 import { openTaskLifecycleStore } from './task-lifecycle-store.js';
@@ -434,6 +434,105 @@ function countUncheckedCriteria(body: string): { allChecked: boolean | null; unc
   }
   const unchecked = items.filter((item) => item.includes('[ ]')).length;
   return { allChecked: unchecked === 0, unchecked };
+}
+
+function extractAcceptanceCriteriaItems(body: string): Array<{ checked: boolean; text: string }> {
+  const acMatch = body.match(/##\s*Acceptance Criteria\s*\n/i);
+  if (!acMatch) return [];
+
+  const startIdx = acMatch.index! + acMatch[0].length;
+  const nextHeading = body.slice(startIdx).match(/\n##\s/);
+  const sectionEnd = nextHeading ? startIdx + nextHeading.index! : body.length;
+  const section = body.slice(startIdx, sectionEnd);
+  const items: Array<{ checked: boolean; text: string }> = [];
+  const itemRe = /^\s*-\s+\[([xX ])\]\s*(.*?)\s*$/gm;
+  let match: RegExpExecArray | null;
+  while ((match = itemRe.exec(section)) !== null) {
+    items.push({ checked: match[1].toLowerCase() === 'x', text: match[2].trim() });
+  }
+  return items;
+}
+
+function lintAcceptanceCriteriaShape(file: string, body: string): Array<{ type: string; file: string; detail: string }> {
+  const issues: Array<{ type: string; file: string; detail: string }> = [];
+  for (const item of extractAcceptanceCriteriaItems(body)) {
+    if (item.text.includes(';')) {
+      issues.push({
+        type: 'malformed_acceptance_criteria',
+        file,
+        detail: `Acceptance criterion contains a semicolon-joined fragment: "${item.text}"`,
+      });
+    }
+    const wordCount = item.text.split(/\s+/).filter(Boolean).length;
+    if (wordCount > 0 && wordCount < 3) {
+      issues.push({
+        type: 'malformed_acceptance_criteria',
+        file,
+        detail: `Acceptance criterion is too fragmentary: "${item.text}"`,
+      });
+    }
+  }
+  return issues;
+}
+
+function extractEvidenceText(body: string): string {
+  const sections: string[] = [];
+  const sectionRe = /^##\s+(Execution Notes|Verification|Outcome)\s*\n([\s\S]*?)(?=^##\s+|$)/gim;
+  let match: RegExpExecArray | null;
+  while ((match = sectionRe.exec(body)) !== null) {
+    sections.push(match[2]);
+  }
+  return sections.join('\n');
+}
+
+function normalizeReferencedPath(raw: string): string | null {
+  let value = raw.trim().replace(/[),.;:]+$/g, '');
+  value = value.split('#')[0];
+  value = value.replace(/^\/home\/andrey\/src\/narada\//, '');
+  value = value.replace(/:\d+$/, '');
+  if (!value || value.includes('*') || value.includes('${') || value.includes('<') || value.includes('>')) {
+    return null;
+  }
+  return value;
+}
+
+function extractReferencedPaths(text: string): string[] {
+  const paths = new Set<string>();
+  const re =
+    /(?:^|[\s(`])((?:\/home\/andrey\/src\/narada\/)?(?:(?:\.ai|docs|packages|scripts|content|tools|test|tests)\/[A-Za-z0-9._/@+=:,#%~-][A-Za-z0-9._/@+=:,/#%~-]*|(?:AGENTS|SEMANTICS|TERMINOLOGY|README)\.md|package\.json|pnpm-lock\.yaml)(?::\d+)?)(?=$|[\s`).,;:])/gm;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text)) !== null) {
+    const normalized = normalizeReferencedPath(match[1]);
+    if (normalized) paths.add(normalized);
+  }
+  return [...paths].sort();
+}
+
+async function pathExists(cwd: string, path: string): Promise<boolean> {
+  try {
+    await stat(join(resolveRepoPath(cwd), path));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function lintMissingEvidencePaths(
+  cwd: string,
+  file: string,
+  body: string,
+): Promise<Array<{ type: string; file: string; detail: string }>> {
+  const issues: Array<{ type: string; file: string; detail: string }> = [];
+  for (const referencedPath of extractReferencedPaths(extractEvidenceText(body))) {
+    if (!(await pathExists(cwd, referencedPath))) {
+      issues.push({
+        type: 'missing_evidence_path',
+        file,
+        detail: `Evidence references missing path: ${referencedPath}`,
+      });
+    }
+  }
+  return issues;
 }
 
 const DERIVATIVE_SUFFIXES = ['-EXECUTED.md', '-DONE.md', '-RESULT.md', '-FINAL.md', '-SUPERSEDED.md'];
@@ -1659,7 +1758,9 @@ export async function lintTaskFiles(cwd: string): Promise<{
     allTaskIds.add(base);
 
     const content = await readFile(join(dir, f), 'utf8');
-    const { frontMatter } = parseFrontMatter(content);
+    const { frontMatter, body } = parseFrontMatter(content);
+    issues.push(...lintAcceptanceCriteriaShape(f, body));
+    issues.push(...(await lintMissingEvidencePaths(cwd, f, body)));
 
     // Filename-based number extraction (always runs for duplicate detection)
     const filenameMatch = base.match(/-(\d+)-/);
@@ -2033,6 +2134,8 @@ export async function lintTaskFilesForRange(
         detail: 'Task file is missing an ## Acceptance Criteria section',
       });
     }
+    issues.push(...lintAcceptanceCriteriaShape(filename, body));
+    issues.push(...(await lintMissingEvidencePaths(cwd, filename, body)));
     const status = frontMatter.status as string | undefined;
     const taskNumber = extractTaskNumberFromFileName(filename);
     if ((status === 'closed' || status === 'confirmed') && taskNumber !== null) {

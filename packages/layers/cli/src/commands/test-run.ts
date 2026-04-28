@@ -12,6 +12,7 @@
  */
 
 import { resolve } from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { attachFormattedOutput } from '../lib/cli-output.js';
@@ -28,6 +29,7 @@ import { commandRunCommand } from './command-run.js';
 
 export interface TestRunOptions {
   cmd?: string;
+  cmdFile?: string;
   taskNumber?: number;
   timeout?: number;
   scope?: TestRunScope;
@@ -68,17 +70,24 @@ function resolveTaskId(cwd: string, taskNumber: number | undefined, store: TaskL
   return lifecycle?.task_id ?? null;
 }
 
+async function resolveCommand(options: TestRunOptions, cwd: string): Promise<string | null> {
+  if (options.cmdFile) {
+    return (await readFile(resolve(cwd, options.cmdFile), 'utf8')).trim();
+  }
+  return options.cmd?.trim() || null;
+}
+
 export async function testRunCommand(
   options: TestRunOptions,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const fmt = createFormatter({ format: options.format || 'auto', verbose: false });
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
-  const command = options.cmd?.trim();
+  const command = await resolveCommand(options, cwd);
 
   if (!command) {
     return {
       exitCode: ExitCode.GENERAL_ERROR,
-      result: { status: 'error', error: 'No command provided. Use --cmd "<command>"' },
+      result: { status: 'error', error: 'No command provided. Use --cmd "<command>" or --cmd-file <path>' },
     };
   }
 
