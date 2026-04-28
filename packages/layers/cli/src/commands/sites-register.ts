@@ -164,6 +164,9 @@ export function registerSitesCommands(program: Command): void {
     .requiredOption('--substrate <name>', 'Substrate: windows-native, windows-wsl, macos, linux-user, linux-system')
     .option('--operation <id>', 'Operation ID to bind')
     .option('--root <path>', 'Override Site root directory')
+    .option('--authority-locus <locus>', 'Windows authority locus: user or pc')
+    .option('--sync <posture>', 'Windows user Site sync posture')
+    .option('--execution-surface <surface>', 'Execution surface: windows_native, wsl_assisted, wsl_native, linux_user, linux_system, macos_native')
     .option('--dry-run', 'Preview without making changes', false)
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
@@ -172,6 +175,9 @@ export function registerSitesCommands(program: Command): void {
         substrate: opts.substrate as string,
         operation: opts.operation as string | undefined,
         root: opts.root as string | undefined,
+        authorityLocus: opts.authorityLocus as string | undefined,
+        sync: opts.sync as string | undefined,
+        executionSurface: opts.executionSurface as string | undefined,
         dryRun: opts.dryRun as boolean | undefined,
         format: resolveCommandFormat(),
         verbose: opts.verbose as boolean | undefined,

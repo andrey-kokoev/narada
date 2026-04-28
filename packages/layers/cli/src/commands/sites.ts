@@ -1083,6 +1083,7 @@ export interface SitesInitOptions extends SitesOptions {
   root?: string;
   authorityLocus?: string;
   sync?: string;
+  executionSurface?: string;
   dryRun?: boolean;
 }
 
@@ -1093,6 +1094,128 @@ const VALID_SUBSTRATES = [
   'linux-user',
   'linux-system',
 ];
+
+const VALID_EXECUTION_SURFACES = [
+  'windows_native',
+  'wsl_assisted',
+  'wsl_native',
+  'linux_user',
+  'linux_system',
+  'macos_native',
+] as const;
+
+type ExecutionSurface = (typeof VALID_EXECUTION_SURFACES)[number];
+type ExecutorRuntime = 'windows' | 'wsl' | 'linux' | 'macos' | 'other';
+
+function detectExecutorRuntime(): ExecutorRuntime {
+  const override = process.env.NARADA_EXECUTOR_RUNTIME;
+  if (override === 'windows' || override === 'wsl' || override === 'linux' || override === 'macos' || override === 'other') {
+    return override;
+  }
+  if (process.platform === 'win32') return 'windows';
+  if (process.platform === 'darwin') return 'macos';
+  if (process.env.WSL_DISTRO_NAME || process.env.WSL_INTEROP) return 'wsl';
+  if (process.platform === 'linux') return 'linux';
+  return 'other';
+}
+
+function inferExecutionSurface(args: {
+  substrate: string;
+  authorityLocus?: string;
+  explicit?: string;
+}): {
+  surface?: ExecutionSurface;
+  executorRuntime: ExecutorRuntime;
+  inferred: boolean;
+  targetAuthorityLocus: string | null;
+  rationale: string;
+  error?: string;
+} {
+  const executorRuntime = detectExecutorRuntime();
+  const targetAuthorityLocus =
+    args.substrate === 'windows-native' || args.substrate === 'windows-wsl'
+      ? `windows_${args.authorityLocus === 'pc' ? 'pc' : 'user'}`
+      : args.substrate;
+
+  if (args.explicit) {
+    if (!VALID_EXECUTION_SURFACES.includes(args.explicit as ExecutionSurface)) {
+      return {
+        executorRuntime,
+        inferred: false,
+        targetAuthorityLocus,
+        rationale: 'Explicit execution surface was invalid.',
+        error: `Unsupported execution surface: "${args.explicit}". Valid surfaces: ${VALID_EXECUTION_SURFACES.join(', ')}`,
+      };
+    }
+    return {
+      surface: args.explicit as ExecutionSurface,
+      executorRuntime,
+      inferred: false,
+      targetAuthorityLocus,
+      rationale: `Execution surface explicitly set to ${args.explicit}.`,
+    };
+  }
+
+  if ((args.substrate === 'windows-native' || args.substrate === 'windows-wsl') && executorRuntime === 'wsl') {
+    return {
+      surface: 'wsl_assisted',
+      executorRuntime,
+      inferred: true,
+      targetAuthorityLocus,
+      rationale: `Detected WSL executor targeting ${targetAuthorityLocus}; defaulting execution_surface=wsl_assisted while preserving target authority locus.`,
+    };
+  }
+
+  if (args.substrate === 'windows-native' || args.substrate === 'windows-wsl') {
+    return {
+      surface: 'windows_native',
+      executorRuntime,
+      inferred: true,
+      targetAuthorityLocus,
+      rationale: `Executor runtime ${executorRuntime} targeting ${targetAuthorityLocus}; defaulting execution_surface=windows_native.`,
+    };
+  }
+
+  if (args.substrate === 'linux-user' && executorRuntime === 'wsl') {
+    return {
+      surface: 'wsl_native',
+      executorRuntime,
+      inferred: true,
+      targetAuthorityLocus,
+      rationale: 'Detected WSL executor targeting a Linux/WSL user Site; defaulting execution_surface=wsl_native, not wsl_assisted.',
+    };
+  }
+
+  if (args.substrate === 'linux-user') {
+    return {
+      surface: 'linux_user',
+      executorRuntime,
+      inferred: true,
+      targetAuthorityLocus,
+      rationale: `Executor runtime ${executorRuntime} targeting linux-user Site; defaulting execution_surface=linux_user.`,
+    };
+  }
+
+  if (args.substrate === 'linux-system') {
+    return {
+      surface: executorRuntime === 'wsl' ? 'wsl_native' : 'linux_system',
+      executorRuntime,
+      inferred: true,
+      targetAuthorityLocus,
+      rationale: executorRuntime === 'wsl'
+        ? 'Detected WSL executor targeting a Linux/WSL system Site; defaulting execution_surface=wsl_native, not wsl_assisted.'
+        : `Executor runtime ${executorRuntime} targeting linux-system Site; defaulting execution_surface=linux_system.`,
+    };
+  }
+
+  return {
+    surface: 'macos_native',
+    executorRuntime,
+    inferred: true,
+    targetAuthorityLocus,
+    rationale: `Executor runtime ${executorRuntime} targeting macOS Site; defaulting execution_surface=macos_native.`,
+  };
+}
 
 export async function sitesInitCommand(
   siteId: string,
@@ -1121,6 +1244,22 @@ export async function sitesInitCommand(
   const ceilingMs = 300_000;
   const validAuthorityLoci = ['user', 'pc'];
   const validSyncPostures = ['local_only', 'cloud_synced_folder', 'git_backed', 'hybrid', 'hybrid_capable_plain_folder'];
+  const execution = inferExecutionSurface({
+    substrate,
+    authorityLocus: options.authorityLocus,
+    explicit: options.executionSurface,
+  });
+
+  if (execution.error) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        status: 'error',
+        error: execution.error,
+        remediation: `Choose one of: ${VALID_EXECUTION_SURFACES.join(', ')}`,
+      },
+    };
+  }
 
   // Resolve site root and config per substrate
   let siteRoot: string;
@@ -1169,6 +1308,7 @@ export async function sitesInitCommand(
         for (const subdir of SITE_SUBDIRECTORIES) {
           await mkdir(pathLib.join(siteRoot, subdir), { recursive: true });
         }
+        await mkdir(join(siteRoot, '.ai'), { recursive: true });
         await mkdir(pathLib.join(siteRoot, '.ai', 'tasks'), { recursive: true });
         const taskStore = openTaskLifecycleStore(siteRoot);
         taskStore.db.close();
@@ -1202,6 +1342,13 @@ export async function sitesInitCommand(
             cloud_sync: 'external_if_configured',
           },
         } : {}),
+        execution: {
+          surface: execution.surface,
+          inferred: execution.inferred,
+          executor_runtime: execution.executorRuntime,
+          target_authority_locus: execution.targetAuthorityLocus,
+          rationale: execution.rationale,
+        },
         cycle_interval_minutes: intervalMinutes,
         lock_ttl_ms: lockTtlMs,
         ceiling_ms: ceilingMs,
@@ -1245,6 +1392,13 @@ export async function sitesInitCommand(
         site_id: siteId,
         site_root: siteRoot,
         config_path: configPath,
+        execution: {
+          surface: execution.surface,
+          inferred: execution.inferred,
+          executor_runtime: execution.executorRuntime,
+          target_authority_locus: execution.targetAuthorityLocus,
+          rationale: execution.rationale,
+        },
         cycle_interval_minutes: intervalMinutes,
         lock_ttl_ms: lockTtlMs,
         ceiling_ms: ceilingMs,
@@ -1274,6 +1428,13 @@ export async function sitesInitCommand(
         mode,
         site_root: siteRoot,
         config_path: configPath,
+        execution: {
+          surface: execution.surface,
+          inferred: execution.inferred,
+          executor_runtime: execution.executorRuntime,
+          target_authority_locus: execution.targetAuthorityLocus,
+          rationale: execution.rationale,
+        },
         cycle_interval_minutes: intervalMinutes,
         lock_ttl_ms: lockTtlMs,
         ceiling_ms: ceilingMs,
@@ -1321,6 +1482,11 @@ export async function sitesInitCommand(
     if ('sync' in configContent!) {
       const sync = configContent!.sync as { posture?: string };
       fmt.kv('Sync Posture', sync.posture ?? '-');
+    }
+    if ('execution' in configContent!) {
+      const surface = configContent!.execution as { surface?: string; rationale?: string };
+      fmt.kv('Execution Surface', surface.surface ?? '-');
+      fmt.message(surface.rationale ?? 'Execution surface was not inferred.', 'info');
     }
     if (options.operation) {
       fmt.kv('Operation', options.operation);

@@ -92,10 +92,23 @@ Windows User Sites also carry a sync posture. This is separate from authority lo
 
 `sites init` should record this posture instead of inferring it from the presence of `.git` or a cloud-sync path.
 
+Site bootstrap also records an **execution surface**. This is separate from the target authority locus:
+
+| Execution surface | Meaning |
+|-------------------|---------|
+| `windows_native` | Command runs on native Windows against a Windows Site |
+| `wsl_assisted` | Command runs inside WSL while mutating a Windows user-locus or PC-locus Site root |
+| `wsl_native` | Command runs inside WSL against WSL/Linux-owned state |
+| `linux_user` | Command runs as a Linux user process |
+| `linux_system` | Command runs as a Linux system/service process |
+| `macos_native` | Command runs on macOS |
+
+`wsl_assisted` is inferred only from both facts together: the executor runtime is WSL, and the target authority locus is Windows user or Windows PC. WSL detection alone is insufficient, because WSL may also host WSL/Linux Sites that own Linux-side state. Ambiguous or cross-host plans should pass `--execution-surface` explicitly.
+
 ### Step 2: Create Site root
 
 ```bash
-narada sites init <site-id> --substrate <substrate> [--operation <operation-id>] [--authority-locus user|pc] [--sync <posture>]
+narada sites init <site-id> --substrate <substrate> [--operation <operation-id>] [--authority-locus user|pc] [--sync <posture>] [--execution-surface <surface>]
 ```
 
 This creates:
@@ -103,6 +116,7 @@ This creates:
 - A minimal Site `config.json` with metadata
 - Standard subdirectories (`state/`, `messages/`, `db/`, `logs/`, `traces/`)
 - For Windows: a registry entry in the Site registry
+- An `execution` record containing `surface`, `executor_runtime`, `target_authority_locus`, and inference rationale
 
 Use `--dry-run` to preview without filesystem mutation.
 

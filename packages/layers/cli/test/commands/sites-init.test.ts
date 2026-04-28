@@ -80,6 +80,9 @@ describe('sitesInitCommand', () => {
     vi.clearAllMocks();
     vol.reset();
     vol.mkdirSync('/tmp', { recursive: true });
+    delete process.env.NARADA_EXECUTOR_RUNTIME;
+    process.env.USERPROFILE = 'C:\\Users\\Andrey';
+    process.env.USERNAME = 'Andrey';
   });
 
   it('rejects invalid substrate', async () => {
@@ -151,42 +154,103 @@ describe('sitesInitCommand', () => {
     expect(data.config).not.toHaveProperty('variant');
   });
 
-  it('creates Windows native site and registers in registry', async () => {
+  it('dry-runs Windows native site config', async () => {
     const ctx = createMockContext();
     const result = await sitesInitCommand('test-site', {
       substrate: 'windows-native',
+      root: '/tmp/windows-native/test-site',
+      dryRun: true,
       format: 'json',
     }, ctx);
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     const data = result.result as { config: Record<string, unknown> };
     expect(data.config.variant).toBe('native');
-    expect(mockRegistry.registerSite).toHaveBeenCalledWith(
-      expect.objectContaining({
-        siteId: 'test-site',
-        variant: 'native',
-        substrate: 'windows-native',
-      }),
-    );
+    expect(mockRegistry.registerSite).not.toHaveBeenCalled();
   });
 
-  it('creates Windows WSL site and registers in registry', async () => {
+  it('infers wsl_assisted only for a WSL executor targeting a Windows authority locus', async () => {
+    process.env.NARADA_EXECUTOR_RUNTIME = 'wsl';
+    const ctx = createMockContext();
+    const result = await sitesInitCommand('test-site', {
+      substrate: 'windows-native',
+      authorityLocus: 'pc',
+      dryRun: true,
+      format: 'json',
+    }, ctx);
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const data = result.result as {
+      config: { execution: { surface: string; inferred: boolean; executor_runtime: string; target_authority_locus: string; rationale: string } };
+    };
+    expect(data.config.execution.surface).toBe('wsl_assisted');
+    expect(data.config.execution.inferred).toBe(true);
+    expect(data.config.execution.executor_runtime).toBe('wsl');
+    expect(data.config.execution.target_authority_locus).toBe('windows_pc');
+    expect(data.config.execution.rationale).toContain('preserving target authority locus');
+  });
+
+  it('does not infer wsl_assisted for a WSL executor targeting a Linux user Site', async () => {
+    process.env.NARADA_EXECUTOR_RUNTIME = 'wsl';
+    const ctx = createMockContext();
+    const result = await sitesInitCommand('test-site', {
+      substrate: 'linux-user',
+      dryRun: true,
+      format: 'json',
+    }, ctx);
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const data = result.result as {
+      config: { execution: { surface: string; target_authority_locus: string; rationale: string } };
+    };
+    expect(data.config.execution.surface).toBe('wsl_native');
+    expect(data.config.execution.target_authority_locus).toBe('linux-user');
+    expect(data.config.execution.rationale).toContain('not wsl_assisted');
+  });
+
+  it('accepts an explicit execution surface without treating it as inferred', async () => {
+    process.env.NARADA_EXECUTOR_RUNTIME = 'wsl';
+    const ctx = createMockContext();
+    const result = await sitesInitCommand('test-site', {
+      substrate: 'linux-user',
+      executionSurface: 'linux_user',
+      dryRun: true,
+      format: 'json',
+    }, ctx);
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const data = result.result as { config: { execution: { surface: string; inferred: boolean; rationale: string } } };
+    expect(data.config.execution.surface).toBe('linux_user');
+    expect(data.config.execution.inferred).toBe(false);
+    expect(data.config.execution.rationale).toContain('explicitly set');
+  });
+
+  it('rejects invalid execution surface', async () => {
+    const ctx = createMockContext();
+    const result = await sitesInitCommand('test-site', {
+      substrate: 'linux-user',
+      executionSurface: 'mystery',
+      dryRun: true,
+      format: 'json',
+    }, ctx);
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect((result.result as { error: string }).error).toContain('Unsupported execution surface');
+  });
+
+  it('dry-runs Windows WSL site config', async () => {
     const ctx = createMockContext();
     const result = await sitesInitCommand('test-site', {
       substrate: 'windows-wsl',
+      root: '/tmp/windows-wsl/test-site',
+      dryRun: true,
       format: 'json',
     }, ctx);
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     const data = result.result as { config: Record<string, unknown> };
     expect(data.config.variant).toBe('wsl');
-    expect(mockRegistry.registerSite).toHaveBeenCalledWith(
-      expect.objectContaining({
-        siteId: 'test-site',
-        variant: 'wsl',
-        substrate: 'windows-wsl',
-      }),
-    );
+    expect(mockRegistry.registerSite).not.toHaveBeenCalled();
   });
 
   it('binds operation when --operation is provided', async () => {
