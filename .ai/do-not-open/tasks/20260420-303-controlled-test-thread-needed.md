@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T19:46:40.451Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
+---
+
 # Task 303: Controlled Test Thread Needed for Mailbox Operational Trial
 
 status: closed
@@ -72,3 +80,14 @@ The empty-inbox blocker is resolved, but a **new product gap** emerged:
 - Sync output: captured in `commands-task303.log` (daemon direct output)
 - Graph API sendMail response: HTTP 202 Accepted (empty body)
 - Inbox verification: `GET /mailFolders/inbox/messages` returned 1 message with test subject
+
+## Verification
+
+| Check | Result |
+| --- | --- |
+| TIZ focused run `run_1777405550919_tsns6l` | Passed in 13ms |
+| Private command log | `narada.sonar` `commands-task303.log` exists |
+| Sync/fact evidence | Private log records `Sync complete`, applied work, and opened work item `wi_7e40881b-eb7b-4c20-ab7d-9debdbb07083` |
+| Follow-up blocker | Task evidence names Task 305 as the new blocker after the empty-inbox blocker was resolved |
+
+Verification inspected existing private/public evidence only. It did not send another email or run live mailbox sync.
