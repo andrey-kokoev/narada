@@ -2,6 +2,8 @@
 
 Governed Locus Federation is the Narada doctrine for continuity across multiple evolving loci without collapsing them into one authority domain.
 
+For the recursive topology reading in which Operations, Sites, and Realms can each become zone-like participants at an enclosing scale, see the external concept-corpus note [`Scale-Relative Operation Topology`](../../../thoughts/content/concepts/scale-relative-operation-topology.md).
+
 It names the parent pattern behind:
 
 - Plural Embodiment, Singular Authority;

@@ -24,6 +24,8 @@ Users create, configure, preflight, activate, and run **Operations**.
 
 In the primary topology reading, an **Operation** is a configured Zone topology whose external boundary is itself zone-like: enclosing topologies may interact only through declared governed crossings, never by depending on internal sub-zone structure. Internally, the Operation is a topology of authority-homogeneous Zones connected by governed crossings. Externally, it presents one coherent authority grammar to larger Operations, Sites, or supervisory control surfaces.
 
+For the broader scale-recursive doctrine behind this reading, see the external concept-corpus note [`Scale-Relative Operation Topology`](../thoughts/content/concepts/scale-relative-operation-topology.md).
+
 Each Operation maps to exactly one `scope`. An Operation is the atomic unit of user intent; a scope is its internal representation. If Narada later needs to group or coordinate multiple Operations, that will be introduced as a distinct composite concept (e.g. `suite` or `campaign`), not by redefining Operation.
 
 Do **not** call a user's configured work setup a "Narada instance." Use **Operation** for the user-owned configured unit of work. Use **runtime**, **daemon**, or **Site** for the deployed machinery that runs Operations.

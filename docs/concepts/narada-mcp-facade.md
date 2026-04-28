@@ -4,6 +4,8 @@ Narada MCP is a typed agent-facing facade over Narada's canonical application se
 
 It is not a second authority surface. MCP tools must delegate to the same command/service functions used by CLI operators, return the same canonical identifiers, and preserve mutation evidence whenever a tool mutates durable state.
 
+This facade participates in the scale-recursive topology described by the external concept note [`Scale-Relative Operation Topology`](../../../thoughts/content/concepts/scale-relative-operation-topology.md): MCP fabric is a governed traversal medium, while each addressed Site remains the local authority locus.
+
 ## Boundary
 
 | Layer | Role |
@@ -50,6 +52,8 @@ Initial tools:
 ## Site Scoping
 
 Every Narada Site may expose its own MCP facade, but that facade is not a new authority owner.
+
+There may be many possible Site-scoped MCP facades. The long-term model is not an unbounded swarm of sovereign servers; it is a governed access fabric that resolves each request to a declared Site before consequence.
 
 Site-scoped MCP means:
 
