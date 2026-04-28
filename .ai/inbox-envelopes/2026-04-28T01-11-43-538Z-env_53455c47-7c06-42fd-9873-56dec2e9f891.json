@@ -21,5 +21,13 @@
     ],
     "recommendation": "Add or update a Narada client Site bootstrap template/command so this pattern can be executed directly. Remaining friction: empty directory creation and boilerplate files still require manual setup; the bootstrap command should create durable directories, .ai/inbox-drop, .ai/inbox-envelopes, guidance docs, and validation output in one governed operation."
   },
-  "status": "received"
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_53455c47-7c06-42fd-9873-56dec2e9f891",
+    "promoted_at": "2026-04-28T02:01:14.485Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
 }
