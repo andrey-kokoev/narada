@@ -1,0 +1,33 @@
+{
+  "envelope_id": "env_ae9cee38-4cb3-4137-bb63-4dc313cc533b",
+  "received_at": "2026-04-28T03:51:34.395Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:inbox-envelope-capabilities-20260428"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "andrey"
+  },
+  "payload": {
+    "title": "Inbox envelopes should carry typed capability metadata",
+    "summary": "Narada inbox envelopes should be able to carry capability requests, requirements, references, claims, grant evidence, refusals, and revocation notices, while avoiding raw secrets or unbounded authority in the envelope payload.",
+    "evidence": [
+      "Discussion clarified that an inbox envelope is a crossing artifact, not the authority store itself. It can coherently carry capability metadata such as a request to read a repo, a requirement for repo.write, a reference to a locally resolved credential, an operator grant evidence record, or a revocation notice. But raw API keys, passwords, bearer tokens, private keys, and long-lived secrets should remain in locus-owned secret or capability stores. A signed envelope may prove origin, but authenticity is not admission and possession is not authority."
+    ],
+    "proposal": [
+      "Extend or document canonical inbox envelope schema to support typed capability metadata. Suggested envelope fields: capability_requirements, capability_requests, capability_claims, capability_references, capability_grant_evidence, capability_refusals, and capability_revocations. These fields should be treated as inert until admitted by the receiving authority. Capability references should resolve receiver-locally through the canonical capability/consent registry and secret-management policy. Grant evidence carried in an envelope should create no executable power until converted into a local admitted grant by the target Site or authority locus. Add examples for: 1. proposal requiring repo.write on narada proper; 2. operator grant to agent:architect for commit/push with expiry; 3. credential reference to a Graph mailbox resolved only by receiver; 4. revocation/refusal notice. Explicitly forbid raw secrets in normal inbox envelopes except via a separate high-risk, encrypted, consent-governed path if such a path is ever implemented."
+    ],
+    "recommendation": "Treat this as a schema/doctrine task adjacent to canonical inbox, canonical capability consent registry, verifiable envelope trust, and capability-governed secret management. Acceptance should include docs and schema examples; a clear statement that envelope capability metadata is a crossing artifact; and validation language that actual power is resolved only through local admitted capability authority. No execution behavior should trust a capability merely because it appears in an inbox envelope."
+  },
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_ae9cee38-4cb3-4137-bb63-4dc313cc533b",
+    "promoted_at": "2026-04-28T03:53:54.910Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
+}

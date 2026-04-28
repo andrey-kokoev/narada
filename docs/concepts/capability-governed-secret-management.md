@@ -11,6 +11,8 @@ Site artifacts may carry secret references and capability policy.
 Raw secret values live in the authority-bearing secret store for the relevant locus.
 ```
 
+Canonical Inbox envelopes may carry secret references or capability metadata, but not raw secret values. See [`canonical-inbox.md`](canonical-inbox.md#capability-metadata).
+
 ## Secret Reference Shape
 
 A Site config, task, inbox envelope, or tool binding may reference a secret by metadata:

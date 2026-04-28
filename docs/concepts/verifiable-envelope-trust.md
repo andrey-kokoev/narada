@@ -13,6 +13,8 @@ It applies to:
 
 Secret management is adjacent but distinct: envelope trust verifies message provenance and integrity; secret management governs protected capabilities used to authenticate, decrypt, sign, fetch, execute, or mutate.
 
+Capability metadata inside an inbox envelope remains inert even when the envelope is signed. See [`canonical-inbox.md`](canonical-inbox.md#capability-metadata).
+
 ## Doctrine
 
 ```text

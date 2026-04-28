@@ -63,6 +63,101 @@ Admission writes exactly one `file_drop` envelope per item path and content dige
 | `status` | Intake lifecycle state |
 | `promotion` | Optional target after governed promotion |
 | `handling` | Optional claim/lease metadata while a principal handles the envelope |
+| `capability` | Optional inert capability metadata for requirements, requests, claims, references, grant evidence, refusals, or revocations |
+
+## Capability Metadata
+
+Inbox envelopes may carry typed capability metadata. This metadata is a crossing artifact, not executable authority.
+
+Capability metadata can express:
+
+| Field | Meaning |
+| --- | --- |
+| `capability_requirements` | Capabilities the target crossing would need before consequence, such as `github.repo:write`. |
+| `capability_requests` | Requests for the receiving authority to consider granting or binding a capability. |
+| `capability_claims` | Sender claims about capability posture; these require local verification before use. |
+| `capability_references` | Receiver-local references such as `env:NARADA_GRAPH_TOKEN` or `credential-manager:Narada/mailbox`; never raw values. |
+| `capability_grant_evidence` | Evidence that an operator or authority granted something elsewhere. Evidence is not a local grant until admitted. |
+| `capability_refusals` | Explicit refusal to provide or exercise a capability. |
+| `capability_revocations` | Notice that a previous capability should be distrusted, expired, or reviewed. |
+
+The receiving Site resolves actual power through its local capability authority, normally the Canonical Capability Consent Registry and secret-management policy. A signed envelope may prove origin; it does not grant mutation authority.
+
+Raw API keys, passwords, bearer tokens, private keys, refresh tokens, and long-lived secrets are forbidden in normal inbox envelopes. If Narada ever supports encrypted secret transfer, that must be a separate high-risk, consent-governed path with explicit capability and trust admission.
+
+### Capability Examples
+
+Proposal requiring repository write:
+
+```json
+{
+  "kind": "proposal",
+  "capability": {
+    "capability_requirements": [
+      {
+        "capability_kind": "github.repo",
+        "scope": { "repo": "andrey-kokoev/narada" },
+        "actions": ["commit", "push"]
+      }
+    ]
+  }
+}
+```
+
+Operator grant evidence for an agent:
+
+```json
+{
+  "kind": "observation",
+  "capability": {
+    "capability_grant_evidence": [
+      {
+        "principal_id": "andrey",
+        "agent_id": "architect",
+        "capability_kind": "github.repo",
+        "actions": ["push"],
+        "expires_at": "2026-04-28T23:59:59.000Z",
+        "evidence_ref": "operator-chat:grant-001"
+      }
+    ]
+  }
+}
+```
+
+Receiver-local credential reference:
+
+```json
+{
+  "kind": "proposal",
+  "capability": {
+    "capability_references": [
+      {
+        "capability_kind": "mail.graph",
+        "credential_ref": "credential-manager:Narada/help-mailbox",
+        "resolution_locus": "receiver"
+      }
+    ]
+  }
+}
+```
+
+Revocation or refusal notice:
+
+```json
+{
+  "kind": "observation",
+  "capability": {
+    "capability_refusals": [
+      { "capability_kind": "filesystem.write", "reason": "outside declared Site root" }
+    ],
+    "capability_revocations": [
+      { "grant_ref": "cap_123", "reason": "operator revoked access" }
+    ]
+  }
+}
+```
+
+Related doctrine: [`canonical-capability-consent-registry.md`](canonical-capability-consent-registry.md), [`capability-governed-secret-management.md`](capability-governed-secret-management.md), and [`verifiable-envelope-trust.md`](verifiable-envelope-trust.md).
 
 ## Example
 
