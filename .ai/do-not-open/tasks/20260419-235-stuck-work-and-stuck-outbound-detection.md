@@ -1,18 +1,29 @@
+---
+status: closed
+criteria_proved_by: architect
+criteria_proved_at: 2026-04-28T16:10:09.497Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777392592409_ytfwlb
+closed_at: 2026-04-28T16:10:27.461Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: peer_reviewed
+---
+
 # Task 235: Stuck-Work and Stuck-Outbound Detection
 
 ## Chapter
 
 Operational Trust
 
-## Why
-
-The scheduler recovers stale leases mechanically, but it does not *alert* when work is piling up. A work item can sit in `opened` for days if the scheduler stops scanning. An outbound command can sit in `pending` forever if the worker registry is misconfigured. The operator has no way to know something is wrong without manually running `narada status` or checking the UI.
-
-Operational trust requires that the system detect and surface its own stagnation.
-
 ## Goal
 
 Add explicit detection for stuck work items and stuck outbound commands, surface the findings in health reporting and observation queries, and document the thresholds.
+
+## Context
+
+<!-- Context placeholder -->
 
 ## Required Work
 
@@ -110,21 +121,6 @@ Add threshold configuration to config schema:
 - Do not add real-time streaming updates.
 - Do not modify the scheduler or outbound worker logic.
 
-## Acceptance Criteria
-
-- [ ] Stuck work item detection query exists and covers all four conditions.
-- [ ] Stuck outbound detection query exists and covers all four conditions.
-- [ ] Health file includes stuck-item counts.
-- [ ] `narada status` includes stuck-item summary.
-- [ ] Observation API routes exist for stuck items.
-- [ ] Thresholds are configurable via config.
-- [ ] Task notes document default thresholds and rationale.
-
-## Dependencies
-
-- Tasks 228-232 (Live Operation chapter) must be complete. Detection requires work items and outbound commands to exist.
-- Task 234 (Health/Readiness Contract) should precede or coincide with this task, as stuck-item data feeds into health reporting.
-
 ## Execution Notes
 
 ### Implemented
@@ -195,6 +191,10 @@ Add threshold configuration to config schema:
 
 5. **Test coverage for snapshot stuck integration** (`packages/layers/control-plane/test/unit/observability/queries.test.ts`):
    - Added `buildControlPlaneSnapshot includes stuck work items and outbound commands` test that seeds stuck state and asserts `snapshot.stuck` is populated.
+
+## Verification
+
+<!-- Record commands run, results observed, and how correctness was checked. -->
 
 ## Acceptance Criteria
 
