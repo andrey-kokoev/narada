@@ -29,7 +29,7 @@ const steps: Step[] = [
   { name: "Typecheck", command: "pnpm typecheck" },
   { name: "Build", command: "pnpm build" },
   { name: "Task lifecycle snapshot guard", command: "pnpm narada:guard-task-db" },
-  { name: "Task-governance fast tests", command: "pnpm --filter @narada2/task-governance test:fast" },
+  { name: "Task-governance smoke tests", command: "pnpm --filter @narada2/task-governance test:smoke" },
   { name: "Charters tests", command: "pnpm --filter @narada2/charters test" },
   { name: "Ops-kit tests", command: "pnpm --filter @narada2/ops-kit test" },
 ];

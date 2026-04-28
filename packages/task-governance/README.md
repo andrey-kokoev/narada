@@ -69,10 +69,23 @@ pnpm --filter @narada2/task-governance build
 pnpm --filter @narada2/cli typecheck
 ```
 
-`pnpm verify` includes `@narada2/task-governance` fast tests. The exhaustive governance test is intentionally separate:
+`pnpm verify` includes only the `@narada2/task-governance` smoke test. Broader package tests are intentionally separate because they exercise file-backed SQLite and dominate the fast gate runtime:
+
+```bash
+pnpm --filter @narada2/task-governance test:smoke
+pnpm --filter @narada2/task-governance test:fast
+```
+
+Assignment-lifecycle integration coverage is also separate:
+
+```bash
+pnpm --filter @narada2/task-governance test:assignment-lifecycle
+```
+
+The exhaustive governance test is also intentionally separate:
 
 ```bash
 pnpm --filter @narada2/task-governance test:governance
 ```
 
-Use the exhaustive test when changing lint, lifecycle, report, review, or dependency semantics.
+Use `test:fast` when changing projection, recommender, evidence admission, close, allocation, or search semantics. Use the assignment-lifecycle test when changing claim, continue, release, roster, or assignment-intent semantics. Use the exhaustive governance test when changing lint, lifecycle, report, review, or dependency semantics.
