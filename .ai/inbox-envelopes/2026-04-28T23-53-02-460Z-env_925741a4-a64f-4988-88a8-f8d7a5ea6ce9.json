@@ -22,5 +22,13 @@
     ],
     "recommendation": "Record as pending site_config_change for windows-operator-surface-adapter-materializers"
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "site_config_change",
+    "target_ref": "windows-operator-surface-adapter-materializers",
+    "promoted_at": "2026-04-28T23:53:16.633Z",
+    "promoted_by": "builder",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'site_config_change' is not implemented yet."
+  }
 }

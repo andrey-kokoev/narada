@@ -1,0 +1,50 @@
+{
+  "envelope_id": "env_7530976f-283c-4429-8522-3663b67f7938",
+  "received_at": "2026-04-28T23:56:11.937Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "thoughts-project:daemon-runtime"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "codex"
+  },
+  "payload": {
+    "title": "Thoughts Site daemon exposed missing coherent Site-local source path",
+    "summary": "While equipping the /home/andrey/src/thoughts project-locus Narada Site with a daemon, the first coherent attempt was a timer-backed heartbeat scope. The config accepted a timer source and lower layers contain TimerSource/FilesystemSource concepts, but the daemon sync projector treated the timer fact as mailbox-shaped and failed with `Unknown event kind: undefined`. We fell back to a no-op mock source to create daemon presence without pretending Site-local inbox/watch machinery exists.",
+    "observed_at": "2026-04-28",
+    "source_site": "thoughts-project",
+    "evidence": {
+      "site_root": "/home/andrey/src/thoughts/.narada",
+      "added_files": [
+        ".narada/daemon.config.json",
+        ".narada/package.json",
+        ".narada/chapters/20260428-daemon-runtime.md"
+      ],
+      "failed_attempt": {
+        "source_type": "timer",
+        "context_strategy": "timer",
+        "error": "Unknown event kind: undefined"
+      },
+      "current_fallback": {
+        "source_type": "mock",
+        "scope_id": "thoughts-project-daemon",
+        "purpose": "no-op daemon/runtime presence only"
+      },
+      "running_pid": "3954942"
+    },
+    "impact": "Project-locus Sites that have authored inboxes or governance memory cannot yet be coherently equipped with a useful daemon that watches Site-local inbox drops or emits heartbeat/check work through standard config. Operators are forced either to run a no-op daemon or improvise local machinery outside Narada proper.",
+    "proposed_direction": "Add a coherent Site-local daemon source path: either make timer sources projectable by the daemon without mailbox assumptions, or expose a config-level filesystem/inbox-drop source for Site-local authored envelopes. The source should admit inert facts and route them through canonical inbox/admission machinery rather than mailbox-specific projection.",
+    "classification": "daemon_site_local_source_gap"
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "decision",
+    "target_ref": "site-local-daemon-source-chapter-1056-1059",
+    "promoted_at": "2026-04-28T23:58:19.755Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'decision' is not implemented yet."
+  }
+}
