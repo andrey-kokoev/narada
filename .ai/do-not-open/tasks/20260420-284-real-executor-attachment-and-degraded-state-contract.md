@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T18:46:43.015Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
+---
+
 # Task 284: Real Executor Attachment and Degraded-State Contract
 
 ## Chapter
@@ -12,7 +20,20 @@ Narada can already govern work and produce draft-oriented outcomes, but the prod
 
 Make the real executor path explicit, inspectable, and safe, with a first-class degraded-state contract.
 
-## Implementation
+## Required Work
+
+- Define the real executor attachment path from config to charter runner to governed execution.
+- Make degraded-state classes explicit, inspectable, and visible through operator surfaces.
+- Provide concrete recovery guidance for every degraded-state class.
+- Preserve draft-first safety independently of runtime health.
+
+## Non-Goals
+
+- Do not remove draft-first governance.
+- Do not make degraded runtime health silently authorize direct effects.
+- Do not introduce autonomous send behavior.
+
+## Execution Notes
 
 ### 1. Canonical Executor Path
 
@@ -89,6 +110,8 @@ This gives operators an explicit knob to restrict the runtime to draft-only mode
 
 ## Verification
 
+- `narada test-run run --task 284 --requester architect --scope focused --timeout 120 --cmd <executor health and degraded-state contract checks>` — passed as TIZ run `run_1777401975963_jm8jij` in 2685ms.
+- The TIZ check verified `getRecoveryGuidance`, daemon execution gating via `healthClassPermitsExecution`, `degraded_mode` config plumbing, charter runtime health tests, and doctor command degraded-state reporting.
 - `pnpm verify` — passes (5/5 steps)
 - `pnpm --filter @narada2/charters test` — 72/72 pass
 - `pnpm --filter @narada2/cli test` — doctor + status tests pass
