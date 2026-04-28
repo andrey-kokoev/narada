@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T16:58:55.940Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: peer_reviewed
+---
+
 # Task 256: Daemon Vertical Neutrality
 
 ## Chapter
@@ -110,3 +118,7 @@ In `packages/layers/control-plane/config.example.json`:
 
 - Task 255 (Init & Setup Path Hardening) — setup path should be able to scaffold non-mail operations.
 - Task 252 (Agent Verification Speed & Telemetry) — verification commands must be stable for daemon tests.
+
+## Verification
+
+<!-- Record commands run, results observed, and how correctness was checked. -->
