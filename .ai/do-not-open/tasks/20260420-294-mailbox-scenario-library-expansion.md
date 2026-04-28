@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T19:28:09.348Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
+---
+
 # Task 294: Mailbox Scenario Library Expansion
 
 ## Chapter
@@ -57,10 +65,19 @@ Prefer one strong scenario per class over a sprawling example catalog.
 ## Execution Notes
 
 - **Fixtures created**: `packages/layers/control-plane/test/fixtures/threads/support-thread-{billing-question,refund-request,escalation-complaint,ambiguous-request}.json`
-- **Documentation created**: `docs/mailbox-scenario-library.md` — defines evaluation character, outbound action class, and governance outcome per scenario.
+- **Documentation created**: `docs/product/mailbox-scenario-library.md` — defines evaluation character, outbound action class, and governance outcome per scenario.
 - **Proof hook created**: `packages/layers/control-plane/test/integration/live-operation/scenario-library.test.ts` — 6 tests (5 scenarios + safe-posture gate) exercising the full dispatch → evaluation → resolution pipeline.
 - **Governance outcomes observed**:
   - Login / billing / escalation → `action_created` (approval off) or `pending_approval` (approval on)
   - Refund (medium confidence + uncertainty flags) → `pending_approval` regardless of policy
   - Ambiguous (low confidence) → `escalated` regardless of policy
 - **Tests pass**: `pnpm test:focused "pnpm --filter @narada2/control-plane exec vitest run test/integration/live-operation/scenario-library.test.ts"`
+
+## Verification
+
+| Check | Result |
+| --- | --- |
+| TIZ focused run `run_1777404457155_i3k2f7` | Passed in 1.1s |
+| Scenario docs | `docs/product/mailbox-scenario-library.md` exists and preserves the no-autonomous-send boundary |
+| Fixture basis | Login, billing, refund, escalation, and ambiguous-request fixtures exist |
+| Proof hook | `packages/layers/control-plane/test/integration/live-operation/scenario-library.test.ts` passed |
