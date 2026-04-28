@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T19:26:08.589Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
+---
+
 # Task 293: Day-2 Mailbox Hardening
 
 ## Chapter
@@ -56,6 +64,22 @@ Implement or document the bounded hardening changes that most directly improve o
 - [x] Auth/degraded-state operator behavior is coherent and documented.
 - [x] Mailbox recovery drills are defined against current runtime surfaces.
 - [x] Focused hardening closes the highest-value live-operational gaps.
+
+## Execution Notes
+
+1. Day-2 failure modes are documented in `docs/product/day-2-mailbox-hardening.md`, including auth and credential failures, degraded-state behavior, Graph API edge cases, terminal failure classes, and operational runbook snippets.
+2. Auth recovery is materially backed by code: Graph auth failures invalidate token cache, `retry_auth_failed` is available as an operator action and CLI command, and `failed_terminal` can transition back to `approved_for_send` or `draft_ready` through the governed retry path.
+3. Recovery drills are defined for daemon interruption, outbound ambiguity, and auth restoration. The outbound ambiguity drill keeps confirmation in reconciliation and does not re-send from an uncertain `sending` state.
+4. Highest-value hardening gaps are bounded rather than hidden: attachment-bearing outbound replies remain a known future-design gap; draft mutation detection, missing managed draft handling, auth retry, and Graph retry classes are covered by focused tests.
+
+## Verification
+
+| Check | Result |
+| --- | --- |
+| TIZ focused run `run_1777404253810_inezve` | Passed in 990ms |
+| Day-2 docs smoke check | Confirmed auth failure taxonomy, `draft_only` degraded mode, outbound ambiguity recovery, and `narada retry-auth-failed` guidance |
+| Auth/retry/operator tests | `packages/layers/control-plane/test/unit/operator-actions/executor.test.ts` passed |
+| Send hardening tests | `send-execution-worker.test.ts` and `send-reply-worker.test.ts` passed |
 
 ## Completed Work
 
