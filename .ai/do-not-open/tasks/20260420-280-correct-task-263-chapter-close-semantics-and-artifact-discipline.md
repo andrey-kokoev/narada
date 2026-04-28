@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T18:42:03.547Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
+---
+
 # Task 280: Correct Task 263 Chapter Close Semantics and Artifact Discipline
 
 ## Chapter
