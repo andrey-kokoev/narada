@@ -21,6 +21,14 @@ The admissible-crossing language is grounded in Governed Crossing: arrival is no
 | Execution surface | Where a command runs. | The target authority of the command. |
 | Local governance materializations | Config, inbox, tasks, chapters, arcs, KB, traces, logs, runtime DBs, templates, and tools. | The definition of Site. |
 
+## Embodiments Key
+
+When a Site has multiple concrete presences, its config or authority-routing file should use the canonical `embodiments` key to declare them.
+
+`embodiments` describes static topology: roots, roles, and mutation policy. It does not store dynamic sync state. Preflight commands observe freshness, pending inbox-drop files, dirty trees, and ahead/behind posture at runtime.
+
+For Narada proper, this means the WSL authority clone and Windows clone are both Site embodiments, but only the declared authority embodiment may admit governed mutations directly.
+
 ## Core Rule
 
 ```text

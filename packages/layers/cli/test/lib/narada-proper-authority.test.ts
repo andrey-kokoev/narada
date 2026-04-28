@@ -34,6 +34,35 @@ describe('Narada proper authority clone routing', () => {
     }
   });
 
+  it('reads canonical Site embodiments and reports sibling inbox-drop residue', () => {
+    const authority = mkdtempSync(join(tmpdir(), 'narada-authority-'));
+    const sibling = mkdtempSync(join(tmpdir(), 'narada-sibling-'));
+    try {
+      mkdirSync(join(authority, '.ai'), { recursive: true });
+      mkdirSync(join(sibling, '.ai', 'inbox-drop'), { recursive: true });
+      writeFileSync(join(sibling, '.ai', 'inbox-drop', '001.md'), '# Pending\n');
+      writeFileSync(join(authority, '.ai', 'authority-clone.json'), JSON.stringify({
+        site_id: 'narada-proper',
+        authority_root: authority,
+        embodiments: [
+          { id: 'authority', root: authority, role: 'authority', mutation_policy: 'allow' },
+          { id: 'sibling', root: sibling, role: 'read_only_forwarding', mutation_policy: 'refuse_or_forward' },
+        ],
+      }));
+
+      const posture = inspectAuthorityClonePosture(authority);
+
+      expect(posture.status).toBe('authority_clone');
+      expect(posture.embodiments).toEqual([
+        expect.objectContaining({ id: 'authority', role: 'authority', current: true }),
+        expect.objectContaining({ id: 'sibling', role: 'read_only_forwarding', current: false, inbox_drop_count: 1 }),
+      ]);
+    } finally {
+      rmSync(authority, { recursive: true, force: true });
+      rmSync(sibling, { recursive: true, force: true });
+    }
+  });
+
   it('refuses a configured non-authority clone before mutation', () => {
     const authority = mkdtempSync(join(tmpdir(), 'narada-authority-'));
     const embodiment = mkdtempSync(join(tmpdir(), 'narada-embodiment-'));

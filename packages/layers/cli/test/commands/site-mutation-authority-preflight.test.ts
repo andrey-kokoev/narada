@@ -38,6 +38,43 @@ describe('site mutation authority preflight', () => {
     }
   });
 
+  it('reports configured sibling embodiment inbox-drop warnings', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'narada-site-authority-'));
+    const sibling = mkdtempSync(join(tmpdir(), 'narada-site-sibling-'));
+    try {
+      initGit(cwd);
+      mkdirSync(join(cwd, '.ai', 'do-not-open', 'tasks'), { recursive: true });
+      writeFileSync(join(cwd, '.ai', 'task-lifecycle-snapshot.json'), '{"tasks":[]}');
+      mkdirSync(join(sibling, '.ai', 'inbox-drop'), { recursive: true });
+      writeFileSync(join(sibling, '.ai', 'inbox-drop', '001.md'), '# Pending\n');
+      writeFileSync(join(cwd, '.ai', 'authority-clone.json'), JSON.stringify({
+        site_id: 'test-site',
+        authority_root: cwd,
+        embodiments: [
+          { id: 'authority', root: cwd, role: 'authority', mutation_policy: 'allow' },
+          { id: 'sibling', root: sibling, role: 'read_only_forwarding', mutation_policy: 'refuse_or_forward' },
+        ],
+      }));
+
+      const { result } = await siteMutationAuthorityPreflightCommand({
+        cwd,
+        mutationFamily: 'publication',
+        format: 'json',
+      });
+
+      expect(result).toMatchObject({
+        status: 'success',
+        locus_state: 'authority_locus',
+      });
+      const data = result as { embodiment_warnings: string[]; embodiments: Array<{ id: string; inbox_drop_count: number }> };
+      expect(data.embodiments.some((e) => e.id === 'sibling' && e.inbox_drop_count === 1)).toBe(true);
+      expect(data.embodiment_warnings).toContain('sibling has 1 pending inbox-drop file(s)');
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+      rmSync(sibling, { recursive: true, force: true });
+    }
+  });
+
   it('refuses mutation from an unknown locus', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'narada-site-unknown-'));
     try {

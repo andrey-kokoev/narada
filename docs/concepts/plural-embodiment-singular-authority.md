@@ -33,6 +33,20 @@ caller embodiment
 
 If the current embodiment is not the authority locus, it may inspect, dry-run, forward with disclosure, or refuse with a precise routing explanation. It must not silently mutate local state merely because local execution is possible.
 
+## Site Embodiments Registry
+
+A Site that has more than one operational presence should declare known embodiments with an `embodiments` key. `embodiments` is the canonical vocabulary; older ad hoc names such as `embeddings` are not authority language.
+
+Each embodiment entry should name:
+
+- `id` — stable local identifier.
+- `kind` — substrate shape such as `git_clone`, `runtime`, `console`, or `projection`.
+- `root` — concrete coordinate for inspection or routing.
+- `role` — `authority`, `read_only_forwarding`, `read_only`, or `forwarding`.
+- `mutation_policy` — `allow`, `refuse`, `forward`, or `refuse_or_forward`.
+
+Static config declares the topology. Dynamic freshness, dirty working tree state, inbox-drop residue, and ahead/behind posture are observed by preflight surfaces, not hand-edited into config.
+
 ## Mode Distinctions
 
 | Mode | Rule |

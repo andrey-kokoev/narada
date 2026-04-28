@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
+import { inspectAuthorityClonePosture, type SiteEmbodimentPosture } from '../lib/narada-proper-authority.js';
 
 export type SiteMutationFamily = 'task_lifecycle' | 'inbox' | 'publication' | 'secret' | 'site';
 export type SiteMutationLocusState =
@@ -29,6 +30,8 @@ export interface SiteMutationAuthorityPreflightResult {
   reason: string;
   repo: GitPosture | null;
   authority_files: AuthorityFiles;
+  embodiments: SiteEmbodimentPosture[];
+  embodiment_warnings: string[];
   integration_hooks: Record<SiteMutationFamily, string[]>;
 }
 
@@ -65,6 +68,9 @@ export async function siteMutationAuthorityPreflightCommand(
   const authorityRoot = repo?.root ?? cwd;
   const authorityFiles = inspectAuthorityFiles(authorityRoot);
   const classification = classifyLocus(mutationFamily, repo, authorityFiles);
+  const authorityClone = inspectAuthorityClonePosture(cwd);
+  const embodiments = authorityClone.embodiments;
+  const embodimentWarnings = embodimentWarningsFor(embodiments);
   const result: SiteMutationAuthorityPreflightResult = {
     status: 'success',
     cwd,
@@ -75,6 +81,8 @@ export async function siteMutationAuthorityPreflightCommand(
     reason: classification.reason,
     repo,
     authority_files: authorityFiles,
+    embodiments,
+    embodiment_warnings: embodimentWarnings,
     integration_hooks: buildIntegrationHooks(),
   };
 
@@ -82,6 +90,25 @@ export async function siteMutationAuthorityPreflightCommand(
     exitCode: ExitCode.SUCCESS,
     result: formattedResult(result, formatHuman(result), options.format ?? 'auto'),
   };
+}
+
+function embodimentWarningsFor(embodiments: SiteEmbodimentPosture[]): string[] {
+  const warnings: string[] = [];
+  for (const embodiment of embodiments) {
+    if (!embodiment.current && embodiment.inbox_drop_count > 0) {
+      warnings.push(`${embodiment.id ?? embodiment.root} has ${embodiment.inbox_drop_count} pending inbox-drop file(s)`);
+    }
+    if (!embodiment.current && (embodiment.behind ?? 0) > 0) {
+      warnings.push(`${embodiment.id ?? embodiment.root} is behind upstream by ${embodiment.behind}`);
+    }
+    if (!embodiment.current && (embodiment.ahead ?? 0) > 0) {
+      warnings.push(`${embodiment.id ?? embodiment.root} is ahead of upstream by ${embodiment.ahead}`);
+    }
+    if (!embodiment.current && (embodiment.dirty_count ?? 0) > 0) {
+      warnings.push(`${embodiment.id ?? embodiment.root} has ${embodiment.dirty_count} uncommitted change(s)`);
+    }
+  }
+  return warnings;
 }
 
 function classifyLocus(
@@ -238,5 +265,6 @@ function formatHuman(result: SiteMutationAuthorityPreflightResult): string[] {
     `Reason: ${result.reason}`,
     `Next safe command: ${result.next_safe_command}`,
     `Repo: ${result.repo ? `${result.repo.branch ?? '(detached)'} behind=${result.repo.behind ?? 'n/a'} ahead=${result.repo.ahead ?? 'n/a'} dirty=${result.repo.dirty_count}` : 'none'}`,
+    ...result.embodiment_warnings.map((warning) => `Embodiment warning: ${warning}`),
   ];
 }

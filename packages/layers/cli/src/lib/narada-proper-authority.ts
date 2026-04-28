@@ -1,11 +1,41 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { ExitCode } from './exit-codes.js';
 
+export type SiteEmbodimentRole = 'authority' | 'read_only_forwarding' | 'read_only' | 'forwarding';
+
+export interface SiteEmbodimentConfig {
+  id?: string;
+  kind?: string;
+  root: string;
+  role?: SiteEmbodimentRole;
+  mutation_policy?: 'allow' | 'refuse' | 'forward' | 'refuse_or_forward';
+  purpose?: string;
+}
+
 export interface AuthorityCloneConfig {
+  site_id?: string;
   authority_root: string;
+  embodiments?: SiteEmbodimentConfig[];
+  /** @deprecated Use embodiments. */
   non_authority_embeddings?: Array<{ root: string; purpose?: string }>;
+}
+
+export interface SiteEmbodimentPosture {
+  id: string | null;
+  kind: string;
+  root: string;
+  role: SiteEmbodimentRole;
+  mutation_policy: string;
+  exists: boolean;
+  current: boolean;
+  ahead: number | null;
+  behind: number | null;
+  dirty_count: number | null;
+  inbox_drop_count: number;
+  status: 'current' | 'reachable' | 'missing';
+  purpose: string | null;
 }
 
 export interface AuthorityClonePosture {
@@ -20,6 +50,7 @@ export interface AuthorityClonePosture {
   runtime_origin: string;
   status: 'authority_clone' | 'non_authority_clone' | 'stale_authority_clone' | 'unconfigured';
   next_safe_command: string | null;
+  embodiments: SiteEmbodimentPosture[];
 }
 
 export class AuthorityCloneRefusal extends Error {
@@ -102,7 +133,8 @@ export function inspectAuthorityClonePosture(cwd = process.cwd()): AuthorityClon
   const config = readAuthorityCloneConfig(configPath);
   const ahead = numberOrNull(git(root, ['rev-list', '--count', '@{u}..HEAD']));
   const behind = numberOrNull(git(root, ['rev-list', '--count', 'HEAD..@{u}']));
-  const authorityRoot = config ? resolve(root, config.authority_root) : null;
+  const embodiments = config ? inspectConfiguredEmbodiments(root, config) : [];
+  const authorityRoot = config ? resolveConfiguredPath(root, config.authority_root) : null;
   const isAuthority = authorityRoot ? samePath(root, authorityRoot) : false;
   const stale = Boolean(isAuthority && (behind ?? 0) > 0);
 
@@ -128,6 +160,7 @@ export function inspectAuthorityClonePosture(cwd = process.cwd()): AuthorityClon
       : stale
         ? 'git pull --ff-only && narada mutation-evidence reconcile --apply'
         : `cd ${authorityRoot} && narada <same-command>`,
+    embodiments,
   };
 }
 
@@ -142,6 +175,79 @@ function readAuthorityCloneConfig(path: string): AuthorityCloneConfig | null {
     return JSON.parse(readFileSync(path, 'utf8')) as AuthorityCloneConfig;
   } catch {
     return null;
+  }
+}
+
+function inspectConfiguredEmbodiments(root: string, config: AuthorityCloneConfig): SiteEmbodimentPosture[] {
+  const configured = normalizeEmbodimentsConfig(config);
+  return configured.map((embodiment) => {
+    const embodimentRoot = resolveConfiguredPath(root, embodiment.root);
+    const exists = existsSync(embodimentRoot);
+    return {
+      id: embodiment.id ?? null,
+      kind: embodiment.kind ?? 'git_clone',
+      root: embodimentRoot,
+      role: embodiment.role ?? 'read_only_forwarding',
+      mutation_policy: embodiment.mutation_policy ?? (embodiment.role === 'authority' ? 'allow' : 'refuse_or_forward'),
+      exists,
+      current: samePath(root, embodimentRoot),
+      ahead: exists ? numberOrNull(git(embodimentRoot, ['rev-list', '--count', '@{u}..HEAD'])) : null,
+      behind: exists ? numberOrNull(git(embodimentRoot, ['rev-list', '--count', 'HEAD..@{u}'])) : null,
+      dirty_count: exists ? dirtyCount(embodimentRoot) : null,
+      inbox_drop_count: exists ? inboxDropCount(embodimentRoot) : 0,
+      status: samePath(root, embodimentRoot) ? 'current' : exists ? 'reachable' : 'missing',
+      purpose: embodiment.purpose ?? null,
+    };
+  });
+}
+
+function normalizeEmbodimentsConfig(config: AuthorityCloneConfig): SiteEmbodimentConfig[] {
+  if (Array.isArray(config.embodiments) && config.embodiments.length > 0) {
+    return config.embodiments;
+  }
+  const result: SiteEmbodimentConfig[] = [
+    {
+      id: 'authority',
+      kind: 'git_clone',
+      root: config.authority_root,
+      role: 'authority',
+      mutation_policy: 'allow',
+      purpose: 'Declared mutation authority clone',
+    },
+  ];
+  for (const legacy of config.non_authority_embeddings ?? []) {
+    result.push({
+      kind: 'git_clone',
+      root: legacy.root,
+      role: 'read_only_forwarding',
+      mutation_policy: 'refuse_or_forward',
+      purpose: legacy.purpose,
+    });
+  }
+  return result;
+}
+
+function resolveConfiguredPath(base: string, path: string): string {
+  const windowsPath = path.match(/^([A-Za-z]):\\(.*)$/);
+  if (windowsPath) {
+    return `/${process.env.NARADA_WINDOWS_MOUNT_ROOT ?? 'mnt'}/${windowsPath[1].toLowerCase()}/${windowsPath[2].replace(/\\/g, '/')}`;
+  }
+  return resolve(base, path);
+}
+
+function dirtyCount(cwd: string): number | null {
+  const output = git(cwd, ['status', '--porcelain', '--untracked-files=no']);
+  return output === null ? null : output.split('\n').filter(Boolean).length;
+}
+
+function inboxDropCount(root: string): number {
+  const dropDir = join(root, '.ai', 'inbox-drop');
+  try {
+    return readdirSync(dropDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && !entry.name.startsWith('.'))
+      .length;
+  } catch {
+    return 0;
   }
 }
 

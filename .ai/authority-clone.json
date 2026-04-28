@@ -1,8 +1,21 @@
 {
+  "site_id": "narada-proper",
   "authority_root": "/home/andrey/src/narada",
-  "non_authority_embeddings": [
+  "embodiments": [
     {
+      "id": "wsl-authority",
+      "kind": "git_clone",
+      "root": "/home/andrey/src/narada",
+      "role": "authority",
+      "mutation_policy": "allow",
+      "purpose": "Narada proper mutation authority clone"
+    },
+    {
+      "id": "windows-clone",
+      "kind": "git_clone",
       "root": "D:\\code\\narada",
+      "role": "read_only_forwarding",
+      "mutation_policy": "refuse_or_forward",
       "purpose": "Windows embodiment; inspect or forward, do not mutate Narada proper state directly"
     }
   ]
