@@ -12,10 +12,130 @@ import type { CoordinatorStore, ForemanDecisionRow } from "../coordinator/types.
 import type { OutboundCommand, OutboundVersion } from "../outbound/types.js";
 import type { OutboundStore } from "../outbound/store.js";
 import { computeIdempotencyKey } from "../outbound/idempotency.js";
+import type { Fact } from "../facts/types.js";
 
 export interface OutboundHandoffDeps {
   coordinatorStore: CoordinatorStore;
   outboundStore: OutboundStore;
+}
+
+interface ReplySource {
+  messageId: string;
+  senderEmail: string | null;
+  subject: string;
+}
+
+function getString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function getEmail(value: unknown): string | null {
+  if (typeof value === "string" && value.includes("@")) {
+    return value.trim();
+  }
+  if (value && typeof value === "object") {
+    const email = (value as Record<string, unknown>).email;
+    if (typeof email === "string" && email.includes("@")) {
+      return email.trim();
+    }
+  }
+  return null;
+}
+
+function getReplySubject(subject: string): string {
+  const trimmed = subject.trim();
+  if (!trimmed) return "";
+  return /^re:/i.test(trimmed) ? trimmed : `Re: ${trimmed}`;
+}
+
+function parseMailReplySource(fact: Fact): ReplySource | null {
+  if (fact.fact_type !== "mail.message.discovered") {
+    return null;
+  }
+
+  try {
+    const payload = JSON.parse(fact.payload_json) as Record<string, unknown>;
+    const event = payload.event as Record<string, unknown> | undefined;
+    if (!event || typeof event !== "object") return null;
+    const normalizedPayload = event.payload as Record<string, unknown> | undefined;
+
+    const messageId =
+      getString(event.message_id) ??
+      getString(event.id) ??
+      getString(normalizedPayload?.message_id) ??
+      getString(normalizedPayload?.id);
+    if (!messageId) return null;
+
+    const senderEmail =
+      getEmail(event.from) ??
+      getEmail(event.sender) ??
+      getEmail(normalizedPayload?.from) ??
+      getEmail(normalizedPayload?.sender);
+    const subject =
+      getString(event.subject) ??
+      getString(normalizedPayload?.subject) ??
+      "";
+
+    return { messageId, senderEmail, subject };
+  } catch {
+    return null;
+  }
+}
+
+function inferReplySourceFromDecision(
+  coordinatorStore: CoordinatorStore,
+  decision: ForemanDecisionRow,
+): ReplySource | null {
+  const suffix = `_${decision.approved_action}`;
+  if (!decision.decision_id.startsWith("fd_") || !decision.decision_id.endsWith(suffix)) {
+    return null;
+  }
+
+  const workItemId = decision.decision_id.slice(3, -suffix.length);
+  const workItem = coordinatorStore.getWorkItem(workItemId);
+  if (!workItem?.context_json) return null;
+
+  try {
+    const context = JSON.parse(workItem.context_json) as { facts?: Fact[] };
+    const facts = Array.isArray(context.facts) ? context.facts : [];
+    for (const fact of facts) {
+      const source = parseMailReplySource(fact);
+      if (source) return source;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function enrichReplyPayload(
+  coordinatorStore: CoordinatorStore,
+  decision: ForemanDecisionRow,
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  if (decision.approved_action !== "draft_reply" && decision.approved_action !== "send_reply") {
+    return payload;
+  }
+
+  const source = inferReplySourceFromDecision(coordinatorStore, decision);
+  if (!source) return payload;
+
+  const enriched = { ...payload };
+  if (!getString(enriched.reply_to_message_id)) {
+    enriched.reply_to_message_id = source.messageId;
+  }
+
+  const to = Array.isArray(enriched.to) ? enriched.to : [];
+  if (to.length === 0 && source.senderEmail) {
+    enriched.to = [source.senderEmail];
+  }
+
+  if (!getString(enriched.subject)) {
+    enriched.subject = getReplySubject(source.subject);
+  }
+
+  return enriched;
 }
 
 export class OutboundHandoff {
@@ -41,6 +161,8 @@ export class OutboundHandoff {
     } catch {
       // Leave as empty object if payload is unparseable
     }
+
+    payload = enrichReplyPayload(this.deps.coordinatorStore, decision, payload);
 
     const idempotencyKey = computeIdempotencyKey(
       decision.context_id,

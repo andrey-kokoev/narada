@@ -35,6 +35,8 @@ interface DraftRow {
   approved_at: string | null;
   decision_rationale: string | null;
   charter_summary: string | null;
+  storage_scope_id: string;
+  storage_root_dir: string;
 }
 
 interface DraftSummary {
@@ -105,68 +107,84 @@ function isStuck(row: DraftRow): boolean {
 async function loadDraftsReport(
   scopeId: string,
   rootDir: string,
+  storageScopes: Array<{ scopeId: string; rootDir: string }>,
   limit: number,
 ): Promise<DraftSummary> {
-  const { Database, SqliteCoordinatorStore, SqliteOutboundStore } = await import(
+  const { Database, SqliteOutboundStore } = await import(
     '@narada2/control-plane'
   );
-  const db = new Database(join(rootDir, '.narada', 'coordinator.db'));
   const capturedAt = new Date().toISOString();
+  const rows: DraftRow[] = [];
 
-  try {
-    const coordinatorStore = new SqliteCoordinatorStore({ db });
+  for (const storageScope of storageScopes) {
+    const db = new Database(join(storageScope.rootDir, '.narada', 'coordinator.db'));
     const outboundStore = new SqliteOutboundStore({ db });
 
-    const rows = outboundStore.db
-      .prepare(
-        `select
-           oh.outbound_id, oh.action_type, oh.context_id, oh.status,
-           oh.created_at, oh.reviewed_at, oh.approved_at,
-           ov.payload_json, ov.subject,
-           fd.rationale as decision_rationale,
-           ev.summary as charter_summary
-         from outbound_handoffs oh
-         join outbound_versions ov on oh.outbound_id = ov.outbound_id and oh.latest_version = ov.version
-         left join foreman_decisions fd on fd.outbound_id = oh.outbound_id
-         left join evaluations ev on ev.context_id = oh.context_id and ev.scope_id = oh.scope_id
-         where oh.scope_id = ?
-         order by oh.created_at desc`
-      )
-      .all(scopeId) as DraftRow[];
+    try {
+      const storageRows = outboundStore.db
+        .prepare(
+          `select
+             oh.outbound_id, oh.action_type, oh.context_id, oh.status,
+             oh.created_at, oh.reviewed_at, oh.approved_at,
+             ov.payload_json, ov.subject,
+             fd.rationale as decision_rationale,
+             (
+               select ev.summary
+               from evaluations ev
+               where ev.context_id = oh.context_id and ev.scope_id = oh.scope_id
+               order by ev.analyzed_at desc
+               limit 1
+             ) as charter_summary
+           from outbound_handoffs oh
+           join outbound_versions ov on oh.outbound_id = ov.outbound_id and oh.latest_version = ov.version
+           left join foreman_decisions fd on fd.outbound_id = oh.outbound_id
+           where oh.scope_id = ?
+           order by oh.created_at desc`
+        )
+        .all(scopeId) as Omit<DraftRow, "storage_scope_id" | "storage_root_dir">[];
 
-    const counts: Record<string, number> = {};
-    for (const row of rows) {
-      counts[row.status] = (counts[row.status] ?? 0) + 1;
+      rows.push(...storageRows.map((row) => ({
+        ...row,
+        storage_scope_id: storageScope.scopeId,
+        storage_root_dir: storageScope.rootDir,
+      })));
+    } finally {
+      db.close();
     }
-
-    const active = rows.filter((r) => r.status === 'pending' || r.status === 'draft_creating');
-    const readyForReview = rows.filter((r) => r.status === 'draft_ready');
-    const approvedForSend = rows.filter((r) => r.status === 'approved_for_send');
-    const inFlight = rows.filter((r) => r.status === 'sending' || r.status === 'submitted');
-    const blocked = rows.filter(
-      (r) => r.status === 'blocked_policy' || r.status === 'retry_wait' || r.status === 'failed_terminal'
-    );
-    const terminal = rows.filter(
-      (r) => r.status === 'confirmed' || r.status === 'cancelled' || r.status === 'superseded'
-    );
-    const stuck = rows.filter(isStuck).slice(0, limit);
-
-    return {
-      scopeId,
-      rootDir,
-      capturedAt,
-      counts,
-      active: active.slice(0, limit),
-      readyForReview: readyForReview.slice(0, limit),
-      approvedForSend: approvedForSend.slice(0, limit),
-      inFlight: inFlight.slice(0, limit),
-      blocked: blocked.slice(0, limit),
-      terminal: terminal.slice(0, limit),
-      stuck,
-    };
-  } finally {
-    db.close();
   }
+
+  rows.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  const counts: Record<string, number> = {};
+  for (const row of rows) {
+    counts[row.status] = (counts[row.status] ?? 0) + 1;
+  }
+
+  const active = rows.filter((r) => r.status === 'pending' || r.status === 'draft_creating');
+  const readyForReview = rows.filter((r) => r.status === 'draft_ready');
+  const approvedForSend = rows.filter((r) => r.status === 'approved_for_send');
+  const inFlight = rows.filter((r) => r.status === 'sending' || r.status === 'submitted');
+  const blocked = rows.filter(
+    (r) => r.status === 'blocked_policy' || r.status === 'retry_wait' || r.status === 'failed_terminal'
+  );
+  const terminal = rows.filter(
+    (r) => r.status === 'confirmed' || r.status === 'cancelled' || r.status === 'superseded'
+  );
+  const stuck = rows.filter(isStuck).slice(0, limit);
+
+  return {
+    scopeId,
+    rootDir,
+    capturedAt,
+    counts,
+    active: active.slice(0, limit),
+    readyForReview: readyForReview.slice(0, limit),
+    approvedForSend: approvedForSend.slice(0, limit),
+    inFlight: inFlight.slice(0, limit),
+    blocked: blocked.slice(0, limit),
+    terminal: terminal.slice(0, limit),
+    stuck,
+  };
 }
 
 export async function draftsCommand(
@@ -209,8 +227,12 @@ export async function draftsCommand(
         result: { status: 'error', error: 'Invalid multi-mailbox configuration' },
       };
     }
+    const storageScopes = config.mailboxes.map((mailbox) => ({
+      scopeId: mailbox.mailbox_id,
+      rootDir: resolve(mailbox.root_dir),
+    }));
     for (const mailbox of config.mailboxes) {
-      reports.push(await loadDraftsReport(mailbox.mailbox_id, resolve(mailbox.root_dir), limit));
+      reports.push(await loadDraftsReport(mailbox.mailbox_id, resolve(mailbox.root_dir), storageScopes, limit));
     }
   } else {
     let config;
@@ -222,8 +244,12 @@ export async function draftsCommand(
         result: { status: 'error', error: 'Failed to load config: ' + (error as Error).message },
       };
     }
+    const storageScopes = config.scopes.map((scope) => ({
+      scopeId: scope.scope_id,
+      rootDir: resolve(scope.root_dir),
+    }));
     for (const scope of config.scopes) {
-      reports.push(await loadDraftsReport(scope.scope_id, resolve(scope.root_dir), limit));
+      reports.push(await loadDraftsReport(scope.scope_id, resolve(scope.root_dir), storageScopes, limit));
     }
   }
 

@@ -108,6 +108,65 @@ describe("IntentHandoff", () => {
       expect(cmdCount).toBe(1);
     });
 
+    it("enriches reply commands from the work item context facts", () => {
+      const now = new Date().toISOString();
+      const contextFact = {
+        fact_id: "fact-mail-1",
+        fact_type: "mail.message.discovered" as const,
+        provenance: {
+          source_id: "mb-1",
+          source_record_id: "msg-1",
+          observed_at: now,
+        },
+        payload_json: JSON.stringify({
+          event: {
+            message_id: "graph-msg-1",
+            subject: "Campaign request",
+            from: { email: "willem@example.com" },
+          },
+        }),
+        created_at: now,
+      };
+      const workItem: WorkItem = {
+        work_item_id: "wi-enrich",
+        context_id: "ctx-1",
+        scope_id: "mb-1",
+        status: "executing",
+        priority: 0,
+        opened_for_revision_id: "rev-1",
+        resolved_revision_id: null,
+        resolution_outcome: null,
+        error_message: null,
+        retry_count: 0,
+        next_retry_at: null,
+        context_json: JSON.stringify({ facts: [contextFact] }),
+        created_at: now,
+        updated_at: now,
+        preferred_session_id: null,
+        preferred_agent_id: null,
+        affinity_group_id: null,
+        affinity_strength: 0,
+        affinity_expires_at: null,
+        affinity_reason: null,
+      };
+      coordinatorStore.insertWorkItem(workItem);
+
+      const decision = makeDecision({
+        decision_id: "fd_wi-enrich_draft_reply",
+        approved_action: "draft_reply",
+        payload_json: JSON.stringify({ body_text: "Thanks, please send more details." }),
+      });
+      coordinatorStore.insertDecision(decision);
+
+      const outboundId = db.transaction(() => handoff.admitIntentFromDecision(decision))();
+      const version = outboundStore.getLatestVersion(outboundId)!;
+
+      expect(version.reply_to_message_id).toBe("graph-msg-1");
+      expect(version.to).toEqual(["willem@example.com"]);
+      expect(version.subject).toBe("Re: Campaign request");
+      expect(version.body_text).toBe("Thanks, please send more details.");
+    });
+
     it("returns existing outbound_id when decision already has outbound_id", () => {
       const decision = makeDecision({ outbound_id: "ob_fd-1" });
       coordinatorStore.insertDecision(decision);
