@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T19:40:58.325Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
+---
+
 # Task 300 — Approval, Send, and Reconciliation Live Trial
 
 Status: **completed** (with product fixes)
@@ -47,7 +55,7 @@ Take one safe managed draft from approval to send to reconciliation confirmation
 - [x] Private evidence is sufficient to audit the full path.
 - [x] Public notes contain no private mailbox content.
 
-## Execution Summary
+## Execution Notes
 
 ### Trial Run
 
@@ -90,8 +98,23 @@ Review identified six issues that were fixed as part of closing this task:
 
 - `~/src/narada.sonar/evidence/297-302-mailbox-operational-trial/task-300-evidence.md`
 
+## Verification
+
+| Check | Result |
+| --- | --- |
+| TIZ focused run `run_1777405212363_vyipqa` | Passed in 11ms |
+| Private trial evidence | `narada.sonar` `task-300-evidence.md` exists |
+| Approval/send/reconciliation evidence | Private evidence records manual approval, `SendExecutionWorker` path, reconciliation by captured message identity, and confirmed terminal state |
+| Public/private split | Public task notes contain no private mailbox content |
+
+Verification inspected existing private/public evidence only. It did not rerun a live send.
+
 ## Boundary Preservation
 
 - No autonomous send enabled by default
 - No private message content exposed in public repo
 - Product code modified only to fix the reconciler bug and review findings
+
+## Execution Notes
+
+<!-- Record what was done, decisions made, and files changed. -->
