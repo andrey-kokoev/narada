@@ -4,17 +4,18 @@ vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { taskClaimCommand } from '../../src/commands/task-claim.js';
-import { taskReleaseCommand } from '../../src/commands/task-release.js';
-import { ExitCode } from '../../src/lib/exit-codes.js';
-import { loadAssignment } from '../../src/lib/task-governance.js';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { claimTaskService } from '@narada2/task-governance/task-assignment-lifecycle-service';
+import { loadAssignment } from '../../src/lib/task-governance.js';
+import { taskReleaseCommand } from '../../src/commands/task-release.js';
+import { ExitCode } from '../../src/lib/exit-codes.js';
 
-function setupRepo(tempDir: string) {
+process.env.NARADA_TASK_LIFECYCLE_FAST_SQLITE = '1';
+
+function setupRepo(tempDir: string): void {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
-  mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
 
   writeFileSync(
@@ -34,11 +35,11 @@ function setupRepo(tempDir: string) {
   );
 }
 
-describe('task release operator', () => {
+describe('task release command', () => {
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'narada-task-release-test-'));
+    tempDir = mkdtempSync(join(tmpdir(), 'narada-task-release-command-'));
     setupRepo(tempDir);
   });
 
@@ -46,8 +47,8 @@ describe('task release operator', () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('releases a claimed task as completed', async () => {
-    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
+  it('delegates a completed release and writes mutation evidence', async () => {
+    await claimTaskService({ taskNumber: '999', agent: 'test-agent', cwd: tempDir });
 
     const result = await taskReleaseCommand({
       taskNumber: '999',
@@ -62,153 +63,11 @@ describe('task release operator', () => {
       release_reason: 'completed',
       new_status: 'in_review',
     });
-
-    const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
-    expect(taskContent).toContain('status: in_review');
-
-    const assignment = await loadAssignment(tempDir, '20260420-999-test-task');
-    expect(assignment?.assignments[0].release_reason).toBe('completed');
-    expect(assignment?.assignments[0].released_at).not.toBeNull();
+    expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8')).toContain('status: in_review');
   });
 
-  it('releases a claimed task as abandoned', async () => {
-    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
-
-    const result = await taskReleaseCommand({
-      taskNumber: '999',
-      reason: 'abandoned',
-      cwd: tempDir,
-      format: 'json',
-    });
-
-    expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    expect(result.result).toMatchObject({
-      status: 'success',
-      release_reason: 'abandoned',
-      new_status: 'opened',
-    });
-
-    const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
-    expect(taskContent).toContain('status: opened');
-  });
-
-  it('fails when task has no assignment record', async () => {
-    const result = await taskReleaseCommand({
-      taskNumber: '999',
-      reason: 'completed',
-      cwd: tempDir,
-      format: 'json',
-    });
-
-    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
-    expect((result.result as { error: string }).error).toContain('no assignment record');
-  });
-
-  it('fails when task has no active assignment', async () => {
-    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
-    await taskReleaseCommand({ taskNumber: '999', reason: 'completed', cwd: tempDir, format: 'json' });
-
-    const result = await taskReleaseCommand({
-      taskNumber: '999',
-      reason: 'completed',
-      cwd: tempDir,
-      format: 'json',
-    });
-
-    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
-    expect((result.result as { error: string }).error).toContain('no active assignment');
-  });
-
-  it('fails without task number', async () => {
-    const result = await taskReleaseCommand({
-      reason: 'completed',
-      cwd: tempDir,
-      format: 'json',
-    });
-
-    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
-    expect((result.result as { error: string }).error).toContain('Task number is required');
-  });
-
-  it('releases a claimed task as budget_exhausted', async () => {
-    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
-
-    const packetPath = join(tempDir, 'continuation.json');
-    writeFileSync(packetPath, JSON.stringify({
-      last_completed_step: 'Step 1',
-      remaining_work: 'Step 2',
-      files_touched: ['src/a.ts'],
-      verification_run: 'none',
-      known_blockers: 'none',
-      resume_recommendation: 'same agent',
-    }));
-
-    const result = await taskReleaseCommand({
-      taskNumber: '999',
-      reason: 'budget_exhausted',
-      continuation: packetPath,
-      cwd: tempDir,
-      format: 'json',
-    });
-
-    expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    expect(result.result).toMatchObject({
-      status: 'success',
-      release_reason: 'budget_exhausted',
-      new_status: 'needs_continuation',
-    });
-
-    const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
-    expect(taskContent).toContain('status: needs_continuation');
-  });
-
-  it('fails with invalid release reason', async () => {
-    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
-
-    const result = await taskReleaseCommand({
-      taskNumber: '999',
-      reason: 'invalid_reason' as 'completed',
-      cwd: tempDir,
-      format: 'json',
-    });
-
-    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
-    expect((result.result as { error: string }).error).toContain('budget_exhausted');
-  });
-
-  it('fails if task status is not claimed', async () => {
-    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
-
-    // Corrupt the task file status behind the operator's back
-    writeFileSync(
-      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
-      '---\ntask_id: 999\nstatus: opened\n---\n\n# Task 999: Test Task\n',
-    );
-
-    const result = await taskReleaseCommand({
-      taskNumber: '999',
-      reason: 'completed',
-      cwd: tempDir,
-      format: 'json',
-    });
-
-    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
-    expect((result.result as { error: string }).error).toContain('consistency error');
-  });
-
-  it('fails without reason', async () => {
-    const result = await taskReleaseCommand({
-      taskNumber: '999',
-      cwd: tempDir,
-      format: 'json',
-    });
-
-    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
-    expect((result.result as { error: string }).error).toContain('--reason must be one of');
-  });
-
-  it('requires continuation packet for budget_exhausted', async () => {
-    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
+  it('preserves failure atomicity through the command wrapper', async () => {
+    await claimTaskService({ taskNumber: '999', agent: 'test-agent', cwd: tempDir });
 
     const result = await taskReleaseCommand({
       taskNumber: '999',
@@ -219,46 +78,9 @@ describe('task release operator', () => {
 
     expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
     expect((result.result as { error: string }).error).toContain('--continuation');
+    expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8')).toContain('status: claimed');
 
-    // Assignment must still be active (failure-atomic)
     const assignment = await loadAssignment(tempDir, '20260420-999-test-task');
-    const active = assignment?.assignments.find((a: { released_at: string | null }) => a.released_at === null);
-    expect(active).toBeDefined();
-
-    // Task status must still be claimed
-    const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
-    expect(taskContent).toContain('status: claimed');
-  });
-
-  it('accepts continuation packet for budget_exhausted', async () => {
-    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
-
-    const packetPath = join(tempDir, 'continuation.json');
-    writeFileSync(packetPath, JSON.stringify({
-      last_completed_step: 'Step 3 done',
-      remaining_work: 'Step 4 and 5',
-      files_touched: ['src/a.ts'],
-      verification_run: 'tests pass',
-      known_blockers: 'none',
-      resume_recommendation: 'same agent',
-    }));
-
-    const result = await taskReleaseCommand({
-      taskNumber: '999',
-      reason: 'budget_exhausted',
-      continuation: packetPath,
-      cwd: tempDir,
-      format: 'json',
-    });
-
-    expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    expect(result.result).toMatchObject({
-      status: 'success',
-      new_status: 'needs_continuation',
-    });
-
-    const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
-    expect(taskContent).toContain('status: needs_continuation');
-    expect(taskContent).toContain('continuation_packet');
+    expect(assignment?.assignments.find((item) => item.released_at === null)).toBeDefined();
   });
 });

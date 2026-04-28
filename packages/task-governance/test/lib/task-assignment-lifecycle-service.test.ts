@@ -7,6 +7,8 @@ import { ExitCode } from '../../src/exit-codes.js';
 import { loadAssignment } from '../../src/task-governance.js';
 import { openTaskLifecycleStore } from '../../src/task-lifecycle-store.js';
 
+process.env.NARADA_TASK_LIFECYCLE_FAST_SQLITE = '1';
+
 function setupRepo(tempDir: string): void {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });

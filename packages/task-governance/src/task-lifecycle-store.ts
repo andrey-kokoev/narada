@@ -653,6 +653,7 @@ export interface SqliteTaskLifecycleStoreOptions {
 
 export const TASK_LIFECYCLE_BUSY_TIMEOUT_MS = 30000;
 export const TASK_LIFECYCLE_SYNCHRONOUS_MODE = 'normal';
+export const TASK_LIFECYCLE_FAST_SQLITE_ENV = 'NARADA_TASK_LIFECYCLE_FAST_SQLITE';
 
 const initializedLifecycleDbPaths = new Set<string>();
 
@@ -677,8 +678,13 @@ export function openTaskLifecycleStore(cwd: string): SqliteTaskLifecycleStore {
   const dbPath = join(cwd, ".ai", "task-lifecycle.db");
   const db = new Database(dbPath);
   db.pragma(`busy_timeout = ${TASK_LIFECYCLE_BUSY_TIMEOUT_MS}`);
-  db.pragma('journal_mode = WAL');
-  db.pragma(`synchronous = ${TASK_LIFECYCLE_SYNCHRONOUS_MODE}`);
+  if (process.env[TASK_LIFECYCLE_FAST_SQLITE_ENV] === '1') {
+    db.pragma('journal_mode = MEMORY');
+    db.pragma('synchronous = OFF');
+  } else {
+    db.pragma('journal_mode = WAL');
+    db.pragma(`synchronous = ${TASK_LIFECYCLE_SYNCHRONOUS_MODE}`);
+  }
   const store = new SqliteTaskLifecycleStore({ db });
   if (!initializedLifecycleDbPaths.has(dbPath)) {
     if (!hasCurrentLifecycleSchema(db)) {

@@ -104,6 +104,15 @@ export async function reviewTaskService(
       result: { status: 'error', error: `Agent not found in roster: ${agentId}` },
     };
   }
+  if (agent.role !== 'reviewer' && agent.role !== 'admin') {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: {
+        status: 'error',
+        error: `Agent ${agentId} has role '${agent.role}' but only 'reviewer' or 'admin' may review tasks`,
+      },
+    };
+  }
 
   let taskFile;
   try {

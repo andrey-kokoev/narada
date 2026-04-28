@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T18:20:44.685Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
+---
+
 # Task 271: Correct Task 261 Lifecycle Operator Integrity
 
 ## Chapter

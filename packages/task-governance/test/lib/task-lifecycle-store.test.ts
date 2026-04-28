@@ -99,6 +99,29 @@ describe('SqliteTaskLifecycleStore', () => {
         opened.db.close();
       }
     });
+
+    it('supports explicit fast SQLite posture for tests', async () => {
+      const previous = process.env.NARADA_TASK_LIFECYCLE_FAST_SQLITE;
+      process.env.NARADA_TASK_LIFECYCLE_FAST_SQLITE = '1';
+      tempDir = await mkdtemp(join(tmpdir(), 'narada-lifecycle-store-fast-'));
+      await mkdir(join(tempDir, '.ai'), { recursive: true });
+
+      const opened = openTaskLifecycleStore(tempDir);
+      try {
+        const journalMode = opened.db.pragma('journal_mode', { simple: true });
+        const synchronous = opened.db.pragma('synchronous', { simple: true });
+
+        expect(String(journalMode).toLowerCase()).toBe('memory');
+        expect(synchronous).toBe(0);
+      } finally {
+        opened.db.close();
+        if (previous === undefined) {
+          delete process.env.NARADA_TASK_LIFECYCLE_FAST_SQLITE;
+        } else {
+          process.env.NARADA_TASK_LIFECYCLE_FAST_SQLITE = previous;
+        }
+      }
+    });
   });
 
   describe('task lifecycle', () => {
