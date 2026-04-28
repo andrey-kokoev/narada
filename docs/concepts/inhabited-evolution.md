@@ -16,13 +16,30 @@ situated ops
   -> doctrine/tooling/substrate lift
 ```
 
-## Roles
+## Currently Inhabited Roles
 
 | Role | Function | Authority Limit |
 | --- | --- | --- |
 | Operator | Names pressure, corrects direction, grants authority, rejects unearned structure. | Operator correction is authority-bearing input, not conversational decoration. |
-| AI architect | Forms hypotheses, proposes structure, edits bounded artifacts, detects incoherence. | Intelligence proposes and constructs; it does not silently grant itself authority. |
+| Architect | Interprets intent, preserves doctrine/topology, drafts specs and acceptance criteria, detects incoherence, reviews whether construction fits the approved invariant. | Architecture proposes and constrains; it does not grant itself Operator authority or execute merely because it can. |
+| Builder | Executes approved local work, chooses means and methods inside the accepted spec, runs verification, reports field conditions and residuals. | Building implements and reports; it does not silently redesign doctrine, widen scope, or admit its own work. |
 | Trace substrate | Preserves tasks, evidence, diffs, commands, failures, residuals, and decisions. | Trace explains and constrains future construction; it is not a substitute for crossing authority. |
+
+These are the roles currently admitted by use in Narada self-build operations. The names are intentionally ordinary: the division follows the normal residential-construction split between owner/operator, architect, and builder. Additional roles such as inspector, clerk, superintendent, or project manager may be proposed, but they are not admitted merely because they are thinkable.
+
+### Role Admission Rule
+
+A new self-build role may be documented as active only after it has been inhabited in a real operation and produced traceable evidence that a distinct responsibility boundary was needed. Before that, it remains a possibility, proposal, or residual.
+
+A proposed role is earned only when:
+
+- real work exposed recurring friction that the current Operator / Architect / Builder split could not cleanly absorb;
+- the proposed role protects a distinct authority, evidence, sequencing, review, or coordination boundary;
+- the originating operation can be rerun through the new role split without adding speculative ceremony;
+- the role's authority limit is explicit;
+- the role does not collapse Intelligence-Authority Separation or become an autonomous self-grooming loop.
+
+Thinking about a role, naming it, or finding an appealing construction analogy is not enough.
 
 ## Rules
 
