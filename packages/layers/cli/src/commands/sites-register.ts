@@ -7,6 +7,7 @@ import {
   sitesDoctorCommand,
   sitesInitCommand,
   sitesBootstrapClientCommand,
+  sitesBootstrapProjectCommand,
   sitesBootstrapWindowsCommand,
   sitesEnableCommand,
   sitesTaskLifecycleInitCommand,
@@ -277,7 +278,7 @@ export function registerSitesCommands(program: Command): void {
     .description('Validate a Site root and authority posture')
     .option('--root <path>', 'Site workspace/root path to inspect')
     .option('--authority-locus <locus>', 'Windows authority locus: user or pc')
-    .option('--kind <kind>', 'Site kind: windows or client', 'windows')
+    .option('--kind <kind>', 'Site kind: windows, client, or project', 'windows')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
     .action(async (siteId: string, opts: Record<string, unknown>) => {
@@ -355,6 +356,27 @@ export function registerSitesCommands(program: Command): void {
     .option('-v, --verbose', 'Enable verbose output', false)
     .action(async (opts: Record<string, unknown>) => {
       const result = await sitesBootstrapClientCommand({
+        workspace: opts.workspace as string | undefined,
+        siteId: opts.siteId as string | undefined,
+        sync: opts.sync as string | undefined,
+        execute: opts.execute as boolean | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitFormatterBackedCommandResult(result, { format: opts.format });
+    });
+
+  sitesCmd
+    .command('bootstrap-project')
+    .description('Plan or execute contained project Site bootstrap inside an existing project repo')
+    .requiredOption('--workspace <path>', 'Project workspace/repository root')
+    .option('--site-id <id>', 'Project Site id; defaults from workspace name')
+    .option('--sync <posture>', 'Project sync posture: git_backed_project_repo', 'git_backed_project_repo')
+    .option('--execute', 'Perform mutations; default is dry-run', false)
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (opts: Record<string, unknown>) => {
+      const result = await sitesBootstrapProjectCommand({
         workspace: opts.workspace as string | undefined,
         siteId: opts.siteId as string | undefined,
         sync: opts.sync as string | undefined,

@@ -112,3 +112,14 @@ site_root = workspace_root/.narada
 ```
 
 The workspace may contain contracts, reports, PBIX files, spreadsheets, code, or other business artifacts. Those artifacts are not Narada knowledge, evidence, or authority merely because a Site inhabits the workspace.
+
+For existing project repositories, use the same containment shape but with project authority language:
+
+```text
+workspace_root = existing project Git repo
+site_root = workspace_root/.narada
+site_kind = project
+sync.posture = git_backed_project_repo
+```
+
+Project source code remains project-owned. The contained Site governs project-local construction memory and intake, not global Narada doctrine or external capabilities.

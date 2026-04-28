@@ -1283,6 +1283,130 @@ async function sitesClientDoctorCommand(
   };
 }
 
+async function sitesProjectDoctorCommand(
+  siteId: string,
+  options: SitesDoctorOptions,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
+  const checks: SiteDoctorCheck[] = [];
+  const workspaceRoot = resolve(options.root ?? '.');
+  const siteRoot = clientSiteRootFromWorkspace(workspaceRoot);
+  const configPath = join(siteRoot, 'config.json');
+  let config: Record<string, unknown> | null = null;
+
+  addCheck(
+    checks,
+    'project_workspace_exists',
+    existsSync(workspaceRoot) ? 'pass' : 'fail',
+    existsSync(workspaceRoot) ? `Project workspace exists: ${workspaceRoot}` : `Project workspace is missing: ${workspaceRoot}`,
+  );
+  addCheck(
+    checks,
+    'project_git_root',
+    existsSync(join(workspaceRoot, '.git')) ? 'pass' : 'warn',
+    existsSync(join(workspaceRoot, '.git')) ? 'Project workspace has a .git directory' : 'Project workspace has no .git directory; git_backed_project_repo posture may be wrong',
+  );
+  addCheck(
+    checks,
+    'project_site_root_exists',
+    existsSync(siteRoot) ? 'pass' : 'fail',
+    existsSync(siteRoot) ? `Project Site root exists: ${siteRoot}` : `Project Site root is missing: ${siteRoot}`,
+    'Run narada sites bootstrap-project --workspace <path> --execute',
+  );
+
+  if (existsSync(configPath)) {
+    addCheck(checks, 'config_exists', 'pass', `Config exists: ${configPath}`);
+    try {
+      config = JSON.parse(await readFile(configPath, 'utf8')) as Record<string, unknown>;
+      addCheck(checks, 'config_parse', 'pass', 'Config parses as JSON');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      addCheck(checks, 'config_parse', 'fail', `Config is not valid JSON: ${message}`);
+    }
+  } else {
+    addCheck(checks, 'config_exists', 'fail', `Config is missing: ${configPath}`, 'Run narada sites bootstrap-project --workspace <path> --execute');
+  }
+
+  if (config) {
+    addCheck(
+      checks,
+      'config_site_id',
+      config.site_id === siteId ? 'pass' : 'fail',
+      config.site_id === siteId ? `Config site_id matches ${siteId}` : `Config site_id is ${String(config.site_id)}, expected ${siteId}`,
+    );
+    addCheck(
+      checks,
+      'site_kind',
+      config.site_kind === 'project' ? 'pass' : 'fail',
+      config.site_kind === 'project' ? 'Site kind is project' : `Site kind is ${String(config.site_kind)}, expected project`,
+    );
+    addCheck(
+      checks,
+      'workspace_root',
+      String(config.workspace_root) === workspaceRoot ? 'pass' : 'fail',
+      String(config.workspace_root) === workspaceRoot ? `Workspace root matches ${workspaceRoot}` : `Workspace root is ${String(config.workspace_root)}, expected ${workspaceRoot}`,
+    );
+    const sync = config.sync as { posture?: string } | undefined;
+    addCheck(
+      checks,
+      'project_sync_posture',
+      sync?.posture === 'git_backed_project_repo' ? 'pass' : 'fail',
+      sync?.posture ? `Sync posture is ${sync.posture}` : 'Sync posture is missing',
+      'Use git_backed_project_repo for contained project Site bootstrap',
+    );
+  }
+
+  for (const directory of CLIENT_SITE_DIRECTORIES) {
+    const pathValue = join(siteRoot, directory);
+    addCheck(
+      checks,
+      `dir_${directory.replace(/[^a-z0-9]+/gi, '_')}`,
+      existsSync(pathValue) ? 'pass' : 'fail',
+      existsSync(pathValue) ? `Directory exists: ${pathValue}` : `Directory is missing: ${pathValue}`,
+    );
+  }
+
+  for (const file of CLIENT_SITE_GUIDANCE_FILES) {
+    const pathValue = join(siteRoot, file);
+    addCheck(
+      checks,
+      `file_${file.replace(/[^a-z0-9]+/gi, '_')}`,
+      existsSync(pathValue) ? 'pass' : 'fail',
+      existsSync(pathValue) ? `File exists: ${pathValue}` : `File is missing: ${pathValue}`,
+    );
+  }
+
+  const failed = checks.filter((check) => check.status === 'fail');
+  const warned = checks.filter((check) => check.status === 'warn');
+  const health = failed.length > 0 ? 'failed' : warned.length > 0 ? 'warning' : 'passed';
+
+  if (fmt.getFormat() === 'human') {
+    fmt.section(`Project Site Doctor - ${siteId}`);
+    fmt.kv('Workspace', workspaceRoot);
+    fmt.kv('Site Root', siteRoot);
+    fmt.kv('Health', health);
+    for (const check of checks) {
+      const prefix = check.status === 'pass' ? '[pass]' : check.status === 'warn' ? '[warn]' : '[fail]';
+      fmt.message(`${prefix} ${check.name}: ${check.message}`, check.status === 'pass' ? 'success' : check.status === 'warn' ? 'warning' : 'error');
+      if (check.remediation && options.verbose) {
+        fmt.message(`  remediation: ${check.remediation}`, 'info');
+      }
+    }
+  }
+
+  return {
+    exitCode: failed.length > 0 ? ExitCode.GENERAL_ERROR : ExitCode.SUCCESS,
+    result: {
+      status: health,
+      siteId,
+      site_kind: 'project',
+      workspace_root: workspaceRoot,
+      site_root: siteRoot,
+      checks,
+    },
+  };
+}
+
 export async function sitesDoctorCommand(
   siteId: string,
   options: SitesDoctorOptions,
@@ -1290,6 +1414,9 @@ export async function sitesDoctorCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   if (options.kind === 'client') {
     return sitesClientDoctorCommand(siteId, options);
+  }
+  if (options.kind === 'project') {
+    return sitesProjectDoctorCommand(siteId, options);
   }
 
   const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
@@ -1580,6 +1707,13 @@ export interface SitesBootstrapClientOptions extends SitesOptions {
   execute?: boolean;
 }
 
+export interface SitesBootstrapProjectOptions extends SitesOptions {
+  workspace?: string;
+  siteId?: string;
+  sync?: string;
+  execute?: boolean;
+}
+
 export interface SitesBootstrapWindowsOptions extends SitesOptions {
   userSiteId?: string;
   pcSiteId?: string;
@@ -1647,6 +1781,41 @@ function clientSiteConfig(args: {
       visible_workspace_preserved: true,
       runtime_state_git_ignored: true,
       empty_directory_markers: '.gitkeep',
+    },
+  };
+}
+
+function projectSiteConfig(args: {
+  siteId: string;
+  workspaceRoot: string;
+  siteRoot: string;
+  sync: string;
+}): Record<string, unknown> {
+  return {
+    site_id: args.siteId,
+    site_kind: 'project',
+    workspace_root: args.workspaceRoot,
+    site_root: args.siteRoot,
+    config_path: join(args.siteRoot, 'config.json'),
+    locus: {
+      authority_locus: 'project',
+      project_workspace_root: args.workspaceRoot,
+      governance_root: args.siteRoot,
+    },
+    sync: {
+      posture: args.sync,
+      git_initialized: args.sync === 'git_backed_project_repo',
+      repository_root: args.workspaceRoot,
+    },
+    inbox: {
+      drop_dir: join(args.siteRoot, '.ai', 'inbox-drop'),
+      envelope_export_dir: join(args.siteRoot, '.ai', 'inbox-envelopes'),
+      adapter: 'canonical_file_drop',
+    },
+    durability: {
+      visible_workspace_preserved: true,
+      governance_contained_in_dot_narada: true,
+      project_artifacts_external_until_admitted: true,
     },
   };
 }
@@ -2203,6 +2372,95 @@ export async function sitesBootstrapClientCommand(
 
   if (fmt.getFormat() === 'human') {
     fmt.message(execute ? 'Bootstrapped client Site' : 'Dry run - client Site bootstrap plan', 'success');
+    fmt.kv('Site', siteId);
+    fmt.kv('Workspace', workspaceRoot);
+    fmt.kv('Site Root', siteRoot);
+    fmt.kv('Sync Posture', sync);
+    fmt.kv('Mutation', execute ? 'executed' : 'not executed');
+    fmt.section('Validation');
+    for (const command of result.validation_commands) {
+      fmt.message(command, 'info');
+    }
+  }
+
+  return { exitCode: ExitCode.SUCCESS, result };
+}
+
+export async function sitesBootstrapProjectCommand(
+  options: SitesBootstrapProjectOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
+  const workspaceRoot = resolve(options.workspace ?? '.');
+  const siteId = options.siteId ?? clientSiteIdFromWorkspace(workspaceRoot);
+  const siteRoot = clientSiteRootFromWorkspace(workspaceRoot);
+  const sync = options.sync ?? 'git_backed_project_repo';
+  const execute = options.execute === true;
+  if (sync !== 'git_backed_project_repo') {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        status: 'error',
+        error: `Unsupported project sync posture: "${sync}". Valid postures: git_backed_project_repo`,
+      },
+    };
+  }
+  const config = projectSiteConfig({ siteId, workspaceRoot, siteRoot, sync });
+  const directories = CLIENT_SITE_DIRECTORIES.map((directory) => join(siteRoot, directory));
+  const files = [
+    { path: join(siteRoot, 'config.json'), kind: 'config' },
+    { path: join(siteRoot, 'README.md'), kind: 'guidance' },
+    { path: join(siteRoot, 'AGENTS.md'), kind: 'guidance' },
+    { path: join(siteRoot, '.ai', 'inbox-drop', '.gitkeep'), kind: 'empty-directory-marker' },
+    { path: join(siteRoot, '.ai', 'inbox-envelopes', '.gitkeep'), kind: 'empty-directory-marker' },
+  ];
+
+  if (execute) {
+    await mkdir(siteRoot, { recursive: true });
+    for (const directory of directories) {
+      await mkdir(directory, { recursive: true });
+    }
+    await writeFile(join(siteRoot, 'config.json'), JSON.stringify(config, null, 2) + '\n', 'utf8');
+    await writeFile(
+      join(siteRoot, 'README.md'),
+      [
+        `# ${siteId} Project Site`,
+        '',
+        'Contained Narada governance for project-local construction work rooted at:',
+        '',
+        workspaceRoot,
+        '',
+        'Project code and artifacts remain project-owned. Narada governance lives in .narada.',
+        '',
+        `Use \`narada sites doctor ${siteId} --kind project --root ${workspaceRoot}\` to validate this Site.`,
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(join(siteRoot, 'AGENTS.md'), `# AGENTS.md - ${siteId} project Site\n\nworkspace_root: ${workspaceRoot}\nsite_root: ${siteRoot}\n\nThis project repository keeps implementation code at workspace_root and Narada governance inside site_root (.narada).\n\nThis Site owns project-local governance, construction memory, inbox intake, observations, decisions, tasks, chapters, KB, and requests.\n\nThis Site does not own Narada proper doctrine, User Site memory, PC recovery authority, client-owned external artifacts, or external capabilities unless those are explicitly admitted through governed crossings.\n\nProject code outside site_root is not Narada knowledge, evidence, or authority merely because the Site inhabits the repository.\nUse .ai/inbox-drop for human-authored inbound messages and .ai/inbox-envelopes for canonical exported envelopes.\n`, 'utf8');
+    await writeFile(join(siteRoot, '.ai', 'inbox-drop', '.gitkeep'), '', 'utf8');
+    await writeFile(join(siteRoot, '.ai', 'inbox-envelopes', '.gitkeep'), '', 'utf8');
+  }
+
+  const result = {
+    status: execute ? 'success' : 'dry_run',
+    mutation_performed: execute,
+    plan_kind: 'project_site_bootstrap',
+    site_id: siteId,
+    workspace_root: workspaceRoot,
+    site_root: siteRoot,
+    sync_posture: sync,
+    directories,
+    files,
+    config,
+    validation_commands: [
+      `narada sites doctor ${siteId} --kind project --root ${workspaceRoot}`,
+      `narada inbox ingest-files --from ${join(siteRoot, '.ai', 'inbox-drop')}`,
+    ],
+  };
+
+  if (fmt.getFormat() === 'human') {
+    fmt.message(execute ? 'Bootstrapped project Site' : 'Dry run - project Site bootstrap plan', 'success');
     fmt.kv('Site', siteId);
     fmt.kv('Workspace', workspaceRoot);
     fmt.kv('Site Root', siteRoot);

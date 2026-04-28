@@ -144,9 +144,12 @@ For a client-service workspace, the contained first-run path is:
 
 ```bash
 narada sites bootstrap-client --workspace <client-workspace> [--site-id <id>] [--sync onedrive_non_git|local_non_git]
+narada sites bootstrap-project --workspace <project-repo> [--site-id <id>] [--sync git_backed_project_repo]
 ```
 
 `bootstrap-client` is dry-run by default and requires `--execute` to create files. It preserves the visible client workspace and places Narada governance under `<client-workspace>/.narada`.
+
+`bootstrap-project` is also dry-run by default and requires `--execute`. It is for existing Git-backed project repositories where Narada governance should live under `<project-repo>/.narada` while project source code remains project-owned.
 
 For client, business, document, or OneDrive folders, this containment is the default rule:
 
@@ -156,6 +159,17 @@ site_root = workspace_root/.narada
 ```
 
 Client artifacts at `workspace_root` are outside Narada unless explicitly admitted. Narada governance files at the visible workspace root are treated as placement drift unless the Operator explicitly chooses root-level Site materialization.
+
+For project repositories:
+
+```text
+workspace_root = existing project Git repo
+site_root = workspace_root/.narada
+sync.posture = git_backed_project_repo
+site_kind = project
+```
+
+The project Site owns project-local governance, construction memory, inbox intake, observations, decisions, tasks, chapters, KB, and requests. It does not own Narada proper doctrine, User Site memory, PC recovery authority, or external capabilities unless those are explicitly admitted through governed crossings.
 
 The created client Site includes:
 
