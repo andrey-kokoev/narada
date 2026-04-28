@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T16:17:49.829Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: peer_reviewed
+---
+
 # Task 238: Draft Disposition Surface
 
 ## Chapter
@@ -149,3 +157,11 @@ Operators who want a "fresh" draft after rejecting one must wait for the context
 - Tasks 228-232 (Live Operation chapter) must be complete. Disposition requires drafts to exist.
 - Task 231 (Inspection Surfaces) should precede or coincide. Operators need to see drafts before they can disposition them.
 - Task 236 (Operator Audit Inspection) should precede or coincide. Disposition actions are operator actions that must be auditable.
+
+## Execution Notes
+
+<!-- Record what was done, decisions made, and files changed. -->
+
+## Verification
+
+<!-- Record commands run, results observed, and how correctness was checked. -->
