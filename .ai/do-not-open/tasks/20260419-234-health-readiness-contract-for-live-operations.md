@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T16:34:38.145Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: peer_reviewed
+---
+
 # Task 234: Health/Readiness Contract for Live Operations
 
 ## Chapter
@@ -163,3 +171,7 @@ If any threshold is exceeded, mark the corresponding health level as degraded an
 ## Dependencies
 
 - Tasks 228-232 (Live Operation chapter) must be complete. This task needs a running daemon with work items and outbound commands to meaningfully report readiness.
+
+## Verification
+
+<!-- Record commands run, results observed, and how correctness was checked. -->

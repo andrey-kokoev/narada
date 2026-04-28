@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T16:35:32.088Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: peer_reviewed
+---
+
 # Task 244: Close Operational Trust Chapter
 
 ## Chapter
@@ -90,3 +98,7 @@ Do not include unrelated local telemetry such as `.ai/metrics/`.
   - `control-plane-lint.test.ts` cwd sensitivity — fails when run outside package root because it resolves `scripts/control-plane-lint.ts` relative to `process.cwd()`.
 - **Corrective tasks created**: 246, 247, 248, 266, 267, 269, 270, 272
 - **Verification before commit**: `pnpm verify` passed; `pnpm typecheck` passed
+
+## Verification
+
+<!-- Record commands run, results observed, and how correctness was checked. -->
