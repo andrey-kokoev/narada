@@ -623,6 +623,72 @@ describe('Canonical Inbox CLI commands', () => {
     expect(result.alternatives_count).toBe(0);
   });
 
+  it('reports sibling embodiment file-drop candidates in work-next', async () => {
+    const sibling = mkdtempSync(join(tmpdir(), 'narada-inbox-sibling-'));
+    try {
+      mkdirSync(join(tempDir, '.ai'), { recursive: true });
+      mkdirSync(join(sibling, '.ai', 'inbox-drop'), { recursive: true });
+      writeFileSync(join(sibling, '.ai', 'inbox-drop', '20260428-001-pending.md'), '# Pending\n');
+      writeFileSync(join(tempDir, '.ai', 'authority-clone.json'), JSON.stringify({
+        authority_root: tempDir,
+        embodiments: [
+          { id: 'authority', root: tempDir, role: 'authority', mutation_policy: 'allow' },
+          { id: 'sibling', root: sibling, role: 'read_only_forwarding', mutation_policy: 'refuse_or_forward' },
+        ],
+      }));
+
+      const workNext = await inboxWorkNextCommand({ cwd: tempDir, format: 'json' });
+
+      expect(workNext.exitCode).toBe(ExitCode.SUCCESS);
+      const result = workNext.result as {
+        primary: null;
+        embodiment_file_drops: Array<{ embodiment_id: string; pending_file_count: number; command_args: string[] }>;
+        warnings: string[];
+      };
+      expect(result.primary).toBeNull();
+      expect(result.embodiment_file_drops).toEqual([
+        expect.objectContaining({
+          embodiment_id: 'sibling',
+          pending_file_count: 1,
+          command_args: ['inbox', 'ingest-files', '--from', join(sibling, '.ai', 'inbox-drop')],
+        }),
+      ]);
+      expect(result.warnings[0]).toContain('Embodiment sibling has 1 pending inbox-drop file(s)');
+    } finally {
+      rmSync(sibling, { recursive: true, force: true });
+    }
+  });
+
+  it('reports sibling embodiment file-drop candidates in next', async () => {
+    const sibling = mkdtempSync(join(tmpdir(), 'narada-inbox-sibling-'));
+    try {
+      mkdirSync(join(tempDir, '.ai'), { recursive: true });
+      mkdirSync(join(sibling, '.ai', 'inbox-drop'), { recursive: true });
+      writeFileSync(join(sibling, '.ai', 'inbox-drop', '20260428-001-pending.md'), '# Pending\n');
+      writeFileSync(join(tempDir, '.ai', 'authority-clone.json'), JSON.stringify({
+        authority_root: tempDir,
+        embodiments: [
+          { id: 'authority', root: tempDir, role: 'authority', mutation_policy: 'allow' },
+          { id: 'sibling', root: sibling, role: 'read_only_forwarding', mutation_policy: 'refuse_or_forward' },
+        ],
+      }));
+
+      const next = await inboxNextCommand({ cwd: tempDir, format: 'json' });
+
+      expect(next.exitCode).toBe(ExitCode.SUCCESS);
+      const result = next.result as {
+        primary: null;
+        embodiment_file_drops: Array<{ embodiment_id: string; pending_file_count: number }>;
+      };
+      expect(result.primary).toBeNull();
+      expect(result.embodiment_file_drops).toEqual([
+        expect.objectContaining({ embodiment_id: 'sibling', pending_file_count: 1 }),
+      ]);
+    } finally {
+      rmSync(sibling, { recursive: true, force: true });
+    }
+  });
+
   it('claims, releases, and claim-skips inbox work-next envelopes', async () => {
     const first = await inboxSubmitCommand({
       cwd: tempDir,

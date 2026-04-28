@@ -20,6 +20,7 @@ import {
   inboxEnvelopeToEvidenceState,
   writeInboxMutationEvidence,
 } from '../lib/inbox-mutation-evidence-writer.js';
+import { inspectAuthorityClonePosture, type SiteEmbodimentPosture } from '../lib/narada-proper-authority.js';
 
 const USER_PC_TEMPLATE_WORKFLOW_REF = 'user-pc-template-materialization-workflow';
 const USER_PC_TEMPLATE_WORKFLOW_PATH = 'docs/product/user-pc-template-materialization-workflow.md';
@@ -85,6 +86,15 @@ export interface InboxNextOptions extends InboxListOptions {}
 export interface InboxWorkNextOptions extends InboxNextOptions {
   claim?: boolean;
   by?: string;
+}
+
+interface EmbodimentFileDropCandidate {
+  embodiment_id: string | null;
+  embodiment_root: string;
+  drop_dir: string;
+  pending_file_count: number;
+  command: string;
+  command_args: string[];
 }
 
 export interface InboxTriageOptions extends Omit<InboxPromoteOptions, 'targetKind'> {
@@ -502,12 +512,15 @@ export async function inboxNextCommand(options: InboxNextOptions): Promise<{ exi
     const limit = clampLimit(options.limit ?? 5);
     const envelopes = selectEnvelopes(store, { status, kind, limit });
     const [primary, ...alternatives] = envelopes;
+    const embodimentFileDrops = await inspectEmbodimentFileDrops(options.cwd ?? process.cwd(), existingFileDropRefs(store));
     return okResult(
       {
         status: 'success',
         primary: primary ?? null,
         alternatives,
         count: envelopes.length,
+        embodiment_file_drops: embodimentFileDrops,
+        warnings: embodimentFileDropWarnings(embodimentFileDrops),
       },
       primary
         ? [
@@ -515,8 +528,12 @@ export async function inboxNextCommand(options: InboxNextOptions): Promise<{ exi
           `Kind: ${primary.kind}`,
           `Source: ${primary.source.kind}:${primary.source.ref}`,
           `Alternatives: ${alternatives.length}`,
+          ...embodimentFileDropWarnings(embodimentFileDrops),
         ]
-        : ['No matching inbox envelopes.'],
+        : [
+          'No matching inbox envelopes.',
+          ...embodimentFileDropWarnings(embodimentFileDrops),
+        ],
       options.format,
     );
   });
@@ -558,6 +575,7 @@ export async function inboxWorkNextCommand(options: InboxWorkNextOptions): Promi
       }
     }
     const admissibleActions = primary ? admissibleActionsForEnvelope(primary) : [];
+    const embodimentFileDrops = await inspectEmbodimentFileDrops(options.cwd ?? process.cwd(), existingFileDropRefs(store));
     return okResult(
       {
         status: 'success',
@@ -565,6 +583,8 @@ export async function inboxWorkNextCommand(options: InboxWorkNextOptions): Promi
         admissible_actions: admissibleActions,
         alternatives,
         alternatives_count: alternatives.length,
+        embodiment_file_drops: embodimentFileDrops,
+        warnings: embodimentFileDropWarnings(embodimentFileDrops),
       },
       primary
         ? [
@@ -572,11 +592,64 @@ export async function inboxWorkNextCommand(options: InboxWorkNextOptions): Promi
           `Kind: ${primary.kind}`,
           `Admissible actions: ${admissibleActions.map((action) => action.action).join(', ') || 'none'}`,
           `Alternatives: ${alternatives.length}`,
+          ...embodimentFileDropWarnings(embodimentFileDrops),
         ]
-        : ['No matching inbox work.'],
+        : [
+          'No matching inbox work.',
+          ...embodimentFileDropWarnings(embodimentFileDrops),
+        ],
       options.format,
     );
   });
+}
+
+async function inspectEmbodimentFileDrops(cwd: string, existingRefs: Set<string>): Promise<EmbodimentFileDropCandidate[]> {
+  const posture = inspectAuthorityClonePosture(cwd);
+  const candidates: EmbodimentFileDropCandidate[] = [];
+  for (const embodiment of posture.embodiments) {
+    if (embodiment.current || embodiment.inbox_drop_count <= 0) continue;
+    const dropDir = join(embodiment.root, '.ai', 'inbox-drop');
+    let fileDropCandidates: FileDropCandidate[];
+    try {
+      fileDropCandidates = await inspectFileDropCandidates(cwd, dropDir, 'user_statement', undefined);
+    } catch {
+      continue;
+    }
+    const unadmittedCount = fileDropCandidates
+      .filter((candidate) => candidate.admissible && !existingRefs.has(candidate.source_ref))
+      .length;
+    if (unadmittedCount > 0) {
+      candidates.push(embodimentFileDropCandidate(embodiment, unadmittedCount));
+    }
+  }
+  return candidates;
+}
+
+function embodimentFileDropCandidate(embodiment: SiteEmbodimentPosture, pendingFileCount: number): EmbodimentFileDropCandidate {
+  const dropDir = join(embodiment.root, '.ai', 'inbox-drop');
+  return {
+    embodiment_id: embodiment.id,
+    embodiment_root: embodiment.root,
+    drop_dir: dropDir,
+    pending_file_count: pendingFileCount,
+    command: `narada inbox ingest-files --from ${dropDir}`,
+    command_args: ['inbox', 'ingest-files', '--from', dropDir],
+  };
+}
+
+function embodimentFileDropWarnings(candidates: EmbodimentFileDropCandidate[]): string[] {
+  return candidates.map((candidate) =>
+    `Embodiment ${candidate.embodiment_id ?? candidate.embodiment_root} has ${candidate.pending_file_count} pending inbox-drop file(s): ${candidate.command}`,
+  );
+}
+
+function existingFileDropRefs(store: SqliteInboxStore): Set<string> {
+  return new Set(
+    store
+      .list({ limit: 1000 })
+      .filter((envelope) => envelope.source.kind === 'file_drop')
+      .map((envelope) => envelope.source.ref),
+  );
 }
 
 export async function inboxShowCommand(options: InboxShowOptions): Promise<{ exitCode: ExitCode; result: unknown }> {

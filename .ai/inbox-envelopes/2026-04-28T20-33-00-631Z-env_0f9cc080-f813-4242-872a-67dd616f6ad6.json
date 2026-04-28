@@ -1,0 +1,35 @@
+{
+  "envelope_id": "env_0f9cc080-f813-4242-872a-67dd616f6ad6",
+  "received_at": "2026-04-28T20:33:00.631Z",
+  "source": {
+    "kind": "file_drop",
+    "ref": "../../../../mnt/d/code/narada/.ai/inbox-drop/20260428-002-embodiment-aware-authority-routing.md#sha256:851442f92c5fbd5c7b44ae894ade684f"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Execute Embodiment-Aware Authority Routing",
+    "summary": "# Execute Embodiment-Aware Authority Routing Kind: task_candidate Source: codex-user-site Authority: operator_confirmed Principal: andrey ## Trigger Narada proper added the canonical `embodiments` key to `docs/product/site-factorization.md`",
+    "body": "# Execute Embodiment-Aware Authority Routing\n\nKind: task_candidate\nSource: codex-user-site\nAuthority: operator_confirmed\nPrincipal: andrey\n\n## Trigger\n\nNarada proper added the canonical `embodiments` key to `docs/product/site-factorization.md`.\n\nThat clarifies static Site topology: roots, roles, and mutation policy. The next coherent step is to make authority routing embodiment-aware so multiple concrete presences of one Site cannot silently desync or mutate through the wrong locus.\n\n## Execution Request\n\nCreate and execute a Narada proper task/chapter to specify and implement embodiment-aware authority routing.\n\n## Proposed Scope\n\n- Define stable embodiment roles, for example:\n  - `authority`\n  - `working`\n  - `mirror`\n  - `runtime`\n  - `presentation`\n- Distinguish Site, Operation, Embodiment, Runtime, and Projection in the relevant docs.\n- Add or specify mutation routing by mutation class:\n  - task lifecycle\n  - inbox admission\n  - config mutation\n  - runtime state mutation\n  - operator UI/preference mutation\n  - external effect confirmation\n- Ensure dynamic freshness remains a preflight observation/projection, not static config.\n- Add an embodiment-aware preflight/report shape covering:\n  - current embodiment\n  - authority embodiment\n  - allowed mutation classes here\n  - dirty/ahead/behind posture\n  - pending inbox-drop files\n  - route for disallowed mutations\n- Add a route/refuse behavior for commands invoked from the wrong embodiment.\n- Consider a `narada site whereami` command that answers:\n  - current Site\n  - current embodiment\n  - authority embodiment\n  - mutation permissions here\n  - route for disallowed mutations\n  - current freshness/posture observations\n\n## Acceptance Sketch\n\n- Narada proper docs make the factorization crisp enough that an agent can tell whether it is allowed to mutate from Windows, WSL, or another clone.\n- Config supports static embodiment declarations without storing dynamic sync state.\n- Preflight/whereami exposes dynamic posture.\n- Authority-affecting commands either execute only on the authority embodiment or emit a clear handoff/refusal path.\n\n## Motivation\n\nRecent Windows/WSL Narada work exposed a recurring failure mode: a clone or runtime presence exists and can run commands, but that does not mean it is authoritative for governed mutations. The Site should be one authority-bearing locus with multiple declared embodiments, not an accidental set of partially equivalent repos.",
+    "source_item": "../../../../mnt/d/code/narada/.ai/inbox-drop/20260428-002-embodiment-aware-authority-routing.md",
+    "source_root": "../../../../mnt/d/code/narada/.ai/inbox-drop",
+    "item_name": "20260428-002-embodiment-aware-authority-routing.md",
+    "item_kind": "file",
+    "content_digest": "sha256:851442f92c5fbd5c7b44ae894ade684f",
+    "supporting_files": [],
+    "body_files": [],
+    "front_matter": {}
+  },
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_0f9cc080-f813-4242-872a-67dd616f6ad6",
+    "promoted_at": "2026-04-28T20:36:26.708Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
+}
