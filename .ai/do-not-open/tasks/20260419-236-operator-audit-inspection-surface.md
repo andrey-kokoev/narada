@@ -1,18 +1,29 @@
+---
+status: closed
+criteria_proved_by: architect
+criteria_proved_at: 2026-04-28T16:12:10.408Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777392711514_pgjf78
+closed_at: 2026-04-28T16:12:21.196Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: peer_reviewed
+---
+
 # Task 236: Operator Audit Inspection Surface
 
 ## Chapter
 
 Operational Trust
 
-## Why
-
-Every operator action is recorded in the `operator_actions` table, but there is zero visibility into this audit trail. An operator who triggers `request_redispatch`, `acknowledge`, or `cancel_work` leaves no observable trace except the side effects. This opacity makes debugging incidents impossible: you cannot distinguish "the system did this" from "an operator did this."
-
-Operational trust requires that every human intervention be inspectable.
-
 ## Goal
 
 Expose the `operator_actions` table through the observation API, CLI, and UI so an operator can review who did what, when, and why.
+
+## Context
+
+<!-- Context placeholder -->
 
 ## Required Work
 
@@ -112,15 +123,6 @@ The raw `payload_json` with full fact content must NOT be returned by observatio
 - Do not add audit log retention policy changes.
 - Do not modify the action recording mechanism (it already works).
 
-## Acceptance Criteria
-
-- [ ] `operator_actions` are queryable via observation API.
-- [ ] `narada audit` CLI command exists and works.
-- [ ] UI has an Audit Log page.
-- [ ] Payloads are reviewed for secret leakage.
-- [ ] `preview_work` payloads are explicitly redacted to summary-only before API/UI/CLI exposure.
-- [ ] No new SQLite tables are required.
-
 ## Execution Notes
 
 ### 1. Observation Types
@@ -170,6 +172,13 @@ The raw `payload_json` column is never returned by any observation query, API ro
 3. **CLI human-output test tightened**: `audit.test.ts` now spies on `console.log` during human-format execution and asserts the rendered table contains expected action types (`trigger_sync`, `retry_work_item`) and actors (`operator`, `system`).
 
 ### Verification
+- `packages/layers/control-plane` typecheck: **pass**
+- `packages/layers/cli` typecheck: **pass**
+- Daemon authority guardrails (`test/unit/authority-guardrails.test.ts`): **15/15 pass**
+- Control-plane observability authority guard (`test/unit/observability/authority-guard.test.ts`): 24/25 pass; the one failure is pre-existing (`register(` in `rebuild.ts`), not caused by this change.
+
+## Verification
+
 - `packages/layers/control-plane` typecheck: **pass**
 - `packages/layers/cli` typecheck: **pass**
 - Daemon authority guardrails (`test/unit/authority-guardrails.test.ts`): **15/15 pass**
