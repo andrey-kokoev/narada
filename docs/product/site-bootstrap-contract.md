@@ -105,6 +105,8 @@ Site bootstrap also records an **execution surface**. This is separate from the 
 
 `wsl_assisted` is inferred only from both facts together: the executor runtime is WSL, and the target authority locus is Windows user or Windows PC. WSL detection alone is insufficient, because WSL may also host WSL/Linux Sites that own Linux-side state. Ambiguous or cross-host plans should pass `--execution-surface` explicitly.
 
+A WSL-assisted plan must record the Windows target root, the executor root, path translation, permission posture, and mutation-evidence locus. For drive-qualified Windows paths, the dry-run plan includes the translated `/mnt/<drive>/...` path. For PC-locus roots under ProgramData, the permission posture must state that PC-locus ProgramData write access is required.
+
 ### Step 2: Create Site root
 
 ```bash
@@ -116,7 +118,7 @@ This creates:
 - A minimal Site `config.json` with metadata
 - Standard subdirectories (`state/`, `messages/`, `db/`, `logs/`, `traces/`)
 - For Windows: a registry entry in the Site registry
-- An `execution` record containing `surface`, `executor_runtime`, `target_authority_locus`, and inference rationale
+- An `execution` record containing `surface`, `executor_runtime`, `target_authority_locus`, `target_root`, `executor_root`, `path_translation`, `permission_posture`, `mutation_evidence_locus`, and inference rationale
 
 Use `--dry-run` to preview without filesystem mutation.
 

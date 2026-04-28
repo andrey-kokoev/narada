@@ -181,12 +181,33 @@ describe('sitesInitCommand', () => {
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     const data = result.result as {
-      config: { execution: { surface: string; inferred: boolean; executor_runtime: string; target_authority_locus: string; rationale: string } };
+      config: {
+        site_root: string;
+        execution: {
+          surface: string;
+          inferred: boolean;
+          executor_runtime: string;
+          target_authority_locus: string;
+          target_root: string;
+          executor_root: string;
+          path_translation: { kind: string; windows_path: string; wsl_path: string };
+          permission_posture: string;
+          mutation_evidence_locus: string;
+          rationale: string;
+        };
+      };
     };
     expect(data.config.execution.surface).toBe('wsl_assisted');
     expect(data.config.execution.inferred).toBe(true);
     expect(data.config.execution.executor_runtime).toBe('wsl');
     expect(data.config.execution.target_authority_locus).toBe('windows_pc');
+    expect(data.config.execution.target_root).toBe(data.config.site_root);
+    expect(data.config.execution.executor_root).toBeTruthy();
+    expect(data.config.execution.path_translation.kind).toBe('windows_drive_to_wsl_mount');
+    expect(data.config.execution.path_translation.windows_path).toBe('C:\\ProgramData\\Narada\\sites\\pc\\test-site');
+    expect(data.config.execution.path_translation.wsl_path).toBe('/mnt/c/ProgramData/Narada/sites/pc/test-site');
+    expect(data.config.execution.permission_posture).toBe('pc_locus_programdata_write_required');
+    expect(data.config.execution.mutation_evidence_locus).toBe('executor_wsl_repo_and_target_windows_site');
     expect(data.config.execution.rationale).toContain('preserving target authority locus');
   });
 
@@ -201,10 +222,12 @@ describe('sitesInitCommand', () => {
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     const data = result.result as {
-      config: { execution: { surface: string; target_authority_locus: string; rationale: string } };
+      config: { execution: { surface: string; target_authority_locus: string; path_translation: { kind: string }; permission_posture: string; rationale: string } };
     };
     expect(data.config.execution.surface).toBe('wsl_native');
     expect(data.config.execution.target_authority_locus).toBe('linux-user');
+    expect(data.config.execution.path_translation.kind).toBe('not_required');
+    expect(data.config.execution.permission_posture).toBe('substrate_local_write_required');
     expect(data.config.execution.rationale).toContain('not wsl_assisted');
   });
 

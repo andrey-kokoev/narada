@@ -21,5 +21,13 @@
     ],
     "recommendation": "Add fields such as authority_locus, execution_surface, target_root, executor_root, and path_translation to Windows Site bootstrap/upgrade evidence. Provide command flags like --execution-surface windows-native and --execution-surface wsl-assisted. Ensure docs and doctor/preflight output state that WSL can execute a governed Act against a Windows Site, but does not become that Site's authority locus."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "site_config_change",
+    "target_ref": "task-1010-wsl-assisted-execution-coordinates",
+    "promoted_at": "2026-04-28T01:40:42.659Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'site_config_change' is not implemented yet."
+  }
 }

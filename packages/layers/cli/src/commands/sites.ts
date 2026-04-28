@@ -1217,6 +1217,52 @@ function inferExecutionSurface(args: {
   };
 }
 
+function windowsPathToWslPath(pathValue: string): string | null {
+  const match = pathValue.match(/^([A-Za-z]):[\\/](.*)$/);
+  if (!match) return null;
+  const drive = match[1].toLowerCase();
+  const rest = match[2].replace(/[\\/]+/g, '/');
+  return `/mnt/${drive}/${rest}`;
+}
+
+function buildExecutionRecord(args: {
+  execution: ReturnType<typeof inferExecutionSurface>;
+  siteRoot: string;
+  authorityLocus?: string;
+}): Record<string, unknown> {
+  const wslPath = args.execution.surface === 'wsl_assisted'
+    ? windowsPathToWslPath(args.siteRoot)
+    : null;
+  return {
+    surface: args.execution.surface,
+    inferred: args.execution.inferred,
+    executor_runtime: args.execution.executorRuntime,
+    executor_root: resolve('.'),
+    target_authority_locus: args.execution.targetAuthorityLocus,
+    target_root: args.siteRoot,
+    path_translation: args.execution.surface === 'wsl_assisted'
+      ? {
+          kind: wslPath ? 'windows_drive_to_wsl_mount' : 'unavailable',
+          windows_path: args.siteRoot,
+          wsl_path: wslPath,
+        }
+      : {
+          kind: 'not_required',
+          windows_path: null,
+          wsl_path: null,
+        },
+    permission_posture: args.execution.targetAuthorityLocus === 'windows_pc'
+      ? 'pc_locus_programdata_write_required'
+      : args.execution.targetAuthorityLocus === 'windows_user'
+        ? 'user_locus_profile_write_required'
+        : 'substrate_local_write_required',
+    mutation_evidence_locus: args.execution.surface === 'wsl_assisted'
+      ? 'executor_wsl_repo_and_target_windows_site'
+      : 'executor_local_site',
+    rationale: args.execution.rationale,
+  };
+}
+
 export async function sitesInitCommand(
   siteId: string,
   options: SitesInitOptions,
@@ -1342,13 +1388,7 @@ export async function sitesInitCommand(
             cloud_sync: 'external_if_configured',
           },
         } : {}),
-        execution: {
-          surface: execution.surface,
-          inferred: execution.inferred,
-          executor_runtime: execution.executorRuntime,
-          target_authority_locus: execution.targetAuthorityLocus,
-          rationale: execution.rationale,
-        },
+        execution: buildExecutionRecord({ execution, siteRoot, authorityLocus }),
         cycle_interval_minutes: intervalMinutes,
         lock_ttl_ms: lockTtlMs,
         ceiling_ms: ceilingMs,
@@ -1392,13 +1432,7 @@ export async function sitesInitCommand(
         site_id: siteId,
         site_root: siteRoot,
         config_path: configPath,
-        execution: {
-          surface: execution.surface,
-          inferred: execution.inferred,
-          executor_runtime: execution.executorRuntime,
-          target_authority_locus: execution.targetAuthorityLocus,
-          rationale: execution.rationale,
-        },
+        execution: buildExecutionRecord({ execution, siteRoot }),
         cycle_interval_minutes: intervalMinutes,
         lock_ttl_ms: lockTtlMs,
         ceiling_ms: ceilingMs,
@@ -1428,13 +1462,7 @@ export async function sitesInitCommand(
         mode,
         site_root: siteRoot,
         config_path: configPath,
-        execution: {
-          surface: execution.surface,
-          inferred: execution.inferred,
-          executor_runtime: execution.executorRuntime,
-          target_authority_locus: execution.targetAuthorityLocus,
-          rationale: execution.rationale,
-        },
+        execution: buildExecutionRecord({ execution, siteRoot }),
         cycle_interval_minutes: intervalMinutes,
         lock_ttl_ms: lockTtlMs,
         ceiling_ms: ceilingMs,
