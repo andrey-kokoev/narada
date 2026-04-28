@@ -1,0 +1,25 @@
+{
+  "envelope_id": "env_3fbcef07-10d6-4288-8cc1-4997791de3a5",
+  "received_at": "2026-04-28T03:46:46.415Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:readme-reader-segmentation-agent-reconstruction-20260428"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "user_statement",
+    "principal": "andrey"
+  },
+  "payload": {
+    "title": "Segment README reader routes and add agent reconstruction specification",
+    "summary": "Narada README currently routes mostly to readers who can install and run Narada packages. It should explicitly segment readers by capability and offer a route for corporate/perimeter-blocked readers, including instructions for their own internal agent to reconstruct Narada from principles and documentation.",
+    "evidence": [
+      "README has useful demo, trial, live, and Site bootstrap paths, but it assumes the reader can eventually run code. AGENTS.md and docs/concepts/system.md carry stronger doctrine about zones, governed crossings, authority loci, and construction guidance, but README does not route blocked readers there. No README-level path was found for people who cannot install packages, access GitHub/npm, use Graph credentials, execute arbitrary code, or get runnable Narada through a corporate perimeter. The missing segment matters because Narada is also a principle-first architecture and agent-readable specification, not only an npm-installable tool."
+    ],
+    "proposal": [
+      "Add README-level reader segmentation and a dedicated agent reconstruction specification. The README should distinguish at least: 1. evaluator who can run demo/trial; 2. operator who can deploy live; 3. architect who cannot run code but can read doctrine; 4. corporate/perimeter-blocked reader; 5. agent-assisted builder who wants to reconstruct Narada inside their own environment. Add a section near First-Run Paths such as Choose Your Route or If You Cannot Run This Repo. It should state that Narada can be consumed as runnable software, reference doctrine, or an agent reconstruction specification. For blocked readers, point to docs/concepts/system.md, AGENTS.md, SEMANTICS.md, packages/layers/control-plane/docs/00-kernel.md, docs/concepts/command-execution-intent-zone.md, docs/product/bootstrap-contract.md, docs/product/site-factorization.md, and the new Governed Crossing concept in the thoughts corpus. Create an agent reconstruction spec, likely docs/product/agent-reconstruction-specification.md or docs/concepts/agent-reconstruction-specification.md, that tells an internal corporate agent how to rebuild a local Narada-compatible kernel from principles without importing runnable code. It should preserve invariants: governed crossings, zone authority, intelligence-authority separation, explicit admission, durable evidence, intent before execution, confirmation after execution, projections not authority, capability/secret separation, and Site factorization. It should include: scope, non-goals, required invariants, minimal data model, minimal cycle, prompt/instructions for an internal agent, validation checks, and how to report divergence back as proposals rather than claiming compatibility."
+    ],
+    "recommendation": "Treat as documentation/product execution. Acceptance should include: README segmentation section; blocked-reader route; dedicated agent reconstruction specification; links from docs/README.md and AGENTS.md if appropriate; a short copy-paste prompt for a reader's internal agent; and explicit warning that reconstruction should preserve Narada invariants rather than mimic package names or internal implementation details. No runtime machinery is required unless docs reveal a forced support command."
+  },
+  "status": "received"
+}

@@ -4,6 +4,8 @@ A Narada **Site** is a governed authority object with one or more concrete reali
 
 This document separates the dimensions that often collapse into the word "Site."
 
+The admissible-crossing language is grounded in Governed Crossing: arrival is not admission, capability is not authority, and crossing is governed before consequence. See [`../concepts/governed-crossing.md`](../concepts/governed-crossing.md).
+
 ## Ten-Part Factorization
 
 | Dimension | Meaning | Not The Same As |

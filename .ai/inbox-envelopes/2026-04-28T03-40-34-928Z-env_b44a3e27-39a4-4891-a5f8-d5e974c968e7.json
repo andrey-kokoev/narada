@@ -21,5 +21,13 @@
     ],
     "recommendation": "Treat this as a doctrine-linking and vocabulary-normalization task. Acceptance should include: 1. at least one Narada docs page linking to the new thoughts concept; 2. identification of the most central Narada-native doc where Governed Crossing should be summarized; 3. a pass over Site factorization and command/inbox docs to avoid inconsistent vocabulary around admission, routing, residual, projection, and authority boundary; 4. no machinery changes unless the documentation pass reveals a forced implementation gap."
   },
-  "status": "received"
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_b44a3e27-39a4-4891-a5f8-d5e974c968e7",
+    "promoted_at": "2026-04-28T03:47:05.480Z",
+    "promoted_by": "architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
 }

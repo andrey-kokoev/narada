@@ -98,6 +98,8 @@ A **governed crossing** is the admissible, durable transfer from one zone to ano
 
 A **crossing regime** is the law carried by a governed crossing: it states what may cross, in what form, under whose authority, and how the crossing is confirmed.
 
+Governed Crossing is the primitive act; crossing regime is the local law for a particular instance. See [`docs/concepts/governed-crossing.md`](docs/concepts/governed-crossing.md).
+
 An **admission method** is a concrete check used by a crossing regime. Review, tests, deterministic validation, operator approval, and reconciliation are admission methods. They are not zones unless they own a stable authority grammar and durable request/result lifecycle of their own.
 
 This is the deepest semantic lens. The other major Narada descriptions are derived views:
@@ -1336,6 +1338,8 @@ Narada repeatedly relies on the same deep invariant:
 > **No meaningful boundary crossing without an explicit admissibility regime.**
 
 This section crystallizes the cross-cutting concept of **zone**, **boundary**, **crossing regime**, and **crossing artifact**, and establishes it as a first-class semantic object.
+
+Governed Crossing is the primitive by which something crosses an authority boundary without collapsing arrival, admission, execution, and truth. Crossing regime is the concrete edge law that governs one such crossing. For the compact doctrine, see [`docs/concepts/governed-crossing.md`](docs/concepts/governed-crossing.md).
 
 This section should be read together with §2.0. Narada is not merely a pipeline that happens to have boundaries; it is a composed topology of zones, and crossing regime is the local law that makes that topology governable.
 

@@ -4,6 +4,8 @@ The Command Execution Intent Zone (CEIZ) is the governed ops zone for non-test c
 
 CEIZ exists because a shell line is not a durable authority artifact. A governed Narada command run has three distinct stages:
 
+CEIZ is a stabilized Governed Crossing form: command text enters as inert intent, then crosses into process execution only through command-execution law. See [`governed-crossing.md`](governed-crossing.md).
+
 1. `CommandRunRequest` is the input boundary. It records requested command, cwd, environment policy, timeout, approval posture, side-effect classification, requester, task linkage, and rationale before execution.
 2. `CommandExecution` is the admitted runtime attempt. It may spawn a process only after request admission and approval checks.
 3. `CommandRunResult` is the output boundary. It records exit status, duration, timeout state, stdout/stderr digests, bounded excerpts, artifact pointers, and output-admission decision.

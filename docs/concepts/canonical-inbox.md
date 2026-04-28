@@ -4,6 +4,8 @@ Canonical Inbox is Narada's typed-envelope intake zone. It is not an email mailb
 
 Inbox envelopes are inert. Submitting an envelope does not create a task, execute a command, mutate Site configuration, or author knowledge. An envelope can only be inspected or promoted across an explicit governed crossing.
 
+Canonical Inbox is a stabilized Governed Crossing form for arrivals that may or may not become consequential. See [`governed-crossing.md`](governed-crossing.md).
+
 ## CLI Surface
 
 ```bash
