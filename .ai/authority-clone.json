@@ -1,0 +1,9 @@
+{
+  "authority_root": "/home/andrey/src/narada",
+  "non_authority_embeddings": [
+    {
+      "root": "D:\\code\\narada",
+      "purpose": "Windows embodiment; inspect or forward, do not mutate Narada proper state directly"
+    }
+  ]
+}

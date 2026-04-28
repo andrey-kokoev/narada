@@ -9,6 +9,10 @@ import { createLogger } from './logger.js';
 import { ExitCode } from './exit-codes.js';
 import type { OutputFormat } from './formatter.js';
 import { configureLogging, setLogLevel, setLogFormat, metrics } from '@narada2/control-plane';
+import {
+  assertAuthorityCloneForMutation,
+  authorityCloneErrorToCommandResult,
+} from './narada-proper-authority.js';
 
 export interface CommandContext {
   configPath: string;
@@ -113,6 +117,12 @@ export async function runDirectCommand(options: DirectCommandRunnerOptions): Pro
   try {
     result = await options.invocation();
   } catch (error) {
+    const authorityResult = authorityCloneErrorToCommandResult(error);
+    if (authorityResult) {
+      options.emit(authorityResult.result, options.format);
+      exit(authorityResult.exitCode);
+      return;
+    }
     const normalized = normalizeCommandError(options.command, error);
     if (!normalized) {
       throw error;
@@ -135,7 +145,10 @@ export function directCommandAction<TArgs extends unknown[]>(
     const format = typeof options.format === 'function' ? options.format(...args) : options.format;
     await runDirectCommand({
       command: options.command,
-      invocation: () => options.invocation(...args),
+      invocation: () => {
+        assertAuthorityCloneForMutation(options.command, args);
+        return options.invocation(...args);
+      },
       emit: options.emit,
       format,
       exit: options.exit,
@@ -146,7 +159,19 @@ export function directCommandAction<TArgs extends unknown[]>(
 export async function runDirectCommandWithResource<TResource>(
   options: ResourceScopedDirectCommandRunnerOptions<TResource>,
 ): Promise<void> {
-  const resource = options.open();
+  let resource: TResource;
+  try {
+    resource = options.open();
+  } catch (error) {
+    const authorityResult = authorityCloneErrorToCommandResult(error);
+    if (authorityResult) {
+      const exit = options.exit ?? ((code: number): never => process.exit(code));
+      options.emit(authorityResult.result, options.format);
+      exit(authorityResult.exitCode);
+      return;
+    }
+    throw error;
+  }
   try {
     await runDirectCommand({
       command: options.command,
@@ -167,7 +192,10 @@ export function resourceScopedDirectCommandAction<TResource, TArgs extends unkno
     const format = typeof options.format === 'function' ? options.format(...args) : options.format;
     await runDirectCommandWithResource({
       command: options.command,
-      open: () => options.open(...args),
+      open: () => {
+        assertAuthorityCloneForMutation(options.command, args);
+        return options.open(...args);
+      },
       close: options.close,
       invocation: (resource) => options.invocation(resource, ...args),
       emit: options.emit,

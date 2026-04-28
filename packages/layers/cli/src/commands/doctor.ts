@@ -4,6 +4,7 @@ import { access, readFile, stat } from 'node:fs/promises';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import { inspectAuthorityClonePosture } from '../lib/narada-proper-authority.js';
 import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig, loadCharterEnv, loadEnvFile } from '@narada2/control-plane';
 import { CodexCharterRunner, MockCharterRunner, KimiCliCharterRunner, getRecoveryGuidance } from '@narada2/charters';
 
@@ -127,6 +128,24 @@ async function doctorBootstrap(
     remediation: 'Run `pnpm install`; for shell-level access run `pnpm run narada:install-shim`.',
     remediation_command: 'pnpm run narada:install-shim',
     remediation_args: ['pnpm', 'run', 'narada:install-shim'],
+  });
+
+  const authorityClone = inspectAuthorityClonePosture(root);
+  checks.push({
+    name: 'authority-clone-routing',
+    status: !authorityClone.configured || authorityClone.is_authority && !authorityClone.stale ? 'pass' : 'fail',
+    detail: authorityClone.configured
+      ? `current=${authorityClone.status}; authority=${authorityClone.authority_root}; behind=${authorityClone.behind ?? 'unknown'}`
+      : 'authority clone routing is not configured',
+    remediation: authorityClone.configured
+      ? authorityClone.next_safe_command ?? undefined
+      : 'Create .ai/authority-clone.json when this checkout has non-authority embodiments.',
+    remediation_command: authorityClone.configured && authorityClone.next_safe_command?.startsWith('git pull')
+      ? 'git pull --ff-only'
+      : undefined,
+    remediation_args: authorityClone.configured && authorityClone.next_safe_command?.startsWith('git pull')
+      ? ['git', 'pull', '--ff-only']
+      : undefined,
   });
 
   try {

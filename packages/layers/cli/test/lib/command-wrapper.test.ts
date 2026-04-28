@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   directCommandAction,
@@ -139,6 +142,45 @@ describe('direct command action helper', () => {
 
     expect(emitted).toEqual([{ status: 'error', error: 'bad' }]);
     expect(exitCode).toBe(2);
+  });
+
+  it('refuses mutating commands from a configured non-authority clone', async () => {
+    const authority = mkdtempSync(join(tmpdir(), 'narada-authority-'));
+    const embodiment = mkdtempSync(join(tmpdir(), 'narada-embodiment-'));
+    try {
+      mkdirSync(join(embodiment, '.ai'), { recursive: true });
+      writeFileSync(join(embodiment, '.ai', 'authority-clone.json'), JSON.stringify({
+        authority_root: authority,
+      }));
+
+      const emitted: unknown[] = [];
+      let exitCode: number | null = null;
+      const action = directCommandAction<[Record<string, unknown>]>({
+        command: 'task claim',
+        invocation: async () => ({ exitCode: 0, result: { status: 'success' } }),
+        emit: (result) => emitted.push(result),
+        exit: (code): never => {
+          exitCode = code;
+          throw new Error('exit');
+        },
+      });
+
+      await expect(action({ cwd: embodiment })).rejects.toThrow('exit');
+
+      expect(exitCode).toBe(1);
+      expect(emitted).toEqual([
+        expect.objectContaining({
+          status: 'error',
+          authority_clone: expect.objectContaining({
+            status: 'non_authority_clone',
+            authority_root: authority,
+          }),
+        }),
+      ]);
+    } finally {
+      rmSync(authority, { recursive: true, force: true });
+      rmSync(embodiment, { recursive: true, force: true });
+    }
   });
 });
 
