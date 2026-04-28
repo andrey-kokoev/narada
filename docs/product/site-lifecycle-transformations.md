@@ -19,6 +19,8 @@ The continuity record for those changes is Site provenance lineage. See [`site-p
 
 Relation evidence is recorded separately from lifecycle mutation. See [`site-relation-ledger.md`](site-relation-ledger.md).
 
+For the maturation phase after bootstrap and before operational steady state, see [`inhabited-onboarding.md`](inhabited-onboarding.md).
+
 ## Transformation Kinds
 
 | Kind | Meaning | Authority Rule |
@@ -29,6 +31,7 @@ Relation evidence is recorded separately from lifecycle mutation. See [`site-rel
 | `absorb` | Admit sidecar/local Site material into another Site or Narada proper. | Requires governed admission and re-instantiation evidence. |
 | `migrate` | Move Site authority or substrate. | Requires cutover plan, old-locus retirement posture, and read-back confirmation. |
 | `re-instantiate` | Rebuild a Site from template, trace, config, and evidence. | Originating case must still run through the rebuilt form. |
+| `inhabited_onboarding` | Mature a newly created Site by running first real or representative situations through its boundaries. | Does not grant new effect authority; records readiness, residuals, and first-loop proofs. |
 | `archive` | Retire a Site from active operation. | Must preserve trace and record non-authority posture. |
 
 ## Required Plan Shape

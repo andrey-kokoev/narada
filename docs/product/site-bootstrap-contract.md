@@ -10,6 +10,7 @@
 > For the durable provenance substrate behind those transformations, see [`site-provenance-lineage.md`](site-provenance-lineage.md).
 > For the user-locus directory of known Sites, see [`user-site-awareness-registry.md`](user-site-awareness-registry.md).
 > For the factorization of Site authority object, realization, interface, projection, crossing, and lineage, see [`site-factorization.md`](site-factorization.md).
+> For the maturation phase after first-run setup, see [`inhabited-onboarding.md`](inhabited-onboarding.md).
 
 ---
 
@@ -48,6 +49,14 @@ The Site bootstrap is an **8-step explicit path**:
 7. Enable unattended supervisor
 8. Inspect health/trace
 ```
+
+After bootstrap, a Site enters **Inhabited Onboarding** before operational steady state:
+
+```text
+bootstrap -> inhabited onboarding -> operational steady state
+```
+
+Bootstrap proves the substrate exists. Inhabited Onboarding proves real or representative situations can pass through the Site's authority boundaries, intake routes, operation charters, effect policies, and trace surfaces. See [`inhabited-onboarding.md`](inhabited-onboarding.md).
 
 ### Step 1: Choose substrate
 
