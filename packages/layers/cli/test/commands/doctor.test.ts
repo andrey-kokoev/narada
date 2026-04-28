@@ -286,6 +286,7 @@ describe('doctor command', () => {
     expect(report.checks.find((check) => check.name === 'dependencies-installed')?.status).toBe('pass');
     expect(report.checks.find((check) => check.name === 'cli-built')?.status).toBe('pass');
     expect(report.checks.find((check) => check.name === 'better-sqlite3-native')).toBeDefined();
+    expect(report.checks.find((check) => check.name === 'sqlite-runtime-posture')).toBeDefined();
   });
 
   it('reports degraded bootstrap readiness with bounded remediations', async () => {

@@ -18,6 +18,7 @@ import {
   type TaskReportRow,
   type TaskReviewRow,
 } from '../../src/task-lifecycle-store.js';
+import { SQLITE_BACKEND_ENV } from '../../src/sqlite-runtime.js';
 
 describe('SqliteTaskLifecycleStore', () => {
   let db: Database;
@@ -119,6 +120,23 @@ describe('SqliteTaskLifecycleStore', () => {
           delete process.env.NARADA_TASK_LIFECYCLE_FAST_SQLITE;
         } else {
           process.env.NARADA_TASK_LIFECYCLE_FAST_SQLITE = previous;
+        }
+      }
+    });
+
+    it('fails clearly when node:sqlite is explicitly selected before adapter promotion', async () => {
+      const previous = process.env[SQLITE_BACKEND_ENV];
+      process.env[SQLITE_BACKEND_ENV] = 'node:sqlite';
+      tempDir = await mkdtemp(join(tmpdir(), 'narada-lifecycle-store-node-sqlite-'));
+      await mkdir(join(tempDir, '.ai'), { recursive: true });
+
+      try {
+        expect(() => openTaskLifecycleStore(tempDir)).toThrow('NARADA_SQLITE_BACKEND=node:sqlite');
+      } finally {
+        if (previous === undefined) {
+          delete process.env[SQLITE_BACKEND_ENV];
+        } else {
+          process.env[SQLITE_BACKEND_ENV] = previous;
         }
       }
     });

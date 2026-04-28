@@ -27,6 +27,10 @@ import type {
   RepoPublicationRow,
   RepoPublicationStatus,
 } from "@narada2/intent-zones/repo-publication-intent";
+import {
+  assertSqliteRuntimeSupported,
+  selectSqliteRuntime,
+} from "./sqlite-runtime.js";
 
 type Db = Database.Database;
 
@@ -675,6 +679,8 @@ function hasCurrentLifecycleSchema(db: Db): boolean {
 }
 
 export function openTaskLifecycleStore(cwd: string): SqliteTaskLifecycleStore {
+  const runtime = selectSqliteRuntime();
+  assertSqliteRuntimeSupported(runtime);
   const dbPath = join(cwd, ".ai", "task-lifecycle.db");
   const db = new Database(dbPath);
   db.pragma(`busy_timeout = ${TASK_LIFECYCLE_BUSY_TIMEOUT_MS}`);

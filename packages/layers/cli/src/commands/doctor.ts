@@ -7,6 +7,7 @@ import { createFormatter } from '../lib/formatter.js';
 import { inspectAuthorityClonePosture } from '../lib/narada-proper-authority.js';
 import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig, loadCharterEnv, loadEnvFile } from '@narada2/control-plane';
 import { CodexCharterRunner, MockCharterRunner, KimiCliCharterRunner, getRecoveryGuidance } from '@narada2/charters';
+import { selectSqliteRuntime } from '@narada2/task-governance/sqlite-runtime';
 
 export interface DoctorOptions {
   config?: string;
@@ -168,6 +169,22 @@ async function doctorBootstrap(
       remediation_args: ['pnpm', 'rebuild', 'better-sqlite3'],
     });
   }
+
+  const sqlitePosture = selectSqliteRuntime({
+    betterSqlite3Available: checks.find((check) => check.name === 'better-sqlite3-native')?.status === 'pass',
+  });
+  checks.push({
+    name: 'sqlite-runtime-posture',
+    status: sqlitePosture.supported ? 'pass' : 'fail',
+    detail: `${sqlitePosture.selected}; ${sqlitePosture.reason}`,
+    remediation: sqlitePosture.remediation,
+    remediation_command: sqlitePosture.remediation?.includes('pnpm rebuild better-sqlite3')
+      ? 'pnpm rebuild better-sqlite3'
+      : undefined,
+    remediation_args: sqlitePosture.remediation?.includes('pnpm rebuild better-sqlite3')
+      ? ['pnpm', 'rebuild', 'better-sqlite3']
+      : undefined,
+  });
 
   const repairPlan = checks
     .filter((check) => check.status !== 'pass' && check.remediation_command && check.remediation_args)
