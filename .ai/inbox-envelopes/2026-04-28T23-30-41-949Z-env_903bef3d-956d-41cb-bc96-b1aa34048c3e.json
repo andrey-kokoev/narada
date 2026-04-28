@@ -1,0 +1,72 @@
+{
+  "envelope_id": "env_903bef3d-956d-41cb-bc96-b1aa34048c3e",
+  "received_at": "2026-04-28T23:30:41.949Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "windows-user-site:agent-runtime-control-channel-session-binding"
+  },
+  "kind": "proposal",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "codex"
+  },
+  "payload": {
+    "title": "Model agent runtimes, control channels, and session bindings alongside Operator Surfaces",
+    "summary": "The Operator Surface proposal should account for our actual mixed workflow: human operator plus CLI-based coding agents in terminal windows plus API-based coding agents in conversation/control-plane sessions. CLI agents are spatially embodied in terminal Operator Surfaces; API agents are not spatial by default but still project into Narada through transcripts, inbox envelopes, task files, logs, or console surfaces. Narada needs to model the binding between surfaces, agent runtimes, control channels, Sites, roles, and continuity artifacts.",
+    "observed_at": "2026-04-28",
+    "source_site": "windows-user-site",
+    "related_envelope": "env_7b649a68-e706-45d7-88de-f6b1b1c42d8a",
+    "concepts": {
+      "OperatorSurface": "A durable, addressable locus where work is inhabited or observed, such as a terminal window, YASB panel, VS Code workspace, browser profile, or console.",
+      "AgentRuntime": "The actor/capability runtime doing cognitive or coding work, such as human operator, codex-cli, codex-api, kimi-cli, MCP-backed agent, or another AI process.",
+      "ControlChannel": "The medium through which an operator or agent is instructed and observed, such as terminal stdin/stdout, API conversation, MCP tool call, inbox envelope, command intent, Git-visible task, or email.",
+      "SessionBinding": "The durable or resumable binding that relates an AgentRuntime to an OperatorSurface, ControlChannel, Site, role, task/chapter, and continuity state."
+    },
+    "specific_workflow_evidence": {
+      "cli_agents": "Codex CLI sessions live in Windows Terminal windows and therefore naturally bind to stable Operator Surfaces such as narada-proper or narada-andrey.",
+      "api_agents": "API-based coding agents live in conversation/session state and may have no native window identity, but they still need Narada continuity through transcript, inbox, task, mutation evidence, and optional projection into a console or terminal surface.",
+      "human_operator": "The human operator bridges both classes: conversationally directing API agents while also supervising or inhabiting CLI agent terminals and Windows operator surfaces.",
+      "friction_observed": "Narada currently sees Sites, tasks, inboxes, repos, and some sessions more clearly than it sees who or what is inhabiting which operational surface through which channel. This weakens resume, routing, focus, and recovery."
+    },
+    "proposal": {
+      "model_relation": "OperatorSurface hosts or projects AgentRuntime; AgentRuntime communicates over ControlChannel; SessionBinding records the active or resumable relation among them under a Site/role/task.",
+      "example_cli_binding": {
+        "surface": "narada-proper-terminal",
+        "runtime": "codex-cli",
+        "site": "narada-proper",
+        "role": "architect",
+        "control_channel": "terminal",
+        "continuity": [
+          "task",
+          "chapter",
+          "resume"
+        ]
+      },
+      "example_api_binding": {
+        "surface": "api-conversation-thread",
+        "runtime": "codex-api",
+        "site": "windows-user-site",
+        "role": "operator-architect",
+        "control_channel": "chat-api",
+        "continuity": [
+          "transcript",
+          "inbox proposals",
+          "committed artifacts",
+          "runtime observations"
+        ]
+      }
+    },
+    "doctrinal_relevance": "A Narada Site is not only operated through files and commands; it is inhabited by humans and agents through bound surfaces and channels. Resume and continuity should recover not only textual context but the active topology of agents, surfaces, channels, roles, and tasks.",
+    "proposed_direction": "Extend the Operator Surface work with AgentRuntime, ControlChannel, and SessionBinding concepts. Decide whether these are separate first-class constructs or a layered model under inhabited operations/session lifecycle. Document relation to Site embodiments, resume, console, inbox/outbox, and task/chapter machinery.",
+    "classification": "concept_and_machinery_proposal"
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "decision",
+    "target_ref": "operator-surface-architecture-chapter-1049-1053",
+    "promoted_at": "2026-04-28T23:38:46.149Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'decision' is not implemented yet."
+  }
+}

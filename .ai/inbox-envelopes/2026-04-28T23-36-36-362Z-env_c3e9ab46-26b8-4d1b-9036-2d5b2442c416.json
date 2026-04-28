@@ -1,0 +1,26 @@
+{
+  "envelope_id": "env_c3e9ab46-26b8-4d1b-9036-2d5b2442c416",
+  "received_at": "2026-04-28T23:36:36.362Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada.builder:task-list-ergonomics"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "builder"
+  },
+  "payload": {
+    "title": "Task list needs bounded output admission",
+    "summary": "Running raw narada task list emitted about 2.9k lines because the command has --range but no --limit or bounded default. This repeats the CLI output admission failure pattern: read surfaces can still flood the Operator transcript even when the agent intends a compact task check.",
+    "evidence": [
+      "Observed command: narada task list",
+      "Observed effect: large unbounded JSON output in chat transcript"
+    ],
+    "proposal": [
+      "Devise a fix that makes task list output bounded by default or requires explicit unbounded admission, while preserving machine-readable workflows through explicit flags."
+    ],
+    "recommendation": "Promote as task_candidate for CLI output admission ergonomics"
+  },
+  "status": "received"
+}

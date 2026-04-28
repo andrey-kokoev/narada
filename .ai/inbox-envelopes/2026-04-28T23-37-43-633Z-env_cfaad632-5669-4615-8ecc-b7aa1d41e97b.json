@@ -1,0 +1,27 @@
+{
+  "envelope_id": "env_cfaad632-5669-4615-8ecc-b7aa1d41e97b",
+  "received_at": "2026-04-28T23:37:43.633Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada.builder:inbox-submit-observation-ergonomics"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "builder"
+  },
+  "payload": {
+    "title": "Inbox submit-observation flag mismatch caused failed command",
+    "summary": "A proposed sanctioned inbox submission command used --authority-principal, but the actual narada inbox submit-observation surface accepts --principal. The mismatch caused an avoidable failed command before the observation could be submitted.",
+    "evidence": [
+      "Failed command used: narada inbox submit-observation ... --authority-principal builder",
+      "CLI error: unknown option '--authority-principal'",
+      "Actual help surface uses: --principal <id>"
+    ],
+    "proposal": [
+      "Devise a fix so authority principal naming is discoverable and hard to misuse, either by accepting --authority-principal as an alias or by aligning help/examples/errors across inbox submit surfaces."
+    ],
+    "recommendation": "Promote as task_candidate for inbox submit-observation CLI ergonomics"
+  },
+  "status": "received"
+}
