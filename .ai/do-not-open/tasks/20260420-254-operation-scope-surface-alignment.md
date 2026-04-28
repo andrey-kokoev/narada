@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T16:56:11.187Z
+closed_by: architect
+governed_by: task_close:architect
+closure_mode: peer_reviewed
+---
+
 # Task 254: Operation/Scope Surface Alignment
 
 ## Chapter
@@ -145,3 +153,7 @@ Review found three categories of missed surface:
 
 - Tasks 228-244 (Operational Trust chapter) — stable CLI surface to rename.
 - Task 252 (Agent Verification Speed & Telemetry) — verification ladder must be stable before renaming commands that agents use.
+
+## Verification
+
+<!-- Record commands run, results observed, and how correctness was checked. -->
