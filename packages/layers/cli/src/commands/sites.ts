@@ -772,6 +772,7 @@ export async function sitesRemoveCommand(
 export interface SitesDoctorOptions extends SitesOptions {
   root?: string;
   authorityLocus?: string;
+  kind?: string;
 }
 
 function addCheck(
@@ -802,11 +803,133 @@ async function runGh(args: string[]): Promise<string> {
   return stdout.trim();
 }
 
+async function sitesClientDoctorCommand(
+  siteId: string,
+  options: SitesDoctorOptions,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
+  const checks: SiteDoctorCheck[] = [];
+  const workspaceRoot = resolve(options.root ?? '.');
+  const siteRoot = clientSiteRootFromWorkspace(workspaceRoot);
+  const configPath = join(siteRoot, 'config.json');
+  let config: Record<string, unknown> | null = null;
+
+  if (existsSync(siteRoot)) {
+    addCheck(checks, 'client_site_root_exists', 'pass', `Client Site root exists: ${siteRoot}`);
+  } else {
+    addCheck(checks, 'client_site_root_exists', 'fail', `Client Site root is missing: ${siteRoot}`, 'Run narada sites bootstrap-client --workspace <path> --execute');
+  }
+
+  if (existsSync(configPath)) {
+    addCheck(checks, 'config_exists', 'pass', `Config exists: ${configPath}`);
+    try {
+      config = JSON.parse(await readFile(configPath, 'utf8')) as Record<string, unknown>;
+      addCheck(checks, 'config_parse', 'pass', 'Config parses as JSON');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      addCheck(checks, 'config_parse', 'fail', `Config is not valid JSON: ${message}`);
+    }
+  } else {
+    addCheck(checks, 'config_exists', 'fail', `Config is missing: ${configPath}`, 'Run narada sites bootstrap-client --workspace <path> --execute');
+  }
+
+  if (config) {
+    addCheck(
+      checks,
+      'config_site_id',
+      config.site_id === siteId ? 'pass' : 'fail',
+      config.site_id === siteId ? `Config site_id matches ${siteId}` : `Config site_id is ${String(config.site_id)}, expected ${siteId}`,
+    );
+    addCheck(
+      checks,
+      'site_kind',
+      config.site_kind === 'client_service' ? 'pass' : 'fail',
+      config.site_kind === 'client_service' ? 'Site kind is client_service' : `Site kind is ${String(config.site_kind)}, expected client_service`,
+    );
+    addCheck(
+      checks,
+      'workspace_root',
+      String(config.workspace_root) === workspaceRoot ? 'pass' : 'fail',
+      String(config.workspace_root) === workspaceRoot ? `Workspace root matches ${workspaceRoot}` : `Workspace root is ${String(config.workspace_root)}, expected ${workspaceRoot}`,
+    );
+    const sync = config.sync as { posture?: string; onedrive_safe?: boolean } | undefined;
+    addCheck(
+      checks,
+      'durability_posture',
+      sync?.posture === 'onedrive_non_git' || sync?.posture === 'local_non_git' ? 'pass' : 'fail',
+      sync?.posture ? `Sync posture is ${sync.posture}` : 'Sync posture is missing',
+      'Use onedrive_non_git or local_non_git for client Site bootstrap',
+    );
+    if (workspaceRoot.toLowerCase().includes('onedrive')) {
+      addCheck(
+        checks,
+        'onedrive_non_git_posture',
+        sync?.posture === 'onedrive_non_git' && sync?.onedrive_safe === true ? 'pass' : 'fail',
+        sync?.posture === 'onedrive_non_git' ? 'OneDrive workspace has explicit non-Git posture' : 'OneDrive workspace should use onedrive_non_git posture',
+      );
+    }
+  }
+
+  for (const directory of CLIENT_SITE_DIRECTORIES) {
+    const pathValue = join(siteRoot, directory);
+    addCheck(
+      checks,
+      `dir_${directory.replace(/[^a-z0-9]+/gi, '_')}`,
+      existsSync(pathValue) ? 'pass' : 'fail',
+      existsSync(pathValue) ? `Directory exists: ${pathValue}` : `Directory is missing: ${pathValue}`,
+    );
+  }
+
+  for (const file of CLIENT_SITE_GUIDANCE_FILES) {
+    const pathValue = join(siteRoot, file);
+    addCheck(
+      checks,
+      `file_${file.replace(/[^a-z0-9]+/gi, '_')}`,
+      existsSync(pathValue) ? 'pass' : 'fail',
+      existsSync(pathValue) ? `File exists: ${pathValue}` : `File is missing: ${pathValue}`,
+    );
+  }
+
+  const failed = checks.filter((check) => check.status === 'fail');
+  const warned = checks.filter((check) => check.status === 'warn');
+  const health = failed.length > 0 ? 'failed' : warned.length > 0 ? 'warning' : 'passed';
+
+  if (fmt.getFormat() === 'human') {
+    fmt.section(`Client Site Doctor - ${siteId}`);
+    fmt.kv('Workspace', workspaceRoot);
+    fmt.kv('Site Root', siteRoot);
+    fmt.kv('Health', health);
+    for (const check of checks) {
+      const prefix = check.status === 'pass' ? '[pass]' : check.status === 'warn' ? '[warn]' : '[fail]';
+      fmt.message(`${prefix} ${check.name}: ${check.message}`, check.status === 'pass' ? 'success' : check.status === 'warn' ? 'warning' : 'error');
+      if (check.remediation && options.verbose) {
+        fmt.message(`  remediation: ${check.remediation}`, 'info');
+      }
+    }
+  }
+
+  return {
+    exitCode: failed.length > 0 ? ExitCode.GENERAL_ERROR : ExitCode.SUCCESS,
+    result: {
+      status: health,
+      siteId,
+      site_kind: 'client_service',
+      workspace_root: workspaceRoot,
+      site_root: siteRoot,
+      checks,
+    },
+  };
+}
+
 export async function sitesDoctorCommand(
   siteId: string,
   options: SitesDoctorOptions,
   _context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
+  if (options.kind === 'client') {
+    return sitesClientDoctorCommand(siteId, options);
+  }
+
   const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
   const checks: SiteDoctorCheck[] = [];
   const validSyncPostures = new Set([
@@ -1088,12 +1211,82 @@ export interface SitesInitOptions extends SitesOptions {
   dryRun?: boolean;
 }
 
+export interface SitesBootstrapClientOptions extends SitesOptions {
+  workspace?: string;
+  siteId?: string;
+  sync?: string;
+  execute?: boolean;
+}
+
 export interface SitesBootstrapWindowsOptions extends SitesOptions {
   userSiteId?: string;
   pcSiteId?: string;
   sync?: string;
   executionSurface?: string;
   execute?: boolean;
+}
+
+const CLIENT_SITE_DIRECTORIES = [
+  'chapters',
+  'tasks',
+  'decisions',
+  'kb',
+  'observations',
+  'friction',
+  'requests',
+  join('.ai', 'inbox-drop'),
+  join('.ai', 'inbox-envelopes'),
+] as const;
+
+const CLIENT_SITE_GUIDANCE_FILES = [
+  'README.md',
+  'AGENTS.md',
+  join('.ai', 'inbox-drop', '.gitkeep'),
+  join('.ai', 'inbox-envelopes', '.gitkeep'),
+] as const;
+
+function clientSiteIdFromWorkspace(workspaceRoot: string): string {
+  const base = workspaceRoot.split(/[\\/]+/).filter(Boolean).at(-1) ?? 'client-site';
+  return base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'client-site';
+}
+
+function clientSiteRootFromWorkspace(workspaceRoot: string): string {
+  return join(workspaceRoot, '.narada');
+}
+
+function clientSiteConfig(args: {
+  siteId: string;
+  workspaceRoot: string;
+  siteRoot: string;
+  sync: string;
+}): Record<string, unknown> {
+  return {
+    site_id: args.siteId,
+    site_kind: 'client_service',
+    workspace_root: args.workspaceRoot,
+    site_root: args.siteRoot,
+    config_path: join(args.siteRoot, 'config.json'),
+    locus: {
+      authority_locus: 'client_service',
+      visible_workspace_root: args.workspaceRoot,
+      governance_root: args.siteRoot,
+    },
+    sync: {
+      posture: args.sync,
+      git_initialized: false,
+      onedrive_safe: args.sync === 'onedrive_non_git' || args.workspaceRoot.toLowerCase().includes('onedrive'),
+    },
+    inbox: {
+      drop_dir: join(args.siteRoot, '.ai', 'inbox-drop'),
+      envelope_export_dir: join(args.siteRoot, '.ai', 'inbox-envelopes'),
+      adapter: 'canonical_file_drop',
+    },
+    durability: {
+      visible_workspace_preserved: true,
+      runtime_state_git_ignored: true,
+      empty_directory_markers: '.gitkeep',
+    },
+  };
 }
 
 const VALID_SUBSTRATES = [
@@ -1558,6 +1751,108 @@ export async function sitesInitCommand(
       ],
     },
   };
+}
+
+export async function sitesBootstrapClientCommand(
+  options: SitesBootstrapClientOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
+  const workspaceRoot = resolve(options.workspace ?? '.');
+  const siteId = options.siteId ?? clientSiteIdFromWorkspace(workspaceRoot);
+  const siteRoot = clientSiteRootFromWorkspace(workspaceRoot);
+  const sync = options.sync ?? (workspaceRoot.toLowerCase().includes('onedrive') ? 'onedrive_non_git' : 'local_non_git');
+  const execute = options.execute === true;
+  if (sync !== 'onedrive_non_git' && sync !== 'local_non_git') {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        status: 'error',
+        error: `Unsupported client sync posture: "${sync}". Valid postures: onedrive_non_git, local_non_git`,
+      },
+    };
+  }
+  const config = clientSiteConfig({ siteId, workspaceRoot, siteRoot, sync });
+  const directories = CLIENT_SITE_DIRECTORIES.map((directory) => join(siteRoot, directory));
+  const files = [
+    {
+      path: join(siteRoot, 'config.json'),
+      kind: 'config',
+    },
+    {
+      path: join(siteRoot, 'README.md'),
+      kind: 'guidance',
+    },
+    {
+      path: join(siteRoot, 'AGENTS.md'),
+      kind: 'guidance',
+    },
+    {
+      path: join(siteRoot, '.ai', 'inbox-drop', '.gitkeep'),
+      kind: 'empty-directory-marker',
+    },
+    {
+      path: join(siteRoot, '.ai', 'inbox-envelopes', '.gitkeep'),
+      kind: 'empty-directory-marker',
+    },
+  ];
+
+  if (execute) {
+    await mkdir(siteRoot, { recursive: true });
+    for (const directory of directories) {
+      await mkdir(directory, { recursive: true });
+    }
+    await writeFile(join(siteRoot, 'config.json'), JSON.stringify(config, null, 2) + '\n', 'utf8');
+    await writeFile(
+      join(siteRoot, 'README.md'),
+      [
+        `# ${siteId} Client Site`,
+        '',
+        'Contained Narada governance for client-service work rooted at:',
+        '',
+        workspaceRoot,
+        '',
+        `Use \`narada sites doctor ${siteId} --kind client --root ${workspaceRoot}\` to validate this Site.`,
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(join(siteRoot, 'AGENTS.md'), `# AGENTS.md - ${siteId} client Site\n\nThis workspace keeps client-visible material at the workspace root and Narada governance inside .narada.\n\nDo not initialize Git or external sync for this Site unless the Operator explicitly changes the durability posture.\nUse .ai/inbox-drop for human-authored inbound messages and .ai/inbox-envelopes for canonical exported envelopes.\n`, 'utf8');
+    await writeFile(join(siteRoot, '.ai', 'inbox-drop', '.gitkeep'), '', 'utf8');
+    await writeFile(join(siteRoot, '.ai', 'inbox-envelopes', '.gitkeep'), '', 'utf8');
+  }
+
+  const result = {
+    status: execute ? 'success' : 'dry_run',
+    mutation_performed: execute,
+    plan_kind: 'client_site_bootstrap',
+    site_id: siteId,
+    workspace_root: workspaceRoot,
+    site_root: siteRoot,
+    sync_posture: sync,
+    directories,
+    files,
+    config,
+    validation_commands: [
+      `narada sites doctor ${siteId} --kind client --root ${workspaceRoot}`,
+      `narada inbox ingest-files --from ${join(siteRoot, '.ai', 'inbox-drop')}`,
+    ],
+  };
+
+  if (fmt.getFormat() === 'human') {
+    fmt.message(execute ? 'Bootstrapped client Site' : 'Dry run - client Site bootstrap plan', 'success');
+    fmt.kv('Site', siteId);
+    fmt.kv('Workspace', workspaceRoot);
+    fmt.kv('Site Root', siteRoot);
+    fmt.kv('Sync Posture', sync);
+    fmt.kv('Mutation', execute ? 'executed' : 'not executed');
+    fmt.section('Validation');
+    for (const command of result.validation_commands) {
+      fmt.message(command, 'info');
+    }
+  }
+
+  return { exitCode: ExitCode.SUCCESS, result };
 }
 
 function defaultWindowsUserSiteId(): string {

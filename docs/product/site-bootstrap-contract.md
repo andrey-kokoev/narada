@@ -139,6 +139,33 @@ Default identities:
 
 The paired command exists because a Windows Narada installation normally needs two different authority loci: the User Site for operator memory and personal control, and the PC Site for machine/session recovery. Creating them together prevents accidental collapse of user authority into PC authority, or PC recovery state into user memory.
 
+For a client-service workspace, the contained first-run path is:
+
+```bash
+narada sites bootstrap-client --workspace <client-workspace> [--site-id <id>] [--sync onedrive_non_git|local_non_git]
+```
+
+`bootstrap-client` is dry-run by default and requires `--execute` to create files. It preserves the visible client workspace and places Narada governance under `<client-workspace>/.narada`.
+
+The created client Site includes:
+
+| Path | Purpose |
+|------|---------|
+| `.narada/config.json` | Client Site identity, visible workspace root, sync posture, and inbox paths |
+| `.narada/README.md` | Operator-facing Site orientation |
+| `.narada/AGENTS.md` | Agent execution guidance for this client Site |
+| `.narada/.ai/inbox-drop/` | Human-authored file-drop intake |
+| `.narada/.ai/inbox-envelopes/` | Exported canonical inbox envelopes |
+| `.narada/chapters`, `.narada/tasks`, `.narada/decisions`, `.narada/kb`, `.narada/observations`, `.narada/friction`, `.narada/requests` | Durable Site-local governance surfaces |
+
+Validate a client Site with:
+
+```bash
+narada sites doctor <site-id> --kind client --root <client-workspace>
+```
+
+Client Site doctor checks config parse, site identity, site kind, workspace root, non-Git durability posture, OneDrive-safe posture when applicable, required governance folders, canonical inbox drop/export folders, and empty-directory markers.
+
 ### Step 3: Bind operation/config
 
 If `--operation` was not provided during `sites init`, bind the operation now:

@@ -4,7 +4,9 @@ import {
   sitesDiscoverCommand,
   sitesShowCommand,
   sitesRemoveCommand,
+  sitesDoctorCommand,
   sitesInitCommand,
+  sitesBootstrapClientCommand,
   sitesBootstrapWindowsCommand,
   sitesEnableCommand,
   sitesTaskLifecycleInitCommand,
@@ -134,6 +136,25 @@ export function registerSitesCommands(program: Command): void {
     }));
 
   sitesCmd
+    .command('doctor <site-id>')
+    .description('Validate a Site root and authority posture')
+    .option('--root <path>', 'Site workspace/root path to inspect')
+    .option('--authority-locus <locus>', 'Windows authority locus: user or pc')
+    .option('--kind <kind>', 'Site kind: windows or client', 'windows')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (siteId: string, opts: Record<string, unknown>) => {
+      const result = await sitesDoctorCommand(siteId, {
+        root: opts.root as string | undefined,
+        authorityLocus: opts.authorityLocus as string | undefined,
+        kind: opts.kind as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitFormatterBackedCommandResult(result, { format: opts.format });
+    });
+
+  sitesCmd
     .command('show <site-id>')
     .description('Show Site metadata and last-known health')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
@@ -181,6 +202,27 @@ export function registerSitesCommands(program: Command): void {
         executionSurface: opts.executionSurface as string | undefined,
         dryRun: opts.dryRun as boolean | undefined,
         format: resolveCommandFormat(),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitFormatterBackedCommandResult(result, { format: opts.format });
+    });
+
+  sitesCmd
+    .command('bootstrap-client')
+    .description('Plan or execute contained client Site bootstrap')
+    .requiredOption('--workspace <path>', 'Client workspace root')
+    .option('--site-id <id>', 'Client Site id; defaults from workspace name')
+    .option('--sync <posture>', 'Client sync posture: onedrive_non_git or local_non_git')
+    .option('--execute', 'Perform mutations; default is dry-run', false)
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (opts: Record<string, unknown>) => {
+      const result = await sitesBootstrapClientCommand({
+        workspace: opts.workspace as string | undefined,
+        siteId: opts.siteId as string | undefined,
+        sync: opts.sync as string | undefined,
+        execute: opts.execute as boolean | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
         verbose: opts.verbose as boolean | undefined,
       }, silentCommandContext({ verbose: !!opts.verbose }));
       emitFormatterBackedCommandResult(result, { format: opts.format });

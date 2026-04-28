@@ -21,5 +21,13 @@
     ],
     "recommendation": "Treat these as follow-up implementation candidates for the client Site bootstrap arc. The highest leverage first step is a site bootstrap dry-run/execution command paired with site doctor, because those two surfaces can absorb most of the repeated manual validation and boilerplate."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "site_config_change",
+    "target_ref": "task-1012-client-site-bootstrap-doctor",
+    "promoted_at": "2026-04-28T01:55:10.131Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'site_config_change' is not implemented yet."
+  }
 }
