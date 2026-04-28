@@ -29,6 +29,7 @@ import { registerObservationCommands } from './commands/observation-register.js'
 import { registerOpsKitCommands } from './commands/ops-kit-register.js';
 import { registerInboxCommands } from './commands/inbox-register.js';
 import { registerAdmissionCommands } from './commands/admission-register.js';
+import { registerOutboxCommands } from './commands/outbox-register.js';
 import { registerCoherenceCommands } from './commands/coherence-register.js';
 import { registerCapabilityCommands } from './commands/capability-register.js';
 import { registerRoutingCommands } from './commands/routing-register.js';
@@ -94,6 +95,7 @@ registerPostureCommands(program);
 registerObservationCommands(program);
 registerInboxCommands(program);
 registerAdmissionCommands(program);
+registerOutboxCommands(program);
 registerMutationEvidenceCommands(program);
 registerCapabilityCommands(program);
 registerRoutingCommands(program);

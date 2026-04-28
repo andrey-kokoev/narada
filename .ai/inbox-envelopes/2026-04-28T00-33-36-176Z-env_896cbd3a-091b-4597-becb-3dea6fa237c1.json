@@ -21,5 +21,13 @@
     ],
     "recommendation": "Treat this as important for immediate execution. Start with the smallest coherent vertical: Site-to-Site and filesystem-drop delivery, because they avoid external credentials while exercising the full authority model. Then add email/GitHub transports behind the same outbox lifecycle. Provide CLI surfaces such as outbox compose, outbox preview, outbox approve, outbox send, outbox confirm, and outbox work-next, with Git-visible outbox envelope artifacts analogous to inbox-envelopes."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "site_config_change",
+    "target_ref": "task-1016-canonical-outbox",
+    "promoted_at": "2026-04-28T03:14:50.074Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'site_config_change' is not implemented yet."
+  }
 }
