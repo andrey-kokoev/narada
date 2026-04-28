@@ -1,3 +1,11 @@
+---
+status: closed
+closed_at: 2026-04-28T19:53:01.459Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
+---
+
 # Task 306 — Document Intelligence-Authority Separation in Narada
 
 Status: opened
@@ -34,7 +42,7 @@ Update Narada documentation to explain Narada as an instantiation of Intelligenc
    - Connect the concept to existing authority classes and durable boundaries.
    - Avoid importing external concept prose wholesale; summarize the invariant in Narada terms.
 
-3. Update `docs/system.md` with an operational explanation or diagram.
+3. Update `docs/concepts/system.md` with an operational explanation or diagram.
    - Show how Narada prevents collapse between judgment and consequence.
    - Identify which component owns each boundary:
      source/fact admission, context/work formation, charter evaluation, foreman decision, intent/outbound handoff, worker execution, reconciliation, observation.
@@ -66,7 +74,17 @@ Update Narada documentation to explain Narada as an instantiation of Intelligenc
 
 - `README.md` — Enhanced "What this is" section with IAS framing, the boundary sequence diagram, and the prevented-collapse table. Kept concise; did not duplicate the external concept document.
 - `SEMANTICS.md` — Added §2.13 "Intelligence-Authority Separation" with core invariant, boundary ownership table, authority class connection, evaluation authority definition, and failure modes with Narada defenses.
-- `docs/system.md` — Added "Intelligence-Authority Separation" subsection under "Authority Boundaries" with a component ownership table and the structural guarantee that charter runtime is read-only.
+- `docs/concepts/system.md` — Added "Intelligence-Authority Separation" subsection under "Authority Boundaries" with a component ownership table and the structural guarantee that charter runtime is read-only.
 - `AGENTS.md` — Added `SEMANTICS.md §2.13` to the documentation index table.
 - No private operational data added. No code changes. No derivative status files created.
 - `pnpm typecheck` passes across all packages.
+
+## Verification
+
+| Check | Result |
+| --- | --- |
+| TIZ focused run `run_1777405938031_i67ld5` | Passed in 12ms |
+| README | Contains IAS framing and the full boundary sequence |
+| SEMANTICS | Contains canonical §2.13 Intelligence-Authority Separation |
+| System concept doc | `docs/concepts/system.md` records charter runtime as read-only evaluation |
+| Agent index | `AGENTS.md` points agents to `SEMANTICS.md §2.13` |
