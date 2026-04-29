@@ -2,6 +2,7 @@ import type { Command } from 'commander';
 import { directCommandAction, silentCommandContext } from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 import {
+  operatorSurfaceAgentInstantiateCommand,
   operatorSurfaceBindingDeferredCommand,
   operatorSurfaceBindFocusedCommand,
   operatorSurfaceIdentityAddCommand,
@@ -12,6 +13,40 @@ export function registerOperatorSurfaceCommands(program: Command): void {
   const surfaceCmd = program
     .command('operator-surface')
     .description('Operator Surface identity and runtime binding operators');
+
+  const agentCmd = surfaceCmd.command('agent').description('High-level Operator Surface agent paths');
+  agentCmd
+    .command('instantiate')
+    .description('Admit/reuse a Site role identity and emit bootstrap handoff text')
+    .requiredOption('--site <site-id-or-root>', 'Site id or root for the agent surface')
+    .requiredOption('--role <role>', 'Role to instantiate: architect or builder')
+    .requiredOption('--agent-kind <kind>', 'Runtime/agent kind, e.g. codex_cli, kimi_cli')
+    .requiredOption('--by <principal>', 'Principal requesting/admitting identity')
+    .option('--identity <id>', 'Override durable identity id')
+    .option('--label <label>', 'UI label projection for new identity')
+    .option('--dry-run', 'Preview without identity mutation', false)
+    .option('--bind-focused', 'Request focused runtime binding; defers to owning runtime locus', false)
+    .option('--runtime-locus <locus>', 'Owning User/PC runtime locus for binding deferral')
+    .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'operator-surface agent instantiate',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => operatorSurfaceAgentInstantiateCommand({
+        site: opts.site as string | undefined,
+        role: opts.role as string | undefined,
+        agentKind: opts.agentKind as string | undefined,
+        by: opts.by as string | undefined,
+        identityName: opts.identity as string | undefined,
+        label: opts.label as string | undefined,
+        dryRun: opts.dryRun as boolean | undefined,
+        bindFocused: opts.bindFocused as boolean | undefined,
+        runtimeLocus: opts.runtimeLocus as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
 
   const identityCmd = surfaceCmd.command('identity').description('Durable Operator Surface identities');
   identityCmd

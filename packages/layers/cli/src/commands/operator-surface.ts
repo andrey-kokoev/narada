@@ -1,5 +1,6 @@
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
+import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import {
   makeOperatorSurfaceLabel,
   operatorSurfaceIdentityPath,
@@ -7,6 +8,7 @@ import {
   writeOperatorSurfaceIdentities,
 } from '../lib/operator-surface-registry.js';
 import { loadRoster } from '../lib/task-governance.js';
+import { sitesAgentBootstrapCommand } from './sites.js';
 
 export interface OperatorSurfaceIdentityAddOptions {
   cwd?: string;
@@ -36,6 +38,20 @@ export interface OperatorSurfaceBindingOptions {
   format?: string;
 }
 
+export interface OperatorSurfaceAgentInstantiateOptions {
+  cwd?: string;
+  site?: string;
+  role?: string;
+  agentKind?: string;
+  by?: string;
+  identityName?: string;
+  label?: string;
+  dryRun?: boolean;
+  bindFocused?: boolean;
+  runtimeLocus?: string;
+  format?: CliFormat;
+}
+
 function requireText(value: string | undefined, name: string): string {
   const trimmed = value?.trim();
   if (!trimmed) throw new Error(`${name} is required`);
@@ -47,6 +63,142 @@ function errorResult(error: unknown): { exitCode: ExitCode; result: unknown } {
     exitCode: ExitCode.INVALID_CONFIG,
     result: { status: 'error', error: error instanceof Error ? error.message : String(error) },
   };
+}
+
+function normalizeInstantiateRole(role: string | undefined): 'architect' | 'builder' | null {
+  const value = role?.trim().toLowerCase();
+  return value === 'architect' || value === 'builder' ? value : null;
+}
+
+function defaultIdentityName(site: string, role: string): string {
+  return `${site}-${role}`.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function fallbackBootstrapText(role: 'architect' | 'builder'): string {
+  const title = role === 'architect' ? 'Architect' : 'Builder';
+  return [
+    `You are ${role}. Operator is Operator. We are governed by Narada law.`,
+    `Inhabit the ${title} role without claiming authority from the chat surface.`,
+    'Before work, run: narada operator-surface bind-focused --as self',
+  ].join('\n');
+}
+
+export async function operatorSurfaceAgentInstantiateCommand(
+  options: OperatorSurfaceAgentInstantiateOptions,
+  context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  try {
+    const cwd = options.cwd ?? '.';
+    const site = requireText(options.site, '--site');
+    const role = normalizeInstantiateRole(options.role);
+    if (!role) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          error: `Unsupported role: ${options.role ?? ''}`,
+          allowed_roles: ['architect', 'builder'],
+          mutation_performed: false,
+        },
+      };
+    }
+    const agentKind = requireText(options.agentKind, '--agent-kind');
+    const by = requireText(options.by, '--by');
+    const identityName = options.identityName?.trim() || defaultIdentityName(site, role);
+    const registry = await readOperatorSurfaceIdentities(cwd);
+    const existing = registry.identities.find((entry) => entry.identity_id === identityName);
+    let identityResult: unknown = null;
+    let mutationPerformed = false;
+
+    if (options.dryRun) {
+      identityResult = {
+        status: existing ? 'would_reuse' : 'would_admit',
+        identity_id: identityName,
+      };
+    } else if (existing) {
+      identityResult = {
+        status: 'reused',
+        identity: existing,
+      };
+    } else {
+      const admitted = await operatorSurfaceIdentityAddCommand({
+        cwd,
+        identityName,
+        role,
+        agentKind,
+        site,
+        by,
+        label: options.label ?? identityName,
+        format: 'json',
+      }, context);
+      if (admitted.exitCode !== ExitCode.SUCCESS) return admitted;
+      identityResult = admitted.result;
+      mutationPerformed = true;
+    }
+
+    const bootstrap = await sitesAgentBootstrapCommand(site, {
+      role,
+      format: 'json',
+      verbose: false,
+    }, context).catch((error) => ({
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: {
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
+      },
+    }));
+    const bootstrapResult = bootstrap.result as { bootstrap_text?: string; error?: string };
+    const bootstrapText = bootstrap.exitCode === ExitCode.SUCCESS && bootstrapResult.bootstrap_text
+      ? bootstrapResult.bootstrap_text
+      : fallbackBootstrapText(role);
+    const selfBindInstruction = 'narada operator-surface bind-focused --as self';
+    const runtimeBinding = options.bindFocused
+      ? {
+          status: 'deferred',
+          reason: 'runtime_locus_required',
+          runtime_binding_mutated: false,
+          deferred_command: `Route to owning runtime locus: narada operator-surface bind-focused --identity ${identityName} --runtime-locus ${options.runtimeLocus ?? '<pc-or-user-site>'}`,
+        }
+      : null;
+
+    const result = {
+      status: 'success',
+      mutation_performed: mutationPerformed,
+      dry_run: Boolean(options.dryRun),
+      site,
+      role,
+      agent_kind: agentKind,
+      identity_id: identityName,
+      registry_path: operatorSurfaceIdentityPath(cwd),
+      identity: identityResult,
+      bootstrap: {
+        source: bootstrap.exitCode === ExitCode.SUCCESS ? 'site_agent_bootstrap' : 'fallback',
+        warning: bootstrap.exitCode === ExitCode.SUCCESS ? null : bootstrapResult.error ?? 'Site bootstrap contract unavailable',
+        text: bootstrapText,
+      },
+      self_bind_instruction: selfBindInstruction,
+      runtime_binding: runtimeBinding,
+      copyable_text: [
+        bootstrapText,
+        '',
+        `Identity: ${identityName}`,
+        `Self-bind: ${selfBindInstruction}`,
+      ].join('\n'),
+    };
+
+    const lines = [
+      `Instantiate ${role}: ${identityName}`,
+      `Mutation: ${mutationPerformed ? 'identity admitted' : options.dryRun ? 'dry-run' : 'identity reused'}`,
+      `Self-bind: ${selfBindInstruction}`,
+      ...(runtimeBinding ? [`Runtime binding: deferred (${runtimeBinding.deferred_command})`] : []),
+    ];
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: formattedResult(result, lines, options.format ?? 'auto'),
+    };
+  } catch (error) {
+    return errorResult(error);
+  }
 }
 
 export async function operatorSurfaceIdentityAddCommand(

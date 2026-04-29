@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import {
+  operatorSurfaceAgentInstantiateCommand,
   operatorSurfaceBindingDeferredCommand,
   operatorSurfaceBindFocusedCommand,
   operatorSurfaceIdentityAddCommand,
@@ -41,6 +42,145 @@ afterEach(async () => {
 });
 
 describe('operator-surface commands', () => {
+  it('instantiates an architect surface through one high-level command', async () => {
+    const cwd = await tempRepo();
+    const result = await operatorSurfaceAgentInstantiateCommand({
+      cwd,
+      site: 'narada-proper',
+      role: 'architect',
+      agentKind: 'codex_cli',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      mutation_performed: true,
+      dry_run: false,
+      role: 'architect',
+      identity_id: 'narada-proper-architect',
+      self_bind_instruction: 'narada operator-surface bind-focused --as self',
+    });
+    expect(existsSync(join(cwd, 'operator-surfaces', 'identities.json'))).toBe(true);
+  });
+
+  it('rejects unknown instantiate roles without mutation', async () => {
+    const cwd = await tempRepo();
+    const result = await operatorSurfaceAgentInstantiateCommand({
+      cwd,
+      site: 'narada-proper',
+      role: 'reviewer',
+      agentKind: 'codex_cli',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      mutation_performed: false,
+      allowed_roles: ['architect', 'builder'],
+    });
+    expect(existsSync(join(cwd, 'operator-surfaces', 'identities.json'))).toBe(false);
+  });
+
+  it('supports dry-run instantiate without identity mutation', async () => {
+    const cwd = await tempRepo();
+    const result = await operatorSurfaceAgentInstantiateCommand({
+      cwd,
+      site: 'narada-proper',
+      role: 'architect',
+      agentKind: 'codex_cli',
+      by: 'operator',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      mutation_performed: false,
+      dry_run: true,
+      identity_id: 'narada-proper-architect',
+    });
+    expect(existsSync(join(cwd, 'operator-surfaces', 'identities.json'))).toBe(false);
+  });
+
+  it('reuses an existing instantiate identity instead of rewriting it', async () => {
+    const cwd = await tempRepo();
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-proper-architect',
+      role: 'architect',
+      agentKind: 'codex_cli',
+      site: 'narada-proper',
+      label: 'Existing Architect',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    const result = await operatorSurfaceAgentInstantiateCommand({
+      cwd,
+      site: 'narada-proper',
+      role: 'architect',
+      agentKind: 'codex_cli',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      mutation_performed: false,
+      identity: {
+        status: 'reused',
+        identity: {
+          label: 'Existing Architect',
+        },
+      },
+    });
+  });
+
+  it('returns runtime-locus deferral when focused binding is requested', async () => {
+    const cwd = await tempRepo();
+    const result = await operatorSurfaceAgentInstantiateCommand({
+      cwd,
+      site: 'narada-proper',
+      role: 'architect',
+      agentKind: 'codex_cli',
+      by: 'operator',
+      bindFocused: true,
+      runtimeLocus: 'pc-site',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      runtime_binding: {
+        status: 'deferred',
+        runtime_binding_mutated: false,
+        deferred_command: 'Route to owning runtime locus: narada operator-surface bind-focused --identity narada-proper-architect --runtime-locus pc-site',
+      },
+    });
+  });
+
+  it('returns compact human output for instantiate', async () => {
+    const cwd = await tempRepo();
+    const result = await operatorSurfaceAgentInstantiateCommand({
+      cwd,
+      site: 'narada-proper',
+      role: 'architect',
+      agentKind: 'codex_cli',
+      by: 'operator',
+      format: 'human',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(String((result.result as { _formatted: string })._formatted)).toContain('Instantiate architect');
+    expect(String((result.result as { _formatted: string })._formatted)).toContain('Self-bind: narada operator-surface bind-focused --as self');
+  });
+
   it('admits durable identities and builds bounded UI-ready labels without direct JSON editing', async () => {
     const cwd = await tempRepo();
     const add = await operatorSurfaceIdentityAddCommand({

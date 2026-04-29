@@ -246,11 +246,12 @@ Read AGENTS.md, confirm the assigned task and acceptance criteria, inspect the m
 The Operator can extract the bounded bootstrap text for a fresh thread without opening the full contract:
 
 ```bash
+narada operator-surface agent instantiate --site <site-id-or-root> --role architect --agent-kind codex_cli --by <principal>
 narada sites agent-bootstrap <site-id-or-root> --role architect
 narada sites agent-bootstrap <site-id-or-root> --role builder
 ```
 
-The command is read-only. It reads the generated Site `AGENTS.md` and `config.json`, rejects roles other than `architect` or `builder`, and emits only the selected role section so it can be copied into a fresh AI thread without widening the active role set.
+`operator-surface agent instantiate` is the Operator-facing path when a durable role identity should be admitted or reused before copy/paste bootstrap. `sites agent-bootstrap` remains the read-only primitive: it reads the generated Site `AGENTS.md` and `config.json`, rejects roles other than `architect` or `builder`, and emits only the selected role section so it can be copied into a fresh AI thread without widening the active role set.
 
 Neither contract admits additional AI roles. Operator remains the owner/client authority. The trace substrate records evidence and constrains future work; it is not a thinking role.
 

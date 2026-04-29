@@ -162,9 +162,12 @@ The first coherent command posture is read-only inspection.
 The current generic Narada proper CLI surface admits durable identity records and builds bounded label projections without requiring direct JSON edits:
 
 ```bash
+narada operator-surface agent instantiate --site <site-id-or-root> --role architect --agent-kind codex_cli --by <principal>
 narada operator-surface identity add <identity-name> --role <role> --agent-kind <kind> --site <site-id> --by <principal>
 narada operator-surface labels build --site <site-id>
 ```
+
+`agent instantiate` is the canonical high-level Operator path. It admits or reuses the durable role identity, emits bounded bootstrap/copy text, and includes `narada operator-surface bind-focused --as self`. The lower-level `identity add` and `labels build` commands remain primitives.
 
 These commands write/read Site-local durable identity records. They do not bind HWNDs, process ids, terminal tabs, API threads, MCP clients, or other volatile runtime handles.
 
