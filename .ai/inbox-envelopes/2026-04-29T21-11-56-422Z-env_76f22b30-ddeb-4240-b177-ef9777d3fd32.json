@@ -1,0 +1,29 @@
+{
+  "envelope_id": "env_76f22b30-ddeb-4240-b177-ef9777d3fd32",
+  "received_at": "2026-04-29T21:11:56.422Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "narada-andrey:builder-window-bind-instruction-exchange"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "WSL terminal agents need a standard bind-self operator-surface path",
+    "summary": "An exchange with narada-andrey.builder exposed that WSL/Windows terminal agents still need platform-specific PowerShell instructions to bind their visible window identity. This should be lifted into Narada proper as a standard operator-surface self-identification path.",
+    "observation": "Current instruction to a WSL terminal agent is: focus your own Windows Terminal window, then run a Windows PowerShell helper such as Show-FocusedWindowIdentityBindingDialog.ps1 or Set-FocusedWindowIdentityBinding.ps1 with an exact identity. This works locally, but it makes the agent/operator remember Windows-specific scripts and exact identity strings. The more coherent primitive is bind-self or bind-focused through Narada's operator-surface machinery, with declared cross-embodiment routing from WSL agent context to PC-local HWND runtime binding.",
+    "evidence": [
+      "Builder advised WSL windows to run powershell.exe -File C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Show-FocusedWindowIdentityBindingDialog.ps1 -AssertedBy operator and choose an admitted identity.",
+      "Builder also advised the lower-level Set-FocusedWindowIdentityBinding.ps1 -IdentityName <identity-name> path for agents that know their exact identity.",
+      "The workflow is correct locally but remains script-path and platform specific.",
+      "The missing ergonomic primitive is an agent/window self-identification path: bind this terminal/window to my declared identity without relying on operator memory of exact identity strings.",
+      "This is cross-embodiment: WSL agent context, Windows Terminal HWND, PC Site runtime binding, and User Site identity authority."
+    ],
+    "proposed_direction": "Extend the operator-surface identity/binding machinery proposal with commands such as narada operator-surface bind-self, bind-focused --identity <id>, bindings list, unbind-focused, and a UI picker surface. The implementation must preserve the authority split: admitted identities come from Site authority; volatile HWND binding belongs to the PC/runtime locus; WSL-to-Windows invocation uses declared embodiment routing rather than ad hoc PowerShell incantations.",
+    "related_upstream_envelope": "env_99dad4bf-1caa-4364-809e-257977fccc4f",
+    "requested_handling": "Attach as concrete evidence to the operator-surface binding machinery work, with emphasis on bind-self and cross-embodiment routing."
+  },
+  "status": "received"
+}
