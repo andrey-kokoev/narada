@@ -30,6 +30,16 @@ write_shim() {
 set -euo pipefail
 DIST_BIN="${target}"
 SRC_DIR="${SRC_DIR}"
+is_governance_command() {
+  case "\${1:-}" in
+    task|chapter|inbox|principal)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
 if [[ ! -f "\${DIST_BIN}" ]]; then
   echo "${name} dist not found: \${DIST_BIN}" >&2
   echo "Run: pnpm --filter @narada2/cli build" >&2
@@ -41,6 +51,9 @@ if [[ -d "\${SRC_DIR}" ]]; then
     if [[ "\${NARADA_SHIM_AUTO_BUILD:-0}" == "1" ]]; then
       echo "narada CLI dist is stale; rebuilding because NARADA_SHIM_AUTO_BUILD=1" >&2
       pnpm --dir "${ROOT_DIR}" --filter @narada2/cli build >&2
+    elif [[ "${name}" == "narada" ]] && [[ "\${NARADA_SHIM_ALLOW_STALE_GOVERNANCE:-1}" == "1" ]] && is_governance_command "\$@"; then
+      echo "narada CLI dist is stale relative to source: \${stale_source}" >&2
+      echo "continuing with installed dist for governance command; set NARADA_SHIM_ALLOW_STALE_GOVERNANCE=0 to block" >&2
     else
     echo "narada CLI dist is stale relative to source: \${stale_source}" >&2
     echo "Run: pnpm --filter @narada2/cli build" >&2
