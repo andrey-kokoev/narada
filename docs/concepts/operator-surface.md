@@ -149,6 +149,8 @@ Operator Surface controls should be projections of canonical capability families
 
 Use [`Contextual Capability Projection`](contextual-capability-projection.md) when deciding whether adjacent buttons are distinct capabilities or contextual labels/modes of one capability. The surface label must be backed by an operator-visible invariant: the work outcome the Operator expects, not merely a command exiting successfully.
 
+Use [`Operator Surface Action Posture`](operator-surface-action-posture.md) when deciding which surface tier a valid control belongs in. Diagnostic tools, repair/recovery actions, intrusive platform mutations, and hidden/internal primitives should remain available through their governed diagnostic or recovery posture, not appear in primary work-action rows by default.
+
 ## Inspection Posture
 
 The first coherent command posture is read-only inspection.

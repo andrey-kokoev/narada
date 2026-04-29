@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T17:25:34.583Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T17:31:50.406Z
+criteria_proof_verification:
+  state: unbound
+  rationale: docs/concepts/operator-surface-action-posture.md defines primary_work_action, secondary_utility, diagnostic_tool, repair_recovery_action, dangerous_intrusive_platform_mutation, hidden_internal_primitive, and contextual_capability_projection; projection rules exclude diagnostic/intrusive/hidden controls from primary rows by default; test requirements mandate posture assertions; Toggle Primary Display versus Exchange Monitor Contents is the motivating example; links were added from operator-surface, contextual-capability-projection, coverage-audit, and AGENTS.
+closed_at: 2026-04-29T17:32:03.333Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Classify operator surface actions by work diagnostic repair and projection posture
@@ -39,8 +48,8 @@ Inbox envelope env_e2bff944-56d8-411b-8630-1cda2c34c21f extends the closed conte
 
 ## Acceptance Criteria
 
-- [ ] Operator surface action classes are defined for primary work action secondary utility diagnostic tool repair recovery action dangerous intrusive platform mutation hidden internal primitive and contextual capability projection
-- [ ] Projection rules keep diagnostic and intrusive tools out of primary work-action surfaces by default
-- [ ] Tests or doctrine require projection posture assertions in addition to mechanics assertions
-- [ ] Toggle Primary Display versus Exchange Monitor Contents is used as motivating example
-- [ ] Source inbox envelope is routed and focused verification or pnpm verify passes
+- [x] Operator surface action classes are defined for primary work action secondary utility diagnostic tool repair recovery action dangerous intrusive platform mutation hidden internal primitive and contextual capability projection
+- [x] Projection rules keep diagnostic and intrusive tools out of primary work-action surfaces by default
+- [x] Tests or doctrine require projection posture assertions in addition to mechanics assertions
+- [x] Toggle Primary Display versus Exchange Monitor Contents is used as motivating example
+- [x] Source inbox envelope is routed and focused verification or pnpm verify passes

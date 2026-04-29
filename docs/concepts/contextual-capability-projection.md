@@ -14,6 +14,8 @@ An Operator Surface should not multiply buttons merely because a capability has 
 
 Projection is allowed to rename or narrow a capability for clarity. Projection is not allowed to hide missing behavior.
 
+Projection also does not decide whether a valid tool belongs in the primary work-action surface. For action class and placement posture, use [`Operator Surface Action Posture`](operator-surface-action-posture.md).
+
 ## Monitor Content Transfer Example
 
 Canonical capability family:
@@ -74,6 +76,7 @@ Coverage Audit should flag:
 - fixture-only or manual-helper proof presented as an integrated capability;
 - UI controls whose authority locus, capability grant, or admission path is unclear;
 - context-insensitive labels that do not change when prerequisites are absent.
+- diagnostic, recovery, intrusive, or hidden/internal controls projected into primary work rows by implementation convenience.
 
 The finding should record the canonical capability family, current projections, missing invariant proof, and recommended repair.
 
@@ -94,6 +97,7 @@ It must not:
 - bypass command/admission rules;
 - claim a capability is live because a helper exists;
 - multiply controls without naming the higher-level capability family.
+- promote diagnostic or intrusive helpers into primary work-action rows merely because they are implemented.
 
 ## Relationship To Capabilities
 

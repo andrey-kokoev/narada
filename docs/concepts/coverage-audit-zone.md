@@ -87,8 +87,11 @@ The audit sweep should cover:
 - Operator labels such as `done`, `complete`, `live`, `automatic`, `canonical`, `daemon`, or `MCP` where the surface is actually advisory, inert, or local-only.
 - Adjacent operator buttons that expose implementation decomposition instead of projections of one canonical capability family.
 - Operator-surface tests that prove command-local behavior but not the operator-visible invariant.
+- Diagnostic, recovery, intrusive, or hidden/internal controls shown as primary work actions without action-class justification.
 
 The motivating example category is display-toggle or swap-monitor style capability claims: a manual helper, fixture proof, or script stub may be valuable evidence, but it must not be labeled as a normal-path automatic capability until the normal path exists and is proven.
+
+For operator surfaces, use [`operator-surface-action-posture.md`](operator-surface-action-posture.md) to classify whether a valid control is a primary work action, secondary utility, diagnostic tool, repair/recovery action, dangerous intrusive platform mutation, hidden internal primitive, or contextual projection. Coverage should assert placement posture as well as mechanics.
 
 ## Bounded Initial Sweep Protocol
 
