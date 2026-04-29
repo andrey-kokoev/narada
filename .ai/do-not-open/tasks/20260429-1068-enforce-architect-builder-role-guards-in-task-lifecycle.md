@@ -1,8 +1,17 @@
 ---
-status: opened
+status: closed
 depends_on: [1065]
 amended_by: architect
 amended_at: 2026-04-29T15:06:45.274Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T16:07:03.444Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Focused role-guard test covers Builder-owned report blocking, explicit durable override rationale, and task evidence inspection visibility; close surface uses the same guard and CLI override option; full verification passed.
+closed_at: 2026-04-29T16:04:15.027Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Enforce Architect Builder role guards in task lifecycle
@@ -40,8 +49,8 @@ This task addresses the role-collapse failure where Architect executed and close
 
 ## Acceptance Criteria
 
-- [ ] Architect role may create specify assign route review and admit tasks but is warned or blocked from Builder-owned execution closure by default
-- [ ] Builder-owned task report close or implementation commands require Builder or explicit override with rationale
-- [ ] Override is durable evidence and visible in task evidence inspection
-- [ ] Role guard uses configured roster or task assignment state rather than chat inference
-- [ ] Tests cover allowed Architect handoff allowed Builder execution blocked Architect execution and explicit override and pnpm verify passes
+- [x] Architect role may create specify assign route review and admit tasks but is warned or blocked from Builder-owned execution closure by default
+- [x] Builder-owned task report close or implementation commands require Builder or explicit override with rationale
+- [x] Override is durable evidence and visible in task evidence inspection
+- [x] Role guard uses configured roster or task assignment state rather than chat inference
+- [x] Tests cover allowed Architect handoff allowed Builder execution blocked Architect execution and explicit override and pnpm verify passes

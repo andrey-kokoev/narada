@@ -191,6 +191,7 @@ function summarizeCommandResult(result: unknown): Record<string, unknown> {
     'evidence_verdict',
     'close_action',
     'release_reason',
+    'role_guard_override',
   ]) {
     if (key in record) summary[key] = record[key];
   }

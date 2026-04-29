@@ -16,6 +16,7 @@ import {
   captureTaskLifecycleEvidenceState,
   writeTaskLifecycleMutationEvidence,
 } from '../lib/mutation-evidence-writer.js';
+import { enforceBuilderOwnedLifecycleGuard } from '../lib/task-role-guard.js';
 
 export interface TaskReportOptions {
   taskNumber?: string;
@@ -29,6 +30,7 @@ export interface TaskReportOptions {
   principalStateDir?: string;
   verbose?: boolean;
   store?: TaskLifecycleStore;
+  overrideRationale?: string;
 }
 
 export async function taskReportCommand(
@@ -36,11 +38,25 @@ export async function taskReportCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const fmt = createFormatter({ format: options.format || 'auto', verbose: false });
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
+  const roleGuard = await enforceBuilderOwnedLifecycleGuard({
+    cwd,
+    taskNumber: options.taskNumber,
+    actor: options.agent,
+    action: 'report',
+    overrideRationale: options.overrideRationale,
+  });
+  if (!roleGuard.ok) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: { status: 'error', error: roleGuard.error },
+    };
+  }
   const before = await captureTaskLifecycleEvidenceState(cwd, options.taskNumber, options.store);
+  const serviceAgent = roleGuard.override?.owner_agent_id ?? options.agent;
 
   const serviceResult = await reportTaskService({
     taskNumber: options.taskNumber,
-    agent: options.agent,
+    agent: serviceAgent,
     summary: options.summary,
     changedFiles: options.changedFiles,
     verification: options.verification,
@@ -49,7 +65,9 @@ export async function taskReportCommand(
     store: options.store,
   } as ReportTaskServiceOptions);
 
-  const result = serviceResult.result;
+  const result = roleGuard.override
+    ? { ...serviceResult.result, role_guard_override: roleGuard.override }
+    : serviceResult.result;
   const after = result.status === 'success'
     ? await captureTaskLifecycleEvidenceState(cwd, options.taskNumber, options.store)
     : null;

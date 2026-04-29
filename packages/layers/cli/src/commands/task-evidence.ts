@@ -6,6 +6,7 @@
  */
 
 import { resolve } from 'node:path';
+import { readdir, readFile } from 'node:fs/promises';
 import {
   findTaskFile,
   inspectTaskEvidence,
@@ -87,6 +88,7 @@ export async function taskEvidenceCommand(
   }
 
   const format = options.format === 'json' ? 'json' : 'human';
+  const roleGuardOverrides = await readRoleGuardOverrides(cwd, Number(taskNumber));
 
   if (format === 'json') {
     return {
@@ -94,6 +96,7 @@ export async function taskEvidenceCommand(
       result: {
         status: 'ok',
         evidence,
+        role_guard_overrides: roleGuardOverrides,
       },
     };
   }
@@ -111,6 +114,14 @@ export async function taskEvidenceCommand(
     `  closure:             ${evidence.has_closure ? 'yes' : 'no'}`,
     `  assignment intent:   ${evidence.active_assignment_intent ?? 'none'}`,
   ];
+
+  if (roleGuardOverrides.length > 0) {
+    lines.push('');
+    lines.push('Role guard overrides:');
+    for (const override of roleGuardOverrides) {
+      lines.push(`  ${override.command}: ${override.rationale}`);
+    }
+  }
 
   if (evidence.violations.length > 0) {
     lines.push('');
@@ -132,6 +143,37 @@ export async function taskEvidenceCommand(
     exitCode: ExitCode.SUCCESS,
     result: lines.join('\n'),
   };
+}
+
+async function readRoleGuardOverrides(cwd: string, taskNumber: number): Promise<Array<{ command: string; actor: string; owner_agent_id: string; rationale: string }>> {
+  const dir = resolve(cwd, '.ai', 'mutation-evidence', 'task_lifecycle');
+  let files: string[];
+  try {
+    files = await readdir(dir);
+  } catch {
+    return [];
+  }
+  const overrides: Array<{ command: string; actor: string; owner_agent_id: string; rationale: string }> = [];
+  for (const file of files.filter((entry) => entry.endsWith('.json'))) {
+    try {
+      const parsed = JSON.parse(await readFile(resolve(dir, file), 'utf8')) as {
+        command?: string;
+        subject?: { number?: number };
+        replay_payload?: { command_result?: { role_guard_override?: { actor?: string; owner_agent_id?: string; rationale?: string } } };
+      };
+      const override = parsed.replay_payload?.command_result?.role_guard_override;
+      if (parsed.subject?.number !== taskNumber || !override?.rationale || !override.actor || !override.owner_agent_id) continue;
+      overrides.push({
+        command: parsed.command ?? 'unknown',
+        actor: override.actor,
+        owner_agent_id: override.owner_agent_id,
+        rationale: override.rationale,
+      });
+    } catch {
+      continue;
+    }
+  }
+  return overrides;
 }
 
 export async function taskEvidenceAdmitCommand(

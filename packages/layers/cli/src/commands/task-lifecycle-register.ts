@@ -117,6 +117,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .option('--verification <json>', 'JSON array of {command, result} objects, e.g. \'[{"command":"pnpm verify","result":"passed"}]\'')
     .option('--residuals <json>', 'JSON array of known residual strings')
     .option('--principal-state-dir <path>', 'Directory containing PrincipalRuntime state file')
+    .option('--override-rationale <text>', 'Explicit durable override rationale for role-guarded lifecycle actions')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('-v, --verbose', 'Show accepted-learning guidance and expanded rationale', false)
     .action(directCommandAction<[string, Record<string, unknown>]>({
@@ -132,6 +133,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(),
         principalStateDir: opts.principalStateDir as string | undefined,
+        overrideRationale: opts.overrideRationale as string | undefined,
         verbose: opts.verbose as boolean | undefined,
       }),
     }));
@@ -225,6 +227,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .requiredOption('--by <id>', 'Operator or agent ID performing the close')
     .requiredOption('--mode <mode>', 'Closure mode: operator_direct, peer_reviewed, agent_finish, emergency. Use peer_reviewed only for explicit review-driven closure; task review --verdict accepted normally handles that path.')
     .option('--format <fmt>', 'Output format: json or human', 'human')
+    .option('--override-rationale <text>', 'Explicit durable override rationale for role-guarded lifecycle actions')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .action(resourceScopedDirectCommandAction<SqliteTaskLifecycleStore, [string, Record<string, unknown>]>({
       command: 'task close',
@@ -239,6 +242,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'human'),
         store,
+        overrideRationale: opts.overrideRationale as string | undefined,
       }),
     }));
 

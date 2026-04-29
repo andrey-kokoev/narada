@@ -6,6 +6,7 @@ vi.unmock('node:fs/promises');
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskReportCommand } from '../../src/commands/task-report.js';
 import { taskClaimCommand } from '../../src/commands/task-claim.js';
+import { taskEvidenceCommand } from '../../src/commands/task-evidence.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import type { TaskAssignmentRecord } from '../../src/lib/task-governance.js';
 import { openTaskLifecycleStore, type ReportRecordRow } from '../../src/lib/task-lifecycle-store.js';
@@ -28,6 +29,8 @@ function setupRepo(tempDir: string) {
       agents: [
         { agent_id: 'test-agent', role: 'implementer', capabilities: ['claim'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
         { agent_id: 'other-agent', role: 'implementer', capabilities: ['claim'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
+        { agent_id: 'builder', role: 'builder', capabilities: ['claim', 'execute'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
+        { agent_id: 'architect', role: 'architect', capabilities: ['propose', 'review'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
       ],
     }, null, 2),
   );
@@ -149,6 +152,53 @@ describe('task report operator', () => {
     expect(agent.status).toBe('done');
     expect(agent.task).toBeNull();
     expect(agent.last_done).toBe(999);
+  });
+
+  it('blocks Architect report on Builder-owned task unless durable override rationale is supplied', async () => {
+    await taskClaimCommand({ taskNumber: '999', agent: 'builder', cwd: tempDir, format: 'json' });
+
+    const blocked = await taskReportCommand({
+      taskNumber: '999',
+      agent: 'architect',
+      summary: 'Architect should not execute Builder work',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(blocked.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect((blocked.result as { error: string }).error).toContain('Role guard');
+
+    const overridden = await taskReportCommand({
+      taskNumber: '999',
+      agent: 'architect',
+      summary: 'Emergency evidence repair',
+      changedFiles: 'src/foo.ts',
+      verification: JSON.stringify([{ command: 'manual inspection', result: 'passed' }]),
+      residuals: JSON.stringify([]),
+      cwd: tempDir,
+      format: 'json',
+      overrideRationale: 'Builder unavailable; Operator directed emergency report repair.',
+    });
+
+    expect(overridden.exitCode).toBe(ExitCode.SUCCESS);
+    expect(overridden.result).toMatchObject({
+      status: 'success',
+      role_guard_override: {
+        actor: 'architect',
+        owner_agent_id: 'builder',
+        rationale: 'Builder unavailable; Operator directed emergency report repair.',
+      },
+    });
+
+    const evidence = await taskEvidenceCommand({ cwd: tempDir, taskNumber: '999', format: 'json' });
+    const parsed = evidence.result as { role_guard_overrides: Array<{ actor: string; owner_agent_id: string; rationale: string }> };
+    expect(parsed.role_guard_overrides).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        actor: 'architect',
+        owner_agent_id: 'builder',
+        rationale: 'Builder unavailable; Operator directed emergency report repair.',
+      }),
+    ]));
   });
 
   it('includes guidance in JSON only when verbose is set', async () => {

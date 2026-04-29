@@ -13,6 +13,7 @@ import {
   captureTaskLifecycleEvidenceState,
   writeTaskLifecycleMutationEvidence,
 } from '../lib/mutation-evidence-writer.js';
+import { enforceBuilderOwnedLifecycleGuard } from '../lib/task-role-guard.js';
 
 export interface TaskCloseOptions {
   taskNumber: string;
@@ -21,6 +22,7 @@ export interface TaskCloseOptions {
   cwd?: string;
   store?: TaskLifecycleStore;
   mode?: TaskClosureMode;
+  overrideRationale?: string;
 }
 
 export async function taskCloseCommand(
@@ -28,6 +30,19 @@ export async function taskCloseCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const fmt = createFormatter({ format: options.format || 'auto', verbose: false });
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
+  const roleGuard = await enforceBuilderOwnedLifecycleGuard({
+    cwd,
+    taskNumber: options.taskNumber,
+    actor: options.by,
+    action: 'close',
+    overrideRationale: options.overrideRationale,
+  });
+  if (!roleGuard.ok) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: { status: 'error', error: roleGuard.error },
+    };
+  }
   const before = await captureTaskLifecycleEvidenceState(cwd, options.taskNumber, options.store);
   const serviceResult = await closeTaskService({
     taskNumber: options.taskNumber,
@@ -36,7 +51,9 @@ export async function taskCloseCommand(
     store: options.store,
     mode: options.mode ?? 'operator_direct',
   });
-  const result = serviceResult.result;
+  const result = roleGuard.override
+    ? { ...serviceResult.result, role_guard_override: roleGuard.override }
+    : serviceResult.result;
   const after = result.status === 'success'
     ? await captureTaskLifecycleEvidenceState(cwd, options.taskNumber, options.store)
     : null;

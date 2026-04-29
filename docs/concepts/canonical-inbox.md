@@ -276,6 +276,8 @@ narada inbox architect-process <envelope-id> --by architect
 
 This command is deliberately a handoff boundary. It may create a task, claim it for Builder, route the source envelope to `task:<number>`, and export portable inbox/lifecycle artifacts. It must not execute the Builder work, submit a Builder report, close the task, or self-review.
 
+Task lifecycle guardrails preserve the same separation after handoff. Architect may specify, route, assign, review, and admit where authorized, but Builder-owned report/close paths reject Architect by default. If the Operator requires an emergency exception, the command must carry `--override-rationale`; the rationale is recorded in task lifecycle mutation evidence and surfaced by task evidence inspection.
+
 If handling must be abandoned without taking an action:
 
 ```bash
