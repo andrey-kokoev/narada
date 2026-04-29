@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T15:33:56.216Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T16:36:58.516Z
+criteria_proof_verification:
+  state: unbound
+  rationale: MCP tool list includes narada_inbox_submit_observation and narada_task_work_next; task work-next delegates to task peek-next for read-only discovery and task work-next when claim=true; tests prove discovery and local task discovery through MCP; docs describe bounded tool names and posture; pnpm verify passed.
+closed_at: 2026-04-29T16:37:14.352Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Expose canonical inbox and work-next MCP tools to Codex agents
@@ -39,8 +48,8 @@ This task follows an observed Codex tool-surface gap: a Narada Site architect at
 
 ## Acceptance Criteria
 
-- [ ] Codex-visible MCP tool surface includes canonical inbox observation submission or an equivalent governed envelope submission tool
-- [ ] Codex-visible MCP tool surface includes work-next discovery for assigned or admissible governed work
-- [ ] Tool implementation delegates to Narada canonical application services or CLI logic rather than creating a second authority implementation
-- [ ] Agent-facing tool names and outputs are bounded ergonomic and documented in AGENTS or MCP facade docs
-- [ ] Tests or verification demonstrate tool discovery and a dry-run or local submission path and pnpm verify passes
+- [x] Codex-visible MCP tool surface includes canonical inbox observation submission or an equivalent governed envelope submission tool
+- [x] Codex-visible MCP tool surface includes work-next discovery for assigned or admissible governed work
+- [x] Tool implementation delegates to Narada canonical application services or CLI logic rather than creating a second authority implementation
+- [x] Agent-facing tool names and outputs are bounded ergonomic and documented in AGENTS or MCP facade docs
+- [x] Tests or verification demonstrate tool discovery and a dry-run or local submission path and pnpm verify passes

@@ -47,6 +47,7 @@ Initial tools:
 | `narada_site_context` | Read-only inspection of the Site identity and authority posture scoping this MCP facade. |
 | `narada_inbox_doctor` | Read-only readiness inspection. |
 | `narada_inbox_work_next` | Read-only by default; `claim=true` performs the same claim transition as the inbox command. |
+| `narada_task_work_next` | Read-only task discovery by default; `claim=true` delegates to the canonical task work-next command and may claim/pull work. |
 | `narada_inbox_list` | Read-only inbox inspection. |
 | `narada_inbox_show` | Read-only envelope inspection. |
 | `narada_inbox_submit_observation` | Mutating inbox submission with read-back confirmation and canonical mutation evidence. |
@@ -110,7 +111,7 @@ The local Narada proper MCP client config artifact is:
 The expected read-only proof after registration is:
 
 1. Client lists MCP tools.
-2. Tool list includes `narada_inbox_submit_observation`, `narada_inbox_work_next`, and `narada_inbox_doctor`.
+2. Tool list includes `narada_inbox_submit_observation`, `narada_inbox_work_next`, `narada_task_work_next`, and `narada_inbox_doctor`.
 3. `narada_site_context` returns the intended `site_id`, `site_root`, and `authority_posture: "facade_only"`.
 
 This is configuration of a `ControlChannel`, not authority movement. The MCP facade still delegates to canonical services and mutating inbox tools still create inert envelopes with read-back confirmation and mutation evidence.

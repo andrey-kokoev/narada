@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import { handleMcpRequest, resolveMcpSiteContext, runMcpServer } from '../../src/mcp-server.js';
+import { taskCreateCommand } from '../../src/commands/task-create.js';
 
 describe('Narada MCP facade', () => {
   let tempDir: string;
@@ -42,6 +43,7 @@ describe('Narada MCP facade', () => {
     expect(tools).toContain('narada_mcp_fabric_context');
     expect(tools).toContain('narada_inbox_doctor');
     expect(tools).toContain('narada_inbox_work_next');
+    expect(tools).toContain('narada_task_work_next');
     expect(tools).toContain('narada_inbox_submit_observation');
   });
 
@@ -117,6 +119,60 @@ describe('Narada MCP facade', () => {
         cross_site: false,
         mutation_attempted: false,
         capability_status: 'not_required',
+      },
+    });
+  });
+
+  it('calls task work-next discovery through the existing task command surface', async () => {
+    mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
+    mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
+    writeFileSync(join(tempDir, '.ai', 'agents', 'roster.json'), JSON.stringify({
+      version: 1,
+      updated_at: new Date().toISOString(),
+      agents: [{
+        agent_id: 'builder',
+        role: 'builder',
+        capabilities: ['claim', 'execute'],
+        first_seen_at: new Date().toISOString(),
+        last_active_at: new Date().toISOString(),
+        status: 'idle',
+        task: null,
+        last_done: null,
+        updated_at: new Date().toISOString(),
+      }],
+    }, null, 2));
+    const created = await taskCreateCommand({
+      cwd: tempDir,
+      number: 501,
+      title: 'MCP task discovery',
+      goal: 'Discover this task through MCP.',
+      requiredWork: 'Return the next task.',
+      criteria: ['Task is discoverable'],
+      format: 'json',
+    });
+    expect(created.exitCode).toBe(0);
+
+    const response = await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 12,
+      method: 'tools/call',
+      params: {
+        name: 'narada_task_work_next',
+        arguments: { cwd: tempDir, agent: 'builder' },
+      },
+    });
+
+    const result = JSON.parse(((response?.result as { content: Array<{ text: string }> }).content[0].text));
+    expect(result).toMatchObject({
+      status: 'ok',
+      action: 'peek_next',
+      primary: {
+        title: 'MCP task discovery',
+      },
+      traversal: {
+        resolution: 'source_site',
+        cross_site: false,
+        mutation_attempted: false,
       },
     });
   });

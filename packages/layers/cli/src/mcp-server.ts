@@ -8,6 +8,10 @@ import {
   inboxSubmitObservationCommand,
   inboxWorkNextCommand,
 } from './commands/inbox.js';
+import {
+  taskPeekNextCommand,
+  taskWorkNextCommand,
+} from './commands/task-next.js';
 import { grantEffectiveStatus, readCapabilityRegistry } from './lib/capability-consent-registry.js';
 import { ExitCode } from './lib/exit-codes.js';
 import { readRoutingRegistry, resolveRoute, type RouteAddressRecord } from './lib/routing-addressing-registry.js';
@@ -109,6 +113,16 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
       by: stringSchema('Principal for claim=true.'),
       target: targetSchema(),
     }),
+  },
+  {
+    name: 'narada_task_work_next',
+    description: 'Discover the next governed task for an agent without mutating unless claim=true.',
+    inputSchema: objectSchema({
+      cwd: stringSchema('Working directory; defaults to current process cwd.'),
+      agent: { type: 'string', description: 'Roster agent id.' },
+      claim: booleanSchema('Claim/pull work and return an execution packet. Defaults to false for read-only discovery.'),
+      target: targetSchema(),
+    }, ['agent']),
   },
   {
     name: 'narada_inbox_list',
@@ -220,7 +234,8 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
   const args = asRecord(record.arguments);
   if (!name) throw new Error('tools/call requires params.name');
   const mutationAttempted = name === 'narada_inbox_submit_observation'
-    || (name === 'narada_inbox_work_next' && booleanField(args, 'claim') === true);
+    || (name === 'narada_inbox_work_next' && booleanField(args, 'claim') === true)
+    || (name === 'narada_task_work_next' && booleanField(args, 'claim') === true);
   const traversal = await resolveMcpTraversal({
     sourceSite: siteContext,
     tool: name,
@@ -267,6 +282,19 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
         limit: numberField(args, 'limit'),
         claim: booleanField(args, 'claim'),
         by: stringField(args, 'by'),
+        format: 'json',
+      }), traversal);
+    case 'narada_task_work_next':
+      if (booleanField(args, 'claim') === true) {
+        return commandToolResult(await taskWorkNextCommand({
+          cwd: scopedCwd,
+          agent: requiredString(args, 'agent'),
+          format: 'json',
+        }), traversal);
+      }
+      return commandToolResult(await taskPeekNextCommand({
+        cwd: scopedCwd,
+        agent: requiredString(args, 'agent'),
         format: 'json',
       }), traversal);
     case 'narada_inbox_list':
