@@ -14,7 +14,7 @@ When durable governance coordinates, runtime truth, and operator/session knowled
 | `law_admission_mode` | How law is admitted: inherited, overlaid, federated, or referenced. | Local overlays must be explicit. |
 | `authority_locus` | The Site locus that owns governed mutation. | Current shell, clone, or process is not authority by convenience. |
 | `embodiments` | Known concrete presences: roots, runtimes, projections, forwarding surfaces. | Multiple embodiments do not create multiple authorities. |
-| `site_participant_roles` | Declared human/agent participant roles such as resident, architect, builder, receptionist, or inspector. | Role declaration is not capability grant, runtime existence, or mutation authority. |
+| `site_participant_roles` | Declared human/agent participant roles such as resident, architect, builder, receptionist, dharma_observer, or inspector. | Role declaration is not capability grant, runtime existence, or mutation authority. |
 | `operator_surfaces` | Optional addressable interfaces for inhabiting or observing Site work. | Surfaces improve launch/focus/recovery; they do not grant mutation, effect, or capability authority. |
 | `session_bindings` | Optional continuity links between role, runtime, channel, surface, task/chapter, and trace references. | Session continuity does not claim work, admit evidence, or prove completion. |
 | `state_projections` | Queryable current-state surfaces derived from authority records, runtime observations, transition protocols, and evidence logs. | Projections are read models; scripts and logs do not become authority by updating them. |
@@ -91,12 +91,12 @@ When durable governance coordinates, runtime truth, and operator/session knowled
         "authority_posture": "construction"
       },
       {
-        "role_id": "inspector",
-        "role_class": "inspector",
+        "role_id": "observer",
+        "role_class": "dharma_observer",
         "status": "planned",
-        "purpose": "Independently inspect evidence before admission when the Site has earned that separation.",
-        "runtime_kind": "api_agent",
-        "authority_posture": "inspection"
+        "purpose": "Observe Narada-law, telos, authority-boundary, and inhabited-evolution coherence without building or reviewing.",
+        "runtime_kind": "codex_cli",
+        "authority_posture": "read_only_observation"
       }
     ],
     "operator_surfaces": [
@@ -347,9 +347,12 @@ Default role posture:
 | `architect` | Specifies topology, doctrine fit, work packages, and acceptance criteria. | Specification/review posture only unless separately granted. |
 | `builder` | Executes approved construction work. | Construction posture only; must report evidence. |
 | `receptionist` | Intake/routing role for envelopes and first contact. | Intake-only until promotion/admission. |
-| `inspector` | Independent evidence/admission review role. | Inspection posture; should stay independent from Builder. |
+| `dharma_observer` | Observes whether work preserves Narada law, telos, authority boundaries, and inhabited-evolution discipline. | Read-only observation posture; may submit observations/proposals/appeals, but must not build, review, close, assign, or mutate implementation state. |
+| `inspector` | Deferred construction-style inspection/review role. | Not admitted by default; if later inhabited, must remain distinct from Dharma Observer and Builder. |
 
-`site_participant_roles` may declare planned roles so startup posture is explicit, for example an API-based Inspector or CLI-based Receptionist. Planned/deferred roles are inert until an inhabited operation actually uses them and the Site config gives them a bounded contract.
+`site_participant_roles` may declare planned roles so startup posture is explicit, for example a CLI-based Dharma Observer or Receptionist. Planned/deferred roles are inert until an inhabited operation actually uses them and the Site config gives them a bounded contract.
+
+For the currently admitted observer semantics, see [`Dharma Observer Role`](../concepts/dharma-observer-role.md). Do not use `inspector` as shorthand for this role: Inspector implies review/enforcement, while Dharma Observer is read-only law/telos observation.
 
 Delegated role categories may appear as Site-local participant or session metadata when a Site has earned them, but they are qualifiers rather than default bootstrap roles. Use `builder-worker` for bounded construction delegation under Builder, `resident-worker` for bounded use-work under Resident, and `effect-worker` for runtime effect machinery. See [`delegated-role-taxonomy.md`](../concepts/delegated-role-taxonomy.md).
 

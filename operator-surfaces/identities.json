@@ -1,6 +1,6 @@
 {
   "schema": "https://narada.dev/schemas/operator-surface-identities/v1",
-  "updated_at": "2026-04-29T21:27:05.361Z",
+  "updated_at": "2026-04-29T22:28:10.573Z",
   "identities": [
     {
       "identity_id": "architect",
@@ -26,6 +26,21 @@
       "admitted_by": "operator",
       "admitted_at": "2026-04-29T21:27:05.360Z",
       "updated_at": "2026-04-29T21:27:05.360Z",
+      "authority_limits": [
+        "identity_record_is_site_authority",
+        "runtime_handle_binding_is_not_admitted_here",
+        "operator_surface_does_not_grant_effect_capability"
+      ]
+    },
+    {
+      "identity_id": "observer",
+      "site_id": "narada-proper",
+      "role": "dharma_observer",
+      "agent_kind": "codex_cli",
+      "label": "Observer",
+      "admitted_by": "operator",
+      "admitted_at": "2026-04-29T22:28:10.545Z",
+      "updated_at": "2026-04-29T22:28:10.545Z",
       "authority_limits": [
         "identity_record_is_site_authority",
         "runtime_handle_binding_is_not_admitted_here",

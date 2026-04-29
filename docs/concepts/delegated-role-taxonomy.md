@@ -96,6 +96,8 @@ This is not a claim that every role needs a worker, inspector, manager, or symme
 
 Additional roles such as inspector, receptionist, clerk, superintendent, or project manager remain deferred until they satisfy the Role Admission Rule in [`inhabited-evolution.md`](inhabited-evolution.md).
 
+`dharma_observer` is a separate observer role, not an inspector. It observes Narada-law and telos coherence in read-only posture and may submit observations, proposals, or appeals. It must not build, review, close, assign, or mutate implementation state. See [`Dharma Observer Role`](dharma-observer-role.md).
+
 ## Relationship To Bootstrap Contracts
 
 Default fresh AI thread bootstrap remains limited to `architect` and `builder` unless a Site explicitly declares a more specific contract.
