@@ -82,6 +82,7 @@ When describing higher-order architecture, deployment, or design:
 - Do not interpret, narrow, relax, or silently carve exceptions into operator-set constraints.
 - Treat an operator prohibition as still active until the operator explicitly lifts or changes it.
 - If an operator constraint appears ambiguous, ask instead of inferring a narrower allowable path.
+- Do not repair Narada CLI invocation by hardcoding Node, NVM, WSL, or package-manager paths from memory. Use the declared delegated CLI embodiment, the installed `narada` shim, or report the exact `narada inbox doctor` / `narada doctor` repair command.
 
 ## Target Locus Before Mutation
 

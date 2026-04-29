@@ -398,10 +398,56 @@ describe('Canonical Inbox CLI commands', () => {
     expect(result.runtime.delegated_cli_embodiment.scripts[0]).toMatchObject({
       script_name: 'status',
       loadable: false,
+      failure_kind: 'execution_failed',
+      repair_command: 'pnpm --filter @narada2/cli build && pnpm run narada:install-shim',
     });
     expect(result.runtime.delegated_cli_embodiment.scripts[0]?.detail).toContain('@narada2/missing-task-governance-fixture');
     expect(result.checks.find((check) => check.name === 'delegated_cli_embodiment_loadable')).toMatchObject({
       ok: false,
+    });
+  });
+
+  it('reports declared delegated CLI invocation contracts and classifies node-not-found failures', async () => {
+    setupGitRepo(tempDir);
+    const wrapper = join(tempDir, 'delegated-narada.sh');
+    writeFileSync(wrapper, '#!/bin/sh\nPATH=/definitely-missing\nexec node ./packages/layers/cli/dist/main.js "$@"\n', 'utf8');
+    writeFileSync(tempDir + '/package.json', JSON.stringify({
+      narada: {
+        delegated_cli_embodiment: {
+          command: 'sh ./delegated-narada.sh',
+          cwd: '.',
+          shell: 'non_login',
+          repair_command: 'pnpm run narada:install-shim',
+        },
+      },
+    }), 'utf8');
+
+    const doctor = await inboxDoctorCommand({ cwd: tempDir, format: 'json' });
+
+    const result = doctor.result as {
+      runtime: {
+        delegated_cli_embodiment: {
+          ok: boolean;
+          configured: boolean;
+          invocation_contract: { command: string; shell: string; repair_command: string } | null;
+          scripts: Array<{ script_name: string; loadable: boolean; failure_kind: string; repair_command: string }>;
+        };
+      };
+    };
+    expect(result.runtime.delegated_cli_embodiment).toMatchObject({
+      configured: true,
+      ok: false,
+      invocation_contract: {
+        command: 'sh ./delegated-narada.sh',
+        shell: 'non_login',
+        repair_command: 'pnpm run narada:install-shim',
+      },
+    });
+    expect(result.runtime.delegated_cli_embodiment.scripts[0]).toMatchObject({
+      script_name: 'narada.delegated_cli_embodiment',
+      loadable: false,
+      failure_kind: 'missing_node',
+      repair_command: 'pnpm run narada:install-shim',
     });
   });
 

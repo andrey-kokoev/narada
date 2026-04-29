@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T19:17:29.768Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T19:24:40.803Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Agent guidance now forbids hardcoded Node/NVM/WSL path repair; package.json can declare narada.delegated_cli_embodiment with command/cwd/shell/repair_command; inbox doctor reports loadability, failure_kind, and repair_command; output points to shim/wrapper contract; source envelope env_e20fca5c-33cf-489e-8610-c6094b121dbf is routed through task 1087; focused inbox tests and pnpm verify passed.
+closed_at: 2026-04-29T19:24:52.648Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Add canonical delegated CLI invocation contract
@@ -39,8 +48,8 @@ Inbox envelope env_e20fca5c-33cf-489e-8610-c6094b121dbf reports that narada-andr
 
 ## Acceptance Criteria
 
-- [ ] Agent-facing guidance forbids hardcoded Node or NVM bin path repair for Narada CLI invocation
-- [ ] Delegated CLI embodiment config can declare the canonical invocation path or wrapper for a target Site embodiment
-- [ ] Doctor or preflight reports loadability and exact repair command when the delegated CLI embodiment is not usable
-- [ ] Output recommends using the Narada shim or generated wrapper instead of sampled PATH commands
-- [ ] Source envelope env_e20fca5c-33cf-489e-8610-c6094b121dbf is routed
+- [x] Agent-facing guidance forbids hardcoded Node or NVM bin path repair for Narada CLI invocation
+- [x] Delegated CLI embodiment config can declare the canonical invocation path or wrapper for a target Site embodiment
+- [x] Doctor or preflight reports loadability and exact repair command when the delegated CLI embodiment is not usable
+- [x] Output recommends using the Narada shim or generated wrapper instead of sampled PATH commands
+- [x] Source envelope env_e20fca5c-33cf-489e-8610-c6094b121dbf is routed

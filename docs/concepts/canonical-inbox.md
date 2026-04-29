@@ -69,6 +69,23 @@ Run `narada inbox doctor` before cross-environment submission or publication. It
 
 Runtime substrate health and delegated command-surface health are separate. A Site can have an accessible inbox DB and valid runtime state while its Site-local scripts delegate to a broken Narada CLI embodiment. `inbox doctor` reports that as `delegated_cli_embodiment_loadable` instead of smearing it into inbox or daemon health.
 
+Sites may declare a delegated CLI invocation contract in `package.json`:
+
+```json
+{
+  "narada": {
+    "delegated_cli_embodiment": {
+      "command": "./bin/narada-site",
+      "cwd": ".",
+      "shell": "login",
+      "repair_command": "pnpm run narada:install-shim"
+    }
+  }
+}
+```
+
+Agents and wrappers should use this declared command, the installed `narada` shim, or the doctor-provided repair command. They must not assemble hardcoded Node/NVM/WSL paths from memory. `inbox doctor` classifies delegated CLI failures such as missing build output, missing `node`, stale dist, or broken shim and returns the repair command attached to the contract.
+
 Command responsibilities:
 
 | Command | Responsibility |

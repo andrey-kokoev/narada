@@ -479,6 +479,7 @@ export async function inboxDoctorCommand(options: InboxDoctorOptions): Promise<{
       `Platform: ${runtime.node_platform}/${process.arch}${runtime.is_wsl ? ` (WSL${runtime.wsl_distro ? ` ${runtime.wsl_distro}` : ''})` : ''}`,
       `Runtime posture: ${runtime.runtime_posture}`,
       `Delegated CLI embodiment: ${runtime.delegated_cli_embodiment.detail}`,
+      ...(runtime.delegated_cli_embodiment.ok ? [] : [`Delegated CLI repair: ${runtime.delegated_cli_embodiment.repair_command ?? 'declare narada.delegated_cli_embodiment in package.json'}`]),
       `Inbox publication: ${publication.status}`,
       `Message routing: ${messageRouting.configured ? `configured (${messageRouting.principals.length} principal policy entries)` : 'not configured'}`,
       `Export refresh: ${refresh.imported} imported, ${refresh.skipped} already present, ${refresh.exported_count} artifacts`,

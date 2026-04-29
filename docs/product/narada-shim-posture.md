@@ -22,3 +22,27 @@ NARADA_SHIM_ALLOW_STALE_GOVERNANCE=0 narada task create --title "..."
 ```
 
 This preserves the default development safety posture for implementation commands while keeping task, chapter, inbox, and principal authority surfaces usable during active Builder work.
+
+## Delegated Site Invocation
+
+A Site wrapper should not hand-assemble Node, NVM, WSL, or `dist/main.js` paths as an agent-facing repair strategy. The canonical delegated invocation is either:
+
+- the installed `narada` shim available in the target embodiment, or
+- a Site-declared wrapper in `package.json` under `narada.delegated_cli_embodiment`.
+
+Example:
+
+```json
+{
+  "narada": {
+    "delegated_cli_embodiment": {
+      "command": "./bin/narada-site",
+      "cwd": ".",
+      "shell": "login",
+      "repair_command": "pnpm run narada:install-shim"
+    }
+  }
+}
+```
+
+`narada inbox doctor` reads this contract, checks `--version`, classifies failures, and prints the exact repair command. If the delegated embodiment is not loadable, an agent should report that failure and repair command rather than inventing a sampled PATH command.

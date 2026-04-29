@@ -166,6 +166,8 @@ The Site also needed:
 
 Delegated CLI embodiment health is not the same as runtime substrate health. A Site may have valid local state, inbox directories, and daemon configuration while its operator command surface points to a stale or broken Narada CLI build. During onboarding, run both the Site doctor and inbox doctor so command-surface failures are surfaced as repairable embodiment problems rather than mistaken for authority or mailbox failures.
 
+Onboarding should prefer a declared delegated CLI invocation contract over remembered shell repair. If a fresh agent cannot load `narada` through the declared wrapper or shim, it should stop at the doctor/preflight result and report the exact repair command. It should not paste machine-specific Node/NVM/WSL paths into task or inbox guidance.
+
 That evidence earned the operation-intake routing bridge and the explicit Inhabited Onboarding lifecycle phase. The concept remains generic: any Site may use the phase when real operation pressure exposes missing boundaries or readiness criteria.
 
 ## Exit Posture
