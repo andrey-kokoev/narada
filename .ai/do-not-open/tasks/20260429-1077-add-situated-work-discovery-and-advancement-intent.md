@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T16:56:20.366Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T17:06:41.572Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Defined situated_work_discovery_and_advancement as an interpretation-to-admission path; specified Architect, Builder, and Resident checklists; covered outcomes for review, tasks, inbox, answer-only, clarification, refusal, deferral, and handoff; required Site/role/session/task/chapter/inbox/handoff/verification/residual/authority checks; linked source envelope through task and verified with pnpm verify.
+closed_at: 2026-04-29T17:06:55.942Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Add situated work discovery and advancement intent
@@ -39,8 +48,8 @@ Inbox envelope env_2e3c341a-ad66-44d3-a7fe-72884390d540 extends the closed Inten
 
 ## Acceptance Criteria
 
-- [ ] A situated work discovery and advancement intent is defined as an Intent Interpretation to Intent Admission path
-- [ ] Role-specific checklists are specified for Architect Builder and Resident without becoming unbounded autonomous action
-- [ ] Admitted outcomes cover review builder output process assigned tasks process inbox answer question ask clarification refuse defer or handoff as appropriate
-- [ ] The intent checks current Site role session task chapter inbox handoff verification residual and authority posture surfaces
-- [ ] Source inbox envelope is routed and focused docs verification or pnpm verify passes
+- [x] A situated work discovery and advancement intent is defined as an Intent Interpretation to Intent Admission path
+- [x] Role-specific checklists are specified for Architect Builder and Resident without becoming unbounded autonomous action
+- [x] Admitted outcomes cover review builder output process assigned tasks process inbox answer question ask clarification refuse defer or handoff as appropriate
+- [x] The intent checks current Site role session task chapter inbox handoff verification residual and authority posture surfaces
+- [x] Source inbox envelope is routed and focused docs verification or pnpm verify passes

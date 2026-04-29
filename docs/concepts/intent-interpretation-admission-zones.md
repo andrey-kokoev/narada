@@ -122,6 +122,8 @@ Operator input may authorize or override, but the override must still be represe
 | Role bootstrap | Fresh roles start by interpreting pressure, then admitting a controlled path; they do not rely on chat memory or magic phrases. |
 | Inhabited Evolution | Repeated friction in interpretation/admission may lift into new paths only after the originating case runs through the lifted form. |
 
+The concrete [`situated_work_discovery_and_advancement`](situated-work-discovery-advancement-intent.md) intent handles ordinary Operator nudges such as `continue`, `where are we`, `what next`, `builder is done`, `process tasks`, or `check inbox` by inspecting bounded work surfaces before admitting any next action.
+
 ## First Machinery Slice
 
 The first machinery slice should not make an autonomous interpreter.
