@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T17:59:13.032Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T18:02:29.828Z
+criteria_proof_verification:
+  state: unbound
+  rationale: docs/product/site-posture-work-next.md defines Site posture fields for daemon posture, sync freshness, runtime readiness, work queue, drafts, inbox, tasks, publication, residuals, and next action. It defines Site work-next priority selection for bounded operator action across Site kinds, forbids raw transcript/db/payload dumps, requires local wrappers to project the canonical command, and includes fixtures for healthy quiescent, pending draft, and failed-terminal attention states. Source envelope env_19b837f5-59ce-4cb3-8ed7-2efa1f12129f is already routed to task 1084.
+closed_at: 2026-04-29T18:02:45.473Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Add canonical Site posture and work-next commands
@@ -39,8 +48,8 @@ Inbox envelope env_19b837f5-59ce-4cb3-8ed7-2efa1f12129f reports a Staccato Site 
 
 ## Acceptance Criteria
 
-- [ ] Site posture surface summarizes daemon posture sync freshness runtime readiness work queue drafts failed-terminal attention residuals and next recommended action
-- [ ] Site work-next surface returns a bounded next operator action across Site kinds without raw transcript dumps
-- [ ] Local Site wrappers can project the canonical command instead of reinventing posture choreography
-- [ ] Human and JSON output are bounded and actionable
-- [ ] Source envelope env_19b837f5-59ce-4cb3-8ed7-2efa1f12129f is routed
+- [x] Site posture surface summarizes daemon posture sync freshness runtime readiness work queue drafts failed-terminal attention residuals and next recommended action
+- [x] Site work-next surface returns a bounded next operator action across Site kinds without raw transcript dumps
+- [x] Local Site wrappers can project the canonical command instead of reinventing posture choreography
+- [x] Human and JSON output are bounded and actionable
+- [x] Source envelope env_19b837f5-59ce-4cb3-8ed7-2efa1f12129f is routed

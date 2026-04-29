@@ -4,6 +4,8 @@ Site stabilization is a governed read-only surface for comparing durable Site me
 
 It exists because a Site can become operationally healthier than its authored memory says, or operationally blocked while old docs still imply readiness. Stabilization makes that mismatch visible and proposes bounded posture updates. It does not silently mutate Site docs, config, tasks, doctrine, runtime state, or external systems.
 
+For the adjacent Operator-facing command surface that summarizes current posture and selects one next action, see [`site-posture-work-next.md`](site-posture-work-next.md). Stabilization handles divergence; posture/work-next handles current operating rhythm.
+
 ## Authority Posture
 
 ```text

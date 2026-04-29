@@ -14,6 +14,8 @@ Every operator session should answer five questions in order:
 
 These are not ad-hoc checks. They are a defined loop with mapped commands and clear exit conditions.
 
+For Site-level operation, the canonical bounded surfaces are [`site-posture-work-next.md`](site-posture-work-next.md): `narada site posture <site-id-or-root>` answers the current Site posture, and `narada site work-next <site-id-or-root>` selects one next Operator action. The detailed loop below remains the expanded mailbox/operator workflow.
+
 ---
 
 ## Step 1: Is It Healthy?
