@@ -1,0 +1,42 @@
+{
+  "envelope_id": "env_77c8e090-c828-42fb-b331-5cc381547690",
+  "received_at": "2026-04-29T16:50:41.068Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:builder-raw-task-db-done-posture"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Addendum: builder used raw SQLite to determine done posture",
+    "summary": "Builder also queried task_lifecycle directly for open/in-progress task count before finishing. This strengthens the need for a governed builder-done or task lifecycle status surface.",
+    "body": "## Addendum To Prior Observation\n\nRelated prior envelope:\n\n`env_6f4cafd3-7b2a-417c-bfe8-8f017379f447`\n\nAfter the first raw task lifecycle SQLite read, builder also ran:\n\n```text\nsqlite3 \".ai\\tasks\\task-lifecycle.db\" \"select count(*) from task_lifecycle where status in ('opened','open','in_progress');\"\n```\n\nIt returned:\n\n```text\n0\n```\n\nThis was still read-only, but it confirms the ergonomic gap: builder was trying to determine whether the work set was done/clear by directly querying the task lifecycle substrate.\n\n## Why This Matters\n\nThe useful question was:\n\n```text\nAre there any open or in-progress tasks left, and is builder done posture clean?\n```\n\nThat should not require raw SQL. The query also hardcodes lifecycle status vocabulary:\n\n```sql\nstatus in ('opened','open','in_progress')\n```\n\nThat is brittle. If Narada changes status names, introduces aliases, or adds states such as review requested / handoff needed / blocked, the raw query can return a misleading answer while appearing authoritative.\n\n## Additional Requirement\n\nThe proposed governed read surface should include a builder handoff/done posture check, for example:\n\n- open task count;\n- in-progress task count;\n- review-requested or handoff-needed count;\n- blocked/deferred count when applicable;\n- status vocabulary according to Narada's lifecycle model;\n- whether the current builder work packet is clean to hand back to architect/operator;\n- residuals that prevent clean closure.\n\nPossible command names:\n\n```text\nnarada task lifecycle-status\nnarada task done-posture\nnarada builder done-posture\n```\n\nThe important point is not the name. The important point is that `builder is done` should be answerable through a governed surface, not through direct SQLite inspection.",
+    "labels": [
+      "observation",
+      "task-lifecycle",
+      "builder-ergonomics",
+      "authority-boundary",
+      "done-posture"
+    ],
+    "evidence": [
+      "Raw sqlite3 count query against task_lifecycle for opened/open/in_progress statuses",
+      "Query returned 0 before builder finish",
+      "Status vocabulary was manually hardcoded in SQL"
+    ],
+    "related_envelopes": [
+      "env_6f4cafd3-7b2a-417c-bfe8-8f017379f447"
+    ]
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "decision",
+    "target_ref": "task-1076-task-lifecycle-allocation-and-done-posture",
+    "promoted_at": "2026-04-29T16:54:31.025Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'decision' is not implemented yet."
+  }
+}

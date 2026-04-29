@@ -1,7 +1,7 @@
 ---
 status: opened
 amended_by: architect
-amended_at: 2026-04-29T16:47:54.768Z
+amended_at: 2026-04-29T16:54:31.033Z
 ---
 
 # Add governed task lifecycle allocation status read surface
@@ -20,7 +20,7 @@ Inbox envelope env_6f4cafd3-7b2a-417c-bfe8-8f017379f447 reports that Builder use
 
 ## Required Work
 
-1. Inspect existing task lifecycle/list/allocate/status commands for an appropriate home. 2. Add or specify a read-only sanctioned command such as narada task allocation-status or narada task lifecycle-status. 3. The command must report max task number, last allocated number, next allocatable number, drift between sequence and task rows, and whether dry-run allocation would mutate. 4. The command must not allocate, reserve, claim, close, amend, or mutate lifecycle state. 5. Include bounded human and JSON output. 6. Document in AGENTS or task lifecycle posture that direct SQLite reads are diagnostic-only under explicitly admitted diagnosis/repair tasks. 7. Add focused tests for read-only behavior and drift reporting. 8. Run pnpm verify and report residuals.
+1. Inspect existing task lifecycle/list/allocate/status commands for an appropriate home. 2. Add or specify a read-only sanctioned command such as narada task allocation-status, narada task lifecycle-status, narada task done-posture, or narada builder done-posture. 3. The command must report max task number, last allocated number, next allocatable number, drift between sequence and task rows, and whether dry-run allocation would mutate. 4. The command must report builder done posture: open task count, in-progress task count, review-requested or handoff-needed count, blocked/deferred count where applicable, lifecycle vocabulary used by Narada, whether the current Builder work packet is clean to hand back, and residuals preventing clean closure. 5. The command must not allocate, reserve, claim, close, amend, or mutate lifecycle state. 6. Include bounded human and JSON output. 7. Document in AGENTS or task lifecycle posture that direct SQLite reads are diagnostic-only under explicitly admitted diagnosis/repair tasks. 8. Add focused tests for read-only behavior, drift reporting, and done-posture reporting without hardcoded raw SQL status aliases. 9. Run pnpm verify and report residuals.
 
 ## Non-Goals
 
@@ -32,6 +32,7 @@ Inbox envelope env_6f4cafd3-7b2a-417c-bfe8-8f017379f447 reports that Builder use
 
 <!-- Record what was done, decisions made, and files changed during execution. -->
 - Amended by architect at 2026-04-29T16:47:54.768Z: context, required work
+- Amended by architect at 2026-04-29T16:54:31.033Z: required work, appended criteria
 
 ## Verification
 
@@ -44,3 +45,4 @@ Inbox envelope env_6f4cafd3-7b2a-417c-bfe8-8f017379f447 reports that Builder use
 - [ ] Builder and AGENTS guidance says direct task lifecycle SQLite reads are diagnostic-only under explicit admitted repair or diagnosis tasks
 - [ ] Output is bounded and includes evidence about DB versus exported snapshot or task-file authority where appropriate
 - [ ] Source inbox envelope is routed and focused tests or pnpm verify pass
+- [ ] Builder done posture is included without hardcoded raw SQL status vocabulary
