@@ -148,6 +148,25 @@ export const SiteCapabilityGrantSchema = z.object({
   grants_effect_authority: z.boolean().default(false),
 });
 
+export const SiteMessageRouteRuleSchema = z.object({
+  target_locus: z.string().min(1).optional(),
+  target_loci: z.array(z.string().min(1)).optional(),
+  kinds: z.array(z.string().min(1)).optional(),
+  authority_levels: z.array(z.string().min(1)).optional(),
+  condition: z.string().min(1).optional(),
+  reason: z.string().min(1).optional(),
+});
+
+export const SiteMessageRoutingPrincipalSchema = z.object({
+  may_send: z.array(SiteMessageRouteRuleSchema).default([]),
+  may_not_send: z.array(SiteMessageRouteRuleSchema).default([]),
+});
+
+export const SiteMessageRoutingAuthoritySchema = z.object({
+  default_policy: z.enum(["allow_when_unconfigured", "deny_cross_locus_unless_allowed", "deny_unless_allowed"]).default("allow_when_unconfigured"),
+  principals: z.record(SiteMessageRoutingPrincipalSchema).default({}),
+});
+
 export const SiteGovernanceCoordinatesSchema = z.object({
   governing_law_source: SiteGoverningLawSourceSchema,
   law_admission_mode: z.enum(["inherit_without_fork", "local_overlay", "federated_review", "external_reference"]),
@@ -157,6 +176,7 @@ export const SiteGovernanceCoordinatesSchema = z.object({
   mutation_evidence_locus: SiteMutationEvidenceLocusSchema,
   inbox_sources: z.array(SiteInboxSourceSchema).default([]),
   outbox_targets: z.array(SiteOutboxTargetSchema).default([]),
+  message_routing_authority: SiteMessageRoutingAuthoritySchema.optional(),
   effect_authority_policy: z.enum(["metadata_only", "operator_confirmed", "capability_grant_required", "no_effects"]),
   capability_grants: z.array(SiteCapabilityGrantSchema).default([]),
   lineage_source: z.object({
@@ -188,6 +208,7 @@ export type SiteGoverningLawSource = z.infer<typeof SiteGoverningLawSourceSchema
 export type SiteAuthorityLocus = z.infer<typeof SiteAuthorityLocusSchema>;
 export type SiteEmbodiment = z.infer<typeof SiteEmbodimentSchema>;
 export type SiteParticipantRole = z.infer<typeof SiteParticipantRoleSchema>;
+export type SiteMessageRoutingAuthority = z.infer<typeof SiteMessageRoutingAuthoritySchema>;
 export type SiteGovernanceCoordinates = z.infer<typeof SiteGovernanceCoordinatesSchema>;
 
 // ---------------------------------------------------------------------------

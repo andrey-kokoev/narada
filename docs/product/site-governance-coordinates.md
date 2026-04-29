@@ -20,6 +20,7 @@ When durable governance coordinates, runtime truth, and operator/session knowled
 | `mutation_evidence_locus` | Where mergeable/replayable mutation evidence is recorded. | Raw SQLite is runtime substrate, not portable authority by itself. |
 | `inbox_sources` | Inbound intake surfaces and their admission posture. | Arrival is inert until admitted or promoted. |
 | `outbox_targets` | Outbound handoff surfaces and their authority posture. | Sending a handoff is not confirmation of external effect. |
+| `message_routing_authority` | Principal-to-locus message routing matrix for inbox, handoff, and MCP submissions. | Routing permission is not effect authority and does not bypass local admission. |
 | `effect_authority_policy` | Whether metadata can ever imply executable effect authority. | Default posture should be `metadata_only` or capability-gated. |
 | `capability_grants` | References to capability sources and scopes. | Capability references do not expose raw secrets. |
 | `lineage_source` | Evidence source for Site origin and relationship changes. | Lineage is evidence, not decorative graph. |
@@ -179,6 +180,37 @@ When durable governance coordinates, runtime truth, and operator/session knowled
         "authority": "handoff_only"
       }
     ],
+    "message_routing_authority": {
+      "default_policy": "deny_cross_locus_unless_allowed",
+      "principals": {
+        "builder": {
+          "may_send": [
+            {
+              "target_locus": "local_user_site",
+              "kinds": ["observation", "task_handoff", "residual", "review_request"],
+              "authority_levels": ["agent_reported"],
+              "condition": "always"
+            }
+          ],
+          "may_not_send": [
+            {
+              "target_locus": "narada_proper",
+              "kinds": ["*"],
+              "reason": "Builder reports locally; Architect escalates upstream."
+            }
+          ]
+        },
+        "architect": {
+          "may_send": [
+            {
+              "target_locus": "narada_proper",
+              "kinds": ["observation", "proposal", "task_candidate"],
+              "condition": "after_local_admission_or_explicit_operator_instruction"
+            }
+          ]
+        }
+      }
+    },
     "effect_authority_policy": "metadata_only",
     "capability_grants": [],
     "lineage_source": {

@@ -170,4 +170,43 @@ describe('task handoff command', () => {
     expect(readdirSync(join(tempDir, '.ai', 'inbox-envelopes')).some((name) => name.includes(parsed.inbox_envelope_id))).toBe(true);
     expect(readdirSync(join(tempDir, '.ai', 'mutation-evidence', 'inbox')).length).toBeGreaterThan(0);
   });
+
+  it('refuses disallowed Builder upstream handoff routing', async () => {
+    writeFileSync(join(tempDir, 'config.json'), JSON.stringify({
+      message_routing_authority: {
+        default_policy: 'deny_cross_locus_unless_allowed',
+        principals: {
+          builder: {
+            may_send: [
+              { target_locus: 'local_user_site', kinds: ['task_handoff'], authority_levels: ['agent_reported'], condition: 'always' },
+            ],
+            may_not_send: [
+              { target_locus: 'narada_proper', kinds: ['*'], reason: 'Builder reports locally; Architect escalates upstream.' },
+            ],
+          },
+        },
+      },
+    }), 'utf8');
+
+    const refused = await taskHandoffCommand({
+      cwd: tempDir,
+      taskNumber: '321',
+      format: 'json',
+      routeInbox: true,
+      by: 'builder',
+      targetLocus: 'narada_proper',
+    });
+    expect(refused.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect((refused.result as { error: string }).error).toContain('Builder reports locally');
+
+    const allowed = await taskHandoffCommand({
+      cwd: tempDir,
+      taskNumber: '321',
+      format: 'json',
+      routeInbox: true,
+      by: 'builder',
+      targetLocus: 'local_user_site',
+    });
+    expect(allowed.exitCode).toBe(ExitCode.SUCCESS);
+  });
 });

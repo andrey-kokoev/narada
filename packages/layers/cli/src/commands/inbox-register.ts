@@ -60,6 +60,7 @@ export function registerInboxCommands(program: Command): void {
     .option('--payload-file <path>', 'Read JSON payload from a file')
     .option('--payload-stdin', 'Read JSON payload from stdin', false)
     .option('--allow-empty-payload', 'Allow empty object payload for envelope kinds that normally require content', false)
+    .option('--target-locus <locus>', 'Message routing authority target locus; defaults to local_site')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[Record<string, unknown>]>({
@@ -77,6 +78,7 @@ export function registerInboxCommands(program: Command): void {
         payloadFile: opts.payloadFile as string | undefined,
         payloadStdin: opts.payloadStdin as boolean | undefined,
         allowEmptyPayload: opts.allowEmptyPayload as boolean | undefined,
+        targetLocus: opts.targetLocus as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }),
@@ -95,6 +97,7 @@ export function registerInboxCommands(program: Command): void {
     .option('--evidence <text>', 'Evidence line; repeatable', collectOption, [])
     .option('--proposal <text>', 'Proposal line; repeatable', collectOption, [])
     .option('--recommendation <text>', 'Recommended handling')
+    .option('--target-locus <locus>', 'Message routing authority target locus; defaults to local_site')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[Record<string, unknown>]>({
@@ -112,6 +115,7 @@ export function registerInboxCommands(program: Command): void {
         evidence: opts.evidence as string[] | undefined,
         proposal: opts.proposal as string[] | undefined,
         recommendation: opts.recommendation as string | undefined,
+        targetLocus: opts.targetLocus as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }),

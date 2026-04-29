@@ -116,6 +116,8 @@ The expected read-only proof after registration is:
 
 This is configuration of a `ControlChannel`, not authority movement. The MCP facade still delegates to canonical services and mutating inbox tools still create inert envelopes with read-back confirmation and mutation evidence.
 
+Mutating inbox tools also delegate to the same message routing authority decision as CLI. `narada_inbox_submit_observation` accepts `target_locus`; when Site policy refuses `principal + target_locus + envelope_kind + authority_level`, MCP returns the same bounded refusal and writes no envelope.
+
 ## Site Scoping
 
 Every Narada Site may expose its own MCP facade, but that facade is not a new authority owner.

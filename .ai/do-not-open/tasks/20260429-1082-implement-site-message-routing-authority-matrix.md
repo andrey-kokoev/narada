@@ -1,7 +1,16 @@
 ---
-status: claimed
+status: closed
 amended_by: builder
 amended_at: 2026-04-29T17:38:41.438Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T17:54:16.145Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Site config/schema now declares message_routing_authority with principal route rules, default deny-cross-locus posture, refusal reasons, and authority-level/kind matching. CLI inbox submit/submit-observation and task handoff --route-inbox call the shared route decision. MCP narada_inbox_submit_observation passes target_locus into the same inbox command path. inbox doctor exposes routing policy inspection. Focused tests cover allowed local Builder handoff, refused Builder upstream submission, and allowed Architect upstream escalation across CLI and MCP; pnpm verify passes.
+closed_at: 2026-04-29T17:54:36.263Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Implement Site message routing authority matrix
@@ -39,8 +48,8 @@ Inbox envelope env_4e363212-3e43-4812-98f4-e649790dcd15 proposes making cross-lo
 
 ## Acceptance Criteria
 
-- [ ] Site config or referenced authority file can declare principal target locus envelope kind authority level permissions and refusal reasons.
-- [ ] CLI inbox submission and handoff routing enforce the matrix for allowed local Builder handoff refused Builder upstream submission and allowed Architect upstream escalation.
-- [ ] MCP mutating inbox tools enforce the same routing rule or explicitly defer with documented bounded blocker.
-- [ ] Read-only inspection or doctor surface shows a principal's allowed routes and clear refusal reasons.
-- [ ] Source inbox envelope is routed and focused tests or pnpm verify pass.
+- [x] Site config or referenced authority file can declare principal target locus envelope kind authority level permissions and refusal reasons.
+- [x] CLI inbox submission and handoff routing enforce the matrix for allowed local Builder handoff refused Builder upstream submission and allowed Architect upstream escalation.
+- [x] MCP mutating inbox tools enforce the same routing rule or explicitly defer with documented bounded blocker.
+- [x] Read-only inspection or doctor surface shows a principal's allowed routes and clear refusal reasons.
+- [x] Source inbox envelope is routed and focused tests or pnpm verify pass.

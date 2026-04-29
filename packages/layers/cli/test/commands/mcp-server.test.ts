@@ -399,6 +399,68 @@ describe('Narada MCP facade', () => {
     });
   });
 
+  it('enforces message routing authority on MCP inbox mutation tools', async () => {
+    writeSiteConfig(tempDir, {
+      site_id: 'mcp-routing-site',
+      site_kind: 'project',
+      site_root: tempDir,
+      locus: { authority_locus: 'project' },
+      message_routing_authority: {
+        default_policy: 'deny_cross_locus_unless_allowed',
+        principals: {
+          builder: {
+            may_not_send: [
+              { target_locus: 'narada_proper', kinds: ['*'], reason: 'Builder reports locally; Architect escalates upstream.' },
+            ],
+          },
+          architect: {
+            may_send: [
+              { target_locus: 'narada_proper', kinds: ['observation'], authority_levels: ['agent_reported'], condition: 'after_local_admission_or_explicit_operator_instruction' },
+            ],
+          },
+        },
+      },
+    });
+
+    const refused = await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 9,
+      method: 'tools/call',
+      params: {
+        name: 'narada_inbox_submit_observation',
+        arguments: {
+          source_ref: 'mcp-test:builder-upstream',
+          title: 'Builder upstream',
+          principal: 'builder',
+          target_locus: 'narada_proper',
+        },
+      },
+    }, { siteRoot: tempDir });
+    const refusedResult = JSON.parse(((refused?.result as { content: Array<{ text: string }> }).content[0].text));
+    expect(refusedResult).toMatchObject({ status: 'error' });
+    expect(refusedResult.error).toContain('Builder reports locally');
+
+    const admitted = await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 10,
+      method: 'tools/call',
+      params: {
+        name: 'narada_inbox_submit_observation',
+        arguments: {
+          source_ref: 'mcp-test:architect-upstream',
+          title: 'Architect upstream',
+          principal: 'architect',
+          target_locus: 'narada_proper',
+        },
+      },
+    }, { siteRoot: tempDir });
+    const admittedResult = JSON.parse(((admitted?.result as { content: Array<{ text: string }> }).content[0].text));
+    expect(admittedResult).toMatchObject({
+      status: 'success',
+      routing: { status: 'admitted' },
+    });
+  });
+
   it('responds to stdio messages before stream shutdown', async () => {
     const input = new PassThrough();
     const output = new CaptureStream();

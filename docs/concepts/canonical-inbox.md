@@ -31,6 +31,8 @@ Prefer `submit-observation` for routine observations from chat, diagnostics, and
 
 Use `--principal <id>` to set `authority.principal`. `--authority-principal <id>` is accepted as a compatibility alias on `inbox submit` and `inbox submit-observation` for callers that name the field by its envelope location.
 
+Use `--target-locus <locus>` when a Site declares `governance.message_routing_authority` or root `message_routing_authority`. The routing decision evaluates `principal + target_locus + envelope_kind + authority_level` before admitting the inert envelope. If the route is refused, the command returns a bounded refusal reason and writes no envelope.
+
 Use low-level `submit` when the caller already has a complete typed envelope payload. Prefer `--payload-file` or `--payload-stdin` for non-trivial payloads. Inline JSON is acceptable for tiny POSIX-shell examples, but it is brittle across PowerShell, chat copy/paste, and multi-line payloads. Empty object payloads are rejected for observations and task candidates unless `--allow-empty-payload` is explicit.
 
 Successful `inbox submit` and `inbox submit-observation` write two surfaces:
@@ -76,6 +78,7 @@ Command responsibilities:
 | `narada inbox publish` | Bounded handoff helper: export/replay, stage `.ai/inbox-envelopes`, commit, and optionally push. |
 | `narada inbox import` | Replay portable artifacts from Git-visible handoff into local inbox substrate. |
 | `narada inbox doctor` | Inspect local delivery, runtime, import refresh, and publication posture without publishing. |
+| `message_routing_authority` in doctor output | Shows whether principal-to-locus routing policy is configured and which principal entries are available. |
 | `narada inbox architect-process` | Architect-side handoff: create a detailed Builder-owned task from a task envelope, claim it for Builder, route the envelope to the task, and stop before implementation/report/closure. |
 | `narada publication *` | General Repository Publication Intent Zone handoff/confirmation for broader repo mutation bundles. |
 

@@ -182,6 +182,7 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
     .option('--artifact-path <path>', 'Write durable handoff artifact to a specific path')
     .option('--route-inbox', 'Route handoff packet into Canonical Inbox as an observation', false)
     .option('--by <principal>', 'Principal generating the handoff packet')
+    .option('--target-locus <locus>', 'Message routing authority target locus for --route-inbox; defaults to local_site')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .action(async (taskNumber: string, opts: Record<string, unknown>) => {
       await runDirectCommand({
@@ -196,6 +197,7 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
           artifactPath: opts.artifactPath as string | undefined,
           routeInbox: opts.routeInbox as boolean | undefined,
           by: opts.by as string | undefined,
+          targetLocus: opts.targetLocus as string | undefined,
         }),
       });
     });

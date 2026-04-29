@@ -25,6 +25,11 @@ import {
 } from '../lib/inbox-mutation-evidence-writer.js';
 import { inspectAuthorityClonePosture, type SiteEmbodimentPosture } from '../lib/narada-proper-authority.js';
 import { inspectDelegatedCliHealth, type DelegatedCliHealth } from '../lib/delegated-cli-health.js';
+import {
+  decideMessageRoute,
+  inspectMessageRoutingAuthority,
+  routingRefusalMessage,
+} from '../lib/message-routing-authority.js';
 
 const USER_PC_TEMPLATE_WORKFLOW_REF = 'user-pc-template-materialization-workflow';
 const USER_PC_TEMPLATE_WORKFLOW_PATH = 'docs/product/user-pc-template-materialization-workflow.md';
@@ -49,6 +54,7 @@ export interface InboxSubmitOptions extends InboxCommandOptions {
   payloadFile?: string;
   payloadStdin?: boolean;
   allowEmptyPayload?: boolean;
+  targetLocus?: string;
   stdin?: NodeJS.ReadableStream;
 }
 
@@ -63,6 +69,7 @@ export interface InboxSubmitObservationOptions extends InboxCommandOptions {
   evidence?: string[];
   proposal?: string[];
   recommendation?: string;
+  targetLocus?: string;
 }
 
 export interface InboxListOptions extends InboxCommandOptions {
@@ -197,6 +204,19 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
     );
   }
   const principal = options.principal ?? options.authorityPrincipal;
+  const routeDecision = decideMessageRoute(options.cwd ?? process.cwd(), {
+    principal,
+    targetLocus: options.targetLocus,
+    envelopeKind: kind,
+    authorityLevel,
+    command: 'inbox submit',
+  });
+  if (routeDecision.status === 'refused') {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: { status: 'error', error: routingRefusalMessage(routeDecision), routing: routeDecision },
+    };
+  }
 
   return withInboxStoreAsync(options, async (store) => {
     const delivery = inspectInboxDelivery(options.cwd ?? process.cwd());
@@ -233,6 +253,7 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
           git_visible_handoff: portableArtifact,
           commit_and_push: 'Commit and push the exported envelope artifact when another embodiment must see this inbox item.',
         },
+        routing: routeDecision,
       },
       [
         `Inbox envelope received: ${envelope.envelope_id}`,
@@ -273,6 +294,7 @@ export async function inboxSubmitObservationCommand(
     authorityLevel,
     principal: options.principal ?? options.authorityPrincipal,
     payload: JSON.stringify(payload),
+    targetLocus: options.targetLocus,
   });
   if (submitted.exitCode !== ExitCode.SUCCESS) return submitted;
 
@@ -280,6 +302,7 @@ export async function inboxSubmitObservationCommand(
     envelope?: InboxEnvelope;
     delivery?: Record<string, unknown>;
     portable_artifact?: string;
+    routing?: unknown;
   };
   const envelopeId = result.envelope?.envelope_id;
   if (!envelopeId) return errorResult('Submitted envelope did not return an envelope_id');
@@ -295,6 +318,7 @@ export async function inboxSubmitObservationCommand(
         status: 'success',
         envelope: readBack,
         delivery: result.delivery,
+        routing: result.routing,
         confirmation: {
           read_back_envelope_id: readBack.envelope_id,
           payload_equivalent: true,
@@ -415,6 +439,7 @@ export async function inboxDoctorCommand(options: InboxDoctorOptions): Promise<{
   const readiness = inspectInboxReadiness(cwd, delivery.inbox_db_path);
   const runtime = inspectInboxRuntime(cwd);
   const publication = inspectInboxPublication(cwd);
+  const messageRouting = inspectMessageRoutingAuthority(cwd);
   const refresh = await refreshInboxFromExports(new SqliteInboxStore(String(delivery.inbox_db_path)), cwd, { closeStore: true });
   const checks = [
     { name: 'repo_detected', ok: delivery.repo_root !== null, detail: delivery.repo_root ?? 'not a git worktree' },
@@ -427,6 +452,7 @@ export async function inboxDoctorCommand(options: InboxDoctorOptions): Promise<{
     { name: 'delegated_cli_embodiment_loadable', ok: runtime.delegated_cli_embodiment.ok, detail: runtime.delegated_cli_embodiment.detail },
     { name: 'inbox_envelope_artifacts_committed', ok: publication.uncommitted_envelope_artifacts_count === 0, detail: publication.uncommitted_envelope_artifacts_count === 0 ? 'no uncommitted inbox envelope artifacts' : `${publication.uncommitted_envelope_artifacts_count} uncommitted inbox envelope artifact(s)` },
     { name: 'inbox_envelope_artifacts_pushed', ok: publication.unpushed_commit_count === 0, detail: publication.unpushed_commit_count === 0 ? 'no unpushed commits detected' : `${publication.unpushed_commit_count} unpushed commit(s) may contain portable inbox artifacts` },
+    { name: 'message_routing_authority', ok: true, detail: messageRouting.configured ? `configured principals: ${messageRouting.principals.join(', ') || '(none)'}` : 'not configured; legacy local submission posture' },
   ];
   const ok = checks.every((check) => check.ok);
   return okResult(
@@ -437,6 +463,7 @@ export async function inboxDoctorCommand(options: InboxDoctorOptions): Promise<{
       readiness,
       runtime,
       publication,
+      message_routing_authority: messageRouting,
       refresh,
       checks,
     },
@@ -453,6 +480,7 @@ export async function inboxDoctorCommand(options: InboxDoctorOptions): Promise<{
       `Runtime posture: ${runtime.runtime_posture}`,
       `Delegated CLI embodiment: ${runtime.delegated_cli_embodiment.detail}`,
       `Inbox publication: ${publication.status}`,
+      `Message routing: ${messageRouting.configured ? `configured (${messageRouting.principals.length} principal policy entries)` : 'not configured'}`,
       `Export refresh: ${refresh.imported} imported, ${refresh.skipped} already present, ${refresh.exported_count} artifacts`,
       `Checks: ${checks.filter((check) => check.ok).length}/${checks.length} ok`,
       ...checks.filter((check) => !check.ok).map((check) => `warn ${check.name}: ${check.detail}`),

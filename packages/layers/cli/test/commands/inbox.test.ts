@@ -108,6 +108,65 @@ describe('Canonical Inbox CLI commands', () => {
     expect(envelope.payload).toEqual({ title: 'From file', nested: { ok: true } });
   });
 
+  it('enforces configured message routing authority for inbox submissions', async () => {
+    writeFileSync(join(tempDir, 'config.json'), JSON.stringify({
+      message_routing_authority: {
+        default_policy: 'deny_cross_locus_unless_allowed',
+        principals: {
+          builder: {
+            may_send: [
+              { target_locus: 'local_user_site', kinds: ['observation'], authority_levels: ['agent_reported'], condition: 'always' },
+            ],
+            may_not_send: [
+              { target_locus: 'narada_proper', kinds: ['*'], reason: 'Builder reports locally; Architect escalates upstream.' },
+            ],
+          },
+          architect: {
+            may_send: [
+              { target_locus: 'narada_proper', kinds: ['observation'], authority_levels: ['agent_reported'], condition: 'after_local_admission_or_explicit_operator_instruction' },
+            ],
+          },
+        },
+      },
+    }), 'utf8');
+
+    const allowedBuilder = await inboxSubmitObservationCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceRef: 'test:local-builder',
+      title: 'Local handoff',
+      principal: 'builder',
+      targetLocus: 'local_user_site',
+    });
+    expect(allowedBuilder.exitCode).toBe(ExitCode.SUCCESS);
+
+    const refusedBuilder = await inboxSubmitObservationCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceRef: 'test:builder-upstream',
+      title: 'Upstream attempt',
+      principal: 'builder',
+      targetLocus: 'narada_proper',
+    });
+    expect(refusedBuilder.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect((refusedBuilder.result as { error: string }).error).toContain('Builder reports locally');
+
+    const allowedArchitect = await inboxSubmitObservationCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceRef: 'test:architect-upstream',
+      title: 'Upstream escalation',
+      principal: 'architect',
+      targetLocus: 'narada_proper',
+    });
+    expect(allowedArchitect.exitCode).toBe(ExitCode.SUCCESS);
+    expect((allowedArchitect.result as { routing: { status: string } }).routing.status).toBe('admitted');
+
+    const doctor = await inboxDoctorCommand({ cwd: tempDir, format: 'json' });
+    expect(doctor.exitCode).toBe(ExitCode.SUCCESS);
+    expect((doctor.result as { message_routing_authority: { principals: string[] } }).message_routing_authority.principals).toEqual(['architect', 'builder']);
+  });
+
   it('submits payload from stdin for pipe-safe ingestion', async () => {
     const submitted = await inboxSubmitCommand({
       cwd: tempDir,

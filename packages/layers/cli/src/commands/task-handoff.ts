@@ -10,6 +10,7 @@ import {
   writeInboxMutationEvidence,
 } from '../lib/inbox-mutation-evidence-writer.js';
 import { taskReadCommand, type TaskReadResult } from './task-read.js';
+import { decideMessageRoute, routingRefusalMessage } from '../lib/message-routing-authority.js';
 
 export interface TaskHandoffOptions {
   taskNumber: string;
@@ -19,6 +20,7 @@ export interface TaskHandoffOptions {
   artifactPath?: string;
   routeInbox?: boolean;
   by?: string;
+  targetLocus?: string;
 }
 
 export interface TaskHandoffPacket {
@@ -82,6 +84,19 @@ export async function taskHandoffCommand(
 
   let inboxEnvelope: InboxEnvelope | null = null;
   if (options.routeInbox) {
+    const routeDecision = decideMessageRoute(cwd, {
+      principal: options.by,
+      targetLocus: options.targetLocus,
+      envelopeKind: 'task_handoff',
+      authorityLevel: options.by ? 'agent_reported' : 'system_observed',
+      command: 'task handoff route-inbox',
+    });
+    if (routeDecision.status === 'refused') {
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: { status: 'error', error: routingRefusalMessage(routeDecision), routing: routeDecision },
+      };
+    }
     const store = new SqliteInboxStore(join(cwd, '.ai', 'inbox.db'));
     try {
       inboxEnvelope = store.insert({
