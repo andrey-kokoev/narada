@@ -24,5 +24,17 @@
     "proposed_direction": "Make empty SQLite agent_roster a valid empty roster. Remove JSON fallback from normal roster authority paths or make it an explicit migration/import operator. Make task roster add able to create the first SQLite row. Make work-next report agent_not_in_roster with a repair command, or materialize declared default role contracts when the Site config provides them.",
     "requested_handling": "Open a Narada proper corrective task because current behavior contradicts the completed SQLite-only roster cutover."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1090",
+    "promoted_at": "2026-04-29T20:25:31.466Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1090,
+      "task_id": "20260429-1090-fix-sqlite-only-roster-empty-bootstrap"
+    }
+  }
 }
