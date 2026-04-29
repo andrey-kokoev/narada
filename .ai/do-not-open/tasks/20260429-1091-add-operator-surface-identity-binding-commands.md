@@ -1,7 +1,16 @@
 ---
-status: claimed
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T21:11:52.931Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T21:19:00.327Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Implemented operator-surface identity add, labels build, bind-focused --identity/--as-self, rebind, unbind, list, and clean-stale command surfaces. Focused tests, CLI typecheck/build, and smoke commands verify durable identity admission, runtime binding deferral, self identity resolution, bounded JSON outputs, and authority split.
+closed_at: 2026-04-29T21:19:41.282Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add operator-surface identity binding commands
@@ -39,9 +48,9 @@ Inbox envelope env_99dad4bf-1caa-4364-809e-257977fccc4f reports that inhabited W
 
 ## Acceptance Criteria
 
-- [ ] CLI or specified product surface supports durable identity admission without direct JSON edits
-- [ ] CLI or specified product surface supports runtime binding operations including bind-focused bind-as-self rebind unbind list and clean-stale or records bounded deferrals
-- [ ] Authority split is enforced between Site identity records and PC/runtime-local volatile handles
-- [ ] Bind-as-self resolves the current agent identity without requiring Operator memory of exact identity strings
-- [ ] Human and JSON outputs are bounded and UI-ready
-- [ ] Source envelope env_99dad4bf-1caa-4364-809e-257977fccc4f is routed
+- [x] CLI or specified product surface supports durable identity admission without direct JSON edits
+- [x] CLI or specified product surface supports runtime binding operations including bind-focused bind-as-self rebind unbind list and clean-stale or records bounded deferrals
+- [x] Authority split is enforced between Site identity records and PC/runtime-local volatile handles
+- [x] Bind-as-self resolves the current agent identity without requiring Operator memory of exact identity strings
+- [x] Human and JSON outputs are bounded and UI-ready
+- [x] Source envelope env_99dad4bf-1caa-4364-809e-257977fccc4f is routed

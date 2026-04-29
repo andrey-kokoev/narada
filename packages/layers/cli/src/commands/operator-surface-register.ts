@@ -1,0 +1,154 @@
+import type { Command } from 'commander';
+import { directCommandAction, silentCommandContext } from '../lib/command-wrapper.js';
+import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
+import {
+  operatorSurfaceBindingDeferredCommand,
+  operatorSurfaceBindFocusedCommand,
+  operatorSurfaceIdentityAddCommand,
+  operatorSurfaceLabelsBuildCommand,
+} from './operator-surface.js';
+
+export function registerOperatorSurfaceCommands(program: Command): void {
+  const surfaceCmd = program
+    .command('operator-surface')
+    .description('Operator Surface identity and runtime binding operators');
+
+  const identityCmd = surfaceCmd.command('identity').description('Durable Operator Surface identities');
+  identityCmd
+    .command('add <identity-name>')
+    .description('Admit or update a durable Operator Surface identity')
+    .requiredOption('--role <role>', 'Role represented by this identity')
+    .requiredOption('--agent-kind <kind>', 'Runtime/agent kind, e.g. codex_cli, kimi_cli, api_agent')
+    .requiredOption('--site <site-id>', 'Site whose identity authority admits this identity')
+    .requiredOption('--by <principal>', 'Principal admitting the identity')
+    .option('--label <label>', 'UI label projection')
+    .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[string, Record<string, unknown>]>({
+      command: 'operator-surface identity add',
+      emit: emitCommandResult,
+      format: (_identityName: string, opts: Record<string, unknown>) => opts.format,
+      invocation: (identityName, opts) => operatorSurfaceIdentityAddCommand({
+        identityName,
+        role: opts.role as string | undefined,
+        agentKind: opts.agentKind as string | undefined,
+        site: opts.site as string | undefined,
+        by: opts.by as string | undefined,
+        label: opts.label as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  const labelsCmd = surfaceCmd.command('labels').description('Operator Surface label projections');
+  labelsCmd
+    .command('build')
+    .description('Build bounded UI-ready labels from admitted identities')
+    .option('--site <site-id>', 'Filter by Site')
+    .option('--limit <n>', 'Maximum labels', '50')
+    .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'operator-surface labels build',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => operatorSurfaceLabelsBuildCommand({
+        site: opts.site as string | undefined,
+        limit: opts.limit ? Number(opts.limit) : undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  surfaceCmd
+    .command('bind-focused')
+    .description('Prepare focused runtime-handle binding; defers mutation to owning runtime locus')
+    .option('--identity <id>', 'Durable identity to bind')
+    .option('--as <kind>', 'Resolve identity as self')
+    .option('--runtime-locus <locus>', 'Owning User/PC runtime locus')
+    .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'operator-surface bind-focused',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => operatorSurfaceBindFocusedCommand({
+        identity: opts.identity as string | undefined,
+        as: opts.as as string | undefined,
+        runtimeLocus: opts.runtimeLocus as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  surfaceCmd
+    .command('rebind')
+    .description('Runtime binding rebind request; deferred to owning runtime locus')
+    .option('--identity <id>', 'Durable identity')
+    .option('--runtime-locus <locus>', 'Owning User/PC runtime locus')
+    .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'operator-surface rebind',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => operatorSurfaceBindingDeferredCommand('rebind', {
+        identity: opts.identity as string | undefined,
+        runtimeLocus: opts.runtimeLocus as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  surfaceCmd
+    .command('unbind-focused')
+    .description('Runtime binding unbind request; deferred to owning runtime locus')
+    .option('--runtime-locus <locus>', 'Owning User/PC runtime locus')
+    .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'operator-surface unbind-focused',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => operatorSurfaceBindingDeferredCommand('unbind', {
+        runtimeLocus: opts.runtimeLocus as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  const bindingsCmd = surfaceCmd.command('bindings').description('Runtime binding projections');
+  bindingsCmd
+    .command('list')
+    .description('List runtime bindings; deferred unless run in owning runtime locus')
+    .option('--runtime-locus <locus>', 'Owning User/PC runtime locus')
+    .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'operator-surface bindings list',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => operatorSurfaceBindingDeferredCommand('list', {
+        runtimeLocus: opts.runtimeLocus as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  bindingsCmd
+    .command('clean-stale')
+    .description('Clean stale runtime bindings; deferred to owning runtime locus')
+    .option('--runtime-locus <locus>', 'Owning User/PC runtime locus')
+    .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'operator-surface bindings clean-stale',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => operatorSurfaceBindingDeferredCommand('clean-stale', {
+        runtimeLocus: opts.runtimeLocus as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+}

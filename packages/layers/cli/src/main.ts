@@ -40,6 +40,7 @@ import { registerOutboundActionCommands } from './commands/outbound-action-regis
 import { registerPostureCommands } from './commands/posture-register.js';
 import { registerMutationEvidenceCommands } from './commands/mutation-evidence-register.js';
 import { registerMcpCommands } from './commands/mcp-register.js';
+import { registerOperatorSurfaceCommands } from './commands/operator-surface-register.js';
 
 loadEnvFile('./.env');
 
@@ -78,6 +79,7 @@ registerSitesCommands(program);
 registerConsoleCommands(program);
 registerWorkbenchCommands(program);
 registerMcpCommands(program);
+registerOperatorSurfaceCommands(program);
 registerResumeCommands(program);
 registerWorkNextCommands(program);
 registerPrincipalCommands(program);

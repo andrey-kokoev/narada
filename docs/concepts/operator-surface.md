@@ -159,6 +159,28 @@ Use [`Runtime Identity Binding`](runtime-identity-binding.md) when a live runtim
 
 The first coherent command posture is read-only inspection.
 
+The current generic Narada proper CLI surface admits durable identity records and builds bounded label projections without requiring direct JSON edits:
+
+```bash
+narada operator-surface identity add <identity-name> --role <role> --agent-kind <kind> --site <site-id> --by <principal>
+narada operator-surface labels build --site <site-id>
+```
+
+These commands write/read Site-local durable identity records. They do not bind HWNDs, process ids, terminal tabs, API threads, MCP clients, or other volatile runtime handles.
+
+The runtime binding command surface exists as an authority-preserving deferral surface:
+
+```bash
+narada operator-surface bind-focused --identity <id>
+narada operator-surface bind-focused --as self
+narada operator-surface rebind --identity <id>
+narada operator-surface unbind-focused
+narada operator-surface bindings list
+narada operator-surface bindings clean-stale
+```
+
+In Narada proper these commands either refuse unknown identities or return `status: "deferred"` with the required runtime locus. The actual volatile-handle mutation belongs to the User/PC/runtime Site that can observe the handle and admit the binding. `--as self` resolves from governed runtime context such as `NARADA_AGENT_ID` / `NARADA_PRINCIPAL_ID` or an unambiguous active roster assignment, so the Operator does not need to remember the exact identity string during inhabited work.
+
 Future command names may be:
 
 ```bash
