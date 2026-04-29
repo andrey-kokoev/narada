@@ -1,0 +1,37 @@
+{
+  "envelope_id": "env_f37130c9-14ae-4219-9c98-60998277ed6a",
+  "received_at": "2026-04-29T14:31:45.476Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:capa-proposal-addendum-builder-handoff-20260429"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "andrey"
+  },
+  "payload": {
+    "title": "CAPA proposal addendum: builder completion needs explicit review handoff",
+    "summary": "After the initial CAPA doctrine proposal for raw-output context waste, a second related incident surfaced: builder completed and committed operator-surface and Komorebi work, but left no explicit review_request or handoff message for the architect. The architect had to infer completion by inspecting git history, task files, and artifacts. This should not be filed as a separate ad hoc CAPA before Narada has a canonical CAPA Operation; it should be admitted as addendum evidence shaping the proposed CAPA doctrine.",
+    "evidence": [
+      "Related envelope: env_186fccec-c23b-43c8-8e64-8fb2fd916b57 proposed a canonical CAPA Operation using the raw Inspect-WindowSurfaceOverlay output incident as motivating evidence.",
+      "Incident 2: builder completed committed work in User Site, including commits 5d49582, b5cc6cc, and a3c07e4, and closed tasks 019-023, but did not create an explicit architect-facing review_request/handoff artifact.",
+      "Impact: architect had to scrape repository state and task files to discover what was completed, what needed review, what artifacts mattered, and what residuals remained. The review/admission crossing was implicit rather than governed."
+    ],
+    "proposal": [
+      "Broaden the CAPA Operation doctrine proposal to cover failed handoff crossings, not only excessive raw output. CAPA triggers should include missing review/admission handoff where work completion requires another role to review, admit, or continue.",
+      "Builder completion doctrine should require a bounded review_request artifact when work is done and architect review is expected. The artifact should include commit ids, task/chapter ids, changed loci, verification artifacts, requested review questions, residual risks, and explicit next requested action.",
+      "Preventive machinery should consider task lifecycle templates or commands that generate completion handoff packets automatically, rather than relying on conversational courtesy."
+    ],
+    "recommendation": "Link this addendum to the canonical CAPA Operation proposal. Treat it as evidence that Narada CAPA must govern crossing failures: evidence-channel crossing, completion-to-review crossing, and admission boundary crossing."
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "decision",
+    "target_ref": "task-1063-capa-operation-doctrine",
+    "promoted_at": "2026-04-29T14:36:39.788Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'decision' is not implemented yet."
+  }
+}

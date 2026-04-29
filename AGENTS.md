@@ -56,6 +56,8 @@ From that primary shape, the familiar Narada readings follow:
 
 **Canonical Mutation Evidence**: See [`docs/concepts/canonical-mutation-evidence.md`](docs/concepts/canonical-mutation-evidence.md) for the SQLite/Git authority posture: SQLite is local runtime substrate, while Git carries mergeable mutation evidence that can be replayed or reconciled into that substrate.
 
+**CAPA Operation**: See [`docs/concepts/capa-operation.md`](docs/concepts/capa-operation.md) for corrective/preventive action when an incident exposes recurrence risk, including raw-output containment and explicit review handoff failures.
+
 ### Semantic Crystallization Guidance
 
 When describing higher-order architecture, deployment, or design:
@@ -68,6 +70,7 @@ When describing higher-order architecture, deployment, or design:
 - Use the **Control Cycle phase vocabulary** (see [`SEMANTICS.md §2.14.7`](SEMANTICS.md)) when describing Cycle internals: Source Read → Fact Admission → Context Formation → Evaluation → Governance → Intent/Handoff → Execution Attempt → Confirmation/Reconciliation → Evidence Trace.
 - Use the **Operation Specification** (not "telos") as the canonical reading of `Aim`. An Aim is inspectable, versionable, and independent of runtime.
 - For Narada self-build work, apply **Inhabited Evolution**: build what the operation has earned; record unearned structure as possibility, proposal, or residual; treat Operator correction as part of the control loop.
+- For recurrence-risk failures, use **CAPA Operation**: contain the incident, name root cause, implement corrective and preventive action, verify the originating case, disseminate the change, and close with evidence.
 - Apply **Authority-Revealing Inversion** when an artifact, tool, folder, repo, UI, command, or agent action appears primary: identify the governing authority/lifecycle/evidence/locus before letting convenience become authority.
 - For SQLite-backed task/inbox/Site mutations, preserve **Canonical Mutation Evidence**: do not make raw SQLite merge the governing invariant; emit or preserve Git-visible evidence that can rebuild or reconcile local SQLite.
 - **`operation`** remains current user-facing CLI language. Do not invent new meanings for it.
@@ -130,6 +133,7 @@ When describing higher-order architecture, deployment, or design:
 | [runtime-usc-boundary.md §Language / Runtime Posture](docs/concepts/runtime-usc-boundary.md#language--runtime-posture) | TypeScript posture vs durable authority boundaries | Need to decide whether types, schemas, runtime checks, or another language own a concern |
 | [authority-revealing-inversion.md](docs/concepts/authority-revealing-inversion.md) | Authority-Revealing Inversion — review lens for artifact-first regressions | Need to identify what authority/lifecycle/evidence/locus an artifact actually embodies |
 | [canonical-mutation-evidence.md](docs/concepts/canonical-mutation-evidence.md) | Canonical Mutation Evidence — SQLite/Git authority posture | Need to decide what portable evidence a local SQLite mutation must emit |
+| [capa-operation.md](docs/concepts/capa-operation.md) | CAPA Operation — corrective/preventive action for recurrence-risk incidents | Need to handle repeated failures, raw-output incidents, missing review handoffs, or doctrine/tooling prevention |
 | [build-toolchain-posture.md](docs/concepts/build-toolchain-posture.md) | Build Toolchain Posture — tsc authority and non-authoritative faster emit probes | Need to evaluate oxbuild, oxc, Vite, or another alternate TypeScript build path |
 | [sqlite-runtime-posture.md](docs/concepts/sqlite-runtime-posture.md) | SQLite Runtime Posture — adapter-first `better-sqlite3` to `node:sqlite` migration posture | Need to evaluate SQLite driver changes, native binding friction, or Node 22 runtime moves |
 | [governed-crossing.md](docs/concepts/governed-crossing.md) | Governed Crossing — primitive for payloads crossing authority boundaries without collapsing arrival, admission, execution, and truth | Need to unify inbox, task lifecycle, command execution, pub/sub, outbox, Site lineage, or evidence admission language |

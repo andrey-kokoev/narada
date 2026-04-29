@@ -1,0 +1,39 @@
+{
+  "envelope_id": "env_186fccec-c23b-43c8-8e64-8fb2fd916b57",
+  "received_at": "2026-04-29T14:27:31.056Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:narada-capa-doctrine-proposal-20260429"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "andrey"
+  },
+  "payload": {
+    "title": "Add canonical CAPA operation to Narada doctrine",
+    "summary": "A builder pasted 8,774 lines of raw inspect JSON into conversational context. The immediate issue is context waste, but the broader doctrinal gap is that Narada has observations, proposals, tasks, and chapters without a canonical CAPA loop for recurrence-risk incidents. Medical device and pharma CAPA expectations suggest a useful Narada-native pattern: signal, analysis, investigation, cause, corrective action, preventive action, verification, dissemination, management review, and documented closure.",
+    "evidence": [
+      "Incident: builder reported full Inspect-WindowSurfaceOverlay.ps1 JSON transcript, around 8,774 lines, into operator-facing context instead of storing raw evidence as an artifact and reporting a bounded summary.",
+      "Regulatory inspiration: 21 CFR 820.100 requires CAPA procedures for analysis of quality data, investigation of causes, identifying actions, verifying or validating effectiveness, implementing and recording changes, disseminating relevant quality information, management review, and documentation.",
+      "ICH Q10 frames CAPA as a pharmaceutical quality system element, with investigation effort and documentation commensurate with risk, and CAPA linked to monitoring, change management, management review, knowledge management, and quality risk management."
+    ],
+    "proposal": [
+      "Define a canonical Narada CAPA Operation distinct from ordinary observation, proposal, task, and chapter. CAPA should be used when an incident has recurrence risk, systemic drift risk, authority confusion, context destruction, unsafe mutation risk, data loss risk, or repeated ergonomic failure.",
+      "Suggested CAPA record fields: CAPA ID, trigger, impact, immediate containment, root cause, corrective action, preventive action, owner, affected doctrine/tools, verification method, closure evidence, residual risk, dissemination targets, and management/architect review state.",
+      "Corrective action should address the immediate observed problem; preventive action should change doctrine, templates, commands, guards, or machinery so recurrence is harder. CAPA closure should require effectiveness verification, not merely proposal creation.",
+      "For the raw-output incident specifically: require large diagnostic/tool outputs to be written to artifact files by default; operator conversation should receive bounded summary plus artifact path unless the operator explicitly asks for raw output.",
+      "Add output-size/evidence-channel discipline to builder/architect doctrine, AGENTS guidance, task execution templates, and any future MCP/CLI helpers that can summarize or artifact noisy outputs."
+    ],
+    "recommendation": "Promote as doctrine and machinery work: design CAPA Operation, document relation to observations/proposals/tasks/chapters, and use the raw inspect JSON incident as the first example CAPA."
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "decision",
+    "target_ref": "task-1063-capa-operation-doctrine",
+    "promoted_at": "2026-04-29T14:36:39.557Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'decision' is not implemented yet."
+  }
+}

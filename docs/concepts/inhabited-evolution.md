@@ -83,6 +83,10 @@ Operator pressure
 
 This grammar is directional but not hierarchical. Builder observations may return pressure to Architect or Operator as field conditions or residuals. Architect review may reject, narrow, or ask for more evidence. Operator correction overrides the AI thread's interpretation of the work.
 
+When Builder completion expects Architect or Operator admission, the completion must produce an explicit review handoff artifact. The reviewer should not have to infer completion by scanning git history, task folders, shell transcript, or chat residue. Acceptable handoff artifacts include a task report with review requested, a `review_request` inbox envelope, a Site-local handoff record, or another governed artifact that names reviewer, scope, evidence, decision needed, and residuals.
+
+Missing handoff is a crossing failure, not a communication preference. If it has recurrence risk, route it through CAPA rather than relying on apology or memory. See [`capa-operation.md`](capa-operation.md).
+
 Deferred roles such as receptionist, inspector, clerk, superintendent, project manager, or coordinator remain possibilities/proposals/residuals only. They are not active bootstrap targets until inhabited operation evidence proves that the Resident / Operator / Architect / Builder / Trace substrate split cannot absorb the recurring responsibility boundary.
 
 ## Rules
