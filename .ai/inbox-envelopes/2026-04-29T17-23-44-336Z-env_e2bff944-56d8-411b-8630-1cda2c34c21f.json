@@ -1,0 +1,39 @@
+{
+  "envelope_id": "env_e2bff944-56d8-411b-8630-1cda2c34c21f",
+  "received_at": "2026-04-29T17:23:44.336Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:operator-surface-action-classes"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Distinguish operator work actions from diagnostic and topology tools in Site surfaces",
+    "summary": "Toggle Primary Display was a valid and tested diagnostic topology tool, but projecting it on the main YASB operator surface made it feel like a work action and caused incoherent expectations. Narada surfaces need explicit action surface classes.",
+    "body": "## Observation\n\nDuring Windows operator-surface work, `Toggle Primary Display` was implemented and tested as a coherent Windows topology operation. It changes which display Windows treats as primary and can help diagnose or repair display-topology behavior.\n\nHowever, placing it on the main YASB bar beside work-level actions made the surface incoherent. The operator expected the button to move or exchange visible work between displays. The tool was valid, but it belonged to a different surface class.\n\nThe eventual correction was to demote `Toggle Primary Display` from the main operator surface while keeping the mechanics available as diagnostic tooling through `tools/display/Swap-Displays.ps1` and its regression test.\n\n## Learning\n\nSome tools are useful and tested, but should not be projected as primary operator work actions.\n\nNarada Site surfaces should distinguish at least these classes:\n\n- primary work action;\n- secondary utility;\n- diagnostic tool;\n- repair/recovery action;\n- dangerous or intrusive platform mutation;\n- hidden/internal primitive;\n- contextual projection of a canonical capability.\n\nA tool's implementation validity is not enough to justify main-surface placement. Surface placement should match operator intent, risk, frequency, and semantic level.\n\n## Concrete Example\n\n`Toggle Primary Display`:\n\n- valid as diagnostic Windows-topology tooling;\n- intrusive because it mutates primary display and can require Komorebi repair/hard restart;\n- not a work-level action;\n- should be discoverable from diagnostics/tooling, not projected on the main bar.\n\n`Exchange Monitor Contents`:\n\n- work-level operator action;\n- context projection of `Monitor Content Transfer` when exactly two monitors exist;\n- belongs on the main operator surface.\n\n## Requested Guidance / Machinery\n\n1. Allow Site/operator-surface actions to declare a surface class.\n2. Make projection rules depend on that class. Diagnostic tools should not appear in the primary work-action row by default.\n3. Tests should assert projection posture as well as mechanics. Example:\n\n   ```text\n   diagnostic Toggle Primary Display mechanics remain available\n   diagnostic Toggle Primary Display is absent from main YASB operator bar\n   ```\n\n4. Diagnostic/intrusive tools should carry warnings, logs, restoration expectations, and narrower access paths.\n5. Surface reviews should ask: does this belong where the operator will encounter it during ordinary work?\n\n## Local Evidence\n\nWindows User Site commits:\n\n```text\ncae5759 Implement monitor content transfer\n93cc96a Demote primary display toggle from operator surface\n```\n\nThe final posture keeps `Toggle Primary Display` as diagnostic tooling and projects `Exchange Monitor Contents` as the primary work-level action.",
+    "labels": [
+      "observation",
+      "operator-surface",
+      "diagnostics",
+      "ux-semantics",
+      "capability-projection"
+    ],
+    "evidence": [
+      "Toggle Primary Display was valid but caused wrong operator expectation on main bar",
+      "Final fix demoted primary toggle and kept Exchange Monitor Contents as work-level action",
+      "Tests were adjusted to assert diagnostic tool absence from main YASB bar"
+    ]
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "decision",
+    "target_ref": "task-1081-operator-surface-action-classes",
+    "promoted_at": "2026-04-29T17:25:34.573Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'decision' is not implemented yet."
+  }
+}
