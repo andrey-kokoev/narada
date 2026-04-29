@@ -12,6 +12,7 @@ import {
   captureTaskLifecycleEvidenceState,
   writeTaskLifecycleMutationEvidence,
 } from '../lib/mutation-evidence-writer.js';
+import { checkLawAdmission, lawUpdateRequiredResult } from '../lib/law-sync.js';
 
 export interface TaskFinishOptions {
   taskNumber?: string;
@@ -37,6 +38,13 @@ export async function taskFinishCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const fmt = createFormatter({ format: options.format || 'auto', verbose: false });
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
+  const lawAdmission = await checkLawAdmission(cwd, options.agent);
+  if (lawAdmission.status === 'blocked') {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: lawUpdateRequiredResult(lawAdmission),
+    };
+  }
   const serviceStore = options.store;
   const before = await captureTaskLifecycleEvidenceState(cwd, options.taskNumber, serviceStore);
 

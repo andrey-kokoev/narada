@@ -1,0 +1,26 @@
+{
+  "schema": "https://narada.dev/schemas/law-change/v1",
+  "change_id": "law_2026-04-29T23-57-30-951Z_a5029d6a-88a7-4333-98f1-158c8cbb596d",
+  "issued_at": "2026-04-29T23:57:30.951Z",
+  "issuer": "builder",
+  "summary": "Law Change Propagation adds durable law-change records, agent receipts, and law_update_required work-admission blocking.",
+  "scope": "site",
+  "files": [
+    "AGENTS.md",
+    "docs/concepts/law-change-propagation.md",
+    "packages/layers/cli/src/lib/law-sync.ts"
+  ],
+  "commit": null,
+  "required_roles": [
+    "architect",
+    "builder",
+    "observer"
+  ],
+  "law_sources": [
+    "AGENTS.md",
+    "SEMANTICS.md",
+    ".ai/task-contracts",
+    "docs/concepts",
+    "docs/product/site-governance-coordinates.md"
+  ]
+}

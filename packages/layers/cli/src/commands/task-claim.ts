@@ -17,6 +17,7 @@ import {
   captureTaskLifecycleEvidenceState,
   writeTaskLifecycleMutationEvidence,
 } from '../lib/mutation-evidence-writer.js';
+import { checkLawAdmission, lawUpdateRequiredResult } from '../lib/law-sync.js';
 
 export interface TaskClaimOptions {
   taskNumber?: string;
@@ -35,6 +36,13 @@ export async function taskClaimCommand(
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
   const taskNumber = (options as Record<string, unknown>).taskNumber as string | undefined;
   const agentId = options.agent;
+  const lawAdmission = await checkLawAdmission(cwd, agentId);
+  if (lawAdmission.status === 'blocked') {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: lawUpdateRequiredResult(lawAdmission),
+    };
+  }
   const before = await captureTaskLifecycleEvidenceState(cwd, taskNumber);
   const service = await claimTaskService({
     taskNumber,
