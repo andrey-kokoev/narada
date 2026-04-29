@@ -4,6 +4,7 @@ import { taskDeriveFromFindingCommand } from './task-derive-from-finding.js';
 import { taskLintCommand } from './task-lint.js';
 import { taskListCommand } from './task-list.js';
 import { taskGraphCommand } from './task-graph.js';
+import { taskHandoffCommand } from './task-handoff.js';
 import { taskSearchCommand } from './task-search.js';
 import { taskReadCommand } from './task-read.js';
 import {
@@ -168,6 +169,32 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
           bounded: true,
           view: opts.view as boolean | undefined,
           open: opts.open as boolean | undefined,
+        }),
+      });
+    });
+
+  taskCmd
+    .command('handoff <task-number>')
+    .description('Emit a bounded Builder handoff packet for a task')
+    .option('--format <fmt>', 'Output format: json or human', 'human')
+    .option('--artifact', 'Write durable handoff artifact under .ai/handoffs', false)
+    .option('--artifact-path <path>', 'Write durable handoff artifact to a specific path')
+    .option('--route-inbox', 'Route handoff packet into Canonical Inbox as an observation', false)
+    .option('--by <principal>', 'Principal generating the handoff packet')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .action(async (taskNumber: string, opts: Record<string, unknown>) => {
+      await runDirectCommand({
+        command: 'task handoff',
+        emit: emitCommandResult,
+        format: opts.format,
+        invocation: () => taskHandoffCommand({
+          taskNumber,
+          cwd: opts.cwd as string | undefined,
+          format: outputFormat(opts.format),
+          artifact: opts.artifact as boolean | undefined,
+          artifactPath: opts.artifactPath as string | undefined,
+          routeInbox: opts.routeInbox as boolean | undefined,
+          by: opts.by as string | undefined,
         }),
       });
     });

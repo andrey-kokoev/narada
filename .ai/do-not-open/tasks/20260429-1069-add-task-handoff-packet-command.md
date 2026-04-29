@@ -1,8 +1,17 @@
 ---
-status: opened
+status: closed
 depends_on: [1065]
 amended_by: architect
 amended_at: 2026-04-29T15:06:50.725Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T16:16:38.188Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Focused tests and live command checks cover human/json handoff packets, required packet fields, artifact writing, optional inbox routing as observation, bounded output posture, and pnpm verify passed.
+closed_at: 2026-04-29T16:16:43.673Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Add task handoff packet command
@@ -40,8 +49,8 @@ This task addresses missing explicit handoff packets. Builder and Architect need
 
 ## Acceptance Criteria
 
-- [ ] task handoff command emits human and json handoff packets for a task
-- [ ] Packet includes task id number title goal criteria dependencies assignment source envelopes changed loci if known verification expectations and return review path
-- [ ] Command can write a durable handoff artifact and optionally route it through inbox as review_request or handoff
-- [ ] Output is bounded and never dumps full task lifecycle or inbox payload transcripts by default
-- [ ] Tests cover human json artifact and bounded output behavior and pnpm verify passes
+- [x] task handoff command emits human and json handoff packets for a task
+- [x] Packet includes task id number title goal criteria dependencies assignment source envelopes changed loci if known verification expectations and return review path
+- [x] Command can write a durable handoff artifact and optionally route it through inbox as review_request or handoff
+- [x] Output is bounded and never dumps full task lifecycle or inbox payload transcripts by default
+- [x] Tests cover human json artifact and bounded output behavior and pnpm verify passes
