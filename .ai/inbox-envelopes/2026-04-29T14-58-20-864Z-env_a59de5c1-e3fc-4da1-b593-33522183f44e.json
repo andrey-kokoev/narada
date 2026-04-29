@@ -1,0 +1,40 @@
+{
+  "envelope_id": "env_a59de5c1-e3fc-4da1-b593-33522183f44e",
+  "received_at": "2026-04-29T14:58:20.864Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:scale-relative-canonical-inbox-envelope-20260429"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "andrey"
+  },
+  "payload": {
+    "title": "Generalize canonical inbox as scale-relative governed crossing substrate",
+    "summary": "Discussion of builder-to-architect handoff initially suggested an outward canonical inbox plus an inward internal inbox. Reading Scale-Relative Operation Topology sharpened this: these are not separate species. They are the same inbox pattern instantiated at different scale positions. Narada should preserve one canonical envelope substrate while enriching envelope structure with scale-relative crossing coordinates and message kinds.",
+    "evidence": [
+      "Originating incident: builder completed work and commits but did not leave an explicit architect review_request. This exposed a missing intra-Site role crossing, not necessarily a need for a separate inbox ontology.",
+      "Scale-Relative Operation Topology states that internally an Operation is a topology of authority zones and governed crossings, while externally it may appear as one zone-like participant; the outer reading must not erase the inner topology.",
+      "Applied here: the User Site may appear externally as one Site, but internally architect and builder remain distinct loci. Builder-to-architect review is still a governed crossing and should use the same canonical envelope grammar."
+    ],
+    "proposal": [
+      "Keep canonical inbox as one governed crossing substrate / envelope grammar. Do not create unrelated inbox species for external intake vs internal handoff. Instead, enrich envelopes with typed scale-relative crossing metadata.",
+      "Add or formalize crossing coordinates on canonical envelopes: crossing.scale, crossing.authority_scope, crossing.from_locus, crossing.to_locus, crossing.owning_site, crossing.target_authority, crossing.requested_crossing, and responsibility/review/admission state as appropriate.",
+      "Initial crossing scales may include site, role, operation, subsystem, and external. Initial authority scopes may include same_site, cross_site, external_to_site, and intra_operation.",
+      "Initial message kinds should include existing observation/proposal plus review_request, handoff, approval_request, admission_request, verification_request, blocker, capa_candidate, and capa_addendum.",
+      "Views such as architect inbox, builder handoff queue, Narada proper inbox, and CAPA queue should be projections over the canonical envelope substrate, not separate ontological inboxes.",
+      "Guardrail: one envelope representation must not imply one global authority. Each envelope still resolves to the local authority of its target locus, and admission remains governed at that locus."
+    ],
+    "recommendation": "Promote as doctrine/schema work adjacent to canonical inbox, governed crossing, CAPA Operation, Site factorization, and Scale-Relative Operation Topology. Use the builder handoff incident as the first test case."
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "decision",
+    "target_ref": "task-1064-scale-relative-canonical-inbox-envelope",
+    "promoted_at": "2026-04-29T15:01:00.541Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'decision' is not implemented yet."
+  }
+}
