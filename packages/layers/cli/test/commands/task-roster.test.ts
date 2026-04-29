@@ -198,6 +198,23 @@ describe('task roster operator', () => {
         join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-385-test.md'),
         '---\ntask_id: 385\nstatus: opened\n---\n\n# Task 385\n',
       );
+      const seededStore = openTaskLifecycleStore(tempDir);
+      try {
+        seededStore.upsertLifecycle({
+          task_id: '20260420-385-test',
+          task_number: 385,
+          status: 'opened',
+          governed_by: null,
+          closed_at: null,
+          closed_by: null,
+          reopened_at: null,
+          reopened_by: null,
+          continuation_packet_json: null,
+          updated_at: '2026-04-20T00:00:00Z',
+        });
+      } finally {
+        seededStore.db.close();
+      }
 
       const result = await taskRosterAssignCommand({
         taskNumber: '385',
@@ -405,6 +422,23 @@ describe('task roster operator', () => {
         join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-385-test.md'),
         '---\ntask_id: 385\nstatus: opened\n---\n\n# Task 385\n',
       );
+      const seededStore = openTaskLifecycleStore(tempDir);
+      try {
+        seededStore.upsertLifecycle({
+          task_id: '20260420-385-test',
+          task_number: 385,
+          status: 'opened',
+          governed_by: null,
+          closed_at: null,
+          closed_by: null,
+          reopened_at: null,
+          reopened_by: null,
+          continuation_packet_json: null,
+          updated_at: '2026-04-20T00:00:00Z',
+        });
+      } finally {
+        seededStore.db.close();
+      }
 
       const result = await taskRosterAssignCommand({
         taskNumber: '385',
@@ -419,9 +453,24 @@ describe('task roster operator', () => {
       expect(parsed.claimed).toBe(false);
       expect(parsed.warnings?.some((w) => w.includes('--no-claim'))).toBe(true);
 
+      const human = await taskRosterAssignCommand({
+        taskNumber: '385',
+        agent: 'test-agent',
+        cwd: tempDir,
+        format: 'human',
+        noClaim: true,
+      });
+      expect(String(human.result)).toContain('claim: skipped');
+
       // Task file unchanged
       const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-385-test.md'), 'utf8');
       expect(taskContent).toContain('status: opened');
+      const store = openTaskLifecycleStore(tempDir);
+      try {
+        expect(store.getLifecycleByNumber(385)?.status).toBe('opened');
+      } finally {
+        store.db.close();
+      }
 
       // Roster updated
       const roster = await loadRoster(tempDir);

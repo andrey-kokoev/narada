@@ -331,8 +331,9 @@ export async function taskRosterAssignCommand(
       };
     }
 
+    const claimText = claimed ? 'claim: performed' : 'claim: skipped';
     const lines: string[] = [
-      `Assigned ${options.agent} → task ${taskNumber} (status: working)${claimed ? ' and claimed' : ''}`,
+      `Assigned ${options.agent} -> task ${taskNumber} (status: working, ${claimText})`,
     ];
     for (const w of admission.warnings) {
       lines.push(`⚠ ${w}`);
