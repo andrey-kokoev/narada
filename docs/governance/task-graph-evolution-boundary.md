@@ -136,6 +136,7 @@ Lifecycle transitions are documented in the task body under `## Execution Notes`
 - `accepted` → `closed` is operator-driven (or automatic after a grace period).
 - A task in `rejected` returns to `claimed` or `in_progress` for corrective work.
 - `deferred` and `closed` are terminal unless explicitly reopened.
+- A task review, closure, deferral, supersession, or reopen refusal may be challenged through [`Canonical Appeal And Grievance`](../concepts/canonical-appeal-grievance.md). Filing an appeal does not automatically suspend the task state unless the governing regime or Operator grants a stay.
 
 ---
 

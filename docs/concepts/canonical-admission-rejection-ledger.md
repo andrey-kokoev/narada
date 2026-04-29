@@ -51,6 +51,12 @@ Each ledger entry records:
 
 Canonical Inbox stores typed envelopes after admission. The ledger stores candidate decisions before or around admission. This keeps rejected file-drop items, rejected mailbox candidates, deferred Site absorption material, and superseded proposals visible without forcing all of them into the inbox as active work.
 
+## Relationship To Appeal And Grievance
+
+The ledger records candidate admission decisions. [`Canonical Appeal And Grievance`](canonical-appeal-grievance.md) defines the governed path for challenging those decisions after they exist.
+
+A rejected, deferred, or superseded candidate may be appealed when the filing principal has standing and can name grounds such as missing evidence, wrong authority, procedural error, new evidence, or misclassification. The appeal does not erase or edit the ledger entry. If successful, it creates a new governed outcome such as admitted, remanded, superseded, or clarified.
+
 ## V0 Boundary
 
 This v0 provides the durable ledger and CLI. Intake adapters should be migrated incrementally to write ledger decisions during dry-run/admit flows. The first expected integrations are human file-drop intake and mailbox participant-domain filtering.

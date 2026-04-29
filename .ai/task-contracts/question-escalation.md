@@ -104,6 +104,14 @@ If the task is **not blocked** but the agent notices friction in the governing s
 
 Escalation is for blockers. Governance feedback is for post-task improvement signals.
 
+## Appeal / Grievance (Not Escalation)
+
+If a decision already exists and a principal wants to challenge it, use the Canonical Appeal and Grievance mechanism instead of this pre-decision escalation format.
+
+Appeal is for post-decision challenge: review verdicts, closures, refusals, routing decisions, capability denials, or admission/rejection outcomes. Escalation is for unresolved choices before the disputed action is taken.
+
+See [`docs/concepts/canonical-appeal-grievance.md`](../../docs/concepts/canonical-appeal-grievance.md).
+
 ## Architect Interaction
 
 If an architect agent is available, ask the architect first. If not, ask the user.
