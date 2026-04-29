@@ -26,5 +26,17 @@
     "source_user_site_envelope": "env_718d7fd3-051b-4dab-bb4c-9bf58b0a99aa",
     "requested_handling": "Treat as design input to operator-surface identity/binding machinery rather than a separate local one-off."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1091",
+    "promoted_at": "2026-04-29T21:17:58.895Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1091,
+      "task_id": "20260429-1091-add-operator-surface-identity-binding-commands"
+    }
+  }
 }
