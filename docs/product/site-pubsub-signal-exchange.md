@@ -37,7 +37,7 @@ Sites may publish typed signals such as:
 
 A subscription says that one Site wants to hear about a class of signals from another locus. It does not say the receiving Site accepts, trusts, promotes, executes, or stores the payload as canonical truth.
 
-Subscribed signals should enter an inert intake boundary, preferably canonical inbox or a sibling typed signal inbox. From there, normal governed actions apply:
+Subscribed signals should enter an inert intake boundary, preferably Canonical Inbox with scale-relative crossing coordinates. A sibling typed signal projection may exist, but it is a derived view, not a second inbox authority. From there, normal governed actions apply:
 
 - archive;
 - task candidate;

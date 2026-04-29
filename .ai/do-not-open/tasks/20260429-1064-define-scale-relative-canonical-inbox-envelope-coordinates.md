@@ -1,7 +1,16 @@
 ---
-status: claimed
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T15:00:50.654Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T17:11:01.446Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Canonical Inbox remains one governed envelope substrate; crossing coordinates define scale, authority_scope, from_locus, to_locus, owning_site, target_authority, requested_crossing, admission_state, and review_state; compatible requested crossing kinds include review_request, handoff, approval_request, admission_request, verification_request, blocker, capa_candidate, and capa_addendum; Builder-to-Architect handoff incident and projection surfaces are documented; AGENTS and Site pub/sub docs link the doctrine; pnpm verify passed.
+closed_at: 2026-04-29T17:11:12.618Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Define scale-relative canonical inbox envelope coordinates
@@ -39,8 +48,8 @@ Inbox envelope env_a59de5c1-e3fc-4da1-b593-33522183f44e observes that Builder-to
 
 ## Acceptance Criteria
 
-- [ ] Canonical inbox remains one governed envelope substrate rather than separate external and internal inbox ontologies
-- [ ] Envelope crossing coordinates are specified for scale authority scope from locus to locus owning Site target authority requested crossing and admission or review state
-- [ ] Message kinds include review request handoff approval request admission request verification request blocker capa candidate and capa addendum without breaking existing observation proposal command request and knowledge candidate use
-- [ ] Architect builder handoff incident is used as the motivating test case and expected projection surfaces are named
-- [ ] Documentation is linked from AGENTS and relevant concepts and pnpm verify passes
+- [x] Canonical inbox remains one governed envelope substrate rather than separate external and internal inbox ontologies
+- [x] Envelope crossing coordinates are specified for scale authority scope from locus to locus owning Site target authority requested crossing and admission or review state
+- [x] Message kinds include review request handoff approval request admission request verification request blocker capa candidate and capa addendum without breaking existing observation proposal command request and knowledge candidate use
+- [x] Architect builder handoff incident is used as the motivating test case and expected projection surfaces are named
+- [x] Documentation is linked from AGENTS and relevant concepts and pnpm verify passes

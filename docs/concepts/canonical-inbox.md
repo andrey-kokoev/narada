@@ -117,6 +117,112 @@ Admission writes exactly one `file_drop` envelope per item path and content dige
 | `promotion` | Optional target after governed promotion |
 | `handling` | Optional claim/lease metadata while a principal handles the envelope |
 | `capability` | Optional inert capability metadata for requirements, requests, claims, references, grant evidence, refusals, or revocations |
+| `crossing` | Optional scale-relative crossing coordinates for external intake or intra-Site role handoff |
+
+## Scale-Relative Crossing Coordinates
+
+Canonical Inbox remains one governed envelope substrate. It must not split into separate "external inbox", "internal inbox", "role inbox", "review inbox", or "Site pub/sub inbox" ontologies merely because the source and target are at different scales.
+
+Instead, envelopes may carry scale-relative crossing coordinates:
+
+```json
+{
+  "crossing": {
+    "scale": "operation | site | realm | role | task | capability",
+    "authority_scope": "narada-proper | user-site | pc-site | project-site | client-service | data-site | elt-site",
+    "from_locus": "builder:narada-proper",
+    "to_locus": "architect:narada-proper",
+    "owning_site": "narada-proper",
+    "target_authority": "task_lifecycle | canonical_inbox | evidence_admission | site_governance | capability_consent | operator",
+    "requested_crossing": "review_request | handoff | approval_request | admission_request | verification_request | blocker | capa_candidate | capa_addendum",
+    "admission_state": "received | claimed | admitted | rejected | deferred | promoted | archived",
+    "review_state": "not_required | requested | in_review | accepted | rejected | superseded"
+  }
+}
+```
+
+Required fields for a crossing-aware envelope are `scale`, `authority_scope`, `from_locus`, `to_locus`, `owning_site`, `target_authority`, `requested_crossing`, and `admission_state`. `review_state` is required when the requested crossing is review-related.
+
+The scale is relative:
+
+- A Builder-to-Architect review handoff is internal to Narada proper at the Site scale, but it is still a governed crossing between role/lifecycle authority surfaces.
+- A User Site proposal to a PC Site is inter-Site at the User/PC scale, but it still enters the same Canonical Inbox substrate.
+- A Site pub/sub signal is inter-Site delivery, but receiving admission is still local.
+
+The coordinates describe the crossing. They do not admit it.
+
+## Compatible Message Kinds
+
+Existing envelope kinds such as `observation`, `proposal`, `command_request`, `knowledge_candidate`, `task_candidate`, and `incident` remain valid.
+
+The following crossing request kinds may appear inside `payload.kind`, `crossing.requested_crossing`, or a future typed envelope field without creating a second inbox ontology:
+
+| Requested crossing | Meaning |
+| --- | --- |
+| `review_request` | A role or task needs another authority to review evidence or fit. |
+| `handoff` | Work, context, or responsibility is being handed to another role/locus. |
+| `approval_request` | A decision needs Operator or configured authority approval. |
+| `admission_request` | A candidate requests admission into a target zone. |
+| `verification_request` | A TIZ-style verification is requested before evidence admission. |
+| `blocker` | A progress-blocking condition is surfaced for routing or resolution. |
+| `capa_candidate` | A recurrence-risk issue may need CAPA handling. |
+| `capa_addendum` | Additional evidence or context for an existing CAPA path. |
+
+These are requested crossings, not automatic work types. Promotion decides whether they become task lifecycle work, evidence admission, CAPA, review, archive, or residual.
+
+## Motivating Test Case
+
+The Builder-to-Architect review handoff incident exposed why internal role handoff should not become a separate inbox species.
+
+Correct shape:
+
+```text
+Builder report/evidence
+-> Canonical Inbox envelope or task handoff artifact
+-> crossing coordinates:
+   scale=role
+   from_locus=builder:narada-proper
+   to_locus=architect:narada-proper
+   owning_site=narada-proper
+   target_authority=evidence_admission
+   requested_crossing=review_request
+-> Architect or Operator admission
+-> task review / finding / closure / residual
+```
+
+The same substrate can also carry external intake:
+
+```text
+User Site observation
+-> Canonical Inbox envelope
+-> crossing coordinates:
+   scale=site
+   from_locus=user-site:narada-andrey
+   to_locus=site:narada-proper
+   owning_site=narada-proper
+   target_authority=canonical_inbox
+   requested_crossing=admission_request
+-> local admission
+```
+
+The difference is in coordinates and crossing law, not in a new inbox.
+
+## Projection Surfaces
+
+Projection surfaces are derived views, not separate authority stores.
+
+Allowed projections include:
+
+- review queue;
+- Builder handoff queue;
+- Operator approval queue;
+- CAPA candidate queue;
+- blockers view;
+- verification request view;
+- inter-Site incoming signal view;
+- inbox work-next view.
+
+These projections may sort, filter, group, and summarize envelope rows. They must not become independent mutation authority.
 
 ## Capability Metadata
 
