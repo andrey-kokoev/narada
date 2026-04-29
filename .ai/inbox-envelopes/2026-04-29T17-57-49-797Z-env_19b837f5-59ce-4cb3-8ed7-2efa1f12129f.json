@@ -1,0 +1,41 @@
+{
+  "envelope_id": "env_19b837f5-59ce-4cb3-8ed7-2efa1f12129f",
+  "received_at": "2026-04-29T17:57:49.797Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey:staccato-site-posture-command-gap-20260429"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Narada Sites need canonical posture and work-next operator commands",
+    "summary": "While checking the Staccato Narada Site, the available local posture required running and mentally reconciling pnpm status, pnpm ops, pnpm check, and pnpm drafts. This is technically CLI-based but ergonomically incoherent for routine Site operation. Each Site should not have to invent its own wrapper for daemon posture, sync freshness, work queue, drafts, failed-terminal attention, runtime readiness, residuals, and next recommended action.",
+    "evidence": [
+      "Staccato was healthy and quiescent, but this required separate status, ops, check, and drafts commands to establish.",
+      "The local residual task initially described the four-command inspection path; operator correctly pushed that the desired surface should be a CLI command, not remembered manual choreography.",
+      "The local Staccato task should belong to narada-staccato.builder, while the generic capability belongs to narada-proper.architect/product machinery."
+    ],
+    "proposal": [
+      "Add canonical Site-level commands such as narada site health, narada site work-next, and/or narada site stabilize that work across Site kinds and execution surfaces.",
+      "The command should summarize sync freshness, daemon posture, active/retryable/stuck work, pending drafts, failed-terminal attention, mailbox/runtime readiness, known residuals, and next recommended action.",
+      "Local Site wrappers such as pnpm health should be thin projections of the canonical command, not independent reinventions."
+    ],
+    "recommendation": "Treat this as execution work for Narada proper: design and implement a canonical cross-Site posture/work-next surface, then let Staccato use it instead of growing a private convention."
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1084",
+    "promoted_at": "2026-04-29T17:59:17.995Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1084,
+      "task_id": "20260429-1084-add-canonical-site-posture-and-work-next-commands"
+    }
+  }
+}
