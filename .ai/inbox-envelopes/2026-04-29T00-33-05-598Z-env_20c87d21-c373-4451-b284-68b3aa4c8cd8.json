@@ -1,0 +1,40 @@
+{
+  "envelope_id": "env_20c87d21-c373-4451-b284-68b3aa4c8cd8",
+  "received_at": "2026-04-29T00:33:05.598Z",
+  "source": {
+    "kind": "file_drop",
+    "ref": ".ai/inbox-drop/20260428-001-cli-api-agent-embodiment.md#sha256:8463cbc20156c3cf0845708523d0e765"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "andrey"
+  },
+  "payload": {
+    "title": "Model CLI and API agents as execution embodiments",
+    "summary": "# Model CLI and API Agents as Execution Embodiments ## Summary Operator and agent observed that CLI-based agents and API-based agents are not different species of intelligence. A CLI agent is an API-like agent given an operator-inhabitable ",
+    "body": "# Model CLI and API Agents as Execution Embodiments\n\n## Summary\n\nOperator and agent observed that CLI-based agents and API-based agents are not different species of intelligence. A CLI agent is an API-like agent given an operator-inhabitable embodiment: terminal, working directory, shell, logs, interrupts, prompts, and visible process locality.\n\nThe terminal is a portal into the same underlying execution world, but with inspectability, interruptibility, locality, and shared operational presence.\n\n## Evidence\n\n- CLI sessions expose commands, logs, failures, prompts, long-running state, working directory, PATH, credentials, OS session, window title, desktop, and operator interrupts.\n- API-only sessions can perform similar intelligence and tool calls, but the operator cannot inhabit the unfolding process through the same terminal surface.\n- This distinction matters for Narada operator-surface doctrine, session binding, resume semantics, and authority routing across mixed CLI/API coding agents.\n\n## Proposal\n\n- Document CLI agents and API agents as different embodiments of agentic execution, not different classes of intelligence.\n- Define terminal windows as operator-inhabitable portals over API-equivalent execution worlds, with explicit affordances: locality, inspectability, interruptibility, traceability, and shared operational presence.\n- Use this framing when designing `narada resume`, session binding, operator surface adapters, and authority assignment between API-based and CLI-based agents.\n\n## Recommendation\n\nAdmit as doctrine/product design input for operator surface topology and agent embodiment documentation.",
+    "source_item": ".ai/inbox-drop/20260428-001-cli-api-agent-embodiment.md",
+    "source_root": ".ai/inbox-drop",
+    "item_name": "20260428-001-cli-api-agent-embodiment.md",
+    "item_kind": "file",
+    "content_digest": "sha256:8463cbc20156c3cf0845708523d0e765",
+    "supporting_files": [],
+    "body_files": [],
+    "front_matter": {
+      "kind": "observation",
+      "title": "Model CLI and API agents as execution embodiments",
+      "authority_level": "operator_confirmed",
+      "principal": "andrey"
+    }
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "decision",
+    "target_ref": "operator-surface-agent-runtime-control-channel-doctrine-1049-1053",
+    "promoted_at": "2026-04-29T00:34:53.170Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'decision' is not implemented yet."
+  }
+}

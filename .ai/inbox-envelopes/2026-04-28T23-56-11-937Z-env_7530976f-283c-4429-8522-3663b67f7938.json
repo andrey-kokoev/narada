@@ -38,13 +38,13 @@
     "proposed_direction": "Add a coherent Site-local daemon source path: either make timer sources projectable by the daemon without mailbox assumptions, or expose a config-level filesystem/inbox-drop source for Site-local authored envelopes. The source should admit inert facts and route them through canonical inbox/admission machinery rather than mailbox-specific projection.",
     "classification": "daemon_site_local_source_gap"
   },
-  "status": "promoted",
+  "status": "archived",
   "promotion": {
-    "target_kind": "decision",
-    "target_ref": "site-local-daemon-source-chapter-1056-1059",
-    "promoted_at": "2026-04-28T23:58:19.755Z",
+    "target_kind": "archive",
+    "target_ref": "archive:env_7530976f-283c-4429-8522-3663b67f7938",
+    "promoted_at": "2026-04-29T00:21:31.071Z",
     "promoted_by": "architect",
-    "enactment_status": "pending",
-    "note": "recorded_pending_crossing: executable promotion for target kind 'decision' is not implemented yet."
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
   }
 }

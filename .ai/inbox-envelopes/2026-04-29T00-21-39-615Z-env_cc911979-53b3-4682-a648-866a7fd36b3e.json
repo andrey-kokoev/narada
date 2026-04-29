@@ -22,5 +22,13 @@
     ],
     "recommendation": "Treat as thoughts Project Site configuration/materialization follow-through, not Narada proper doctrine work."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "site_config_change",
+    "target_ref": "thoughts-project-daemon-source-materialization",
+    "promoted_at": "2026-04-29T00:21:47.969Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'site_config_change' is not implemented yet."
+  }
 }
