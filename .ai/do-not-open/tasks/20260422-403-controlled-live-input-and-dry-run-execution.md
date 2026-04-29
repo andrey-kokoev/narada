@@ -1,5 +1,5 @@
 ---
-status: claimed
+status: in_review
 depends_on: [400, 401, 402, 416]
 operator_gate: true
 ---
@@ -116,3 +116,11 @@ The output is either:
 - [ ] No campaign is sent or published.
 - [ ] Cycle health is `healthy` or `degraded` (not `critical`).
 - [ ] Execution trace is recorded in `cycle_traces`.
+
+## Execution Notes
+
+<!-- Record what was done, decisions made, and files changed. -->
+
+## Verification
+
+<!-- Record commands run, results observed, and how correctness was checked. -->
