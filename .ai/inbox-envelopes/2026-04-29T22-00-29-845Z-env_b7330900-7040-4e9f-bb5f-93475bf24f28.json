@@ -29,5 +29,17 @@
     "supersedes_misplaced_artifact": "packages/layers/cli/.ai/inbox-envelopes/2026-04-29T21-54-38-626Z-env_b7d3aeae-cd59-4cc8-a323-140192da4194.json",
     "misplaced_envelope_id": "env_b7d3aeae-cd59-4cc8-a323-140192da4194"
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1094",
+    "promoted_at": "2026-04-29T22:08:30.023Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1094,
+      "task_id": "20260429-1094-add-affinity-color-metadata-for-site-and-role-projections"
+    }
+  }
 }

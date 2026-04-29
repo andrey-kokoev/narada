@@ -29,5 +29,17 @@
     "proposed_direction": "Inbox submit should preflight that --cwd resolves to the intended Site root and that target_locus is allowed for the principal/source Site/envelope kind. Submitting from package subdirectories should either resolve to the governing repo root or fail with an explicit repair command. Builder-facing defaults should submit to local architect, with direct upstream requiring explicit authority.",
     "requested_handling": "Admit as corrective work adjacent to message routing authority, inbox publication ergonomics, and role-specific builder guardrails."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1093",
+    "promoted_at": "2026-04-29T22:08:23.394Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1093,
+      "task_id": "20260429-1093-enforce-inbox-target-locus-and-cwd-root-authority"
+    }
+  }
 }
