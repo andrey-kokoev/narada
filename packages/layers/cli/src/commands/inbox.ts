@@ -21,6 +21,7 @@ import {
   writeInboxMutationEvidence,
 } from '../lib/inbox-mutation-evidence-writer.js';
 import { inspectAuthorityClonePosture, type SiteEmbodimentPosture } from '../lib/narada-proper-authority.js';
+import { inspectDelegatedCliHealth, type DelegatedCliHealth } from '../lib/delegated-cli-health.js';
 
 const USER_PC_TEMPLATE_WORKFLOW_REF = 'user-pc-template-materialization-workflow';
 const USER_PC_TEMPLATE_WORKFLOW_PATH = 'docs/product/user-pc-template-materialization-workflow.md';
@@ -131,6 +132,7 @@ interface InboxRuntimeDiagnostics {
   runtime_origin_detail: string;
   canonical_inbox_commands_available: boolean;
   canonical_inbox_commands_detail: string;
+  delegated_cli_embodiment: DelegatedCliHealth;
   preflight_recommendation: string;
 }
 
@@ -409,6 +411,7 @@ export async function inboxDoctorCommand(options: InboxDoctorOptions): Promise<{
     { name: 'node_runtime_origin', ok: true, detail: runtime.runtime_origin_detail },
     { name: 'cli_entrypoint_exists', ok: runtime.cli_entrypoint_exists, detail: runtime.cli_entrypoint ?? 'no CLI entrypoint recorded' },
     { name: 'canonical_inbox_commands_available', ok: runtime.canonical_inbox_commands_available, detail: runtime.canonical_inbox_commands_detail },
+    { name: 'delegated_cli_embodiment_loadable', ok: runtime.delegated_cli_embodiment.ok, detail: runtime.delegated_cli_embodiment.detail },
     { name: 'inbox_envelope_artifacts_committed', ok: publication.uncommitted_envelope_artifacts_count === 0, detail: publication.uncommitted_envelope_artifacts_count === 0 ? 'no uncommitted inbox envelope artifacts' : `${publication.uncommitted_envelope_artifacts_count} uncommitted inbox envelope artifact(s)` },
     { name: 'inbox_envelope_artifacts_pushed', ok: publication.unpushed_commit_count === 0, detail: publication.unpushed_commit_count === 0 ? 'no unpushed commits detected' : `${publication.unpushed_commit_count} unpushed commit(s) may contain portable inbox artifacts` },
   ];
@@ -435,6 +438,7 @@ export async function inboxDoctorCommand(options: InboxDoctorOptions): Promise<{
       `CLI entrypoint: ${runtime.cli_entrypoint}`,
       `Platform: ${runtime.node_platform}/${process.arch}${runtime.is_wsl ? ` (WSL${runtime.wsl_distro ? ` ${runtime.wsl_distro}` : ''})` : ''}`,
       `Runtime posture: ${runtime.runtime_posture}`,
+      `Delegated CLI embodiment: ${runtime.delegated_cli_embodiment.detail}`,
       `Inbox publication: ${publication.status}`,
       `Export refresh: ${refresh.imported} imported, ${refresh.skipped} already present, ${refresh.exported_count} artifacts`,
       `Checks: ${checks.filter((check) => check.ok).length}/${checks.length} ok`,
@@ -1685,6 +1689,7 @@ function inspectInboxRuntime(cwdInput: string): InboxRuntimeDiagnostics {
         ? 'tsx_development_entrypoint'
         : 'unknown_or_external_entrypoint';
   const runtimeOriginDetail = `${process.execPath} ${process.version} on ${process.platform}/${process.arch}${isWsl ? ' under WSL' : ''}`;
+  const delegatedCliEmbodiment = inspectDelegatedCliHealth(cwd);
 
   return {
     node_exec_path: process.execPath,
@@ -1704,6 +1709,7 @@ function inspectInboxRuntime(cwdInput: string): InboxRuntimeDiagnostics {
     canonical_inbox_commands_detail: canonicalInboxCommandsAvailable
       ? `expected repo CLI build exists: ${expectedDistEntry}`
       : `expected repo CLI build missing: ${expectedDistEntry}; run pnpm --filter @narada2/cli build`,
+    delegated_cli_embodiment: delegatedCliEmbodiment,
     preflight_recommendation: 'Run narada inbox doctor before cross-environment inbox submission; submit from the authority clone when runtime posture is ambiguous.',
   };
 }

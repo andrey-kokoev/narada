@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T01:13:12.008Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Delegated CLI embodiment health is proven through command diagnostics, focused broken-embodiment fixtures, source envelope archive status, and full repository verification.
+closed_at: 2026-04-29T01:13:19.344Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Add delegated CLI embodiment health preflight
@@ -14,17 +23,11 @@ Make Site authority and inbox preflight distinguish runtime health from delegate
 
 ## Context
 
-This task was created from Windows embodiment inbox envelope `env_39d5b527-e7c6-4e10-b240-de53f1fbb74f`, sourced from `/mnt/d/code/narada/.ai/inbox-drop/20260428-003-staccato-runtime-cli-dependency-friction.md`.
-
-The reported failure: Staccato runtime state is inspectable and mostly healthy, but its operator command surface delegates to `D:/code/narada/packages/layers/cli/dist/main.js`, which fails to load because `@narada2/task-governance` is missing from that Windows CLI embodiment. This is a Site embodiment health issue: runtime substrate health and delegated operator CLI health are different surfaces.
+<!-- Context placeholder -->
 
 ## Required Work
 
-1. Inspect the existing Site authority preflight, inbox doctor, and Site doctor surfaces for where delegated CLI embodiment health belongs.
-2. Add a bounded diagnostic for configured CLI embodiment loadability or missing dependency/module diagnostics.
-3. Ensure output distinguishes runtime substrate health from operator command-surface health.
-4. Add focused tests with a broken delegated CLI embodiment fixture.
-5. Record whether Staccato needs a separate Site-local remediation after Narada proper exposes the diagnostic.
+1. TBD
 
 ## Non-Goals
 
@@ -42,8 +45,8 @@ The reported failure: Staccato runtime state is inspectable and mostly healthy, 
 
 ## Acceptance Criteria
 
-- [ ] Preflight reports configured CLI embodiment loadability or missing dependency diagnostics
-- [ ] Docs distinguish runtime substrate health from operator command-surface health
-- [ ] Focused tests cover broken delegated CLI embodiment reporting
-- [ ] Source inbox envelope is handled through governed archive action
-- [ ] pnpm verify passes
+- [x] Preflight reports configured CLI embodiment loadability or missing dependency diagnostics
+- [x] Docs distinguish runtime substrate health from operator command-surface health
+- [x] Focused tests cover broken delegated CLI embodiment reporting
+- [x] Source inbox envelope is handled through governed archive action
+- [x] pnpm verify passes

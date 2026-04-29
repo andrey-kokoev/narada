@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -182,5 +182,40 @@ describe('sitesBootstrapClientCommand', () => {
     const containment = data.checks.find((check) => check.name === 'client_workspace_containment');
     expect(containment?.status).toBe('warn');
     expect(containment?.message).toContain('outside .narada');
+  });
+
+  it('client doctor fails when a delegated Narada CLI embodiment is configured but cannot load', async () => {
+    const workspace = await tempWorkspace('narada-client-broken-cli-');
+    await sitesBootstrapClientCommand({
+      workspace,
+      siteId: 'utz',
+      sync: 'onedrive_non_git',
+      execute: true,
+      format: 'json',
+    }, createMockContext());
+
+    const siteRoot = join(workspace, '.narada');
+    const delegatedMain = join(siteRoot, 'delegated', 'packages', 'layers', 'cli', 'dist', 'main.js');
+    await mkdir(join(siteRoot, 'delegated', 'packages', 'layers', 'cli', 'dist'), { recursive: true });
+    await writeFile(delegatedMain, "require('@narada2/missing-task-governance-fixture')\n", 'utf8');
+    await writeFile(join(siteRoot, 'package.json'), JSON.stringify({
+      scripts: {
+        status: 'node ./delegated/packages/layers/cli/dist/main.js status',
+      },
+    }), 'utf8');
+
+    const doctor = await sitesDoctorCommand('utz', {
+      kind: 'client',
+      root: workspace,
+      format: 'json',
+    }, createMockContext());
+
+    expect(doctor.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    const data = doctor.result as { checks: Array<{ name: string; status: string; message: string }> };
+    const check = data.checks.find((item) => item.name === 'delegated_cli_embodiment_loadable');
+    expect(check).toMatchObject({
+      status: 'fail',
+    });
+    expect(check?.message).toContain('failed to load');
   });
 });

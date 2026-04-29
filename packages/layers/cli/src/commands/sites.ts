@@ -25,6 +25,7 @@ import {
   validateSiteRelations,
   writeSiteRelationRegistry,
 } from '../lib/site-relation-registry.js';
+import { inspectDelegatedCliHealth } from '../lib/delegated-cli-health.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -1221,6 +1222,17 @@ function addCheck(
   checks.push({ name, status, message, remediation });
 }
 
+function addDelegatedCliEmbodimentCheck(checks: SiteDoctorCheck[], siteRoot: string): void {
+  const health = inspectDelegatedCliHealth(siteRoot);
+  addCheck(
+    checks,
+    'delegated_cli_embodiment_loadable',
+    health.status,
+    health.detail,
+    health.ok ? undefined : 'Repair the delegated Narada CLI embodiment referenced by Site-local package scripts, then rerun Site doctor.',
+  );
+}
+
 function normalizeNativePath(pathValue: string): string {
   return win32.normalize(pathValue).replace(/[\\/]+$/, '').toLowerCase();
 }
@@ -1338,6 +1350,8 @@ async function sitesClientDoctorCommand(
       existsSync(pathValue) ? `File exists: ${pathValue}` : `File is missing: ${pathValue}`,
     );
   }
+
+  addDelegatedCliEmbodimentCheck(checks, siteRoot);
 
   const failed = checks.filter((check) => check.status === 'fail');
   const warned = checks.filter((check) => check.status === 'warn');
@@ -1462,6 +1476,8 @@ async function sitesProjectDoctorCommand(
       existsSync(pathValue) ? `File exists: ${pathValue}` : `File is missing: ${pathValue}`,
     );
   }
+
+  addDelegatedCliEmbodimentCheck(checks, siteRoot);
 
   const failed = checks.filter((check) => check.status === 'fail');
   const warned = checks.filter((check) => check.status === 'warn');

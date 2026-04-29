@@ -307,6 +307,43 @@ describe('Canonical Inbox CLI commands', () => {
     expect((after.result as { count: number }).count).toBe((before.result as { count: number }).count);
   });
 
+  it('reports broken delegated Narada CLI embodiments separately from inbox runtime health', async () => {
+    setupGitRepo(tempDir);
+    const delegatedMain = join(tempDir, 'delegated', 'packages', 'layers', 'cli', 'dist', 'main.js');
+    mkdirSync(join(tempDir, 'delegated', 'packages', 'layers', 'cli', 'dist'), { recursive: true });
+    writeFileSync(delegatedMain, "require('@narada2/missing-task-governance-fixture')\n", 'utf8');
+    writeFileSync(tempDir + '/package.json', JSON.stringify({
+      scripts: {
+        status: 'node ./delegated/packages/layers/cli/dist/main.js status',
+      },
+    }), 'utf8');
+
+    const doctor = await inboxDoctorCommand({ cwd: tempDir, format: 'json' });
+
+    const result = doctor.result as {
+      runtime: {
+        delegated_cli_embodiment: {
+          ok: boolean;
+          configured: boolean;
+          scripts: Array<{ script_name: string; loadable: boolean; detail: string }>;
+        };
+      };
+      checks: Array<{ name: string; ok: boolean; detail: string }>;
+    };
+    expect(result.runtime.delegated_cli_embodiment).toMatchObject({
+      configured: true,
+      ok: false,
+    });
+    expect(result.runtime.delegated_cli_embodiment.scripts[0]).toMatchObject({
+      script_name: 'status',
+      loadable: false,
+    });
+    expect(result.runtime.delegated_cli_embodiment.scripts[0]?.detail).toContain('@narada2/missing-task-governance-fixture');
+    expect(result.checks.find((check) => check.name === 'delegated_cli_embodiment_loadable')).toMatchObject({
+      ok: false,
+    });
+  });
+
   it('exports and imports inbox envelopes idempotently through append-only artifacts', async () => {
     const submitted = await inboxSubmitCommand({
       cwd: tempDir,

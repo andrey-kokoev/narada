@@ -61,7 +61,9 @@ narada inbox work-next
 
 `narada inbox doctor` reports whether `.ai/inbox-envelopes/*.json` artifacts are uncommitted or whether the current branch has unpushed commits that may contain portable inbox artifacts.
 
-Run `narada inbox doctor` before cross-environment submission or publication. It reports the working directory, Git delivery coordinates, inbox DB accessibility, Node executable, CLI entrypoint, platform/WSL posture, package root, repository dist entrypoint, and whether canonical inbox commands are available from the current runtime.
+Run `narada inbox doctor` before cross-environment submission or publication. It reports the working directory, Git delivery coordinates, inbox DB accessibility, Node executable, CLI entrypoint, platform/WSL posture, package root, repository dist entrypoint, delegated Narada CLI embodiment loadability, and whether canonical inbox commands are available from the current runtime.
+
+Runtime substrate health and delegated command-surface health are separate. A Site can have an accessible inbox DB and valid runtime state while its Site-local scripts delegate to a broken Narada CLI embodiment. `inbox doctor` reports that as `delegated_cli_embodiment_loadable` instead of smearing it into inbox or daemon health.
 
 Command responsibilities:
 

@@ -164,6 +164,8 @@ The Site also needed:
 - reply identity posture (`Staccato Narada`, not a generic support team);
 - local dependency/runtime repair posture.
 
+Delegated CLI embodiment health is not the same as runtime substrate health. A Site may have valid local state, inbox directories, and daemon configuration while its operator command surface points to a stale or broken Narada CLI build. During onboarding, run both the Site doctor and inbox doctor so command-surface failures are surfaced as repairable embodiment problems rather than mistaken for authority or mailbox failures.
+
 That evidence earned the operation-intake routing bridge and the explicit Inhabited Onboarding lifecycle phase. The concept remains generic: any Site may use the phase when real operation pressure exposes missing boundaries or readiness criteria.
 
 ## Exit Posture
