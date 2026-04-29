@@ -1,0 +1,40 @@
+{
+  "envelope_id": "env_99dad4bf-1caa-4364-809e-257977fccc4f",
+  "received_at": "2026-04-29T21:08:40.225Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey.architect:operator-surface-identity-binding-machinery"
+  },
+  "kind": "proposal",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Add operator-surface identity and binding CLI/UI machinery",
+    "summary": "Inhabited use of the Windows User Site overlay shows that identity admission and runtime window binding need governed Narada machinery rather than ad hoc JSON edits, helper scripts, and manual memory of agent ids.",
+    "proposal": "Narada proper should add operator-surface identity and binding machinery that preserves the authority split: durable identity admission belongs to Site authority, while volatile substrate bindings such as HWND -> identity live in the PC/runtime locus. Provide CLI and UI-ready commands for identity admission, label projection, bind focused, bind as self, rebind, unbind, list bindings, and clean stale bindings.",
+    "requested_commands": [
+      "narada operator-surface identity add <identity-name> --role <role> --agent-kind <kind> --site <site-id>",
+      "narada operator-surface labels build --cwd <site-root>",
+      "narada operator-surface bind-focused --identity <id> --cwd <site-root>",
+      "narada operator-surface bind-focused --as self --cwd <site-root>",
+      "narada operator-surface unbind-focused --cwd <site-root>",
+      "narada operator-surface bindings list --cwd <site-root>",
+      "narada operator-surface bindings clean-stale --cwd <site-root>"
+    ],
+    "evidence": [
+      "User Site identity authority is currently operator-surfaces/identities.json.",
+      "Runtime HWND bindings are PC-local volatile state at C:\\ProgramData\\Narada\\sites\\pc\\desktop-sunroom-2\\runtime\\operator-surface-window-bindings.json.",
+      "YASB picker improved binding ergonomics by capturing target HWND before opening the dialog.",
+      "Manual direct binding and hand cleanup remain too error-prone; wrong bindings and stale bindings occurred during inhabited use.",
+      "The most important next primitive is bind as self so agents do not require the operator to remember their exact identity string."
+    ],
+    "source_user_site_envelopes": [
+      "env_b82dc2ea-013f-421e-92a9-cde86b996781",
+      "env_cb899139-79df-42b4-81c1-f349ffcd58fb"
+    ],
+    "requested_handling": "Admit as Narada proper product work. This should generalize the User Site implementation into governed operator-surface identity/binding commands and UI-ready surfaces."
+  },
+  "status": "received"
+}
