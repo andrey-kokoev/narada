@@ -123,6 +123,23 @@ describe('Canonical Inbox CLI commands', () => {
     expect(envelope.payload).toEqual({ title: 'From stdin' });
   });
 
+  it('accepts --authority-principal alias on low-level submit', async () => {
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual:authority-principal',
+      kind: 'proposal',
+      authorityLevel: 'operator_confirmed',
+      authorityPrincipal: 'architect',
+      payload: JSON.stringify({ title: 'Authority alias' }),
+    });
+
+    expect(submitted.exitCode).toBe(ExitCode.SUCCESS);
+    const envelope = (submitted.result as { envelope: { authority: { principal?: string } } }).envelope;
+    expect(envelope.authority.principal).toBe('architect');
+  });
+
   it('submits shell-safe observations with read-back confirmation and export guidance', async () => {
     const submitted = await inboxSubmitObservationCommand({
       cwd: tempDir,
@@ -159,6 +176,25 @@ describe('Canonical Inbox CLI commands', () => {
     expect(result.next_steps.publish_command).toBe('narada inbox publish --execute');
     expect(result.next_steps.publish_push_command).toBe('narada inbox publish --execute --push');
     expect(result.next_steps.git_visible_handoff).toContain(result.envelope.envelope_id);
+  });
+
+  it('accepts --authority-principal alias on submit-observation', async () => {
+    const submitted = await inboxSubmitObservationCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceRef: 'codex-session:authority-principal',
+      title: 'Observed alias',
+      authorityPrincipal: 'builder',
+    });
+
+    expect(submitted.exitCode).toBe(ExitCode.SUCCESS);
+    const result = submitted.result as {
+      envelope: { authority: { principal?: string }; payload: Record<string, unknown> };
+      confirmation: { payload_equivalent: boolean };
+    };
+    expect(result.envelope.authority.principal).toBe('builder');
+    expect(result.envelope.payload.title).toBe('Observed alias');
+    expect(result.confirmation.payload_equivalent).toBe(true);
   });
 
   it('rejects empty observation payloads unless explicitly allowed', async () => {

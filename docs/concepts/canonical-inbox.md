@@ -27,6 +27,8 @@ narada inbox pending <envelope-id> --to site_config_change:site:desktop-sunroom-
 
 Prefer `submit-observation` for routine observations from chat, diagnostics, and agent reports. It builds the typed payload from flags, writes the envelope, reads it back, confirms payload equivalence, and returns the Git-visible envelope artifact path for portable visibility.
 
+Use `--principal <id>` to set `authority.principal`. `--authority-principal <id>` is accepted as a compatibility alias on `inbox submit` and `inbox submit-observation` for callers that name the field by its envelope location.
+
 Use low-level `submit` when the caller already has a complete typed envelope payload. Prefer `--payload-file` or `--payload-stdin` for non-trivial payloads. Inline JSON is acceptable for tiny POSIX-shell examples, but it is brittle across PowerShell, chat copy/paste, and multi-line payloads. Empty object payloads are rejected for observations and task candidates unless `--allow-empty-payload` is explicit.
 
 Successful `inbox submit` and `inbox submit-observation` write two surfaces:

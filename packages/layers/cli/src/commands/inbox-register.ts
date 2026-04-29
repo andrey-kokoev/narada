@@ -54,6 +54,7 @@ export function registerInboxCommands(program: Command): void {
     .requiredOption('--kind <kind>', 'Envelope kind: proposal|observation|command_request|question|knowledge_candidate|task_candidate|incident|upstream_task_candidate')
     .requiredOption('--authority-level <level>', 'Authority level: none|user_statement|operator_confirmed|system_observed|agent_reported')
     .option('--principal <id>', 'Principal associated with authority')
+    .option('--authority-principal <id>', 'Alias for --principal; principal associated with authority')
     .option('--payload <json>', 'JSON payload')
     .option('--payload-file <path>', 'Read JSON payload from a file')
     .option('--payload-stdin', 'Read JSON payload from stdin', false)
@@ -70,6 +71,7 @@ export function registerInboxCommands(program: Command): void {
         kind: opts.kind as string | undefined,
         authorityLevel: opts.authorityLevel as string | undefined,
         principal: opts.principal as string | undefined,
+        authorityPrincipal: opts.authorityPrincipal as string | undefined,
         payload: opts.payload as string | undefined,
         payloadFile: opts.payloadFile as string | undefined,
         payloadStdin: opts.payloadStdin as boolean | undefined,
@@ -88,6 +90,7 @@ export function registerInboxCommands(program: Command): void {
     .option('--source-kind <kind>', 'Source kind (default: user_chat): user_chat|email|diagnostic|agent_report|file_drop|cli|webhook|system_observation', 'user_chat')
     .option('--authority-level <level>', 'Authority level (default: agent_reported): none|user_statement|operator_confirmed|system_observed|agent_reported', 'agent_reported')
     .option('--principal <id>', 'Principal associated with authority')
+    .option('--authority-principal <id>', 'Alias for --principal; principal associated with authority')
     .option('--evidence <text>', 'Evidence line; repeatable', collectOption, [])
     .option('--proposal <text>', 'Proposal line; repeatable', collectOption, [])
     .option('--recommendation <text>', 'Recommended handling')
@@ -102,6 +105,7 @@ export function registerInboxCommands(program: Command): void {
         sourceRef: opts.sourceRef as string | undefined,
         authorityLevel: opts.authorityLevel as string | undefined,
         principal: opts.principal as string | undefined,
+        authorityPrincipal: opts.authorityPrincipal as string | undefined,
         title: opts.title as string | undefined,
         summary: opts.summary as string | undefined,
         evidence: opts.evidence as string[] | undefined,

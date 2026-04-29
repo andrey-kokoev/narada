@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-28T23:44:12.230Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T00:58:30.828Z
+criteria_proof_verification:
+  state: unbound
+  rationale: --authority-principal is accepted as an alias on inbox submit and submit-observation, records the same authority.principal as --principal, help/docs document the alias, focused inbox tests pass, and pnpm verify passed.
+closed_at: 2026-04-29T00:58:35.930Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Task 1055 — Fix inbox submit-observation principal flag ergonomics
@@ -44,8 +53,8 @@ Builder reported inbox envelope `env_cfaad632-5669-4615-8ecc-b7aa1d41e97b`: a sa
 
 ## Acceptance Criteria
 
-- [ ] `narada inbox submit-observation --authority-principal <id>` is accepted or produces a targeted corrective error with the exact canonical flag.
-- [ ] The accepted path records the same envelope authority principal as `--principal <id>`.
-- [ ] Help/docs/examples make the accepted principal flag unambiguous.
-- [ ] Focused tests cover the ergonomics path.
-- [ ] `pnpm verify` passes.
+- [x] `narada inbox submit-observation --authority-principal <id>` is accepted or produces a targeted corrective error with the exact canonical flag.
+- [x] The accepted path records the same envelope authority principal as `--principal <id>`.
+- [x] Help/docs/examples make the accepted principal flag unambiguous.
+- [x] Focused tests cover the ergonomics path.
+- [x] `pnpm verify` passes.

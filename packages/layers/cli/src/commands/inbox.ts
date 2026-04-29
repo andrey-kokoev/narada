@@ -40,6 +40,7 @@ export interface InboxSubmitOptions extends InboxCommandOptions {
   kind?: string;
   authorityLevel?: string;
   principal?: string;
+  authorityPrincipal?: string;
   payload?: string;
   payloadFile?: string;
   payloadStdin?: boolean;
@@ -52,6 +53,7 @@ export interface InboxSubmitObservationOptions extends InboxCommandOptions {
   sourceRef?: string;
   authorityLevel?: string;
   principal?: string;
+  authorityPrincipal?: string;
   title?: string;
   summary?: string;
   evidence?: string[];
@@ -179,6 +181,7 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
       `Empty payload is not admissible for --kind ${kind}; provide --payload, --payload-file, or --payload-stdin, or pass --allow-empty-payload explicitly.`,
     );
   }
+  const principal = options.principal ?? options.authorityPrincipal;
 
   return withInboxStoreAsync(options, async (store) => {
     const delivery = inspectInboxDelivery(options.cwd ?? process.cwd());
@@ -190,7 +193,7 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
       kind,
       authority: {
         level: authorityLevel,
-        ...(options.principal ? { principal: options.principal } : {}),
+        ...(principal ? { principal } : {}),
       },
       payload,
     });
@@ -198,7 +201,7 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
     await writeInboxMutationEvidence({
       cwd,
       command: 'inbox submit',
-      principal: options.principal,
+      principal,
       authorityClass: 'claim',
       before: null,
       after: inboxEnvelopeToEvidenceState(store.get(envelope.envelope_id)),
@@ -253,6 +256,7 @@ export async function inboxSubmitObservationCommand(
     sourceRef: options.sourceRef,
     kind: 'observation',
     authorityLevel,
+    principal: options.principal ?? options.authorityPrincipal,
     payload: JSON.stringify(payload),
   });
   if (submitted.exitCode !== ExitCode.SUCCESS) return submitted;
