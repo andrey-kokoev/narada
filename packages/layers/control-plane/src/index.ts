@@ -91,6 +91,8 @@ export type {
   FilesystemEventQueue,
   FilesystemQueueRecord,
 } from "./sources/filesystem-source.js";
+export { InboxDropSource } from "./sources/inbox-drop-source.js";
+export type { InboxDropSourceOptions } from "./sources/inbox-drop-source.js";
 export { GraphHttpClient } from "./adapter/graph/client.js";
 export { GraphDeltaWalker } from "./adapter/graph/delta.js";
 export {
@@ -121,7 +123,7 @@ export { MultiSourceSyncRunner } from "./runner/multi-source-sync.js";
 export { ScopeCursorStore } from "./persistence/scope-cursor.js";
 export { FileCursorStore } from "./persistence/cursor.js";
 export { FileApplyLogStore } from "./persistence/apply-log.js";
-export { DefaultProjector, applyEvent } from "./projector/apply-event.js";
+export { DefaultProjector, applyEvent, applySourceRecord } from "./projector/apply-event.js";
 export { FileBlobStore } from "./persistence/blobs.js";
 export { FileMessageStore } from "./persistence/messages.js";
 export { FileTombstoneStore } from "./persistence/tombstones.js";

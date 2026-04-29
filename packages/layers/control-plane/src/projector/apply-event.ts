@@ -49,6 +49,39 @@ export interface ApplyEventDeps {
   tombstones_enabled: boolean;
 }
 
+const FACT_ONLY_SOURCE_KINDS = new Set([
+  "timer.tick",
+  "filesystem.change",
+  "webhook.received",
+]);
+
+function getPayloadKind(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+  const kind = (payload as { kind?: unknown }).kind;
+  return typeof kind === "string" ? kind : null;
+}
+
+function isFactOnlySourceRecord(record: SourceRecord): boolean {
+  const kind = getPayloadKind(record.payload);
+  return kind !== null && FACT_ONLY_SOURCE_KINDS.has(kind);
+}
+
+function factOnlyApplyResult(record: SourceRecord): ApplyEventResult {
+  return {
+    event_id: record.recordId,
+    message_id: record.recordId,
+    applied: true,
+    dirty_views: {
+      by_thread: [],
+      by_folder: [],
+      unread_changed: false,
+      flagged_changed: false,
+    },
+  };
+}
+
 export async function applyEvent(
   deps: ApplyEventDeps,
   event: NormalizedEvent,
@@ -97,6 +130,18 @@ export async function applyEvent(
   throw new Error(`Unknown event kind: ${kind}`);
 }
 
+export async function applySourceRecord(
+  deps: ApplyEventDeps,
+  record: SourceRecord,
+): Promise<ApplyEventResult> {
+  if (isFactOnlySourceRecord(record)) {
+    return factOnlyApplyResult(record);
+  }
+
+  const event = record.payload as NormalizedEvent;
+  return applyEvent(deps, event);
+}
+
 export interface DefaultProjectorOptions {
   rootDir: string;
   tombstonesEnabled?: boolean;
@@ -132,8 +177,7 @@ export class DefaultProjector implements Projector {
   }
 
   async applyRecord(record: SourceRecord): Promise<ApplyEventResult> {
-    const event = record.payload as NormalizedEvent;
-    return applyEvent(this.deps, event);
+    return applySourceRecord(this.deps, record);
   }
 
   /** @deprecated Use applyRecord instead */

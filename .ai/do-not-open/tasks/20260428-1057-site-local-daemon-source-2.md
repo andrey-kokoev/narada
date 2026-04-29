@@ -1,32 +1,26 @@
 ---
-status: opened
+status: closed
 depends_on: [1056]
+criteria_proved_by: architect
+criteria_proved_at: 2026-04-29T00:16:37.982Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Focused projector tests passed for timer.tick fact-only records, mailbox normalized event preservation, and unknown payload rejection; control-plane build passed; pnpm typecheck passed after exporting applySourceRecord at the package boundary.
+closed_at: 2026-04-29T00:16:31.802Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Task 1057 — Fix timer source projection outside mailbox assumptions
 
-## Execution Mode
+## Goal
 
-Proceed directly. This is a narrow corrective task; use focused edits only.
-
-## Assignment
-
-<!-- Assignment placeholder -->
-
-## Required Reading
-
-- packages/layers/control-plane/src/sources
-- packages/layers/control-plane/src/runner
-- packages/layers/daemon/src
-- packages/layers/control-plane/docs/00-kernel.md
+Make configured timer sources admissible in the daemon/control-plane path without passing through mailbox-only event projection.
 
 ## Context
 
 The thoughts Site daemon accepted timer source configuration but failed at runtime because lower projection expected mailbox-shaped event kind data. TimerSource must either produce a valid vertical-agnostic fact shape or be rejected clearly before runtime.
-
-## Goal
-
-Make configured timer sources admissible in the daemon/control-plane path without passing through mailbox-only event projection.
 
 ## Required Work
 
@@ -41,24 +35,6 @@ Make configured timer sources admissible in the daemon/control-plane path withou
 - Do not build a scheduler loop beyond the bounded source fix
 - Do not add mailbox-specific fields to timer events
 
-## Crossing Regime
-
-<!--
-Fill in ONLY if this task introduces a new durable authority-changing boundary.
-If the task uses an existing canonical crossing (e.g., Source → Fact, Decision → Intent),
-leave this section commented and delete it before closing.
-
-See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
-
-- source_zone:
-- destination_zone:
-- authority_owner:
-- admissibility_regime:
-- crossing_artifact:
-- confirmation_rule:
-- anti_collapse_invariant:
--->
-
 ## Execution Notes
 
 <!-- Record what was done, decisions made, and files changed during execution. -->
@@ -69,7 +45,7 @@ See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
 
 ## Acceptance Criteria
 
-- [ ] Timer source no longer reaches mailbox-only projection and fails with Unknown event kind: undefined
-- [ ] Timer source either produces a valid vertical-agnostic fact/admission result or is rejected at preflight with a clear message
-- [ ] Focused tests cover the chosen behavior
-- [ ] pnpm verify passes
+- [x] Timer source no longer reaches mailbox-only projection and fails with Unknown event kind: undefined
+- [x] Timer source either produces a valid vertical-agnostic fact/admission result or is rejected at preflight with a clear message
+- [x] Focused tests cover the chosen behavior
+- [x] pnpm verify passes

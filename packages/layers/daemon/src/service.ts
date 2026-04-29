@@ -12,6 +12,7 @@ import {
   DefaultGraphAdapter,
   ExchangeSource,
   TimerSource,
+  InboxDropSource,
 
   DefaultSyncRunner,
   FileCursorStore,
@@ -22,7 +23,7 @@ import {
   FileBlobStore,
   ProjectionRebuildRegistry,
   FileLock,
-  applyEvent,
+  applySourceRecord,
   cleanupTmp,
   normalizeFolderRef,
   normalizeFlagged,
@@ -65,7 +66,6 @@ import {
   loadCharterEnv,
   type ExchangeFsSyncConfig,
   type ScopeConfig,
-  type NormalizedEvent,
   type SyncCompletionSignal,
   type ChangedContext,
   type Fact,
@@ -1437,6 +1437,12 @@ export async function createScopeService(
     source = new ExchangeSource({ adapter, sourceId: scope.scope_id });
   } else if (primarySource?.type === 'timer') {
     source = new TimerSource({ sourceId: scope.scope_id, scheduleId: scope.scope_id, intervalMs: scope.runtime.polling_interval_ms });
+  } else if (primarySource?.type === 'inbox_drop') {
+    source = new InboxDropSource({
+      sourceId: scope.scope_id,
+      rootDir,
+      dropDir: typeof primarySource.path === 'string' ? primarySource.path : undefined,
+    });
   } else {
     // No-op source for scopes without a recognized ingress source
     source = {
@@ -1455,8 +1461,7 @@ export async function createScopeService(
     factStore,
     projector: {
       applyRecord: async (record) => {
-        const event = record.payload as NormalizedEvent;
-        const result = await applyEvent(
+        const result = await applySourceRecord(
           {
             blobs: blobStore,
             messages: messageStore,
@@ -1464,7 +1469,7 @@ export async function createScopeService(
             views: viewStore,
             tombstones_enabled: scope.normalize.tombstones_enabled,
           },
-          event,
+          record,
         );
         return result;
       },
