@@ -1,0 +1,40 @@
+{
+  "envelope_id": "env_eaf750e3-de47-4c10-8df7-f7525f42b105",
+  "received_at": "2026-04-29T17:49:18.875Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey:user-site-task-substrate-split-20260429"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Site stabilization should detect legacy/current task substrate splits",
+    "summary": "While processing the Windows User Site inbox, current Narada CLI correctly wrote canonical task state to .ai/do-not-open/tasks, .ai/task-lifecycle.db, mutation evidence, and lifecycle snapshot, but the Site still had older .ai/tasks plus .ai/tasks/task-lifecycle.db recorded as durable history. The result looked like incoherent repository dirt and duplicate task authority until manually dearbitrized in Site config/docs/.gitignore. Narada should provide a governed Site stabilization/reconciliation command that detects this split and offers an explicit migration, archive, or compatibility posture.",
+    "evidence": [
+      "User Site had legacy durable .ai/tasks/ with tasks 001-034 and tracked .ai/tasks/task-lifecycle.db.",
+      "Canonical inbox promotion created .ai/do-not-open/tasks/20260429-1-... plus .ai/task-lifecycle.db and .ai/task-lifecycle-snapshot.json.",
+      "Manual local fix had to update config durable/volatile paths, .gitignore, README, and KB decisions to explain ignored runtime SQLite versus Git-visible task evidence."
+    ],
+    "proposal": [
+      "Add a Site stabilization/reconciliation surface that inspects task substrates, lifecycle DB locations, inbox DB posture, mutation evidence, snapshots, and legacy task directories.",
+      "The surface should emit a dearbitrized plan and execute migration, archive, or compatibility decisions with mutation evidence when authorized."
+    ],
+    "recommendation": "Treat this as execution work adjacent to Site stabilization and task lifecycle DB posture, not merely documentation."
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1083",
+    "promoted_at": "2026-04-29T17:50:53.468Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1083,
+      "task_id": "20260429-1083-detect-and-reconcile-site-task-substrate-splits"
+    }
+  }
+}
