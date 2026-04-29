@@ -1,0 +1,26 @@
+{
+  "envelope_id": "env_cc911979-53b3-4682-a648-866a7fd36b3e",
+  "received_at": "2026-04-29T00:21:39.615Z",
+  "source": {
+    "kind": "system_observation",
+    "ref": "narada-proper:site-local-daemon-source-1056-1059"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "builder"
+  },
+  "payload": {
+    "title": "Thoughts Site daemon config can now adopt Site-local source support",
+    "summary": "Narada proper now supports timer fact-only projection and a bounded inbox_drop source that emits inert filesystem.change facts. The remaining work belongs to the thoughts Project Site authority: update its local daemon config/runtime from mock fallback to timer or inbox_drop as appropriate, then verify inside that Site.",
+    "evidence": [
+      "Narada proper task chapter 1056-1059 implemented docs/product/site-local-daemon-sources.md, TimerSource fact-only projection, and InboxDropSource.",
+      "Do not mutate /home/andrey/src/thoughts from Narada proper; route this as a pending Site config handoff."
+    ],
+    "proposal": [
+      "In the thoughts Site, change the daemon source from mock fallback to an explicit timer or inbox_drop source, run its local verification, and record the Site-local evidence there."
+    ],
+    "recommendation": "Treat as thoughts Project Site configuration/materialization follow-through, not Narada proper doctrine work."
+  },
+  "status": "received"
+}

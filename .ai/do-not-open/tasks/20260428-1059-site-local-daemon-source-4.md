@@ -1,32 +1,26 @@
 ---
-status: claimed
+status: closed
 depends_on: [1058]
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T00:23:19.860Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Chapter verification passed. Origin envelope env_7530976f was archived after Narada proper implementation, and external thoughts Site config follow-through was routed as pending crossing env_cc911979. Docs explicitly preserve thoughts Site authority. Focused tests and pnpm verify passed.
+closed_at: 2026-04-29T00:23:25.097Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Task 1059 — Verify Site-local daemon source chapter and route external residuals
 
-## Execution Mode
+## Goal
 
-Proceed directly. This is a narrow corrective task; use focused edits only.
-
-## Assignment
-
-<!-- Assignment placeholder -->
-
-## Required Reading
-
-- docs/concepts/polycentric-site-locus-routing.md
-- docs/concepts/plural-embodiment-singular-authority.md
-- docs/concepts/canonical-inbox.md
-- docs/product/site-bootstrap-contract.md
+Verify the daemon source chapter, publish source-envelope evidence, and route any thoughts/User/PC Site implementation residuals to the correct authority locus.
 
 ## Context
 
 The originating friction came from the thoughts Project Site. Narada proper can define/fix kernel and CLI behavior, but thoughts Site local daemon config/materialization belongs to that Site unless explicitly routed back through a governed crossing.
-
-## Goal
-
-Verify the daemon source chapter, publish source-envelope evidence, and route any thoughts/User/PC Site implementation residuals to the correct authority locus.
 
 ## Required Work
 
@@ -41,24 +35,6 @@ Verify the daemon source chapter, publish source-envelope evidence, and route an
 - Do not mutate the thoughts Site from Narada proper
 - Do not close implementation tasks without Builder evidence
 
-## Crossing Regime
-
-<!--
-Fill in ONLY if this task introduces a new durable authority-changing boundary.
-If the task uses an existing canonical crossing (e.g., Source → Fact, Decision → Intent),
-leave this section commented and delete it before closing.
-
-See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
-
-- source_zone:
-- destination_zone:
-- authority_owner:
-- admissibility_regime:
-- crossing_artifact:
-- confirmation_rule:
-- anti_collapse_invariant:
--->
-
 ## Execution Notes
 
 <!-- Record what was done, decisions made, and files changed during execution. -->
@@ -69,7 +45,7 @@ See SEMANTICS.md §2.15 and Task 495 for the declaration contract.
 
 ## Acceptance Criteria
 
-- [ ] Verification passes or blockers are recorded precisely
-- [ ] Originating inbox envelope is handled through sanctioned inbox transition
-- [ ] External Site residuals are routed rather than hidden
-- [ ] Chapter is ready for Builder implementation/review
+- [x] Verification passes or blockers are recorded precisely
+- [x] Originating inbox envelope is handled through sanctioned inbox transition
+- [x] External Site residuals are routed rather than hidden
+- [x] Chapter is ready for Builder implementation/review
