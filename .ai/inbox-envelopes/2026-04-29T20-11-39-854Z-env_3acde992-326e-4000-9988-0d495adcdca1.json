@@ -22,5 +22,17 @@
     "source_user_site_commit": "9bcbdaa",
     "requested_handling": "Admit as Narada proper product/doctrine work if aligned, because this primitive applies beyond the Windows overlay."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1089",
+    "promoted_at": "2026-04-29T20:16:54.476Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1089,
+      "task_id": "20260429-1089-define-runtime-identity-binding-primitive"
+    }
+  }
 }
