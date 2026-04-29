@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T17:16:42.943Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T17:21:01.572Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Defined readiness states sync_smoke_passed, evaluation_smoke_passed, pending_approval_path_ready, draft_effect_smoke_passed, full_runtime_ready, and blocked_missing_approval_path; documented governed approve-pending-decision path for pending approvals; specified doctor/readiness reporting expectation; covered safe clarification draft_reply as approval-to-draft path without send; required read-back of non-empty to, subject, reply_to_message_id, body, and decision/outbound linkage; source envelope routed to task and pnpm verify passed.
+closed_at: 2026-04-29T17:21:12.731Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Require approval and effect handoff closure for mailbox readiness
@@ -39,9 +48,9 @@ Inbox envelope env_9cac23a7-2f47-42c3-86f0-786a9339c87a reports that the Staccat
 
 ## Acceptance Criteria
 
-- [ ] Readiness states distinguish sync smoke evaluation smoke draft effect smoke pending approval path ready full runtime ready and blocked missing approval path
-- [ ] A governed operator command or path exists or is specified to approve or refuse pending foreman decisions into outbound draft/effect handoff
-- [ ] Mailbox or operation doctor reports approval and effect handoff readiness rather than overstating runtime readiness
-- [ ] Clarification draft reply with uncertainty is covered as a safe pending approval to draft creation path
-- [ ] not send
-- [ ] Evidence/read-back requirements include non-empty to subject and reply_to_message_id for created drafts and source inbox envelope is routed
+- [x] Readiness states distinguish sync smoke evaluation smoke draft effect smoke pending approval path ready full runtime ready and blocked missing approval path
+- [x] A governed operator command or path exists or is specified to approve or refuse pending foreman decisions into outbound draft/effect handoff
+- [x] Mailbox or operation doctor reports approval and effect handoff readiness rather than overstating runtime readiness
+- [x] Clarification draft reply with uncertainty is covered as a safe pending approval to draft creation path
+- [x] not send
+- [x] Evidence/read-back requirements include non-empty to subject and reply_to_message_id for created drafts and source inbox envelope is routed

@@ -176,6 +176,8 @@ Terminal failures require operator intervention. For the definitive reference on
 
 For the full draft/send posture guide — including the "always draft first" principle, high-stakes vs low-stakes routing, batch review patterns, and the `require_human_approval` policy field — see [`docs/product/mailbox-draft-send-posture.md`](mailbox-draft-send-posture.md).
 
+For runtime readiness state names and the approval/effect handoff proof that prevents sync/evaluation smoke from being overstated, see [`mailbox-runtime-readiness.md`](mailbox-runtime-readiness.md).
+
 **Quick reference:**
 
 | Posture | `require_human_approval` | Send Actions Allowed | Use Case |

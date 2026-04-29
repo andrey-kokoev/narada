@@ -172,6 +172,7 @@ When describing higher-order architecture, deployment, or design:
 | [site-relation-ledger.md](docs/product/site-relation-ledger.md) | Durable Site relation evidence without authority movement | Recording absorption, reference, routing, subscription, or publication edges before lifecycle mutation |
 | [tool-catalog-binding.md](docs/product/tool-catalog-binding.md) | Tool Locality Doctrine and operation-to-system tool binding | Binding diagnostic tools from an app/system repo into an operation |
 | [first-operation-proof.md](docs/product/first-operation-proof.md) | Canonical mailbox operation product proof | Understanding what is proven and how to verify it |
+| [mailbox-runtime-readiness.md](docs/product/mailbox-runtime-readiness.md) | Mailbox runtime readiness — staged proof for sync, evaluation, pending approval, draft/effect handoff, and full runtime readiness | Need to avoid overstating mailbox readiness before approval/effect handoff closure |
 | [operator-loop.md](docs/product/operator-loop.md) | Minimal operator rhythm for live operations | Running day-to-day operations |
 | [resume-continuity.md](docs/product/resume-continuity.md) | Resume Continuity — read-only inhabited continuity recovery | Need to recover current locus, dirty state, next work, and tool-hydration posture |
 | [site-lifecycle-transformations.md](docs/product/site-lifecycle-transformations.md) | Governed Site lifecycle transformations — clone, fork, split, absorb, migrate, re-instantiate, archive | Need to transform Sites without smearing authority or provenance |
