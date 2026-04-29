@@ -1,6 +1,6 @@
 {
-  "envelope_id": "env_9afa9712-1d86-4cfa-99fb-17108c1318ec",
-  "received_at": "2026-04-29T16:18:25.428Z",
+  "envelope_id": "env_e797c394-8c26-49e6-8040-4fc2b06f93fc",
+  "received_at": "2026-04-29T16:15:06.220Z",
   "source": {
     "kind": "cli",
     "ref": "narada task handoff 1069"
@@ -13,37 +13,37 @@
   "payload": {
     "packet_type": "task_handoff",
     "packet": {
-      "packet_id": "thp_bb28ad82-3637-4571-a5c5-0aef0c9f2507",
+      "packet_id": "thp_26956a75-a49f-41a7-bc43-f218e08dcd40",
       "packet_type": "task_handoff",
-      "generated_at": "2026-04-29T16:18:25.426Z",
+      "generated_at": "2026-04-29T16:15:06.217Z",
       "generated_by": "architect",
       "task": {
         "task_id": "20260429-1069-add-task-handoff-packet-command",
         "task_number": 1069,
         "title": "Add task handoff packet command",
-        "status": "closed",
+        "status": "claimed",
         "goal": "Add a command that produces a bounded Builder handoff packet from a task, including source envelopes, criteria, verification expectation, residuals, and review return path.",
         "context_summary": "This task addresses missing explicit handoff packets. Builder and Architect need a bounded artifact that says what work is being handed off, what evidence exists, what decision is requested, and where review should return.",
         "acceptance_criteria": [
           {
             "text": "task handoff command emits human and json handoff packets for a task",
-            "checked": true
+            "checked": false
           },
           {
             "text": "Packet includes task id number title goal criteria dependencies assignment source envelopes changed loci if known verification expectations and return review path",
-            "checked": true
+            "checked": false
           },
           {
             "text": "Command can write a durable handoff artifact and optionally route it through inbox as review_request or handoff",
-            "checked": true
+            "checked": false
           },
           {
             "text": "Output is bounded and never dumps full task lifecycle or inbox payload transcripts by default",
-            "checked": true
+            "checked": false
           },
           {
             "text": "Tests cover human json artifact and bounded output behavior and pnpm verify passes",
-            "checked": true
+            "checked": false
           }
         ],
         "dependencies": [
@@ -56,12 +56,7 @@
         }
       },
       "source_envelopes": [],
-      "changed_loci": [
-        ".ai/handoffs/task-1069-handoff.json",
-        "packages/layers/cli/src/commands/task-handoff.ts",
-        "packages/layers/cli/src/commands/task-operations-register.ts",
-        "packages/layers/cli/test/commands/task-handoff.test.ts"
-      ],
+      "changed_loci": [],
       "verification_expectations": [
         "Run focused tests covering the changed behavior.",
         "Run pnpm verify before reporting completion.",
@@ -84,8 +79,8 @@
   "status": "archived",
   "promotion": {
     "target_kind": "archive",
-    "target_ref": "archive:env_9afa9712-1d86-4cfa-99fb-17108c1318ec",
-    "promoted_at": "2026-04-29T16:57:13.186Z",
+    "target_ref": "archive:env_e797c394-8c26-49e6-8040-4fc2b06f93fc",
+    "promoted_at": "2026-04-29T16:57:13.518Z",
     "promoted_by": "architect",
     "enactment_status": "recorded",
     "note": "Envelope archived; no target-zone mutation was performed."
