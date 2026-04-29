@@ -1,6 +1,7 @@
 import type { Command } from 'commander';
 import {
   inboxClaimCommand,
+  inboxArchitectProcessCommand,
   inboxDoctorCommand,
   inboxExportCommand,
   inboxIngestFilesCommand,
@@ -369,6 +370,32 @@ export function registerInboxCommands(program: Command): void {
       invocation: (envelopeId, opts) => inboxTaskCommand({
         envelopeId,
         by: opts.by as string | undefined,
+        title: opts.title as string | undefined,
+        goal: opts.goal as string | undefined,
+        criteria: opts.criteria as string[] | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
+
+  inboxCmd
+    .command('architect-process <envelope-id>')
+    .description('Architect-side processing: create and claim a Builder task handoff from an inbox envelope')
+    .requiredOption('--by <principal>', 'Architect principal recording the handoff')
+    .option('--builder <principal>', 'Builder principal to claim the created task', 'builder')
+    .option('--title <title>', 'Task title override')
+    .option('--goal <goal>', 'Task goal override')
+    .option('--criteria <text>', 'Task acceptance criterion override (repeatable)', collectValues, [])
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[string, Record<string, unknown>]>({
+      command: 'inbox architect-process',
+      emit: emitCommandResult,
+      format: (_envelopeId: string, opts: Record<string, unknown>) => opts.format,
+      invocation: (envelopeId, opts) => inboxArchitectProcessCommand({
+        envelopeId,
+        by: opts.by as string | undefined,
+        builder: opts.builder as string | undefined,
         title: opts.title as string | undefined,
         goal: opts.goal as string | undefined,
         criteria: opts.criteria as string[] | undefined,

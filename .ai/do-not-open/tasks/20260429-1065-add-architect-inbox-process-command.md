@@ -1,7 +1,16 @@
 ---
-status: claimed
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T15:06:16.793Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T15:26:00.289Z
+criteria_proof_verification:
+  state: unbound
+  rationale: The command was verified through focused tests covering detailed task creation without placeholder required work, Builder claim, envelope routing, artifact export, and refusal to execute Builder/report/close actions; full pnpm verify passed.
+closed_at: 2026-04-29T15:26:08.349Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Add architect inbox process command
@@ -39,8 +48,8 @@ This task comes from the 2026-04-29 inbox processing trial where Architect corre
 
 ## Acceptance Criteria
 
-- [ ] Command creates or updates a detailed task from an inbox envelope without placeholder required work
-- [ ] Command assigns the task to Builder and claims it for Builder by default
-- [ ] Command routes the source envelope to the created task with durable evidence
-- [ ] Command exports lifecycle and inbox artifacts and prints a bounded handoff summary
-- [ ] Command refuses to execute report close or implementation steps and pnpm verify passes
+- [x] Command creates or updates a detailed task from an inbox envelope without placeholder required work
+- [x] Command assigns the task to Builder and claims it for Builder by default
+- [x] Command routes the source envelope to the created task with durable evidence
+- [x] Command exports lifecycle and inbox artifacts and prints a bounded handoff summary
+- [x] Command refuses to execute report close or implementation steps and pnpm verify passes

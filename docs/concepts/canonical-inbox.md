@@ -20,6 +20,7 @@ narada inbox publish --execute --push
 narada inbox work-next --claim --by operator
 narada inbox list
 narada inbox show <envelope-id>
+narada inbox architect-process <envelope-id> --by architect
 narada inbox task <envelope-id> --title "Fix PC Site identity policy" --by operator
 narada inbox triage <envelope-id> --action archive --by operator
 narada inbox pending <envelope-id> --to site_config_change:site:desktop-sunroom-2 --by operator
@@ -74,6 +75,7 @@ Command responsibilities:
 | `narada inbox publish` | Bounded handoff helper: export/replay, stage `.ai/inbox-envelopes`, commit, and optionally push. |
 | `narada inbox import` | Replay portable artifacts from Git-visible handoff into local inbox substrate. |
 | `narada inbox doctor` | Inspect local delivery, runtime, import refresh, and publication posture without publishing. |
+| `narada inbox architect-process` | Architect-side handoff: create a detailed Builder-owned task from a task envelope, claim it for Builder, route the envelope to the task, and stop before implementation/report/closure. |
 | `narada publication *` | General Repository Publication Intent Zone handoff/confirmation for broader repo mutation bundles. |
 
 ## Human File-Drop Intake
@@ -248,6 +250,14 @@ narada inbox triage <envelope-id> --action task --by operator
 narada inbox triage <envelope-id> --action archive --by operator
 narada inbox pending <envelope-id> --to site_config_change:site:desktop-sunroom-2 --by operator
 ```
+
+When the next envelope should become Builder work, the Architect path is:
+
+```bash
+narada inbox architect-process <envelope-id> --by architect
+```
+
+This command is deliberately a handoff boundary. It may create a task, claim it for Builder, route the source envelope to `task:<number>`, and export portable inbox/lifecycle artifacts. It must not execute the Builder work, submit a Builder report, close the task, or self-review.
 
 If handling must be abandoned without taking an action:
 

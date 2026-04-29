@@ -15,6 +15,9 @@ import {
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { taskCreateCommand } from './task-create.js';
+import { taskClaimCommand } from './task-claim.js';
+import { taskRosterAddCommand } from './task-roster.js';
+import { taskLifecycleExportCommand } from './task-lifecycle-snapshot.js';
 import { parseFrontMatter } from '../lib/task-governance.js';
 import {
   inboxEnvelopeToEvidenceState,
@@ -112,6 +115,15 @@ export interface InboxPendingOptions extends InboxCommandOptions {
   envelopeId?: string;
   to?: string;
   by?: string;
+}
+
+export interface InboxArchitectProcessOptions extends InboxCommandOptions {
+  envelopeId?: string;
+  by?: string;
+  builder?: string;
+  title?: string;
+  goal?: string;
+  criteria?: string[];
 }
 
 export interface InboxDoctorOptions extends InboxCommandOptions {}
@@ -1197,6 +1209,127 @@ export async function inboxTaskCommand(options: Omit<InboxPromoteOptions, 'targe
   });
 }
 
+export async function inboxArchitectProcessCommand(options: InboxArchitectProcessOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
+  if (!options.envelopeId || !options.by) {
+    return errorResult('Missing envelope ID or --by');
+  }
+
+  const builder = options.builder ?? 'builder';
+  const cwd = options.cwd ?? process.cwd();
+  return withInboxStoreAsync(options, async (store) => {
+    const existing = store.get(options.envelopeId!);
+    if (!existing) return errorResult(`Inbox envelope not found: ${options.envelopeId}`);
+    if (existing.kind !== 'task_candidate' && existing.kind !== 'upstream_task_candidate') {
+      return errorResult(`Envelope kind '${existing.kind}' cannot be processed into Builder task handoff`);
+    }
+    if (existing.promotion?.target_kind === 'task') {
+      return okResult(
+        {
+          status: 'success',
+          already_processed: true,
+          builder,
+          envelope: existing,
+          target_ref: existing.promotion.target_ref,
+          execution_performed: false,
+          next_step: `Builder should inspect and execute ${existing.promotion.target_ref}.`,
+        },
+        [
+          `Inbox envelope already processed: ${existing.envelope_id}`,
+          `Target: ${existing.promotion.target_ref}`,
+          'Execution performed: no',
+        ],
+        options.format,
+      );
+    }
+
+    const before = inboxEnvelopeToEvidenceState(existing);
+    const taskSpec = taskSpecFromEnvelope(existing, options);
+    const taskResult = await taskCreateCommand({
+      cwd,
+      title: taskSpec.title,
+      goal: taskSpec.goal,
+      requiredWork: taskSpec.requiredWork,
+      criteria: taskSpec.criteria,
+      chapter: taskSpec.chapter,
+      dependsOn: taskSpec.dependsOn,
+      format: 'json',
+    });
+    if (taskResult.exitCode !== ExitCode.SUCCESS) return taskResult;
+
+    const task = taskResult.result as { task_number: number; task_id: string; file_path: string };
+    const rosterAdd = await taskRosterAddCommand({
+      cwd,
+      agent: builder,
+      role: 'builder',
+      format: 'json',
+    });
+    if (rosterAdd.exitCode !== ExitCode.SUCCESS) return rosterAdd;
+    const claimResult = await taskClaimCommand({
+      taskNumber: String(task.task_number),
+      agent: builder,
+      reason: `Architect inbox handoff from ${existing.envelope_id}`,
+      cwd,
+      format: 'json',
+    });
+    if (claimResult.exitCode !== ExitCode.SUCCESS) return claimResult;
+
+    const envelope = store.promote(options.envelopeId!, {
+      target_kind: 'task',
+      target_ref: `task:${task.task_number}`,
+      promoted_at: new Date().toISOString(),
+      promoted_by: options.by!,
+      enactment_status: 'enacted',
+      target_command: 'inbox architect-process',
+      target_result: {
+        task,
+        assignment: claimResult.result,
+        builder,
+        execution_performed: false,
+      },
+    });
+    await writeInboxMutationEvidence({
+      cwd,
+      command: 'inbox architect-process',
+      principal: options.by,
+      authorityClass: 'resolve',
+      before,
+      after: inboxEnvelopeToEvidenceState(store.get(envelope.envelope_id)),
+      result: { status: 'success', target_mutation: true, envelope, task, builder, execution_performed: false },
+    });
+    const inboxArtifactFiles = await exportInboxEnvelopeArtifacts([envelope], resolve(cwd, '.ai', 'inbox-envelopes'));
+    const lifecycleExport = await taskLifecycleExportCommand({
+      cwd,
+      output: join('.ai', 'task-lifecycle-snapshot.json'),
+      format: 'json',
+    });
+
+    return okResult(
+      {
+        status: 'success',
+        envelope_id: envelope.envelope_id,
+        task,
+        builder,
+        assignment: claimResult.result,
+        promotion: envelope.promotion,
+        exported_artifacts: {
+          inbox_envelopes: inboxArtifactFiles,
+          lifecycle_snapshot: (lifecycleExport.result as Record<string, unknown>).output,
+        },
+        execution_performed: false,
+        forbidden_actions: ['implementation', 'task report', 'task close', 'self-review'],
+        next_step: `Builder ${builder} should execute task ${task.task_number}; Architect process stops at handoff.`,
+      },
+      [
+        `Architect processed inbox envelope: ${envelope.envelope_id}`,
+        `Created task: ${task.task_number}`,
+        `Assigned Builder: ${builder}`,
+        'Execution performed: no',
+      ],
+      options.format,
+    );
+  });
+}
+
 export async function inboxTriageCommand(options: InboxTriageOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
   switch (options.action) {
     case 'archive':
@@ -1539,11 +1672,74 @@ async function createTaskFromEnvelope(
     cwd: options.cwd,
     title,
     goal,
+    requiredWork: detailedRequiredWorkFromPayload(envelope, payload),
     criteria,
     chapter: stringField(payload, 'chapter') ?? 'Canonical Inbox Promotions',
     dependsOn: numberArrayCsvField(payload, 'depends_on'),
     format: 'json',
   });
+}
+
+function taskSpecFromEnvelope(envelope: InboxEnvelope, options: InboxArchitectProcessOptions): {
+  title: string;
+  goal: string;
+  requiredWork: string;
+  criteria: string[];
+  chapter: string;
+  dependsOn?: string;
+} {
+  const payload = asRecord(envelope.payload);
+  const title = cleanString(options.title)
+    ?? stringField(payload, 'title')
+    ?? stringField(payload, 'summary')
+    ?? `Process inbox envelope ${envelope.envelope_id}`;
+  const goal = cleanString(options.goal)
+    ?? stringField(payload, 'goal')
+    ?? stringField(payload, 'description')
+    ?? stringField(payload, 'summary')
+    ?? `Execute the governed work requested by inbox envelope ${envelope.envelope_id}.`;
+  const criteria = cleanStringArray(options.criteria)
+    ?? stringArrayField(payload, 'acceptance_criteria')
+    ?? stringArrayField(payload, 'criteria')
+    ?? defaultArchitectProcessCriteria(envelope);
+  return {
+    title,
+    goal,
+    requiredWork: detailedRequiredWorkFromPayload(envelope, payload),
+    criteria,
+    chapter: stringField(payload, 'chapter') ?? 'Architect Inbox Processing',
+    dependsOn: numberArrayCsvField(payload, 'depends_on'),
+  };
+}
+
+function detailedRequiredWorkFromPayload(envelope: InboxEnvelope, payload: Record<string, unknown>): string {
+  const requested = stringArrayField(payload, 'required_work')
+    ?? stringArrayField(payload, 'requiredWork')
+    ?? stringArrayField(payload, 'steps');
+  const sourceSummary = stringField(payload, 'summary') ?? stringField(payload, 'body') ?? stringField(payload, 'description');
+  const lines = requested && requested.length > 0
+    ? requested
+    : [
+      `Read source inbox envelope ${envelope.envelope_id} and preserve its authority context.`,
+      'Identify the owning Narada authority boundary before mutating any target state.',
+      'Implement the smallest local change that satisfies the promoted request.',
+      'Verify the result with focused tests or command evidence appropriate to the changed surface.',
+      'Report residuals explicitly before closure.',
+    ];
+  const numbered = lines.map((line, index) => `${index + 1}. ${line.replace(/^\d+\.\s*/, '').trim()}`);
+  if (sourceSummary) {
+    numbered.unshift(`0. Source summary: ${sourceSummary.trim().replace(/\s+/g, ' ').slice(0, 500)}`);
+  }
+  return numbered.join('\n');
+}
+
+function defaultArchitectProcessCriteria(envelope: InboxEnvelope): string[] {
+  return [
+    `Source inbox envelope ${envelope.envelope_id} is handled through a governed task handoff.`,
+    'Implementation does not bypass Narada authority boundaries.',
+    'Verification evidence is recorded before closure.',
+    'Residuals or blockers are reported explicitly.',
+  ];
 }
 
 function withInboxStore(

@@ -6,12 +6,13 @@ vi.unmock('node:child_process');
 
 import { execFileSync } from 'node:child_process';
 import { Readable } from 'node:stream';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SqliteInboxStore } from '@narada2/control-plane';
 import {
+  inboxArchitectProcessCommand,
   inboxClaimCommand,
   inboxDoctorCommand,
   inboxExportCommand,
@@ -30,6 +31,7 @@ import {
   inboxWorkNextCommand,
 } from '../../src/commands/inbox.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
+import { taskReadCommand } from '../../src/commands/task-read.js';
 
 describe('Canonical Inbox CLI commands', () => {
   let tempDir: string;
@@ -725,6 +727,97 @@ describe('Canonical Inbox CLI commands', () => {
     expect(result.envelope.promotion.enactment_status).toBe('enacted');
   });
 
+  it('architect-process creates a detailed Builder-owned task handoff without executing work', async () => {
+    setupRepo(tempDir);
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'agent_report',
+      sourceRef: 'architect:test',
+      kind: 'task_candidate',
+      authorityLevel: 'operator_confirmed',
+      principal: 'architect',
+      payload: JSON.stringify({
+        title: 'Fix routed observation handling',
+        goal: 'Implement governed handling for routed observations.',
+        required_work: [
+          'Inspect the routing surface.',
+          'Add the minimal implementation change.',
+          'Verify with a focused regression test.',
+        ],
+        acceptance_criteria: [
+          'Routed observations are handled through a governed command.',
+          'Focused regression test passes.',
+        ],
+      }),
+    });
+    const envelopeId = (submitted.result as { envelope: { envelope_id: string } }).envelope.envelope_id;
+
+    const processed = await inboxArchitectProcessCommand({
+      cwd: tempDir,
+      envelopeId,
+      by: 'architect',
+      builder: 'builder',
+      format: 'json',
+    });
+
+    expect(processed.exitCode).toBe(ExitCode.SUCCESS);
+    const result = processed.result as {
+      task: { task_number: number; file_path: string };
+      builder: string;
+      execution_performed: boolean;
+      forbidden_actions: string[];
+      exported_artifacts: { inbox_envelopes: string[]; lifecycle_snapshot: string };
+    };
+    expect(result.builder).toBe('builder');
+    expect(result.execution_performed).toBe(false);
+    expect(result.forbidden_actions).toEqual(expect.arrayContaining(['implementation', 'task report', 'task close', 'self-review']));
+    expect(result.exported_artifacts.inbox_envelopes).toHaveLength(1);
+    expect(existsSync(result.exported_artifacts.lifecycle_snapshot)).toBe(true);
+
+    const read = await taskReadCommand({
+      cwd: tempDir,
+      taskNumber: String(result.task.task_number),
+      format: 'json',
+    });
+    const task = (read.result as { task: { status: string; assignment: { agent_id: string }; required_work: string } }).task;
+    expect(task.status).toBe('claimed');
+    expect(task.assignment.agent_id).toBe('builder');
+    expect(task.required_work).toContain('Inspect the routing surface.');
+    expect(task.required_work).not.toContain('TBD');
+
+    const stored = await inboxShowCommand({ cwd: tempDir, envelopeId, format: 'json' });
+    const envelope = (stored.result as { envelope: { promotion: { target_kind: string; target_ref: string; target_command: string } } }).envelope;
+    expect(envelope.promotion).toMatchObject({
+      target_kind: 'task',
+      target_ref: `task:${result.task.task_number}`,
+      target_command: 'inbox architect-process',
+    });
+  });
+
+  it('architect-process refuses non-task envelopes', async () => {
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual:observation',
+      kind: 'observation',
+      authorityLevel: 'operator_confirmed',
+      payload: JSON.stringify({ title: 'Observation only' }),
+    });
+    const envelopeId = (submitted.result as { envelope: { envelope_id: string } }).envelope.envelope_id;
+
+    const processed = await inboxArchitectProcessCommand({
+      cwd: tempDir,
+      envelopeId,
+      by: 'architect',
+      format: 'json',
+    });
+
+    expect(processed.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect((processed.result as { error: string }).error).toContain('cannot be processed into Builder task handoff');
+  });
+
   it('shows the next received inbox envelope without mutating it', async () => {
     await inboxSubmitCommand({
       cwd: tempDir,
@@ -1171,10 +1264,29 @@ describe('Canonical Inbox CLI commands', () => {
 function setupRepo(tempDir: string): void {
   const tasksDir = join(tempDir, '.ai', 'do-not-open', 'tasks');
   mkdirSync(tasksDir, { recursive: true });
+  mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
   writeFileSync(
     join(tasksDir, '20260420-100-alpha.md'),
     '---\nstatus: opened\n---\n\n# Task 100\n',
   );
+  writeFileSync(join(tempDir, '.ai', 'agents', 'roster.json'), JSON.stringify({
+    version: 2,
+    schema: 'https://narada.dev/schemas/agent-roster/v2',
+    updated_at: '2026-04-20T00:00:00.000Z',
+    agents: [
+      {
+        agent_id: 'builder',
+        role: 'builder',
+        capabilities: ['derive', 'propose', 'claim', 'execute', 'resolve', 'confirm'],
+        first_seen_at: '2026-04-20T00:00:00.000Z',
+        last_active_at: '2026-04-20T00:00:00.000Z',
+        status: 'idle',
+        task: null,
+        last_done: null,
+        updated_at: '2026-04-20T00:00:00.000Z',
+      },
+    ],
+  }, null, 2));
 }
 
 function setupGitRepo(tempDir: string): void {
