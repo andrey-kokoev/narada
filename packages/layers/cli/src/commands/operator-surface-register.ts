@@ -24,6 +24,8 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .requiredOption('--by <principal>', 'Principal requesting/admitting identity')
     .option('--identity <id>', 'Override durable identity id')
     .option('--label <label>', 'UI label projection for new identity')
+    .option('--site-affinity-color <color>', 'Optional ergonomic color hint for the Site line')
+    .option('--role-affinity-color <color>', 'Optional ergonomic color hint for the role line')
     .option('--dry-run', 'Preview without identity mutation', false)
     .option('--bind-focused', 'Request focused runtime binding; defers to owning runtime locus', false)
     .option('--runtime-locus <locus>', 'Owning User/PC runtime locus for binding deferral')
@@ -40,6 +42,8 @@ export function registerOperatorSurfaceCommands(program: Command): void {
         by: opts.by as string | undefined,
         identityName: opts.identity as string | undefined,
         label: opts.label as string | undefined,
+        siteAffinityColor: opts.siteAffinityColor as string | undefined,
+        roleAffinityColor: opts.roleAffinityColor as string | undefined,
         dryRun: opts.dryRun as boolean | undefined,
         bindFocused: opts.bindFocused as boolean | undefined,
         runtimeLocus: opts.runtimeLocus as string | undefined,
@@ -57,6 +61,8 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .requiredOption('--site <site-id>', 'Site whose identity authority admits this identity')
     .requiredOption('--by <principal>', 'Principal admitting the identity')
     .option('--label <label>', 'UI label projection')
+    .option('--site-affinity-color <color>', 'Optional ergonomic color hint for the Site line')
+    .option('--role-affinity-color <color>', 'Optional ergonomic color hint for the role line')
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[string, Record<string, unknown>]>({
@@ -70,6 +76,8 @@ export function registerOperatorSurfaceCommands(program: Command): void {
         site: opts.site as string | undefined,
         by: opts.by as string | undefined,
         label: opts.label as string | undefined,
+        siteAffinityColor: opts.siteAffinityColor as string | undefined,
+        roleAffinityColor: opts.roleAffinityColor as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),

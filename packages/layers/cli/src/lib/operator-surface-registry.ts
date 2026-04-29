@@ -13,9 +13,25 @@ export interface OperatorSurfaceIdentity {
   authority_limits: string[];
 }
 
+export interface OperatorSurfaceAffinityColor {
+  value: string;
+  source: 'site_metadata' | 'role_metadata' | 'projection_override';
+  authority: 'ergonomic_projection_hint';
+}
+
+export interface OperatorSurfaceSiteMetadata {
+  affinity_color?: string;
+}
+
+export interface OperatorSurfaceRoleMetadata {
+  affinity_color?: string;
+}
+
 export interface OperatorSurfaceIdentityRegistry {
   schema: string;
   updated_at: string;
+  sites?: Record<string, OperatorSurfaceSiteMetadata>;
+  roles?: Record<string, OperatorSurfaceRoleMetadata>;
   identities: OperatorSurfaceIdentity[];
 }
 
@@ -57,13 +73,41 @@ export async function writeOperatorSurfaceIdentities(
   return path;
 }
 
-export function makeOperatorSurfaceLabel(identity: OperatorSurfaceIdentity): Record<string, unknown> {
+export function makeOperatorSurfaceLabel(
+  identity: OperatorSurfaceIdentity,
+  registry?: OperatorSurfaceIdentityRegistry,
+): Record<string, unknown> {
+  const siteColor = registry?.sites?.[identity.site_id]?.affinity_color;
+  const roleColor = registry?.roles?.[identity.role]?.affinity_color;
   return {
     identity_id: identity.identity_id,
     label: identity.label,
     site_id: identity.site_id,
     role: identity.role,
     agent_kind: identity.agent_kind,
+    projection_hints: {
+      site_line: {
+        affinity_color: siteColor
+          ? {
+              value: siteColor,
+              source: 'site_metadata',
+              authority: 'ergonomic_projection_hint',
+            } satisfies OperatorSurfaceAffinityColor
+          : null,
+      },
+      role_line: {
+        affinity_color: roleColor
+          ? {
+              value: roleColor,
+              source: 'role_metadata',
+              authority: 'ergonomic_projection_hint',
+            } satisfies OperatorSurfaceAffinityColor
+          : null,
+      },
+      agent_name_line: {
+        affinity_color: null,
+      },
+    },
     authority_limits: identity.authority_limits,
   };
 }

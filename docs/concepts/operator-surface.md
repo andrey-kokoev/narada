@@ -169,6 +169,15 @@ narada operator-surface labels build --site <site-id>
 
 `agent instantiate` is the canonical high-level Operator path. It admits or reuses the durable role identity, emits bounded bootstrap/copy text, and includes `narada operator-surface bind-focused --as self`. The lower-level `identity add` and `labels build` commands remain primitives.
 
+Operator-surface identity metadata may include optional `affinity_color` hints for the Site and role projection lines. The supported command flags are `--site-affinity-color <color>` and `--role-affinity-color <color>` on the identity-admission and agent-instantiation paths. These colors are ergonomic recognition hints only: they are not identity proof, authority boundaries, capability grants, review evidence, or runtime-handle binding.
+
+Projection precedence is:
+
+1. Explicit projection style owned by the consuming surface may override local rendering only when that surface declares the override as presentation metadata.
+2. The Site line uses Site `affinity_color` when present.
+3. The role line uses role `affinity_color` when present.
+4. The agent/name line remains neutral unless a separate governed rule admits name coloring.
+
 These commands write/read Site-local durable identity records. They do not bind HWNDs, process ids, terminal tabs, API threads, MCP clients, or other volatile runtime handles.
 
 The runtime binding command surface exists as an authority-preserving deferral surface:

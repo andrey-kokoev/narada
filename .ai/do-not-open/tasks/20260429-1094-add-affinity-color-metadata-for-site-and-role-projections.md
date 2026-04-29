@@ -1,7 +1,16 @@
 ---
-status: claimed
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T22:08:15.871Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T23:40:30.534Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Implemented optional operator-surface affinity color metadata for Site and role projections. Colors are admitted via sanctioned identity-add/agent-instantiate command flags, projected as structured label hints with ergonomic_projection_hint authority, documented with precedence and non-authority limits, and source envelope env_b7330900-7040-4e9f-bb5f-93475bf24f28 was already promoted to task:1094.
+closed_at: 2026-04-29T23:40:48.729Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add affinity color metadata for Site and role projections
@@ -39,8 +48,8 @@ Inbox envelope env_b7330900-7040-4e9f-bb5f-93475bf24f28 proposes affinity color 
 
 ## Acceptance Criteria
 
-- [ ] Site metadata can declare optional affinity color for operator-surface projection
-- [ ] Role metadata can declare optional affinity color for operator-surface projection
-- [ ] Projection precedence and fallback rules are documented
-- [ ] Affinity colors are explicitly ergonomic projection hints not identity proof or authority boundaries
-- [ ] Source envelope env_b7330900-7040-4e9f-bb5f-93475bf24f28 is routed
+- [x] Site metadata can declare optional affinity color for operator-surface projection
+- [x] Role metadata can declare optional affinity color for operator-surface projection
+- [x] Projection precedence and fallback rules are documented
+- [x] Affinity colors are explicitly ergonomic projection hints not identity proof or authority boundaries
+- [x] Source envelope env_b7330900-7040-4e9f-bb5f-93475bf24f28 is routed

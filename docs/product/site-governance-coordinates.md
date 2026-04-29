@@ -379,6 +379,8 @@ Deferred roles are intentionally listed only as non-admitted names. A Site may r
 
 `session_bindings` names continuity relationships across role, task/chapter context, AgentRuntime, ControlChannel, Operator Surface, and trace references. API conversations, transcripts, inbox envelopes, file drops, and MCP tool calls may appear here as control-channel or trace references without requiring a spatial UI surface.
 
+Site and role metadata may declare optional `affinity_color` projection hints for operator surfaces. These hints support visual recognition across windows, labels, and consoles. They do not prove identity, grant capability, bind runtime handles, or create an authority boundary. Consumers should apply the precedence documented in [`Operator Surface`](../concepts/operator-surface.md): explicit presentation override, Site line color, role line color, then neutral agent/name line.
+
 Declarations are advisory unless a separate governed command admits or materializes them. For example:
 
 - a Windows Terminal profile is materialized only by a future adapter/materializer command;

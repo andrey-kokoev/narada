@@ -17,6 +17,8 @@ export interface OperatorSurfaceIdentityAddOptions {
   agentKind?: string;
   site?: string;
   label?: string;
+  siteAffinityColor?: string;
+  roleAffinityColor?: string;
   by?: string;
   format?: string;
 }
@@ -46,6 +48,8 @@ export interface OperatorSurfaceAgentInstantiateOptions {
   by?: string;
   identityName?: string;
   label?: string;
+  siteAffinityColor?: string;
+  roleAffinityColor?: string;
   dryRun?: boolean;
   bindFocused?: boolean;
   runtimeLocus?: string;
@@ -129,6 +133,8 @@ export async function operatorSurfaceAgentInstantiateCommand(
         site,
         by,
         label: options.label ?? identityName,
+        siteAffinityColor: options.siteAffinityColor,
+        roleAffinityColor: options.roleAffinityColor,
         format: 'json',
       }, context);
       if (admitted.exitCode !== ExitCode.SUCCESS) return admitted;
@@ -230,6 +236,26 @@ export async function operatorSurfaceIdentityAddCommand(
         'operator_surface_does_not_grant_effect_capability',
       ],
     };
+    const siteAffinityColor = options.siteAffinityColor?.trim();
+    if (siteAffinityColor) {
+      registry.sites = {
+        ...registry.sites,
+        [siteId]: {
+          ...(registry.sites?.[siteId] ?? {}),
+          affinity_color: siteAffinityColor,
+        },
+      };
+    }
+    const roleAffinityColor = options.roleAffinityColor?.trim();
+    if (roleAffinityColor) {
+      registry.roles = {
+        ...registry.roles,
+        [role]: {
+          ...(registry.roles?.[role] ?? {}),
+          affinity_color: roleAffinityColor,
+        },
+      };
+    }
     if (existing) {
       Object.assign(existing, record);
     } else {
@@ -269,7 +295,7 @@ export async function operatorSurfaceLabelsBuildCommand(
       registry_path: operatorSurfaceIdentityPath(cwd),
       count: identities.length,
       limit,
-      labels: identities.map(makeOperatorSurfaceLabel),
+      labels: identities.map((identity) => makeOperatorSurfaceLabel(identity, registry)),
     },
   };
 }

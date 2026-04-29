@@ -227,6 +227,55 @@ describe('operator-surface commands', () => {
     });
   });
 
+  it('projects Site and role affinity colors as ergonomic hints', async () => {
+    const cwd = await tempRepo();
+    const add = await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-proper-builder',
+      role: 'builder',
+      agentKind: 'codex_cli',
+      site: 'narada-proper',
+      label: 'Narada Proper Builder',
+      siteAffinityColor: '#1f7a54',
+      roleAffinityColor: '#c45a14',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    expect(add.exitCode).toBe(ExitCode.SUCCESS);
+
+    const labels = await operatorSurfaceLabelsBuildCommand({
+      cwd,
+      site: 'narada-proper',
+      format: 'json',
+    }, createMockContext());
+
+    expect(labels.exitCode).toBe(ExitCode.SUCCESS);
+    expect(labels.result).toMatchObject({
+      labels: [{
+        projection_hints: {
+          site_line: {
+            affinity_color: {
+              value: '#1f7a54',
+              source: 'site_metadata',
+              authority: 'ergonomic_projection_hint',
+            },
+          },
+          role_line: {
+            affinity_color: {
+              value: '#c45a14',
+              source: 'role_metadata',
+              authority: 'ergonomic_projection_hint',
+            },
+          },
+          agent_name_line: {
+            affinity_color: null,
+          },
+        },
+      }],
+    });
+  });
+
   it('resolves bind-as-self from governed runtime context and defers volatile handle mutation', async () => {
     const cwd = await tempRepo();
     process.env.NARADA_AGENT_ID = 'narada-proper-builder';
