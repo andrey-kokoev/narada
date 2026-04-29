@@ -1,0 +1,44 @@
+{
+  "envelope_id": "env_db93afac-0f33-42da-8805-4a281df01eb1",
+  "received_at": "2026-04-29T16:00:36.431Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:architect-builder-ergonomics-observations-20260429"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "andrey"
+  },
+  "payload": {
+    "title": "Architect-builder ergonomics gaps observed during User Site capability work",
+    "summary": "During User Site operator-surface, Komorebi, and display-toggle work, several recurring ergonomics and coherence gaps appeared around builder handoff, review, task closure precision, current work visibility, and brittle upstream submission.",
+    "evidence": [
+      "Builder completed and committed work but did not leave an explicit architect-facing review_request packet. Architect had to inspect commits, task files, logs, and repository state manually.",
+      "Task 024 was closed as preserving Komorebi grid slots across minimize/restore, but review found the implemented capability was manual save/restore plus fixture proof, not automatic preservation on the normal Alt-Tab restore path. A follow-up task 030 was needed.",
+      "The display button label 'Swap Displays' drifted from actual V1 semantics, which were dearbitrized to 'Toggle Primary Display'. UI labels need semantic tests and should not overpromise behavior.",
+      "Architect review created follow-up task 030, but that creates another lifecycle handoff question: review-generated tasks need a standard allocation/commit/handoff flow.",
+      "Narada proper submissions remain brittle without MCP. The current surface required WSL CLI, Node version discipline, and temporary scripts to avoid shell quoting failures.",
+      "The operator repeatedly had to ask where we were. Active chapters, pending reviews, builder-running tasks, architect-created follow-ups, and upstream submissions need a current workboard/read-model.",
+      "Architect and builder can work concurrently on adjacent task/chapter files without an explicit coordination protocol, creating risk of overlapping mutations or hidden responsibility transfer."
+    ],
+    "proposal": [
+      "Add builder completion handoff/review_request requirements to role doctrine or task lifecycle templates: commits, changed files, verification artifacts, residuals, and requested review questions.",
+      "Improve task closure semantics so task status distinguishes proven manual helper, operator entrypoint, event-driven automation, and fully integrated capability.",
+      "Add semantic projection tests for operator UI labels/buttons, especially when UI labels name operations with potentially broader meaning than implementation.",
+      "Define a lifecycle path for architect-created follow-up tasks during review: allocation, task file creation, commit expectation, and routing to builder.",
+      "Provide a current workboard/read-model for active chapters, pending reviews, in-progress builder work, local follow-ups, and submitted upstream envelopes.",
+      "Add explicit architect-builder concurrency guidance for shared Site mutation: when simultaneous work is allowed, how files are partitioned, and how handoff/review crossings are recorded."
+    ],
+    "recommendation": "Treat as ergonomics/doctrine input adjacent to CAPA Operation, Intent Interpretation/Admission zones, canonical inbox scale-relative crossing metadata, and role-specific AI thread bootstrap."
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "decision",
+    "target_ref": "task-1073-active-workboard-review-handoff",
+    "promoted_at": "2026-04-29T16:13:05.828Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'decision' is not implemented yet."
+  }
+}
