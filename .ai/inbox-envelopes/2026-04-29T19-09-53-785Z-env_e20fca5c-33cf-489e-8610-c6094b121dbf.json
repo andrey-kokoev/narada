@@ -22,5 +22,17 @@
     ],
     "requested_handling": "Treat this as ergonomics/product work: make the delegated CLI embodiment explicit, make doctor/preflight repair instructions easy to surface, and discourage hand-assembled Node PATH commands in agent-facing guidance."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1087",
+    "promoted_at": "2026-04-29T19:17:41.257Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1087,
+      "task_id": "20260429-1087-add-canonical-delegated-cli-invocation-contract"
+    }
+  }
 }

@@ -22,5 +22,17 @@
     "source_user_site_envelope": "env_9767726b-bcd8-4b0c-8fcd-94480379428d",
     "requested_handling": "Admit as a Narada-proper product proposal or open upstream task(s) if aligned."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1088",
+    "promoted_at": "2026-04-29T19:17:46.330Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1088,
+      "task_id": "20260429-1088-define-site-state-projections-and-transition-protocols"
+    }
+  }
 }
