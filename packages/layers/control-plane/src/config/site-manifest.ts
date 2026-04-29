@@ -111,6 +111,17 @@ export const SiteEmbodimentSchema = z.object({
   mutation_policy: z.enum(["may_mutate_at_authority_locus", "must_forward", "read_only", "dry_run_only"]),
 });
 
+export const SiteParticipantRoleSchema = z.object({
+  role_id: z.string().min(1, "Participant role id is required"),
+  role_class: z.enum(["resident", "receptionist", "architect", "builder", "inspector", "operator", "other"]),
+  status: z.enum(["active", "planned", "deferred"]).default("active"),
+  purpose: z.string().min(1),
+  principal_ref: z.string().min(1).optional(),
+  embodiment_ref: z.string().min(1).optional(),
+  runtime_kind: z.enum(["human", "codex_cli", "kimi_cli", "api_agent", "mcp_facade", "daemon", "external"]).optional(),
+  authority_posture: z.enum(["value_use", "intake_only", "specification", "construction", "inspection", "operator_authority", "metadata_only"]),
+});
+
 export const SiteMutationEvidenceLocusSchema = z.object({
   kind: z.enum(["git", "sqlite_export", "filesystem", "external_ledger"]),
   path: PathRefSchema.optional(),
@@ -142,6 +153,7 @@ export const SiteGovernanceCoordinatesSchema = z.object({
   law_admission_mode: z.enum(["inherit_without_fork", "local_overlay", "federated_review", "external_reference"]),
   authority_locus: SiteAuthorityLocusSchema,
   embodiments: z.array(SiteEmbodimentSchema).default([]),
+  site_participant_roles: z.array(SiteParticipantRoleSchema).default([]),
   mutation_evidence_locus: SiteMutationEvidenceLocusSchema,
   inbox_sources: z.array(SiteInboxSourceSchema).default([]),
   outbox_targets: z.array(SiteOutboxTargetSchema).default([]),
@@ -175,6 +187,7 @@ export const SiteGovernanceCoordinatesSchema = z.object({
 export type SiteGoverningLawSource = z.infer<typeof SiteGoverningLawSourceSchema>;
 export type SiteAuthorityLocus = z.infer<typeof SiteAuthorityLocusSchema>;
 export type SiteEmbodiment = z.infer<typeof SiteEmbodimentSchema>;
+export type SiteParticipantRole = z.infer<typeof SiteParticipantRoleSchema>;
 export type SiteGovernanceCoordinates = z.infer<typeof SiteGovernanceCoordinatesSchema>;
 
 // ---------------------------------------------------------------------------

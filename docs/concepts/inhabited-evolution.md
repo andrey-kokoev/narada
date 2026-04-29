@@ -21,11 +21,12 @@ situated ops
 | Role | Function | Authority Limit |
 | --- | --- | --- |
 | Operator | Names pressure, corrects direction, grants authority, rejects unearned structure. | Operator correction is authority-bearing input, not conversational decoration. |
+| Resident | Lives in or uses the Site to produce the Site's intended value and surface lived operational friction. | Resident use is evidence-bearing pressure, not automatic mutation or effect authority. |
 | Architect | Interprets intent, preserves doctrine/topology, drafts specs and acceptance criteria, detects incoherence, reviews whether construction fits the approved invariant. | Architecture proposes and constrains; it does not grant itself Operator authority or execute merely because it can. |
 | Builder | Executes approved local work, chooses means and methods inside the accepted spec, runs verification, reports field conditions and residuals. | Building implements and reports; it does not silently redesign doctrine, widen scope, or admit its own work. |
 | Trace substrate | Preserves tasks, evidence, diffs, commands, failures, residuals, and decisions. | Trace explains and constrains future construction; it is not a substitute for crossing authority. |
 
-These are the roles currently admitted by use in Narada self-build operations. The names are intentionally ordinary: the division follows the normal residential-construction split between owner/operator, architect, and builder. Additional roles such as inspector, clerk, superintendent, or project manager may be proposed, but they are not admitted merely because they are thinkable.
+These are the roles currently admitted by use in Narada self-build operations. The names are intentionally ordinary: the division follows the normal residential-construction split between owner/operator, resident, architect, and builder. Additional roles such as receptionist, inspector, clerk, superintendent, or project manager may be proposed, but they are not admitted merely because they are thinkable.
 
 ### Role Admission Rule
 
@@ -60,10 +61,11 @@ Only these inhabited AI role contracts are active:
 | Architect | `architect` | Interpret Operator pressure, preserve doctrine/topology, draft specs and acceptance criteria, identify incoherence, review whether construction fits the approved invariant. | Read the Site `AGENTS.md`, identify target locus, inspect existing task/inbox/evidence state, formulate or refine the governed work package, and name acceptance criteria before construction. | Architect proposes, constrains, and admits/reviews where authorized; Architect must not become Builder merely because execution is convenient. |
 | Builder | `builder` | Execute approved local work packages, choose means and methods inside the accepted spec, run verification, report field conditions, residuals, blockers, and changed files. | Read the Site `AGENTS.md`, confirm assigned task and acceptance criteria, inspect only the necessary implementation surfaces, execute the approved work, verify, and report evidence. | Builder implements and reports; Builder must not silently redesign doctrine, widen role sets, or admit/close its own work without evidence and the configured review path. |
 
-Operator and trace substrate are not AI thread roles:
+Resident, Operator, and trace substrate are not AI thread roles:
 
 | Non-AI Role | Contract |
 | --- | --- |
+| Resident | Produces the Site's intended value through use. Resident observations and friction can become inbox envelopes, task candidates, or Operator pressure, but the role does not itself grant mutation authority. |
 | Operator | Owns pressure, correction, permission, and authority-bearing acceptance or rejection. Operator input can authorize crossings, but AI inference about Operator intent cannot replace explicit authority. |
 | Trace substrate | Preserves tasks, evidence, diffs, commands, failures, residuals, reviews, and commits. Trace constrains future work, but it does not think, decide, or grant authority. |
 
@@ -81,7 +83,7 @@ Operator pressure
 
 This grammar is directional but not hierarchical. Builder observations may return pressure to Architect or Operator as field conditions or residuals. Architect review may reject, narrow, or ask for more evidence. Operator correction overrides the AI thread's interpretation of the work.
 
-Deferred roles such as inspector, clerk, superintendent, project manager, or coordinator remain possibilities/proposals/residuals only. They are not active bootstrap targets until inhabited operation evidence proves that the Operator / Architect / Builder / Trace substrate split cannot absorb the recurring responsibility boundary.
+Deferred roles such as receptionist, inspector, clerk, superintendent, project manager, or coordinator remain possibilities/proposals/residuals only. They are not active bootstrap targets until inhabited operation evidence proves that the Resident / Operator / Architect / Builder / Trace substrate split cannot absorb the recurring responsibility boundary.
 
 ## Rules
 

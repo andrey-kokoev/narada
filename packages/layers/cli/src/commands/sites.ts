@@ -1931,6 +1931,7 @@ function siteAgentsContract(args: {
     '',
     'You are either `architect` or `builder`, as assigned by the Operator.',
     'The human is `Operator`.',
+    'The Site value-producing inhabitant role is `resident` unless the Site config declares a narrower domain name.',
     'This Site is governed by Narada law.',
     '',
     '## Target Locus',
@@ -1946,6 +1947,14 @@ function siteAgentsContract(args: {
     args.ownershipSummary,
     '',
     args.nonAuthoritySummary,
+    '',
+    '## Site Participant Roles',
+    '',
+    '- `resident` lives in or uses the Site to produce the Site\'s intended value. Resident is not a synonym for Operator authority.',
+    '- `architect` specifies topology, doctrine fit, acceptance criteria, and review posture.',
+    '- `builder` executes approved construction work and reports evidence.',
+    '- Additional roles such as `receptionist` or `inspector` require explicit Site config and capability/admission rules before use.',
+    '- A declared role, runtime, or embodiment does not grant capability, mutation authority, or evidence admission by itself.',
     '',
     '## Architect Thread Bootstrap',
     '',
@@ -2033,6 +2042,32 @@ function siteGovernanceCoordinates(args: {
         root: args.workspaceRoot,
         substrate: 'filesystem',
         mutation_policy: 'read_only',
+      },
+    ],
+    site_participant_roles: [
+      {
+        role_id: 'resident',
+        role_class: 'resident',
+        status: 'active',
+        purpose: 'Use the Site to produce its intended value and surface lived operational friction.',
+        runtime_kind: 'human',
+        authority_posture: 'value_use',
+      },
+      {
+        role_id: 'architect',
+        role_class: 'architect',
+        status: 'active',
+        purpose: 'Specify governed work, preserve topology and doctrine, and frame review posture.',
+        runtime_kind: 'codex_cli',
+        authority_posture: 'specification',
+      },
+      {
+        role_id: 'builder',
+        role_class: 'builder',
+        status: 'active',
+        purpose: 'Execute approved local construction work packages and report verification evidence.',
+        runtime_kind: 'codex_cli',
+        authority_posture: 'construction',
       },
     ],
     operator_surfaces: [],
@@ -2581,6 +2616,7 @@ export async function sitesInitCommand(
 
       if (!dryRun) {
         await ensureSiteDir(siteId);
+        await mkdir(siteRoot, { recursive: true });
       }
 
       configContent = {
@@ -2618,6 +2654,7 @@ export async function sitesInitCommand(
 
       if (!dryRun) {
         await ensureSiteDir(siteId, mode);
+        await mkdir(siteRoot, { recursive: true });
       }
 
       configContent = {

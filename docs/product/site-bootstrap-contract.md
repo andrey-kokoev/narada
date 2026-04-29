@@ -127,7 +127,7 @@ narada sites init <site-id> --substrate <substrate> [--operation <operation-id>]
 This creates:
 - The Site root directory (substrate-specific path)
 - A minimal Site `config.json` with metadata
-- A `governance` coordinate object declaring law source, authority locus, embodiments, mutation evidence locus, intake/outbox posture, effect authority policy, readiness phase, and agent/operator identity contract
+- A `governance` coordinate object declaring law source, authority locus, embodiments, participant roles, mutation evidence locus, intake/outbox posture, effect authority policy, readiness phase, and agent/operator identity contract
 - Standard subdirectories (`state/`, `messages/`, `db/`, `logs/`, `traces/`)
 - For Windows: a registry entry in the Site registry
 - An `execution` record containing `surface`, `executor_runtime`, `target_authority_locus`, `target_root`, `executor_root`, `path_translation`, `permission_posture`, `mutation_evidence_locus`, and inference rationale
@@ -202,6 +202,16 @@ narada sites doctor <site-id> --kind client --root <client-workspace>
 Client Site doctor checks config parse, site identity, site kind, workspace root, non-Git durability posture, OneDrive-safe posture when applicable, required governance folders, canonical inbox drop/export folders, and empty-directory markers.
 
 Generated `AGENTS.md` is the stable way to orient a fresh AI thread inside the Site. The Operator should not need to repeat the full standing instruction in chat. The generated contract includes separate admitted thread contracts for Architect and Builder, following [`Inhabited Evolution`](../concepts/inhabited-evolution.md).
+
+Site bootstrap also declares Site participant roles. The default active roles are:
+
+| Role | Purpose |
+| --- | --- |
+| `resident` | The value-producing inhabitant/user of the Site: the participant who lives in or uses the Site to produce the Site's intended value and surface lived friction. |
+| `architect` | The construction-design role for topology, doctrine fit, governed work packages, acceptance criteria, and review posture. |
+| `builder` | The construction-execution role for approved work packages and verification evidence. |
+
+`resident` is intentionally distinct from `Operator`. Operator names the authority principal. Resident names the value-producing inhabitant. The same human may occupy both roles, but Site config must not collapse them by vocabulary.
 
 The compact thread bootstrap form is:
 

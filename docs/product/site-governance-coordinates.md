@@ -12,6 +12,7 @@ They do not grant runtime authority by themselves. They make authority inspectab
 | `law_admission_mode` | How law is admitted: inherited, overlaid, federated, or referenced. | Local overlays must be explicit. |
 | `authority_locus` | The Site locus that owns governed mutation. | Current shell, clone, or process is not authority by convenience. |
 | `embodiments` | Known concrete presences: roots, runtimes, projections, forwarding surfaces. | Multiple embodiments do not create multiple authorities. |
+| `site_participant_roles` | Declared human/agent participant roles such as resident, architect, builder, receptionist, or inspector. | Role declaration is not capability grant, runtime existence, or mutation authority. |
 | `operator_surfaces` | Optional addressable interfaces for inhabiting or observing Site work. | Surfaces improve launch/focus/recovery; they do not grant mutation, effect, or capability authority. |
 | `session_bindings` | Optional continuity links between role, runtime, channel, surface, task/chapter, and trace references. | Session continuity does not claim work, admit evidence, or prove completion. |
 | `mutation_evidence_locus` | Where mergeable/replayable mutation evidence is recorded. | Raw SQLite is runtime substrate, not portable authority by itself. |
@@ -58,6 +59,40 @@ They do not grant runtime authority by themselves. They make authority inspectab
         "root": "/repo",
         "substrate": "filesystem",
         "mutation_policy": "read_only"
+      }
+    ],
+    "site_participant_roles": [
+      {
+        "role_id": "resident",
+        "role_class": "resident",
+        "status": "active",
+        "purpose": "Use the Site to produce its intended value and surface lived operational friction.",
+        "runtime_kind": "human",
+        "authority_posture": "value_use"
+      },
+      {
+        "role_id": "architect",
+        "role_class": "architect",
+        "status": "active",
+        "purpose": "Specify governed work, preserve topology and doctrine, and frame review posture.",
+        "runtime_kind": "codex_cli",
+        "authority_posture": "specification"
+      },
+      {
+        "role_id": "builder",
+        "role_class": "builder",
+        "status": "active",
+        "purpose": "Execute approved local construction work packages and report verification evidence.",
+        "runtime_kind": "codex_cli",
+        "authority_posture": "construction"
+      },
+      {
+        "role_id": "inspector",
+        "role_class": "inspector",
+        "status": "planned",
+        "purpose": "Independently inspect evidence before admission when the Site has earned that separation.",
+        "runtime_kind": "api_agent",
+        "authority_posture": "inspection"
       }
     ],
     "operator_surfaces": [
@@ -244,6 +279,26 @@ This means the Site follows Narada law and may carry Site-local overlays such as
 ## Runtime Consequence
 
 Commands may use these coordinates for preflight, routing, and explanation. A coordinate declaration alone must not execute effects, reveal secrets, repair state, or mutate another Site.
+
+## Site Participant Roles
+
+`site_participant_roles` declares who inhabits or works on the Site. It is broader than `agent_role_contracts`: it may include humans, AI threads, API agents, reception/intake roles, inspection roles, daemons, or future project-specific names.
+
+The canonical value-producing role is `resident`.
+
+Resident is the participant who lives in or uses the Site for its intended purpose: handling the client, running the business workflow, operating the project, or otherwise producing the value for which the Site exists. Resident can surface observations, command requests, and friction. Resident is not the same as Operator authority unless the Site separately declares the same principal in both roles.
+
+Default role posture:
+
+| Role | Meaning | Authority posture |
+| --- | --- | --- |
+| `resident` | Value-producing inhabitant/user of the Site. | May surface lived work and friction; does not gain mutation or effect authority by role declaration. |
+| `architect` | Specifies topology, doctrine fit, work packages, and acceptance criteria. | Specification/review posture only unless separately granted. |
+| `builder` | Executes approved construction work. | Construction posture only; must report evidence. |
+| `receptionist` | Intake/routing role for envelopes and first contact. | Intake-only until promotion/admission. |
+| `inspector` | Independent evidence/admission review role. | Inspection posture; should stay independent from Builder. |
+
+`site_participant_roles` may declare planned roles so startup posture is explicit, for example an API-based Inspector or CLI-based Receptionist. Planned/deferred roles are inert until an inhabited operation actually uses them and the Site config gives them a bounded contract.
 
 ## Agent Role Contracts
 

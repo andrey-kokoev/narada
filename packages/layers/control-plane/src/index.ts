@@ -20,6 +20,7 @@ export {
   SiteGoverningLawSourceSchema,
   SiteAuthorityLocusSchema,
   SiteEmbodimentSchema,
+  SiteParticipantRoleSchema,
   validateSiteManifest,
   validateSiteManifestOrThrow,
   isValidSiteManifest,
@@ -31,6 +32,7 @@ export {
   type SiteGoverningLawSource,
   type SiteAuthorityLocus,
   type SiteEmbodiment,
+  type SiteParticipantRole,
   type SiteValidationResult,
 } from "./config/site-manifest.js";
 export type {

@@ -79,6 +79,9 @@ describe('sitesBootstrapProjectCommand', () => {
     const agents = await readFile(join(workspace, '.narada', 'AGENTS.md'), 'utf8');
     expect(agents).toContain('You are `architect`.');
     expect(agents).toContain('You are `builder`.');
+    expect(agents).toContain('The Site value-producing inhabitant role is `resident`');
+    expect(agents).toContain('## Site Participant Roles');
+    expect(agents).toContain('`resident` lives in or uses the Site to produce the Site');
     expect(agents).toContain('## Architect Thread Bootstrap');
     expect(agents).toContain('## Builder Thread Bootstrap');
     expect(agents).toContain('The human is `Operator`.');
@@ -86,14 +89,15 @@ describe('sitesBootstrapProjectCommand', () => {
     expect(agents).toContain('project-local governance');
     expect(agents).toContain('Treat this file as the Site-local execution contract for fresh Architect and Builder threads.');
     expect(agents).toContain('Project code and artifacts outside `site_root` are not Narada knowledge');
-    expect(agents).not.toContain('inspector');
-    expect(agents).not.toContain('superintendent');
+    expect(agents).not.toContain('## Inspector Thread Bootstrap');
+    expect(agents).not.toContain('## Superintendent Thread Bootstrap');
     const config = JSON.parse(await readFile(join(workspace, '.narada', 'config.json'), 'utf8')) as {
       governance: {
         governing_law_source: { source_site_id: string; mode: string };
         authority_locus: { locus_kind: string; mutation_policy: string };
         mutation_evidence_locus: { kind: string; path: string };
         federation_policy: { posture: string; admission: string };
+        site_participant_roles: Array<{ role_id: string; role_class: string; runtime_kind?: string; authority_posture: string }>;
         agent_role_contracts: Record<string, unknown> & { admitted_roles: string[]; architect: { role_id: string }; builder: { role_id: string } };
         operator_surfaces: unknown[];
         session_bindings: unknown[];
@@ -107,6 +111,12 @@ describe('sitesBootstrapProjectCommand', () => {
     expect(config.governance.mutation_evidence_locus.path).toBe(join(workspace, '.narada'));
     expect(config.governance.federation_policy.posture).toBe('receive_only');
     expect(config.governance.federation_policy.admission).toBe('local_admission_required');
+    expect(config.governance.site_participant_roles.map((role) => role.role_id)).toEqual(['resident', 'architect', 'builder']);
+    expect(config.governance.site_participant_roles.find((role) => role.role_id === 'resident')).toMatchObject({
+      role_class: 'resident',
+      runtime_kind: 'human',
+      authority_posture: 'value_use',
+    });
     expect(config.governance.agent_role_contracts.admitted_roles).toEqual(['architect', 'builder']);
     expect(config.governance.agent_role_contracts.architect.role_id).toBe('architect');
     expect(config.governance.agent_role_contracts.builder.role_id).toBe('builder');

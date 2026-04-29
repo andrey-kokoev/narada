@@ -51,6 +51,57 @@ Initial tools:
 | `narada_inbox_show` | Read-only envelope inspection. |
 | `narada_inbox_submit_observation` | Mutating inbox submission with read-back confirmation and canonical mutation evidence. |
 
+## Agent Tool Discovery
+
+An agent only sees Narada MCP tools when its MCP client configuration launches `narada-mcp`. Tool discovery does not happen merely because the repository contains the binary.
+
+Minimum client configuration shape:
+
+```json
+{
+  "mcpServers": {
+    "narada-proper": {
+      "command": "narada-mcp",
+      "args": ["--site-root", "/home/andrey/src/narada"]
+    }
+  }
+}
+```
+
+For a contained Project Site, target the contained Site root rather than the visible project root:
+
+```json
+{
+  "mcpServers": {
+    "project-site": {
+      "command": "narada-mcp",
+      "args": ["--site-root", "/path/to/project/.narada"]
+    }
+  }
+}
+```
+
+If the client cannot resolve `narada-mcp`, use the repo-local binary path or install the root `narada` shim first:
+
+```json
+{
+  "mcpServers": {
+    "narada-proper": {
+      "command": "/home/andrey/src/narada/node_modules/.bin/narada-mcp",
+      "args": ["--site-root", "/home/andrey/src/narada"]
+    }
+  }
+}
+```
+
+The expected read-only proof after registration is:
+
+1. Client lists MCP tools.
+2. Tool list includes `narada_inbox_submit_observation`, `narada_inbox_work_next`, and `narada_inbox_doctor`.
+3. `narada_site_context` returns the intended `site_id`, `site_root`, and `authority_posture: "facade_only"`.
+
+This is configuration of a `ControlChannel`, not authority movement. The MCP facade still delegates to canonical services and mutating inbox tools still create inert envelopes with read-back confirmation and mutation evidence.
+
 ## Site Scoping
 
 Every Narada Site may expose its own MCP facade, but that facade is not a new authority owner.

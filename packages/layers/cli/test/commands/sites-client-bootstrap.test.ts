@@ -85,6 +85,7 @@ describe('sitesBootstrapClientCommand', () => {
         governing_law_source: { source_site_id: string };
         authority_locus: { locus_kind: string; mutation_policy: string };
         effect_authority_policy: string;
+        site_participant_roles: Array<{ role_id: string; role_class: string; runtime_kind?: string; authority_posture: string }>;
         agent_identity_contract: { default_agent_name: string; operator_label: string };
         agent_role_contracts: Record<string, unknown> & { admitted_roles: string[]; architect: { role_id: string }; builder: { role_id: string } };
         operator_surfaces: unknown[];
@@ -95,6 +96,12 @@ describe('sitesBootstrapClientCommand', () => {
     expect(config.governance.authority_locus.locus_kind).toBe('client_service');
     expect(config.governance.authority_locus.mutation_policy).toBe('direct_only_at_locus');
     expect(config.governance.effect_authority_policy).toBe('metadata_only');
+    expect(config.governance.site_participant_roles.map((role) => role.role_id)).toEqual(['resident', 'architect', 'builder']);
+    expect(config.governance.site_participant_roles.find((role) => role.role_id === 'resident')).toMatchObject({
+      role_class: 'resident',
+      runtime_kind: 'human',
+      authority_posture: 'value_use',
+    });
     expect(config.governance.agent_identity_contract.default_agent_name).toBe('architect');
     expect(config.governance.agent_identity_contract.operator_label).toBe('Operator');
     expect(config.governance.agent_role_contracts.admitted_roles).toEqual(['architect', 'builder']);
@@ -119,6 +126,9 @@ describe('sitesBootstrapClientCommand', () => {
     const agents = await readFile(join(workspace, '.narada', 'AGENTS.md'), 'utf8');
     expect(agents).toContain('You are `architect`.');
     expect(agents).toContain('You are `builder`.');
+    expect(agents).toContain('The Site value-producing inhabitant role is `resident`');
+    expect(agents).toContain('## Site Participant Roles');
+    expect(agents).toContain('`resident` lives in or uses the Site to produce the Site');
     expect(agents).toContain('## Architect Thread Bootstrap');
     expect(agents).toContain('## Builder Thread Bootstrap');
     expect(agents).toContain('The human is `Operator`.');
@@ -127,8 +137,8 @@ describe('sitesBootstrapClientCommand', () => {
     expect(agents).toContain(`site_root: ${join(workspace, '.narada')}`);
     expect(agents).toContain('Treat this file as the Site-local execution contract for fresh Architect and Builder threads.');
     expect(agents).toContain('Client/business artifacts outside `site_root` are not Narada knowledge, evidence, or authority unless explicitly admitted');
-    expect(agents).not.toContain('inspector');
-    expect(agents).not.toContain('superintendent');
+    expect(agents).not.toContain('## Inspector Thread Bootstrap');
+    expect(agents).not.toContain('## Superintendent Thread Bootstrap');
   });
 
   it('client doctor fails when the canonical inbox drop is missing', async () => {
