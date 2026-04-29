@@ -1,0 +1,33 @@
+{
+  "envelope_id": "env_b83e6fcd-b19f-46dc-a6c1-bd09b410bf78",
+  "received_at": "2026-04-29T22:33:15.734Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "operator:proposal-to-architect:add-deferred-task-status"
+  },
+  "kind": "upstream_task_candidate",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "operator"
+  },
+  "payload": {
+    "title": "Add first-class deferred task lifecycle status",
+    "intended_recipient": "architect",
+    "problem": "Task lifecycle status surfaces advertise deferred, but the persisted task state machine does not admit deferred. Builder had to move task 403 to in_review to stop recommender churn, which is semantically wrong because the task is externally blocked, not completed-awaiting-review.",
+    "proposal": "Add a sanctioned deferred lifecycle state and command path for tasks that are intentionally paused on external capability, credential, live input, or authority-locus availability. Ensure recommender, workboard, lifecycle status, evidence, chapter status, task read, task report/finish, and mutation evidence treat deferred distinctly from in_review, blocked, needs_continuation, and closed.",
+    "acceptance_criteria": [
+      "TaskStatus and lifecycle SQLite authority admit deferred as a persisted status.",
+      "There is a sanctioned CLI transition into deferred with required rationale/residual/unblock evidence.",
+      "Deferred tasks do not appear as runnable recommendations or active builder work, but remain visible as deferred/blocker posture.",
+      "Dependencies on deferred tasks explain the blocker and unblock condition instead of generic unmet dependency only.",
+      "Existing use of in_review is not abused for external deferral.",
+      "Task 403 can be migrated from in_review workaround to deferred without direct file or SQLite edits."
+    ],
+    "source_context": {
+      "task_number": 403,
+      "workaround_commit": "1d415d7",
+      "reason": "normal builder loop repeatedly tripped on 403/404 because no true deferred state was available"
+    }
+  },
+  "status": "received"
+}
