@@ -1,0 +1,33 @@
+{
+  "envelope_id": "env_9602483c-da6c-466f-87aa-6bb2caee926e",
+  "received_at": "2026-04-29T22:00:54.764Z",
+  "source": {
+    "kind": "system_observation",
+    "ref": "narada-andrey.architect:inbox-cwd-routing-bypass"
+  },
+  "kind": "incident",
+  "authority": {
+    "level": "system_observed",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Inbox submission must enforce target locus and cwd root authority",
+    "summary": "A User Site builder bypassed local architect routing and submitted an upstream proposal from the wrong cwd, producing a portable inbox envelope under packages/layers/cli/.ai instead of Narada proper root .ai. The content was coherent, but the route and locus were wrong.",
+    "incident": {
+      "misplaced_envelope_id": "env_b7d3aeae-cd59-4cc8-a323-140192da4194",
+      "misplaced_path": "packages/layers/cli/.ai/inbox-envelopes/2026-04-29T21-54-38-626Z-env_b7d3aeae-cd59-4cc8-a323-140192da4194.json",
+      "corrected_envelope_id": "env_b7330900-7040-4e9f-bb5f-93475bf24f28",
+      "expected_route": "builder -> User Site architect inbox -> architect review/routing -> Narada proper root inbox",
+      "actual_route": "builder -> Narada proper package cwd .ai inbox artifact"
+    },
+    "evidence": [
+      "Root narada inbox show could not find env_b7d3aeae-cd59-4cc8-a323-140192da4194 after pulling the commit.",
+      "The artifact exists under packages/layers/cli/.ai/inbox-envelopes, outside Narada proper root inbox export_dir.",
+      "The User Site CAPA envelope env_537e5bb6-491c-4b23-a7d3-a65bd01e0bab documents the local architect-routing bypass.",
+      "Corrected root envelope env_b7330900-7040-4e9f-bb5f-93475bf24f28 supersedes the misplaced artifact for processing."
+    ],
+    "proposed_direction": "Inbox submit should preflight that --cwd resolves to the intended Site root and that target_locus is allowed for the principal/source Site/envelope kind. Submitting from package subdirectories should either resolve to the governing repo root or fail with an explicit repair command. Builder-facing defaults should submit to local architect, with direct upstream requiring explicit authority.",
+    "requested_handling": "Admit as corrective work adjacent to message routing authority, inbox publication ergonomics, and role-specific builder guardrails."
+  },
+  "status": "received"
+}

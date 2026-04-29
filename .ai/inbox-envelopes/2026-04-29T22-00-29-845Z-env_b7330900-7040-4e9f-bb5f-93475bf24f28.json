@@ -1,0 +1,33 @@
+{
+  "envelope_id": "env_b7330900-7040-4e9f-bb5f-93475bf24f28",
+  "received_at": "2026-04-29T22:00:29.845Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey.architect:affinity-color-proposal-corrected-route"
+  },
+  "kind": "proposal",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Equip roles and Sites with affinity colors for operator-surface labels",
+    "summary": "The operator window label now distinguishes Site, agent name, and role. The next coherent projection is to let roles and Sites carry affinity colors that can be used by operator surfaces without making each surface invent color semantics locally.",
+    "proposal": [
+      "Add an affinity_color field or equivalent style facet to role metadata so role/name-role lines can be colored consistently across operator surfaces.",
+      "Add an affinity_color field or equivalent style facet to Site identity/config metadata so the Site line in Narada window labels can use the Site affinity color.",
+      "Define precedence and fallback rules: explicit projection style may override, otherwise Site line uses Site affinity color, role line uses role affinity color, and agent/name line uses neutral text unless an admitted role/name coloring rule says otherwise.",
+      "Document that affinity colors are semantic projection hints, not authority boundaries or identity proof. They support recognition and ergonomics only.",
+      "Update the User Site operator-surface label projection to consume these fields after Narada proper admits the schema."
+    ],
+    "evidence": [
+      "In C:/Users/Andrey/Narada, the operator label now renders Site, agent name, and role as distinct visual lines.",
+      "The live experiment renamed the builder surface to Bob while preserving role=builder, proving that name and role are separate display dimensions.",
+      "Without upstream affinity-color fields, color choice would be local UI taste rather than governed Site/role semantics."
+    ],
+    "recommendation": "Treat this as a product/schema proposal for operator-surface identity projection. Admit color as optional semantic metadata on Sites and roles, then let surfaces project it.",
+    "supersedes_misplaced_artifact": "packages/layers/cli/.ai/inbox-envelopes/2026-04-29T21-54-38-626Z-env_b7d3aeae-cd59-4cc8-a323-140192da4194.json",
+    "misplaced_envelope_id": "env_b7d3aeae-cd59-4cc8-a323-140192da4194"
+  },
+  "status": "received"
+}
