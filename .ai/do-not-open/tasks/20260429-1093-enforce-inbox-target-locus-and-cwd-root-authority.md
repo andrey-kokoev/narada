@@ -1,7 +1,16 @@
 ---
-status: claimed
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T22:08:09.372Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T23:44:35.283Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Implemented inbox submit cwd authority preflight. submit and submit-observation resolve package-subdirectory cwd to the Git worktree root before route evaluation, SQLite mutation, portable artifact export, and mutation evidence writing. Results include cwd_preflight with repair command. Existing message_routing_authority enforcement covers principal/target_locus/kind routing and refuses Builder upstream submission unless configured authority admits it. Regression test proves package-local .ai inbox artifacts are not created.
+closed_at: 2026-04-29T23:44:54.038Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Enforce inbox target locus and cwd root authority
@@ -39,9 +48,9 @@ Inbox envelope env_9602483c-da6c-466f-87aa-6bb2caee926e reports that a User Site
 
 ## Acceptance Criteria
 
-- [ ] Inbox submit preflights that cwd resolves to the intended Site root or refuses with repair command
-- [ ] Package subdirectory submissions do not create package-local .ai inbox artifacts by default
-- [ ] Principal target_locus envelope_kind routing policy is enforced or explicitly deferred to message routing authority
-- [ ] Builder direct upstream submission is refused unless admitted by explicit authority
-- [ ] Misplaced package-local inbox artifact case is captured as regression evidence
-- [ ] Source envelope env_9602483c-da6c-466f-87aa-6bb2caee926e is routed
+- [x] Inbox submit preflights that cwd resolves to the intended Site root or refuses with repair command
+- [x] Package subdirectory submissions do not create package-local .ai inbox artifacts by default
+- [x] Principal target_locus envelope_kind routing policy is enforced or explicitly deferred to message routing authority
+- [x] Builder direct upstream submission is refused unless admitted by explicit authority
+- [x] Misplaced package-local inbox artifact case is captured as regression evidence
+- [x] Source envelope env_9602483c-da6c-466f-87aa-6bb2caee926e is routed

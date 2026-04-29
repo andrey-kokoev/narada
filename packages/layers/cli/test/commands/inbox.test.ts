@@ -108,6 +108,36 @@ describe('Canonical Inbox CLI commands', () => {
     expect(envelope.payload).toEqual({ title: 'From file', nested: { ok: true } });
   });
 
+  it('resolves package-subdirectory submit cwd to git root authority', async () => {
+    execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['init', '-b', 'main'], { cwd: tempDir });
+    const packageDir = join(tempDir, 'packages', 'layers', 'cli');
+    mkdirSync(packageDir, { recursive: true });
+
+    const submitted = await inboxSubmitObservationCommand({
+      cwd: packageDir,
+      format: 'json',
+      sourceRef: 'test:package-subdir',
+      title: 'Package subdir should not own inbox',
+      principal: 'architect',
+      targetLocus: 'local_site',
+    });
+
+    expect(submitted.exitCode).toBe(ExitCode.SUCCESS);
+    const result = submitted.result as {
+      cwd_preflight?: { authority_cwd: string; resolved_to_git_root: boolean };
+      delivery?: { inbox_db_path: string; export_dir: string };
+      next_steps?: { git_visible_handoff?: string };
+    };
+    expect(result.cwd_preflight).toMatchObject({
+      authority_cwd: tempDir,
+      resolved_to_git_root: true,
+    });
+    expect(result.delivery?.inbox_db_path).toBe(join(tempDir, '.ai', 'inbox.db'));
+    expect(result.next_steps?.git_visible_handoff).toContain(join(tempDir, '.ai', 'inbox-envelopes'));
+    expect(existsSync(join(packageDir, '.ai', 'inbox.db'))).toBe(false);
+    expect(existsSync(join(packageDir, '.ai', 'inbox-envelopes'))).toBe(false);
+  });
+
   it('enforces configured message routing authority for inbox submissions', async () => {
     writeFileSync(join(tempDir, 'config.json'), JSON.stringify({
       message_routing_authority: {

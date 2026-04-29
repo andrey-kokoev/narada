@@ -184,6 +184,8 @@ export interface InboxIngestFilesOptions extends InboxCommandOptions {
 }
 
 export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const cwdPreflight = resolveInboxAuthorityCwd(options.cwd ?? process.cwd());
+  const authorityCwd = cwdPreflight.authority_cwd;
   const sourceKind = parseSourceKind(options.sourceKind);
   if (!sourceKind) return errorResult(invalidValueMessage('--source-kind', options.sourceKind, SOURCE_KINDS));
   const kind = parseEnvelopeKind(options.kind);
@@ -204,7 +206,7 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
     );
   }
   const principal = options.principal ?? options.authorityPrincipal;
-  const routeDecision = decideMessageRoute(options.cwd ?? process.cwd(), {
+  const routeDecision = decideMessageRoute(authorityCwd, {
     principal,
     targetLocus: options.targetLocus,
     envelopeKind: kind,
@@ -218,9 +220,8 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
     };
   }
 
-  return withInboxStoreAsync(options, async (store) => {
-    const delivery = inspectInboxDelivery(options.cwd ?? process.cwd());
-    const cwd = options.cwd ?? process.cwd();
+  return withInboxStoreAsync({ ...options, cwd: authorityCwd }, async (store) => {
+    const delivery = inspectInboxDelivery(authorityCwd);
     const envelope = store.insert({
       envelope_id: `env_${randomUUID()}`,
       received_at: new Date().toISOString(),
@@ -232,9 +233,9 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
       },
       payload,
     });
-    const portableArtifact = await writePortableInboxEnvelope(cwd, envelope);
+    const portableArtifact = await writePortableInboxEnvelope(authorityCwd, envelope);
     await writeInboxMutationEvidence({
-      cwd,
+      cwd: authorityCwd,
       command: 'inbox submit',
       principal,
       authorityClass: 'claim',
@@ -248,6 +249,7 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
         status: 'success',
         envelope,
         delivery,
+        cwd_preflight: cwdPreflight,
         portable_artifact: portableArtifact,
         next_steps: {
           git_visible_handoff: portableArtifact,
@@ -262,6 +264,7 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
         `Status: ${envelope.status}`,
         `Inbox DB: ${delivery.inbox_db_path}`,
         `Portable artifact: ${portableArtifact}`,
+        `Authority cwd: ${authorityCwd}`,
         `Repo: ${delivery.repo_root ?? 'unknown'} @ ${delivery.branch ?? 'unknown'} ${delivery.head_commit ?? 'unknown'}`,
         `Visible on remote: ${delivery.head_matches_remote === true ? 'yes' : delivery.head_matches_remote === false ? 'no' : 'unknown'}`,
       ],
@@ -301,13 +304,17 @@ export async function inboxSubmitObservationCommand(
   const result = submitted.result as {
     envelope?: InboxEnvelope;
     delivery?: Record<string, unknown>;
+    cwd_preflight?: Record<string, unknown>;
     portable_artifact?: string;
     routing?: unknown;
   };
   const envelopeId = result.envelope?.envelope_id;
   if (!envelopeId) return errorResult('Submitted envelope did not return an envelope_id');
 
-  return withInboxStoreAsync(options, async (store) => {
+  const readBackCwd = typeof result.cwd_preflight?.authority_cwd === 'string'
+    ? result.cwd_preflight.authority_cwd
+    : options.cwd;
+  return withInboxStoreAsync({ ...options, cwd: readBackCwd }, async (store) => {
     const readBack = store.get(envelopeId);
     if (!readBack) return errorResult(`Submitted envelope could not be read back: ${envelopeId}`);
     const payloadEquivalent = JSON.stringify(readBack.payload) === JSON.stringify(payload);
@@ -318,6 +325,7 @@ export async function inboxSubmitObservationCommand(
         status: 'success',
         envelope: readBack,
         delivery: result.delivery,
+        cwd_preflight: result.cwd_preflight,
         routing: result.routing,
         confirmation: {
           read_back_envelope_id: readBack.envelope_id,
@@ -1947,6 +1955,31 @@ function inspectInboxDelivery(cwdInput: string): Record<string, unknown> {
     export_dir: join(cwd, '.ai', 'inbox-envelopes'),
     merge_or_replay_required: headCommit && upstreamCommit ? headCommit !== upstreamCommit : null,
     git_conflict_posture: 'local sqlite db ignored; use inbox publish/export/import for portable envelopes',
+  };
+}
+
+function resolveInboxAuthorityCwd(cwdInput: string): {
+  input_cwd: string;
+  authority_cwd: string;
+  resolved_to_git_root: boolean;
+  repair_command: string | null;
+} {
+  const inputCwd = resolve(cwdInput);
+  const repoRoot = git(inputCwd, ['rev-parse', '--show-toplevel']);
+  if (!repoRoot || resolve(repoRoot) === inputCwd) {
+    return {
+      input_cwd: inputCwd,
+      authority_cwd: inputCwd,
+      resolved_to_git_root: false,
+      repair_command: null,
+    };
+  }
+  const authorityCwd = resolve(repoRoot);
+  return {
+    input_cwd: inputCwd,
+    authority_cwd: authorityCwd,
+    resolved_to_git_root: true,
+    repair_command: `Re-run with --cwd ${JSON.stringify(authorityCwd)} when you need to make the authority locus explicit.`,
   };
 }
 

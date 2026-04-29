@@ -33,6 +33,8 @@ Use `--principal <id>` to set `authority.principal`. `--authority-principal <id>
 
 Use `--target-locus <locus>` when a Site declares `governance.message_routing_authority` or root `message_routing_authority`. The routing decision evaluates `principal + target_locus + envelope_kind + authority_level` before admitting the inert envelope. If the route is refused, the command returns a bounded refusal reason and writes no envelope.
 
+`inbox submit` and `inbox submit-observation` preflight their working directory before mutation. When invoked from a package subdirectory inside a Git worktree, they resolve the authority cwd to the worktree root and write `.ai/inbox.db`, `.ai/inbox-envelopes`, and mutation evidence there. The result includes `cwd_preflight` with the input cwd, authority cwd, and repair command so callers can make the locus explicit. Package-local `.ai` inbox artifacts are not created by default.
+
 Use low-level `submit` when the caller already has a complete typed envelope payload. Prefer `--payload-file` or `--payload-stdin` for non-trivial payloads. Inline JSON is acceptable for tiny POSIX-shell examples, but it is brittle across PowerShell, chat copy/paste, and multi-line payloads. Empty object payloads are rejected for observations and task candidates unless `--allow-empty-payload` is explicit.
 
 Successful `inbox submit` and `inbox submit-observation` write two surfaces:
