@@ -1,0 +1,28 @@
+{
+  "envelope_id": "env_ea9ce332-63a2-4eb5-bc9a-4bfd2cd5b637",
+  "received_at": "2026-04-29T20:22:48.963Z",
+  "source": {
+    "kind": "system_observation",
+    "ref": "narada-andrey.architect:sqlite-roster-empty-bootstrap"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "system_observed",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Roster loading still falls back to retired roster.json and blocks empty SQLite bootstrap",
+    "summary": "Narada proper Task 618 says roster authority is SQLite-only and normal roster operators no longer require or trust .ai/agents/roster.json, but the current roster loader still treats empty SQLite as failure, falls back to .ai/agents/roster.json, and errors when the JSON file is absent.",
+    "observation": "In the Windows User Site, narada work-next --agent narada-andrey.builder fails with roster_unavailable. The failure is not because roster.json should exist; it is because loadRoster falls through from an empty SQLite agent_roster table to the retired JSON fallback. task roster add also calls loadRoster first, so it cannot create the first roster row from an empty SQLite-only Site.",
+    "evidence": [
+      "Task 618 acceptance criteria: roster commands are authoritative on SQLite only; no normal roster operator requires or trusts .ai/agents/roster.json.",
+      "packages/task-governance/src/task-governance.ts still contains: SQLite exists but is empty — fall through to JSON fallback.",
+      "The thrown error is: Roster not found in SQLite or JSON (.ai/agents/roster.json).",
+      "narada task roster add calls loadRoster before inserting a new agent, so an empty SQLite roster cannot be bootstrapped through the normal command.",
+      "Observed command failure: narada work-next --agent narada-andrey.builder --cwd /mnt/c/Users/Andrey/Narada returns reason=roster_unavailable."
+    ],
+    "proposed_direction": "Make empty SQLite agent_roster a valid empty roster. Remove JSON fallback from normal roster authority paths or make it an explicit migration/import operator. Make task roster add able to create the first SQLite row. Make work-next report agent_not_in_roster with a repair command, or materialize declared default role contracts when the Site config provides them.",
+    "requested_handling": "Open a Narada proper corrective task because current behavior contradicts the completed SQLite-only roster cutover."
+  },
+  "status": "received"
+}
