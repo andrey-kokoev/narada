@@ -1,0 +1,43 @@
+{
+  "packet_type": "site_implementation_handoff",
+  "generated_at": "2026-04-29T18:59:00.000Z",
+  "generated_by": "builder",
+  "source_task": {
+    "task_number": 1085,
+    "task_id": "20260429-1085-model-visibility-domain-reconciliation-for-operator-surfaces"
+  },
+  "source_envelope": "env_296dd225-411f-462a-b336-079a9ed6db88",
+  "target_locus": {
+    "preferred": "Windows PC Site",
+    "site_hint": "desktop-sunroom-2",
+    "authority_reason": "Komorebi, YASB, and Windows virtual desktop reconciliation mutate or inspect host-local adapter state outside Narada proper."
+  },
+  "requested_capability": {
+    "name": "windows_desktop_scoped_komorebi_reconciliation",
+    "class": "repair_recovery_action",
+    "summary": "After a Windows virtual desktop transition, reconcile Komorebi-managed HWNDs against Windows virtual desktop membership before retile/focus recovery."
+  },
+  "bounded_algorithm": [
+    "Read current Windows virtual desktop identity.",
+    "Inspect Komorebi-managed HWNDs for the active display/workspace.",
+    "Query each HWND's Windows virtual desktop membership through the PC/User Site sanctioned host API or diagnostic script.",
+    "Remove, float, or unmanage HWNDs outside the current desktop from active tiling state.",
+    "Retile current-desktop windows.",
+    "Assert no off-desktop HWNDs and no invalid rectangles remain.",
+    "Record bounded evidence and residuals in the PC/User Site evidence locus."
+  ],
+  "evidence_reference": {
+    "kind": "pc_site_log",
+    "path": "C:\\ProgramData\\Narada\\sites\\pc\\desktop-sunroom-2\\logs\\komorebi\\desktop-switch-state-leak-20260429-132859.json",
+    "bounded_summary": "Windows desktop was Narada index 4; leaked Staccato HWND 7603338 still reported Windows desktop membership index 2; Komorebi state contained the stale HWND and invalid rectangles."
+  },
+  "authority_limits": [
+    "Narada proper does not mutate Windows, Komorebi, or YASB state.",
+    "Implementation must run through the Windows PC Site or User Site authority locus.",
+    "Large raw Windows logs must remain in the local Site evidence locus."
+  ],
+  "return_path": {
+    "kind": "inbox_or_site_relation",
+    "expected_result": "PC/User Site reports whether the reconciliation capability was implemented, deferred, or rejected with evidence."
+  }
+}

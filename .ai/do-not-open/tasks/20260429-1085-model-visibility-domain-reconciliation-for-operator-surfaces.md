@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T18:35:12.772Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T19:01:38.800Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Docs now distinguish Operator Surface adapter state from host visibility-domain truth, model Windows virtual desktop membership as an external reconciliation boundary, include a PC/User Site implementation handoff, preserve Narada proper authority limits, and route source envelope env_296dd225-411f-462a-b336-079a9ed6db88 through task 1085; pnpm verify passed.
+closed_at: 2026-04-29T19:01:54.088Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Model visibility-domain reconciliation for operator surfaces
@@ -39,8 +48,8 @@ Inbox envelope env_296dd225-411f-462a-b336-079a9ed6db88 reports a live Windows d
 
 ## Acceptance Criteria
 
-- [ ] Doctrine distinguishes operator-surface adapter state from host visibility or membership domain truth
-- [ ] Windows virtual desktop membership is modeled as an external reconciliation boundary for Komorebi adapter state
-- [ ] PC Site/template execution task or handoff is specified for scoped Komorebi reconciliation
-- [ ] No Narada proper task mutates Windows Komorebi YASB or PC Site runtime directly
-- [ ] Source envelope env_296dd225-411f-462a-b336-079a9ed6db88 is routed
+- [x] Doctrine distinguishes operator-surface adapter state from host visibility or membership domain truth
+- [x] Windows virtual desktop membership is modeled as an external reconciliation boundary for Komorebi adapter state
+- [x] PC Site/template execution task or handoff is specified for scoped Komorebi reconciliation
+- [x] No Narada proper task mutates Windows Komorebi YASB or PC Site runtime directly
+- [x] Source envelope env_296dd225-411f-462a-b336-079a9ed6db88 is routed

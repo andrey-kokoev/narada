@@ -108,6 +108,30 @@ Likely authority loci:
 
 The current WSL Narada proper clone may document and propose this adapter path. It must not assume authority to mutate Windows Terminal, Komorebi, YASB, or AHK configuration.
 
+## Visibility-Domain Reconciliation
+
+Windows virtual desktop membership is an external visibility-domain truth. Komorebi state is adapter state. A Windows operator-surface adapter must not treat Komorebi's managed HWND set as authoritative until it has reconciled each HWND against Windows desktop membership.
+
+The earned reconciliation path from the `desktop-sunroom-2` diagnostic is:
+
+```text
+after Windows virtual desktop transition
+-> read current desktop identity
+-> inspect Komorebi-managed HWNDs for the active display/workspace
+-> query each HWND's Windows virtual desktop membership
+-> remove, float, or unmanage HWNDs outside the current desktop
+-> retile current-desktop windows
+-> assert no off-desktop HWNDs and no invalid rectangles remain
+```
+
+Evidence reference:
+
+```text
+C:\ProgramData\Narada\sites\pc\desktop-sunroom-2\logs\komorebi\desktop-switch-state-leak-20260429-132859.json
+```
+
+Narada proper records the doctrine and bounded handoff. The Windows PC Site or User Site owns any Komorebi/YASB/Windows mutation.
+
 ## Materializer Evidence Requirements
 
 A future materializer must produce durable evidence before it can claim success:
@@ -131,6 +155,7 @@ A future materializer must produce durable evidence before it can claim success:
 | Windows/WSL path translation drift | Store both Windows path and WSL path when crossing loci; test launch path explicitly. |
 | Host identity ambiguity | Record hostname, `COMPUTERNAME`, and declared Site authority locus separately. |
 | Komorebi title matching drift | Require stable `tabTitle` plus `suppressApplicationTitle`; read back visible title when possible. |
+| Komorebi cross-desktop HWND leak | Reconcile Komorebi-managed HWNDs against Windows virtual desktop membership before retile/focus recovery. |
 | YASB/AHK launch side effects | Treat as external adapter mutation; dry-run and evidence required. |
 | API transcript locality | Keep API thread/channel refs in `SessionBinding`; do not require native window identity. |
 | Accidental external mutation | Route adapter writes through CEIZ or equivalent governed execution boundary with explicit `--execute`. |

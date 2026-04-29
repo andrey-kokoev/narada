@@ -151,6 +151,8 @@ Use [`Contextual Capability Projection`](contextual-capability-projection.md) wh
 
 Use [`Operator Surface Action Posture`](operator-surface-action-posture.md) when deciding which surface tier a valid control belongs in. Diagnostic tools, repair/recovery actions, intrusive platform mutations, and hidden/internal primitives should remain available through their governed diagnostic or recovery posture, not appear in primary work-action rows by default.
 
+Use [`Visibility Domain Reconciliation`](visibility-domain-reconciliation.md) when an adapter has a managed object set but the host owns independent membership truth, such as Windows virtual desktop membership, display membership, browser profile membership, or process/session membership. Adapter state must be reconciled against that host truth before it is treated as current.
+
 ## Inspection Posture
 
 The first coherent command posture is read-only inspection.
