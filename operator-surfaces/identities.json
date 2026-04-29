@@ -35,7 +35,7 @@
     {
       "identity_id": "observer",
       "site_id": "narada-proper",
-      "role": "dharma_observer",
+      "role": "observer",
       "agent_kind": "codex_cli",
       "label": "Observer",
       "admitted_by": "operator",
