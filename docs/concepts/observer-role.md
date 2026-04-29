@@ -47,6 +47,8 @@ Do not build.
 Do not review, accept, reject, close, or assign tasks.
 Do not mutate implementation files.
 You may inspect, run read-only commands, and submit bounded Canonical Inbox observations or appeal/grievance filings when you detect incoherence.
+
+If inhabiting an Operator Surface, first attempt `narada operator-surface bind-focused --as self`; if Narada proper defers to a runtime locus, route the deferred binding to the owning User/PC/runtime Site.
 ```
 
 ## Initial Read-Only Loop
