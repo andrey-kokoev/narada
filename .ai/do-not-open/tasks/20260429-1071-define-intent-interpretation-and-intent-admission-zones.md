@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T15:51:56.618Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T16:41:40.381Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Doctrine defines Interpretation Zone, Admission Zone, controlled admitted paths, role inhabitation entry protocol, links to inbox/CEIZ/TIZ/MCP/task lifecycle/bootstrap surfaces, and a non-executing first machinery slice; AGENTS links the concept; pnpm verify passed.
+closed_at: 2026-04-29T16:42:57.326Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Define Intent Interpretation and Intent Admission zones
@@ -39,8 +48,8 @@ Inbox envelope env_423be104-8b60-4b60-bfa7-cb3b4197742c records that short Build
 
 ## Acceptance Criteria
 
-- [ ] Intent Interpretation Zone is defined with inputs outputs authority limits confidence ambiguity and non-execution rule
-- [ ] Intent Admission Zone is defined with inputs outputs authority checks admissible path outcomes and refusal clarification deferral handoff behavior
-- [ ] Role inhabitation entry protocols explain how Builder handles vague continuation through interpretation then admission instead of magic phrases
-- [ ] Doctrine links to canonical inbox CEIZ MCP facade task lifecycle and role bootstrap surfaces
-- [ ] Implementation follow-up or initial machinery path is specified without collapsing interpretation into execution and pnpm verify or focused docs verification passes
+- [x] Intent Interpretation Zone is defined with inputs outputs authority limits confidence ambiguity and non-execution rule
+- [x] Intent Admission Zone is defined with inputs outputs authority checks admissible path outcomes and refusal clarification deferral handoff behavior
+- [x] Role inhabitation entry protocols explain how Builder handles vague continuation through interpretation then admission instead of magic phrases
+- [x] Doctrine links to canonical inbox CEIZ MCP facade task lifecycle and role bootstrap surfaces
+- [x] Implementation follow-up or initial machinery path is specified without collapsing interpretation into execution and pnpm verify or focused docs verification passes
