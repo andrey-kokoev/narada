@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T01:03:23.451Z
+criteria_proof_verification:
+  state: unbound
+  rationale: MCP client configuration and shell exposure are environment-specific integration surfaces; verification used direct tools/list probing through narada-mcp and the generated Narada proper config path.
+closed_at: 2026-04-29T01:03:28.483Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Enable Narada MCP facade as installed agent tool surface
@@ -36,8 +45,8 @@ Make the implemented Narada MCP facade actually available to fresh agent session
 
 ## Acceptance Criteria
 
-- [ ] narada-mcp is shell-exposed like narada or the canonical repo-local launch path is enforced by generated config
-- [ ] A concrete MCP client configuration snippet or generated config path exists for this environment
-- [ ] A fresh agent can discover narada_inbox_submit_observation through MCP tool discovery rather than shell probing
-- [ ] The configured MCP surface preserves facade-only authority and inert inbox submission semantics
-- [ ] Verification proves tools/list returns inbox tools through the configured path
+- [x] narada-mcp is shell-exposed like narada or the canonical repo-local launch path is enforced by generated config
+- [x] A concrete MCP client configuration snippet or generated config path exists for this environment
+- [x] A fresh agent can discover narada_inbox_submit_observation through MCP tool discovery rather than shell probing
+- [x] The configured MCP surface preserves facade-only authority and inert inbox submission semantics
+- [x] Verification proves tools/list returns inbox tools through the configured path

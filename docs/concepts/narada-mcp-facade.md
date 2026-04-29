@@ -94,6 +94,19 @@ If the client cannot resolve `narada-mcp`, use the repo-local binary path or ins
 }
 ```
 
+In this repository, `pnpm run narada:install-shim` installs both shell shims:
+
+```bash
+narada
+narada-mcp
+```
+
+The local Narada proper MCP client config artifact is:
+
+```text
+.ai/mcp/narada-proper.mcp.json
+```
+
 The expected read-only proof after registration is:
 
 1. Client lists MCP tools.

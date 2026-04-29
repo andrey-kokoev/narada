@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "narada-proper": {
+      "command": "narada-mcp",
+      "args": [
+        "--site-root",
+        "/home/andrey/src/narada"
+      ]
+    }
+  }
+}
