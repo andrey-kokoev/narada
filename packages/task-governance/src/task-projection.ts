@@ -221,9 +221,17 @@ export async function inspectTaskEvidenceWithProjection(
   const status = lifecycle.status;
   const terminalStatuses: Array<string | undefined> = ['closed', 'confirmed'];
   const hasEvidence = hasReport || hasExecutionNotes;
+  const hasLegacyMaterialEvidence = hasEvidence || hasVerification;
+  const isPreInvariantLegacyTerminal =
+    num !== null &&
+    num < 501 &&
+    terminalStatuses.includes(status) &&
+    criteria.allChecked !== false &&
+    hasLegacyMaterialEvidence &&
+    !hasDerivatives;
 
   if (terminalStatuses.includes(status)) {
-    if (!hasEvidence) {
+    if (!hasEvidence && !isPreInvariantLegacyTerminal) {
       warnings.push(
         'Task is closed/confirmed but lacks execution evidence (report or notes)',
       );
@@ -235,7 +243,7 @@ export async function inspectTaskEvidenceWithProjection(
       );
       violations.push('terminal_with_unchecked_criteria');
     }
-    if (!hasVerification) {
+    if (!hasVerification && !isPreInvariantLegacyTerminal) {
       warnings.push('Task is closed/confirmed but lacks verification notes');
       violations.push('terminal_without_verification');
     }
@@ -243,13 +251,13 @@ export async function inspectTaskEvidenceWithProjection(
       warnings.push('Task is closed/confirmed but derivative task-status files exist');
       violations.push('terminal_with_derivative_files');
     }
-    if (!governedProvenance) {
+    if (!governedProvenance && !isPreInvariantLegacyTerminal) {
       warnings.push(
         'Task is terminal but lacks governed closure provenance; raw file mutation detected',
       );
       violations.push('terminal_without_governed_provenance');
     }
-    if (!hasReview && !hasClosure && !(hasExecutionNotes && hasVerification)) {
+    if (!isPreInvariantLegacyTerminal && !hasReview && !hasClosure && !(hasExecutionNotes && hasVerification)) {
       warnings.push(
         'Task is closed/confirmed without review or closure decision; direct closure requires execution notes and verification',
       );

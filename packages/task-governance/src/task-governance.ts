@@ -743,8 +743,8 @@ export async function inspectTaskEvidence(
   // Prefer SQLite status when available
   let status: string | undefined;
   const num = Number.isFinite(Number(taskNumber)) ? Number(taskNumber) : null;
+  const lifecycle = store && num !== null ? store.getLifecycleByNumber(num) : null;
   if (store && num !== null) {
-    const lifecycle = store.getLifecycleByNumber(num);
     status = lifecycle?.status ?? (frontMatter.status as string | undefined);
   } else {
     status = frontMatter.status as string | undefined;
@@ -754,21 +754,43 @@ export async function inspectTaskEvidence(
   const hasExecutionNotes = hasMaterialSection(body, 'Execution Notes');
   const hasMarkdownVerification = hasMaterialSection(body, 'Verification');
   const reports = await listReportsForTask(cwd, taskFile.taskId);
+  const sqliteReports = store ? store.listReports(taskFile.taskId) : [];
   const hasReport = reports.length > 0;
-  const hasReportVerification = reports.some((report) => report.verification.length > 0);
+  const hasSqliteReport = sqliteReports.length > 0;
+  const hasReportVerification =
+    reports.some((report) => report.verification.length > 0) ||
+    sqliteReports.some((report) => {
+      try {
+        return JSON.parse(report.verification_json ?? '[]').length > 0;
+      } catch {
+        return false;
+      }
+    });
   const hasGovernedVerificationRuns = store && taskFile?.taskId
     ? store.hasVerificationRunsForTask(taskFile.taskId)
     : false;
   const hasVerification = hasMarkdownVerification || hasGovernedVerificationRuns || hasReportVerification;
 
   const reviews = await listReviewsForTask(cwd, taskFile.taskId);
-  const hasReview = reviews.length > 0;
-  const hasAcceptedReview = reviews.some((r) => r.verdict === 'accepted' || r.verdict === 'accepted_with_notes');
+  const sqliteReviews = store ? store.listReviews(taskFile.taskId) : [];
+  const hasReview = reviews.length > 0 || sqliteReviews.length > 0;
+  const hasAcceptedReview =
+    reviews.some((r) => r.verdict === 'accepted' || r.verdict === 'accepted_with_notes') ||
+    sqliteReviews.some((r) => r.verdict === 'accepted');
 
   const closures = num !== null ? await listClosureDecisionsForTask(cwd, num) : [];
-  const hasClosure = closures.length > 0;
+  const hasClosure = closures.length > 0 || lifecycle?.closed_at != null;
   const hasDerivatives = num !== null ? await hasDerivativeFiles(cwd, num) : false;
-  const hasGovernedProvenanceValue = hasGovernedProvenance(frontMatter, hasReview, hasClosure, status);
+  const mergedFrontMatter = {
+    ...frontMatter,
+    status,
+    closed_by: lifecycle?.closed_by ?? frontMatter.closed_by,
+    closed_at: lifecycle?.closed_at ?? frontMatter.closed_at,
+    reopened_by: lifecycle?.reopened_by ?? frontMatter.reopened_by,
+    reopened_at: lifecycle?.reopened_at ?? frontMatter.reopened_at,
+    governed_by: lifecycle?.governed_by ?? frontMatter.governed_by,
+  };
+  const hasGovernedProvenanceValue = hasGovernedProvenance(mergedFrontMatter, hasReview, hasClosure, status);
 
   // Determine active assignment intent
   let activeAssignmentIntent: AssignmentIntent | null = null;
@@ -788,11 +810,19 @@ export async function inspectTaskEvidence(
 
   const terminalStatuses: Array<string | undefined> = ['closed', 'confirmed'];
 
-  const hasEvidence = hasReport || hasExecutionNotes;
-  const governedProvenance = hasGovernedProvenance(frontMatter, hasReview, hasClosure, status);
+  const hasEvidence = hasReport || hasSqliteReport || hasExecutionNotes;
+  const governedProvenance = hasGovernedProvenanceValue;
+  const hasLegacyMaterialEvidence = hasEvidence || hasVerification;
+  const isPreInvariantLegacyTerminal =
+    num !== null &&
+    num < 501 &&
+    terminalStatuses.includes(status) &&
+    criteria.allChecked !== false &&
+    hasLegacyMaterialEvidence &&
+    !hasDerivatives;
 
   if (terminalStatuses.includes(status)) {
-    if (!hasEvidence) {
+    if (!hasEvidence && !isPreInvariantLegacyTerminal) {
       warnings.push('Task is closed/confirmed but lacks execution evidence (report or notes)');
       violations.push('terminal_without_execution_notes');
     }
@@ -800,7 +830,7 @@ export async function inspectTaskEvidence(
       warnings.push(`Task is closed/confirmed but ${criteria.unchecked} acceptance criteria remain unchecked`);
       violations.push('terminal_with_unchecked_criteria');
     }
-    if (!hasVerification) {
+    if (!hasVerification && !isPreInvariantLegacyTerminal) {
       warnings.push('Task is closed/confirmed but lacks verification notes');
       violations.push('terminal_without_verification');
     }
@@ -808,11 +838,11 @@ export async function inspectTaskEvidence(
       warnings.push('Task is closed/confirmed but derivative task-status files exist');
       violations.push('terminal_with_derivative_files');
     }
-    if (!governedProvenance) {
+    if (!governedProvenance && !isPreInvariantLegacyTerminal) {
       warnings.push('Task is terminal but lacks governed closure provenance; raw file mutation detected');
       violations.push('terminal_without_governed_provenance');
     }
-    if (!hasReview && !hasClosure && !(hasExecutionNotes && hasVerification)) {
+    if (!isPreInvariantLegacyTerminal && !hasReview && !hasClosure && !(hasExecutionNotes && hasVerification)) {
       warnings.push('Task is closed/confirmed without review or closure decision; direct closure requires execution notes and verification');
     }
     verdict = warnings.length === 0 ? 'complete' : 'needs_closure';
@@ -861,7 +891,7 @@ export async function inspectTaskEvidence(
     unchecked_count: criteria.unchecked,
     has_execution_notes: hasExecutionNotes,
     has_verification: hasVerification,
-    has_report: hasReport,
+    has_report: hasReport || hasSqliteReport,
     has_review: hasReview,
     has_closure: hasClosure,
     has_governed_provenance: governedProvenance,

@@ -993,6 +993,76 @@ describe('checkDependencies', () => {
     expect(result.details).toEqual([]);
   });
 
+  it('allows pre-invariant closed dependencies with checked criteria and material evidence but no governed provenance', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-400-legacy-dep.md'),
+      '---\nstatus: closed\n---\n\n# Task 400: Legacy Dep\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Execution Notes\n\nDelivered before governed closure provenance was required.\n\n## Verification\n\nVerified before governed closure provenance was required.\n',
+    );
+
+    const result = await checkDependencies(tempDir, [400]);
+    expect(result.blockedBy).toEqual([]);
+    expect(result.details).toEqual([]);
+  });
+
+  it('allows pre-invariant closed dependencies with verification-only evidence', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-416-legacy-verification-only.md'),
+      '---\nstatus: closed\n---\n\n# Task 416: Legacy Verification Only\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Verification\n\nVerified before execution notes were required.\n',
+    );
+
+    const result = await checkDependencies(tempDir, [416]);
+    expect(result.blockedBy).toEqual([]);
+    expect(result.details).toEqual([]);
+  });
+
+  it('still blocks modern closed dependencies without governed provenance', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-modern-dep.md'),
+      '---\nstatus: closed\n---\n\n# Task 998: Modern Dep\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Execution Notes\n\nDone.\n\n## Verification\n\nVerified.\n',
+    );
+
+    const result = await checkDependencies(tempDir, [998]);
+    expect(result.blockedBy).toContain('20260420-998-modern-dep');
+    expect(result.details[0]!.reason).toContain('not complete by evidence');
+  });
+
+  it('allows modern closed dependencies when SQLite carries governed closure and report evidence', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-modern-sqlite-dep.md'),
+      '---\nstatus: opened\n---\n\n# Task 998: Modern SQLite Dep\n\n## Acceptance Criteria\n\n- [x] Done\n',
+    );
+
+    const store = openTaskLifecycleStore(tempDir);
+    store.upsertLifecycle({
+      task_id: '20260420-998-modern-sqlite-dep',
+      task_number: 998,
+      status: 'closed',
+      governed_by: 'task_close:a2',
+      closed_at: '2026-04-20T00:00:00Z',
+      closed_by: 'a2',
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      created_at: '2026-04-20T00:00:00Z',
+      updated_at: '2026-04-20T00:00:00Z',
+    });
+    store.insertReport({
+      report_id: 'wrr_998_builder',
+      task_id: '20260420-998-modern-sqlite-dep',
+      agent_id: 'builder',
+      summary: 'Done.',
+      changed_files_json: '[]',
+      verification_json: '[{"command":"pnpm verify","result":"passed"}]',
+      submitted_at: '2026-04-20T00:00:00Z',
+    });
+
+    const result = await checkDependencies(tempDir, [998], store);
+    expect(result.blockedBy).toEqual([]);
+    expect(result.details).toEqual([]);
+
+    store.db.close();
+  });
+
   it('blocks dependencies that are not terminal by SQLite status', async () => {
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-dep.md'),
