@@ -153,6 +153,8 @@ Use [`Operator Surface Action Posture`](operator-surface-action-posture.md) when
 
 Use [`Visibility Domain Reconciliation`](visibility-domain-reconciliation.md) when an adapter has a managed object set but the host owns independent membership truth, such as Windows virtual desktop membership, display membership, browser profile membership, or process/session membership. Adapter state must be reconciled against that host truth before it is treated as current.
 
+Use [`Runtime Identity Binding`](runtime-identity-binding.md) when a live runtime object must be related to a durable Site, role, surface, participant, or workflow identity. Handles such as HWNDs, process ids, session ids, tab ids, MCP client ids, or API thread ids are volatile substrate facts; titles, profiles, process metadata, and transcript labels are carrier evidence, not naming authority.
+
 ## Inspection Posture
 
 The first coherent command posture is read-only inspection.

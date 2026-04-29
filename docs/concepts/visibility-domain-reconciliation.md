@@ -74,3 +74,16 @@ Site authority
 ```
 
 The adapter may help find or recover work. The Site's governed crossings still admit consequences.
+
+## Relationship To Runtime Identity Binding
+
+[`Runtime Identity Binding`](runtime-identity-binding.md) answers which durable identity a live runtime object currently represents. Visibility-domain reconciliation checks whether the host still admits that runtime object as visible, active, or reachable in the current domain.
+
+For example, a Windows HWND may have a valid binding to `narada-andrey.architect`, but if Windows virtual desktop membership says the HWND belongs to another desktop, the current Operator Surface projection must not tile or label it as active in this desktop.
+
+```text
+runtime identity binding says: this handle represents identity X
+visibility-domain reconciliation says: this handle is currently admissible here
+```
+
+Both checks are required before a projection consumer treats live adapter state as current.

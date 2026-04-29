@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T20:16:48.391Z
+criteria_proved_by: architect
+criteria_proved_at: 2026-04-29T20:18:47.753Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Runtime identity binding doctrine defines the primitive, captures the Windows HWND fixture, preserves User Site versus PC Site authority, requires explicit no_runtime_binding for unknown objects, and links the concept from Operator Surface, Visibility Domain Reconciliation, and Site Governance Coordinates. Verification passed with task-file guard and targeted documentation search.
+closed_at: 2026-04-29T20:18:53.344Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Define runtime identity binding primitive
@@ -39,8 +48,8 @@ Inbox envelope env_3acde992-326e-4000-9988-0d495adcdca1 proposes a runtime ident
 
 ## Acceptance Criteria
 
-- [ ] Doctrine defines runtime identity binding as distinct from durable identity registry volatile substrate handle and projection consumer
-- [ ] Windows HWND to identity_name to label case is captured without making titles or process metadata naming authority
-- [ ] Unknown or unbound runtime objects remain explicitly unlabeled or no_runtime_binding
-- [ ] Authority ownership is explicit between User Site identity labels and PC Site runtime handles
-- [ ] Source envelope env_3acde992-326e-4000-9988-0d495adcdca1 is routed
+- [x] Doctrine defines runtime identity binding as distinct from durable identity registry volatile substrate handle and projection consumer
+- [x] Windows HWND to identity_name to label case is captured without making titles or process metadata naming authority
+- [x] Unknown or unbound runtime objects remain explicitly unlabeled or no_runtime_binding
+- [x] Authority ownership is explicit between User Site identity labels and PC Site runtime handles
+- [x] Source envelope env_3acde992-326e-4000-9988-0d495adcdca1 is routed

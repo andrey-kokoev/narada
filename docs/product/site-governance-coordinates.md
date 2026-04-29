@@ -407,3 +407,5 @@ For the first concrete spatial adapter posture on Windows, see [`windows-operato
 `state_projections` are optional read models for current runtime posture. They let a Site expose current adapter/process/display/session state without making private logs or scripts authoritative.
 
 Projection updates should happen through declared transition protocols with source authority, admissibility checks, evidence, reconciliation responsibility, and escalation rules. For the full grammar, see [`site-state-projections.md`](site-state-projections.md).
+
+Runtime identity bindings are one common projection family. They bind volatile substrate handles such as HWNDs, process ids, session ids, tab ids, MCP client ids, or API thread ids to durable Site identities only after the owning runtime locus observes the handle and the governing identity authority recognizes the target identity. Titles, profile names, process metadata, and transcript labels are carrier evidence, not naming authority. See [`Runtime Identity Binding`](../concepts/runtime-identity-binding.md).
