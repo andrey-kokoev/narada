@@ -60,6 +60,21 @@ Static config declares the topology. Dynamic freshness, dirty working tree state
 
 Read plurality is not write plurality. A stale clone can be useful for reading docs and unsafe for task allocation.
 
+## Concurrent Architect And Builder Work
+
+Architect governance work and Builder implementation work may be concurrent when their mutation substrates are partitioned.
+
+The invariant is:
+
+```text
+Builder source dirtiness is not a blocker for Architect governance mutation.
+Shared authority substrates are blockers unless the crossing command can isolate the intended evidence.
+```
+
+Architect may create, amend, route, hand off, and publish governance artifacts while Builder has dirty source files, provided the publication path stages only declared governance/evidence loci. `narada publication prepare --governance-only` exists for that case: it stages `.ai` task, inbox, mutation-evidence, handoff, review, decision, chapter, and task-contract surfaces and refuses non-governance source includes.
+
+Lifecycle snapshots remain whole-substrate projections. Under concurrent work, mutation evidence files carry the role/principal/task-specific truth; the snapshot is a read model that should be regenerated at the end of the admitted governance mutation and reviewed before publication. If Builder and Architect both need to mutate the same task lifecycle row or same exported envelope, they must serialize through the sanctioned command instead of relying on selective Git staging.
+
 ## Narada Consequences
 
 - `narada doctor` should be able to report embodiment, authority locus, runtime origin, freshness, and mutation safety.

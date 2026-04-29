@@ -100,4 +100,46 @@ describe('publication RPIZ surface', () => {
     const listed = await publicationListCommand({ status: 'pushed', cwd: repo, format: 'json' });
     expect((listed.result as { count: number }).count).toBe(1);
   });
+
+  it('prepares governance-only bundles without staging dirty source work', async () => {
+    const base = git(repo, ['rev-parse', 'HEAD']);
+    mkdirSync(join(repo, '.ai', 'do-not-open', 'tasks'), { recursive: true });
+    writeFileSync(join(repo, '.ai', 'do-not-open', 'tasks', '20260429-999-governance.md'), '# Governance task\n');
+    writeFileSync(join(repo, 'builder-source.ts'), 'export const dirty = true;\n');
+
+    const result = await publicationPrepareCommand({
+      message: 'Publish governance only',
+      by: 'architect',
+      governanceOnly: true,
+      baseRef: base,
+      cwd: repo,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const publication = (result.result as { publication: Record<string, unknown> }).publication;
+    const store = openTaskLifecycleStore(repo);
+    const row = store.getRepoPublication(String(publication.publication_id));
+    store.db.close();
+    const confirmation = JSON.parse(row?.confirmation_json ?? '{}') as { staged_files: string[]; governance_only: boolean };
+    expect(confirmation.governance_only).toBe(true);
+    expect(confirmation.staged_files).toContain('.ai/do-not-open/tasks/20260429-999-governance.md');
+    expect(confirmation.staged_files).not.toContain('builder-source.ts');
+  });
+
+  it('refuses non-governance include paths when governance-only is set', async () => {
+    writeFileSync(join(repo, 'builder-source.ts'), 'export const dirty = true;\n');
+
+    const result = await publicationPrepareCommand({
+      message: 'Publish governance only',
+      by: 'architect',
+      governanceOnly: true,
+      include: ['builder-source.ts'],
+      cwd: repo,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect((result.result as { error: string }).error).toContain('refuses non-governance include');
+  });
 });

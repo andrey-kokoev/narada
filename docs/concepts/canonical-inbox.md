@@ -297,6 +297,7 @@ Canonical Inbox first use should not require ad hoc repair work.
 | Windows/WSL shell uses the wrong `narada`, `node`, or package shim | Run `narada inbox doctor` and inspect `Node`, `CLI entrypoint`, `Platform`, and `Runtime posture` before submitting or publishing envelopes. |
 | Fresh checkout missing dependencies, build output, CLI shim, or native SQLite binding | Run `narada doctor --bootstrap --format json` and follow its `repair_plan`. |
 | Git/worktree uncertainty before publishing an inbox-backed chapter | Run `narada chapter preflight <range> --expect-commit --expect-push`. |
+| Architect governance work while Builder source files are dirty | Use `narada publication prepare --governance-only` or manually stage only declared governance/evidence paths. Builder source dirtiness is not itself a blocker; shared task lifecycle rows or exported envelopes must still be serialized through sanctioned commands. |
 | Unsure whether inbox artifacts are visible to another embodiment | Run `narada inbox doctor`; inspect `publication.uncommitted_envelope_artifacts_count`, `publication.unpushed_commit_count`, and `publication.next_steps`. |
 | Inbox entry is informative but not executable | Use `inbox triage <id> --action archive --by <principal>` after durable guidance or residuals are recorded. |
 | Inbox entry targets a zone without executable promotion | Use `inbox pending <id> --to <kind>:<ref> --by <principal>`; do not report it as enacted. |

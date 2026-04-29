@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T15:58:12.896Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T16:23:36.110Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Focused publication tests simulate dirty Builder source while governance-only preparation stages only .ai governance paths and refuses source includes; docs define invariant, task-target routing posture, snapshot/evidence partitioning, and Architect handoff verification; full pnpm verify passed.
+closed_at: 2026-04-29T16:23:54.039Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Keep Architect governance live during Builder work
@@ -39,8 +48,8 @@ This task captures the repeated ergonomics failure from the 2026-04-29 Architect
 
 ## Acceptance Criteria
 
-- [ ] Architect can create specify and route inbox derived tasks while Builder has dirty implementation files
-- [ ] Governance artifacts can be committed without accidentally including Builder lifecycle source or implementation changes
-- [ ] Inbox routing supports task-number targets directly or records a bounded explicit deferral if direct task targets are not implemented yet
-- [ ] Snapshot and mutation evidence behavior for concurrent Architect and Builder roles is defined narrowed or partitioned to avoid mixed-role commits
-- [ ] Workflow is documented as Architect handoff posture and verification covers stale-dist governance plus concurrent dirty-work scenario
+- [x] Architect can create specify and route inbox derived tasks while Builder has dirty implementation files
+- [x] Governance artifacts can be committed without accidentally including Builder lifecycle source or implementation changes
+- [x] Inbox routing supports task-number targets directly or records a bounded explicit deferral if direct task targets are not implemented yet
+- [x] Snapshot and mutation evidence behavior for concurrent Architect and Builder roles is defined narrowed or partitioned to avoid mixed-role commits
+- [x] Workflow is documented as Architect handoff posture and verification covers stale-dist governance plus concurrent dirty-work scenario

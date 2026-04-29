@@ -24,6 +24,7 @@ export function registerPublicationCommands(program: Command): void {
     .requiredOption('--by <principal>', 'Principal requesting the publication')
     .option('--task <number>', 'Task number linkage')
     .option('--include <path>', 'Path to include in the handoff (repeatable)', collectValues, [])
+    .option('--governance-only', 'Only stage declared Narada governance/evidence paths; refuse source includes', false)
     .option('--remote <name>', 'Remote name', 'origin')
     .option('--base-ref <ref>', 'Base ref for bundle range')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
@@ -37,6 +38,7 @@ export function registerPublicationCommands(program: Command): void {
         by: opts.by as string | undefined,
         taskNumber: opts.task ? Number(opts.task) : undefined,
         include: opts.include as string[] | undefined,
+        governanceOnly: opts.governanceOnly as boolean | undefined,
         remote: opts.remote as string | undefined,
         baseRef: opts.baseRef as string | undefined,
         cwd: opts.cwd as string | undefined,

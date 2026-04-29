@@ -17,6 +17,7 @@ export interface PublicationPrepareOptions {
   by?: string;
   taskNumber?: number;
   include?: string[];
+  governanceOnly?: boolean;
   remote?: string;
   baseRef?: string;
   cwd?: string;
@@ -90,6 +91,45 @@ function normalizeIncludes(repoRoot: string, include: string[] | undefined): str
   });
 }
 
+const GOVERNANCE_PUBLICATION_PATHS = [
+  '.ai/chapters',
+  '.ai/decisions',
+  '.ai/do-not-open/tasks',
+  '.ai/handoffs',
+  '.ai/inbox-envelopes',
+  '.ai/mutation-evidence',
+  '.ai/reviews',
+  '.ai/task-contracts',
+  '.ai/task-lifecycle-snapshot.json',
+];
+
+function isGovernancePublicationPath(path: string): boolean {
+  const normalized = path.replace(/\\/g, '/').replace(/^\.\//, '');
+  return GOVERNANCE_PUBLICATION_PATHS.some((allowed) => {
+    const clean = allowed.replace(/^\.\//, '');
+    return normalized === clean || normalized.startsWith(`${clean}/`);
+  });
+}
+
+function normalizePublicationIncludes(repoRoot: string, options: PublicationPrepareOptions): string[] {
+  const requested = options.governanceOnly && (!options.include || options.include.length === 0)
+    ? GOVERNANCE_PUBLICATION_PATHS
+    : options.include;
+  const includes = normalizeIncludes(repoRoot, requested);
+  if (options.governanceOnly) {
+    const forbidden = includes.filter((include) => include !== '.' && !isGovernancePublicationPath(include));
+    if (forbidden.length > 0) {
+      throw new Error(`--governance-only refuses non-governance include(s): ${forbidden.join(', ')}`);
+    }
+    const existing = includes.filter((include) => existsSync(resolve(repoRoot, include)));
+    if (existing.length === 0) {
+      throw new Error('--governance-only found no existing governance paths to stage');
+    }
+    return existing;
+  }
+  return includes;
+}
+
 function publicPublication(row: RepoPublicationRow): Record<string, unknown> {
   return {
     publication_id: row.publication_id,
@@ -149,7 +189,7 @@ export async function publicationPrepareCommand(options: PublicationPrepareOptio
     tempGitDir = mkdtempSync(join(tmpdir(), 'narada-publication-git-'));
     cpSync(realGitDir, tempGitDir, { recursive: true });
 
-    const includes = normalizeIncludes(repoRoot, options.include);
+    const includes = normalizePublicationIncludes(repoRoot, options);
     runGit(repoRoot, ['add', ...includes], tempGitDir);
     const staged = runGit(repoRoot, ['diff', '--cached', '--name-only'], tempGitDir);
     if (!staged) throw new Error('No staged changes for publication handoff');
@@ -184,6 +224,8 @@ export async function publicationPrepareCommand(options: PublicationPrepareOptio
         git_metadata_writable: gitDirWritable(repoRoot),
         staged_files: staged.split(/\r?\n/).filter(Boolean),
         temp_git_dir: tempGitDir,
+        governance_only: Boolean(options.governanceOnly),
+        governance_include_paths: options.governanceOnly ? includes : [],
       }),
       failure_reason: null,
       updated_at: now,
