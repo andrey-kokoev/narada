@@ -25,5 +25,17 @@
     "related_upstream_envelope": "env_99dad4bf-1caa-4364-809e-257977fccc4f",
     "requested_handling": "Attach as concrete evidence to the operator-surface binding machinery work, with emphasis on bind-self and cross-embodiment routing."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1091",
+    "promoted_at": "2026-04-29T21:12:46.902Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1091,
+      "task_id": "20260429-1091-add-operator-surface-identity-binding-commands"
+    }
+  }
 }
