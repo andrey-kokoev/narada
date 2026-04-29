@@ -5,7 +5,7 @@
  * They are operators: explicit state transitions on static task-governance artifacts.
  */
 
-import { readFile, writeFile, readdir, rename, open, unlink, stat } from 'node:fs/promises';
+import { readFile, writeFile, readdir, rename, open, unlink, stat, mkdir } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import type { TaskLifecycleStore, AgentRosterRow } from './task-lifecycle-store.js';
 import { openTaskLifecycleStore } from './task-lifecycle-store.js';
@@ -946,27 +946,21 @@ function buildRosterFromRows(rows: AgentRosterRow[]): AgentRoster {
 }
 
 export async function loadRoster(cwd: string): Promise<AgentRoster> {
-  // Prefer SQLite authority
-  let store;
-  try {
-    store = openTaskLifecycleStore(cwd);
-  } catch {
-    store = null;
-  }
+  await mkdir(join(resolveRepoPath(cwd), '.ai'), { recursive: true });
 
-  if (store) {
+  try {
+    const store = openTaskLifecycleStore(cwd);
     try {
-      const rows = store.getRoster();
-      if (rows.length > 0) {
-        return buildRosterFromRows(rows);
-      }
-      // SQLite exists but is empty — fall through to JSON fallback
+      return buildRosterFromRows(store.getRoster());
     } finally {
       try { store.db.close(); } catch { /* ignore */ }
     }
+  } catch (err) {
+    throw new Error(`Failed to load roster from SQLite authority: ${err instanceof Error ? err.message : String(err)}`);
   }
+}
 
-  // Fallback: read JSON projection and backfill to SQLite
+export async function importRosterJsonProjection(cwd: string): Promise<AgentRoster> {
   const jsonPath = join(resolveRepoPath(cwd), ROSTER_JSON_PATH);
   try {
     const raw = await readFile(jsonPath, 'utf8');
@@ -974,19 +968,14 @@ export async function loadRoster(cwd: string): Promise<AgentRoster> {
     if (!roster.agents || !Array.isArray(roster.agents)) {
       throw new Error('Invalid roster JSON shape');
     }
-    // Backfill to SQLite if available
-    try {
-      await saveRoster(cwd, roster);
-    } catch {
-      // Ignore backfill failures — JSON is still valid
-    }
+    await saveRoster(cwd, roster);
     return roster;
   } catch (err) {
     const code = (err as { code?: string }).code;
     if (code === 'ENOENT') {
-      throw new Error(`Roster not found in SQLite or JSON (${ROSTER_JSON_PATH})`);
+      throw new Error(`Roster JSON projection not found (${ROSTER_JSON_PATH})`);
     }
-    throw new Error(`Failed to load roster: ${err instanceof Error ? err.message : String(err)}`);
+    throw new Error(`Failed to import roster JSON projection: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -996,6 +985,7 @@ export async function saveRoster(cwd: string, roster: AgentRoster): Promise<void
 
   // Write SQLite authority first
   try {
+    await mkdir(join(resolveRepoPath(cwd), '.ai'), { recursive: true });
     const store = openTaskLifecycleStore(cwd);
     try {
       for (const agent of roster.agents) {
@@ -1010,15 +1000,6 @@ export async function saveRoster(cwd: string, roster: AgentRoster): Promise<void
     const msg = error instanceof Error ? error.message : String(error);
     throw new Error(`Failed to save roster to SQLite authority: ${msg}`);
   }
-
-  // Write JSON projection for compatibility
-  try {
-    const jsonPath = join(resolveRepoPath(cwd), ROSTER_JSON_PATH);
-    await atomicWriteFile(jsonPath, JSON.stringify(roster, null, 2));
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to write roster JSON projection: ${msg}`);
-  }
 }
 
 // ── Roster mutation lock ──
@@ -1029,6 +1010,7 @@ const LOCK_RETRY_DELAY_MS = 25;
 
 async function acquireRosterLock(cwd: string): Promise<string> {
   const lockPath = join(resolveRepoPath(cwd), ROSTER_LOCK_PATH);
+  await mkdir(dirname(lockPath), { recursive: true });
 
   for (let attempt = 0; attempt < LOCK_MAX_RETRIES; attempt++) {
     try {

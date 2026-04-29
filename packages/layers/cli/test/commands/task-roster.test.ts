@@ -178,12 +178,14 @@ describe('task roster operator', () => {
       expect(human.result).toContain('ownership=primary');
     });
 
-    it('fails with clear error when roster is missing', async () => {
+    it('treats empty SQLite roster as a valid empty roster', async () => {
       const emptyDir = mkdtempSync(join(tmpdir(), 'narada-empty-'));
       try {
-        const result = await taskRosterShowCommand({ cwd: emptyDir, format: 'human' });
-        expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
-        expect((result.result as { error: string }).error).toMatch(/Failed to load roster/);
+        const result = await taskRosterShowCommand({ cwd: emptyDir, format: 'json' });
+        expect(result.exitCode).toBe(ExitCode.SUCCESS);
+        expect(result.result).toMatchObject({
+          roster: { agents: [] },
+        });
       } finally {
         rmSync(emptyDir, { recursive: true, force: true });
       }
@@ -702,6 +704,34 @@ describe('task roster operator', () => {
         status: 'idle',
         task: null,
       });
+    });
+
+    it('bootstraps the first SQLite roster row without roster.json', async () => {
+      const emptyDir = mkdtempSync(join(tmpdir(), 'narada-roster-bootstrap-'));
+      try {
+        mkdirSync(join(emptyDir, '.ai'), { recursive: true });
+
+        const result = await taskRosterAddCommand({
+          agent: 'first-agent',
+          role: 'builder',
+          cwd: emptyDir,
+          format: 'json',
+        });
+
+        expect(result.exitCode).toBe(ExitCode.SUCCESS);
+        expect(result.result).toMatchObject({
+          status: 'ok',
+          agent: 'first-agent',
+          agent_status: 'idle',
+          role: 'builder',
+        });
+        expect(() => readFileSync(join(emptyDir, '.ai', 'agents', 'roster.json'), 'utf8')).toThrow();
+        const roster = await loadRoster(emptyDir);
+        expect(roster.agents).toHaveLength(1);
+        expect(roster.agents[0]).toMatchObject({ agent_id: 'first-agent', role: 'builder' });
+      } finally {
+        rmSync(emptyDir, { recursive: true, force: true });
+      }
     });
   });
 

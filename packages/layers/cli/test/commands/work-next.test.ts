@@ -16,27 +16,26 @@ import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 function setupRepo(tempDir: string): void {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments'), { recursive: true });
-  writeFileSync(
-    join(tempDir, '.ai', 'agents', 'roster.json'),
-    JSON.stringify({
-      version: 2,
-      schema: 'https://narada.dev/schemas/agent-roster/v2',
+  seedRoster(tempDir, 'idle', null);
+}
+
+function seedRoster(tempDir: string, status: 'idle' | 'working', task: number | null): void {
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    store.upsertRosterEntry({
+      agent_id: 'architect',
+      role: 'architect',
+      capabilities_json: JSON.stringify(['claim', 'execute', 'review']),
+      first_seen_at: '2026-01-01T00:00:00Z',
+      last_active_at: '2026-01-01T00:00:00Z',
+      status,
+      task_number: task,
+      last_done: null,
       updated_at: '2026-01-01T00:00:00Z',
-      agents: [
-        {
-          agent_id: 'architect',
-          role: 'architect',
-          capabilities: ['claim', 'execute', 'review'],
-          first_seen_at: '2026-01-01T00:00:00Z',
-          last_active_at: '2026-01-01T00:00:00Z',
-          status: 'idle',
-          task: null,
-          last_done: null,
-          updated_at: '2026-01-01T00:00:00Z',
-        },
-      ],
-    }, null, 2),
-  );
+    });
+  } finally {
+    store.db.close();
+  }
 }
 
 describe('work-next unified next action', () => {
@@ -102,25 +101,7 @@ describe('work-next unified next action', () => {
   });
 
   it('peeks current task before claimable future work', async () => {
-    writeFileSync(
-      join(tempDir, '.ai', 'agents', 'roster.json'),
-      JSON.stringify({
-        version: 2,
-        schema: 'https://narada.dev/schemas/agent-roster/v2',
-        updated_at: '2026-01-01T00:00:00Z',
-        agents: [{
-          agent_id: 'architect',
-          role: 'architect',
-          capabilities: ['claim', 'execute', 'review'],
-          first_seen_at: '2026-01-01T00:00:00Z',
-          last_active_at: '2026-01-01T00:00:00Z',
-          status: 'working',
-          task: 100,
-          last_done: null,
-          updated_at: '2026-01-01T00:00:00Z',
-        }],
-      }, null, 2),
-    );
+    seedRoster(tempDir, 'working', 100);
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-current.md'),
       '---\ntask_id: 100\nstatus: claimed\n---\n\n# Task 100 Current\n\n## Acceptance Criteria\n- [ ] Do current work.\n',
@@ -428,7 +409,7 @@ describe('work-next unified next action', () => {
     });
   });
 
-  it('returns agent_not_found before inbox work for non-roster agents', async () => {
+  it('returns agent_not_in_roster with repair command before inbox work for non-roster agents', async () => {
     await inboxSubmitCommand({
       cwd: tempDir,
       sourceKind: 'user_chat',
@@ -445,8 +426,9 @@ describe('work-next unified next action', () => {
     expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
     expect(result.result).toMatchObject({
       status: 'error',
-      reason: 'agent_not_found',
+      reason: 'agent_not_in_roster',
       agent_id: 'ghost',
+      repair_command: 'narada task roster add ghost',
     });
   });
 });

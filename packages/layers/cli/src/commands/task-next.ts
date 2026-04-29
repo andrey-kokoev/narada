@@ -67,16 +67,17 @@ function normalizeTaskStatus(value: unknown): TaskStatus {
     : 'opened';
 }
 
-function agentNotFoundResult(agent: string, action: NextTaskAction): { status: 'error'; reason: 'agent_not_found'; agent: string; agent_id: string; action: NextTaskAction; primary: null; error: string; next_step: string } {
+function agentNotFoundResult(agent: string, action: NextTaskAction): { status: 'error'; reason: 'agent_not_in_roster'; agent: string; agent_id: string; action: NextTaskAction; primary: null; error: string; repair_command: string; next_step: string } {
   return {
     status: 'error',
-    reason: 'agent_not_found',
+    reason: 'agent_not_in_roster',
     agent,
     agent_id: agent,
     action,
     primary: null,
     error: `Agent ${agent} not found in roster`,
-    next_step: 'Ask the operator to admit this agent to the roster before claiming work.',
+    repair_command: `narada task roster add ${agent}`,
+    next_step: `Run: narada task roster add ${agent}`,
   };
 }
 

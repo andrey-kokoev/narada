@@ -1,7 +1,16 @@
 ---
-status: claimed
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T20:25:26.393Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T20:36:46.309Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Source patch plus focused verification: empty SQLite roster is valid; task roster add bootstraps first SQLite row without roster.json; normal load/save no longer use JSON projection; work-next returns agent_not_in_roster with repair command; JSON path isolated as importRosterJsonProjection.
+closed_at: 2026-04-29T20:37:11.674Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Fix SQLite-only roster empty bootstrap
@@ -39,9 +48,9 @@ Inbox envelope env_ea9ce332-63a2-4eb5-bc9a-4bfd2cd5b637 reports that Task 618 de
 
 ## Acceptance Criteria
 
-- [ ] Empty SQLite agent_roster is treated as a valid empty roster not roster_unavailable
-- [ ] task roster add can create the first SQLite roster row without requiring .ai/agents/roster.json
-- [ ] Normal roster load/save and work-next paths do not require or trust .ai/agents/roster.json
-- [ ] Unknown agent work-next reports agent_not_in_roster with an exact sanctioned repair command
-- [ ] Any JSON roster compatibility path is explicit migration/import only and not normal authority
-- [ ] Source envelope env_ea9ce332-63a2-4eb5-bc9a-4bfd2cd5b637 is routed
+- [x] Empty SQLite agent_roster is treated as a valid empty roster not roster_unavailable
+- [x] task roster add can create the first SQLite roster row without requiring .ai/agents/roster.json
+- [x] Normal roster load/save and work-next paths do not require or trust .ai/agents/roster.json
+- [x] Unknown agent work-next reports agent_not_in_roster with an exact sanctioned repair command
+- [x] Any JSON roster compatibility path is explicit migration/import only and not normal authority
+- [x] Source envelope env_ea9ce332-63a2-4eb5-bc9a-4bfd2cd5b637 is routed

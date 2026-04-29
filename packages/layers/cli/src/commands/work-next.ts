@@ -68,7 +68,8 @@ function isEmptyTaskResult(result: unknown): boolean {
 
 function isAgentNotFound(result: unknown): boolean {
   const record = asRecord(result);
-  return record.status === 'error' && record.reason === 'agent_not_found';
+  return record.status === 'error'
+    && (record.reason === 'agent_not_in_roster' || record.reason === 'agent_not_found');
 }
 
 function taskSelectedRef(primary: Record<string, unknown>): string | undefined {
