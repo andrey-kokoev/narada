@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T17:09:48.800Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T17:15:04.681Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Defined canonical capability family versus contextual operator projection; used Monitor Content Transfer with unavailable/refuse, two-monitor Exchange Monitor Contents, and 3+ monitor Transfer Monitor Contents with target selection; required operator-visible invariant testing beyond command-local semantics; added adjacent-button decomposition guidance and coverage audit signals; linked source doctrine and verified with pnpm verify.
+closed_at: 2026-04-29T17:15:16.505Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Define contextual capability projection and operator-visible invariant testing
@@ -39,9 +48,9 @@ Inbox envelope env_c594764b-1b14-4b74-a88a-2c45fcb08bca observes that Windows op
 
 ## Acceptance Criteria
 
-- [ ] Canonical capability family versus contextual operator label projection is defined
-- [ ] Monitor Content Transfer is used as motivating example with two-monitor Exchange Monitor Contents projection and 3 plus monitor target-selection projection
-- [ ] Operator-visible invariant testing is required for operator surfaces
-- [ ] not only command-local semantics
-- [ ] Guidance prevents adjacent button decomposition from hiding a higher-level capability family
-- [ ] Source inbox envelope is routed and focused docs verification or pnpm verify passes
+- [x] Canonical capability family versus contextual operator label projection is defined
+- [x] Monitor Content Transfer is used as motivating example with two-monitor Exchange Monitor Contents projection and 3 plus monitor target-selection projection
+- [x] Operator-visible invariant testing is required for operator surfaces
+- [x] not only command-local semantics
+- [x] Guidance prevents adjacent button decomposition from hiding a higher-level capability family
+- [x] Source inbox envelope is routed and focused docs verification or pnpm verify passes

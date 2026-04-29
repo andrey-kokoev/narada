@@ -85,6 +85,8 @@ The audit sweep should cover:
 - Task acceptance criteria checked without matching normal-path evidence or tests.
 - Tests whose names imply production behavior while proving only helpers, fixtures, mocks, or manual path behavior.
 - Operator labels such as `done`, `complete`, `live`, `automatic`, `canonical`, `daemon`, or `MCP` where the surface is actually advisory, inert, or local-only.
+- Adjacent operator buttons that expose implementation decomposition instead of projections of one canonical capability family.
+- Operator-surface tests that prove command-local behavior but not the operator-visible invariant.
 
 The motivating example category is display-toggle or swap-monitor style capability claims: a manual helper, fixture proof, or script stub may be valuable evidence, but it must not be labeled as a normal-path automatic capability until the normal path exists and is proven.
 

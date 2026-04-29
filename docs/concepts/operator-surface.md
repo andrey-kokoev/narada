@@ -143,6 +143,12 @@ MCP and API agents may not have a visible window. They still have:
 
 This prevents terminal bias. The long-term model includes both spatial surfaces and non-spatial channels, while preserving one rule: authority is admitted by the Site's governed crossings, not by the interface shape.
 
+## Relationship To Contextual Capability Projection
+
+Operator Surface controls should be projections of canonical capability families, not direct mirrors of helper functions or implementation internals.
+
+Use [`Contextual Capability Projection`](contextual-capability-projection.md) when deciding whether adjacent buttons are distinct capabilities or contextual labels/modes of one capability. The surface label must be backed by an operator-visible invariant: the work outcome the Operator expects, not merely a command exiting successfully.
+
 ## Inspection Posture
 
 The first coherent command posture is read-only inspection.
