@@ -12,6 +12,7 @@ import {
   taskPullNextCommand,
   taskWorkNextCommand,
 } from './task-next.js';
+import { taskWorkboardCommand } from './task-workboard.js';
 import { directCommandAction, runDirectCommand } from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
@@ -230,6 +231,23 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
         agent: opts.agent as string,
         format: outputFormat(opts.format),
         cwd: opts.cwd as string | undefined,
+      }),
+    }));
+
+  taskCmd
+    .command('workboard')
+    .description('Show bounded current work, review handoff, inbox, and concurrency posture')
+    .option('--limit <n>', 'Maximum rows per section', '20')
+    .option('--format <fmt>', 'Output format: json or human', 'human')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'task workboard',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => taskWorkboardCommand({
+        cwd: opts.cwd as string | undefined,
+        limit: opts.limit ? Number(opts.limit) : undefined,
+        format: outputFormat(opts.format),
       }),
     }));
 

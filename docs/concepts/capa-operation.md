@@ -115,6 +115,17 @@ The minimum handoff content is:
 
 If the reviewer must infer completion by reading git history, task folders, or chat context, the handoff crossing failed. That can be contained locally, but recurrence belongs in CAPA.
 
+Task completion should name the claim class it actually proves:
+
+| Claim class | Meaning |
+| --- | --- |
+| `manual_helper` | A helper exists, but the normal workflow still requires manual invocation or judgment. |
+| `operator_entrypoint` | The Operator has a named command, UI, or documented entrypoint for the capability. |
+| `event_driven_automation` | The capability runs from the intended event path without manual triggering. |
+| `fully_integrated` | The capability is wired into the normal product/runtime path with evidence and regression coverage. |
+
+Review-generated follow-up tasks follow the same governed path as ordinary tasks: derive or create through a sanctioned command, commit the governance artifact, route or claim it for Builder, and emit a bounded handoff packet when implementation starts. The review itself should not silently become the follow-up task; it records the finding or decision that justifies one.
+
 ## Relationship To Existing Surfaces
 
 | Surface | CAPA Relationship |

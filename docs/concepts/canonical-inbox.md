@@ -278,6 +278,14 @@ This command is deliberately a handoff boundary. It may create a task, claim it 
 
 Task lifecycle guardrails preserve the same separation after handoff. Architect may specify, route, assign, review, and admit where authorized, but Builder-owned report/close paths reject Architect by default. If the Operator requires an emergency exception, the command must carry `--override-rationale`; the rationale is recorded in task lifecycle mutation evidence and surfaced by task evidence inspection.
 
+Current work visibility should use the bounded read model:
+
+```bash
+narada task workboard
+```
+
+The workboard surfaces active chapters, pending reviews, in-progress Builder work, local follow-ups, source envelopes, prepared publication handoffs, review-handoff requirements, closure semantics, follow-up task path, and Architect/Builder concurrency boundaries without dumping full task bodies or inbox payloads.
+
 If handling must be abandoned without taking an action:
 
 ```bash

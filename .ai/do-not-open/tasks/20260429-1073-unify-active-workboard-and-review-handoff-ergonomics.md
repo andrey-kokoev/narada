@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T16:13:05.836Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T16:29:32.959Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Task workboard command and focused tests cover current-work/read-model visibility without payload dumping; docs define Builder completion handoff requirements, closure claim classes, review-generated follow-up lifecycle, and Architect/Builder concurrency guidance; live bounded workboard and pnpm verify passed.
+closed_at: 2026-04-29T16:29:53.179Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Unify active workboard and review handoff ergonomics
@@ -39,8 +48,8 @@ Inbox envelope env_db93afac-0f33-42da-8805-4a281df01eb1 reports ergonomics gaps 
 
 ## Acceptance Criteria
 
-- [ ] Builder completion handoff and review_request requirements are represented in lifecycle or doctrine with commits changed files verification residuals and requested review questions
-- [ ] Task closure semantics distinguish manual helper operator entrypoint event-driven automation and fully integrated capability where relevant
-- [ ] Review-generated follow-up tasks have a standard allocation commit routing and Builder handoff path
-- [ ] A current workboard or read-model is specified for active chapters pending reviews in-progress Builder work local follow-ups and submitted upstream envelopes
-- [ ] Architect Builder concurrency guidance defines allowed simultaneous work file partitioning and handoff evidence and focused verification or pnpm verify passes
+- [x] Builder completion handoff and review_request requirements are represented in lifecycle or doctrine with commits changed files verification residuals and requested review questions
+- [x] Task closure semantics distinguish manual helper operator entrypoint event-driven automation and fully integrated capability where relevant
+- [x] Review-generated follow-up tasks have a standard allocation commit routing and Builder handoff path
+- [x] A current workboard or read-model is specified for active chapters pending reviews in-progress Builder work local follow-ups and submitted upstream envelopes
+- [x] Architect Builder concurrency guidance defines allowed simultaneous work file partitioning and handoff evidence and focused verification or pnpm verify passes
