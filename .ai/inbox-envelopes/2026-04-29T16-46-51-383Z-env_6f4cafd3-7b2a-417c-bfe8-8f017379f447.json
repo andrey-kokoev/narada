@@ -1,0 +1,39 @@
+{
+  "envelope_id": "env_6f4cafd3-7b2a-417c-bfe8-8f017379f447",
+  "received_at": "2026-04-29T16:46:51.383Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:builder-raw-task-db-read"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Builder reached for raw task lifecycle SQLite instead of governed read surface",
+    "summary": "During User Site builder work, builder ran raw sqlite3 queries against .ai/tasks/task-lifecycle.db to inspect max(task_number) and task_number_sequence.last_allocated. The query was read-only, but it crossed the task lifecycle authority boundary through substrate inspection rather than a governed Narada command.",
+    "body": "## Observation\n\nDuring Windows User Site work, builder ran:\n\n```text\nsqlite3 \".ai\\tasks\\task-lifecycle.db\" \"select max(task_number) from task_lifecycle;\" \"select last_allocated from task_number_sequence;\"\n```\n\nThis appears to have been read-only, so it is not itself a mutation incident. But it is an authority-boundary signal: builder reached directly into the task lifecycle SQLite substrate to answer a task-state question.\n\n## Interpretation\n\nThe issue is not whether builder used `sqlite3`, `better-sqlite3`, or `node:sqlite`. The issue is bypassing Narada's governed task lifecycle surface.\n\nUsing `node:sqlite` manually would not make this coherent. It would still be direct substrate inspection outside a task explicitly scoped to task-lifecycle diagnosis/repair.\n\n## Desired Doctrine / Ergonomics\n\nFor task lifecycle questions, builders should use Narada task/query commands. Direct reads of `.ai/tasks/task-lifecycle.db` should be reserved for explicit diagnostic or substrate-repair tasks.\n\nNarada likely needs a sanctioned read-only command that answers questions such as:\n\n- current max task number;\n- last allocated number;\n- next allocatable number;\n- allocation posture / drift between sequence and task rows;\n- whether a dry-run allocation would mutate state;\n- whether task lifecycle DB state matches exported/task-file authority.\n\nThe command should be read-only and should not allocate, reserve, claim, or mutate.\n\n## Proposed Prevention\n\n1. Add a governed read-only task lifecycle inspection command, e.g. `narada task lifecycle-status` or `narada task allocation-status`.\n2. Document in AGENTS / builder role docs: do not inspect or mutate task lifecycle SQLite directly unless the admitted task is explicitly about DB diagnosis or repair.\n3. If raw DB access is used under diagnostic authority, require bounded evidence in the task report explaining why the governed surface was insufficient.\n4. Keep this independent of SQLite adapter selection. `node:sqlite` belongs to Narada runtime posture; it is not a permission slip for ad hoc direct DB inspection.\n\n## Severity\n\nLow-to-medium ergonomics and authority-boundary observation. No known mutation occurred, but this is close to the earlier task-number sequence incident and should be prevented before it becomes normal builder practice.",
+    "labels": [
+      "observation",
+      "task-lifecycle",
+      "authority-boundary",
+      "builder-ergonomics",
+      "sqlite"
+    ],
+    "evidence": [
+      "Raw read-only sqlite3 command against .ai/tasks/task-lifecycle.db",
+      "Earlier task number sequence incident makes this authority-zone sensitive",
+      "Need governed read surface rather than substrate inspection"
+    ]
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "decision",
+    "target_ref": "task-1076-task-lifecycle-allocation-status",
+    "promoted_at": "2026-04-29T16:47:54.759Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'decision' is not implemented yet."
+  }
+}
