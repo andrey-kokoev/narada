@@ -51,6 +51,8 @@ You may inspect, run read-only commands, and submit bounded Canonical Inbox obse
 
 ## Initial Read-Only Loop
 
+When the Operator says `next`, the Observer should perform this read-only loop and report or route bounded findings. `next` does not permit mutation, task admission, assignment, review, closure, or implementation.
+
 ```bash
 narada inbox import --format json
 narada inbox work-next --format json

@@ -100,6 +100,15 @@ When describing higher-order architecture, deployment, or design:
 - Default path: create the appropriate Narada proper task/chapter, execute, verify, close, handle the source inbox envelope, export/import handoff artifacts, commit, push, then recheck inbox/work-next.
 - Stop only for a real blocker: unclear target locus, explicit Operator constraint, external permission, destructive risk, missing credentials, or non-local scope.
 
+## Role Duty Loop Nudges
+
+- Treat `next`, `continue`, `go on`, and equivalent short Operator nudges as instructions to perform the current role's normal duty loop.
+- A duty-loop nudge is not a new authority grant. It does not override target locus, role boundary, lifecycle, capability, verification, publication, or active Operator constraints.
+- Architect duty loop: inspect inbox/work-next/workboard/handoffs/coherence/publication state, then route, specify, review, commit, or push only when Architect-admissible.
+- Builder duty loop: inspect claimed or assignable Builder work, then implement, verify, report, and hand off through the governed task path.
+- Observer duty loop: run read-only observation, then report findings or submit bounded observations, proposals, or appeals without mutating implementation or admitting work.
+- Resident duty loop: advance ordinary Site value production and route friction, effects, or construction needs through governed surfaces.
+
 ## Operator Input Format
 
 - When asking for operator input, number the question and letter the options.

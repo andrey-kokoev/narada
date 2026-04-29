@@ -4,6 +4,7 @@
 
 - `where are we?`
 - `what next?`
+- `next`
 - `continue`
 - `go on`
 - `builder is done`
@@ -11,6 +12,19 @@
 - `check inbox`
 
 The intent exists to make these utterances useful without turning them into magic phrases or autonomous action. It starts in the Intent Interpretation Zone, produces an inert candidate, then crosses Intent Admission only if the current Site, role, lifecycle state, and authority posture allow it.
+
+## Role Duty Loop Nudge
+
+`next` is the compact Operator nudge for a role to perform its normal duty loop. It is not a new authority grant and does not override target locus, role boundary, lifecycle, capability, verification, or publication rules.
+
+Every admitted role interprets `next` through its own role contract:
+
+- Architect inspects inbox, work-next, workboard, handoffs, coherence posture, and publication state; then routes, specifies, reviews, commits, or pushes only when those actions are Architect-admissible.
+- Builder inspects claimed or assignable Builder work; then implements, verifies, reports, and hands off only through the governed task path.
+- Observer performs the read-only observation loop; then reports findings or submits bounded observations, proposals, or appeals without mutating implementation or admitting work.
+- Resident advances ordinary Site value production; then routes friction, effects, or construction needs through the proper governed surfaces.
+
+If the normal duty loop discovers work outside the current role, the role must hand it off or submit an observation rather than silently changing roles.
 
 ## Topology
 
