@@ -18,7 +18,7 @@ import { taskCreateCommand } from './task-create.js';
 import { taskClaimCommand } from './task-claim.js';
 import { taskRosterAddCommand } from './task-roster.js';
 import { taskLifecycleExportCommand } from './task-lifecycle-snapshot.js';
-import { parseFrontMatter } from '../lib/task-governance.js';
+import { findTaskFile, parseFrontMatter } from '../lib/task-governance.js';
 import {
   inboxEnvelopeToEvidenceState,
   writeInboxMutationEvidence,
@@ -862,6 +862,20 @@ function existingFileDropRefs(store: SqliteInboxStore): Set<string> {
   );
 }
 
+function formatPromotionSummary(envelope: InboxEnvelope): string {
+  if (!envelope.promotion) return 'none';
+  const target = envelope.promotion.target_kind === 'task' && envelope.promotion.target_ref.startsWith('task:')
+    ? envelope.promotion.target_ref
+    : `${envelope.promotion.target_kind}:${envelope.promotion.target_ref}`;
+  const result = asRecord(envelope.promotion.target_result);
+  const taskNumber = typeof result.task_number === 'number' ? result.task_number : null;
+  const taskId = typeof result.task_id === 'string' ? result.task_id : null;
+  if (envelope.promotion.target_kind === 'task' && taskNumber && taskId) {
+    return `${target} (${taskId})`;
+  }
+  return target;
+}
+
 export async function inboxShowCommand(options: InboxShowOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
   if (!options.envelopeId) return errorResult('Missing envelope ID');
   return withInboxStoreAsync(options, async (store) => {
@@ -876,7 +890,7 @@ export async function inboxShowCommand(options: InboxShowOptions): Promise<{ exi
         `Kind: ${envelope.kind}`,
         `Source: ${envelope.source.kind}:${envelope.source.ref}`,
         `Authority: ${envelope.authority.level}${envelope.authority.principal ? ` (${envelope.authority.principal})` : ''}`,
-        `Promotion: ${envelope.promotion ? `${envelope.promotion.target_kind}:${envelope.promotion.target_ref}` : 'none'}`,
+        `Promotion: ${formatPromotionSummary(envelope)}`,
       ],
       options.format,
     );
@@ -1012,6 +1026,44 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
       }
 
       if (targetKind === 'task') {
+        const existingTaskTarget = await resolveExistingTaskTarget(cwd, options.targetRef);
+        if (existingTaskTarget instanceof Error) return errorResult(existingTaskTarget.message);
+        if (existingTaskTarget) {
+          const envelope = store.promote(options.envelopeId!, {
+            target_kind: 'task',
+            target_ref: `task:${existingTaskTarget.task_number}`,
+            promoted_at: new Date().toISOString(),
+            promoted_by: options.by!,
+            enactment_status: 'enacted',
+            target_command: 'task route',
+            target_result: existingTaskTarget,
+          });
+          await writeInboxMutationEvidence({
+            cwd,
+            command: 'inbox promote task target',
+            principal: options.by,
+            authorityClass: 'resolve',
+            before,
+            after: inboxEnvelopeToEvidenceState(store.get(envelope.envelope_id)),
+            result: { status: 'success', enactment_status: 'enacted', target_mutation: false, envelope, task_target: existingTaskTarget },
+          });
+          return okResult(
+            {
+              status: 'success',
+              enactment_status: 'enacted',
+              target_mutation: false,
+              target: existingTaskTarget,
+              envelope,
+            },
+            [
+              `Inbox envelope routed to task: ${envelope.envelope_id}`,
+              `Task target: ${existingTaskTarget.task_number}`,
+              `Task ID: ${existingTaskTarget.task_id}`,
+              `Promoted by: ${options.by}`,
+            ],
+            options.format,
+          );
+        }
         const taskResult = await createTaskFromEnvelope(existing, options);
         if (taskResult.exitCode !== ExitCode.SUCCESS) return taskResult;
         const task = taskResult.result as { task_number: number; task_id: string };
@@ -1375,6 +1427,13 @@ export async function inboxPendingCommand(options: InboxPendingOptions): Promise
   if (!options.to) return errorResult('--to is required as <kind>:<ref>');
   const parsed = parsePendingTo(options.to);
   if (!parsed) return errorResult('--to must be <kind>:<ref>');
+  if (parsed.targetKind === 'task') {
+    return inboxPromoteCommand({
+      ...options,
+      targetKind: 'task',
+      targetRef: parsed.targetRef,
+    });
+  }
   return inboxPromoteCommand({
     ...options,
     targetKind: parsed.targetKind,
@@ -1710,6 +1769,27 @@ function canCreateTaskFromEnvelope(envelope: InboxEnvelope): boolean {
     || envelope.kind === 'upstream_task_candidate'
     || envelope.kind === 'proposal'
     || envelope.kind === 'observation';
+}
+
+async function resolveExistingTaskTarget(cwd: string, targetRef: string | undefined): Promise<{
+  task_number: number;
+  task_id: string;
+} | null | Error> {
+  if (!targetRef) return null;
+  const match = /^task:(\d+)$/.exec(targetRef.trim()) ?? /^(\d+)$/.exec(targetRef.trim());
+  if (!match) return null;
+  const taskNumber = Number(match[1]);
+  if (!Number.isInteger(taskNumber) || taskNumber <= 0) {
+    return new Error(`Malformed task target: ${targetRef}`);
+  }
+  const taskFile = await findTaskFile(cwd, String(taskNumber));
+  if (!taskFile) {
+    return new Error(`Task target does not exist: ${targetRef}`);
+  }
+  return {
+    task_number: taskNumber,
+    task_id: taskFile.taskId,
+  };
 }
 
 function taskSpecFromEnvelope(envelope: InboxEnvelope, options: InboxArchitectProcessOptions): {
@@ -2166,7 +2246,8 @@ function parsePendingTo(value: string): { targetKind: InboxPromotionTargetKind; 
   const index = value.indexOf(':');
   if (index <= 0 || index === value.length - 1) return undefined;
   const targetKind = parsePromotionTargetKind(value.slice(0, index));
-  if (!targetKind || targetKind === 'task' || targetKind === 'archive') return undefined;
+  if (!targetKind || targetKind === 'archive') return undefined;
+  if (targetKind === 'task' && !/^\d+$/.test(value.slice(index + 1))) return undefined;
   return { targetKind, targetRef: value.slice(index + 1) };
 }
 

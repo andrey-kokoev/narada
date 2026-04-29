@@ -894,6 +894,86 @@ describe('Canonical Inbox CLI commands', () => {
     expect(taskContent).not.toContain('TBD');
   });
 
+  it('routes inbox envelopes to existing task targets with validation and clear rendering', async () => {
+    setupRepo(tempDir);
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual:route',
+      kind: 'observation',
+      authorityLevel: 'operator_confirmed',
+      payload: JSON.stringify({ title: 'Route this to existing task' }),
+    });
+    const envelopeId = (submitted.result as { envelope: { envelope_id: string } }).envelope.envelope_id;
+
+    const routed = await inboxPendingCommand({
+      cwd: tempDir,
+      envelopeId,
+      to: 'task:100',
+      by: 'architect',
+      format: 'json',
+    });
+
+    expect(routed.exitCode).toBe(ExitCode.SUCCESS);
+    const result = routed.result as {
+      target: { task_number: number; task_id: string };
+      envelope: { promotion: { target_kind: string; target_ref: string; target_result: { task_number: number; task_id: string } } };
+    };
+    expect(result.target).toEqual({ task_number: 100, task_id: '20260420-100-alpha' });
+    expect(result.envelope.promotion).toMatchObject({
+      target_kind: 'task',
+      target_ref: 'task:100',
+      target_result: { task_number: 100, task_id: '20260420-100-alpha' },
+    });
+
+    const shown = await inboxShowCommand({ cwd: tempDir, envelopeId, format: 'human' });
+    expect((shown.result as { _formatted: string })._formatted).toContain('Promotion: task:100 (20260420-100-alpha)');
+  });
+
+  it('rejects missing and malformed task targets without breaking other pending targets', async () => {
+    setupRepo(tempDir);
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual:route-missing',
+      kind: 'observation',
+      authorityLevel: 'operator_confirmed',
+      payload: JSON.stringify({ title: 'Route missing task' }),
+    });
+    const envelopeId = (submitted.result as { envelope: { envelope_id: string } }).envelope.envelope_id;
+
+    const malformed = await inboxPendingCommand({
+      cwd: tempDir,
+      envelopeId,
+      to: 'task:not-a-number',
+      by: 'architect',
+      format: 'json',
+    });
+    expect(malformed.exitCode).toBe(ExitCode.GENERAL_ERROR);
+
+    const missing = await inboxPendingCommand({
+      cwd: tempDir,
+      envelopeId,
+      to: 'task:999',
+      by: 'architect',
+      format: 'json',
+    });
+    expect(missing.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect((missing.result as { error: string }).error).toContain('Task target does not exist');
+
+    const decision = await inboxPendingCommand({
+      cwd: tempDir,
+      envelopeId,
+      to: 'decision:route-later',
+      by: 'architect',
+      format: 'json',
+    });
+    expect(decision.exitCode).toBe(ExitCode.SUCCESS);
+    expect((decision.result as { envelope: { promotion: { target_kind: string } } }).envelope.promotion.target_kind).toBe('decision');
+  });
+
   it('shows the next received inbox envelope without mutating it', async () => {
     await inboxSubmitCommand({
       cwd: tempDir,

@@ -1,8 +1,17 @@
 ---
-status: opened
+status: closed
 depends_on: [1065]
 amended_by: architect
 amended_at: 2026-04-29T15:06:25.933Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T15:46:32.988Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Focused inbox tests cover valid task target routing, missing and malformed task targets, backward-compatible decision pending targets, task id/number recording, and human show rendering; full verification passed.
+closed_at: 2026-04-29T15:46:38.800Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Allow inbox promotion to task targets
@@ -40,8 +49,8 @@ Inbox routing currently forced env_a59de5c1-e3fc-4da1-b593-33522183f44e to decis
 
 ## Acceptance Criteria
 
-- [ ] inbox pending or promote accepts task:<number> or target kind task with validation
-- [ ] Task target routing verifies the referenced task exists and records task number and task id
-- [ ] work-next and show surfaces render task-linked promoted envelopes clearly
-- [ ] Existing decision operator_action knowledge_entry and site_config_change targets remain compatible
-- [ ] Tests cover valid missing and malformed task targets and pnpm verify passes
+- [x] inbox pending or promote accepts task:<number> or target kind task with validation
+- [x] Task target routing verifies the referenced task exists and records task number and task id
+- [x] work-next and show surfaces render task-linked promoted envelopes clearly
+- [x] Existing decision operator_action knowledge_entry and site_config_change targets remain compatible
+- [x] Tests cover valid missing and malformed task targets and pnpm verify passes

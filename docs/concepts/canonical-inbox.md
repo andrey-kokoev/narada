@@ -24,6 +24,7 @@ narada inbox architect-process <envelope-id> --by architect
 narada inbox task <envelope-id> --title "Fix PC Site identity policy" --by operator --assign builder
 narada inbox triage <envelope-id> --action archive --by operator
 narada inbox pending <envelope-id> --to site_config_change:site:desktop-sunroom-2 --by operator
+narada inbox pending <envelope-id> --to task:123 --by architect
 ```
 
 Prefer `submit-observation` for routine observations from chat, diagnostics, and agent reports. It builds the typed payload from flags, writes the envelope, reads it back, confirms payload equivalence, and returns the Git-visible envelope artifact path for portable visibility.
@@ -240,6 +241,14 @@ narada inbox task <envelope-id> --by architect --assign builder
 ```
 
 Generated tasks preserve source envelope id, source ref, envelope kind, summary/body/evidence/proposal/recommendation context, detailed required work, and acceptance criteria when payload structure provides them. The command must not leave `TBD` placeholders when the envelope contains enough structure to derive the task specification.
+
+If an envelope should be routed to an existing task rather than creating a new one, use:
+
+```bash
+narada inbox pending <envelope-id> --to task:<number> --by architect
+```
+
+Task targets are validated before promotion. The envelope promotion records both task number and canonical task id in `target_result`, and human `inbox show` renders the linked task explicitly.
 
 ## Work-Next
 
