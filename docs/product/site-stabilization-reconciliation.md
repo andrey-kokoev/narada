@@ -24,6 +24,7 @@ The stabilization surface is not a repair worker. It may observe, compare, class
 | Work state | active/open/failed/retryable work items, task lifecycle, dispatch leases, roster/session bindings | Active work blocks quiescence unless explicitly classified. |
 | Outbound handoffs | pending approvals, pending outbound commands, draft-ready commands, sent/confirmed/terminal commands | A confirmed handoff is evidence; it is not permission to rewrite durable docs silently. |
 | Private substrate | ignored SQLite files, local health files, daemon pid files, logs, temp working state | Private files may inform posture but must not be the only portable evidence. |
+| Task substrate inventory | current task directory, legacy task directory, current lifecycle DB, legacy lifecycle DB, lifecycle snapshot, mutation evidence | Split substrate posture is a stabilization finding, not permission to migrate or delete. |
 | Repository posture | dirty tree, ahead/behind, unexported mutation evidence, unpublished inbox envelopes | Publishability is separate from runtime health. |
 | Operator/session knowledge | explicit Operator correction, agent report, external manual action, current residuals | Session knowledge must be recorded as evidence before it changes durable posture. |
 
@@ -94,6 +95,9 @@ Human output should answer:
 | `blocked_pending_effects` | Pending approvals, drafts, sends, or other outbound effects remain. |
 | `blocked_terminal_failures` | Terminal work or effect failures remain unresolved. |
 | `blocked_missing_approval_path` | Evaluation/sync can run, but approvals cannot be governed into effect handoff. |
+| `task_substrate_needs_migration` | Legacy and current task/lifecycle substrates coexist without an admitted compatibility declaration. |
+| `task_substrate_needs_archive` | Legacy task files or DBs remain as stale artifacts after current substrate has authority. |
+| `task_substrate_compatibility_declared` | Legacy and current substrates coexist under an explicit compatibility or migration declaration. |
 | `full_runtime_ready` | Durable memory, runtime truth, approval/refusal posture, effect handoff, confirmation, recovery, and publication evidence all agree. |
 
 These states refine, but do not replace, mailbox runtime readiness states. For mailbox-specific proof boundaries, see [`mailbox-runtime-readiness.md`](mailbox-runtime-readiness.md).
@@ -136,6 +140,100 @@ Until the command exists, the manual checklist is:
 | Operator residuals | Explicit session-known gaps, manual actions, and next governed update. |
 
 The checklist result is a stabilization observation, not a mutation.
+
+## Task Substrate Split Check
+
+A Site stabilization pass must inspect task substrate posture when the Site uses Narada task governance.
+
+Canonical inventory:
+
+| Surface | Current Posture | Legacy / Split Signal |
+| --- | --- | --- |
+| Task directory | `.ai/do-not-open/tasks` | `.ai/tasks` exists with task markdown. |
+| Lifecycle DB | `.ai/task-lifecycle.db` | `.ai/tasks/task-lifecycle.db` exists. |
+| Lifecycle snapshot | `.ai/task-lifecycle-snapshot.json` | Snapshot missing, stale, or pointing to legacy substrate. |
+| Mutation evidence | `.ai/mutation-evidence/task_lifecycle/*.json` | Lifecycle mutations without Git-visible evidence. |
+| Inbox DB | `.ai/inbox.db` | Inbox exists only in a legacy task folder or has unexported envelopes. |
+| Exported inbox envelopes | `.ai/inbox-envelopes/*.json` | Inbox DB contains rows not exported as portable artifacts. |
+| Git ignore posture | `.gitignore`, Site config | Raw DB files tracked or portable evidence ignored. |
+
+Posture classification:
+
+| Classification | Meaning | Allowed Result |
+| --- | --- | --- |
+| `ok` | Only current substrate exists, or legacy residue is absent and snapshot/evidence posture is current. | Report clean. |
+| `needs_migration` | Legacy substrate contains live or newer state not represented in current substrate. | Propose a governed migration task or command. |
+| `needs_archive` | Legacy substrate is stale residue after current substrate is authoritative. | Propose archive/removal with evidence; do not delete silently. |
+| `compatibility_declared` | Legacy/current coexistence is explicitly documented as compatibility posture. | Report declared compatibility and residual review date if present. |
+
+The check must not:
+
+- move task files;
+- delete legacy directories;
+- import or overwrite SQLite rows;
+- rewrite `.gitignore`;
+- regenerate snapshots as a hidden repair.
+
+Authorized remediation must emit durable evidence, such as:
+
+- a task lifecycle mutation evidence record;
+- a migration artifact under `.ai/migration-evidence/`;
+- a committed compatibility declaration;
+- a report naming the source and target substrate digests.
+
+Bounded JSON shape:
+
+```json
+{
+  "task_substrate": {
+    "classification": "needs_archive",
+    "current_task_dir": ".ai/do-not-open/tasks",
+    "legacy_task_dir_present": true,
+    "current_lifecycle_db_present": true,
+    "legacy_lifecycle_db_present": true,
+    "snapshot_present": true,
+    "mutation_evidence_present": true,
+    "raw_db_dump_included": false,
+    "recommendation": "Create governed archive/removal evidence for legacy .ai/tasks substrate."
+  }
+}
+```
+
+Human output should be one bounded line in the stabilization summary plus one next command or task recommendation. It must not dump task lists, SQLite rows, or raw inbox payloads.
+
+## Fixture: Legacy And Current Task Substrates Coexist
+
+Input filesystem posture:
+
+```text
+.ai/do-not-open/tasks/20260429-1083-detect-and-reconcile-site-task-substrate-splits.md
+.ai/task-lifecycle.db
+.ai/task-lifecycle-snapshot.json
+.ai/mutation-evidence/task_lifecycle/mev_example.json
+.ai/inbox.db
+.ai/inbox-envelopes/2026-04-29T17-49-18-875Z-env_eaf750e3-de47-4c10-8df7-f7525f42b105.json
+.ai/tasks/task-lifecycle.db
+.ai/tasks/legacy-task.md
+```
+
+Expected stabilization result:
+
+```json
+{
+  "task_substrate": {
+    "classification": "needs_migration",
+    "legacy_task_dir_present": true,
+    "legacy_lifecycle_db_present": true,
+    "current_task_dir_present": true,
+    "current_lifecycle_db_present": true,
+    "raw_db_dump_included": false,
+    "silent_mutation_performed": false,
+    "recommended_next_step": "create governed task-substrate migration or archive artifact"
+  }
+}
+```
+
+If a committed compatibility declaration says the legacy directory is intentionally retained for a bounded transition window, the expected classification becomes `compatibility_declared`. If current substrate is authoritative and legacy content is stale residue, the expected classification becomes `needs_archive`.
 
 ## Fixture: Stale Durable Memory With Advanced Runtime Truth
 

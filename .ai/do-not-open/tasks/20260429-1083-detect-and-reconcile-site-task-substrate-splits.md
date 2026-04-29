@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T17:50:43.271Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T17:58:03.750Z
+criteria_proof_verification:
+  state: unbound
+  rationale: docs/product/site-stabilization-reconciliation.md now requires the stabilization pass to inspect .ai/do-not-open/tasks and legacy .ai/tasks, current and legacy lifecycle DBs, lifecycle snapshot, task lifecycle mutation evidence, inbox DB, exported inbox envelopes, and gitignore/config durable-vs-volatile posture. It defines ok, needs_migration, needs_archive, and compatibility_declared classifications, forbids silent migration/deletion/raw DB dumping, requires durable evidence for remediation, and includes a fixture for .ai/tasks/task-lifecycle.db plus .ai/task-lifecycle.db coexistence with current task directory.
+closed_at: 2026-04-29T17:58:20.886Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Detect and reconcile Site task substrate splits
@@ -39,9 +48,9 @@ Inbox envelope env_eaf750e3-de47-4c10-8df7-f7525f42b105 reports that a Windows U
 
 ## Acceptance Criteria
 
-- [ ] Stabilization detects legacy .ai/tasks and current .ai/do-not-open/tasks coexisting
-- [ ] Stabilization detects legacy and current lifecycle DB location split
-- [ ] Output classifies split posture as ok needs_migration needs_archive or compatibility_declared without silent mutation
-- [ ] Authorized remediation path emits durable evidence or migration artifact
-- [ ] Human and JSON outputs are bounded and do not dump raw DB contents
-- [ ] Source envelope env_eaf750e3-de47-4c10-8df7-f7525f42b105 is routed
+- [x] Stabilization detects legacy .ai/tasks and current .ai/do-not-open/tasks coexisting
+- [x] Stabilization detects legacy and current lifecycle DB location split
+- [x] Output classifies split posture as ok needs_migration needs_archive or compatibility_declared without silent mutation
+- [x] Authorized remediation path emits durable evidence or migration artifact
+- [x] Human and JSON outputs are bounded and do not dump raw DB contents
+- [x] Source envelope env_eaf750e3-de47-4c10-8df7-f7525f42b105 is routed
