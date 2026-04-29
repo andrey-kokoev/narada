@@ -28,6 +28,7 @@ import {
 export interface TaskCreateOptions {
   title: string;
   goal?: string;
+  context?: string;
   requiredWork?: string;
   chapter?: string;
   dependsOn?: string;
@@ -56,12 +57,13 @@ function buildTaskSpec(options: {
   taskNumber: number;
   title: string;
   goal?: string;
+  context?: string;
   requiredWork?: string;
   chapter?: string;
   criteria?: string[];
   dependsOn?: number[];
 }): TaskSpecRecord {
-  const { taskId, taskNumber, title, goal, requiredWork, chapter, criteria, dependsOn } = options;
+  const { taskId, taskNumber, title, goal, context, requiredWork, chapter, criteria, dependsOn } = options;
 
   return {
     task_id: taskId,
@@ -69,7 +71,7 @@ function buildTaskSpec(options: {
     title,
     chapter: chapter ?? null,
     goal: goal || title,
-    context: null,
+    context: context ?? null,
     required_work: requiredWork || '1. TBD',
     non_goals: [
       '- Do not expand scope beyond this task.',
@@ -180,6 +182,7 @@ export async function taskCreateCommand(
       taskNumber,
       title,
       goal: options.goal,
+      context: options.context,
       requiredWork: options.requiredWork,
       chapter: options.chapter,
       criteria: options.criteria,

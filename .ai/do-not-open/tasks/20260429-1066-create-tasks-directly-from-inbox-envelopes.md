@@ -1,8 +1,17 @@
 ---
-status: opened
+status: closed
 depends_on: [1065]
 amended_by: architect
 amended_at: 2026-04-29T15:06:21.160Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T15:36:20.691Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Focused inbox tests cover observation and proposal envelope task creation, source-linked context, non-placeholder required work, criteria derivation, and optional Builder assignment; full verification passed.
+closed_at: 2026-04-29T15:36:26.538Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Create tasks directly from inbox envelopes
@@ -40,8 +49,8 @@ This task should factor the reusable envelope-to-task generation needed by the A
 
 ## Acceptance Criteria
 
-- [ ] task create or inbox command supports creating a task from an envelope id
-- [ ] Generated task includes context required work criteria and source envelope reference from payload fields
-- [ ] Generated task avoids placeholder TBD sections when envelope has enough structure
-- [ ] Command supports assignment target such as builder without requiring separate roster command
-- [ ] Tests cover observation and proposal envelopes and pnpm verify passes
+- [x] task create or inbox command supports creating a task from an envelope id
+- [x] Generated task includes context required work criteria and source envelope reference from payload fields
+- [x] Generated task avoids placeholder TBD sections when envelope has enough structure
+- [x] Command supports assignment target such as builder without requiring separate roster command
+- [x] Tests cover observation and proposal envelopes and pnpm verify passes

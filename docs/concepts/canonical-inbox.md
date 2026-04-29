@@ -21,7 +21,7 @@ narada inbox work-next --claim --by operator
 narada inbox list
 narada inbox show <envelope-id>
 narada inbox architect-process <envelope-id> --by architect
-narada inbox task <envelope-id> --title "Fix PC Site identity policy" --by operator
+narada inbox task <envelope-id> --title "Fix PC Site identity policy" --by operator --assign builder
 narada inbox triage <envelope-id> --action archive --by operator
 narada inbox pending <envelope-id> --to site_config_change:site:desktop-sunroom-2 --by operator
 ```
@@ -221,7 +221,7 @@ Promotion is the governed crossing out of the Inbox. It must not imply more than
 
 | Target kind | Behavior |
 |-------------|----------|
-| `task` | Executed for `task_candidate` and `upstream_task_candidate` envelopes by calling the sanctioned task creation command. Prefer `narada inbox task <envelope-id> --by <principal>`; `inbox promote --target-kind task` remains the canonical compatibility path. The envelope records `enactment_status: enacted` and `target_ref: task:<number>`. Repeating the promotion returns the existing promotion and does not create a duplicate task. |
+| `task` | Executed for `task_candidate`, `upstream_task_candidate`, `proposal`, and `observation` envelopes by calling the sanctioned task creation command. Prefer `narada inbox task <envelope-id> --by <principal>`; `inbox promote --target-kind task` remains the canonical compatibility path. The envelope records `enactment_status: enacted` and `target_ref: task:<number>`. Repeating the promotion returns the existing promotion and does not create a duplicate task. |
 | `archive` | Records the envelope as `archived` with no target-zone mutation. `--target-ref` is optional. |
 | `decision`, `operator_action`, `knowledge_entry`, `site_config_change` | Recorded as `enactment_status: pending` and `pending_kind: recorded_pending_crossing` until those target zones have explicit executable promotion operators. |
 
@@ -232,6 +232,14 @@ For task promotion, CLI overrides take precedence over payload fields:
 ```bash
 narada inbox task <envelope-id> --by operator --title "..." --goal "..." --criteria "First criterion" --criteria "Second criterion"
 ```
+
+Use `--assign <principal>` when the created task should be claimed immediately:
+
+```bash
+narada inbox task <envelope-id> --by architect --assign builder
+```
+
+Generated tasks preserve source envelope id, source ref, envelope kind, summary/body/evidence/proposal/recommendation context, detailed required work, and acceptance criteria when payload structure provides them. The command must not leave `TBD` placeholders when the envelope contains enough structure to derive the task specification.
 
 ## Work-Next
 

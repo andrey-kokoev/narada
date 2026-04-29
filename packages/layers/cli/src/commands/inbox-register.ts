@@ -360,6 +360,7 @@ export function registerInboxCommands(program: Command): void {
     .requiredOption('--by <principal>', 'Principal recording promotion')
     .option('--title <title>', 'Task title override')
     .option('--goal <goal>', 'Task goal override')
+    .option('--assign <principal>', 'Claim the created task for this principal')
     .option('--criteria <text>', 'Task acceptance criterion override (repeatable)', collectValues, [])
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
@@ -370,6 +371,7 @@ export function registerInboxCommands(program: Command): void {
       invocation: (envelopeId, opts) => inboxTaskCommand({
         envelopeId,
         by: opts.by as string | undefined,
+        assign: opts.assign as string | undefined,
         title: opts.title as string | undefined,
         goal: opts.goal as string | undefined,
         criteria: opts.criteria as string[] | undefined,

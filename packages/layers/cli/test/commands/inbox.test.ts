@@ -795,15 +795,15 @@ describe('Canonical Inbox CLI commands', () => {
     });
   });
 
-  it('architect-process refuses non-task envelopes', async () => {
+  it('architect-process refuses non-taskable envelopes', async () => {
     const submitted = await inboxSubmitCommand({
       cwd: tempDir,
       format: 'json',
       sourceKind: 'cli',
-      sourceRef: 'manual:observation',
-      kind: 'observation',
+      sourceRef: 'manual:question',
+      kind: 'question',
       authorityLevel: 'operator_confirmed',
-      payload: JSON.stringify({ title: 'Observation only' }),
+      payload: JSON.stringify({ title: 'Question only' }),
     });
     const envelopeId = (submitted.result as { envelope: { envelope_id: string } }).envelope.envelope_id;
 
@@ -816,6 +816,82 @@ describe('Canonical Inbox CLI commands', () => {
 
     expect(processed.exitCode).toBe(ExitCode.GENERAL_ERROR);
     expect((processed.result as { error: string }).error).toContain('cannot be processed into Builder task handoff');
+  });
+
+  it('creates assigned tasks directly from observation envelopes with source-linked context', async () => {
+    setupRepo(tempDir);
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'agent_report',
+      sourceRef: 'staccato:runtime',
+      kind: 'observation',
+      authorityLevel: 'agent_reported',
+      payload: JSON.stringify({
+        title: 'Fix runtime drift',
+        summary: 'Runtime drift was observed in a delegated Site command surface.',
+        evidence: ['doctor showed stale command surface', 'runtime DB remained healthy'],
+        recommendation: 'Separate command-surface health from runtime health.',
+      }),
+    });
+    const envelopeId = (submitted.result as { envelope: { envelope_id: string } }).envelope.envelope_id;
+
+    const promoted = await inboxTaskCommand({
+      cwd: tempDir,
+      envelopeId,
+      by: 'architect',
+      assign: 'builder',
+      format: 'json',
+    });
+
+    expect(promoted.exitCode).toBe(ExitCode.SUCCESS);
+    const result = promoted.result as {
+      target: { task_number: number; file_path: string };
+      assignment: { agent_id: string };
+    };
+    expect(result.assignment.agent_id).toBe('builder');
+    const taskContent = readFileSync(result.target.file_path, 'utf8');
+    expect(taskContent).toContain('Source inbox envelope:');
+    expect(taskContent).toContain(envelopeId);
+    expect(taskContent).toContain('Source: agent_report:staccato:runtime');
+    expect(taskContent).toContain('Runtime drift was observed');
+    expect(taskContent).toContain('Recommendation addressed or explicitly rejected');
+    expect(taskContent).not.toContain('TBD');
+  });
+
+  it('creates complete tasks directly from proposal envelopes', async () => {
+    setupRepo(tempDir);
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'user_chat',
+      sourceRef: 'operator:proposal',
+      kind: 'proposal',
+      authorityLevel: 'operator_confirmed',
+      payload: JSON.stringify({
+        title: 'Add proposal route',
+        summary: 'A proposal should become an executable task without manual markdown editing.',
+        proposal: ['Add direct inbox task creation.', 'Preserve source linkage.'],
+        required_work: ['Implement the direct route.', 'Verify proposal handling.'],
+      }),
+    });
+    const envelopeId = (submitted.result as { envelope: { envelope_id: string } }).envelope.envelope_id;
+
+    const promoted = await inboxTaskCommand({
+      cwd: tempDir,
+      envelopeId,
+      by: 'architect',
+      format: 'json',
+    });
+
+    expect(promoted.exitCode).toBe(ExitCode.SUCCESS);
+    const result = promoted.result as { target: { file_path: string }; assignment: null };
+    expect(result.assignment).toBeNull();
+    const taskContent = readFileSync(result.target.file_path, 'utf8');
+    expect(taskContent).toContain('Implement the direct route.');
+    expect(taskContent).toContain('Proposal handled: Add direct inbox task creation.');
+    expect(taskContent).toContain(envelopeId);
+    expect(taskContent).not.toContain('TBD');
   });
 
   it('shows the next received inbox envelope without mutating it', async () => {

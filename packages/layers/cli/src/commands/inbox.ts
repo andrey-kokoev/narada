@@ -80,6 +80,7 @@ export interface InboxPromoteOptions extends InboxCommandOptions {
   targetKind?: string;
   targetRef?: string;
   by?: string;
+  assign?: string;
   title?: string;
   goal?: string;
   criteria?: string[];
@@ -1014,6 +1015,25 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
         const taskResult = await createTaskFromEnvelope(existing, options);
         if (taskResult.exitCode !== ExitCode.SUCCESS) return taskResult;
         const task = taskResult.result as { task_number: number; task_id: string };
+        let assignment: unknown = null;
+        if (options.assign) {
+          const rosterAdd = await taskRosterAddCommand({
+            cwd,
+            agent: options.assign,
+            role: options.assign === 'builder' ? 'builder' : 'implementer',
+            format: 'json',
+          });
+          if (rosterAdd.exitCode !== ExitCode.SUCCESS) return rosterAdd;
+          const claim = await taskClaimCommand({
+            taskNumber: String(task.task_number),
+            agent: options.assign,
+            reason: `Inbox task creation from ${existing.envelope_id}`,
+            cwd,
+            format: 'json',
+          });
+          if (claim.exitCode !== ExitCode.SUCCESS) return claim;
+          assignment = claim.result;
+        }
         const envelope = store.promote(options.envelopeId!, {
           target_kind: 'task',
           target_ref: `task:${task.task_number}`,
@@ -1021,7 +1041,7 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
           promoted_by: options.by!,
           enactment_status: 'enacted',
           target_command: 'task create',
-          target_result: taskResult.result,
+          target_result: { task: taskResult.result, assignment },
         });
         await writeInboxMutationEvidence({
           cwd,
@@ -1030,7 +1050,7 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
           authorityClass: 'resolve',
           before,
           after: inboxEnvelopeToEvidenceState(store.get(envelope.envelope_id)),
-          result: { status: 'success', enactment_status: 'enacted', target_mutation: true, envelope },
+          result: { status: 'success', enactment_status: 'enacted', target_mutation: true, envelope, assignment },
         });
         return okResult(
           {
@@ -1038,11 +1058,13 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
             enactment_status: 'enacted',
             target_mutation: true,
             target: taskResult.result,
+            assignment,
             envelope,
           },
           [
             `Inbox envelope promoted: ${envelope.envelope_id}`,
             `Created task: ${task.task_number}`,
+            ...(options.assign ? [`Assigned: ${options.assign}`] : []),
             `Promoted by: ${options.by}`,
           ],
           options.format,
@@ -1219,7 +1241,7 @@ export async function inboxArchitectProcessCommand(options: InboxArchitectProces
   return withInboxStoreAsync(options, async (store) => {
     const existing = store.get(options.envelopeId!);
     if (!existing) return errorResult(`Inbox envelope not found: ${options.envelopeId}`);
-    if (existing.kind !== 'task_candidate' && existing.kind !== 'upstream_task_candidate') {
+    if (!canCreateTaskFromEnvelope(existing)) {
       return errorResult(`Envelope kind '${existing.kind}' cannot be processed into Builder task handoff`);
     }
     if (existing.promotion?.target_kind === 'task') {
@@ -1649,7 +1671,7 @@ async function createTaskFromEnvelope(
   envelope: InboxEnvelope,
   options: InboxPromoteOptions,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  if (envelope.kind !== 'task_candidate' && envelope.kind !== 'upstream_task_candidate') {
+  if (!canCreateTaskFromEnvelope(envelope)) {
     return errorResult(`Envelope kind '${envelope.kind}' cannot be enacted as task`);
   }
 
@@ -1662,22 +1684,32 @@ async function createTaskFromEnvelope(
   const goal = cleanString(options.goal)
     ?? stringField(payload, 'goal')
     ?? stringField(payload, 'description')
+    ?? stringField(payload, 'summary')
     ?? `Promoted from inbox envelope ${envelope.envelope_id}.`;
   const criteria = cleanStringArray(options.criteria)
     ?? stringArrayField(payload, 'acceptance_criteria')
     ?? stringArrayField(payload, 'criteria')
-    ?? [`Inbox envelope ${envelope.envelope_id} has been handled.`];
+    ?? criteriaFromPayload(payload)
+    ?? defaultArchitectProcessCriteria(envelope);
 
   return taskCreateCommand({
     cwd: options.cwd,
     title,
     goal,
+    context: contextFromEnvelope(envelope, payload),
     requiredWork: detailedRequiredWorkFromPayload(envelope, payload),
     criteria,
     chapter: stringField(payload, 'chapter') ?? 'Canonical Inbox Promotions',
     dependsOn: numberArrayCsvField(payload, 'depends_on'),
     format: 'json',
   });
+}
+
+function canCreateTaskFromEnvelope(envelope: InboxEnvelope): boolean {
+  return envelope.kind === 'task_candidate'
+    || envelope.kind === 'upstream_task_candidate'
+    || envelope.kind === 'proposal'
+    || envelope.kind === 'observation';
 }
 
 function taskSpecFromEnvelope(envelope: InboxEnvelope, options: InboxArchitectProcessOptions): {
@@ -1701,6 +1733,7 @@ function taskSpecFromEnvelope(envelope: InboxEnvelope, options: InboxArchitectPr
   const criteria = cleanStringArray(options.criteria)
     ?? stringArrayField(payload, 'acceptance_criteria')
     ?? stringArrayField(payload, 'criteria')
+    ?? criteriaFromPayload(payload)
     ?? defaultArchitectProcessCriteria(envelope);
   return {
     title,
@@ -1740,6 +1773,35 @@ function defaultArchitectProcessCriteria(envelope: InboxEnvelope): string[] {
     'Verification evidence is recorded before closure.',
     'Residuals or blockers are reported explicitly.',
   ];
+}
+
+function contextFromEnvelope(envelope: InboxEnvelope, payload: Record<string, unknown>): string {
+  const parts = [
+    `Source inbox envelope: ${envelope.envelope_id}`,
+    `Source: ${envelope.source.kind}:${envelope.source.ref}`,
+    `Envelope kind: ${envelope.kind}`,
+  ];
+  const summary = stringField(payload, 'summary');
+  const body = stringField(payload, 'body');
+  const evidence = stringArrayField(payload, 'evidence');
+  const proposal = stringArrayField(payload, 'proposal');
+  const recommendation = stringField(payload, 'recommendation');
+  if (summary) parts.push(`Summary: ${summary}`);
+  if (body) parts.push(`Body excerpt: ${body.replace(/\s+/g, ' ').slice(0, 500)}`);
+  if (evidence) parts.push(`Evidence:\n${evidence.map((item) => `- ${item}`).join('\n')}`);
+  if (proposal) parts.push(`Proposal:\n${proposal.map((item) => `- ${item}`).join('\n')}`);
+  if (recommendation) parts.push(`Recommendation: ${recommendation}`);
+  return parts.join('\n\n');
+}
+
+function criteriaFromPayload(payload: Record<string, unknown>): string[] | undefined {
+  const proposal = stringArrayField(payload, 'proposal');
+  const recommendation = stringField(payload, 'recommendation');
+  const criteria = [
+    ...(proposal ?? []).map((item) => `Proposal handled: ${item}`),
+    ...(recommendation ? [`Recommendation addressed or explicitly rejected: ${recommendation}`] : []),
+  ];
+  return criteria.length > 0 ? criteria : undefined;
 }
 
 function withInboxStore(
