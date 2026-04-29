@@ -196,12 +196,13 @@ const OperationIntakeSchema = z.object({
 
 // Source configuration schema
 const SourceConfigSchema = z.object({
-  type: z.enum(['graph', 'timer', 'webhook', 'mock']),
+  type: z.enum(['graph', 'timer', 'webhook', 'inbox_drop', 'mock']),
   tenant_id: z.string().min(1).optional(),
   client_id: z.string().min(1).optional(),
   client_secret: z.string().min(1).optional(),
   user_id: z.string().min(1).optional(),
   base_url: z.string().url().optional(),
+  path: z.string().min(1).optional(),
   prefer_immutable_ids: z.boolean().optional(),
 }).catchall(z.unknown());
 

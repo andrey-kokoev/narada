@@ -115,12 +115,13 @@ export interface OperationIntakeConfig {
 
 /** Source configuration for a scope (e.g. Graph API, timer, webhook) */
 export interface SourceConfig {
-  type: 'graph' | 'timer' | 'webhook' | 'mock';
+  type: 'graph' | 'timer' | 'webhook' | 'inbox_drop' | 'mock';
   tenant_id?: string;
   client_id?: string;
   client_secret?: string;
   user_id?: string;
   base_url?: string;
+  path?: string;
   prefer_immutable_ids?: boolean;
   /**
    * @deprecated Legacy field for backward compatibility. Prefer source-specific config objects.

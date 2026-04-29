@@ -10,6 +10,7 @@ This document defines the authority posture for Project and Site-local daemons t
 | --- | --- | --- |
 | `ExchangeSource` | Pulls Microsoft Graph mailbox deltas. | External remote source. Payloads are normalized into mailbox events and may update mailbox projections. |
 | `TimerSource` | Emits deterministic `timer.tick` source records. | Local scheduling/liveness source. It creates facts for context formation; it is not a mailbox event. |
+| `InboxDropSource` | Observes direct children of a Site inbox-drop directory and emits `filesystem.change` source records. | Local intake observation source. It is inert; Canonical Inbox admission remains separate. |
 | `WebhookSource` | Pulls queued `webhook.received` records. | External intake source. Arrival is inert until policy admits or promotes it. |
 | `FilesystemSource` | Pulls queued `filesystem.change` records. | Local filesystem observation source. It records file observations; it does not by itself decide meaning. |
 | No-op fallback source | Emits no records for unsupported source config. | Liveness placeholder only. It must not be treated as useful Site-local work. |
@@ -50,6 +51,36 @@ Forbidden shortcuts:
 | No-op fallback source is reported as a useful Site-local daemon source. | It proves only process presence, not observation, admission, or work creation. |
 
 For file-drop intake, the daemon should reuse the same semantics as `narada inbox ingest-files`: dry observation first, explicit admission when the governing context authorizes it, and portable envelope evidence under `.ai/inbox-envelopes`.
+
+## First Implemented Path
+
+The first bounded implementation is `sources: [{ "type": "inbox_drop" }]`.
+
+Example:
+
+```json
+{
+  "scope_id": "project-site",
+  "root_dir": "/path/to/site",
+  "sources": [
+    {
+      "type": "inbox_drop",
+      "path": ".ai/inbox-drop"
+    }
+  ],
+  "context_strategy": "filesystem"
+}
+```
+
+Rules:
+
+| Rule | Effect |
+| --- | --- |
+| The watched path defaults to `.ai/inbox-drop`. | Project/Site daemons have a conventional local intake surface. |
+| Only direct children of the drop directory are observed. | The source does not become an arbitrary filesystem crawler. |
+| Each child emits a stable `filesystem.change` source record keyed by path, size, and mtime. | Repeated sync cycles are idempotent through apply-log/fact-store behavior. |
+| The daemon stores the record as an unadmitted `filesystem.change` fact. | Arrival stays inert until a later governed admission path acts. |
+| Canonical Inbox admission is still performed by `narada inbox ingest-files --from <drop-dir> --admit --by <principal>`. | The source observes; it does not promote or mutate tasks. |
 
 ## Projection Posture
 

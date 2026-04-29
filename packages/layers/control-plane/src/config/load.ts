@@ -288,8 +288,8 @@ function loadScopeConfig(rawScope: unknown, pathPrefix: string): ScopeConfig {
   const sources = sourcesRaw.map((s, i) => {
     const src = expectObject(s, `${pathPrefix}.sources[${i}]`);
     const type = expectString(src.type, `${pathPrefix}.sources[${i}].type`);
-    if (!["graph", "timer", "webhook", "mock"].includes(type)) {
-      throw new Error(`${pathPrefix}.sources[${i}].type must be one of: graph, timer, webhook, mock`);
+    if (!["graph", "timer", "webhook", "inbox_drop", "mock"].includes(type)) {
+      throw new Error(`${pathPrefix}.sources[${i}].type must be one of: graph, timer, webhook, inbox_drop, mock`);
     }
     return { type, ...src } as ScopeConfig["sources"][number];
   });
