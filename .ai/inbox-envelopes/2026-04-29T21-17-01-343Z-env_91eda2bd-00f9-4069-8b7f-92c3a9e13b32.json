@@ -1,0 +1,30 @@
+{
+  "envelope_id": "env_91eda2bd-00f9-4069-8b7f-92c3a9e13b32",
+  "received_at": "2026-04-29T21:17:01.343Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey.builder:operator-surface-label-shape"
+  },
+  "kind": "proposal",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Operator-surface labels should project semantic display parts",
+    "summary": "Builder observed that long identity ids such as narada-andrey.builder are visually heavy and collapse Site context, agent name, and role metadata into one string. Label projection should render from semantic parts while identity authority remains the full admitted identity id.",
+    "observation": "The current overlay displays the full admitted identity id. That is correct as an authority anchor, but it is not always the right operator-facing display string. Identities need display metadata such as site/context, name, and role. The label projection should decide compact/full display text from those parts without changing identity authority.",
+    "evidence": [
+      "Current labels such as narada-andrey.architect and narada-andrey.builder are visually heavy.",
+      "The strings collapse Site identity, agent/persona name, and role metadata into one label.",
+      "Builder noted that builder is currently both agent name and role-like word, but future identities may have name and role differ, for example name=kimi role=reviewer.",
+      "Potential displays include 'andrey - builder', 'andrey - kimi - reviewer', or 'andrey - kimi (reviewer)'.",
+      "Identity authority should remain the full admitted identity id; label projection should render display text from metadata."
+    ],
+    "proposed_direction": "Extend operator-surface identity metadata with display parts: site/context display, name, role, and display policy. Update label projection, overlay, YASB picker/list surfaces, and future CLI commands to render from these parts while preserving the full identity id as authority and machine key.",
+    "related_upstream_task": "20260429-1091-add-operator-surface-identity-binding-commands",
+    "source_user_site_envelope": "env_718d7fd3-051b-4dab-bb4c-9bf58b0a99aa",
+    "requested_handling": "Treat as design input to operator-surface identity/binding machinery rather than a separate local one-off."
+  },
+  "status": "received"
+}
