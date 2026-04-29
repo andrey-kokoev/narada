@@ -4,6 +4,8 @@ Site governance coordinates are the explicit declaration of where a Site gets la
 
 They do not grant runtime authority by themselves. They make authority inspectable before a command, agent, UI, MCP facade, or clone acts.
 
+When durable governance coordinates, runtime truth, and operator/session knowledge diverge, use [`site-stabilization-reconciliation.md`](site-stabilization-reconciliation.md). Stabilization is read-only: it proposes governed posture updates and records residuals without silently rewriting Site config, tasks, doctrine, or runtime state.
+
 ## Coordinate Set
 
 | Coordinate | Meaning | Anti-Collapse Rule |

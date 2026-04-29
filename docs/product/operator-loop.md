@@ -144,6 +144,8 @@ For `draft_reply`, this creates a pending outbound command only. The outbound wo
 
 Runtime readiness is staged. Sync and evaluation smoke do not prove that pending approvals can become safe drafts or effects. See [`mailbox-runtime-readiness.md`](mailbox-runtime-readiness.md) for the canonical states: `sync_smoke_passed`, `evaluation_smoke_passed`, `pending_approval_path_ready`, `draft_effect_smoke_passed`, `full_runtime_ready`, and `blocked_missing_approval_path`.
 
+If durable Site memory says one readiness state while runtime/control-plane evidence says another, use the Site stabilization posture from [`site-stabilization-reconciliation.md`](site-stabilization-reconciliation.md). Stabilization is a read-only comparison and proposal surface; it does not update Site docs, config, tasks, or runtime state by implication.
+
 **Promotion flow:**
 - `pending_approval` decision → approve (`approve-pending-decision`) → outbound command exists
 - `draft_ready` → review (`mark-reviewed`) → approve (`approve-draft-for-send`) → worker sends → `submitted` → inbound reconciliation → `confirmed`

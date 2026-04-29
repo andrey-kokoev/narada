@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T17:20:04.894Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T17:28:08.893Z
+criteria_proof_verification:
+  state: unbound
+  rationale: The accepted fixture in docs/product/site-stabilization-reconciliation.md proves stale durable memory plus advanced runtime truth yields a proposed read-only posture update; the surface distinguishes durable memory, runtime health, quiescence, work state, outbound handoffs, private substrate, publication posture, and operator/session residuals; bounded human/JSON output, readiness states including operational_quiescent_with_approval_path_residual, and non-mutation rules are documented and linked from AGENTS/operator-loop/Site governance docs.
+closed_at: 2026-04-29T17:28:22.900Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Add governed Site stabilization and posture reconciliation surface
@@ -39,8 +48,8 @@ Inbox envelope env_63b9a246-347b-4732-acfa-8ba21c074e14 reports a Staccato Site 
 
 ## Acceptance Criteria
 
-- [ ] Stabilization surface distinguishes durable tasks chapters config runtime health quiescence work items outbound handoffs and operator/session residuals
-- [ ] Command or checklist produces bounded human and JSON summaries with current health quiescence pending work pending effects confirmed effects residuals and recommended posture
-- [ ] Surface proposes posture updates rather than silently mutating Site docs config or doctrine
-- [ ] Readiness states include operational quiescent with residuals and detect stale durable memory that contradicts runtime truth
-- [ ] Source Staccato envelope is routed and focused tests or pnpm verify pass
+- [x] Stabilization surface distinguishes durable tasks chapters config runtime health quiescence work items outbound handoffs and operator/session residuals
+- [x] Command or checklist produces bounded human and JSON summaries with current health quiescence pending work pending effects confirmed effects residuals and recommended posture
+- [x] Surface proposes posture updates rather than silently mutating Site docs config or doctrine
+- [x] Readiness states include operational quiescent with residuals and detect stale durable memory that contradicts runtime truth
+- [x] Source Staccato envelope is routed and focused tests or pnpm verify pass
