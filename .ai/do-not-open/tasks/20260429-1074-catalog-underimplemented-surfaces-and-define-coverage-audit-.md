@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T16:34:24.975Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T16:49:06.114Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Coverage Audit Zone doctrine defines the catalog schema, sweep scope, authority posture, bounded initial sweep protocol, admission paths for follow-up tasks and other outcomes, and first implementation slice. AGENTS links the concept. Verified by pnpm verify.
+closed_at: 2026-04-29T16:49:27.436Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Catalog underimplemented surfaces and define coverage audit zone
@@ -39,8 +48,8 @@ This task follows repeated Operator pressure that some Narada and Site capabilit
 
 ## Acceptance Criteria
 
-- [ ] A catalog format is defined for underimplemented surfaces including claim source implemented behavior missing behavior impact evidence owner and recommended next action
-- [ ] Sweep scope covers CLI commands docs concepts tasks tests and operator surfaces where labels or accepted criteria may overstate implementation
-- [ ] Authority zone posture is defined for coverage audit discovery cataloging admission and repair so detection does not automatically mutate implementation
-- [ ] Initial sweep command or manual protocol is specified with bounded output and artifact-first evidence
-- [ ] Follow-up tasks can be generated from catalog entries through governed admission and focused verification or pnpm verify passes
+- [x] A catalog format is defined for underimplemented surfaces including claim source implemented behavior missing behavior impact evidence owner and recommended next action
+- [x] Sweep scope covers CLI commands docs concepts tasks tests and operator surfaces where labels or accepted criteria may overstate implementation
+- [x] Authority zone posture is defined for coverage audit discovery cataloging admission and repair so detection does not automatically mutate implementation
+- [x] Initial sweep command or manual protocol is specified with bounded output and artifact-first evidence
+- [x] Follow-up tasks can be generated from catalog entries through governed admission and focused verification or pnpm verify passes
