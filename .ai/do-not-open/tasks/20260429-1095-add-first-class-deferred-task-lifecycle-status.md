@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T23:23:58.955Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Implemented first-class deferred task status in shared lifecycle vocabulary and state transitions; added sanctioned narada task defer command with required reason/unblock/residual evidence; deferred tasks are excluded from runnable recommendations and active work while shown on workboard/lifecycle posture; dependency diagnostics now distinguish deferred blockers; task 403 was migrated from in_review workaround to deferred via the new command.
+closed_at: 2026-04-29T23:24:36.057Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add first-class deferred task lifecycle status
@@ -44,9 +53,9 @@ Envelope kind: upstream_task_candidate
 
 ## Acceptance Criteria
 
-- [ ] TaskStatus and lifecycle SQLite authority admit deferred as a persisted status.
-- [ ] There is a sanctioned CLI transition into deferred with required rationale/residual/unblock evidence.
-- [ ] Deferred tasks do not appear as runnable recommendations or active builder work, but remain visible as deferred/blocker posture.
-- [ ] Dependencies on deferred tasks explain the blocker and unblock condition instead of generic unmet dependency only.
-- [ ] Existing use of in_review is not abused for external deferral.
-- [ ] Task 403 can be migrated from in_review workaround to deferred without direct file or SQLite edits.
+- [x] TaskStatus and lifecycle SQLite authority admit deferred as a persisted status.
+- [x] There is a sanctioned CLI transition into deferred with required rationale/residual/unblock evidence.
+- [x] Deferred tasks do not appear as runnable recommendations or active builder work, but remain visible as deferred/blocker posture.
+- [x] Dependencies on deferred tasks explain the blocker and unblock condition instead of generic unmet dependency only.
+- [x] Existing use of in_review is not abused for external deferral.
+- [x] Task 403 can be migrated from in_review workaround to deferred without direct file or SQLite edits.

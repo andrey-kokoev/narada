@@ -28,11 +28,13 @@ export interface TaskWorkboard {
     active_tasks: number;
     pending_reviews: number;
     in_progress: number;
+    deferred: number;
     task_numbers: number[];
   }>;
   pending_reviews: WorkboardTask[];
   in_progress: WorkboardTask[];
   local_followups: WorkboardTask[];
+  deferred: WorkboardTask[];
   source_envelopes: Array<{
     envelope_id: string;
     kind: string;
@@ -55,6 +57,7 @@ export interface TaskWorkboard {
 }
 
 const ACTIVE_STATUSES = new Set(['claimed', 'needs_continuation', 'in_review']);
+const DEFERRED_STATUSES = new Set(['deferred']);
 
 export async function taskWorkboardCommand(
   options: TaskWorkboardOptions,
@@ -69,14 +72,16 @@ export async function taskWorkboardCommand(
       .filter((task): task is WorkboardTask => task !== null)
       .sort((a, b) => b.task_number - a.task_number);
     const activeTasks = tasks.filter((task) => ACTIVE_STATUSES.has(task.status));
+    const deferredTasks = tasks.filter((task) => DEFERRED_STATUSES.has(task.status));
     const result: TaskWorkboard = {
       status: 'success',
       generated_at: new Date().toISOString(),
       limit,
-      active_chapters: summarizeChapters(activeTasks).slice(0, limit),
+      active_chapters: summarizeChapters([...activeTasks, ...deferredTasks]).slice(0, limit),
       pending_reviews: activeTasks.filter((task) => task.status === 'in_review').slice(0, limit),
       in_progress: activeTasks.filter((task) => task.status === 'claimed' || task.status === 'needs_continuation').slice(0, limit),
       local_followups: tasks.filter((task) => task.status === 'opened' || task.status === 'needs_continuation').slice(0, limit),
+      deferred: deferredTasks.slice(0, limit),
       source_envelopes: listSourceEnvelopes(cwd, limit),
       upstream_publications: store.listRepoPublications(limit, null)
         .filter((publication) => publication.status === 'prepared')
@@ -154,6 +159,7 @@ function summarizeChapters(tasks: WorkboardTask[]): TaskWorkboard['active_chapte
       active_tasks: chapterTasks.length,
       pending_reviews: chapterTasks.filter((task) => task.status === 'in_review').length,
       in_progress: chapterTasks.filter((task) => task.status === 'claimed' || task.status === 'needs_continuation').length,
+      deferred: chapterTasks.filter((task) => task.status === 'deferred').length,
       task_numbers: chapterTasks.map((task) => task.task_number).sort((a, b) => a - b),
     }))
     .sort((a, b) => b.active_tasks - a.active_tasks || a.chapter.localeCompare(b.chapter));
@@ -183,6 +189,7 @@ function renderHuman(workboard: TaskWorkboard): string[] {
     `Active chapters: ${workboard.active_chapters.length}`,
     `Pending reviews: ${workboard.pending_reviews.length}`,
     `In progress: ${workboard.in_progress.length}`,
+    `Deferred: ${workboard.deferred.length}`,
     `Local followups: ${workboard.local_followups.length}`,
     `Source envelopes: ${workboard.source_envelopes.length}`,
     `Prepared publications: ${workboard.upstream_publications.length}`,
@@ -192,6 +199,9 @@ function renderHuman(workboard: TaskWorkboard): string[] {
     '',
     'In Progress:',
     ...renderTaskLines(workboard.in_progress),
+    '',
+    'Deferred:',
+    ...renderTaskLines(workboard.deferred),
     '',
     'Concurrency:',
     ...workboard.concurrency_boundaries.map((line) => `  - ${line}`),

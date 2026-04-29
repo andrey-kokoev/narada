@@ -106,6 +106,7 @@ function normalizeLifecycleStatus(value: unknown): TaskStatus {
     status === 'claimed' ||
     status === 'needs_continuation' ||
     status === 'in_review' ||
+    status === 'deferred' ||
     status === 'closed' ||
     status === 'confirmed'
   ) {
@@ -366,6 +367,8 @@ export async function taskReadCommand(
     if (hasDerivatives) {
       warnings.push('Derivative task-status files exist');
     }
+  } else if (status === 'deferred') {
+    warnings.push('Task is deferred; external unblock evidence is required before it should become runnable');
   }
 
   const result: TaskReadResult = {

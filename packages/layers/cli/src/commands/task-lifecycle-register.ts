@@ -1,6 +1,7 @@
 import type { Command } from 'commander';
 import { taskClaimCommand } from './task-claim.js';
 import { taskReleaseCommand } from './task-release.js';
+import { taskDeferCommand } from './task-defer.js';
 import { taskReviewCommand } from './task-review.js';
 import { taskReportCommand } from './task-report.js';
 import { taskFinishCommand } from './task-finish.js';
@@ -121,6 +122,28 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
         cwd: opts.cwd as string | undefined,
         format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
         principalStateDir: opts.principalStateDir as string | undefined,
+      }),
+    }));
+
+  taskCmd
+    .command('defer <task-number>')
+    .description('Defer a task on explicit external unblock evidence')
+    .requiredOption('--agent <id>', 'Agent ID recording the deferral')
+    .requiredOption('--reason <text>', 'Why the task cannot progress now')
+    .requiredOption('--unblock <text>', 'Concrete unblock condition or command')
+    .option('--residuals <json>', 'JSON array or comma-separated residuals')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .action(directCommandAction<[string, Record<string, unknown>]>({
+      command: 'task defer',
+      emit: emitCommandResult,
+      invocation: (taskNumber, opts) => taskDeferCommand({
+        taskNumber,
+        agent: opts.agent as string,
+        reason: opts.reason as string,
+        unblock: opts.unblock as string,
+        residuals: opts.residuals as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
       }),
     }));
 

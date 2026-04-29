@@ -40,6 +40,7 @@ export type TaskStatus =
   | "claimed"
   | "needs_continuation"
   | "in_review"
+  | "deferred"
   | "closed"
   | "confirmed";
 

@@ -1092,6 +1092,37 @@ describe('checkDependencies', () => {
     store.db.close();
   });
 
+  it('explains dependencies that are explicitly deferred in SQLite', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-dep.md'),
+      '---\nstatus: opened\n---\n\n# Task 998: Dep\n',
+    );
+
+    const store = openTaskLifecycleStore(tempDir);
+    store.upsertLifecycle({
+      task_id: '20260420-998-dep',
+      task_number: 998,
+      status: 'deferred',
+      governed_by: null,
+      closed_at: null,
+      closed_by: null,
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: JSON.stringify({
+        kind: 'task_defer',
+        unblock_condition: 'Bind real Graph source',
+      }),
+      created_at: '2026-04-20T00:00:00Z',
+      updated_at: '2026-04-20T00:00:00Z',
+    });
+
+    const result = await checkDependencies(tempDir, [998], store);
+    expect(result.blockedBy).toContain('20260420-998-dep');
+    expect(result.details[0]!.reason).toContain('Dependency is deferred');
+
+    store.db.close();
+  });
+
   it('allows dependencies that are confirmed in SQLite even when markdown says opened', async () => {
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-dep.md'),

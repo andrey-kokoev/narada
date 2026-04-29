@@ -1,7 +1,18 @@
 ---
-status: in_review
+status: deferred
 depends_on: [400, 401, 402, 416]
 operator_gate: true
+deferred_by: builder
+deferred_at: 2026-04-29T23:22:10.938Z
+defer_reason: Controlled live mailbox input and real Graph-bound operation execution are not currently available in this locus; task should not appear as completed-awaiting-review.
+unblock_condition: Select a controlled help@global-maxima.com mailbox thread, bind a real Graph source in the materialized operation locus, and run one safe no-send Cycle.
+continuation_packet:
+  kind: task_defer
+  deferred_by: builder
+  deferred_at: 2026-04-29T23:22:10.938Z
+  reason: Controlled live mailbox input and real Graph-bound operation execution are not currently available in this locus; task should not appear as completed-awaiting-review.
+  unblock_condition: Select a controlled help@global-maxima.com mailbox thread, bind a real Graph source in the materialized operation locus, and run one safe no-send Cycle.
+  residuals: [Requires controlled mailbox thread selection., Requires real Graph API source binding/connectivity., Requires one real-mail Cycle with Klaviyo send/publish effects prevented.]
 ---
 
 # Task 403 — Controlled Live Input & Dry Run Execution

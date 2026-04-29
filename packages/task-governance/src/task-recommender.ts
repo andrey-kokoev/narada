@@ -24,6 +24,7 @@ import {
   type AgentRosterEntry,
   type ChapterTaskInfo,
   type ComputedAffinity,
+  type DependencyCheckDetail,
   type WorkResultReport,
 } from './task-governance.js';
 import { openTaskLifecycleStore, type TaskLifecycleStore } from './task-lifecycle-store.js';
@@ -89,6 +90,7 @@ export interface AbstainedTask {
   reason: string;
   blocked_by?: number[];
   blocked_by_agents?: Array<{ task_number: number; agent_id: string }>;
+  blocker_details?: DependencyCheckDetail[];
 }
 
 export interface RecommendationOptions {
@@ -525,7 +527,7 @@ export async function generateRecommendations(
   }
 
   // Filter to runnable tasks with satisfied dependencies (evidence-valid)
-  const dependencyBlocked: Array<{ task: TaskInfo; blockedBy: number[] }> = [];
+  const dependencyBlocked: Array<{ task: TaskInfo; blockedBy: number[]; details: DependencyCheckDetail[] }> = [];
   const awaitingReview: TaskInfo[] = [];
   const runnableTasks: TaskInfo[] = [];
 
@@ -536,13 +538,14 @@ export async function generateRecommendations(
     }
     if (task.status !== 'opened' && task.status !== 'needs_continuation') continue;
 
-    const { blockedBy } = await checkDependencies(cwd, task.dependsOn, store);
+    const { blockedBy, details } = await checkDependencies(cwd, task.dependsOn, store);
     if (blockedBy.length > 0) {
       dependencyBlocked.push({
         task,
         blockedBy: blockedBy
           .map((id) => extractTaskNumberFromFileName(id))
           .filter((n): n is number => n !== null),
+        details,
       });
       continue;
     }
@@ -661,19 +664,23 @@ export async function generateRecommendations(
     });
   }
 
-  for (const { task, blockedBy } of dependencyBlocked) {
+  for (const { task, blockedBy, details } of dependencyBlocked) {
     const blockedByAgents = blockedBy
       .map((taskNumber) => {
         const agentId = rosterByTask.get(taskNumber);
         return agentId ? { task_number: taskNumber, agent_id: agentId } : null;
       })
       .filter((entry): entry is { task_number: number; agent_id: string } => entry !== null);
+    const hasDeferredDependency = details.some((detail) => detail.reason.includes('Dependency is deferred'));
     abstained.push({
       task_id: task.taskId,
       task_number: task.taskNumber,
-      reason: 'Blocked by unmet dependencies',
+      reason: hasDeferredDependency
+        ? 'Blocked by deferred dependency'
+        : 'Blocked by unmet dependencies',
       blocked_by: blockedBy,
       blocked_by_agents: blockedByAgents.length > 0 ? blockedByAgents : undefined,
+      blocker_details: details.length > 0 ? details : undefined,
     });
   }
 
