@@ -181,6 +181,14 @@ narada operator-surface bindings clean-stale
 
 In Narada proper these commands either refuse unknown identities or return `status: "deferred"` with the required runtime locus. The actual volatile-handle mutation belongs to the User/PC/runtime Site that can observe the handle and admit the binding. `--as self` resolves from governed runtime context such as `NARADA_AGENT_ID` / `NARADA_PRINCIPAL_ID` or an unambiguous active roster assignment, so the Operator does not need to remember the exact identity string during inhabited work.
 
+Any agent inhabiting an Operator Surface should attempt self-binding during bootstrap:
+
+```bash
+narada operator-surface bind-focused --as self
+```
+
+If the command returns a runtime-locus deferral, the agent must route the deferred binding to the owning User/PC/runtime Site. It must not infer HWNDs, process ids, terminal tabs, API thread ids, or MCP client ids from convenience metadata.
+
 Future command names may be:
 
 ```bash

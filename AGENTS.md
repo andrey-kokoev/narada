@@ -102,6 +102,7 @@ When describing higher-order architecture, deployment, or design:
 
 ## Role Duty Loop Nudges
 
+- If the agent is inhabiting an Operator Surface, first attempt self-binding with `narada operator-surface bind-focused --as self`. If Narada proper returns a runtime-locus deferral, route the deferred binding to the owning User/PC/runtime Site; do not guess volatile handles, window ids, or session ids.
 - Treat `next`, `continue`, `go on`, and equivalent short Operator nudges as instructions to perform the current role's normal duty loop.
 - A duty-loop nudge is not a new authority grant. It does not override target locus, role boundary, lifecycle, capability, verification, publication, or active Operator constraints.
 - Architect duty loop: inspect inbox/work-next/workboard/handoffs/coherence/publication state, then route, specify, review, commit, or push only when Architect-admissible.

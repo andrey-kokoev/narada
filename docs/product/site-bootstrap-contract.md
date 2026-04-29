@@ -223,6 +223,14 @@ This Site is governed by Narada law.
 
 and binds that identity to the declared `workspace_root`, `site_root`, `site_kind`, authority locus, sync posture, canonical intake paths, and no-direct-authority rules.
 
+If the fresh thread is inhabiting an Operator Surface, its first bounded runtime action is:
+
+```bash
+narada operator-surface bind-focused --as self
+```
+
+If that returns a runtime-locus deferral, the thread routes the deferred binding to the owning User/PC/runtime Site. It does not guess volatile window, process, terminal, API-thread, or MCP-client identity.
+
 Architect thread default:
 
 ```text
