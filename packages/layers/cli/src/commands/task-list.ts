@@ -15,7 +15,11 @@ export interface TaskListOptions {
   format?: 'json' | 'human' | 'auto';
   cwd?: string;
   range?: string;
+  limit?: number;
+  all?: boolean;
 }
+
+const DEFAULT_TASK_LIST_LIMIT = 20;
 
 function parseRangeFilter(input: string | undefined): { start: number; end: number } | undefined {
   if (!input) return undefined;
@@ -33,6 +37,8 @@ export async function taskListCommand(
   const fmt = createFormatter({ format: options.format || 'auto', verbose: false });
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
   const rangeFilter = parseRangeFilter(options.range);
+  const explicitLimit = Number.isInteger(options.limit) && Number(options.limit) > 0 ? Number(options.limit) : undefined;
+  const limit = options.all ? undefined : (explicitLimit ?? DEFAULT_TASK_LIST_LIMIT);
 
   let tasks;
   try {
@@ -52,13 +58,21 @@ export async function taskListCommand(
     };
   }
 
+  const totalCount = tasks.length;
+  const visibleTasks = limit === undefined ? tasks : tasks.slice(0, limit);
+  const truncated = visibleTasks.length < totalCount;
+
   if (fmt.getFormat() === 'json') {
     return {
       exitCode: ExitCode.SUCCESS,
       result: {
         status: 'success',
-        count: tasks.length,
-        tasks: tasks.map((t) => ({
+        count: visibleTasks.length,
+        total_count: totalCount,
+        limit: limit ?? null,
+        truncated,
+        next_step: truncated ? 'Use --limit <n>, --range <start-end>, or --all to admit more output.' : null,
+        tasks: visibleTasks.map((t) => ({
           task_id: t.taskId,
           task_number: t.taskNumber,
           status: t.status,
@@ -74,17 +88,19 @@ export async function taskListCommand(
     };
   }
 
-  if (tasks.length === 0) {
+  if (visibleTasks.length === 0) {
     fmt.message('No runnable tasks found', 'info');
     return {
       exitCode: ExitCode.SUCCESS,
-      result: { status: 'success', count: 0, tasks: [] },
+      result: { status: 'success', count: 0, total_count: totalCount, limit: limit ?? null, truncated, tasks: [] },
     };
   }
 
-  fmt.section(`Runnable Tasks (${tasks.length})`);
+  fmt.section(truncated
+    ? `Runnable Tasks (showing ${visibleTasks.length} of ${totalCount})`
+    : `Runnable Tasks (${totalCount})`);
 
-  const rows = tasks.map((t) => {
+  const rows = visibleTasks.map((t) => {
     const affinityStr = t.affinity.preferred_agent_id
       ? `${t.affinity.preferred_agent_id} (${t.affinity.affinity_strength})`
       : '—';
@@ -106,12 +122,20 @@ export async function taskListCommand(
     rows,
   );
 
+  if (truncated) {
+    fmt.message(`Output bounded to ${visibleTasks.length} tasks. Use --limit <n>, --range <start-end>, or --all to admit more output.`, 'info');
+  }
+
   return {
     exitCode: ExitCode.SUCCESS,
     result: {
       status: 'success',
-      count: tasks.length,
-      tasks: tasks.map((t) => ({
+      count: visibleTasks.length,
+      total_count: totalCount,
+      limit: limit ?? null,
+      truncated,
+      next_step: truncated ? 'Use --limit <n>, --range <start-end>, or --all to admit more output.' : null,
+      tasks: visibleTasks.map((t) => ({
         task_id: t.taskId,
         task_number: t.taskNumber,
         status: t.status,

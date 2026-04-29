@@ -85,8 +85,10 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
 
   taskCmd
     .command('list')
-    .description('List runnable tasks sorted by continuation affinity')
+    .description('List runnable tasks sorted by continuation affinity (bounded by default)')
     .option('--range <start-end>', 'Filter tasks to a number range (e.g. 501-999)')
+    .option('--limit <n>', 'Maximum tasks to return (default: 20)', (value) => Number.parseInt(value, 10))
+    .option('--all', 'Explicitly admit full task-list output')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .action(async (opts: Record<string, unknown>) => {
       await runDirectCommand({
@@ -96,6 +98,8 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
           cwd: opts.cwd as string | undefined,
           format: resolveCommandFormat(),
           range: opts.range as string | undefined,
+          limit: opts.limit as number | undefined,
+          all: opts.all as boolean | undefined,
         }),
       });
     });

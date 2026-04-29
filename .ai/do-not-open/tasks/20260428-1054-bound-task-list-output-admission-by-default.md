@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-28T23:44:03.213Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T00:53:21.497Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Task list is bounded by default with limit=20, supports explicit --limit and --all, help documents output admission, focused tests cover default/expanded/range behavior, and pnpm verify passed.
+closed_at: 2026-04-29T00:53:26.665Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Task 1054 — Bound task list output admission by default
@@ -45,8 +54,8 @@ Builder reported inbox envelope `env_c3e9ab46-26b8-4d1b-9036-2d5b2442c416`: runn
 
 ## Acceptance Criteria
 
-- [ ] `narada task list` has bounded default output.
-- [ ] A caller can explicitly request more/full output.
-- [ ] Help text documents the output-admission behavior.
-- [ ] Focused tests cover default bounded behavior and explicit expanded behavior.
-- [ ] `pnpm verify` passes.
+- [x] `narada task list` has bounded default output.
+- [x] A caller can explicitly request more/full output.
+- [x] Help text documents the output-admission behavior.
+- [x] Focused tests cover default bounded behavior and explicit expanded behavior.
+- [x] `pnpm verify` passes.
