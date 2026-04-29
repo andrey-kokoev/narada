@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { SqliteInboxStore, type InboxEnvelope, type InboxEnvelopeKind } from '@narada2/control-plane';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
+import { inspectAuthorityClonePosture } from '../lib/narada-proper-authority.js';
 
 export interface CoherenceScanOptions {
   cwd?: string;
@@ -18,9 +19,16 @@ export interface CoherenceScanOptions {
 
 type CoherenceSeverity = 'info' | 'warning' | 'error';
 type CoherenceEnvelopeKind = Extract<InboxEnvelopeKind, 'observation' | 'task_candidate'>;
-export type CoherenceModule = 'operational' | 'semantic' | 'telos' | 'documentation' | 'authority_inversion';
+export type CoherenceModule =
+  | 'operational'
+  | 'semantic'
+  | 'telos'
+  | 'documentation'
+  | 'authority_inversion'
+  | 'mutation_evidence'
+  | 'locus';
 
-const ALL_MODULES: CoherenceModule[] = ['operational', 'semantic', 'telos', 'documentation'];
+const ALL_MODULES: CoherenceModule[] = ['operational', 'semantic', 'telos', 'documentation', 'mutation_evidence', 'locus'];
 const VALID_MODULES: CoherenceModule[] = [...ALL_MODULES, 'authority_inversion'];
 
 interface AuthorityInversionInventory {
@@ -115,6 +123,16 @@ async function collectFindings(cwd: string, modules: CoherenceModule[]): Promise
   if (modules.includes('documentation')) {
     const docFinding = await checkDocumentationCoherenceDoctrine(cwd);
     if (docFinding) findings.push(docFinding);
+  }
+
+  if (modules.includes('mutation_evidence')) {
+    const mutationEvidenceFinding = checkMutationEvidencePosture(cwd);
+    if (mutationEvidenceFinding) findings.push(mutationEvidenceFinding);
+  }
+
+  if (modules.includes('locus')) {
+    const locusFinding = checkAuthorityLocusPosture(cwd);
+    if (locusFinding) findings.push(locusFinding);
   }
 
   if (modules.includes('authority_inversion')) {
@@ -340,6 +358,60 @@ async function checkAuthorityInversionInventory(cwd: string): Promise<CoherenceF
   return entries.map((entry) => inventoryEntryToFinding(entry));
 }
 
+function checkMutationEvidencePosture(cwd: string): CoherenceFinding | null {
+  const changedFiles = gitPorcelainChangedFiles(cwd);
+  if (changedFiles.length === 0) return null;
+
+  const authorityMutationFiles = changedFiles.filter((file) =>
+    file === '.ai/task-lifecycle-snapshot.json' ||
+    file.startsWith('.ai/do-not-open/tasks/') ||
+    file.startsWith('.ai/inbox-envelopes/')
+  );
+  if (authorityMutationFiles.length === 0) return null;
+
+  const mutationEvidenceFiles = changedFiles.filter((file) => file.startsWith('.ai/mutation-evidence/'));
+  if (mutationEvidenceFiles.length > 0) return null;
+
+  return {
+    finding_id: 'mutation-evidence-missing-for-authority-surface',
+    module: 'mutation_evidence',
+    severity: 'warning',
+    confidence: 'high',
+    locus: 'canonical_mutation_evidence',
+    kind: 'task_candidate',
+    title: 'Authority-surface changes lack mutation evidence files',
+    summary: 'Task, inbox, or lifecycle authority surfaces are dirty without a companion canonical mutation-evidence artifact.',
+    evidence: authorityMutationFiles.slice(0, 8).map((file) => `dirty_authority_file=${file}`),
+    proposed_action: 'Run the sanctioned lifecycle/inbox command that emits mutation evidence, then export snapshots before commit.',
+    cooldown_key: `mutation-evidence-missing:${authorityMutationFiles.sort().join('|')}`,
+  };
+}
+
+function checkAuthorityLocusPosture(cwd: string): CoherenceFinding | null {
+  const posture = inspectAuthorityClonePosture(cwd);
+  if (!posture.configured || posture.status === 'authority_clone') return null;
+
+  return {
+    finding_id: 'wrong-locus-mutation-risk',
+    module: 'locus',
+    severity: posture.status === 'stale_authority_clone' ? 'error' : 'warning',
+    confidence: 'high',
+    locus: 'authority_locus',
+    kind: 'task_candidate',
+    title: 'Current clone is not ready for mutation authority',
+    summary: 'A configured authority-clone posture says mutations here would happen from the wrong or stale locus.',
+    evidence: [
+      `status=${posture.status}`,
+      `repo_root=${posture.repo_root ?? 'unknown'}`,
+      `authority_root=${posture.authority_root ?? 'unknown'}`,
+      `ahead=${posture.ahead ?? 'unknown'}`,
+      `behind=${posture.behind ?? 'unknown'}`,
+    ],
+    proposed_action: posture.next_safe_command,
+    cooldown_key: `wrong-locus:${posture.status}:${posture.repo_root ?? cwd}`,
+  };
+}
+
 function inventoryEntryToFinding(entry: AuthorityInversionInventoryFinding): CoherenceFinding {
   const findingId = stringOr(entry.finding_id, 'authority-inversion-unknown');
   const severity = parseSeverity(entry.severity);
@@ -435,6 +507,25 @@ function git(cwd: string, args: string[]): string | null {
     }).trim();
   } catch {
     return null;
+  }
+}
+
+function gitLines(cwd: string, args: string[]): string[] {
+  return git(cwd, args)?.split(/\r?\n/).filter(Boolean) ?? [];
+}
+
+function gitPorcelainChangedFiles(cwd: string): string[] {
+  try {
+    return execFileSync('git', ['status', '--porcelain'], {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .split(/\r?\n/)
+      .map((line) => line.slice(3).trim())
+      .filter(Boolean);
+  } catch {
+    return [];
   }
 }
 

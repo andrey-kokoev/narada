@@ -77,6 +77,7 @@ const MUTATING_PREFIXES = [
   'task promote-recommendation',
   'task pull-next',
   'task work-next',
+  'work-next',
   'task claim',
   'task release',
   'task report',
@@ -112,6 +113,7 @@ export function shouldGuardAuthorityClone(command: string, args: unknown[]): boo
   if (command === 'task allocate' && lastOptions(args)?.dryRun) return false;
   if (command === 'task create' && lastOptions(args)?.dryRun) return false;
   if (command === 'task work-next' && lastOptions(args)?.peek) return false;
+  if (command === 'work-next' && lastOptions(args)?.peek) return false;
   if (command === 'inbox work-next' && lastOptions(args)?.peek) return false;
   if (command === 'mutation-evidence reconcile' && !lastOptions(args)?.apply) return false;
   return MUTATING_PREFIXES.some((prefix) => command === prefix || command.startsWith(`${prefix} `));

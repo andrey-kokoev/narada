@@ -1,8 +1,17 @@
 ---
-status: opened
+status: closed
 depends_on: [992, 997, 1001]
 amended_by: architect
 amended_at: 2026-04-27T21:49:43.106Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T19:11:15.438Z
+criteria_proof_verification:
+  state: unbound
+  rationale: work-next now returns doctrine_guard status with authority-inversion warnings and exact next commands; coherence scan now has mutation_evidence and locus modules plus authority_inversion; tests cover no duplicate submission for same mutation-evidence finding and no hidden mutation by default; pnpm verify passed.
+closed_at: 2026-04-29T19:11:33.486Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Wire doctrine guards into work-next and coherence loop
@@ -43,8 +52,8 @@ The doctrine implementation tasks add scanners, mutation evidence, and authority
 
 ## Acceptance Criteria
 
-- [ ] `work-next` can surface doctrine-guard blockers or preflight warnings before recommending mutation work.
-- [ ] Coherence scan submits bounded observations/task candidates for authority inversion, missing mutation evidence, and wrong-locus mutation risk.
-- [ ] Loop remains summon/configure-event driven, cooldown-bound, and non-repairing by default.
-- [ ] Tests prove no infinite resubmission for the same finding and that actionable findings include exact next commands.
-- [ ] `pnpm verify` passes.
+- [x] `work-next` can surface doctrine-guard blockers or preflight warnings before recommending mutation work.
+- [x] Coherence scan submits bounded observations/task candidates for authority inversion, missing mutation evidence, and wrong-locus mutation risk.
+- [x] Loop remains summon/configure-event driven, cooldown-bound, and non-repairing by default.
+- [x] Tests prove no infinite resubmission for the same finding and that actionable findings include exact next commands.
+- [x] `pnpm verify` passes.

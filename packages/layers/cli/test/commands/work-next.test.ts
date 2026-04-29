@@ -4,6 +4,7 @@ vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
 
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -380,6 +381,50 @@ describe('work-next unified next action', () => {
         { zone: 'review_work', status: 'empty', reason: 'no_reviewable_task' },
         { zone: 'inbox_work', status: 'empty' },
       ],
+    });
+  });
+
+  it('surfaces doctrine guard warnings before recommending mutation work', async () => {
+    mkdirSync(join(tempDir, 'docs', 'concepts'), { recursive: true });
+    mkdirSync(join(tempDir, 'packages', 'layers', 'cli', 'src', 'commands'), { recursive: true });
+    writeFileSync(
+      join(tempDir, 'docs', 'concepts', 'authority-inversion-inventory.json'),
+      JSON.stringify({
+        findings: [{
+          finding_id: 'resume-tool-process-authority',
+          surface: 'resume_work_next',
+          visible_artifact: 'work-next command',
+          hidden_authority_structure: 'work selection and task claim authority',
+          current_guard: 'work-next doctrine guard',
+          gap: 'work-next can mutate by claiming work',
+          severity: 'warning',
+          recommended_follow_up: 'narada coherence scan --module authority_inversion --submit',
+        }],
+      }, null, 2),
+    );
+    writeFileSync(join(tempDir, 'packages', 'layers', 'cli', 'src', 'commands', 'work-next.ts'), 'base\n');
+    execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['init', '-b', 'main'], { cwd: tempDir });
+    execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['config', 'user.email', 'test@example.invalid'], { cwd: tempDir });
+    execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['config', 'user.name', 'Test Agent'], { cwd: tempDir });
+    execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['add', '.'], { cwd: tempDir });
+    execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['commit', '-m', 'base'], { cwd: tempDir });
+    writeFileSync(join(tempDir, 'packages', 'layers', 'cli', 'src', 'commands', 'work-next.ts'), 'changed\n');
+
+    const result = await workNextCommand({ agent: 'architect', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'empty',
+      doctrine_guard: {
+        status: 'warning',
+        blockers: [],
+        next_commands: ['narada coherence scan --module authority_inversion --submit'],
+        warnings: [{
+          finding_id: 'resume-tool-process-authority',
+          surface: 'resume_work_next',
+          changed_file: 'packages/layers/cli/src/commands/work-next.ts',
+        }],
+      },
     });
   });
 

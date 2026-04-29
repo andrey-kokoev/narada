@@ -6,8 +6,14 @@
  */
 
 import { resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
+import {
+  evaluateAuthorityInversionForChangedFiles,
+  summarizeAuthorityInversionWarning,
+} from '../lib/authority-inversion.js';
+import { inspectAuthorityClonePosture } from '../lib/narada-proper-authority.js';
 import {
   findTaskFile,
   loadRoster,
@@ -42,6 +48,13 @@ interface WorkNextCheckedZone {
   status: WorkNextCheckedStatus;
   reason?: string;
   selected_ref?: string;
+}
+
+interface DoctrineGuardStatus {
+  status: 'clear' | 'warning' | 'blocked';
+  warnings: unknown[];
+  blockers: string[];
+  next_commands: string[];
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -106,7 +119,61 @@ function formatHuman(result: Record<string, unknown>): string {
     }
   }
   if (result.next_step) lines.push(`Next step: ${String(result.next_step)}`);
+  const doctrineGuard = asRecord(result.doctrine_guard);
+  if (doctrineGuard.status && doctrineGuard.status !== 'clear') {
+    lines.push(`Doctrine guard: ${String(doctrineGuard.status)}`);
+    const commands = Array.isArray(doctrineGuard.next_commands) ? doctrineGuard.next_commands : [];
+    for (const command of commands.slice(0, 3)) lines.push(`- ${String(command)}`);
+  }
   return lines.join('\n');
+}
+
+async function buildDoctrineGuard(cwd: string): Promise<DoctrineGuardStatus> {
+  const changedFiles = currentChangedFiles(cwd);
+  const authorityWarnings = await evaluateAuthorityInversionForChangedFiles(cwd, changedFiles.join(','));
+  const posture = inspectAuthorityClonePosture(cwd);
+  const blockers: string[] = [];
+  const nextCommands: string[] = [];
+
+  if (posture.configured && posture.status !== 'authority_clone') {
+    blockers.push(`authority_locus:${posture.status}`);
+    if (posture.next_safe_command) nextCommands.push(posture.next_safe_command);
+  }
+
+  if (authorityWarnings.length > 0) {
+    nextCommands.push('narada coherence scan --module authority_inversion --submit');
+  }
+
+  const warnings = authorityWarnings.map((warning) => ({
+    ...summarizeAuthorityInversionWarning(warning),
+    next_command: warning.recommended_follow_up ?? 'narada coherence scan --module authority_inversion --submit',
+  }));
+
+  return {
+    status: blockers.length > 0 ? 'blocked' : warnings.length > 0 ? 'warning' : 'clear',
+    warnings,
+    blockers,
+    next_commands: [...new Set(nextCommands)],
+  };
+}
+
+function currentChangedFiles(cwd: string): string[] {
+  const tracked = gitLines(cwd, ['diff', '--name-only']);
+  const staged = gitLines(cwd, ['diff', '--name-only', '--cached']);
+  const untracked = gitLines(cwd, ['ls-files', '--others', '--exclude-standard']);
+  return [...new Set([...tracked, ...staged, ...untracked])].sort();
+}
+
+function gitLines(cwd: string, args: string[]): string[] {
+  try {
+    return execFileSync('git', args, {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
 }
 
 async function findReviewWork(cwd: string, agentId: string): Promise<Record<string, unknown> | null> {
@@ -194,6 +261,7 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
   const format = options.format ?? 'auto';
   const checked: WorkNextCheckedZone[] = [];
+  const doctrineGuard = await buildDoctrineGuard(cwd);
 
   if (options.peek) {
     const currentTask = await findCurrentTaskWork(cwd, options.agent);
@@ -214,6 +282,7 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
           task: currentTask,
         },
         dispatch_result: null,
+        doctrine_guard: doctrineGuard,
         next_step: 'Inspect only; this agent already has current task work.',
       };
       return {
@@ -294,6 +363,7 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
       checked,
       task_result: taskResult.result,
       dispatch_result: dispatchResult,
+      doctrine_guard: doctrineGuard,
       next_step: options.peek
         ? 'Inspect only; rerun without --peek to claim or execute the selected work.'
         : 'Execute the returned task packet through the governed task lifecycle.',
@@ -314,6 +384,7 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
       agent_id: options.agent,
       primary: reviewWork,
       checked,
+      doctrine_guard: doctrineGuard,
       next_step: 'Review the task report through the governed task review command.',
     };
     return {
@@ -345,6 +416,7 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
       primary,
       checked,
       inbox_result: inboxResult.result,
+      doctrine_guard: doctrineGuard,
       next_step: options.peek
         ? 'Inspect only; rerun inbox claim or work-next without --peek to take the work.'
         : 'Handle the inbox envelope through one of its admissible actions.',
@@ -363,6 +435,7 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
     primary: null,
     reason: 'no_task_or_inbox_work',
     checked,
+    doctrine_guard: doctrineGuard,
     next_step: 'No task or inbox work is currently available for this agent.',
   };
   return {

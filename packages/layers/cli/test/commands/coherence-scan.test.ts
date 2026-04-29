@@ -31,7 +31,7 @@ describe('coherence scan command', () => {
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     const body = result.result as { mode: string; finding_count: number; findings: Array<{ finding_id: string; kind: string }>; submitted: unknown[] };
     expect(body.mode).toBe('dry_run');
-    expect(body).toMatchObject({ modules: ['operational', 'semantic', 'telos', 'documentation'] });
+    expect(body).toMatchObject({ modules: ['operational', 'semantic', 'telos', 'documentation', 'mutation_evidence', 'locus'] });
     expect(body.submitted).toEqual([]);
     expect(body.finding_count).toBe(1);
     expect(body.findings[0]).toMatchObject({
@@ -155,6 +155,64 @@ describe('coherence scan command', () => {
       cooldown_key: 'authority-inversion:task-markdown-projection-authority',
     });
     store.close();
+  });
+
+  it('reports missing mutation evidence for dirty authority surfaces and dedupes submissions', async () => {
+    writeFileSync(join(tempDir, '.ai', 'task-lifecycle-snapshot.json'), JSON.stringify({ changed: true }));
+    const store = new SqliteInboxStore(join(tempDir, '.ai', 'inbox.db'));
+    const first = await coherenceScanCommand({
+      cwd: tempDir,
+      format: 'json',
+      modules: ['mutation_evidence'],
+      submit: true,
+      store,
+    });
+    const second = await coherenceScanCommand({
+      cwd: tempDir,
+      format: 'json',
+      modules: ['mutation_evidence'],
+      submit: true,
+      store,
+    });
+
+    expect(first.exitCode).toBe(ExitCode.SUCCESS);
+    expect(second.exitCode).toBe(ExitCode.SUCCESS);
+    expect(first.result).toMatchObject({
+      modules: ['mutation_evidence'],
+      findings: [{
+        finding_id: 'mutation-evidence-missing-for-authority-surface',
+        proposed_action: expect.stringContaining('mutation evidence'),
+      }],
+    });
+    expect((first.result as { submitted: unknown[] }).submitted).toHaveLength(1);
+    expect((second.result as { submitted: unknown[] }).submitted).toHaveLength(0);
+    store.close();
+  });
+
+  it('reports wrong-locus mutation risk with an exact next command', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'authority-clone.json'),
+      JSON.stringify({
+        site_id: 'narada-proper',
+        authority_root: join(tempDir, '..', 'narada-authority'),
+      }, null, 2),
+    );
+
+    const result = await coherenceScanCommand({
+      cwd: tempDir,
+      format: 'json',
+      modules: ['locus'],
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      modules: ['locus'],
+      findings: [{
+        finding_id: 'wrong-locus-mutation-risk',
+        module: 'locus',
+        proposed_action: expect.stringContaining('narada <same-command>'),
+      }],
+    });
   });
 
   it('rejects unknown charter modules', async () => {
