@@ -1,0 +1,39 @@
+{
+  "envelope_id": "env_2e3c341a-ad66-44d3-a7fe-72884390d540",
+  "received_at": "2026-04-29T16:54:27.433Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:situated-work-operator-nudge-intent"
+  },
+  "kind": "proposal",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Add situated work discovery and advancement as an operator-nudge intent",
+    "summary": "Operator should not need to remember magic phrases such as process inbox. Natural nudges like \"builder is done\", \"where are we\", or \"continue\" should enter an intent interpretation zone that checks the normally expected surfaces for the current Site/role and advances admissible work.",
+    "body": "## Proposal\n\nAdd a higher-level operator-nudge intent that can interpret ordinary operator statements such as:\n\n```text\nBuilder is done.\nWhere are we?\nContinue.\nWhat next?\n```\n\nas a bounded situated work-discovery and advancement request.\n\nA possible enum name:\n\n```text\nsituated_work_discovery_and_advancement\n```\n\nOther possible names:\n\n```text\norient_and_advance\nresume_situated_work\nwork_surface_sweep_and_advance\n```\n\n## Meaning\n\nGiven the current Site, role, session, recent work, and authority posture, Narada should ask:\n\n```text\nWhat normally expected surfaces should be checked, what work is now due, and what is the next admissible action?\n```\n\nThis intent is broader than `process inbox`. It may include checking:\n\n- task/chapter state;\n- builder handoff or review-request surfaces;\n- canonical inbox items relevant to the current Site/work;\n- current working tree and latest commits;\n- test/verification posture;\n- residuals and blocked items;\n- pending proposals or observations;\n- role-specific expectations for the current participant.\n\n## Role-Specific Checklists\n\nThe intent must be bounded by role and Site, not an unstructured \"do anything\" capability.\n\nFor an Architect, after a nudge such as `builder is done`, the expected surfaces may include:\n\n- latest builder commits;\n- task completion report;\n- task/chapter closure quality;\n- review handoff artifacts;\n- relevant tests;\n- residuals or coherence debt;\n- whether follow-up tasks or inbox observations are needed;\n- whether integration/commit/push is authorized.\n\nFor a Builder, the expected surfaces differ:\n\n- assigned/open tasks;\n- implementation scope;\n- tests required by acceptance criteria;\n- handoff report requirements;\n- done posture.\n\nFor a Resident, they differ again:\n\n- inbound user/client requests;\n- ordinary Site-use queues;\n- resident-worker/effect-worker outputs;\n- missing capability surfaced during use.\n\n## Why This Matters\n\nWithout this intent, the operator is forced to remember narrow command-like phrases such as:\n\n```text\nprocess inbox\ncheck tasks\nreview builder output\nrun tests\n```\n\nThat burdens the operator with Narada's internal surfaces. The operator should be able to express ordinary situated pressure, and Narada should perform bounded interpretation into typed intent and admissible action.\n\n## Constraint\n\nThis must not collapse into arbitrary autonomous action. It should be an intent-zone path:\n\n```text\noperator nudge -> intent interpretation -> typed situated-work intent -> role/Site checklist -> admissible actions or clarification/refusal\n```\n\nIf authority is insufficient, if multiple paths are materially ambiguous, or if mutation would cross a governed boundary, Narada should ask for approval or create a typed proposal/task rather than silently acting.\n\n## Relationship To Existing Proposals\n\nThis extends the earlier Intent Interpretation / Intent Admission direction. It is the higher-level case where the operator's utterance is not a direct command, but a situated nudge that should trigger normal work-surface discovery and next-action selection.",
+    "labels": [
+      "proposal",
+      "intent-zones",
+      "operator-ergonomics",
+      "situated-work",
+      "roles"
+    ],
+    "evidence": [
+      "Operator asked whether they should say process inbox after builder completion",
+      "Process inbox is too narrow and becomes a magic phrase",
+      "Builder completion should trigger architect review/checklist surfaces, not only inbox handling"
+    ]
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "decision",
+    "target_ref": "task-1077-situated-work-discovery-advancement-intent",
+    "promoted_at": "2026-04-29T16:56:20.356Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'decision' is not implemented yet."
+  }
+}
