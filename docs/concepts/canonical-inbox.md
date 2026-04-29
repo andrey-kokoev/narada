@@ -99,6 +99,8 @@ Each candidate item must be named `YYYYMMDD-NNN-slug`. An item may be:
 | `.md` or `.txt` file | The file body becomes one envelope payload. Optional front matter may set `kind`, `title`, `summary`, `authority_level`, or `principal`. |
 | Folder | The folder is one message. `README.md`, `message.md`, or `intent.md` supplies the body. Other child files are recorded as supporting-file metadata. |
 
+Front matter `kind` should use canonical envelope kinds such as `observation`, `task_candidate`, or `command_request`. The human shorthand `request` is accepted as an alias for `command_request` so file-drop authors do not have to know the internal enum name. Unsupported kinds fall back to `observation` in candidate inspection rather than inventing a new envelope kind.
+
 Admission writes exactly one `file_drop` envelope per item path and content digest. Re-running admission skips already-admitted path/digest pairs. Invalid names, unsupported file extensions, empty bodies, and folders without a canonical body file are reported as rejected candidates in dry-run output.
 
 ## Envelope Axes

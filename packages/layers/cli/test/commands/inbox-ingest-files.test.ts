@@ -70,6 +70,43 @@ describe('inbox ingest-files', () => {
     });
   });
 
+  it('maps file-drop shorthand kind request to command_request', async () => {
+    writeFileSync(
+      join(dropDir, '20260428-006-request.md'),
+      [
+        '---',
+        'kind: request',
+        'title: Return message',
+        'authority_level: operator_confirmed',
+        'principal: andrey',
+        '---',
+        '',
+        'Please return this message through governed intake.',
+        '',
+      ].join('\n'),
+    );
+
+    const result = await inboxIngestFilesCommand({ cwd: tempDir, format: 'json', admit: true, by: 'architect' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const candidates = (result.result as { candidates: Array<Record<string, unknown>> }).candidates;
+    expect(candidates[0]).toMatchObject({
+      status: 'admitted',
+      kind: 'command_request',
+      authority_level: 'operator_confirmed',
+      principal: 'andrey',
+    });
+
+    const listed = await inboxListCommand({ cwd: tempDir, format: 'json', status: 'received' });
+    const envelopes = (listed.result as { envelopes: Array<Record<string, unknown>> }).envelopes;
+    expect(envelopes[0]).toMatchObject({
+      source: { kind: 'file_drop' },
+      kind: 'command_request',
+      authority: { level: 'operator_confirmed', principal: 'andrey' },
+      payload: { front_matter: { kind: 'request' } },
+    });
+  });
+
   it('admits a dated numbered folder using README body and supporting file metadata', async () => {
     const folder = join(dropDir, '20260428-003-folder-message');
     mkdirSync(folder);

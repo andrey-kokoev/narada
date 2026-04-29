@@ -1888,6 +1888,7 @@ function parseSourceKind(value: string | undefined): InboxSourceKind | undefined
 }
 
 function parseEnvelopeKind(value: string | undefined): InboxEnvelopeKind | undefined {
+  if (value === 'request') return 'command_request';
   return oneOf(value, ENVELOPE_KINDS);
 }
 
