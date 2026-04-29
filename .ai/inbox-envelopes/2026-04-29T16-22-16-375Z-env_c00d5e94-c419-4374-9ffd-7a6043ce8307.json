@@ -1,0 +1,38 @@
+{
+  "envelope_id": "env_c00d5e94-c419-4374-9ffd-7a6043ce8307",
+  "received_at": "2026-04-29T16:22:16.375Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:resident-builder-worker-role-taxonomy"
+  },
+  "kind": "proposal",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "architect"
+  },
+  "payload": {
+    "title": "Admit resident-worker and builder-worker as explicit delegated role categories",
+    "body": "## Context\n\nDuring inhabited operation of the Windows User Site and Staccato Site, we clarified that Narada currently has admitted inhabited roles such as operator, architect, builder, and resident. Narada also has several existing uses of worker-like terminology for operational/effect machinery, such as send-reply workers, process runners, and future executors.\n\nThis creates pressure against using a generic `worker` role for delegated human/AI construction or use-work. Generic `worker` would overload operational machinery with inhabited delegation roles.\n\n## Proposal\n\nAdmit explicit delegated role categories:\n\n- `builder-worker`: a bounded construction agent delegated by `builder` to execute a specific implementation subtask.\n- `resident-worker`: a bounded operational/use agent delegated by `resident` to perform useful Site-charter work that requires cognition above mechanical effects.\n\nKeep plain `worker` reserved for low-level operational/effect machinery unless a future doctrine pass explicitly refactors that vocabulary.\n\n## Role Shape\n\n- `architect`: owns coherence, doctrine alignment, task/chapter shape, acceptance criteria, and review.\n- `builder`: owns admitted construction execution, coordination, integration, verification, and handoff.\n- `builder-worker`: executes bounded construction subtasks under builder direction.\n- `resident`: inhabits a Site for its ordinary useful purpose and responds to user/operator requests within the Site charter.\n- `resident-worker`: executes bounded operational/use subtasks under resident direction.\n- `effect-worker`: performs mechanical effects such as sending email, writing drafts, running processes, syncing data, or invoking external APIs.\n\n## Messaging Consequence\n\nThe resident should be able to message:\n\n- `architect`, when ordinary Site use reveals incoherence, missing capability, unclear doctrine, broken routing, bad ergonomics, or need to reshape Site structure.\n- `builder`, when the needed change is already coherent and within existing doctrine and can proceed as implementation.\n- `resident-worker`, for bounded ordinary use-work.\n- `effect-worker`, for mechanical execution.\n\n## Why This Matters\n\nThis preserves a clean distinction between construction roles and operational roles while allowing Narada Sites to scale inhabited work without collapsing everything into an overloaded `worker` concept.\n\nA concise relation is:\n\n`architect -> builder -> builder-worker`\n\n`resident -> resident-worker -> effect-worker`\n\nThis is not symmetry for its own sake. It is supported by actual pressure from client Sites, email intake, campaign preparation, operator-surface work, and delegated build work.",
+    "labels": [
+      "doctrine",
+      "roles",
+      "site-participants",
+      "delegation",
+      "inbox"
+    ],
+    "source": {
+      "type": "windows-user-site",
+      "site": "narada-andrey",
+      "path": "C:/Users/Andrey/Narada"
+    }
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "decision",
+    "target_ref": "task-1075-delegated-role-taxonomy",
+    "promoted_at": "2026-04-29T16:43:50.574Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'decision' is not implemented yet."
+  }
+}
