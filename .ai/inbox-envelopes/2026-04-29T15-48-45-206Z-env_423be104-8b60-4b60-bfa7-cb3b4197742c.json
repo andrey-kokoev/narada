@@ -1,0 +1,40 @@
+{
+  "envelope_id": "env_423be104-8b60-4b60-bfa7-cb3b4197742c",
+  "received_at": "2026-04-29T15:48:45.206Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex-session:intent-interpretation-admission-zones-20260429"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "andrey"
+  },
+  "payload": {
+    "title": "Distinguish Intent Interpretation and Intent Admission zones",
+    "summary": "Discussion around whether the operator should be able to tell a builder simply 'process tasks' exposed a deeper authority boundary. The problem is not a need for magic phrases. Narada needs role agents to orient from vague operator nudges without shifting burden to the operator, while still preventing ambiguous language from becoming arbitrary execution. This decomposes into Intent Interpretation and Intent Admission as distinct governed zones.",
+    "evidence": [
+      "Pressure case: operator wanted a builder to proceed without a long prompt. A verbose safe instruction exists, but it increases operator burden. A magic phrase would also increase burden by requiring the operator to remember incantations.",
+      "Better target: when builder is activated or receives vague continuation such as go on, continue, proceed, process tasks, or what next, builder should orient through role posture, discover admissible work, apply chapter/task stop rules, and proceed only through an admitted path.",
+      "Further de-arbitrization showed two functions: Intent Interpretation converts natural/operator utterances into typed intent candidates; Intent Admission takes typed intent candidates from any source and admits, routes, refuses, asks clarification, or produces a governed work path."
+    ],
+    "proposal": [
+      "Define an Intent Interpretation Zone: input is natural language/operator expression/control-channel utterance; output is one or more typed intent candidates plus confidence and ambiguity evidence. This zone must not itself execute work.",
+      "Define an Intent Admission Zone: input is typed intent candidate from any source, including interpretation, inbox envelope, CLI command, MCP call, UI button, file drop, or schedule; output is admitted path, refusal, route, clarification request, deferral, or handoff. This zone governs consequence.",
+      "Typed intent admission should check target authority, role posture, task/chapter state, stop rules, capabilities, freshness, mutation risk, and required review/handoff. Typed intent is not automatically admitted merely because it is typed.",
+      "Role Inhabitation Entry Protocols should use these zones. A builder on activation or vague continuation should discover assigned/open tasks, identify governing chapter/arc, apply stop rules, choose next admissible path, artifact large evidence, update lifecycle, and leave review_request handoff when review is expected.",
+      "Represent admitted paths as a bounded enum or equivalent controlled set, e.g. continue_current_task, discover_next_task, process_assigned_tasks, review_completed_work, submit_observation, repair_local_system, answer_question_only, ask_clarifying_question, refuse_due_to_guardrail, handoff_for_review.",
+      "Connect this doctrine to canonical inbox scale-relative crossing metadata: inbox envelopes may already carry typed intent and should enter at Intent Admission, while human chat usually enters through Intent Interpretation first."
+    ],
+    "recommendation": "Promote as doctrine and machinery work adjacent to command-execution intent zone, canonical inbox typed envelopes, role-specific AI thread bootstrap, task lifecycle, MCP facade, and CAPA/handoff discipline."
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "decision",
+    "target_ref": "task-1071-intent-interpretation-admission-zones",
+    "promoted_at": "2026-04-29T15:51:56.605Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'decision' is not implemented yet."
+  }
+}
