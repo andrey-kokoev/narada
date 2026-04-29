@@ -1,0 +1,26 @@
+{
+  "envelope_id": "env_243de0db-3bca-4438-a295-63d084515aae",
+  "received_at": "2026-04-29T19:06:44.004Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey.builder:windows-operator-surface-state-model-upstream"
+  },
+  "kind": "proposal",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Add Narada support for explicit Site state projections and transition protocols",
+    "summary": "The Windows operator surface model exposes a recurring Narada machinery need: Sites need a first-class way to declare layered state models, volatile projections, evidence logs, and transition protocols so scripts do not each invent local assumptions.",
+    "proposal": "Narada proper should define product/documentation support for Site state projections and transition protocols: declare hierarchy, authority boundaries, volatile runtime projections, evidence surfaces, transition triggers, reconciliation responsibilities, and escalation rules. This would generalize the Windows operator surface work beyond Komorebi/YASB.",
+    "evidence": [
+      "Windows operator surface model requires separating User Site preference authority from PC Site machine/runtime authority.",
+      "Repair and sync scripts currently write logs but do not update a queryable current-state projection.",
+      "Access mode, display topology epoch, Windows desktop membership, Komorebi state, and YASB runtime each have distinct authority and volatility."
+    ],
+    "source_user_site_envelope": "env_9767726b-bcd8-4b0c-8fcd-94480379428d",
+    "requested_handling": "Admit as a Narada-proper product proposal or open upstream task(s) if aligned."
+  },
+  "status": "received"
+}

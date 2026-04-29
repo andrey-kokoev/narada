@@ -1,0 +1,26 @@
+{
+  "envelope_id": "env_e20fca5c-33cf-489e-8610-c6094b121dbf",
+  "received_at": "2026-04-29T19:09:53.785Z",
+  "source": {
+    "kind": "system_observation",
+    "ref": "narada-andrey.architect:cli-embodiment-friction"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "system_observed",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Agents need a loadable Narada CLI embodiment instead of PATH repair by memory",
+    "summary": "During User Site inbox processing, narada-andrey.architect fell back to hardcoded WSL Node bin paths to run the Narada CLI. The immediate rule is correct: agents should use the Narada shim inside the target embodiment, or report delegated CLI embodiment not loadable with the exact doctor/preflight repair command.",
+    "observation": "The Narada proper shim at node_modules/.bin/narada works under the intended login-shell WSL embodiment, but fails under non-login WSL with exec: node: not found. The User Site doctor also reports no Site-local delegated Narada CLI embodiment configured and says to run narada inbox doctor before cross-environment inbox submission when runtime posture is ambiguous.",
+    "evidence": [
+      "Non-login WSL call: ./node_modules/.bin/narada failed with 'exec: node: not found'.",
+      "Login-shell WSL call: ./node_modules/.bin/narada inbox doctor --cwd /mnt/c/Users/Andrey/Narada --format json succeeded.",
+      "Doctor reported delegated_cli_embodiment.configured=false for the User Site and canonical_inbox_commands_available=false because /mnt/c/Users/Andrey/Narada/packages/layers/cli/dist/main.js is missing.",
+      "Doctor repair guidance included: run pnpm --filter @narada2/cli build when a local repo CLI build is expected."
+    ],
+    "requested_handling": "Treat this as ergonomics/product work: make the delegated CLI embodiment explicit, make doctor/preflight repair instructions easy to surface, and discourage hand-assembled Node PATH commands in agent-facing guidance."
+  },
+  "status": "received"
+}
