@@ -112,6 +112,8 @@ The current WSL Narada proper clone may document and propose this adapter path. 
 
 Windows virtual desktop membership is an external visibility-domain truth. Komorebi state is adapter state. A Windows operator-surface adapter must not treat Komorebi's managed HWND set as authoritative until it has reconciled each HWND against Windows desktop membership.
 
+This should be represented as a Site state projection plus transition protocol, not as a private script assumption. See [`site-state-projections.md`](site-state-projections.md).
+
 The earned reconciliation path from the `desktop-sunroom-2` diagnostic is:
 
 ```text

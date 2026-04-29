@@ -17,6 +17,7 @@ When durable governance coordinates, runtime truth, and operator/session knowled
 | `site_participant_roles` | Declared human/agent participant roles such as resident, architect, builder, receptionist, or inspector. | Role declaration is not capability grant, runtime existence, or mutation authority. |
 | `operator_surfaces` | Optional addressable interfaces for inhabiting or observing Site work. | Surfaces improve launch/focus/recovery; they do not grant mutation, effect, or capability authority. |
 | `session_bindings` | Optional continuity links between role, runtime, channel, surface, task/chapter, and trace references. | Session continuity does not claim work, admit evidence, or prove completion. |
+| `state_projections` | Queryable current-state surfaces derived from authority records, runtime observations, transition protocols, and evidence logs. | Projections are read models; scripts and logs do not become authority by updating them. |
 | `mutation_evidence_locus` | Where mergeable/replayable mutation evidence is recorded. | Raw SQLite is runtime substrate, not portable authority by itself. |
 | `inbox_sources` | Inbound intake surfaces and their admission posture. | Arrival is inert until admitted or promoted. |
 | `outbox_targets` | Outbound handoff surfaces and their authority posture. | Sending a handoff is not confirmation of external effect. |
@@ -157,6 +158,22 @@ When durable governance coordinates, runtime truth, and operator/session knowled
           "binding_does_not_claim_work",
           "binding_does_not_admit_evidence",
           "binding_does_not_close_tasks"
+        ]
+      }
+    ],
+    "state_projections": [
+      {
+        "projection_id": "operator_surface_current_state",
+        "authority_records": ["operator_surfaces", "authority_locus"],
+        "runtime_observations": ["adapter_status", "host_visibility_domain"],
+        "transition_protocols": ["surface_visibility_reconcile"],
+        "evidence_locus": "/repo/.narada/logs/operator-surface",
+        "freshness": {
+          "invalidated_by": ["adapter_restarted", "visibility_domain_changed"]
+        },
+        "authority_limits": [
+          "projection_is_not_authority_record",
+          "scripts_update_projection_only_through_transition_protocol"
         ]
       }
     ],
@@ -384,3 +401,9 @@ Inspection commands for these declarations should be read-only and bounded. They
 Materialization commands are future governed crossings. They should default to dry-run, require explicit `--execute`, route adapter side effects through CEIZ or an equivalent governed execution boundary, and write mutation evidence with read-back confirmation. Until such commands exist, `operator_surfaces` and `session_bindings` are declarations only.
 
 For the first concrete spatial adapter posture on Windows, see [`windows-operator-surface-adapter-path.md`](windows-operator-surface-adapter-path.md). That plan treats Windows Terminal, Komorebi, YASB, and AHK as adapters owned by the Windows User or PC authority locus, not by Narada proper by convenience.
+
+## State Projections And Transition Protocols
+
+`state_projections` are optional read models for current runtime posture. They let a Site expose current adapter/process/display/session state without making private logs or scripts authoritative.
+
+Projection updates should happen through declared transition protocols with source authority, admissibility checks, evidence, reconciliation responsibility, and escalation rules. For the full grammar, see [`site-state-projections.md`](site-state-projections.md).

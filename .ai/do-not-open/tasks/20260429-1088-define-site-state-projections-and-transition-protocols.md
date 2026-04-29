@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T19:17:35.138Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T19:30:29.323Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Docs now distinguish authority records from volatile projections, define projection declarations and transition protocol grammar, capture the Windows operator surface case as motivating evidence, make reconciliation responsibility and escalation explicit, and route source envelope env_243de0db-3bca-4438-a295-63d084515aae through task 1088; pnpm verify passed.
+closed_at: 2026-04-29T19:30:40.942Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Define Site state projections and transition protocols
@@ -39,8 +48,8 @@ Inbox envelope env_243de0db-3bca-4438-a295-63d084515aae reports that the Windows
 
 ## Acceptance Criteria
 
-- [ ] Docs distinguish authority records from volatile current-state projections
-- [ ] Site state model can declare projection surfaces and transition protocols without making scripts authoritative
-- [ ] Windows operator surface case is captured as motivating evidence
-- [ ] Reconciliation responsibilities and escalation rules are explicit
-- [ ] Source envelope env_243de0db-3bca-4438-a295-63d084515aae is routed
+- [x] Docs distinguish authority records from volatile current-state projections
+- [x] Site state model can declare projection surfaces and transition protocols without making scripts authoritative
+- [x] Windows operator surface case is captured as motivating evidence
+- [x] Reconciliation responsibilities and escalation rules are explicit
+- [x] Source envelope env_243de0db-3bca-4438-a295-63d084515aae is routed
