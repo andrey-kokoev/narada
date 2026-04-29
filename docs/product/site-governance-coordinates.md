@@ -300,6 +300,8 @@ Default role posture:
 
 `site_participant_roles` may declare planned roles so startup posture is explicit, for example an API-based Inspector or CLI-based Receptionist. Planned/deferred roles are inert until an inhabited operation actually uses them and the Site config gives them a bounded contract.
 
+Delegated role categories may appear as Site-local participant or session metadata when a Site has earned them, but they are qualifiers rather than default bootstrap roles. Use `builder-worker` for bounded construction delegation under Builder, `resident-worker` for bounded use-work under Resident, and `effect-worker` for runtime effect machinery. See [`delegated-role-taxonomy.md`](../concepts/delegated-role-taxonomy.md).
+
 ## Agent Role Contracts
 
 `agent_role_contracts` is orientation metadata for fresh AI threads. It is not an authorization table and must not be treated as proof that a role may mutate, execute effects, admit evidence, or close work.

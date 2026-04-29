@@ -89,6 +89,16 @@ Missing handoff is a crossing failure, not a communication preference. If it has
 
 Deferred roles such as receptionist, inspector, clerk, superintendent, project manager, or coordinator remain possibilities/proposals/residuals only. They are not active bootstrap targets until inhabited operation evidence proves that the Resident / Operator / Architect / Builder / Trace substrate split cannot absorb the recurring responsibility boundary.
 
+### Delegated Role Categories
+
+Delegated categories may qualify an admitted role without becoming new default top-level roles. The current admitted delegated taxonomy is defined in [`delegated-role-taxonomy.md`](delegated-role-taxonomy.md):
+
+- `builder-worker`: bounded construction delegate under Builder direction.
+- `resident-worker`: bounded Site-use delegate under Resident direction.
+- `effect-worker`: low-level runtime machinery executing admitted mechanical effects.
+
+These names exist to avoid overloading generic `worker`. They do not expand the default fresh-thread bootstrap set beyond Architect and Builder, and they do not grant mutation, admission, or effect authority by themselves.
+
 ## Rules
 
 1. Build what the operation has earned.

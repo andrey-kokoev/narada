@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T16:43:50.587Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T16:54:00.972Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Defined builder-worker, resident-worker, and effect-worker as delegated categories; disambiguated generic worker terminology from runtime effect machinery; documented messaging paths and non-symmetry rule; applied Role Admission Rule using inhabited evidence from Windows User Site, Staccato Site, and Narada proper Builder work; source envelope is linked in task and docs verification passed.
+closed_at: 2026-04-29T16:54:15.758Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Admit delegated role taxonomy for builder-worker resident-worker and effect-worker
@@ -39,8 +48,8 @@ Inbox envelope env_c00d5e94-c419-4374-9ffd-7a6043ce8307 proposes admitting deleg
 
 ## Acceptance Criteria
 
-- [ ] builder-worker resident-worker and effect-worker are defined or explicitly deferred with rationale
-- [ ] Generic worker terminology is disambiguated from low-level operational or effect machinery
-- [ ] Resident builder architect and delegated worker messaging paths are documented without creating unearned role symmetry
-- [ ] Role admission rule is applied using inhabited evidence from User Site Staccato Site and delegated build work
-- [ ] Source inbox envelope is routed to the task and focused verification or pnpm verify passes
+- [x] builder-worker resident-worker and effect-worker are defined or explicitly deferred with rationale
+- [x] Generic worker terminology is disambiguated from low-level operational or effect machinery
+- [x] Resident builder architect and delegated worker messaging paths are documented without creating unearned role symmetry
+- [x] Role admission rule is applied using inhabited evidence from User Site Staccato Site and delegated build work
+- [x] Source inbox envelope is routed to the task and focused verification or pnpm verify passes
