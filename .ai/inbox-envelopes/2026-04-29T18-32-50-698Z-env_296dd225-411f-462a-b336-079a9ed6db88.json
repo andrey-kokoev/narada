@@ -1,0 +1,40 @@
+{
+  "envelope_id": "env_296dd225-411f-462a-b336-079a9ed6db88",
+  "received_at": "2026-04-29T18:32:50.698Z",
+  "source": {
+    "kind": "diagnostic",
+    "ref": "desktop-sunroom-2:komorebi-cross-desktop-hwnd-leak-20260429"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "system_observed",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Operator surfaces need visibility-domain reconciliation boundaries",
+    "summary": "A live Windows desktop switch test reproduced Komorebi state pollution across Windows virtual desktops. After switching Narada -> Staccato -> Narada, Komorebi admitted a Staccato Windows Terminal HWND into the Narada workspace even though Windows virtual desktop membership still reported that HWND on Staccato. Komorebi then held invalid rectangles with negative width/height. The principled fix is to make external visibility or membership domains, such as Windows virtual desktop identity, first-class reconciliation boundaries for operator-surface state.",
+    "evidence": [
+      "Captured evidence: C:\\ProgramData\\Narada\\sites\\pc\\desktop-sunroom-2\\logs\\komorebi\\desktop-switch-state-leak-20260429-132859.json",
+      "Current Windows desktop was Narada index 4; leaked Staccato HWND 7603338 still reported Windows desktop membership index 2.",
+      "Komorebi state after returning to Narada showed the Staccato HWND inside DISPLAY2 workspace I and invalid rects such as width=-53 and height=-125."
+    ],
+    "proposal": [
+      "Define a Windows Desktop Scoped Komorebi Reconciliation capability: after every Windows virtual desktop transition, read current desktop identity, inspect Komorebi-managed HWNDs, query each HWND desktop membership, remove/float/unmanage off-desktop HWNDs from active tiling, retile current-desktop windows, and assert no off-desktop HWNDs or invalid rectangles remain.",
+      "Generalize the doctrine: operator surfaces must not assume their own managed object set is authoritative when the host OS has an independent visibility/membership domain. Such domains should be explicit reconciliation boundaries."
+    ],
+    "recommendation": "Treat this as execution work for the Windows PC Site/template and as product doctrine for Narada operator-surface reconciliation."
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1085",
+    "promoted_at": "2026-04-29T18:35:17.630Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1085,
+      "task_id": "20260429-1085-model-visibility-domain-reconciliation-for-operator-surfaces"
+    }
+  }
+}
