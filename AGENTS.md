@@ -90,6 +90,7 @@ When describing higher-order architecture, deployment, or design:
 - `/home/andrey/src/narada` defaults to read-only doctrine/tool inspection when the requested work belongs to a local Site, PC Site, client Site, data Site, ELT Site, User Site, or external repo.
 - Mutate Narada proper task/inbox/chapter/lifecycle state only when the Operator explicitly names Narada proper as the target work substrate, or when the active task itself is already a Narada proper task.
 - Treat `task allocate/create/claim/close/confirm/finish`, `chapter init/close/finish-range`, `inbox triage/promote/pending/task`, `task lifecycle import/export`, roster, assignment, dispatch, evidence-admission, and publication commands as authority-affecting surfaces.
+- Use `narada task lifecycle status` for normal task allocation, lifecycle drift, and Builder done-posture questions. Direct reads of `.ai/tasks/task-lifecycle.db` are diagnostic-only under explicit admitted repair or diagnosis tasks.
 - If an accidental Narada proper mutation happens, repair only the introduced residue and verify with bounded evidence; do not use broad reset/revert commands.
 
 ## Default Inbox Arc Execution

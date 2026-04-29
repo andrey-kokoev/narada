@@ -12,6 +12,7 @@ import {
   taskLifecycleExportCommand,
   taskLifecycleImportCommand,
 } from './task-lifecycle-snapshot.js';
+import { taskLifecycleStatusCommand } from './task-lifecycle-status.js';
 import {
   directCommandAction,
   resourceScopedDirectCommandAction,
@@ -31,6 +32,21 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
   const lifecycleCmd = taskCmd
     .command('lifecycle')
     .description('Task lifecycle SQLite authority snapshot operators');
+
+  lifecycleCmd
+    .command('status')
+    .description('Read-only task lifecycle allocation and Builder done posture')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'task lifecycle status',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => taskLifecycleStatusCommand({
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
 
   lifecycleCmd
     .command('export')

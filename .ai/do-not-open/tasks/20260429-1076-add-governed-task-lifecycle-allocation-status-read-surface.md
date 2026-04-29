@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-29T16:54:31.033Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-29T17:02:36.796Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Implemented read-only narada task lifecycle status with allocation max/last/next/drift posture, no mutation authority, Builder done posture, snapshot evidence, and direct-SQLite diagnostic-only guidance. Added focused tests for read-only behavior, drift reporting, Builder posture, and human output. pnpm verify passed.
+closed_at: 2026-04-29T17:02:54.406Z
+closed_by: a2
+governed_by: task_close:a2
+closure_mode: peer_reviewed
 ---
 
 # Add governed task lifecycle allocation status read surface
@@ -40,9 +49,9 @@ Inbox envelope env_6f4cafd3-7b2a-417c-bfe8-8f017379f447 reports that Builder use
 
 ## Acceptance Criteria
 
-- [ ] A read-only sanctioned command or documented surface answers max task number last allocated next allocatable number and sequence drift posture
-- [ ] Command does not allocate reserve claim close or mutate task lifecycle state
-- [ ] Builder and AGENTS guidance says direct task lifecycle SQLite reads are diagnostic-only under explicit admitted repair or diagnosis tasks
-- [ ] Output is bounded and includes evidence about DB versus exported snapshot or task-file authority where appropriate
-- [ ] Source inbox envelope is routed and focused tests or pnpm verify pass
-- [ ] Builder done posture is included without hardcoded raw SQL status vocabulary
+- [x] A read-only sanctioned command or documented surface answers max task number last allocated next allocatable number and sequence drift posture
+- [x] Command does not allocate reserve claim close or mutate task lifecycle state
+- [x] Builder and AGENTS guidance says direct task lifecycle SQLite reads are diagnostic-only under explicit admitted repair or diagnosis tasks
+- [x] Output is bounded and includes evidence about DB versus exported snapshot or task-file authority where appropriate
+- [x] Source inbox envelope is routed and focused tests or pnpm verify pass
+- [x] Builder done posture is included without hardcoded raw SQL status vocabulary
