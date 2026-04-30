@@ -53,5 +53,17 @@
     ],
     "suggested_direction": "Keep bootstrap-windows as the front door, but separate cwd-independent CLI readiness, native-vs-WSL execution-surface posture, two-phase paired Site execution, and planned-only adapter topology from actual owning-locus adapter mutation."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1113",
+    "promoted_at": "2026-04-30T05:29:18.442Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1113,
+      "task_id": "20260430-1113-make-windows-bootstrap-cli-readiness-cwd-independent"
+    }
+  }
 }
