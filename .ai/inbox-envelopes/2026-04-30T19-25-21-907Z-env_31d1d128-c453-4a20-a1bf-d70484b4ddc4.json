@@ -1,0 +1,42 @@
+{
+  "envelope_id": "env_31d1d128-c453-4a20-a1bf-d70484b4ddc4",
+  "received_at": "2026-04-30T19:25:21.907Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-cpy.architect-chat"
+  },
+  "kind": "proposal",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-cpy.architect"
+  },
+  "payload": {
+    "title": "Operator-surface agent forking should have a canonical orchestration path",
+    "summary": "Local User Site has pieces for agent instantiation, fork handoff packets, Windows Terminal carrier materialization, identity binding, and operator-surface input, but no single governed command that launches/adopts a builder from an architect work package.",
+    "available_tools": [
+      "narada operator-surface agent instantiate",
+      "New-OperatorSurfaceForkHandoffPacket.ps1",
+      "Confirm-OperatorSurfaceForkAdoption.ps1",
+      "Materialize-WindowsTerminalCarrier.ps1",
+      "Send-Os.ps1 / Send-OperatorSurfaceInput.ps1",
+      "narada task dispatch start --exec",
+      "narada work-next --start-task --exec-task"
+    ],
+    "missing_tools": [
+      "Canonical operator-surface agent fork/start command that composes identity admission, handoff packet generation, terminal profile/materialization, process launch, runtime binding, adoption evidence, and initial prompt delivery.",
+      "Structured CLI launch contract for passing a handoff packet to Codex/Kimi without UI paste as the authority boundary.",
+      "Fork readiness/preflight command that reports missing identity, carrier projection, binding locus, submit strategy, related Site root, and task authority before launch.",
+      "Site-local recipient/role resolution for builder identities that works across User Site, PC Site, and client Sites without relying on global aliases only.",
+      "Post-launch verification that the child agent adopted the declared identity and target Site contract before it can claim tasks."
+    ],
+    "proposal": [
+      "Add a narada operator-surface agent fork or narada agent start command as the canonical front door for architect-to-builder spawning.",
+      "Make dry-run the default posture and require explicit --exec for process launch.",
+      "Emit durable fork_handoff and fork_adoption evidence.",
+      "Support task-backed launch: from task number or work package, generate the builder prompt and acceptance criteria automatically.",
+      "Fail closed when identity, Site, runtime locus, or submit strategy is ambiguous."
+    ],
+    "why_now": "CPY architect needs to delegate a clear implementation task to builder; doing this manually would repeat known drift risks around identity, context inheritance, and operator-surface binding."
+  },
+  "status": "received"
+}
