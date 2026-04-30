@@ -1,0 +1,68 @@
+{
+  "envelope_id": "env_0d7d6386-974e-4c07-af90-a55113d7428f",
+  "received_at": "2026-04-30T14:22:35.657Z",
+  "source": {
+    "kind": "system_observation",
+    "ref": "narada-andrey.architect/cascading-onboarding-structured-artifact-clarification"
+  },
+  "kind": "proposal",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Clarify cascading onboarding should be governed structured data, not prose-only documentation",
+    "summary": "Follow-up to the cascading onboarding proposal: the onboarding cascade should be encoded as machine-readable governed structure, such as JSON or YAML, with prose documentation derived from or explaining that structure. It should not live only as prose guidance for architects.",
+    "related_envelope": "env_64cf33b1-83cf-43ec-9dda-91ef6f922a6a",
+    "clarification": {
+      "canonical_form": "structured_artifact_first",
+      "acceptable_formats": [
+        "json",
+        "yaml"
+      ],
+      "prose_role": "explanation_and_doctrine_only",
+      "reason": "If onboarding remains prose-only, Narada cannot reliably ask numbered choices, resume after interruption, compute missing capability readiness, record deferred choices, or prevent architect-memory drift."
+    },
+    "expected_capabilities_enabled_by_structure": [
+      "Generate numbered/lettered Operator questions from the cascade.",
+      "Persist answers and deferred choices as state or decisions.",
+      "Resume onboarding from the next unanswered material choice.",
+      "Compute readiness by layer: structural Site, selected capabilities, credentials, dry-run proof, activation, runtime installation, live health.",
+      "Generate or recommend CLI commands from chosen branches.",
+      "Detect that a Site is structurally ready but capability-incomplete.",
+      "Compare onboarding posture across Sites without relying on prose interpretation.",
+      "Evolve onboarding contracts through governed data migrations rather than undocumented architect behavior."
+    ],
+    "suggested_shape": {
+      "artifact_kind": "narada.onboarding_cascade.v0",
+      "top_level_sections": [
+        "substrate_selection",
+        "capability_selection",
+        "capability_questions",
+        "readiness_states",
+        "deferred_choice_policy",
+        "command_templates",
+        "authority_locus_rules"
+      ],
+      "site_local_projection": "Each Site may store its selected cascade version, answers, deferred choices, and readiness projection in Site-local governed files."
+    },
+    "requested_execution": [
+      "Amend the cascading onboarding proposal/docs to say the canonical cascade is structured data first.",
+      "Create an initial narada.onboarding_cascade.v0 schema or example artifact for client-service Sites.",
+      "Ensure CLI onboarding uses this artifact rather than hardcoded question order or prose-only instructions."
+    ]
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1130",
+    "promoted_at": "2026-04-30T14:24:49.701Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1130,
+      "task_id": "20260430-1130-add-structured-cascading-onboarding-contract"
+    }
+  }
+}
