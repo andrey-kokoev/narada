@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { SqliteInboxStore } from '@narada2/control-plane';
+import { onboardingCascadeForSiteKind } from './onboarding-cascade.js';
 import { readOperatorSurfaceIdentities, type OperatorSurfaceIdentity } from './operator-surface-registry.js';
 
 export type SiteReadinessPosture =
@@ -168,54 +169,13 @@ function choiceStatus(value: unknown): SiteCapabilityChoice['status'] {
 }
 
 function clientServiceCapabilityChoices(config: Record<string, unknown> | null): SiteCapabilityChoice[] {
-  if (siteKind(config) !== 'client_service') return [];
-  const definitions = [
-    {
-      id: 'mailbox_intake_posture',
-      prompt: 'Mailbox/intake posture',
-      options: ['none_for_now', 'bind_existing_mailbox', 'provision_or_request_mailbox'],
-    },
-    {
-      id: 'allowed_correspondents_or_domains',
-      prompt: 'Allowed correspondents or domains',
-      options: ['none_declared', 'specific_correspondents', 'domain_predicates'],
-    },
-    {
-      id: 'runtime_behavior',
-      prompt: 'Runtime behavior',
-      options: ['manual_only', 'scheduled_polling', 'continuous_background'],
-    },
-    {
-      id: 'sync_posture',
-      prompt: 'Sync posture',
-      options: ['metadata_only', 'headers_and_bodies', 'attachments_with_bounds'],
-    },
-    {
-      id: 'source_data_loci',
-      prompt: 'Source data loci',
-      options: ['none_declared', 'mailbox', 'filesystem', 'external_system'],
-    },
-    {
-      id: 'affiliated_data_or_elt_sites',
-      prompt: 'Affiliated Data/ELT Sites',
-      options: ['none_for_now', 'existing_site_refs', 'request_new_site'],
-    },
-    {
-      id: 'reporting_surfaces',
-      prompt: 'Reporting surfaces',
-      options: ['operator_console_only', 'site_inbox_observations', 'external_report_artifacts'],
-    },
-    {
-      id: 'operator_surface_roles',
-      prompt: 'Operator-surface roles',
-      options: ['architect_only', 'architect_builder_observer', 'custom_declared_roles'],
-    },
-  ];
-  return definitions.map((definition, index) => {
+  const cascade = onboardingCascadeForSiteKind(siteKind(config));
+  if (!cascade) return [];
+  return cascade.capability_questions.map((definition) => {
     const current = configuredChoice(config, definition.id);
     return {
-      number: index + 1,
       ...definition,
+      number: definition.number,
       status: choiceStatus(current),
       current,
     };

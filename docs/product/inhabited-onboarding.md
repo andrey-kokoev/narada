@@ -70,6 +70,8 @@ It does not turn conversation into Site authority. Operator pressure must enter 
 
 Structural readiness is not inhabited readiness for a `client_service` Site. A client-service Site may have config, `.ai`, an admitted operator surface, and no pending inbox while still missing material business-capability choices.
 
+The structured source for these questions is the client-service Cascading Onboarding artifact, not this prose. See [`cascading-onboarding.md`](cascading-onboarding.md) and [`narada.onboarding_cascade.v0.client-service.json`](narada.onboarding_cascade.v0.client-service.json).
+
 Before declaring client-service inhabited readiness, answer or explicitly defer these numbered choices:
 
 1. Mailbox/intake posture: `none_for_now`, `bind_existing_mailbox`, or `provision_or_request_mailbox`.

@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T15:25:54.938Z
+criteria_proof_verification:
+  state: unbound
+  rationale: narada.onboarding_cascade.v0 client-service artifact exists and includes substrate selection, capabilities, numbered questions, readiness states, deferred policy, command templates, authority locus rules, and Site-local projection shape; site readiness consumes it for numbered Operator questions; docs preserve structured artifact as canonical; tests and inbox evidence verify.
+closed_at: 2026-04-30T15:26:14.037Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add structured cascading onboarding contract
@@ -46,10 +55,10 @@ This task generalizes recent CPY onboarding lessons: structural bootstrap succee
 
 ## Acceptance Criteria
 
-- [ ] `narada.onboarding_cascade.v0` schema or example artifact exists for client-service Sites
-- [ ] Cascade artifact includes substrate selection, capability selection, capability questions, readiness states, deferred choice policy, command templates, and authority locus rules
-- [ ] Readiness is stratified by structural Site, capability configuration, credential binding, dry-run proof, activation, runtime installation, and live health
-- [ ] Site-local projection shape records cascade version, answers, deferred choices, and readiness projection
-- [ ] Docs explain cascading onboarding while preserving structured artifact as canonical
-- [ ] Tests or fixtures derive numbered Operator questions, deferred choices, and readiness-by-layer from the structured artifact
-- [ ] Both source inbox envelopes are promoted or recorded pending to this task with durable evidence
+- [x] `narada.onboarding_cascade.v0` schema or example artifact exists for client-service Sites
+- [x] Cascade artifact includes substrate selection, capability selection, capability questions, readiness states, deferred choice policy, command templates, and authority locus rules
+- [x] Readiness is stratified by structural Site, capability configuration, credential binding, dry-run proof, activation, runtime installation, and live health
+- [x] Site-local projection shape records cascade version, answers, deferred choices, and readiness projection
+- [x] Docs explain cascading onboarding while preserving structured artifact as canonical
+- [x] Tests or fixtures derive numbered Operator questions, deferred choices, and readiness-by-layer from the structured artifact
+- [x] Both source inbox envelopes are promoted or recorded pending to this task with durable evidence
