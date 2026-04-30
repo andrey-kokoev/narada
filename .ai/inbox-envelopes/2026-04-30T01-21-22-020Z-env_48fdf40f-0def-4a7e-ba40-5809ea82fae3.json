@@ -25,5 +25,32 @@
     ],
     "recommendation": "Treat as Narada proper architecture work for capability propagation and Site-to-Site operational learning."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1103",
+    "promoted_at": "2026-04-30T01:22:29.641Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "inbox architect-process",
+    "target_result": {
+      "task": {
+        "status": "success",
+        "task_id": "20260430-1103-add-typed-capability-announcement-construct",
+        "task_number": 1103,
+        "file_name": "20260430-1103-add-typed-capability-announcement-construct.md",
+        "file_path": "/home/andrey/src/narada/.ai/do-not-open/tasks/20260430-1103-add-typed-capability-announcement-construct.md",
+        "title": "Add typed capability announcement construct"
+      },
+      "assignment": {
+        "status": "success",
+        "task_id": "20260430-1103-add-typed-capability-announcement-construct",
+        "agent_id": "builder",
+        "claimed_at": "2026-04-30T01:22:28.266Z",
+        "assignment_intent_id": "air_claim_1103_builder_1777512147620_gt4vgd"
+      },
+      "builder": "builder",
+      "execution_performed": false
+    }
+  }
 }
