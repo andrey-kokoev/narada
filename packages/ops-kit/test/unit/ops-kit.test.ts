@@ -139,6 +139,8 @@ describe("ops-kit", () => {
 
     const before = preflight("help@example.com", { configPath });
     expect(before.status).toBe("fail");
+    expect(before.nextActions.some((action) => action.includes("narada capability bind-credential"))).toBe(true);
+    expect(before.nextActions.some((action) => action.includes("Copy .env.example"))).toBe(false);
 
     const setupResult = setup({ configPath, target: "help@example.com" });
     expect(setupResult.createdPaths.length).toBeGreaterThan(0);

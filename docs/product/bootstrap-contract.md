@@ -91,7 +91,24 @@ Minimal mailbox operations remain valid: `narada want-mailbox help@example.com -
 
 **Validation gate:** Scope entry exists in config and `scope_id` is unique.
 
-### Step 3a: Bind System-Owned Tools (Optional)
+### Step 3a: Bind Credential References
+
+Credential onboarding is a capability crossing, not config editing. Record the credential reference and reuse provenance through a sanctioned command:
+
+```bash
+narada capability bind-credential \
+  --site <site-id> \
+  --principal <principal> \
+  --kind graph.client_credentials \
+  --credential-ref env:GRAPH_CLIENT_SECRET \
+  --allow graph.token.request \
+  --local-env GRAPH_CLIENT_SECRET \
+  --by <principal>
+```
+
+The command records the reference, provenance, and local-material status without printing or storing the raw secret. Direct `.env` copying is manual recovery only; it is not the normal onboarding route.
+
+### Step 3b: Bind System-Owned Tools (Optional)
 
 If the operation needs to inspect or diagnose another system, bind to tools owned by that system repo. Do not copy those tools into the ops repo.
 
@@ -123,10 +140,10 @@ Verify the operation can run before attempting live execution.
 |-------|----------|-------------|
 | Config file exists | **Fail** | Re-run `init-repo` or create manually |
 | Operation data root exists | **Fail** | Run `narada setup` |
-| Graph API credentials present | **Fail** (live only) | Fill `.env` or config |
-| Charter runtime credentials present | **Fail** (live only) | Fill `.env` or config |
+| Graph API credentials present | **Fail** (live only) | Run `narada capability bind-credential` and provide referenced local secret material |
+| Charter runtime credentials present | **Fail** (live only) | Run `narada capability bind-credential` and provide referenced local secret material |
 | `.activated` marker exists | **Warn** | Run `narada activate <operation>` |
-| `.env` file exists | **Warn** | `cp .env.example .env` |
+| `.env` file exists | **Warn** | Manual recovery only; canonical onboarding records credential references with `narada capability bind-credential` |
 | Authority classes valid | **Fail** | Fix config policy bindings |
 
 **Artifact:** `ReadinessReport` with `pass`/`warn`/`fail` per check.

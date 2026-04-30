@@ -15,6 +15,7 @@ import {
   capabilityAnnouncementPublishCommand,
   capabilityAnnouncementShowCommand,
   capabilityAnnouncementSupersedeCommand,
+  capabilityBindCredentialCommand,
   capabilityExplainCommand,
   capabilityGrantCommand,
   capabilityListCommand,
@@ -136,6 +137,78 @@ describe('capability consent registry', () => {
 
     expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
     expect((result.result as { error: string }).error).toContain('credential_ref must be a reference');
+  });
+
+  it('binds an existing credential reference with provenance and redacted output', async () => {
+    const cwd = await tempRepo();
+    const original = process.env.NARADA_TEST_GRAPH_SECRET;
+    process.env.NARADA_TEST_GRAPH_SECRET = 'super-secret-value';
+    try {
+      const result = await capabilityBindCredentialCommand({
+        cwd,
+        site: 'cpy',
+        principal: 'operator',
+        kind: 'graph.client_credentials',
+        scope: '{"tenant":"global-maxima"}',
+        allow: 'graph.token.request',
+        credentialRef: 'env:NARADA_TEST_GRAPH_SECRET',
+        localEnv: 'NARADA_TEST_GRAPH_SECRET',
+        reusedFromSite: 'narada.sonar',
+        evidenceRef: 'inbox:env_credential_reuse',
+        rationale: 'Reuse existing Graph app posture for client-service onboarding',
+        by: 'operator',
+        format: 'json',
+      }, createMockContext());
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      const output = JSON.stringify(result.result);
+      expect(output).not.toContain('super-secret-value');
+      const data = result.result as {
+        secret_values_stored: boolean;
+        local_secret_material_available: boolean;
+        credential_binding: {
+          reused_from_site: string;
+          local_material: { env_var: string; status: string };
+          raw_secret_stored: boolean;
+        };
+        grant: { credential_provenance: { reused_from_site: string; raw_secret_stored: boolean } };
+      };
+      expect(data.secret_values_stored).toBe(false);
+      expect(data.local_secret_material_available).toBe(true);
+      expect(data.credential_binding).toMatchObject({
+        reused_from_site: 'narada.sonar',
+        local_material: { env_var: 'NARADA_TEST_GRAPH_SECRET', status: 'present' },
+        raw_secret_stored: false,
+      });
+      expect(data.grant.credential_provenance).toMatchObject({
+        reused_from_site: 'narada.sonar',
+        raw_secret_stored: false,
+      });
+    } finally {
+      if (original === undefined) delete process.env.NARADA_TEST_GRAPH_SECRET;
+      else process.env.NARADA_TEST_GRAPH_SECRET = original;
+    }
+  });
+
+  it('records missing local secret material without rejecting the credential reference', async () => {
+    const cwd = await tempRepo();
+    delete process.env.NARADA_TEST_MISSING_SECRET;
+    const result = await capabilityBindCredentialCommand({
+      cwd,
+      site: 'cpy',
+      principal: 'operator',
+      kind: 'graph.client_credentials',
+      allow: 'graph.token.request',
+      credentialRef: 'env:NARADA_TEST_MISSING_SECRET',
+      localEnv: 'NARADA_TEST_MISSING_SECRET',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect((result.result as { local_secret_material_available: boolean }).local_secret_material_available).toBe(false);
+    expect((result.result as { credential_binding: { local_material: { status: string } } }).credential_binding.local_material.status).toBe('missing');
+    expect((result.result as { warnings: string[] }).warnings[0]).toContain('Local secret material not found');
   });
 
   it('marks expired active grants as expired in list and explain output', async () => {

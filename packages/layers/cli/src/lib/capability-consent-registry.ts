@@ -20,9 +20,25 @@ export interface CapabilityConsentGrant {
   status: CapabilityGrantStatus;
   granted_by: string;
   granted_at: string;
+  credential_provenance?: CredentialBindingProvenance;
   revoked_by: string | null;
   revoked_at: string | null;
   revocation_reason: string | null;
+}
+
+export interface CredentialBindingProvenance {
+  binding_kind: 'credential_reference_reuse';
+  credential_ref: string | null;
+  reused_from_site: string | null;
+  local_material: {
+    checked: boolean;
+    env_var: string | null;
+    status: 'present' | 'missing' | 'not_checked';
+  };
+  rationale: string | null;
+  recorded_by: string;
+  recorded_at: string;
+  raw_secret_stored: false;
 }
 
 export interface CapabilityConsentRegistry {
@@ -112,6 +128,7 @@ export function makeCapabilityGrant(args: {
   credentialRef?: string | null;
   evidenceRef?: string | null;
   expiresAt?: string | null;
+  credentialProvenance?: CredentialBindingProvenance;
   grantedBy: string;
   now?: Date;
 }): CapabilityConsentGrant {
@@ -130,6 +147,7 @@ export function makeCapabilityGrant(args: {
     status: 'active',
     granted_by: args.grantedBy,
     granted_at: (args.now ?? new Date()).toISOString(),
+    credential_provenance: args.credentialProvenance,
     revoked_by: null,
     revoked_at: null,
     revocation_reason: null,

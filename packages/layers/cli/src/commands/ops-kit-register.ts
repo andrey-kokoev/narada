@@ -4,6 +4,7 @@ import {
   wantWorkflow,
   wantPosture,
   setup,
+  preflight,
   renderTargetPreflight,
   inspect,
   explain,
@@ -243,12 +244,15 @@ export function registerOpsKitCommands(program: Command): void {
       command: 'preflight',
       emit: emitCommandResult,
       invocation: async (scopeId, opts) => {
+        const report = preflight(scopeId, {
+          configPath: opts.config as string | undefined,
+        });
         const output = renderTargetPreflight(scopeId, {
           configPath: opts.config as string | undefined,
         });
         return {
           exitCode: ExitCode.SUCCESS,
-          result: resultWithOutput({ status: 'success', operation: scopeId }, output),
+          result: resultWithOutput({ ...report, status: 'success', readiness_status: report.status, operation: scopeId }, output),
         };
       },
     }));

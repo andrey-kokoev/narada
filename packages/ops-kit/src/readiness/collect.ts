@@ -271,7 +271,7 @@ export function preflight(options: PreflightOptions): ReadinessReport {
         : `Microsoft Graph API credentials missing: ${missing.join(", ")} (checked ${checkedSources.join(", ")})`,
       remediation: graphReady
         ? undefined
-        : "Set GRAPH_TENANT_ID, GRAPH_CLIENT_ID, GRAPH_CLIENT_SECRET env vars, or add them to the graph source in config",
+        : "Run `narada capability bind-credential --kind graph.client_credentials --credential-ref env:GRAPH_CLIENT_SECRET --allow graph.token.request --local-env GRAPH_CLIENT_SECRET --by <principal>` and provide the referenced local secret material at runtime",
     });
   }
 
@@ -283,7 +283,7 @@ export function preflight(options: PreflightOptions): ReadinessReport {
     name: ".env",
     status: fs.existsSync(envPath) ? "pass" : "warn",
     detail: "Local environment file",
-    remediation: fs.existsSync(envPath) ? undefined : "Copy .env.example to .env and fill in secrets",
+    remediation: fs.existsSync(envPath) ? undefined : "Use `narada capability bind-credential` to record credential references; direct .env copying is manual recovery, not canonical onboarding",
   });
 
   if (options.coordinatorConfig && options.mailboxIdForTools) {

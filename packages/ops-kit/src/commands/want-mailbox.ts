@@ -135,7 +135,7 @@ export function wantMailbox(
       `Folders: ${scope.scope.included_container_refs.join(", ")}.`,
     nextSteps: [
       "narada setup",
-      "cp .env.example .env  # then edit with your credentials",
+      "narada capability bind-credential --site <site-id> --principal <principal> --kind graph.client_credentials --credential-ref env:GRAPH_CLIENT_SECRET --allow graph.token.request --local-env GRAPH_CLIENT_SECRET --by <principal>",
       `narada preflight ${scopeId}`,
       `narada explain ${scopeId}`,
       `narada activate ${scopeId}`,

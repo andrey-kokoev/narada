@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T15:14:22.023Z
+criteria_proof_verification:
+  state: unbound
+  rationale: capability bind-credential is the sanctioned credential reference reuse path; it records provenance and local-material status without raw secrets; preflight and onboarding docs route missing credential material to this command; focused tests and live readbacks cover existing reference reuse, missing material, redaction, and provenance fields.
+closed_at: 2026-04-30T15:14:40.745Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add credential binding reuse command for Site onboarding
@@ -40,8 +49,8 @@ Narada already treats secrets as authority-bearing capabilities. Onboarding need
 
 ## Acceptance Criteria
 
-- [ ] A sanctioned command or documented command stub exists for binding/reusing a credential reference during Site onboarding
-- [ ] Output records credential provenance without exposing raw secret values
-- [ ] Preflight or doctor points to the credential binding path when local secret material is missing
-- [ ] Direct `.env` copying is documented as non-canonical/manual recovery, not normal onboarding
-- [ ] Tests cover existing-reference reuse, missing local material, redaction, and provenance fields
+- [x] A sanctioned command or documented command stub exists for binding/reusing a credential reference during Site onboarding
+- [x] Output records credential provenance without exposing raw secret values
+- [x] Preflight or doctor points to the credential binding path when local secret material is missing
+- [x] Direct `.env` copying is documented as non-canonical/manual recovery, not normal onboarding
+- [x] Tests cover existing-reference reuse, missing local material, redaction, and provenance fields

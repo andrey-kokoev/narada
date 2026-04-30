@@ -5,6 +5,7 @@ import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import {
   capabilityRegistryPath,
+  type CredentialBindingProvenance,
   grantEffectiveStatus,
   makeCapabilityGrant,
   parseCsv,
@@ -29,6 +30,12 @@ export interface CapabilityGrantOptions {
   expiresAt?: string;
   by?: string;
   format?: string;
+}
+
+export interface CapabilityBindCredentialOptions extends CapabilityGrantOptions {
+  localEnv?: string;
+  reusedFromSite?: string;
+  rationale?: string;
 }
 
 export interface CapabilityListOptions {
@@ -251,6 +258,79 @@ export async function capabilityGrantCommand(
         registry_path: path,
         grant,
         secret_values_stored: false,
+      },
+    };
+  } catch (error) {
+    return normalizeError(error);
+  }
+}
+
+export async function capabilityBindCredentialCommand(
+  options: CapabilityBindCredentialOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  try {
+    const cwd = options.cwd ?? '.';
+    const siteId = requireOption(options.site, '--site');
+    const principalId = requireOption(options.principal, '--principal');
+    const kind = requireOption(options.kind, '--kind');
+    const grantedBy = requireOption(options.by, '--by');
+    const allowedActions = parseCsv(options.allow);
+    if (allowedActions.length === 0) {
+      throw new Error('--allow must include at least one action');
+    }
+    const credentialRef = validateCredentialRef(options.credentialRef);
+    const localEnv = options.localEnv?.trim() || null;
+    const localStatus: CredentialBindingProvenance['local_material']['status'] = localEnv
+      ? process.env[localEnv]?.trim() ? 'present' : 'missing'
+      : 'not_checked';
+    const now = new Date().toISOString();
+    const provenance: CredentialBindingProvenance = {
+      binding_kind: 'credential_reference_reuse',
+      credential_ref: credentialRef,
+      reused_from_site: options.reusedFromSite?.trim() || null,
+      local_material: {
+        checked: Boolean(localEnv),
+        env_var: localEnv,
+        status: localStatus,
+      },
+      rationale: options.rationale?.trim() || null,
+      recorded_by: grantedBy,
+      recorded_at: now,
+      raw_secret_stored: false,
+    };
+    const grant = makeCapabilityGrant({
+      siteId,
+      principalId,
+      agentId: options.agent,
+      capabilityKind: kind,
+      scope: parseScopeJson(options.scope),
+      allowedActions,
+      deniedActions: parseCsv(options.deny),
+      credentialRef,
+      evidenceRef: options.evidenceRef,
+      expiresAt: options.expiresAt,
+      credentialProvenance: provenance,
+      grantedBy,
+      now: new Date(now),
+    });
+    const registry = await readCapabilityRegistry(cwd);
+    registry.grants.push(grant);
+    const path = await writeCapabilityRegistry(cwd, registry);
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: {
+        status: 'success',
+        mutation_performed: true,
+        registry_path: path,
+        grant,
+        credential_binding: provenance,
+        local_secret_material_available: localStatus === 'present',
+        local_secret_material_status: localStatus,
+        secret_values_stored: false,
+        warnings: localStatus === 'missing'
+          ? [`Local secret material not found in env var ${localEnv}; credential reference is recorded but runtime availability remains unresolved.`]
+          : [],
       },
     };
   } catch (error) {
