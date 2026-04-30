@@ -24,5 +24,36 @@
     ],
     "recommendation": "Treat as CAPA and priority execution item before further identity rename/migration work."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "1159",
+    "promoted_at": "2026-04-30T23:48:04.278Z",
+    "promoted_by": "builder",
+    "enactment_status": "enacted",
+    "target_command": "task create",
+    "target_result": {
+      "task": {
+        "status": "success",
+        "task_id": "20260430-1159-reject-incoherent-operator-surface-identity-rename-site-ids",
+        "task_number": 1159,
+        "file_name": "20260430-1159-reject-incoherent-operator-surface-identity-rename-site-ids.md",
+        "file_path": "/home/andrey/src/narada/.ai/do-not-open/tasks/20260430-1159-reject-incoherent-operator-surface-identity-rename-site-ids.md",
+        "title": "Reject incoherent operator-surface identity rename Site ids",
+        "handoff_actionability": {
+          "status": "actionable",
+          "reason": null,
+          "repair_command": null,
+          "required_work_excerpt": "0. Source summary: While renaming narada-andrey.architect to Kevin, the operator-surface identity rename command rejected narada-andrey.Kevin as a site_locus_mismatch because the registry owner Site id was andrey-user, then accepted andrey-user.Kevin. The operator correctly identified this as incoherent: the Site is known and lived as narada-andrey, not andrey-user. Tooling should not admit or suggest identity names under unregistered or incoherent Site ids.\n1. Read source inbox envelope env_4539cf01-ef62-4738-af9e-75b9012ea011 and preserve its authority context.\n2. Identify the owning Narada authority boundary before mutating any target state."
+        }
+      },
+      "assignment": {
+        "status": "success",
+        "task_id": "20260430-1159-reject-incoherent-operator-surface-identity-rename-site-ids",
+        "agent_id": "builder",
+        "claimed_at": "2026-04-30T23:48:02.619Z",
+        "assignment_intent_id": "air_claim_1159_builder_1777592882324_zmkrjz"
+      }
+    }
+  }
 }

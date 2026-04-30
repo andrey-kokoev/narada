@@ -1,0 +1,27 @@
+{
+  "envelope_id": "env_c9e356a6-b7cb-4d12-b039-7c4fc2315b92",
+  "received_at": "2026-04-30T23:53:24.121Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey-operator-surface-message-20260430"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "CAPA: operator-surface delivered messages need mechanical sender identity",
+    "summary": "Operator-surface send records delivery metadata, but the text pasted into the target agent does not mechanically include the sender identity. This caused ambiguity when asking Bob to shout back via the same channel: the receiver had to infer the sender from conversational context and runtime focus rather than from the delivered message itself.",
+    "evidence": [
+      "Send-Os event records target identity, previous foreground HWND, asserted_by, and restoration metadata, but delivered_text contains only the operator-provided message body.",
+      "The sender identity should be resolved from the previous foreground HWND binding when the send is operator-mediated from a live operator surface."
+    ],
+    "proposal": [
+      "Split operator-surface input intent into typed message versus raw input. Typed message delivery must prepend or wrap a compact sender header, e.g. [from: narada-andrey.Kevin], and record the same sender identity in the event artifact.",
+      "Raw input injection may suppress the rendered sender header only when explicitly requested, because it is keystroke delivery rather than agent-to-agent message delivery."
+    ],
+    "recommendation": "Treat as CAPA/execution item for operator-surface messaging before relying on this as a normal inter-agent channel."
+  },
+  "status": "received"
+}
