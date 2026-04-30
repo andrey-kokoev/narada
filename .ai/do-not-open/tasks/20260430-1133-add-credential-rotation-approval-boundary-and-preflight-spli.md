@@ -1,5 +1,5 @@
 ---
-status: opened
+status: claimed
 ---
 
 # Add credential rotation approval boundary and preflight split
