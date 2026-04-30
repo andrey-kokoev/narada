@@ -1,0 +1,53 @@
+{
+  "envelope_id": "env_285e8922-6cc8-41ef-984a-3ac81f4753a0",
+  "received_at": "2026-04-30T14:10:19.663Z",
+  "source": {
+    "kind": "system_observation",
+    "ref": "narada-andrey.architect/cpy-mailbox-onboarding-ergonomics"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "CPY onboarding exposed remaining client-service mailbox ergonomics gaps",
+    "summary": "After CPY Site bootstrap, mailbox configuration succeeded, but the flow required manual config edits and ad hoc credential binding even though the Operator choices were clear. This indicates gaps in client-service onboarding, want-mailbox expressiveness, and credential-binding ergonomics.",
+    "context": {
+      "site": "cpy",
+      "workspace": "C:/Users/Andrey/OneDrive - Global Maxima LLC/!Business/!Clients/!CPY",
+      "mailbox_scope": "cpy-correspondence",
+      "mailbox_user": "andrey@kokoev.name",
+      "admitted_domain": "corepoweryoga.com"
+    },
+    "observations": [
+      {
+        "area": "client_service_onboarding_inventory",
+        "detail": "A fresh Operator needs a guided sequence that surfaces material choices before the Site is called ready: mailbox posture, mailbox address, admission rule, attachment policy, draft/send posture, KB behavior, credential posture, runtime activation, and daemon posture. Today these were discovered conversationally after structural bootstrap."
+      },
+      {
+        "area": "want_mailbox_expressiveness",
+        "detail": "narada want-mailbox scaffolded the base operation, but could not express participant-domain admission across from/sender/to/cc/bcc, attachment_policy include_content, Site-local KB/material notes, or a client-service correspondence scope name separate from mailbox address. These had to be patched directly into config files."
+      },
+      {
+        "area": "credential_binding_ergonomics",
+        "detail": "The Operator chose to reuse the existing Graph app/tenant credential posture. The practical path was copying another Site's local .env into CPY. This worked but is not a principled credential-binding operation. Narada should support a first-class credential reference/reuse flow with provenance and without exposing raw secrets."
+      },
+      {
+        "area": "fresh_operator_path",
+        "detail": "The actual successful path was bootstrap-client -> doctor -> local architect identity admission -> mailbox choice inventory -> want-mailbox -> direct config refinement -> setup -> credential binding -> preflight -> activate. This should become one guided first-time client-service onboarding path or a resumable checklist."
+      },
+      {
+        "area": "activation_wording_positive_example",
+        "detail": "narada activate behaved well: it clearly stated that activation marks the operation live but does not start the daemon or send mail. This wording should be preserved as a model for effect-boundary clarity."
+      }
+    ],
+    "requested_direction": [
+      "Extend or wrap want-mailbox for client-service Sites so it accepts admission predicates, attachment policy, mailbox user id, scope id, and draft/send posture as first-class fields.",
+      "Add a credential binding command that records a credential reference or reuses an existing binding without manual .env copying and without raw secret exposure.",
+      "Add a guided client-service onboarding command or checklist that separates structural readiness from business-capability readiness and resumes from partial completion.",
+      "Keep activation language explicit about what does and does not happen."
+    ]
+  },
+  "status": "received"
+}
