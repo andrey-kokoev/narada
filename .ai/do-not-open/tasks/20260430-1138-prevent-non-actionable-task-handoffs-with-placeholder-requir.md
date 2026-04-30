@@ -1,5 +1,7 @@
 ---
-status: opened
+status: claimed
+amended_by: architect
+amended_at: 2026-04-30T17:26:03.316Z
 ---
 
 # Prevent non-actionable task handoffs with placeholder required work
@@ -18,7 +20,13 @@ CAPA source: task 1133 was claimed by Builder and had acceptance criteria, but i
 
 ## Required Work
 
-1. TBD
+1. Inspect task create, inbox task, chapter commission, task amend, task claim, task work-next, task recommend, task read, task evidence, and task workboard surfaces for task actionability validation.
+2. Define a handoff_actionability model that detects placeholder, empty, or non-actionable Required Work in executable Builder handoff tasks.
+3. Make task creation or commissioning reject or flag executable tasks whose Required Work is missing or placeholder text such as TBD.
+4. Make claim, work-next, and recommend surface an underspecified active task as a blocker with repair guidance instead of only a normal continue instruction.
+5. Expose handoff_actionability in task read, evidence, and workboard output so Architect can detect whether a task is executable before assigning Builder.
+6. Add or verify a sanctioned amendment path that can repair Required Work and clear the actionability blocker without releasing the task.
+7. Add tests for placeholder Required Work, empty Required Work, valid multi-step Required Work, and non-executable planning/deferred exceptions, including the 1133 regression shape.
 
 ## Non-Goals
 
@@ -29,6 +37,7 @@ CAPA source: task 1133 was claimed by Builder and had acceptance criteria, but i
 ## Execution Notes
 
 <!-- Record what was done, decisions made, and files changed during execution. -->
+- Amended by architect at 2026-04-30T17:26:03.316Z: required work
 
 ## Verification
 
