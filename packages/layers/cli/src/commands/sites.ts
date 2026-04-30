@@ -7,6 +7,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { execFile } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { join, posix, resolve, win32 } from 'node:path';
 import { hostname } from 'node:os';
 import { promisify } from 'node:util';
@@ -3072,6 +3073,24 @@ function envToolStatus(name: string): 'present' | 'missing' | null {
   return value === 'present' || value === 'missing' ? value : null;
 }
 
+function resolveCliReadinessCoordinates(): {
+  module_entrypoint: string;
+  package_root: string;
+  dist_entrypoint: string;
+  shell_shim: string | null;
+  repair_command: string;
+} {
+  const moduleEntrypoint = fileURLToPath(import.meta.url);
+  const packageRoot = resolve(moduleEntrypoint, '..', '..', '..');
+  return {
+    module_entrypoint: moduleEntrypoint,
+    package_root: packageRoot,
+    dist_entrypoint: join(packageRoot, 'dist', 'main.js'),
+    shell_shim: process.env.HOME ? join(process.env.HOME, '.local', 'bin', 'narada') : null,
+    repair_command: 'pnpm --filter @narada2/cli build && pnpm run narada:install-shim',
+  };
+}
+
 async function commandAvailable(command: string): Promise<boolean> {
   try {
     await execFileAsync(command, ['--version'], { timeout: 1500, windowsHide: true });
@@ -3145,13 +3164,20 @@ async function inspectWindowsOnboardingReadiness(executionSurface?: string): Pro
       ? undefined
       : 'Use --execution-surface wsl_assisted when invoking from WSL, or run from native Windows.',
   });
-  const cliDist = join(process.cwd(), 'packages', 'layers', 'cli', 'dist', 'main.js');
+  const cli = resolveCliReadinessCoordinates();
+  const distExists = existsSync(cli.dist_entrypoint);
+  const shimExists = cli.shell_shim ? existsSync(cli.shell_shim) : false;
   checks.push({
     name: 'narada_cli_readiness',
-    status: existsSync(cliDist) ? 'pass' : 'fail',
+    status: distExists ? 'pass' : 'fail',
     authority_locus: 'narada_proper',
-    detail: existsSync(cliDist) ? `CLI dist exists: ${cliDist}` : `CLI dist missing: ${cliDist}`,
-    unblock_command: existsSync(cliDist) ? undefined : 'pnpm --filter @narada2/cli build && pnpm run narada:install-shim',
+    detail: [
+      `module=${cli.module_entrypoint}`,
+      `package_root=${cli.package_root}`,
+      `dist=${distExists ? cli.dist_entrypoint : `missing:${cli.dist_entrypoint}`}`,
+      `shell_shim=${cli.shell_shim ? shimExists ? cli.shell_shim : `missing:${cli.shell_shim}` : 'unavailable'}`,
+    ].join('; '),
+    unblock_command: distExists ? undefined : cli.repair_command,
   });
   return checks;
 }

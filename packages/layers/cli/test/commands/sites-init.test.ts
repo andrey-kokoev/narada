@@ -80,6 +80,7 @@ vi.mock('@narada2/linux-site', async (importOriginal) => {
 describe('sitesInitCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.restoreAllMocks();
     vol.reset();
     vol.mkdirSync('/tmp', { recursive: true });
     delete process.env.NARADA_EXECUTOR_RUNTIME;
@@ -562,6 +563,31 @@ describe('sitesInitCommand', () => {
     expect(data.adapter_plan.every((entry) => entry.dry_run && !entry.mutation_performed)).toBe(true);
     expect(data.adapter_plan.map((entry) => entry.authority_locus)).toContain('windows_pc');
     expect(data.evidence.site_creation).toBe('dry-run plan only');
+  });
+
+  it.each([
+    ['narada proper'],
+    ['user Site'],
+    ['pc Site'],
+    ['unrelated cwd'],
+  ])('resolves bootstrap Windows CLI readiness independently of cwd: %s', async (_label) => {
+    process.env.NARADA_EXECUTOR_RUNTIME = 'wsl';
+    process.env.COMPUTERNAME = 'DESKTOP-SUNROOM';
+    const cwd = `/tmp/${String(_label).replace(/\s+/g, '-').toLowerCase()}`;
+    vi.spyOn(process, 'cwd').mockReturnValue(cwd);
+
+    const result = await sitesBootstrapWindowsCommand({ format: 'json' }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const data = result.result as { substrate_readiness: Array<{ name: string; status: string; detail: string; unblock_command?: string }> };
+    const cli = data.substrate_readiness.find((check) => check.name === 'narada_cli_readiness');
+    expect(cli).toBeDefined();
+    expect(cli?.detail).toContain('package_root=');
+    expect(cli?.detail).toContain('packages/layers/cli/dist/main.js');
+    expect(cli?.detail).not.toContain(`${cwd}/packages/layers/cli/dist/main.js`);
+    if (cli?.status === 'fail') {
+      expect(cli.unblock_command).toBe('pnpm --filter @narada2/cli build && pnpm run narada:install-shim');
+    }
   });
 
   it('honors explicit PC Site id and execution surface in paired Windows bootstrap', async () => {

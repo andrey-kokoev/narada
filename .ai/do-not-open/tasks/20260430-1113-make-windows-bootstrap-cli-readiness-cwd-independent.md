@@ -1,6 +1,16 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T05:34:16.028Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-30T05:34:16.269Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
+
 # Make Windows bootstrap CLI readiness cwd-independent
 
 ## Chapter
@@ -38,7 +48,7 @@ Inbox observation env_ffeed7c4 reports that `narada_cli_readiness` currently res
 
 ## Acceptance Criteria
 
-- [ ] bootstrap-windows CLI readiness no longer depends on process.cwd() being Narada proper
-- [ ] Readiness output names the resolved CLI/shim/dist coordinates and exact repair command when stale or missing
-- [ ] Tests cover invocation from Narada proper, User Site, PC Site, and unrelated cwd
-- [ ] No raw SQLite or direct task-file reads are needed to verify readiness
+- [x] bootstrap-windows CLI readiness no longer depends on process.cwd() being Narada proper
+- [x] Readiness output names the resolved CLI/shim/dist coordinates and exact repair command when stale or missing
+- [x] Tests cover invocation from Narada proper, User Site, PC Site, and unrelated cwd
+- [x] No raw SQLite or direct task-file reads are needed to verify readiness
