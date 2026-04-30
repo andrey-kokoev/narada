@@ -25,5 +25,32 @@
     ],
     "recommendation": "Create an execution task in Narada proper to implement deferred-task resumption semantics and regression tests."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1102",
+    "promoted_at": "2026-04-30T01:19:01.292Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "inbox architect-process",
+    "target_result": {
+      "task": {
+        "status": "success",
+        "task_id": "20260430-1102-add-governed-deferred-task-unblock-and-resume-path",
+        "task_number": 1102,
+        "file_name": "20260430-1102-add-governed-deferred-task-unblock-and-resume-path.md",
+        "file_path": "/home/andrey/src/narada/.ai/do-not-open/tasks/20260430-1102-add-governed-deferred-task-unblock-and-resume-path.md",
+        "title": "Add governed deferred task unblock and resume path"
+      },
+      "assignment": {
+        "status": "success",
+        "task_id": "20260430-1102-add-governed-deferred-task-unblock-and-resume-path",
+        "agent_id": "builder",
+        "claimed_at": "2026-04-30T01:19:00.054Z",
+        "assignment_intent_id": "air_claim_1102_builder_1777511939812_1ju85j"
+      },
+      "builder": "builder",
+      "execution_performed": false
+    }
+  }
 }

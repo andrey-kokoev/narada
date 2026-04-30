@@ -25,5 +25,32 @@
     ],
     "recommendation": "Treat as ergonomics execution work for Narada proper task-governance CLI."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1101",
+    "promoted_at": "2026-04-30T01:18:49.887Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "inbox architect-process",
+    "target_result": {
+      "task": {
+        "status": "success",
+        "task_id": "20260430-1101-improve-task-commissioning-ergonomics-and-bounded-authority-",
+        "task_number": 1101,
+        "file_name": "20260430-1101-improve-task-commissioning-ergonomics-and-bounded-authority-.md",
+        "file_path": "/home/andrey/src/narada/.ai/do-not-open/tasks/20260430-1101-improve-task-commissioning-ergonomics-and-bounded-authority-.md",
+        "title": "Improve task commissioning ergonomics and bounded authority inspection"
+      },
+      "assignment": {
+        "status": "success",
+        "task_id": "20260430-1101-improve-task-commissioning-ergonomics-and-bounded-authority-",
+        "agent_id": "builder",
+        "claimed_at": "2026-04-30T01:18:47.393Z",
+        "assignment_intent_id": "air_claim_1101_builder_1777511926910_bhzy7k"
+      },
+      "builder": "builder",
+      "execution_performed": false
+    }
+  }
 }
