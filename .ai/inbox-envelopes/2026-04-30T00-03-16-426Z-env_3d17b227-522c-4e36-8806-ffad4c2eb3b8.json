@@ -1,0 +1,28 @@
+{
+  "envelope_id": "env_3d17b227-522c-4e36-8806-ffad4c2eb3b8",
+  "received_at": "2026-04-30T00:03:16.426Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey.architect:task-create-from-file-criteria-loss"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "task create --from-file loses acceptance criteria in lifecycle authority",
+    "summary": "While creating User Site tasks 11 and 12 from markdown files, the generated task markdown contained Acceptance Criteria, but narada task read showed acceptance_criteria as empty until a separate narada task amend --criteria command was run. This creates extra operator friction and risks divergence between visible task markdown and lifecycle SQLite authority.",
+    "evidence": [
+      "Task 12 markdown initially contained four acceptance criteria under ## Acceptance Criteria.",
+      "Immediately after task create --from-file, narada task read 12 returned acceptance_criteria: [] and unchecked_count: 0.",
+      "Running narada task amend 12 --criteria populated lifecycle authority correctly."
+    ],
+    "proposal": [
+      "Make task create --from-file parse Acceptance Criteria into lifecycle authority, or reject/diagnose from-file bodies whose criteria cannot be admitted.",
+      "Add regression coverage for from-file task creation preserving criteria in both markdown and lifecycle SQLite projection."
+    ],
+    "recommendation": "Create an execution task in Narada proper for task create --from-file criteria admission."
+  },
+  "status": "received"
+}
