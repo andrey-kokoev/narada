@@ -7,6 +7,7 @@ import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import {
   makeOperatorSurfaceLabel,
+  operatorSurfaceCarrierProjectionIssues,
   operatorSurfaceIdentityPath,
   operatorSurfaceDir,
   readOperatorSurfaceIdentities,
@@ -1018,6 +1019,25 @@ export async function operatorSurfaceLabelsBuildCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const cwd = options.cwd ?? '.';
   const registry = await readOperatorSurfaceIdentities(cwd);
+  const compatibilityIssues = operatorSurfaceCarrierProjectionIssues(registry);
+  if (compatibilityIssues.length > 0) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        status: 'error',
+        mutation_performed: false,
+        reason: 'operator_surface_identity_registry_incompatible_with_carrier_projection',
+        registry_path: operatorSurfaceIdentityPath(cwd),
+        projection_boundary: {
+          durable_identity_authority: operatorSurfaceIdentityPath(cwd),
+          carrier_fields_are_projection: true,
+          windows_identity_name_source: 'identity_id',
+        },
+        issues: compatibilityIssues,
+        repair_guidance: 'Repair durable identity records through narada operator-surface identity add or identity rename; do not edit Windows carrier files as identity authority.',
+      },
+    };
+  }
   const limit = options.limit ?? 50;
   const identities = registry.identities
     .filter((entry) => !options.site || entry.site_id === options.site)
@@ -1030,6 +1050,15 @@ export async function operatorSurfaceLabelsBuildCommand(
       registry_path: operatorSurfaceIdentityPath(cwd),
       count: identities.length,
       limit,
+      projection_boundary: {
+        durable_identity_authority: operatorSurfaceIdentityPath(cwd),
+        carrier_fields_are_projection: true,
+        windows_identity_name_source: 'identity_id',
+      },
+      projection_compatibility: {
+        status: 'pass',
+        carrier: 'windows_focused_window_binding',
+      },
       labels: identities.map((identity) => makeOperatorSurfaceLabel(identity, registry)),
     },
   };

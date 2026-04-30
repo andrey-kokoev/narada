@@ -59,6 +59,13 @@ export interface OperatorSurfaceIdentityRegistry {
   identities: OperatorSurfaceIdentity[];
 }
 
+export interface OperatorSurfaceCarrierProjectionIssue {
+  identity_ref: string | null;
+  field: string;
+  reason: string;
+  repair_command: string;
+}
+
 export function operatorSurfaceDir(cwd: string): string {
   return join(resolve(cwd), 'operator-surfaces');
 }
@@ -105,7 +112,9 @@ export function makeOperatorSurfaceLabel(
   const roleColor = registry?.roles?.[identity.role]?.affinity_color;
   return {
     identity_id: identity.identity_id,
+    identity_name: identity.identity_id,
     label: identity.label,
+    presentation_label: identity.label,
     site_id: identity.site_id,
     role: identity.role,
     agent_kind: identity.agent_kind,
@@ -139,6 +148,44 @@ export function makeOperatorSurfaceLabel(
         affinity_color: null,
       },
     },
+    carrier_projection: {
+      windows_focused_window_binding: {
+        identity_name: identity.identity_id,
+        label: identity.label,
+        authority: 'projection_from_site_identity_record',
+      },
+      authority_boundary: 'identity_id is Site authority; identity_name is a Windows carrier projection field',
+    },
     authority_limits: identity.authority_limits,
   };
+}
+
+export function operatorSurfaceCarrierProjectionIssues(
+  registry: OperatorSurfaceIdentityRegistry,
+): OperatorSurfaceCarrierProjectionIssue[] {
+  const issues: OperatorSurfaceCarrierProjectionIssue[] = [];
+  for (const identity of registry.identities as Array<Partial<OperatorSurfaceIdentity>>) {
+    const identityRef = typeof identity.identity_id === 'string' && identity.identity_id.trim()
+      ? identity.identity_id
+      : typeof identity.label === 'string' && identity.label.trim()
+        ? identity.label
+        : null;
+    if (typeof identity.identity_id !== 'string' || !identity.identity_id.trim()) {
+      issues.push({
+        identity_ref: identityRef,
+        field: 'identity_id',
+        reason: 'missing durable identity_id; Windows carrier identity_name cannot be projected',
+        repair_command: 'narada operator-surface identity add <identity-name> --site <site-id> --role <role> --agent-kind <kind> --by <principal>',
+      });
+    }
+    if (typeof identity.label !== 'string' || !identity.label.trim()) {
+      issues.push({
+        identity_ref: identityRef,
+        field: 'label',
+        reason: 'missing presentation label; Windows carrier label cannot be projected',
+        repair_command: `narada operator-surface identity add ${identityRef ?? '<identity-name>'} --site <site-id> --role <role> --agent-kind <kind> --label <label> --by <principal>`,
+      });
+    }
+  }
+  return issues;
 }

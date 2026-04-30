@@ -544,11 +544,72 @@ describe('operator-surface commands', () => {
       status: 'success',
       mutation_performed: false,
       count: 1,
+      projection_boundary: {
+        carrier_fields_are_projection: true,
+        windows_identity_name_source: 'identity_id',
+      },
+      projection_compatibility: {
+        status: 'pass',
+        carrier: 'windows_focused_window_binding',
+      },
       labels: [{
         identity_id: 'narada-proper-builder',
+        identity_name: 'narada-proper-builder',
         label: 'Narada Proper Builder',
+        presentation_label: 'Narada Proper Builder',
         role: 'builder',
+        carrier_projection: {
+          windows_focused_window_binding: {
+            identity_name: 'narada-proper-builder',
+            label: 'Narada Proper Builder',
+            authority: 'projection_from_site_identity_record',
+          },
+          authority_boundary: expect.stringContaining('identity_id is Site authority'),
+        },
       }],
+    });
+  });
+
+  it('fails label carrier projection closed when durable identity records are incompatible', async () => {
+    const cwd = await tempRepo();
+    mkdirSync(join(cwd, 'operator-surfaces'), { recursive: true });
+    await writeFile(join(cwd, 'operator-surfaces', 'identities.json'), JSON.stringify({
+      schema: 'https://narada.dev/schemas/operator-surface-identities/v1',
+      updated_at: '2026-04-30T22:00:00.000Z',
+      identities: [{
+        identity_name: 'narada-proper-builder',
+        site_id: 'narada-proper',
+        role: 'builder',
+        agent_kind: 'codex_cli',
+        label: 'Narada Proper Builder',
+        admitted_by: 'operator',
+        admitted_at: '2026-04-30T22:00:00.000Z',
+        updated_at: '2026-04-30T22:00:00.000Z',
+        authority_limits: [],
+      }],
+    }, null, 2));
+
+    const labels = await operatorSurfaceLabelsBuildCommand({
+      cwd,
+      site: 'narada-proper',
+      format: 'json',
+    }, createMockContext());
+
+    expect(labels.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(labels.result).toMatchObject({
+      status: 'error',
+      mutation_performed: false,
+      reason: 'operator_surface_identity_registry_incompatible_with_carrier_projection',
+      projection_boundary: {
+        carrier_fields_are_projection: true,
+        windows_identity_name_source: 'identity_id',
+      },
+      issues: [{
+        field: 'identity_id',
+        reason: expect.stringContaining('Windows carrier identity_name cannot be projected'),
+        repair_command: expect.stringContaining('narada operator-surface identity add'),
+      }],
+      repair_guidance: expect.stringContaining('do not edit Windows carrier files as identity authority'),
     });
   });
 

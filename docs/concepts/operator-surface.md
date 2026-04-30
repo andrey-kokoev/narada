@@ -249,6 +249,8 @@ Projection precedence is:
 
 These commands write/read Site-local durable identity records. They do not bind HWNDs, process ids, terminal tabs, API threads, MCP clients, or other volatile runtime handles.
 
+`operator-surface labels build` is the carrier projection boundary for window labels and Windows focused-window binding helpers. The durable Site identity field is `identity_id`; the Windows carrier-facing `identity_name` field is generated from that value and is not a second identity authority. If an identity registry cannot project `identity_name`, label build fails closed with repair guidance to use `narada operator-surface identity add` or `identity rename` rather than editing carrier JSON by hand.
+
 The runtime binding command surface exists as an authority-preserving deferral surface:
 
 ```bash

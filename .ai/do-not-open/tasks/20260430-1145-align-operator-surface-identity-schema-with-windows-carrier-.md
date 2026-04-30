@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T22:48:20.478Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777589261712_9l2dwo
+closed_at: 2026-04-30T22:48:36.325Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Align operator-surface identity schema with Windows carrier scripts
@@ -32,8 +41,8 @@ Source inbox envelope env_0e16ff4f-a109-4832-b51a-56dbf57f75db reports that oper
 
 ## Acceptance Criteria
 
-- [ ] A newly admitted operator-surface identity can be resolved by the Windows focused-window binding path without manual identity_name compatibility edits.
-- [ ] Window-label materialization can consume the canonical record or an explicitly generated projection.
-- [ ] Regression coverage proves CLI-created records work with bind-focused/carrier projection expectations.
-- [ ] Doctor/preflight reports schema incompatibility with bounded repair guidance.
-- [ ] Documentation or command help identifies the authority/projection boundary for operator-surface identities.
+- [x] A newly admitted operator-surface identity can be resolved by the Windows focused-window binding path without manual identity_name compatibility edits.
+- [x] Window-label materialization can consume the canonical record or an explicitly generated projection.
+- [x] Regression coverage proves CLI-created records work with bind-focused/carrier projection expectations.
+- [x] Doctor/preflight reports schema incompatibility with bounded repair guidance.
+- [x] Documentation or command help identifies the authority/projection boundary for operator-surface identities.
