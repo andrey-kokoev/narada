@@ -87,7 +87,7 @@ describe('sitesBootstrapProjectCommand', () => {
     expect(agents).toContain('The human is `Operator`.');
     expect(agents).toContain('This Site is governed by Narada law.');
     expect(agents).toContain('project-local governance');
-    expect(agents).toContain('Treat this file as the Site-local execution contract for fresh Architect and Builder threads.');
+    expect(agents).toContain('Treat this file as the Site-local execution contract for fresh Architect, Builder, and Observer threads.');
     expect(agents).toContain('Project code and artifacts outside `site_root` are not Narada knowledge');
     expect(agents).not.toContain('## Inspector Thread Bootstrap');
     expect(agents).not.toContain('## Superintendent Thread Bootstrap');
@@ -117,7 +117,7 @@ describe('sitesBootstrapProjectCommand', () => {
       runtime_kind: 'human',
       authority_posture: 'value_use',
     });
-    expect(config.governance.agent_role_contracts.admitted_roles).toEqual(['architect', 'builder']);
+    expect(config.governance.agent_role_contracts.admitted_roles).toEqual(['architect', 'builder', 'observer']);
     expect(config.governance.agent_role_contracts.architect.role_id).toBe('architect');
     expect(config.governance.agent_role_contracts.builder.role_id).toBe('builder');
     expect(config.governance.agent_role_contracts).not.toHaveProperty('inspector');
@@ -131,10 +131,29 @@ describe('sitesBootstrapProjectCommand', () => {
       format: 'json',
     }, createMockContext());
     expect(doctor.exitCode).toBe(ExitCode.SUCCESS);
-    const data = doctor.result as { status: string; checks: Array<{ name: string; status: string }> };
+    const data = doctor.result as {
+      status: string;
+      checks: Array<{ name: string; status: string }>;
+      readiness: {
+        onboarding: { state: string; source: string };
+        coordinates: {
+          governing_law_source: { source_site_id: string };
+          authority_locus: { locus_kind: string };
+          evidence_locus: { kind: string };
+        };
+        blockers: Array<{ name: string }>;
+        warnings: Array<{ name: string }>;
+      };
+    };
     expect(data.status).toBe('passed');
     expect(data.checks.find((check) => check.name === 'site_kind')?.status).toBe('pass');
     expect(data.checks.find((check) => check.name === 'project_sync_posture')?.status).toBe('pass');
+    expect(data.readiness.onboarding).toMatchObject({ state: 'bootstrap', source: 'governance.readiness_phase' });
+    expect(data.readiness.coordinates.governing_law_source.source_site_id).toBe('narada-proper');
+    expect(data.readiness.coordinates.authority_locus.locus_kind).toBe('project');
+    expect(data.readiness.coordinates.evidence_locus.kind).toBe('git');
+    expect(data.readiness.blockers.find((check) => check.name === 'role_identity_exists')).toBeTruthy();
+    expect(data.readiness.warnings).toEqual([]);
   });
 
   it('refuses non-project sync posture', async () => {

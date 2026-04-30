@@ -1,6 +1,16 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T03:03:34.790Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-30T03:03:35.185Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
+
 # Unify Site deployment readiness with inhabited onboarding
 
 ## Chapter
@@ -38,8 +48,8 @@ Narada distinguishes bootstrap from inhabited onboarding. A first-time Operator 
 
 ## Acceptance Criteria
 
-- [ ] Site readiness output includes inhabited onboarding state or an explicit not-yet-onboarded state.
-- [ ] Readiness output names the governing law source, authority locus, evidence locus, embodiments, and operator-surface posture when available.
-- [ ] Readiness distinguishes warnings from blockers and recommends the next bounded command for each blocker.
-- [ ] First-time front-door logic consumes the same readiness service or data shape rather than reimplementing checks.
-- [ ] Tests prove readiness classification for a fresh Site, a partially bound Site, and a ready Site.
+- [x] Site readiness output includes inhabited onboarding state or an explicit not-yet-onboarded state.
+- [x] Readiness output names the governing law source, authority locus, evidence locus, embodiments, and operator-surface posture when available.
+- [x] Readiness distinguishes warnings from blockers and recommends the next bounded command for each blocker.
+- [x] First-time front-door logic consumes the same readiness service or data shape rather than reimplementing checks.
+- [x] Tests prove readiness classification for a fresh Site, a partially bound Site, and a ready Site.

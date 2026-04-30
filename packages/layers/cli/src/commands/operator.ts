@@ -1,9 +1,6 @@
-import { existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { SqliteInboxStore } from '@narada2/control-plane';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
-import { readOperatorSurfaceIdentities } from '../lib/operator-surface-registry.js';
+import { assessSiteReadiness, type SiteReadinessPosture, type SiteReadinessResult } from '../lib/site-readiness.js';
 
 export interface OperatorStartOptions {
   site?: string;
@@ -13,13 +10,7 @@ export interface OperatorStartOptions {
   format?: CliFormat;
 }
 
-export type OperatorStartPosture =
-  | 'site_absent'
-  | 'initialized_unready'
-  | 'ready_missing_role_binding'
-  | 'ready_missing_transport'
-  | 'ready_pending_inbox'
-  | 'fully_idle';
+export type OperatorStartPosture = SiteReadinessPosture;
 
 export interface OperatorStartResult {
   status: 'success' | 'error';
@@ -44,6 +35,7 @@ export interface OperatorStartResult {
     bound_transport: boolean;
     submit_strategy: string | null;
   };
+  readiness: SiteReadinessResult;
   next_command: string;
   bounded_output: true;
 }
@@ -54,113 +46,39 @@ function requireText(value: string | undefined, name: string): string {
   return trimmed;
 }
 
-function titleFromPayload(payload: unknown): string | null {
-  if (!payload || typeof payload !== 'object') return null;
-  const record = payload as Record<string, unknown>;
-  return typeof record.title === 'string'
-    ? record.title
-    : typeof record.summary === 'string'
-      ? record.summary
-      : null;
-}
-
-function listPendingInbox(siteRoot: string): OperatorStartResult['pending_inbox'] {
-  const dbPath = join(siteRoot, '.ai', 'inbox.db');
-  if (!existsSync(dbPath)) return [];
-  const store = new SqliteInboxStore(dbPath);
-  try {
-    return store.list({ status: 'received', limit: 5 }).map((envelope) => ({
-      envelope_id: envelope.envelope_id,
-      kind: envelope.kind,
-      title: titleFromPayload(envelope.payload),
-    }));
-  } finally {
-    store.close();
-  }
-}
-
-function hasTransport(identity: { input_capabilities?: string[]; submit_strategy?: string } | null): boolean {
-  if (!identity) return false;
-  const capabilities = identity.input_capabilities ?? [];
-  return capabilities.includes('focus') || capabilities.includes('type_text') || Boolean(identity.submit_strategy);
-}
-
-function nextCommandFor(posture: OperatorStartPosture, siteRoot: string, role: string): string {
-  switch (posture) {
-    case 'site_absent':
-      return `narada sites init --root ${JSON.stringify(siteRoot)}`;
-    case 'initialized_unready':
-      return `narada sites doctor ${JSON.stringify(siteRoot)} --format json`;
-    case 'ready_missing_role_binding':
-      return `narada operator-surface agent instantiate --site ${JSON.stringify(siteRoot)} --role ${role} --agent-kind codex_cli --by <principal>`;
-    case 'ready_missing_transport':
-      return 'narada operator-surface bind-focused --as self';
-    case 'ready_pending_inbox':
-      return `narada inbox work-next --by ${role}`;
-    case 'fully_idle':
-      return `narada work-next --agent ${role} --format json`;
-  }
-}
-
 export async function operatorStartCommand(
   options: OperatorStartOptions,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   try {
     const siteInput = requireText(options.site, '--site');
     const role = options.role?.trim() || 'architect';
-    const siteRoot = resolve(siteInput);
-    const siteExists = existsSync(siteRoot);
-    const configExists = existsSync(join(siteRoot, 'config.json'));
-    const aiExists = existsSync(join(siteRoot, '.ai'));
-    const pendingInbox = siteExists ? listPendingInbox(siteRoot) : [];
-    const identities = siteExists ? await readOperatorSurfaceIdentities(siteRoot) : { identities: [] };
-    const roleIdentity = identities.identities.find((identity) => identity.role === role) ?? null;
-
-    let posture: OperatorStartPosture;
-    if (!siteExists) {
-      posture = 'site_absent';
-    } else if (!configExists || !aiExists) {
-      posture = 'initialized_unready';
-    } else if (!roleIdentity) {
-      posture = 'ready_missing_role_binding';
-    } else if (!hasTransport(roleIdentity)) {
-      posture = 'ready_missing_transport';
-    } else if (pendingInbox.length > 0) {
-      posture = 'ready_pending_inbox';
-    } else {
-      posture = 'fully_idle';
-    }
+    const readiness = await assessSiteReadiness({
+      site: siteInput,
+      operation: options.operation,
+      role,
+    });
 
     const result: OperatorStartResult = {
       status: 'success',
-      posture,
+      posture: readiness.posture,
       mutation_performed: false,
-      target_locus: {
-        site: siteInput,
-        site_root: siteRoot,
-        operation: options.operation?.trim() || null,
-      },
+      target_locus: readiness.target_locus,
       command_authority: {
         read_only: true,
         mutates_site_state: false,
         execute_requested: Boolean(options.execute),
         execute_supported: false,
       },
-      checks: [
-        { name: 'site_root_exists', ok: siteExists, detail: siteExists ? siteRoot : `missing: ${siteRoot}` },
-        { name: 'site_config_exists', ok: configExists, detail: join(siteRoot, 'config.json') },
-        { name: 'site_ai_surface_exists', ok: aiExists, detail: join(siteRoot, '.ai') },
-        { name: 'role_identity_exists', ok: Boolean(roleIdentity), detail: roleIdentity?.identity_id ?? `missing role identity for ${role}` },
-        { name: 'operator_surface_transport_declared', ok: hasTransport(roleIdentity), detail: roleIdentity ? 'transport metadata present' : 'no role identity' },
-      ],
-      pending_inbox: pendingInbox,
+      checks: readiness.checks.map((check) => ({ name: check.name, ok: check.status !== 'fail', detail: check.message })),
+      pending_inbox: readiness.pending_inbox,
       role_binding: {
         role,
-        identity_id: roleIdentity?.identity_id ?? null,
-        bound_transport: hasTransport(roleIdentity),
-        submit_strategy: roleIdentity?.submit_strategy ?? null,
+        identity_id: readiness.coordinates.operator_surface_posture.identity_id,
+        bound_transport: readiness.coordinates.operator_surface_posture.bound_transport,
+        submit_strategy: readiness.coordinates.operator_surface_posture.submit_strategy,
       },
-      next_command: nextCommandFor(posture, siteRoot, role),
+      readiness,
+      next_command: readiness.next_command,
       bounded_output: true,
     };
 

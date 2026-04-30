@@ -26,6 +26,7 @@ import {
   writeSiteRelationRegistry,
 } from '../lib/site-relation-registry.js';
 import { inspectDelegatedCliHealth } from '../lib/delegated-cli-health.js';
+import { assessSiteReadiness } from '../lib/site-readiness.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -1379,6 +1380,7 @@ async function sitesClientDoctorCommand(
       site_kind: 'client_service',
       workspace_root: workspaceRoot,
       site_root: siteRoot,
+      readiness: await assessSiteReadiness({ site: siteRoot, role: 'architect' }),
       checks,
     },
   };
@@ -1505,6 +1507,7 @@ async function sitesProjectDoctorCommand(
       site_kind: 'project',
       workspace_root: workspaceRoot,
       site_root: siteRoot,
+      readiness: await assessSiteReadiness({ site: siteRoot, role: 'architect' }),
       checks,
     },
   };
@@ -1784,6 +1787,7 @@ export async function sitesDoctorCommand(
       status: health,
       siteId,
       siteRoot,
+      readiness: siteRoot ? await assessSiteReadiness({ site: siteRoot, role: 'architect' }) : null,
       checks,
     },
   };
