@@ -158,6 +158,8 @@ The intended split is:
 | Substrate-specific execution | May use TypeScript, PowerShell, shell, Go, Rust, platform APIs, or future executors |
 | Cross-language integration | Must pass through durable facts, intents, traces, and explicit operators |
 
+Runtime selection must name the runtime-invariant adapter contract it satisfies. Node is the default implementation runtime for current CLI packages, but not Narada's ontology. For the adapter protocol vocabulary and initial contract artifact, see [`runtime-invariant-adapter-contract.md`](runtime-invariant-adapter-contract.md).
+
 ---
 
 ## USC Recursion and the Crystallized Vocabulary

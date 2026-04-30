@@ -14,7 +14,7 @@ Reasons:
 
 ## Migration Target
 
-`node:sqlite` is the preferred long-term runtime candidate once Narada can require a Node version that includes it and once the task/inbox/control-plane stores pass an adapter conformance suite.
+`node:sqlite` is the preferred long-term runtime candidate once the selected Node CLI embodiment can require a Node version that includes it and once the task/inbox/control-plane stores pass an adapter conformance suite. The contract is store behavior, mutation evidence, and replayability, not loyalty to one Node storage module.
 
 The migration order is:
 

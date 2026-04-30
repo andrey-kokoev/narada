@@ -1,0 +1,52 @@
+{
+  "schema": "narada.adapter_audit.v0",
+  "audited_at": "2026-04-30",
+  "surfaces": [
+    {
+      "surface": "narada CLI",
+      "runtime_substrate": "node_cli",
+      "authority_locus": "current Site or Narada proper as declared by command",
+      "storage_substrate": "filesystem plus SQLite local runtime stores",
+      "adapter_protocol_posture": "partial",
+      "compliance": [
+        "bounded JSON output available on many commands",
+        "dry-run posture exists for bootstrap, inbox publish, runtime startup",
+        "credential refs supported through capability consent registry"
+      ],
+      "residual_gaps": [
+        "some command families still expose Node/pnpm repair commands because this embodiment requires them",
+        "adapter protocol is documented but not yet enforced by a conformance runner"
+      ]
+    },
+    {
+      "surface": "Windows operator surface scripts",
+      "runtime_substrate": "powershell_windows",
+      "authority_locus": "Windows User/PC runtime locus",
+      "storage_substrate": "host profiles, window-manager state, Site-local projections",
+      "adapter_protocol_posture": "planned",
+      "compliance": [
+        "authority locus distinction is documented",
+        "dry-run/read-back requirement is documented"
+      ],
+      "residual_gaps": [
+        "no generic conformance fixture yet",
+        "actual adapter mutation remains owned by Windows locus"
+      ]
+    },
+    {
+      "surface": "SQLite task/inbox stores",
+      "runtime_substrate": "better-sqlite3",
+      "authority_locus": "local Site runtime substrate with Git-visible mutation evidence",
+      "storage_substrate": "SQLite file plus portable mutation evidence",
+      "adapter_protocol_posture": "partial",
+      "compliance": [
+        "SQLite is documented as runtime substrate, not portable authority",
+        "mutation evidence records replayable task lifecycle changes"
+      ],
+      "residual_gaps": [
+        "node:sqlite remains future until conformance suite exists",
+        "store adapter contract is not yet extracted into a standalone package"
+      ]
+    }
+  ]
+}

@@ -136,8 +136,8 @@ async function doctorBootstrap(
   checks.push({
     name: 'node-version',
     status: nodeMajor >= 20 ? 'pass' : 'fail',
-    detail: `Node ${process.versions.node}`,
-    remediation: nodeMajor >= 20 ? undefined : 'Use Node 20 or newer before installing/building Narada.',
+    detail: `Current CLI embodiment requires Node >=20; observed Node ${process.versions.node}`,
+    remediation: nodeMajor >= 20 ? undefined : 'Use Node 20 or newer for this CLI embodiment, or switch to an embodiment whose declared adapter contract does not require Node.',
   });
 
   const packageJson = join(root, 'package.json');

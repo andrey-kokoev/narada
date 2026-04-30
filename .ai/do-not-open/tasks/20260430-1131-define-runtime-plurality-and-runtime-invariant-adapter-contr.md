@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T15:36:33.689Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777563357158_p9upvv
+closed_at: 2026-04-30T15:36:59.989Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Define runtime plurality and runtime-invariant adapter contracts
@@ -45,10 +54,10 @@ This follows recent CPY and Windows onboarding friction where Node CLI assumptio
 
 ## Acceptance Criteria
 
-- [ ] Docs define execution surface, runtime substrate, authority locus, storage substrate, runtime-invariant adapter surface, and adapter protocol
-- [ ] Initial adapter protocol schema or example artifact covers invocation, capability, authority, evidence, dry-run, error, idempotency, secret, observability, and version fields
-- [ ] Onboarding/runtime docs separate runtime substrate selection from authority locus and storage substrate
-- [ ] Doctor/preflight language treats Node as embodiment-specific, not universal Narada substrate
-- [ ] Existing adapter or command surfaces are audited for implicit Node assumptions and classified by compliance or residual gap
-- [ ] Tests, fixtures, or examples show the same adapter contract across at least two runtime substrate postures where feasible
-- [ ] Both source inbox envelopes are promoted or recorded pending to this task with durable evidence
+- [x] Docs define execution surface, runtime substrate, authority locus, storage substrate, runtime-invariant adapter surface, and adapter protocol
+- [x] Initial adapter protocol schema or example artifact covers invocation, capability, authority, evidence, dry-run, error, idempotency, secret, observability, and version fields
+- [x] Onboarding/runtime docs separate runtime substrate selection from authority locus and storage substrate
+- [x] Doctor/preflight language treats Node as embodiment-specific, not universal Narada substrate
+- [x] Existing adapter or command surfaces are audited for implicit Node assumptions and classified by compliance or residual gap
+- [x] Tests, fixtures, or examples show the same adapter contract across at least two runtime substrate postures where feasible
+- [x] Both source inbox envelopes are promoted or recorded pending to this task with durable evidence

@@ -1,0 +1,71 @@
+{
+  "schema": "narada.adapter_protocol.v0",
+  "adapter_id": "example.cross_runtime.operator_surface_message",
+  "adapter_kind": "operator_surface_message",
+  "runtime_invariant_surface": {
+    "input_envelope": "AdapterInvocation",
+    "output_envelope": "AdapterResult",
+    "does_not_own_authority": true
+  },
+  "runtime_substrate_postures": [
+    {
+      "substrate": "node_cli",
+      "entrypoint": "narada operator-surface send",
+      "requirements": ["node>=20", "narada-cli-built", "operator-surface-binding"]
+    },
+    {
+      "substrate": "powershell_windows",
+      "entrypoint": "Send-OperatorSurfaceInput.ps1",
+      "requirements": ["windows-runtime-locus", "operator-surface-binding"]
+    }
+  ],
+  "invocation_contract": {
+    "inputs": ["target_surface_ref", "payload_ref", "dry_run", "idempotency_key"],
+    "outputs": ["status", "evidence_ref", "read_back", "error"],
+    "dry_run_required": true
+  },
+  "capability_declaration": {
+    "capability_kind": "operator_surface.message_submit",
+    "allowed_actions": ["dry_run", "submit_bounded_text"],
+    "forbidden_actions": ["raw_secret_submit", "authority_mutation"]
+  },
+  "authority_binding": {
+    "authority_locus_required": true,
+    "binding_record_required": true,
+    "adapter_state_is_not_authority": true
+  },
+  "evidence_contract": {
+    "must_record": ["request", "dry_run_plan", "read_back", "result_digest"],
+    "must_not_record": ["raw_secret", "private_unbounded_output"]
+  },
+  "dry_run_contract": {
+    "must_predict": ["target", "command_or_api_call", "mutation_family", "read_back_checks"],
+    "mutation_performed": false
+  },
+  "error_taxonomy": [
+    "missing_capability",
+    "missing_runtime_requirement",
+    "wrong_authority_locus",
+    "dry_run_required",
+    "read_back_failed",
+    "secret_refused",
+    "version_incompatible"
+  ],
+  "idempotency": {
+    "key_required": true,
+    "duplicate_policy": "return_prior_result_or_refuse_ambiguous_replay"
+  },
+  "secret_handling": {
+    "raw_secret_in_payload_forbidden": true,
+    "credential_ref_required_for_secret_use": true,
+    "redacted_output_required": true
+  },
+  "observability": {
+    "health_projection": "adapter_status",
+    "trace_fields": ["adapter_id", "runtime_substrate", "authority_locus", "evidence_ref", "duration_ms"]
+  },
+  "version_compatibility": {
+    "protocol_version": 0,
+    "compatibility_rule": "minor additions may add optional fields; required-field changes need a new protocol version"
+  }
+}
