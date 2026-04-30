@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-30T17:27:33.250Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T17:53:49.332Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777571582384_4gdn9j
+closed_at: 2026-04-30T17:54:07.002Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add compact architect-loop workboard output
@@ -43,8 +52,8 @@ Inbox envelope env_e06bcad8-9dfa-4c87-8057-df22c628256c reports that `narada tas
 
 ## Acceptance Criteria
 
-- [ ] A compact workboard mode or view exists for Architect loops.
-- [ ] Compact output omits stable boilerplate guidance unless explicitly requested.
-- [ ] Compact output includes enough state to decide next Architect action.
-- [ ] Help or docs name the recommended compact next-loop command.
-- [ ] Tests cover compact/full output and guidance inclusion behavior.
+- [x] A compact workboard mode or view exists for Architect loops.
+- [x] Compact output omits stable boilerplate guidance unless explicitly requested.
+- [x] Compact output includes enough state to decide next Architect action.
+- [x] Help or docs name the recommended compact next-loop command.
+- [x] Tests cover compact/full output and guidance inclusion behavior.

@@ -9,6 +9,8 @@ export interface TaskWorkboardOptions {
   cwd?: string;
   format?: CliFormat;
   limit?: number;
+  view?: string;
+  includeGuidance?: boolean;
 }
 
 type WorkboardTask = {
@@ -56,6 +58,7 @@ export interface TaskWorkboard {
   closure_semantics: string[];
   followup_task_path: string[];
   concurrency_boundaries: string[];
+  recommended_compact_command?: string;
 }
 
 const ACTIVE_STATUSES = new Set(['claimed', 'needs_continuation', 'in_review']);
@@ -117,11 +120,13 @@ export async function taskWorkboardCommand(
         'Do not simultaneously mutate the same task lifecycle row, exported envelope, or lifecycle snapshot without serialized sanctioned commands.',
         'Publication should stage declared governance/evidence paths separately from Builder implementation paths.',
       ],
+      recommended_compact_command: 'narada task workboard --view compact --format json',
     };
+    const output = compactWorkboard(result, Boolean(options.includeGuidance), options.view);
 
     return {
       exitCode: ExitCode.SUCCESS,
-      result: formattedResult(result, renderHuman(result), options.format ?? 'auto'),
+      result: formattedResult(output, renderHuman(output), options.format ?? 'auto'),
     };
   } finally {
     store.db.close();
@@ -190,29 +195,89 @@ function listSourceEnvelopes(cwd: string, limit: number): TaskWorkboard['source_
   }
 }
 
-function renderHuman(workboard: TaskWorkboard): string[] {
+function compactWorkboard(workboard: TaskWorkboard, includeGuidance: boolean, view: string | undefined): TaskWorkboard | Record<string, unknown> {
+  if ((view ?? 'full') !== 'compact') return workboard;
+  const compact: Record<string, unknown> = {
+    status: workboard.status,
+    view: 'compact',
+    generated_at: workboard.generated_at,
+    limit: workboard.limit,
+    counts: {
+      active_chapters: workboard.active_chapters.length,
+      pending_reviews: workboard.pending_reviews.length,
+      in_progress: workboard.in_progress.length,
+      local_followups: workboard.local_followups.length,
+      deferred: workboard.deferred.length,
+      source_envelopes: workboard.source_envelopes.length,
+      prepared_publications: workboard.upstream_publications.length,
+    },
+    active_chapters: workboard.active_chapters,
+    pending_reviews: workboard.pending_reviews,
+    in_progress: workboard.in_progress,
+    local_followups: workboard.local_followups,
+    deferred: workboard.deferred,
+    high_priority_diagnostics: highPriorityDiagnostics(workboard),
+    source_envelopes: workboard.source_envelopes,
+    upstream_publications: workboard.upstream_publications,
+    recommended_command: workboard.recommended_compact_command,
+  };
+  if (includeGuidance) {
+    compact.review_handoff_requirements = workboard.review_handoff_requirements;
+    compact.closure_semantics = workboard.closure_semantics;
+    compact.followup_task_path = workboard.followup_task_path;
+    compact.concurrency_boundaries = workboard.concurrency_boundaries;
+  }
+  return compact;
+}
+
+function highPriorityDiagnostics(workboard: TaskWorkboard): string[] {
+  const diagnostics: string[] = [];
+  const underspecified = [...workboard.in_progress, ...workboard.local_followups]
+    .filter((task) => task.handoff_actionability.status === 'underspecified')
+    .map((task) => task.task_number);
+  if (underspecified.length > 0) diagnostics.push(`underspecified_handoffs:${underspecified.join(',')}`);
+  if (workboard.pending_reviews.length > 0) diagnostics.push(`pending_reviews:${workboard.pending_reviews.map((task) => task.task_number).join(',')}`);
+  if (workboard.upstream_publications.length > 0) diagnostics.push(`prepared_publications:${workboard.upstream_publications.map((publication) => publication.publication_id).join(',')}`);
+  return diagnostics;
+}
+
+function renderHuman(workboard: TaskWorkboard | Record<string, unknown>): string[] {
+  if ((workboard as { view?: string }).view === 'compact') {
+    const counts = ((workboard as { counts?: Record<string, number> }).counts ?? {});
+    return [
+      'Current Workboard (compact)',
+      `Generated: ${String(workboard.generated_at)}`,
+      `Pending reviews: ${counts.pending_reviews ?? 0}`,
+      `In progress: ${counts.in_progress ?? 0}`,
+      `Deferred: ${counts.deferred ?? 0}`,
+      `Local followups: ${counts.local_followups ?? 0}`,
+      `Prepared publications: ${counts.prepared_publications ?? 0}`,
+      `Recommended: ${String((workboard as { recommended_command?: string }).recommended_command ?? 'narada task workboard --view compact --format json')}`,
+    ];
+  }
+  const full = workboard as TaskWorkboard;
   const lines = [
     'Current Workboard',
-    `Generated: ${workboard.generated_at}`,
-    `Active chapters: ${workboard.active_chapters.length}`,
-    `Pending reviews: ${workboard.pending_reviews.length}`,
-    `In progress: ${workboard.in_progress.length}`,
-    `Deferred: ${workboard.deferred.length}`,
-    `Local followups: ${workboard.local_followups.length}`,
-    `Source envelopes: ${workboard.source_envelopes.length}`,
-    `Prepared publications: ${workboard.upstream_publications.length}`,
+    `Generated: ${full.generated_at}`,
+    `Active chapters: ${full.active_chapters.length}`,
+    `Pending reviews: ${full.pending_reviews.length}`,
+    `In progress: ${full.in_progress.length}`,
+    `Deferred: ${full.deferred.length}`,
+    `Local followups: ${full.local_followups.length}`,
+    `Source envelopes: ${full.source_envelopes.length}`,
+    `Prepared publications: ${full.upstream_publications.length}`,
     '',
     'Pending Reviews:',
-    ...renderTaskLines(workboard.pending_reviews),
+    ...renderTaskLines(full.pending_reviews),
     '',
     'In Progress:',
-    ...renderTaskLines(workboard.in_progress),
+    ...renderTaskLines(full.in_progress),
     '',
     'Deferred:',
-    ...renderTaskLines(workboard.deferred),
+    ...renderTaskLines(full.deferred),
     '',
     'Concurrency:',
-    ...workboard.concurrency_boundaries.map((line) => `  - ${line}`),
+    ...full.concurrency_boundaries.map((line) => `  - ${line}`),
   ];
   return lines;
 }

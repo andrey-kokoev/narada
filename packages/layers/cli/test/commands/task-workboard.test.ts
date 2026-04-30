@@ -167,4 +167,61 @@ describe('task workboard command', () => {
     expect(human).toContain('Pending Reviews:');
     expect(human).not.toContain('payload should not be surfaced');
   });
+
+  it('returns compact architect-loop output without stable guidance by default', async () => {
+    const result = await taskWorkboardCommand({ cwd: tempDir, format: 'json', limit: 10, view: 'compact' });
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const compact = result.result as {
+      view: string;
+      counts: Record<string, number>;
+      pending_reviews: Array<{ task_number: number }>;
+      in_progress: Array<{ task_number: number }>;
+      high_priority_diagnostics: string[];
+      recommended_command: string;
+      review_handoff_requirements?: string[];
+      closure_semantics?: string[];
+      concurrency_boundaries?: string[];
+    };
+
+    expect(compact.view).toBe('compact');
+    expect(compact.counts).toMatchObject({
+      pending_reviews: 1,
+      in_progress: 2,
+      local_followups: 1,
+      deferred: 0,
+      prepared_publications: 1,
+    });
+    expect(compact.pending_reviews.map((task) => task.task_number)).toEqual([402]);
+    expect(compact.in_progress.map((task) => task.task_number)).toEqual([404, 401]);
+    expect(compact.high_priority_diagnostics).toEqual(expect.arrayContaining([
+      'underspecified_handoffs:404',
+      'pending_reviews:402',
+      'prepared_publications:rpi_test',
+    ]));
+    expect(compact.recommended_command).toBe('narada task workboard --view compact --format json');
+    expect(compact.review_handoff_requirements).toBeUndefined();
+    expect(compact.closure_semantics).toBeUndefined();
+    expect(compact.concurrency_boundaries).toBeUndefined();
+    expect(JSON.stringify(compact)).not.toContain('Reviewer must not infer completion');
+  });
+
+  it('can include stable guidance in compact output explicitly', async () => {
+    const result = await taskWorkboardCommand({
+      cwd: tempDir,
+      format: 'json',
+      limit: 10,
+      view: 'compact',
+      includeGuidance: true,
+    });
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const compact = result.result as {
+      review_handoff_requirements?: string[];
+      closure_semantics?: string[];
+      concurrency_boundaries?: string[];
+    };
+
+    expect(compact.review_handoff_requirements?.join(' ')).toContain('changed files');
+    expect(compact.closure_semantics?.join(' ')).toContain('fully_integrated');
+    expect(compact.concurrency_boundaries?.join(' ')).toContain('Builder source files are dirty');
+  });
 });
