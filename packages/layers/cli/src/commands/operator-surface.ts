@@ -17,7 +17,7 @@ import {
   type OperatorSurfaceIdentityRegistry,
   type OperatorSurfaceSubmitStrategy,
 } from '../lib/operator-surface-registry.js';
-import { loadRoster, saveRoster, resolveTaskStatus } from '../lib/task-governance.js';
+import { loadRoster, saveRoster, resolveTaskStatus, type AgentRoster } from '../lib/task-governance.js';
 import { sitesAgentBootstrapCommand } from './sites.js';
 import { grantEffectiveStatus, readCapabilityRegistry, validateCredentialRef } from '../lib/capability-consent-registry.js';
 import { agentAddressResolutionPublic, resolveAgentAddress, type AgentAddressResolution } from '../lib/agent-address.js';
@@ -170,6 +170,7 @@ function operatorSurfaceAliases(identity: OperatorSurfaceIdentity): string[] {
     identity.label,
     identity.role,
     `${identity.site_id}-${identity.role}`,
+    `${identity.site_id}.${identity.role}`,
     `narada-${identity.role}`,
     `${identity.site_id} ${identity.role}`,
     `narada ${identity.role}`,
@@ -711,6 +712,82 @@ export async function operatorSurfaceAgentInstantiateCommand(
           deferred_command: bindFocusedRepairCommand(identityName, options.runtimeLocus ?? null),
         }
       : null;
+    let taskRosterReadiness: Record<string, unknown>;
+    if (role === 'builder' && !options.dryRun) {
+      const roster = await loadRoster(registryTarget.registryCwd).catch((): AgentRoster => ({
+        version: 2,
+        updated_at: new Date().toISOString(),
+        agents: [],
+      }));
+      const existingRosterAgent = roster.agents.find((agent) => agent.agent_id === identityName);
+      if (existingRosterAgent) {
+        taskRosterReadiness = {
+          status: 'ready',
+          mutation_performed: false,
+          agent_id: identityName,
+          command: `narada task work-next --agent ${identityName}`,
+          role_address_command: `narada task work-next --agent ${site}.${role}`,
+        };
+      } else {
+        const now = new Date().toISOString();
+        roster.agents.push({
+          agent_id: identityName,
+          role,
+          capabilities: ['execute', 'test', 'report'],
+          first_seen_at: now,
+          last_active_at: now,
+          status: 'idle',
+          task: null,
+          last_done: null,
+          updated_at: now,
+        });
+        await saveRoster(registryTarget.registryCwd, roster);
+        mutationPerformed = true;
+        taskRosterReadiness = {
+          status: 'created',
+          mutation_performed: true,
+          agent_id: identityName,
+          command: `narada task work-next --agent ${identityName}`,
+          role_address_command: `narada task work-next --agent ${site}.${role}`,
+        };
+      }
+    } else {
+      taskRosterReadiness = {
+        status: role === 'builder' ? 'dry_run' : 'not_required',
+        mutation_performed: false,
+        reason: role === 'builder' ? 'dry-run does not mutate task roster' : 'task execution roster readiness is only auto-reconciled for builder role',
+        repair_command: role === 'builder' ? `narada task roster add ${identityName} --role builder` : null,
+      };
+    }
+    const labelReadiness = {
+      status: 'ready',
+      command: labelVerificationCommand,
+      expected_identity_id: identityName,
+      expected_identity_name: identityName,
+      authority_boundary: 'labels are carrier projections; identity registry remains durable authority',
+    };
+    const aliasReadiness = {
+      status: 'ready',
+      aliases: operatorSurfaceAliases({
+        identity_id: identityName,
+        site_id: site,
+        role,
+        agent_kind: agentKind,
+        label: options.label ?? identityName,
+        admitted_by: by,
+        admitted_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        authority_limits: [],
+      }),
+      role_address: `${site}.${role}`,
+    };
+    const submitStrategyReadiness = {
+      status: parseSubmitStrategy(options.submitStrategy) === 'type_only' ? 'type_only_default' : 'ready',
+      submit_strategy: parseSubmitStrategy(options.submitStrategy),
+      repair_command: parseSubmitStrategy(options.submitStrategy) === 'type_only'
+        ? `narada operator-surface identity add ${identityName} --site ${site} --role ${role} --agent-kind ${agentKind} --submit-strategy known_surface_submit --by ${by}`
+        : null,
+    };
 
     const result = {
       status: 'success',
@@ -741,6 +818,18 @@ export async function operatorSurfaceAgentInstantiateCommand(
       self_bind_instruction: selfBindInstruction,
       binding_verification: bindingVerification,
       runtime_binding: runtimeBinding,
+      readiness: {
+        identity: { status: existing ? 'reused' : options.dryRun ? 'would_admit' : 'ready', identity_id: identityName },
+        alias: aliasReadiness,
+        submit_strategy: submitStrategyReadiness,
+        binding: runtimeBinding ?? {
+          status: 'deferred',
+          reason: 'runtime_locus_required_for_focused_window_binding',
+          repair_command: bindFocusedRepairCommand(identityName, options.runtimeLocus ?? null),
+        },
+        label: labelReadiness,
+        task_roster: taskRosterReadiness,
+      },
       copyable_text: [
         bootstrapText,
         '',

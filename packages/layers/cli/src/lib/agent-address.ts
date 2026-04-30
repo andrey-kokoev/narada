@@ -69,9 +69,9 @@ function roleMatches(agent: AgentRosterEntry, role: string): boolean {
   return agent.role.toLowerCase() === role.toLowerCase();
 }
 
-function sitePrefixMatches(agent: AgentRosterEntry, sitePrefix: string | null): boolean {
+function sitePrefixMatches(agent: AgentRosterEntry, sitePrefix: string | null, role: string): boolean {
   if (!sitePrefix) return true;
-  return rosterSitePrefix(agent.agent_id) === sitePrefix;
+  return rosterSitePrefix(agent.agent_id) === sitePrefix || agent.agent_id === `${sitePrefix}-${role}`;
 }
 
 export function resolveAgentAddress(roster: AgentRoster, requestedAgent: string): AgentAddressResolution {
@@ -92,7 +92,7 @@ export function resolveAgentAddress(roster: AgentRoster, requestedAgent: string)
   const candidates = roster.agents
     .filter(isActiveRosterCard)
     .filter((agent) => roleMatches(agent, role))
-    .filter((agent) => sitePrefixMatches(agent, sitePrefix));
+    .filter((agent) => sitePrefixMatches(agent, sitePrefix, role));
   const candidateIds = candidates.map((agent) => agent.agent_id).sort();
 
   if (candidateIds.length === 1) {

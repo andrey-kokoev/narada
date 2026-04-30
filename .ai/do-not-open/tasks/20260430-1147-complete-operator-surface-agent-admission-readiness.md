@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T22:53:57.547Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777589596759_r1kdod
+closed_at: 2026-04-30T22:54:13.430Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Complete operator-surface agent admission readiness
@@ -32,8 +41,8 @@ Source inbox envelope env_32c66b5f-c096-4b19-a671-a1129ababdb7 reports that afte
 
 ## Acceptance Criteria
 
-- [ ] A newly admitted client-Site builder can be resolved by operator-surface message aliases when messaging capability is requested.
-- [ ] Submit strategy readiness is either created or reported with exact repair commands before first nudge.
-- [ ] Task roster membership is created or repaired through a sanctioned command when task capability is requested.
-- [ ] agent instantiate/admit output includes readiness status for identity, alias, submit strategy, binding, label, and task roster projections.
-- [ ] Focused tests cover the CPY-style narada-cpy.builder admission path.
+- [x] A newly admitted client-Site builder can be resolved by operator-surface message aliases when messaging capability is requested.
+- [x] Submit strategy readiness is either created or reported with exact repair commands before first nudge.
+- [x] Task roster membership is created or repaired through a sanctioned command when task capability is requested.
+- [x] agent instantiate/admit output includes readiness status for identity, alias, submit strategy, binding, label, and task roster projections.
+- [x] Focused tests cover the CPY-style narada-cpy.builder admission path.

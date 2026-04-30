@@ -22,7 +22,8 @@ import {
   operatorSurfaceVoiceTranscriptionCheckCommand,
 } from '../../src/commands/operator-surface.js';
 import { capabilityGrantCommand } from '../../src/commands/capability.js';
-import { saveRoster } from '../../src/lib/task-governance.js';
+import { loadRoster, saveRoster } from '../../src/lib/task-governance.js';
+import { resolveAgentAddress } from '../../src/lib/agent-address.js';
 
 function createMockContext(): CommandContext {
   const logger = {
@@ -135,12 +136,108 @@ describe('operator-surface commands', () => {
     expect(result.result).toMatchObject({
       role: 'builder',
       identity_id: 'narada-proper-builder',
+      readiness: {
+        alias: {
+          status: 'ready',
+          aliases: expect.arrayContaining(['narada-proper.builder', 'narada-proper-builder']),
+        },
+        task_roster: {
+          status: 'created',
+          mutation_performed: true,
+          agent_id: 'narada-proper-builder',
+          role_address_command: 'narada task work-next --agent narada-proper.builder',
+        },
+        label: {
+          status: 'ready',
+          expected_identity_name: 'narada-proper-builder',
+        },
+      },
       role_contract: {
         duties: expect.arrayContaining([expect.stringContaining('Execute approved local work packages')]),
         boundaries: expect.arrayContaining([expect.stringContaining('`next` means run this role normal duty loop')]),
       },
     });
+    const roster = await loadRoster(cwd);
+    expect(roster.agents.find((agent) => agent.agent_id === 'narada-proper-builder')).toMatchObject({
+      role: 'builder',
+      status: 'idle',
+      capabilities: ['execute', 'test', 'report'],
+    });
+    expect(resolveAgentAddress(roster, 'narada-proper.builder')).toMatchObject({
+      status: 'role_exact_one',
+      resolved_agent: 'narada-proper-builder',
+    });
     expect((result.result as { copyable_text: string }).copyable_text).toContain('When Operator says `next`, run the normal duty loop for this role.');
+  });
+
+  it('admits a CPY-style builder as message-addressable and task-roster-ready without manual JSON edits', async () => {
+    const cwd = await tempRepo();
+    const result = await operatorSurfaceAgentInstantiateCommand({
+      cwd,
+      site: 'narada-cpy',
+      role: 'builder',
+      agentKind: 'codex_cli',
+      by: 'operator',
+      identityName: 'narada-cpy.builder',
+      inputCapabilities: 'type_text,submit',
+      submitStrategy: 'known_surface_submit',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      identity_id: 'narada-cpy.builder',
+      readiness: {
+        alias: {
+          status: 'ready',
+          role_address: 'narada-cpy.builder',
+          aliases: expect.arrayContaining(['narada-cpy.builder', 'builder']),
+        },
+        submit_strategy: {
+          status: 'ready',
+          submit_strategy: 'known_surface_submit',
+        },
+        binding: {
+          status: 'deferred',
+          repair_command: expect.stringContaining('narada operator-surface bind-focused --identity narada-cpy.builder --runtime-locus <runtime-locus-from-status>'),
+        },
+        label: {
+          status: 'ready',
+          expected_identity_id: 'narada-cpy.builder',
+          expected_identity_name: 'narada-cpy.builder',
+        },
+        task_roster: {
+          status: 'created',
+          agent_id: 'narada-cpy.builder',
+          command: 'narada task work-next --agent narada-cpy.builder',
+        },
+      },
+    });
+
+    const send = await operatorSurfaceSendCommand({
+      cwd,
+      from: 'operator',
+      to: 'narada-cpy.builder',
+      text: 'next',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+    expect(send.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(send.result).toMatchObject({
+      reason: 'no_binding',
+      identity: 'narada-cpy.builder',
+      message_route: {
+        resolved_recipient: 'narada-cpy.builder',
+      },
+      unblock_command: expect.stringContaining('bind-focused --identity narada-cpy.builder'),
+    });
+
+    const roster = await loadRoster(cwd);
+    expect(resolveAgentAddress(roster, 'narada-cpy.builder')).toMatchObject({
+      status: 'exact',
+      resolved_agent: 'narada-cpy.builder',
+    });
   });
 
   it('instantiates an observer surface without review authority', async () => {
