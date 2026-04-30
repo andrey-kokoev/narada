@@ -1,0 +1,17 @@
+{
+  "bindings": [
+    {
+      "binding_id": "bind_83b941f607aaf709",
+      "identity_id": "builder",
+      "runtime_locus": "narada-proper",
+      "handle": "codex-thread:019dd634-700c-7490-b108-44e1cffb6390",
+      "transport": "codex_cli_thread",
+      "submit_strategy": "known_surface_submit",
+      "input_capabilities": [
+        "type_text",
+        "submit"
+      ],
+      "status": "active"
+    }
+  ]
+}
