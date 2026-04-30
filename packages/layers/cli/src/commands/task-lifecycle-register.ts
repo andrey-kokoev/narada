@@ -2,6 +2,7 @@ import type { Command } from 'commander';
 import { taskClaimCommand } from './task-claim.js';
 import { taskReleaseCommand } from './task-release.js';
 import { taskDeferCommand } from './task-defer.js';
+import { taskUnblockCommand } from './task-unblock.js';
 import { taskReviewCommand } from './task-review.js';
 import { taskReportCommand } from './task-report.js';
 import { taskFinishCommand } from './task-finish.js';
@@ -142,6 +143,26 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
         reason: opts.reason as string,
         unblock: opts.unblock as string,
         residuals: opts.residuals as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
+      }),
+    }));
+
+  taskCmd
+    .command('unblock <task-number>')
+    .description('Resume a deferred task into opened state with explicit unblock evidence')
+    .requiredOption('--agent <id>', 'Agent ID recording the unblock')
+    .requiredOption('--evidence <text>', 'Evidence that the deferred blocker is satisfied')
+    .requiredOption('--rationale <text>', 'Why the task should re-enter normal runnable work')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .action(directCommandAction<[string, Record<string, unknown>]>({
+      command: 'task unblock',
+      emit: emitCommandResult,
+      invocation: (taskNumber, opts) => taskUnblockCommand({
+        taskNumber,
+        agent: opts.agent as string,
+        evidence: opts.evidence as string,
+        rationale: opts.rationale as string,
         cwd: opts.cwd as string | undefined,
         format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto',
       }),

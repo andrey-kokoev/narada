@@ -44,6 +44,16 @@ pnpm narada:guard-task-db
 
 The guard performs a bounded freshness check when a local DB exists: it runs a sanctioned export to a temporary file and byte-compares that export to `.ai/task-lifecycle-snapshot.json`. `pnpm verify` runs this guard after build, so verification fails if local lifecycle state has not been exported into the tracked handoff.
 
+## Deferred Task Resumption
+
+Deferred tasks do not auto-resume. A deferred task can re-enter normal work only through a sanctioned unblock transition:
+
+```bash
+narada task unblock <task-number> --agent <id> --evidence "<evidence>" --rationale "<why normal work may resume>"
+```
+
+The command records unblock evidence in the compatibility task projection, updates SQLite lifecycle authority from `deferred` to `opened`, emits task lifecycle mutation evidence, and leaves assignment to the normal claim/work-next path. It is not a takeover command and does not silently continue prior work.
+
 ## Site-Local Initialization
 
 External Sites do not need to be Narada proper checkouts to receive the task lifecycle substrate. Initialize an explicit Site root with:

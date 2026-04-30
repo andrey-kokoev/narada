@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T01:25:29.669Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-30T01:25:30.845Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add governed deferred task unblock and resume path
@@ -41,8 +50,8 @@ Allow deferred tasks to re-enter the normal work/proof/finish path through a gov
 
 ## Acceptance Criteria
 
-- [ ] Define and implement a sanctioned transition for deferred tasks, such as task unblock or task resume, that records who resumed it, why the blocker is satisfied, and what evidence supports resumption.
-- [ ] Ensure task continue/reopen/workboard semantics no longer strand deferred tasks that need to return to work after an external blocker clears.
-- [ ] Require bounded evidence or rationale for moving from deferred back to opened, claimed, or needs_continuation; do not make deferral silently auto-resume.
-- [ ] Add regression tests covering deferred task rejection today, successful governed unblock/resume, workboard visibility after resumption, and invalid resume without evidence/rationale.
-- [ ] Update task lifecycle docs/help so agents know the canonical path for deferred task resumption.
+- [x] Define and implement a sanctioned transition for deferred tasks, such as task unblock or task resume, that records who resumed it, why the blocker is satisfied, and what evidence supports resumption.
+- [x] Ensure task continue/reopen/workboard semantics no longer strand deferred tasks that need to return to work after an external blocker clears.
+- [x] Require bounded evidence or rationale for moving from deferred back to opened, claimed, or needs_continuation; do not make deferral silently auto-resume.
+- [x] Add regression tests covering deferred task rejection today, successful governed unblock/resume, workboard visibility after resumption, and invalid resume without evidence/rationale.
+- [x] Update task lifecycle docs/help so agents know the canonical path for deferred task resumption.
