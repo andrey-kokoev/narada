@@ -1,6 +1,16 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T05:55:20.541Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Docs/help verification, focused tests, typecheck, and build prove separation of paired Site bootstrap from adapter execution, owning-locus command posture, and authority-locus preservation.
+closed_at: 2026-04-30T05:55:27.286Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
+
 # Align Windows bootstrap docs with owning-locus adapter commands
 
 ## Chapter
@@ -37,7 +47,7 @@ Inbox observation env_ffeed7c4 reports that docs show `bootstrap-windows --execu
 
 ## Acceptance Criteria
 
-- [ ] Docs clearly separate paired User/PC Site bootstrap from Windows Terminal, Komorebi, YASB, and runtime-binding adapter execution
-- [ ] Docs name exact existing follow-up commands or explicitly label residual commands as not yet implemented
-- [ ] Docs preserve authority-locus ownership for User Site, PC Site, and Narada proper
-- [ ] A docs/help verification command is recorded and passes
+- [x] Docs clearly separate paired User/PC Site bootstrap from Windows Terminal, Komorebi, YASB, and runtime-binding adapter execution
+- [x] Docs name exact existing follow-up commands or explicitly label residual commands as not yet implemented
+- [x] Docs preserve authority-locus ownership for User Site, PC Site, and Narada proper
+- [x] A docs/help verification command is recorded and passes

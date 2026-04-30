@@ -427,7 +427,7 @@ export function registerSitesCommands(program: Command): void {
 
   sitesCmd
     .command('bootstrap-windows')
-    .description('Plan or execute paired Windows User and PC Site bootstrap')
+    .description('Plan or execute paired Windows User/PC Site bootstrap; adapter mutations remain planned-only')
     .option('--user-site-id <id>', 'Windows user-locus Site id')
     .option('--pc-site-id <id>', 'Windows PC-locus Site id')
     .option('--sync <posture>', 'Windows User Site sync posture', 'hybrid_capable_plain_folder')

@@ -143,6 +143,13 @@ narada sites bootstrap-windows [--user-site-id <id>] [--pc-site-id <id>] [--sync
 
 `bootstrap-windows` is dry-run by default. It plans the user-locus Site and the PC-locus Site together, records the same execution-surface coordinates as `sites init`, and prints the validation commands for both loci. Use `--execute` only when the target Windows roots and required permissions are intentionally available.
 
+The paired command is two-phase:
+
+1. Preflight both the Windows User Site and Windows PC Site with no mutation.
+2. If `--execute` is present and both preflights pass, create the User Site and then the PC Site through the normal `sites init` path.
+
+If PC Site execution fails after User Site creation, the command returns explicit `partial_state` evidence and repair guidance. It does not pretend the pair is complete.
+
 Default identities:
 
 | Site | Default |
@@ -276,13 +283,25 @@ narada sites bootstrap-windows --execute --format json
 
 The command is dry-run by default. Its output includes:
 
-- `user` and `pc` Site bootstrap plans or execution results;
+- `preflight.user` and `preflight.pc` Site bootstrap plans;
+- `user` and `pc` Site execution results when `--execute` is used;
 - `substrate_readiness` for Windows Terminal, Komorebi, YASB, PowerShell, execution policy posture, WSL path translation, and Narada CLI readiness;
 - `adapter_plan` entries for Windows Terminal profile, Komorebi focus rule, YASB focus affordance, and Operator Surface runtime binding;
 - exact unblock commands for missing Windows Terminal, Komorebi, YASB, PowerShell, WSL/native execution mismatch, and stale CLI readiness;
 - bounded `evidence` naming Site creation/readiness, adapter plan/read-back requirements, residual manual steps, and authority locus for every adapter mutation.
 
-Windows Terminal and YASB adapter writes belong to the Windows User Site. Komorebi machine/session behavior belongs to the PC Site. Narada proper may plan and report this topology, but adapter mutation still requires explicit `--execute` at the owning locus plus read-back evidence.
+`adapter_plan` is planned-only. `narada sites bootstrap-windows --execute` creates the paired Sites; it does not execute adapter mutations. Each adapter entry must remain `execution_state: "planned_only"`, `dry_run: true`, `mutation_performed: false`, and `site_bootstrap_execute_affects_adapter: false` until a separate owning-locus command executes the adapter mutation and records read-back evidence.
+
+Windows Terminal and YASB adapter writes belong to the Windows User Site. Komorebi machine/session behavior belongs to the PC Site. Narada proper may plan and report this topology, but adapter mutation still requires a separate explicit execute path at the owning locus plus read-back evidence.
+
+Current adapter command posture:
+
+| Adapter | Authority locus | Command posture |
+| --- | --- | --- |
+| Windows Terminal profile | Windows User Site | `narada operator-surface agent instantiate --site <user-site> --role builder --agent-kind codex_cli --by <principal>` is the current higher-level surface-instantiation command; direct Terminal profile materialization remains residual until an owning-locus materializer exists. |
+| Komorebi focus rule | Windows PC Site | `narada command-exec request --site <pc-site> --intent komorebi.focus-rule --format json` is an intended CEIZ route and is residual until that intent/materializer exists. |
+| YASB focus affordance | Windows User Site | `narada command-exec request --site <user-site> --intent yasb.focus-affordance --format json` is an intended CEIZ route and is residual until that intent/materializer exists. |
+| Operator Surface runtime binding | Windows User/runtime locus | `narada operator-surface bind-focused --as self` exists; Narada proper may return a runtime-locus deferral that must be routed to the owning locus. |
 
 ### Step 3: Bind operation/config
 

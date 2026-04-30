@@ -108,6 +108,17 @@ Likely authority loci:
 
 The current WSL Narada proper clone may document and propose this adapter path. It must not assume authority to mutate Windows Terminal, Komorebi, YASB, or AHK configuration.
 
+`narada sites bootstrap-windows` belongs to Site bootstrap, not adapter materialization. Its `--execute` mode may create the paired Windows User Site and PC Site after paired preflight succeeds, but it must leave Windows Terminal, Komorebi, YASB, and runtime-binding adapter entries as planned-only handoffs. The `adapter_plan` entries are command hints, not proof that adapter mutations occurred.
+
+Current command posture:
+
+| Adapter entry | Owning locus | Current command hint | Status |
+| --- | --- | --- | --- |
+| `windows_terminal_profile` | Windows User Site | `narada operator-surface agent instantiate --site <user-site> --role builder --agent-kind codex_cli --by <principal>` | Existing high-level surface-instantiation path; direct Terminal profile materialization remains residual. |
+| `komorebi_focus_rule` | Windows PC Site | `narada command-exec request --site <pc-site> --intent komorebi.focus-rule --format json` | Residual intended CEIZ route until the intent/materializer exists. |
+| `yasb_focus_affordance` | Windows User Site | `narada command-exec request --site <user-site> --intent yasb.focus-affordance --format json` | Residual intended CEIZ route until the intent/materializer exists. |
+| `operator_surface_runtime_binding` | Windows User/runtime locus | `narada operator-surface bind-focused --as self` | Existing binding surface; may return a runtime-locus deferral that must be routed to the owner. |
+
 ## Visibility-Domain Reconciliation
 
 Windows virtual desktop membership is an external visibility-domain truth. Komorebi state is adapter state. A Windows operator-surface adapter must not treat Komorebi's managed HWND set as authoritative until it has reconciled each HWND against Windows desktop membership.
