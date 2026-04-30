@@ -10,6 +10,7 @@ import { ExitCode } from '../../src/lib/exit-codes.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
@@ -29,6 +30,33 @@ function setupRepo(tempDir: string) {
       ],
     }, null, 2),
   );
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    store.upsertRosterEntry({
+      agent_id: 'a1',
+      role: 'implementer',
+      capabilities_json: JSON.stringify(['claim']),
+      first_seen_at: '2026-01-01T00:00:00Z',
+      last_active_at: '2026-01-01T00:00:00Z',
+      status: 'working',
+      task_number: 101,
+      last_done: null,
+      updated_at: '2026-01-01T00:00:00Z',
+    });
+    store.upsertRosterEntry({
+      agent_id: 'a2',
+      role: 'reviewer',
+      capabilities_json: JSON.stringify(['claim']),
+      first_seen_at: '2026-01-01T00:00:00Z',
+      last_active_at: '2026-01-01T00:00:00Z',
+      status: 'idle',
+      task_number: null,
+      last_done: null,
+      updated_at: '2026-01-01T00:00:00Z',
+    });
+  } finally {
+    store.db.close();
+  }
 }
 
 function createTask(tempDir: string, num: number, status: string, bodyExtra = '') {
@@ -36,6 +64,69 @@ function createTask(tempDir: string, num: number, status: string, bodyExtra = ''
     join(tempDir, '.ai', 'do-not-open', 'tasks', `20260420-${num}-test.md`),
     `---\ntask_id: ${num}\nstatus: ${status}\n---\n\n# Task ${num}: Test\n\n## Acceptance Criteria\n- [ ] Do thing A\n- [x] Do thing B\n\n${bodyExtra}`,
   );
+}
+
+function seedLifecycle(tempDir: string, taskId: string, taskNumber: number, status: 'opened' | 'claimed' | 'in_review' | 'closed' | 'confirmed') {
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    store.upsertLifecycle({
+      task_id: taskId,
+      task_number: taskNumber,
+      status,
+      governed_by: status === 'closed' || status === 'confirmed' ? 'task_close' : null,
+      closed_at: status === 'closed' || status === 'confirmed' ? '2026-04-30T00:00:00.000Z' : null,
+      closed_by: status === 'closed' || status === 'confirmed' ? 'builder' : null,
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: '2026-04-30T00:00:00.000Z',
+    });
+  } finally {
+    store.db.close();
+  }
+}
+
+function seedCompleteEvidence(tempDir: string, taskId: string, taskNumber: number) {
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    store.insertReport({
+      report_id: `wrr_${taskNumber}`,
+      task_id: taskId,
+      agent_id: 'builder',
+      summary: 'Done',
+      changed_files_json: JSON.stringify(['file.ts']),
+      verification_json: JSON.stringify([{ command: 'pnpm test', result: 'passed' }]),
+      submitted_at: '2026-04-30T00:01:00.000Z',
+    });
+    store.upsertEvidenceBundle({
+      bundle_id: `evb_${taskNumber}`,
+      task_id: taskId,
+      task_number: taskNumber,
+      report_ids_json: JSON.stringify([`wrr_${taskNumber}`]),
+      verification_run_ids_json: JSON.stringify([]),
+      acceptance_criteria_json: JSON.stringify({ all_checked: true, unchecked_count: 0 }),
+      review_ids_json: JSON.stringify([]),
+      changed_files_json: JSON.stringify(['file.ts']),
+      residuals_json: JSON.stringify([]),
+      assembled_at: '2026-04-30T00:02:00.000Z',
+      assembled_by: 'builder',
+    });
+    store.upsertEvidenceAdmissionResult({
+      admission_id: `ear_${taskNumber}`,
+      bundle_id: `evb_${taskNumber}`,
+      task_id: taskId,
+      task_number: taskNumber,
+      verdict: 'admitted',
+      methods_json: JSON.stringify(['criteria_proof']),
+      blockers_json: JSON.stringify([]),
+      lifecycle_eligible_status: 'closed',
+      admitted_at: '2026-04-30T00:03:00.000Z',
+      admitted_by: 'builder',
+      confirmation_json: JSON.stringify({ observation_output_counted: false }),
+    });
+  } finally {
+    store.db.close();
+  }
 }
 
 function createReport(tempDir: string, taskId: string, agentId: string) {
@@ -135,15 +226,15 @@ describe('task evidence list operator', () => {
 
   it('lists closed-but-invalid tasks', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-103-test.md'),
-      `---\ntask_id: 103\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 103: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n\n## Execution Notes\nDone.\n`,
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-503-test.md'),
+      `---\ntask_id: 503\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 503: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n\n## Execution Notes\nDone.\n`,
     );
     const result = await taskEvidenceListCommand({ cwd: tempDir, format: 'json' });
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     const r = result.result as { count: number; tasks: Array<{ task_number: number; verdict: string; violations: string[] }> };
-    const task103 = r.tasks.find((t) => t.task_number === 103);
-    expect(task103?.verdict).toBe('needs_closure');
-    expect(task103?.violations.some((v) => v.includes('terminal_without_verification'))).toBe(true);
+    const task503 = r.tasks.find((t) => t.task_number === 503);
+    expect(task503?.verdict).toBe('needs_closure');
+    expect(task503?.violations.some((v) => v.includes('terminal_without_verification'))).toBe(true);
   });
 
   it('includes needs-review tasks', async () => {
@@ -198,6 +289,69 @@ describe('task evidence list operator', () => {
     const r = result.result as { count: number; tasks: Array<{ task_number: number }> };
     expect(r.count).toBe(2);
     expect(r.tasks.map((t) => t.task_number)).toEqual([109, 110]);
+  });
+
+  it('filters range without duplicating the range chapter file at range start', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260430-1113-1118-windows-bootstrap.md'),
+      `---\nstatus: opened\n---\n\n# Windows Bootstrap Chapter\n`,
+    );
+    for (let taskNumber = 1113; taskNumber <= 1118; taskNumber += 1) {
+      createTask(tempDir, taskNumber, 'opened');
+    }
+
+    const result = await taskEvidenceListCommand({
+      cwd: tempDir,
+      format: 'json',
+      range: '1113-1118',
+      full: true,
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const r = result.result as { count: number; tasks: Array<{ task_number: number; task_id: string }> };
+    expect(r.count).toBe(6);
+    expect(r.tasks.map((t) => t.task_number)).toEqual([1113, 1114, 1115, 1116, 1117, 1118]);
+    expect(r.tasks.map((t) => t.task_id)).not.toContain('20260430-1113-1118-windows-bootstrap');
+  });
+
+  it('classifies closed tasks as complete in list when SQLite evidence admission proves criteria', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260430-1116-projected-complete.md'),
+      `---\ntask_id: 1116\nstatus: closed\n---\n\n# Task 1116: Projected Complete\n\n## Acceptance Criteria\n- [ ] Still unchecked in markdown\n\n## Execution Notes\nDone.\n`,
+    );
+    seedLifecycle(tempDir, '20260430-1116-projected-complete', 1116, 'closed');
+    seedCompleteEvidence(tempDir, '20260430-1116-projected-complete', 1116);
+
+    const result = await taskEvidenceListCommand({
+      cwd: tempDir,
+      format: 'json',
+      verdict: 'complete',
+      range: '1116-1116',
+      full: true,
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const r = result.result as {
+      count: number;
+      tasks: Array<{
+        task_number: number;
+        verdict: string;
+        missing: { unchecked_criteria: number; verification: boolean; report: boolean; closure: boolean };
+        violations: string[];
+      }>;
+    };
+    expect(r.count).toBe(1);
+    expect(r.tasks[0]).toMatchObject({
+      task_number: 1116,
+      verdict: 'complete',
+      missing: {
+        unchecked_criteria: 0,
+        verification: false,
+        report: false,
+        closure: false,
+      },
+      violations: [],
+    });
   });
 
   it('shows complete tasks when verdict filter includes complete', async () => {

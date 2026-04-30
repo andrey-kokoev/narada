@@ -1,7 +1,16 @@
 ---
-status: claimed
+status: closed
 amended_by: architect
 amended_at: 2026-04-30T13:44:23.942Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T13:55:29.165Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Focused tests, typecheck/build, and bounded live evidence readbacks prove range-start chapter file exclusion, complete closed classification, shared SQLite-backed evidence logic, bounded observation artifacts, and correct range count.
+closed_at: 2026-04-30T13:55:36.625Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Fix task evidence list range classification drift
@@ -46,8 +55,8 @@ During the Architect next loop after Builder closed Windows bootstrap correctnes
 
 ## Acceptance Criteria
 
-- [ ] Range 1113-1118 evidence list does not duplicate task 1113 via the chapter file
-- [ ] Complete single-task evidence verdicts are not listed as needs_closure by evidence list
-- [ ] List and single-task inspect paths share SQLite-backed status and provenance logic or tests prove equivalent outcomes
-- [ ] Observation artifacts from evidence list remain bounded and do not create misleading stale evidence
-- [ ] Focused tests cover chapter-file range-start collision and closed task complete classification and range output count
+- [x] Range 1113-1118 evidence list does not duplicate task 1113 via the chapter file
+- [x] Complete single-task evidence verdicts are not listed as needs_closure by evidence list
+- [x] List and single-task inspect paths share SQLite-backed status and provenance logic or tests prove equivalent outcomes
+- [x] Observation artifacts from evidence list remain bounded and do not create misleading stale evidence
+- [x] Focused tests cover chapter-file range-start collision and closed task complete classification and range output count

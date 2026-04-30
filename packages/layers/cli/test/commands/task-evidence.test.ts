@@ -343,10 +343,10 @@ describe('task evidence operator', () => {
 
   it('classifies direct closed task without verification as needs_closure', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-109-test.md'),
-      `---\ntask_id: 109\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 109: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n- [x] Do thing B\n\n## Execution Notes\nDone directly by operator.\n`,
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-509-test.md'),
+      `---\ntask_id: 509\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 509: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n- [x] Do thing B\n\n## Execution Notes\nDone directly by operator.\n`,
     );
-    const result = await taskEvidenceCommand({ taskNumber: '109', cwd: tempDir, format: 'json' });
+    const result = await taskEvidenceCommand({ taskNumber: '509', cwd: tempDir, format: 'json' });
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     const parsed = result.result as { evidence: { verdict: string; warnings: string[] } };
     expect(parsed.evidence.verdict).toBe('needs_closure');
@@ -365,10 +365,10 @@ describe('task evidence operator', () => {
 
   it('detects raw terminal mutation without governed provenance', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-110-test.md'),
-      `---\ntask_id: 110\nstatus: closed\n---\n\n# Task 110: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-510-test.md'),
+      `---\ntask_id: 510\nstatus: closed\n---\n\n# Task 510: Test\n\n## Acceptance Criteria\n- [x] Do thing A\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
     );
-    const result = await taskEvidenceCommand({ taskNumber: '110', cwd: tempDir, format: 'json' });
+    const result = await taskEvidenceCommand({ taskNumber: '510', cwd: tempDir, format: 'json' });
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     const parsed = result.result as { evidence: { verdict: string; violations: string[]; has_governed_provenance: boolean } };
     expect(parsed.evidence.verdict).toBe('needs_closure');

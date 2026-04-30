@@ -751,6 +751,44 @@ export async function inspectTaskEvidence(
   }
 
   const criteria = countUncheckedCriteria(body);
+  if (store) {
+    const latestCriteriaProof = store.getLatestCriteriaProof(taskFile.taskId);
+    if (latestCriteriaProof) {
+      try {
+        const provedCriteria = JSON.parse(latestCriteriaProof.criteria_json) as Array<{ checked?: boolean }>;
+        if (provedCriteria.length > 0 && provedCriteria.every((item) => item.checked === true)) {
+          criteria.allChecked = true;
+          criteria.unchecked = 0;
+        }
+      } catch {
+        // Ignore malformed legacy proof rows; markdown remains fallback.
+      }
+    }
+    const latestAdmission = store.getLatestEvidenceAdmissionResult(taskFile.taskId);
+    if (latestAdmission?.verdict === 'admitted') {
+      const latestBundle = store.getEvidenceBundle(latestAdmission.bundle_id);
+      if (latestBundle) {
+        try {
+          const admittedCriteria = JSON.parse(latestBundle.acceptance_criteria_json) as {
+            all_checked?: boolean | null;
+            unchecked_count?: number;
+          };
+          if (admittedCriteria.all_checked === true) {
+            criteria.allChecked = true;
+            criteria.unchecked = 0;
+          } else if (
+            admittedCriteria.all_checked === false &&
+            typeof admittedCriteria.unchecked_count === 'number'
+          ) {
+            criteria.allChecked = false;
+            criteria.unchecked = admittedCriteria.unchecked_count;
+          }
+        } catch {
+          // Ignore malformed legacy bundles; markdown remains fallback.
+        }
+      }
+    }
+  }
   const hasExecutionNotes = hasMaterialSection(body, 'Execution Notes');
   const hasMarkdownVerification = hasMaterialSection(body, 'Verification');
   const reports = await listReportsForTask(cwd, taskFile.taskId);
@@ -2470,87 +2508,89 @@ export async function listEvidenceBasedTasks(
   }
 
   let specByNumber = new Map<number, { title: string; dependencies: number[] }>();
+  let lifecycleStore: TaskLifecycleStore | null = null;
   try {
-    const store = openTaskLifecycleStore(cwd);
-    try {
-      const rows = store.db
-        .prepare('select task_number, title, dependencies_json from task_specs')
-        .all() as Array<{ task_number: number; title: string; dependencies_json: string }>;
-      specByNumber = new Map(rows.map((row) => [
-        Number(row.task_number),
-        {
-          title: String(row.title),
-          dependencies: JSON.parse(String(row.dependencies_json)) as number[],
-        },
-      ]));
-    } finally {
-      store.db.close();
-    }
+    lifecycleStore = openTaskLifecycleStore(cwd);
+    const rows = lifecycleStore.db
+      .prepare('select task_number, title, dependencies_json from task_specs')
+      .all() as Array<{ task_number: number; title: string; dependencies_json: string }>;
+    specByNumber = new Map(rows.map((row) => [
+      Number(row.task_number),
+      {
+        title: String(row.title),
+        dependencies: JSON.parse(String(row.dependencies_json)) as number[],
+      },
+    ]));
   } catch {
     // Spec store may be unavailable
+    lifecycleStore = null;
   }
 
   const entries: EvidenceBasedTaskEntry[] = [];
 
-  for (const f of mdFiles) {
-    const base = f.replace(/\.md$/, '');
-    const taskNumber = extractTaskNumberFromFileName(f);
+  try {
+    for (const f of mdFiles) {
+      if (!isExecutableTaskFile(f)) continue;
+      const base = f.replace(/\.md$/, '');
+      const taskNumber = extractTaskNumberFromFileName(f);
 
-    // Exclude derivative status files
-    const isDerivative = DERIVATIVE_SUFFIXES.some((suffix) =>
-      base.includes(suffix.replace(/\.md$/, '')),
-    );
-    if (isDerivative) continue;
-    if (isExecutableTaskFile(f) && taskNumber !== null) {
-      if (ownership.conflictedNumbers.has(taskNumber)) continue;
-      const ownerTaskId = ownership.ownerByNumber.get(taskNumber);
-      if (ownerTaskId && ownerTaskId !== base) continue;
-    }
-
-    // Range filter
-    if (options?.rangeFilter && taskNumber !== null) {
-      if (taskNumber < options.rangeFilter.start || taskNumber > options.rangeFilter.end) {
-        continue;
+      if (taskNumber !== null) {
+        if (ownership.conflictedNumbers.has(taskNumber)) continue;
+        const ownerTaskId = ownership.ownerByNumber.get(taskNumber);
+        if (ownerTaskId && ownerTaskId !== base) continue;
       }
+
+      // Range filter
+      if (options?.rangeFilter && taskNumber !== null) {
+        if (taskNumber < options.rangeFilter.start || taskNumber > options.rangeFilter.end) {
+          continue;
+        }
+      }
+
+      const evidence = await inspectTaskEvidence(
+        cwd,
+        taskNumber !== null ? String(taskNumber) : base,
+        lifecycleStore ?? undefined,
+      );
+
+      // Status filter
+      if (options?.statusFilter && evidence.status !== undefined) {
+        if (!options.statusFilter.includes(evidence.status)) continue;
+      }
+
+      // Verdict filter
+      const effectiveVerdictFilter = options?.verdictFilter ?? NOT_COMPLETE_VERDICTS;
+      if (!effectiveVerdictFilter.includes(evidence.verdict)) continue;
+
+      // Find assigned agent from roster
+      let assignedAgent: string | null = null;
+      if (roster && taskNumber !== null) {
+        const agent = roster.agents.find((a) => a.task === taskNumber);
+        if (agent) assignedAgent = agent.agent_id;
+      }
+
+      const title = taskNumber !== null ? (specByNumber.get(taskNumber)?.title ?? null) : null;
+
+      entries.push({
+        task_number: evidence.task_number,
+        task_id: evidence.task_id ?? base,
+        title,
+        status: evidence.status,
+        verdict: evidence.verdict,
+        unchecked_count: evidence.unchecked_count,
+        has_execution_notes: evidence.has_execution_notes,
+        has_verification: evidence.has_verification,
+        has_report: evidence.has_report,
+        has_review: evidence.has_review,
+        has_closure: evidence.has_closure,
+        warnings: evidence.warnings,
+        violations: evidence.violations,
+        assigned_agent: assignedAgent,
+        active_assignment_intent: evidence.active_assignment_intent,
+      });
     }
-
-    const evidence = await inspectTaskEvidence(cwd, taskNumber !== null ? String(taskNumber) : base);
-
-    // Status filter
-    if (options?.statusFilter && evidence.status !== undefined) {
-      if (!options.statusFilter.includes(evidence.status)) continue;
-    }
-
-    // Verdict filter
-    const effectiveVerdictFilter = options?.verdictFilter ?? NOT_COMPLETE_VERDICTS;
-    if (!effectiveVerdictFilter.includes(evidence.verdict)) continue;
-
-    // Find assigned agent from roster
-    let assignedAgent: string | null = null;
-    if (roster && taskNumber !== null) {
-      const agent = roster.agents.find((a) => a.task === taskNumber);
-      if (agent) assignedAgent = agent.agent_id;
-    }
-
-    const title = taskNumber !== null ? (specByNumber.get(taskNumber)?.title ?? null) : null;
-
-    entries.push({
-      task_number: evidence.task_number,
-      task_id: evidence.task_id ?? base,
-      title,
-      status: evidence.status,
-      verdict: evidence.verdict,
-      unchecked_count: evidence.unchecked_count,
-      has_execution_notes: evidence.has_execution_notes,
-      has_verification: evidence.has_verification,
-      has_report: evidence.has_report,
-      has_review: evidence.has_review,
-      has_closure: evidence.has_closure,
-      warnings: evidence.warnings,
-      violations: evidence.violations,
-      assigned_agent: assignedAgent,
-      active_assignment_intent: evidence.active_assignment_intent,
-    });
+  } finally {
+    lifecycleStore?.db.close();
   }
 
   // Sort by task number ascending

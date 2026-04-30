@@ -1,0 +1,140 @@
+{
+  "status": "success",
+  "count": 6,
+  "filter": {
+    "verdict": [
+      "complete"
+    ],
+    "status": null,
+    "range": {
+      "start": 1113,
+      "end": 1118
+    }
+  },
+  "summary": {
+    "verdicts": {
+      "complete": 6,
+      "attempt_complete": 0,
+      "needs_review": 0,
+      "needs_closure": 0,
+      "incomplete": 0,
+      "unknown": 0
+    }
+  },
+  "tasks": [
+    {
+      "task_number": 1113,
+      "task_id": "20260430-1113-make-windows-bootstrap-cli-readiness-cwd-independent",
+      "title": "Make Windows bootstrap CLI readiness cwd-independent",
+      "status": "closed",
+      "verdict": "complete",
+      "missing": {
+        "unchecked_criteria": 0,
+        "execution_notes": true,
+        "verification": false,
+        "report": false,
+        "review": true,
+        "closure": false
+      },
+      "warnings": [],
+      "violations": [],
+      "assigned_agent": null,
+      "active_assignment_intent": null
+    },
+    {
+      "task_number": 1114,
+      "task_id": "20260430-1114-correct-windows-execution-surface-readiness-semantics",
+      "title": "Correct Windows execution-surface readiness semantics",
+      "status": "closed",
+      "verdict": "complete",
+      "missing": {
+        "unchecked_criteria": 0,
+        "execution_notes": true,
+        "verification": false,
+        "report": false,
+        "review": true,
+        "closure": false
+      },
+      "warnings": [],
+      "violations": [],
+      "assigned_agent": null,
+      "active_assignment_intent": null
+    },
+    {
+      "task_number": 1115,
+      "task_id": "20260430-1115-split-windows-tool-command-resolution-from-semantic-readines",
+      "title": "Split Windows tool command resolution from semantic readiness",
+      "status": "closed",
+      "verdict": "complete",
+      "missing": {
+        "unchecked_criteria": 0,
+        "execution_notes": true,
+        "verification": false,
+        "report": false,
+        "review": true,
+        "closure": false
+      },
+      "warnings": [],
+      "violations": [],
+      "assigned_agent": null,
+      "active_assignment_intent": null
+    },
+    {
+      "task_number": 1116,
+      "task_id": "20260430-1116-make-paired-windows-user-pc-bootstrap-two-phase-safe",
+      "title": "Make paired Windows User/PC bootstrap two-phase safe",
+      "status": "closed",
+      "verdict": "complete",
+      "missing": {
+        "unchecked_criteria": 0,
+        "execution_notes": true,
+        "verification": false,
+        "report": false,
+        "review": true,
+        "closure": false
+      },
+      "warnings": [],
+      "violations": [],
+      "assigned_agent": null,
+      "active_assignment_intent": null
+    },
+    {
+      "task_number": 1117,
+      "task_id": "20260430-1117-clarify-windows-adapter-plan-execution-state",
+      "title": "Clarify Windows adapter plan execution state",
+      "status": "closed",
+      "verdict": "complete",
+      "missing": {
+        "unchecked_criteria": 0,
+        "execution_notes": true,
+        "verification": false,
+        "report": false,
+        "review": true,
+        "closure": false
+      },
+      "warnings": [],
+      "violations": [],
+      "assigned_agent": null,
+      "active_assignment_intent": null
+    },
+    {
+      "task_number": 1118,
+      "task_id": "20260430-1118-align-windows-bootstrap-docs-with-owning-locus-adapter-comma",
+      "title": "Align Windows bootstrap docs with owning-locus adapter commands",
+      "status": "closed",
+      "verdict": "complete",
+      "missing": {
+        "unchecked_criteria": 0,
+        "execution_notes": true,
+        "verification": false,
+        "report": false,
+        "review": true,
+        "closure": false
+      },
+      "warnings": [],
+      "violations": [],
+      "assigned_agent": null,
+      "active_assignment_intent": null
+    }
+  ]
+}
