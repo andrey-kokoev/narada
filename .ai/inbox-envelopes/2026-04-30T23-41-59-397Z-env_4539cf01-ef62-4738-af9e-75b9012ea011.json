@@ -1,0 +1,28 @@
+{
+  "envelope_id": "env_4539cf01-ef62-4738-af9e-75b9012ea011",
+  "received_at": "2026-04-30T23:41:59.397Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey-operator-surface-rename-20260430"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "CAPA: operator-surface identity rename must reject unregistered or incoherent Site names",
+    "summary": "While renaming narada-andrey.architect to Kevin, the operator-surface identity rename command rejected narada-andrey.Kevin as a site_locus_mismatch because the registry owner Site id was andrey-user, then accepted andrey-user.Kevin. The operator correctly identified this as incoherent: the Site is known and lived as narada-andrey, not andrey-user. Tooling should not admit or suggest identity names under unregistered or incoherent Site ids.",
+    "evidence": [
+      "operator-surfaces/identities.json has owner_site_id andrey-user while the Operator recognizes the User Site as narada-andrey",
+      "narada operator-surface identity rename --from narada-andrey.architect --to narada-andrey.Kevin failed with site_locus_mismatch requested_new_site_id narada-andrey old_site_id andrey-user",
+      "narada operator-surface identity rename --to andrey-user.Kevin succeeded, producing a coherent-by-tool but incoherent-by-Site identity"
+    ],
+    "proposal": [
+      "Operator-surface identity commands must validate Site names against canonical registered Site identity, not local incidental owner_site_id strings; when mismatch exists, refuse mutation and provide a repair command to reconcile the Site id first.",
+      "Add a preflight invariant: durable identity prefix, registry owner_site_id, Site config id, repository/Site display name, and routing address must be constructively aligned or explicitly aliased by governed Site identity records."
+    ],
+    "recommendation": "Treat as CAPA and priority execution item before further identity rename/migration work."
+  },
+  "status": "received"
+}
