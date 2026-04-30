@@ -281,6 +281,50 @@ narada operator-surface send --identity <id> --text <text> --execute
 
 `send` validates an admitted durable identity and a Site/runtime-locus binding before accepting input. Dry-run returns the resolved runtime locus, handle, submit strategy, and text digest without mutation. Execute records bounded send evidence for the owning runtime locus; it does not hardcode Windows paths or treat Narada proper as the owner of volatile handles. Secret-like text is refused and must route through capability consent and secret-reference paths.
 
+## Governed Message Queue Posture
+
+Operator-surface messages are governed records before they are visible text. A message is not task lifecycle truth, review truth, closure truth, or command execution truth.
+
+Canonical crossing:
+
+```text
+message_intent -> addressed_message -> delivery_attempt -> delivered_to_surface
+  -> admitted_by_recipient -> acted | replied | reported -> reconciled
+```
+
+Required message record fields:
+
+| Field | Meaning |
+| --- | --- |
+| `message_id` | Durable message identity. |
+| `sender_identity` | Site-qualified sender identity or principal. |
+| `recipient_identity` | Site-qualified recipient identity, role address, or resolved agent identity. |
+| `site_plane` | Site or plane in which the address is meaningful. |
+| `kind` | `nudge`, `note`, `handoff`, `review_request`, `capa`, `question`, `command_intent`, or `completion_claim`. |
+| `expected_response_posture` | `none`, `ack`, `reply`, `report`, `review`, or `task_lifecycle_action`. |
+| `delivery_status` | `queued`, `awaiting_visible_surface`, `delivery_attempted`, `delivered_to_surface`, `timed_out`, or `fallback_routed`. |
+| `intake_status` | `unseen`, `admitted_by_recipient`, `rejected_by_recipient`, `acted`, `replied`, `reported`, or `reconciled`. |
+| `evidence_refs` | Links to delivery evidence, reply, report, review, task evidence, or fallback inbox envelope. |
+| `reply_to` | Source message id when this message is a reply. |
+
+Authority rules:
+
+- Delivery is PC/runtime-locus opportunity. It proves only that text or a notification reached a carrier surface.
+- Recipient admission is agent/Site-locus intake. It proves the recipient accepted the message into its duty loop.
+- Acting, reporting, reviewing, closing, or confirming must cross the existing task, evidence, review, command, inbox, or publication surfaces.
+- A `completion_claim` message must route through `narada task reconcile claim`; it must not set criteria, report, review, close, or confirm state.
+- A `review_request` message may direct attention to `narada task review`, but it is not a review artifact.
+- If visible delivery fails, fallback routing must create another governed message or inbox artifact rather than dropping the original.
+
+Recipient intake path:
+
+```bash
+narada role-loop next --agent <recipient> --format json
+narada work-next --agent <recipient> --peek --format json
+```
+
+These surfaces are the current compact intake path. A future `operator-surface message work-next` command may specialize message intake, but it must remain a facade over the governed message record and must not become a parallel task lifecycle.
+
 Any agent inhabiting an Operator Surface should attempt self-binding during bootstrap:
 
 ```bash

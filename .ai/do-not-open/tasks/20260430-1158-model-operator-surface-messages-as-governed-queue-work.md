@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T23:46:31.769Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777592758852_0dvrku
+closed_at: 2026-04-30T23:46:49.795Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Model operator-surface messages as governed queue work
@@ -32,8 +41,8 @@ Source inbox envelope env_fa1dbd0c-2e46-42af-9930-9a73a7c6a7e0 proposes a strong
 
 ## Acceptance Criteria
 
-- [ ] Docs or code model operator-surface messages as typed governed records, not only text sent to windows.
-- [ ] Message lifecycle distinguishes delivery from recipient admission and action.
-- [ ] Recipient intake or work-next path is specified or implemented.
-- [ ] Reply/report linkage to source message is specified or implemented.
-- [ ] The model preserves task lifecycle authority and prevents message claims from becoming lifecycle truth.
+- [x] Docs or code model operator-surface messages as typed governed records, not only text sent to windows.
+- [x] Message lifecycle distinguishes delivery from recipient admission and action.
+- [x] Recipient intake or work-next path is specified or implemented.
+- [x] Reply/report linkage to source message is specified or implemented.
+- [x] The model preserves task lifecycle authority and prevents message claims from becoming lifecycle truth.
