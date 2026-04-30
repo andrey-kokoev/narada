@@ -108,6 +108,54 @@ describe('Canonical Inbox CLI commands', () => {
     expect(envelope.payload).toEqual({ title: 'From file', nested: { ok: true } });
   });
 
+  it('returns compact submit output without echoing payload body when requested', async () => {
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      output: 'compact',
+      sourceKind: 'agent_report',
+      sourceRef: 'architect-loop:test',
+      kind: 'observation',
+      authorityLevel: 'agent_reported',
+      payload: JSON.stringify({ title: 'Compact output', body: 'do not echo this body in routine chat output' }),
+    });
+
+    expect(submitted.exitCode).toBe(ExitCode.SUCCESS);
+    expect(submitted.result).toMatchObject({
+      status: 'success',
+      envelope_id: expect.stringMatching(/^env_/),
+      kind: 'observation',
+      portable_artifact: expect.stringContaining(join(tempDir, '.ai', 'inbox-envelopes')),
+      warnings: [],
+      next_steps: {
+        git_visible_handoff: expect.stringContaining(join(tempDir, '.ai', 'inbox-envelopes')),
+      },
+      output: {
+        mode: 'compact',
+        full_payload_available_with: '--output full',
+      },
+    });
+    expect(JSON.stringify(submitted.result)).not.toContain('do not echo this body');
+    expect(JSON.stringify(submitted.result)).not.toContain('"payload"');
+  });
+
+  it('retains full submit payload output when explicitly requested', async () => {
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      output: 'full',
+      sourceKind: 'agent_report',
+      sourceRef: 'architect-loop:full',
+      kind: 'observation',
+      authorityLevel: 'agent_reported',
+      payload: JSON.stringify({ title: 'Full output', body: 'full mode keeps payload available' }),
+    });
+
+    expect(submitted.exitCode).toBe(ExitCode.SUCCESS);
+    const envelope = (submitted.result as { envelope: { payload: Record<string, unknown> } }).envelope;
+    expect(envelope.payload.body).toBe('full mode keeps payload available');
+  });
+
   it('resolves package-subdirectory submit cwd to git root authority', async () => {
     execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['init', '-b', 'main'], { cwd: tempDir });
     const packageDir = join(tempDir, 'packages', 'layers', 'cli');

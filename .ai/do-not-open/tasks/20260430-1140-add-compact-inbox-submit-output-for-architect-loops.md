@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-30T17:27:23.498Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T17:48:46.385Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777571240788_xhg05r
+closed_at: 2026-04-30T17:49:00.258Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add compact inbox submit output for architect loops
@@ -43,8 +52,8 @@ Inbox envelope env_cd01e2e9-7d54-45d6-9ebc-79202be70a87 reports that `narada inb
 
 ## Acceptance Criteria
 
-- [ ] Routine inbox submit can return compact output without full payload echo.
-- [ ] Compact output includes status, envelope_id, artifact coordinates when available, warnings, and next_steps.
-- [ ] Full payload echo remains available only through explicit verbose/full/debug mode.
-- [ ] Human and JSON/compact-json behavior is documented or discoverable in help.
-- [ ] Tests prove compact output omits submitted payload body while full mode retains it.
+- [x] Routine inbox submit can return compact output without full payload echo.
+- [x] Compact output includes status, envelope_id, artifact coordinates when available, warnings, and next_steps.
+- [x] Full payload echo remains available only through explicit verbose/full/debug mode.
+- [x] Human and JSON/compact-json behavior is documented or discoverable in help.
+- [x] Tests prove compact output omits submitted payload body while full mode retains it.

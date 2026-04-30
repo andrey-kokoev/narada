@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, statSync } from 'node:fs';
-import { access, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, readdir, stat, writeFile, unlink } from 'node:fs/promises';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import {
   type InboxAuthorityLevel,
@@ -56,6 +56,7 @@ export interface InboxSubmitOptions extends InboxCommandOptions {
   allowEmptyPayload?: boolean;
   targetLocus?: string;
   stdin?: NodeJS.ReadableStream;
+  output?: string;
 }
 
 export interface InboxSubmitObservationOptions extends InboxCommandOptions {
@@ -70,6 +71,7 @@ export interface InboxSubmitObservationOptions extends InboxCommandOptions {
   proposal?: string[];
   recommendation?: string;
   targetLocus?: string;
+  output?: string;
 }
 
 export interface InboxListOptions extends InboxCommandOptions {
@@ -246,8 +248,7 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
       result: { status: 'success', envelope, portable_artifact: portableArtifact },
       occurredAt: envelope.received_at,
     });
-    return okResult(
-      {
+    const fullResult = {
         status: 'success',
         envelope,
         delivery,
@@ -258,7 +259,9 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
           commit_and_push: 'Commit and push the exported envelope artifact when another embodiment must see this inbox item.',
         },
         routing: routeDecision,
-      },
+      };
+    return okResult(
+      maybeCompactInboxSubmitResult(fullResult, options.output),
       [
         `Inbox envelope received: ${envelope.envelope_id}`,
         `Kind: ${envelope.kind}`,
@@ -300,6 +303,7 @@ export async function inboxSubmitObservationCommand(
     principal: options.principal ?? options.authorityPrincipal,
     payload: JSON.stringify(payload),
     targetLocus: options.targetLocus,
+    output: 'full',
   });
   if (submitted.exitCode !== ExitCode.SUCCESS) return submitted;
 
@@ -322,8 +326,7 @@ export async function inboxSubmitObservationCommand(
     const payloadEquivalent = JSON.stringify(readBack.payload) === JSON.stringify(payload);
     if (!payloadEquivalent) return errorResult(`Submitted envelope payload read-back mismatch: ${envelopeId}`);
     const exportCommand = 'narada inbox export --format json';
-    return okResult(
-      {
+    const fullResult = {
         status: 'success',
         envelope: readBack,
         delivery: result.delivery,
@@ -339,7 +342,9 @@ export async function inboxSubmitObservationCommand(
           publish_push_command: INBOX_PUBLISH_EXECUTE_PUSH_COMMAND,
           git_visible_handoff: result.portable_artifact,
         },
-      },
+      };
+    return okResult(
+      maybeCompactInboxSubmitResult(fullResult, options.output),
       [
         `Inbox observation received: ${readBack.envelope_id}`,
         `Title: ${payload.title}`,
@@ -349,6 +354,31 @@ export async function inboxSubmitObservationCommand(
       options.format,
     );
   });
+}
+
+function maybeCompactInboxSubmitResult(result: Record<string, unknown>, output: string | undefined): Record<string, unknown> {
+  const mode = output?.trim() || 'full';
+  if (mode === 'full' || mode === 'debug') return result;
+  if (mode !== 'compact') return result;
+  const envelope = result.envelope as InboxEnvelope | undefined;
+  const nextSteps = result.next_steps as Record<string, unknown> | undefined;
+  return {
+    status: result.status,
+    envelope_id: envelope?.envelope_id ?? null,
+    kind: envelope?.kind ?? null,
+    source: envelope?.source ?? null,
+    envelope_status: envelope?.status ?? null,
+    portable_artifact: result.portable_artifact ?? nextSteps?.git_visible_handoff ?? null,
+    delivery: result.delivery,
+    cwd_preflight: result.cwd_preflight,
+    routing: result.routing,
+    warnings: [],
+    next_steps: nextSteps ?? {},
+    output: {
+      mode: 'compact',
+      full_payload_available_with: '--output full',
+    },
+  };
 }
 
 export async function inboxIngestFilesCommand(options: InboxIngestFilesOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
@@ -1357,16 +1387,7 @@ export async function inboxArchitectProcessCommand(options: InboxArchitectProces
 
     const before = inboxEnvelopeToEvidenceState(existing);
     const taskSpec = taskSpecFromEnvelope(existing, options);
-    const taskResult = await taskCreateCommand({
-      cwd,
-      title: taskSpec.title,
-      goal: taskSpec.goal,
-      requiredWork: taskSpec.requiredWork,
-      criteria: taskSpec.criteria,
-      chapter: taskSpec.chapter,
-      dependsOn: taskSpec.dependsOn,
-      format: 'json',
-    });
+    const taskResult = await taskCreateFromInboxSpec(cwd, taskSpec);
     if (taskResult.exitCode !== ExitCode.SUCCESS) return taskResult;
 
     const task = taskResult.result as { task_number: number; task_id: string; file_path: string };
@@ -1790,8 +1811,7 @@ async function createTaskFromEnvelope(
     ?? criteriaFromPayload(payload)
     ?? defaultArchitectProcessCriteria(envelope);
 
-  return taskCreateCommand({
-    cwd: options.cwd,
+  return taskCreateFromInboxSpec(options.cwd ?? process.cwd(), {
     title,
     goal,
     context: contextFromEnvelope(envelope, payload),
@@ -1799,8 +1819,39 @@ async function createTaskFromEnvelope(
     criteria,
     chapter: stringField(payload, 'chapter') ?? 'Canonical Inbox Promotions',
     dependsOn: numberArrayCsvField(payload, 'depends_on'),
-    format: 'json',
   });
+}
+
+async function taskCreateFromInboxSpec(cwd: string, spec: {
+  title: string;
+  goal: string;
+  context?: string;
+  requiredWork: string;
+  criteria: string[];
+  chapter: string;
+  dependsOn?: string;
+}): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const tmpDir = join(resolve(cwd), '.ai', 'tmp');
+  await mkdir(tmpDir, { recursive: true });
+  const inputPath = join(tmpDir, `inbox-task-create-${randomUUID()}.json`);
+  await writeFile(inputPath, `${JSON.stringify({
+    title: spec.title,
+    goal: spec.goal,
+    context: spec.context,
+    required_work: spec.requiredWork,
+    acceptance_criteria: spec.criteria,
+    chapter: spec.chapter,
+    depends_on: spec.dependsOn,
+  }, null, 2)}\n`, 'utf8');
+  try {
+    return await taskCreateCommand({
+      cwd,
+      inputJson: inputPath,
+      format: 'json',
+    });
+  } finally {
+    await unlink(inputPath).catch(() => undefined);
+  }
 }
 
 function canCreateTaskFromEnvelope(envelope: InboxEnvelope): boolean {

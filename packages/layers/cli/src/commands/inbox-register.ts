@@ -61,6 +61,7 @@ export function registerInboxCommands(program: Command): void {
     .option('--payload-stdin', 'Read JSON payload from stdin', false)
     .option('--allow-empty-payload', 'Allow empty object payload for envelope kinds that normally require content', false)
     .option('--target-locus <locus>', 'Message routing authority target locus; defaults to local_site')
+    .option('--output <mode>', 'Output detail: compact|full|debug', 'compact')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[Record<string, unknown>]>({
@@ -79,6 +80,7 @@ export function registerInboxCommands(program: Command): void {
         payloadStdin: opts.payloadStdin as boolean | undefined,
         allowEmptyPayload: opts.allowEmptyPayload as boolean | undefined,
         targetLocus: opts.targetLocus as string | undefined,
+        output: opts.output as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }),
@@ -98,6 +100,7 @@ export function registerInboxCommands(program: Command): void {
     .option('--proposal <text>', 'Proposal line; repeatable', collectOption, [])
     .option('--recommendation <text>', 'Recommended handling')
     .option('--target-locus <locus>', 'Message routing authority target locus; defaults to local_site')
+    .option('--output <mode>', 'Output detail: compact|full|debug', 'compact')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[Record<string, unknown>]>({
@@ -116,6 +119,7 @@ export function registerInboxCommands(program: Command): void {
         proposal: opts.proposal as string[] | undefined,
         recommendation: opts.recommendation as string | undefined,
         targetLocus: opts.targetLocus as string | undefined,
+        output: opts.output as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }),
