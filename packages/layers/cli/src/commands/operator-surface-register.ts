@@ -7,6 +7,7 @@ import {
   operatorSurfaceBindFocusedCommand,
   operatorSurfaceIdentityAddCommand,
   operatorSurfaceLabelsBuildCommand,
+  operatorSurfaceSendCommand,
 } from './operator-surface.js';
 
 export function registerOperatorSurfaceCommands(program: Command): void {
@@ -106,6 +107,31 @@ export function registerOperatorSurfaceCommands(program: Command): void {
       invocation: (opts) => operatorSurfaceLabelsBuildCommand({
         site: opts.site as string | undefined,
         limit: opts.limit ? Number(opts.limit) : undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  surfaceCmd
+    .command('send')
+    .description('Validate or record bounded input send through an admitted Operator Surface binding')
+    .requiredOption('--identity <id>', 'Durable Operator Surface identity')
+    .requiredOption('--text <text>', 'Text to send; secret-like text is refused')
+    .option('--runtime-locus <locus>', 'Owning User/PC runtime locus')
+    .option('--dry-run', 'Validate binding and strategy without recording send evidence', false)
+    .option('--execute', 'Record bounded send evidence for the owning runtime locus', false)
+    .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'operator-surface send',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => operatorSurfaceSendCommand({
+        identity: opts.identity as string | undefined,
+        text: opts.text as string | undefined,
+        runtimeLocus: opts.runtimeLocus as string | undefined,
+        dryRun: opts.dryRun as boolean | undefined,
+        execute: opts.execute as boolean | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),

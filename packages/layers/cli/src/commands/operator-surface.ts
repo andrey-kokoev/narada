@@ -1,3 +1,7 @@
+import { existsSync } from 'node:fs';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { join, resolve } from 'node:path';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
@@ -42,6 +46,28 @@ export interface OperatorSurfaceBindingOptions {
   handle?: string;
   staleAfter?: string;
   format?: string;
+}
+
+export interface OperatorSurfaceSendOptions {
+  cwd?: string;
+  identity?: string;
+  runtimeLocus?: string;
+  text?: string;
+  dryRun?: boolean;
+  execute?: boolean;
+  format?: CliFormat;
+}
+
+interface OperatorSurfaceRuntimeBinding {
+  binding_id?: string;
+  identity_id: string;
+  runtime_locus?: string;
+  handle?: string;
+  transport?: string;
+  submit_strategy?: OperatorSurfaceSubmitStrategy;
+  input_capabilities?: OperatorSurfaceInputCapability[];
+  status?: 'active' | 'stale' | 'revoked';
+  stale_after?: string;
 }
 
 export interface OperatorSurfaceAgentInstantiateOptions {
@@ -102,6 +128,40 @@ function parseSubmitStrategy(value: string | undefined): OperatorSurfaceSubmitSt
     throw new Error(`Unsupported submit strategy: ${value}`);
   }
   return value.trim() as OperatorSurfaceSubmitStrategy;
+}
+
+function runtimeBindingPath(cwd: string): string {
+  return join(resolve(cwd), 'operator-surfaces', 'runtime-bindings.json');
+}
+
+async function readRuntimeBindings(cwd: string): Promise<OperatorSurfaceRuntimeBinding[]> {
+  const path = runtimeBindingPath(cwd);
+  if (!existsSync(path)) return [];
+  const parsed = JSON.parse(await readFile(path, 'utf8')) as { bindings?: OperatorSurfaceRuntimeBinding[] } | OperatorSurfaceRuntimeBinding[];
+  return Array.isArray(parsed) ? parsed : Array.isArray(parsed.bindings) ? parsed.bindings : [];
+}
+
+function isStaleBinding(binding: OperatorSurfaceRuntimeBinding, now = new Date()): boolean {
+  if (binding.status === 'stale' || binding.status === 'revoked') return true;
+  if (!binding.stale_after) return false;
+  const timestamp = Date.parse(binding.stale_after);
+  return Number.isFinite(timestamp) && timestamp <= now.getTime();
+}
+
+function looksSecretLike(text: string): boolean {
+  return /\b(password|passwd|secret|api[_ -]?key|token|bearer|private[_ -]?key)\b/i.test(text);
+}
+
+function textDigest(text: string): string {
+  return createHash('sha256').update(text).digest('hex');
+}
+
+async function writeOperatorSurfaceSendEvent(cwd: string, event: Record<string, unknown>): Promise<string> {
+  const dir = join(resolve(cwd), '.ai', 'operator-surface-events');
+  await mkdir(dir, { recursive: true });
+  const path = join(dir, `${String(event.event_id)}.json`);
+  await writeFile(path, `${JSON.stringify(event, null, 2)}\n`, 'utf8');
+  return path;
 }
 
 function fallbackBootstrapText(role: OperatorSurfaceAgentRole): string {
@@ -453,6 +513,135 @@ export async function operatorSurfaceBindFocusedCommand(
       blockers: known ? [] : [`identity not admitted: ${identity}`],
     },
   };
+}
+
+export async function operatorSurfaceSendCommand(
+  options: OperatorSurfaceSendOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  try {
+    const cwd = options.cwd ?? '.';
+    const identity = requireText(options.identity, '--identity');
+    const text = requireText(options.text, '--text');
+    const registry = await readOperatorSurfaceIdentities(cwd);
+    const admittedIdentity = registry.identities.find((entry) => entry.identity_id === identity);
+    if (!admittedIdentity) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          reason: 'identity_not_admitted',
+          identity,
+          mutation_performed: false,
+          unblock_command: `narada operator-surface agent instantiate --site <site-id-or-root> --role <role> --agent-kind codex_cli --by <principal> --identity ${identity}`,
+        },
+      };
+    }
+    if (looksSecretLike(text)) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          reason: 'secret_like_text_refused',
+          identity,
+          mutation_performed: false,
+          unblock_command: 'Route secrets through capability consent and secret references; do not send raw secret-like text through Operator Surface input.',
+        },
+      };
+    }
+
+    const bindings = (await readRuntimeBindings(cwd))
+      .filter((binding) => binding.identity_id === identity)
+      .filter((binding) => !options.runtimeLocus || binding.runtime_locus === options.runtimeLocus);
+    const activeBindings = bindings.filter((binding) => !isStaleBinding(binding));
+    if (bindings.length > 0 && activeBindings.length === 0) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          reason: 'stale_binding',
+          identity,
+          mutation_performed: false,
+          unblock_command: `narada operator-surface bind-focused --identity ${identity} --runtime-locus ${options.runtimeLocus ?? '<pc-or-user-site>'}`,
+        },
+      };
+    }
+    if (activeBindings.length === 0) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          reason: 'no_binding',
+          identity,
+          mutation_performed: false,
+          unblock_command: `narada operator-surface bind-focused --identity ${identity} --runtime-locus ${options.runtimeLocus ?? '<pc-or-user-site>'}`,
+        },
+      };
+    }
+    if (activeBindings.length > 1) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          reason: 'ambiguous_binding',
+          identity,
+          mutation_performed: false,
+          matching_bindings: activeBindings.map((binding) => ({
+            binding_id: binding.binding_id ?? null,
+            runtime_locus: binding.runtime_locus ?? null,
+            handle: binding.handle ?? null,
+          })),
+          unblock_command: `Pass --runtime-locus or run narada operator-surface bindings clean-stale --runtime-locus ${options.runtimeLocus ?? '<pc-or-user-site>'}`,
+        },
+      };
+    }
+
+    const binding = activeBindings[0]!;
+    const capabilities = binding.input_capabilities ?? admittedIdentity.input_capabilities ?? [];
+    const submitStrategy = binding.submit_strategy ?? admittedIdentity.submit_strategy ?? 'type_only';
+    if (!capabilities.includes('type_text') && !capabilities.includes('submit')) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          reason: 'missing_transport',
+          identity,
+          mutation_performed: false,
+          binding: {
+            binding_id: binding.binding_id ?? null,
+            runtime_locus: binding.runtime_locus ?? null,
+          },
+          unblock_command: `Admit or repair Operator Surface transport for ${identity}, then rerun narada operator-surface send --identity ${identity}.`,
+        },
+      };
+    }
+
+    const eventId = `ose_${Date.now()}_${textDigest(`${identity}:${text}`).slice(0, 12)}`;
+    const send = {
+      event_id: eventId,
+      identity,
+      runtime_locus: binding.runtime_locus ?? options.runtimeLocus ?? null,
+      resolved_runtime_handle: binding.handle ?? null,
+      transport: binding.transport ?? null,
+      submit_strategy: submitStrategy,
+      text_digest: textDigest(text),
+      text_length: text.length,
+      dry_run: Boolean(options.dryRun || !options.execute),
+      status: options.execute ? 'event_recorded_for_runtime_locus' : 'validated_dry_run',
+    };
+    const eventArtifact = options.execute ? await writeOperatorSurfaceSendEvent(cwd, send) : null;
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: {
+        status: 'success',
+        mutation_performed: Boolean(options.execute),
+        event_artifact: eventArtifact,
+        send,
+      },
+    };
+  } catch (error) {
+    return errorResult(error);
+  }
 }
 
 export async function operatorSurfaceBindingDeferredCommand(

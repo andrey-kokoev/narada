@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -11,6 +11,7 @@ import {
   operatorSurfaceBindFocusedCommand,
   operatorSurfaceIdentityAddCommand,
   operatorSurfaceLabelsBuildCommand,
+  operatorSurfaceSendCommand,
 } from '../../src/commands/operator-surface.js';
 
 function createMockContext(): CommandContext {
@@ -34,6 +35,24 @@ async function tempRepo(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'narada-operator-surface-'));
   tempDirs.push(dir);
   return dir;
+}
+
+async function admitIdentity(cwd: string, options: { capabilities?: string; submitStrategy?: string } = {}): Promise<void> {
+  await operatorSurfaceIdentityAddCommand({
+    cwd,
+    identityName: 'narada-proper-builder',
+    role: 'builder',
+    agentKind: 'codex_cli',
+    site: 'narada-proper',
+    by: 'operator',
+    inputCapabilities: options.capabilities ?? 'type_text,submit',
+    submitStrategy: options.submitStrategy ?? 'known_surface_submit',
+    format: 'json',
+  }, createMockContext());
+}
+
+async function writeBindings(cwd: string, bindings: unknown[]): Promise<void> {
+  await writeFile(join(cwd, 'operator-surfaces', 'runtime-bindings.json'), `${JSON.stringify({ bindings }, null, 2)}\n`, 'utf8');
 }
 
 afterEach(async () => {
@@ -339,6 +358,162 @@ describe('operator-surface commands', () => {
           },
         },
       }],
+    });
+  });
+
+  it('dry-runs operator-surface send through an admitted runtime binding', async () => {
+    const cwd = await tempRepo();
+    await admitIdentity(cwd);
+    await writeBindings(cwd, [{
+      binding_id: 'bind-1',
+      identity_id: 'narada-proper-builder',
+      runtime_locus: 'pc-site',
+      handle: 'hwnd:123',
+      transport: 'operator_surface_input',
+      submit_strategy: 'known_surface_submit',
+      input_capabilities: ['type_text', 'submit'],
+      status: 'active',
+    }]);
+
+    const result = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-proper-builder',
+      text: 'next',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      mutation_performed: false,
+      event_artifact: null,
+      send: {
+        identity: 'narada-proper-builder',
+        runtime_locus: 'pc-site',
+        resolved_runtime_handle: 'hwnd:123',
+        submit_strategy: 'known_surface_submit',
+        dry_run: true,
+        status: 'validated_dry_run',
+      },
+    });
+  });
+
+  it('records bounded operator-surface send evidence when executed', async () => {
+    const cwd = await tempRepo();
+    await admitIdentity(cwd);
+    await writeBindings(cwd, [{
+      binding_id: 'bind-1',
+      identity_id: 'narada-proper-builder',
+      runtime_locus: 'pc-site',
+      handle: 'hwnd:123',
+      transport: 'operator_surface_input',
+      submit_strategy: 'operator_confirmed_submit',
+      input_capabilities: ['type_text'],
+      status: 'active',
+    }]);
+
+    const result = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-proper-builder',
+      text: 'continue current task',
+      execute: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const payload = result.result as { event_artifact: string; send: { status: string; text_digest: string; text_length: number } };
+    expect(payload.send).toMatchObject({
+      status: 'event_recorded_for_runtime_locus',
+      text_length: 'continue current task'.length,
+    });
+    expect(payload.send.text_digest).toHaveLength(64);
+    expect(payload.event_artifact).toContain('.ai/operator-surface-events/ose_');
+    const event = JSON.parse(await readFile(payload.event_artifact, 'utf8')) as { identity: string; text_digest: string };
+    expect(event.identity).toBe('narada-proper-builder');
+    expect(event.text_digest).toBe(payload.send.text_digest);
+  });
+
+  it('reports missing operator-surface binding with an exact unblock command', async () => {
+    const cwd = await tempRepo();
+    await admitIdentity(cwd);
+
+    const result = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-proper-builder',
+      text: 'next',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      reason: 'no_binding',
+      unblock_command: 'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <pc-or-user-site>',
+    });
+  });
+
+  it('reports ambiguous operator-surface bindings with a runtime-locus unblock', async () => {
+    const cwd = await tempRepo();
+    await admitIdentity(cwd);
+    await writeBindings(cwd, [
+      { binding_id: 'bind-1', identity_id: 'narada-proper-builder', runtime_locus: 'pc-a', handle: 'hwnd:1', input_capabilities: ['type_text'], status: 'active' },
+      { binding_id: 'bind-2', identity_id: 'narada-proper-builder', runtime_locus: 'pc-b', handle: 'hwnd:2', input_capabilities: ['type_text'], status: 'active' },
+    ]);
+
+    const result = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-proper-builder',
+      text: 'next',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      reason: 'ambiguous_binding',
+      matching_bindings: [
+        { binding_id: 'bind-1', runtime_locus: 'pc-a' },
+        { binding_id: 'bind-2', runtime_locus: 'pc-b' },
+      ],
+      unblock_command: expect.stringContaining('Pass --runtime-locus'),
+    });
+  });
+
+  it('reports missing transport and refuses secret-like operator-surface text', async () => {
+    const cwd = await tempRepo();
+    await admitIdentity(cwd, { capabilities: '', submitStrategy: 'type_only' });
+    await writeBindings(cwd, [{
+      binding_id: 'bind-1',
+      identity_id: 'narada-proper-builder',
+      runtime_locus: 'pc-site',
+      handle: 'hwnd:123',
+      input_capabilities: [],
+      status: 'active',
+    }]);
+
+    const missingTransport = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-proper-builder',
+      text: 'next',
+      format: 'json',
+    }, createMockContext());
+    expect(missingTransport.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(missingTransport.result).toMatchObject({
+      reason: 'missing_transport',
+      unblock_command: expect.stringContaining('Admit or repair Operator Surface transport'),
+    });
+
+    const secretLike = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-proper-builder',
+      text: 'password is abc',
+      format: 'json',
+    }, createMockContext());
+    expect(secretLike.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(secretLike.result).toMatchObject({
+      reason: 'secret_like_text_refused',
+      unblock_command: expect.stringContaining('secret references'),
     });
   });
 

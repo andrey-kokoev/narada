@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-30T02:55:48.590Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T03:16:00.891Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-30T03:16:01.112Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Expose operator-surface send as canonical CLI front door
@@ -44,9 +53,9 @@ Operator-surface input currently works through User Site PowerShell carrier scri
 
 ## Acceptance Criteria
 
-- [ ] narada operator-surface send or equivalent exists and routes through the admitted operator-surface capability model
-- [ ] The command resolves aliases/identities through the declared User Site or runtime locus instead of hardcoding Windows paths
-- [ ] Dry-run validates the live binding and submit strategy that would be used for real submission
-- [ ] Real send emits bounded evidence including identity, resolved runtime handle, submit strategy, event artifact, and status
-- [ ] Failure output gives exact unblock commands for no binding, ambiguous binding, missing transport, stale binding, and refused secret-like text
-- [ ] Focused tests cover dry-run, successful planned send shape, missing binding, ambiguous binding, and missing transport cases
+- [x] narada operator-surface send or equivalent exists and routes through the admitted operator-surface capability model
+- [x] The command resolves aliases/identities through the declared User Site or runtime locus instead of hardcoding Windows paths
+- [x] Dry-run validates the live binding and submit strategy that would be used for real submission
+- [x] Real send emits bounded evidence including identity, resolved runtime handle, submit strategy, event artifact, and status
+- [x] Failure output gives exact unblock commands for no binding, ambiguous binding, missing transport, stale binding, and refused secret-like text
+- [x] Focused tests cover dry-run, successful planned send shape, missing binding, ambiguous binding, and missing transport cases

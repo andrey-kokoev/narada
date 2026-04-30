@@ -217,6 +217,15 @@ narada operator-surface bindings clean-stale
 
 In Narada proper these commands either refuse unknown identities or return `status: "deferred"` with the required runtime locus. The actual volatile-handle mutation belongs to the User/PC/runtime Site that can observe the handle and admit the binding. `--as self` resolves from governed runtime context such as `NARADA_AGENT_ID` / `NARADA_PRINCIPAL_ID` or an unambiguous active roster assignment, so the Operator does not need to remember the exact identity string during inhabited work.
 
+The input front door is:
+
+```bash
+narada operator-surface send --identity <id> --text <text> --dry-run
+narada operator-surface send --identity <id> --text <text> --execute
+```
+
+`send` validates an admitted durable identity and a Site/runtime-locus binding before accepting input. Dry-run returns the resolved runtime locus, handle, submit strategy, and text digest without mutation. Execute records bounded send evidence for the owning runtime locus; it does not hardcode Windows paths or treat Narada proper as the owner of volatile handles. Secret-like text is refused and must route through capability consent and secret-reference paths.
+
 Any agent inhabiting an Operator Surface should attempt self-binding during bootstrap:
 
 ```bash
