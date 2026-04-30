@@ -1,0 +1,35 @@
+{
+  "envelope_id": "env_22404261-c4a8-4abb-897a-1ea6a625919a",
+  "received_at": "2026-04-30T21:05:12.875Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-cpy.architect-chat"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-cpy.architect"
+  },
+  "payload": {
+    "title": "Operator-surface message sending needs PC-level serialization",
+    "summary": "If more than one operator surface attempts to send an operator-surface message at the same time, overlapping focus/clipboard/type/submit windows can interfere with each other. The current bridge has a timing-sensitive delivery phase, including stabilization waits, so concurrent senders should not run independently.",
+    "hazard": "Two or more send attempts can race during focus changes, clipboard replacement, input escrow, typed delivery, or submit delay; this may deliver text to the wrong surface, submit partial input, fail to restore focus, or corrupt operator attention state.",
+    "proposal": [
+      "Introduce a central PC-level operator-surface send intent queue owned by the PC runtime locus.",
+      "Treat each send as an intent that is admitted, serialized, executed, and evidenced by the PC-level queue worker.",
+      "Reject or queue overlapping sends rather than allowing concurrent Send-OperatorSurfaceInput.ps1 executions.",
+      "Use a lock/lease with timeout and stale-lock recovery for the active input bridge critical section.",
+      "Expose queue status and current active send in operator-surface health/doctor output.",
+      "Keep Site-level agents as requesters; the PC Site remains authority over focus/clipboard/input effects."
+    ],
+    "control_boundary": "The serialization point belongs at PC runtime locus because the shared resources are PC-local: foreground window, keyboard/mouse hooks, clipboard, HWND bindings, and submit timing.",
+    "acceptance_criteria": [
+      "Concurrent send requests cannot execute focus/clipboard/type/submit phases simultaneously.",
+      "Second send either waits in queue, receives busy/deferred status, or fails closed with repair guidance.",
+      "Evidence records ordering, requester, target identity, start/end time, and whether it was queued or rejected.",
+      "Interrupted/stale active sends can be recovered without leaving the queue permanently blocked."
+    ],
+    "source_context": "Observed while using operator-surface messaging to coordinate CPY/Narada agents; overlapping sends during the bridge delay window would be unsafe."
+  },
+  "status": "received"
+}
