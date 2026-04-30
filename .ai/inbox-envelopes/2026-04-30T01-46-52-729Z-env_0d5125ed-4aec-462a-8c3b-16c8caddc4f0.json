@@ -27,5 +27,32 @@
     ],
     "recommendation": "Treat as task-governance and architect-ergonomics execution work."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1104",
+    "promoted_at": "2026-04-30T01:50:06.984Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "inbox architect-process",
+    "target_result": {
+      "task": {
+        "status": "success",
+        "task_id": "20260430-1104-add-first-class-chapter-batch-commissioning-command",
+        "task_number": 1104,
+        "file_name": "20260430-1104-add-first-class-chapter-batch-commissioning-command.md",
+        "file_path": "/home/andrey/src/narada/.ai/do-not-open/tasks/20260430-1104-add-first-class-chapter-batch-commissioning-command.md",
+        "title": "Add first-class chapter batch commissioning command"
+      },
+      "assignment": {
+        "status": "success",
+        "task_id": "20260430-1104-add-first-class-chapter-batch-commissioning-command",
+        "agent_id": "builder",
+        "claimed_at": "2026-04-30T01:50:04.415Z",
+        "assignment_intent_id": "air_claim_1104_builder_1777513803803_7joyjy"
+      },
+      "builder": "builder",
+      "execution_performed": false
+    }
+  }
 }
