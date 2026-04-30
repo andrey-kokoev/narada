@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-30T17:27:40.073Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T18:04:13.361Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777572180224_mb41hv
+closed_at: 2026-04-30T18:04:32.306Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Improve Windows-safe task authoring and actionable handoff repair
@@ -44,8 +53,8 @@ Inbox envelope env_81d2e767-9f18-4acf-8e8e-bf3ae9a8845d reports Windows path tra
 
 ## Acceptance Criteria
 
-- [ ] Unreadable --input-json path returns a path/input error, not --title is required.
-- [ ] Windows-origin task authoring has a documented or implemented safe path.
-- [ ] Placeholder Required Work is refused or explicitly non-executable for normal Builder handoffs.
-- [ ] A guided repair command/path can make an underspecified task actionable and recheck actionability.
-- [ ] Tests cover Windows/path error, placeholder refusal, and guided repair behavior.
+- [x] Unreadable --input-json path returns a path/input error, not --title is required.
+- [x] Windows-origin task authoring has a documented or implemented safe path.
+- [x] Placeholder Required Work is refused or explicitly non-executable for normal Builder handoffs.
+- [x] A guided repair command/path can make an underspecified task actionable and recheck actionability.
+- [x] Tests cover Windows/path error, placeholder refusal, and guided repair behavior.

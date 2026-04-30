@@ -59,8 +59,7 @@ describe('task create operator', () => {
     expect(r.task_number).toBe(101);
     expect(r.task_id).toMatch(/^\d{8}-101-test-the-create-operator$/);
     expect(r.handoff_actionability).toMatchObject({
-      status: 'underspecified',
-      repair_command: 'narada task amend 101 --required-work <actionable-work-plan>',
+      status: 'actionable',
     });
 
     // File exists and has content
@@ -70,6 +69,7 @@ describe('task create operator', () => {
     expect(content).toContain('## Goal');
     expect(content).toContain('Test the create operator');
     expect(content).toContain('## Acceptance Criteria');
+    expect(content).not.toContain('1. TBD');
 
     // SQLite lifecycle row is observable through sanctioned read surface
     const listResult = await taskListCommand({ cwd: tempDir, format: 'json' });
@@ -128,7 +128,7 @@ describe('task create operator', () => {
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
-      handoff_actionability: { status: 'underspecified' },
+      handoff_actionability: { status: 'actionable' },
     });
     const r = result.result as Record<string, unknown>;
     expect(r.status).toBe('dry_run');
@@ -249,6 +249,57 @@ describe('task create operator', () => {
     } finally {
       store.db.close();
     }
+  });
+
+  it('returns input path errors before title validation for unreadable --input-json', async () => {
+    const result = await taskCreateCommand({
+      cwd: tempDir,
+      inputJson: 'missing-task-input.json',
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      error: expect.stringContaining("Failed to read --input-json path 'missing-task-input.json'"),
+    });
+    expect(JSON.stringify(result.result)).not.toContain('--title is required');
+  });
+
+  it('returns Windows path conversion guidance for native Windows --input-json paths', async () => {
+    const result = await taskCreateCommand({
+      cwd: tempDir,
+      inputJson: 'D:\\code\\narada\\task-input.json',
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      error: expect.stringContaining('Windows path'),
+    });
+    expect(JSON.stringify(result.result)).toContain('wslpath -u');
+    expect(JSON.stringify(result.result)).not.toContain('--title is required');
+  });
+
+  it('refuses explicit placeholder Required Work for executable task creation', async () => {
+    const result = await taskCreateCommand({
+      cwd: tempDir,
+      title: 'Placeholder handoff',
+      requiredWork: '1. TBD',
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      reason: 'task_handoff_underspecified',
+      handoff_actionability: {
+        status: 'underspecified',
+      },
+    });
+    const files = readdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'));
+    expect(files.filter((name) => name.includes('placeholder-handoff'))).toHaveLength(0);
   });
 
   it('refuses suspicious rich inline text and points to structured input', async () => {

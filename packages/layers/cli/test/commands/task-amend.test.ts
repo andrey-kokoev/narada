@@ -4,7 +4,7 @@ vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { taskAmendCommand } from '../../src/commands/task-amend.js';
+import { taskAmendCommand, taskMakeActionableCommand } from '../../src/commands/task-amend.js';
 import { taskReadCommand } from '../../src/commands/task-read.js';
 import { collectCriteriaValue, mergeCriteriaInputs } from '../../src/commands/task-authoring-register.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
@@ -246,6 +246,38 @@ describe('task amend operator', () => {
     const readResult = await taskReadCommand({ taskNumber: '207', cwd: tempDir, format: 'json' });
     const task = (readResult.result as { task: { required_work: string } }).task;
     expect(task.required_work).toContain('New step');
+  });
+
+  it('make-actionable repairs Required Work and rechecks handoff actionability', async () => {
+    createTask(tempDir, 209, 'claimed');
+    await taskAmendCommand({
+      taskNumber: '209',
+      by: 'operator-1',
+      requiredWork: '1. TBD',
+      format: 'json',
+      cwd: tempDir,
+    });
+
+    const result = await taskMakeActionableCommand({
+      taskNumber: '209',
+      by: 'operator-1',
+      requiredWork: '1. Inspect the failure.\n2. Apply the fix.\n3. Verify the result.',
+      format: 'json',
+      cwd: tempDir,
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      task_number: 209,
+      handoff_actionability: { status: 'actionable' },
+      next_step: 'narada task read 209 --format json',
+    });
+
+    const readResult = await taskReadCommand({ taskNumber: '209', cwd: tempDir, format: 'json' });
+    const task = (readResult.result as { task: { required_work: string; handoff_actionability: { status: string } } }).task;
+    expect(task.required_work).toContain('Apply the fix');
+    expect(task.handoff_actionability.status).toBe('actionable');
   });
 
   it('amends non-goals', async () => {

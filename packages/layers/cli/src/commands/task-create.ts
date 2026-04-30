@@ -75,7 +75,10 @@ function buildTaskSpec(options: {
     chapter: chapter ?? null,
     goal: goal || title,
     context: context ?? null,
-    required_work: requiredWork || '1. TBD',
+    required_work: requiredWork || [
+      '1. Replace this generated authoring guard with concrete Builder steps before assignment.',
+      '2. Run narada task read <task-number> --format json and confirm handoff_actionability.status is actionable.',
+    ].join('\n'),
     non_goals: [
       '- Do not expand scope beyond this task.',
       '- Do not create derivative task-status files.',
@@ -121,6 +124,11 @@ function numberValue(value: unknown): number | undefined {
 
 async function readStructuredInput(cwd: string, inputJson: string | undefined): Promise<Partial<TaskCreateOptions> | { error: string }> {
   if (!inputJson) return {};
+  if (/^[A-Za-z]:[\\/]/.test(inputJson)) {
+    return {
+      error: `Failed to read --input-json: Windows path '${inputJson}' is not readable from this POSIX/WSL locus. Use a WSL path, run the Windows Narada CLI from the Windows Site, or convert with: wslpath -u ${JSON.stringify(inputJson)}`,
+    };
+  }
   try {
     const raw = await readFile(resolve(cwd, inputJson), 'utf8');
     const parsed = JSON.parse(raw) as Record<string, unknown>;
@@ -143,7 +151,7 @@ async function readStructuredInput(cwd: string, inputJson: string | undefined): 
     };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    return { error: `Failed to read --input-json: ${msg}` };
+    return { error: `Failed to read --input-json path '${inputJson}': ${msg}` };
   }
 }
 
@@ -343,6 +351,19 @@ export async function taskCreateCommand(
     status: 'opened',
     requiredWork: spec.required_work,
   });
+
+  if (handoffActionability.status === 'underspecified' && !effective.dryRun) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: {
+        status: 'error',
+        reason: 'task_handoff_underspecified',
+        error: handoffActionability.reason,
+        handoff_actionability: handoffActionability,
+        repair_command: 'Provide concrete --required-work text, or create the task as a non-executable planning artifact through a chapter/planning path.',
+      },
+    };
+  }
 
   // ── Dry run: preview only ──
 

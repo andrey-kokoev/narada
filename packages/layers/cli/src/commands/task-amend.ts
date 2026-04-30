@@ -23,6 +23,7 @@ import {
   parseTaskSpecFromMarkdown,
   renderTaskBodyFromSpec,
 } from '../lib/task-spec.js';
+import { classifyTaskHandoffActionability } from '../lib/task-actionability.js';
 
 export interface TaskAmendOptions {
   taskNumber: string;
@@ -36,6 +37,14 @@ export interface TaskAmendOptions {
   checkAllCriteria?: boolean;
   dependsOn?: number[];
   fromFile?: string;
+  by: string;
+  format?: 'json' | 'human' | 'auto';
+  cwd?: string;
+}
+
+export interface TaskMakeActionableOptions {
+  taskNumber: string;
+  requiredWork?: string;
   by: string;
   format?: 'json' | 'human' | 'auto';
   cwd?: string;
@@ -325,4 +334,53 @@ export async function taskAmendCommand(
         changes,
     },
   };
+}
+
+export async function taskMakeActionableCommand(
+  options: TaskMakeActionableOptions,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  if (!options.requiredWork?.trim()) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: {
+        status: 'error',
+        error: '--required-work is required and must contain concrete executable steps.',
+      },
+    };
+  }
+  const amend = await taskAmendCommand({
+    taskNumber: options.taskNumber,
+    requiredWork: options.requiredWork,
+    by: options.by,
+    format: 'json',
+    cwd: options.cwd,
+  });
+  if (amend.exitCode !== ExitCode.SUCCESS) return amend;
+
+  const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
+  const store = openTaskLifecycleStore(cwd);
+  try {
+    const taskNumber = Number(options.taskNumber);
+    const spec = store.getTaskSpecByNumber(taskNumber);
+    const lifecycle = store.getLifecycleByNumber(taskNumber);
+    const handoffActionability = classifyTaskHandoffActionability({
+      taskNumber,
+      status: lifecycle?.status ?? null,
+      requiredWork: spec?.required_work_markdown ?? options.requiredWork,
+    });
+    return {
+      exitCode: handoffActionability.status === 'underspecified' ? ExitCode.GENERAL_ERROR : ExitCode.SUCCESS,
+      result: {
+        status: handoffActionability.status === 'underspecified' ? 'error' : 'success',
+        task_number: taskNumber,
+        amended_by: options.by,
+        handoff_actionability: handoffActionability,
+        next_step: handoffActionability.status === 'underspecified'
+          ? handoffActionability.repair_command
+          : `narada task read ${taskNumber} --format json`,
+      },
+    };
+  } finally {
+    store.db.close();
+  }
 }

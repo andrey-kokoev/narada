@@ -1,7 +1,7 @@
 import type { Command } from 'commander';
 import { taskAllocateCommand } from './task-allocate.js';
 import { taskCreateCommand } from './task-create.js';
-import { taskAmendCommand } from './task-amend.js';
+import { taskAmendCommand, taskMakeActionableCommand } from './task-amend.js';
 import { taskPromoteRecommendationCommand } from './task-promote-recommendation.js';
 import { directCommandAction } from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
@@ -31,6 +31,8 @@ export function registerTaskAuthoringCommands(taskCmd: Command): void {
     .description('Create a standalone task (allocate number + write spec + init lifecycle)')
     .option('--title <title>', 'Task title; optional when --input-json supplies title')
     .option('--goal <text>', 'Task goal (defaults to title)')
+    .option('--context <text>', 'Task context')
+    .option('--required-work <text>', 'Concrete executable Required Work; use --input-json for multiline text')
     .option('--chapter <name>', 'Chapter name for task grouping')
     .option('--depends-on <numbers>', 'Comma-separated dependency task numbers')
     .option('--criteria <text>', 'Acceptance criterion; repeatable; preserves commas inside the criterion', collectCriteriaValue, [])
@@ -50,6 +52,8 @@ export function registerTaskAuthoringCommands(taskCmd: Command): void {
         return taskCreateCommand({
           title: opts.title as string | undefined,
           goal: opts.goal as string | undefined,
+          context: opts.context as string | undefined,
+          requiredWork: opts.requiredWork as string | undefined,
           chapter: opts.chapter as string | undefined,
           dependsOn: opts.dependsOn as string | undefined,
           criteria: mergeCriteriaInputs(opts.criteria, opts.criteriaCsv),
@@ -98,6 +102,26 @@ export function registerTaskAuthoringCommands(taskCmd: Command): void {
         checkAllCriteria: opts.checkAllCriteria as boolean | undefined,
         dependsOn: opts.dependsOn ? String(opts.dependsOn).split(',').map((s: string) => Number(s.trim())).filter((n: number) => Number.isFinite(n)) : undefined,
         fromFile: opts.fromFile as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+        cwd: opts.cwd as string | undefined,
+      }),
+    }));
+
+  taskCmd
+    .command('make-actionable <task-number>')
+    .description('Guided repair for an underspecified executable task handoff')
+    .requiredOption('--by <id>', 'Operator or agent ID performing the repair')
+    .requiredOption('--required-work <text>', 'Concrete executable Required Work; use shell-safe quoting or a task amend --from-file path for larger changes')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .action(directCommandAction<[string, Record<string, unknown>]>({
+      command: 'task make-actionable',
+      emit: emitCommandResult,
+      format: (_taskNumber: string, opts: Record<string, unknown>) => opts.format,
+      invocation: (taskNumber, opts) => taskMakeActionableCommand({
+        taskNumber,
+        by: opts.by as string,
+        requiredWork: opts.requiredWork as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
         cwd: opts.cwd as string | undefined,
       }),
