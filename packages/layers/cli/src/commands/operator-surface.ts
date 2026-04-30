@@ -8,6 +8,7 @@ import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import {
   makeOperatorSurfaceLabel,
   operatorSurfaceIdentityPath,
+  operatorSurfaceDir,
   readOperatorSurfaceIdentities,
   writeOperatorSurfaceIdentities,
   type OperatorSurfaceIdentity,
@@ -15,7 +16,7 @@ import {
   type OperatorSurfaceIdentityRegistry,
   type OperatorSurfaceSubmitStrategy,
 } from '../lib/operator-surface-registry.js';
-import { loadRoster, resolveTaskStatus } from '../lib/task-governance.js';
+import { loadRoster, saveRoster, resolveTaskStatus } from '../lib/task-governance.js';
 import { sitesAgentBootstrapCommand } from './sites.js';
 import { grantEffectiveStatus, readCapabilityRegistry, validateCredentialRef } from '../lib/capability-consent-registry.js';
 import { agentAddressResolutionPublic, resolveAgentAddress, type AgentAddressResolution } from '../lib/agent-address.js';
@@ -33,6 +34,16 @@ export interface OperatorSurfaceIdentityAddOptions {
   submitStrategy?: string;
   by?: string;
   format?: string;
+}
+
+export interface OperatorSurfaceIdentityRenameOptions {
+  cwd?: string;
+  fromIdentity?: string;
+  toIdentity?: string;
+  by?: string;
+  label?: string;
+  allowActiveAssignment?: boolean;
+  format?: CliFormat;
 }
 
 export interface OperatorSurfaceLabelsBuildOptions {
@@ -154,6 +165,7 @@ function normalizeAlias(value: string): string {
 function operatorSurfaceAliases(identity: OperatorSurfaceIdentity): string[] {
   const aliases = new Set([
     identity.identity_id,
+    ...(identity.previous_identity_ids ?? []),
     identity.label,
     identity.role,
     `${identity.site_id}-${identity.role}`,
@@ -222,6 +234,10 @@ function sitePrefixFromAddress(value: string): string | null {
   const trimmed = value.trim();
   const dot = trimmed.lastIndexOf('.');
   return dot > 0 && dot < trimmed.length - 1 ? trimmed.slice(0, dot) : null;
+}
+
+function sitePrefixFromIdentityId(value: string): string | null {
+  return sitePrefixFromAddress(value);
 }
 
 function isBareRoleAddress(value: string): boolean {
@@ -399,6 +415,20 @@ async function readVisibleLabelEvidence(cwd: string): Promise<OperatorSurfaceVis
   if (!existsSync(path)) return [];
   const parsed = JSON.parse(await readFile(path, 'utf8')) as { labels?: OperatorSurfaceVisibleLabelEvidence[] } | OperatorSurfaceVisibleLabelEvidence[];
   return Array.isArray(parsed) ? parsed : Array.isArray(parsed.labels) ? parsed.labels : [];
+}
+
+async function writeRuntimeBindings(cwd: string, bindings: OperatorSurfaceRuntimeBinding[]): Promise<string> {
+  const path = runtimeBindingPath(cwd);
+  await mkdir(operatorSurfaceDir(cwd), { recursive: true });
+  await writeFile(path, `${JSON.stringify({ bindings }, null, 2)}\n`, 'utf8');
+  return path;
+}
+
+async function writeVisibleLabelEvidence(cwd: string, labels: OperatorSurfaceVisibleLabelEvidence[]): Promise<string> {
+  const path = visibleLabelEvidencePath(cwd);
+  await mkdir(operatorSurfaceDir(cwd), { recursive: true });
+  await writeFile(path, `${JSON.stringify({ labels }, null, 2)}\n`, 'utf8');
+  return path;
 }
 
 function visibleLabelForIdentity(
@@ -773,6 +803,178 @@ export async function operatorSurfaceIdentityAddCommand(
         registry_path: path,
         identity: record,
         runtime_binding_mutated: false,
+      },
+    };
+  } catch (error) {
+    return errorResult(error);
+  }
+}
+
+export async function operatorSurfaceIdentityRenameCommand(
+  options: OperatorSurfaceIdentityRenameOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  try {
+    const cwd = options.cwd ?? '.';
+    const oldIdentityId = requireText(options.fromIdentity, '--from');
+    const newIdentityId = requireText(options.toIdentity, '--to');
+    const by = requireText(options.by, '--by');
+    if (oldIdentityId === newIdentityId) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          reason: 'identity_unchanged',
+          mutation_performed: false,
+        },
+      };
+    }
+
+    const registry = await readOperatorSurfaceIdentities(cwd);
+    const oldIdentity = registry.identities.find((entry) => entry.identity_id === oldIdentityId);
+    if (!oldIdentity) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          reason: 'identity_not_found',
+          mutation_performed: false,
+          old_identity_id: oldIdentityId,
+          unblock_command: `narada operator-surface identity add ${oldIdentityId} --site <site-id> --role <role> --agent-kind <kind> --by ${by}`,
+        },
+      };
+    }
+    const newSitePrefix = sitePrefixFromIdentityId(newIdentityId);
+    if (newSitePrefix && newSitePrefix !== oldIdentity.site_id) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          reason: 'site_locus_mismatch',
+          mutation_performed: false,
+          old_identity_id: oldIdentityId,
+          new_identity_id: newIdentityId,
+          old_site_id: oldIdentity.site_id,
+          requested_new_site_id: newSitePrefix,
+          unblock_command: `Use a new identity under Site ${oldIdentity.site_id}, or perform a governed cross-Site handoff instead of identity rename.`,
+        },
+      };
+    }
+    const existingNewIdentity = registry.identities.find((entry) => entry.identity_id === newIdentityId);
+    if (existingNewIdentity) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          reason: 'new_identity_already_exists',
+          mutation_performed: false,
+          old_identity_id: oldIdentityId,
+          new_identity_id: newIdentityId,
+          unblock_command: `Choose an unclaimed --to identity or inspect: narada operator-surface labels build --site ${oldIdentity.site_id} --format json`,
+        },
+      };
+    }
+
+    const roster = await loadRoster(cwd).catch(() => null);
+    const rosterAgent = roster?.agents.find((agent) => agent.agent_id === oldIdentityId) ?? null;
+    const activeAssignment = Boolean(rosterAgent && (rosterAgent.task != null || rosterAgent.status === 'working' || rosterAgent.status === 'reviewing'));
+    if (activeAssignment && !options.allowActiveAssignment) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          reason: 'active_assignment_requires_explicit_consent',
+          mutation_performed: false,
+          old_identity_id: oldIdentityId,
+          new_identity_id: newIdentityId,
+          active_task: rosterAgent?.task ?? null,
+          unblock_command: `Complete or release active work for ${oldIdentityId}, or rerun with --allow-active-assignment to migrate the roster pointer intentionally.`,
+        },
+      };
+    }
+
+    const now = new Date().toISOString();
+    const migrationId = `osim_${Date.now()}_${createHash('sha256').update(`${oldIdentityId}->${newIdentityId}:${now}`).digest('hex').slice(0, 12)}`;
+    const migrationDir = join(operatorSurfaceDir(cwd), 'identity-migrations');
+    await mkdir(migrationDir, { recursive: true });
+    const migrationPath = join(migrationDir, `${migrationId}.json`);
+    const migration = {
+      migration_id: migrationId,
+      old_identity_id: oldIdentityId,
+      new_identity_id: newIdentityId,
+      site_id: oldIdentity.site_id,
+      role: oldIdentity.role,
+      migrated_by: by,
+      migrated_at: now,
+      immutable_history_posture: 'old evidence remains attributed to old_identity_id; current addressability resolves through previous_identity_ids alias',
+      authority_limits: [
+        'durable_identity_registry_mutated_here',
+        'runtime_bindings_are_projection_records_updated_only_when present_in_same_site_root',
+        'historical_evidence_not_rewritten',
+      ],
+    };
+    await writeFile(migrationPath, `${JSON.stringify(migration, null, 2)}\n`, 'utf8');
+
+    oldIdentity.identity_id = newIdentityId;
+    oldIdentity.previous_identity_ids = [...new Set([...(oldIdentity.previous_identity_ids ?? []), oldIdentityId])];
+    oldIdentity.label = options.label?.trim() || oldIdentity.label;
+    oldIdentity.updated_at = now;
+    oldIdentity.migration_history = [
+      ...(oldIdentity.migration_history ?? []),
+      {
+        old_identity_id: oldIdentityId,
+        new_identity_id: newIdentityId,
+        migrated_by: by,
+        migrated_at: now,
+        evidence_path: migrationPath,
+      },
+    ];
+    const registryPath = await writeOperatorSurfaceIdentities(cwd, registry);
+
+    const bindings = await readRuntimeBindings(cwd);
+    const migratedBindings = bindings.map((binding) => (
+      binding.identity_id === oldIdentityId
+        ? { ...binding, identity_id: newIdentityId }
+        : binding
+    ));
+    const bindingsUpdated = JSON.stringify(bindings) !== JSON.stringify(migratedBindings);
+    const bindingPath = bindingsUpdated ? await writeRuntimeBindings(cwd, migratedBindings) : null;
+
+    const labels = await readVisibleLabelEvidence(cwd);
+    const migratedLabels = labels.map((label) => (
+      label.identity_id === oldIdentityId
+        ? { ...label, identity_id: newIdentityId }
+        : label
+    ));
+    const labelsUpdated = JSON.stringify(labels) !== JSON.stringify(migratedLabels);
+    const labelPath = labelsUpdated ? await writeVisibleLabelEvidence(cwd, migratedLabels) : null;
+
+    let rosterUpdated = false;
+    if (rosterAgent && roster) {
+      rosterAgent.agent_id = newIdentityId;
+      rosterAgent.updated_at = now;
+      await saveRoster(cwd, roster);
+      rosterUpdated = true;
+    }
+
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: {
+        status: 'success',
+        mutation_performed: true,
+        old_identity_id: oldIdentityId,
+        new_identity_id: newIdentityId,
+        role: oldIdentity.role,
+        site_id: oldIdentity.site_id,
+        registry_path: registryPath,
+        migration_evidence_path: migrationPath,
+        projection_updates: {
+          runtime_bindings: bindingsUpdated ? { status: 'updated', path: bindingPath } : { status: 'none' },
+          visible_labels: labelsUpdated ? { status: 'updated', path: labelPath } : { status: 'none' },
+          roster: rosterUpdated ? { status: 'updated' } : { status: 'none' },
+        },
+        immutable_history_preserved: true,
+        current_addressability_aliases: operatorSurfaceAliases(oldIdentity),
       },
     };
   } catch (error) {

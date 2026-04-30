@@ -15,12 +15,14 @@ import {
   operatorSurfaceBindingDeferredCommand,
   operatorSurfaceBindFocusedCommand,
   operatorSurfaceIdentityAddCommand,
+  operatorSurfaceIdentityRenameCommand,
   operatorSurfaceLabelsBuildCommand,
   operatorSurfaceSendCommand,
   operatorSurfaceStatusCommand,
   operatorSurfaceVoiceTranscriptionCheckCommand,
 } from '../../src/commands/operator-surface.js';
 import { capabilityGrantCommand } from '../../src/commands/capability.js';
+import { saveRoster } from '../../src/lib/task-governance.js';
 
 function createMockContext(): CommandContext {
   const logger = {
@@ -270,6 +272,190 @@ describe('operator-surface commands', () => {
           label: 'Existing Architect',
         },
       },
+    });
+  });
+
+  it('renames an operator-surface identity while preserving role alias and migration evidence', async () => {
+    const cwd = await tempRepo();
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-andrey.architect',
+      role: 'architect',
+      agentKind: 'codex_cli',
+      site: 'narada-andrey',
+      label: 'Narada Architect',
+      by: 'operator',
+      inputCapabilities: 'type_text,submit',
+      submitStrategy: 'known_surface_submit',
+      format: 'json',
+    }, createMockContext());
+    await writeBindings(cwd, [
+      { binding_id: 'bind-1', identity_id: 'narada-andrey.architect', runtime_locus: 'pc-site', handle: 'hwnd:1', input_capabilities: ['type_text'], status: 'active' },
+    ]);
+    await writeVisibleLabels(cwd, [
+      { identity_id: 'narada-andrey.architect', site_id: 'narada-andrey', role: 'architect', label: 'Narada Architect', runtime_locus: 'pc-site', status: 'visible' },
+    ]);
+
+    const result = await operatorSurfaceIdentityRenameCommand({
+      cwd,
+      fromIdentity: 'narada-andrey.architect',
+      toIdentity: 'narada-andrey.Kevin',
+      by: 'operator',
+      label: 'Kevin',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      old_identity_id: 'narada-andrey.architect',
+      new_identity_id: 'narada-andrey.Kevin',
+      role: 'architect',
+      immutable_history_preserved: true,
+      projection_updates: {
+        runtime_bindings: { status: 'updated' },
+        visible_labels: { status: 'updated' },
+      },
+      current_addressability_aliases: expect.arrayContaining(['narada-andrey.Kevin', 'narada-andrey.architect', 'architect']),
+    });
+    const registry = JSON.parse(await readFile(join(cwd, 'operator-surfaces', 'identities.json'), 'utf8')) as { identities: Array<Record<string, unknown>> };
+    expect(registry.identities).toHaveLength(1);
+    expect(registry.identities[0]).toMatchObject({
+      identity_id: 'narada-andrey.Kevin',
+      previous_identity_ids: ['narada-andrey.architect'],
+      role: 'architect',
+      label: 'Kevin',
+    });
+    expect(existsSync(String((result.result as { migration_evidence_path: string }).migration_evidence_path))).toBe(true);
+    const bindings = JSON.parse(await readFile(join(cwd, 'operator-surfaces', 'runtime-bindings.json'), 'utf8')) as { bindings: Array<Record<string, unknown>> };
+    expect(bindings.bindings[0]?.identity_id).toBe('narada-andrey.Kevin');
+  });
+
+  it('fails identity rename closed when active assignment exists without explicit consent', async () => {
+    const cwd = await tempRepo();
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-proper-builder',
+      role: 'builder',
+      agentKind: 'codex_cli',
+      site: 'narada-proper',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+    await saveRoster(cwd, {
+      version: 2,
+      updated_at: '2026-04-30T16:00:00.000Z',
+      agents: [{
+        agent_id: 'narada-proper-builder',
+        role: 'builder',
+        capabilities: ['execute'],
+        first_seen_at: '2026-04-30T16:00:00.000Z',
+        last_active_at: '2026-04-30T16:00:00.000Z',
+        status: 'working',
+        task: 1139,
+        last_done: null,
+        updated_at: '2026-04-30T16:00:00.000Z',
+      }],
+    });
+
+    const result = await operatorSurfaceIdentityRenameCommand({
+      cwd,
+      fromIdentity: 'narada-proper-builder',
+      toIdentity: 'narada-proper.Kevin',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      reason: 'active_assignment_requires_explicit_consent',
+      mutation_performed: false,
+      active_task: 1139,
+      unblock_command: expect.stringContaining('--allow-active-assignment'),
+    });
+  });
+
+  it('refuses identity rename across Site loci', async () => {
+    const cwd = await tempRepo();
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-andrey.architect',
+      role: 'architect',
+      agentKind: 'codex_cli',
+      site: 'narada-andrey',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    const result = await operatorSurfaceIdentityRenameCommand({
+      cwd,
+      fromIdentity: 'narada-andrey.architect',
+      toIdentity: 'other-site.Kevin',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      reason: 'site_locus_mismatch',
+      mutation_performed: false,
+      old_site_id: 'narada-andrey',
+      requested_new_site_id: 'other-site',
+      unblock_command: expect.stringContaining('governed cross-Site handoff'),
+    });
+  });
+
+  it('migrates active roster pointer when identity rename is explicitly allowed', async () => {
+    const cwd = await tempRepo();
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-proper-builder',
+      role: 'builder',
+      agentKind: 'codex_cli',
+      site: 'narada-proper',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+    await saveRoster(cwd, {
+      version: 2,
+      updated_at: '2026-04-30T16:00:00.000Z',
+      agents: [{
+        agent_id: 'narada-proper-builder',
+        role: 'builder',
+        capabilities: ['execute'],
+        first_seen_at: '2026-04-30T16:00:00.000Z',
+        last_active_at: '2026-04-30T16:00:00.000Z',
+        status: 'working',
+        task: 1139,
+        last_done: null,
+        updated_at: '2026-04-30T16:00:00.000Z',
+      }],
+    });
+
+    const result = await operatorSurfaceIdentityRenameCommand({
+      cwd,
+      fromIdentity: 'narada-proper-builder',
+      toIdentity: 'narada-proper.Kevin',
+      by: 'operator',
+      allowActiveAssignment: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      projection_updates: {
+        roster: { status: 'updated' },
+      },
+    });
+    const status = await operatorSurfaceStatusCommand({ cwd, site: 'narada-proper', format: 'json' }, createMockContext());
+    expect(status.result).toMatchObject({
+      agents: [expect.objectContaining({
+        identity_id: 'narada-proper.Kevin',
+        work_status: 'working',
+        current_task: 1139,
+      })],
     });
   });
 

@@ -6,6 +6,7 @@ import {
   operatorSurfaceBindingDeferredCommand,
   operatorSurfaceBindFocusedCommand,
   operatorSurfaceIdentityAddCommand,
+  operatorSurfaceIdentityRenameCommand,
   operatorSurfaceLabelsBuildCommand,
   operatorSurfaceSendCommand,
   operatorSurfaceStatusCommand,
@@ -89,6 +90,31 @@ export function registerOperatorSurfaceCommands(program: Command): void {
         roleAffinityColor: opts.roleAffinityColor as string | undefined,
         inputCapabilities: opts.inputCapabilities as string | undefined,
         submitStrategy: opts.submitStrategy as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  identityCmd
+    .command('rename')
+    .description('Governedly migrate an Operator Surface identity without rewriting historical evidence')
+    .requiredOption('--from <identity-id>', 'Existing durable identity id')
+    .requiredOption('--to <identity-id>', 'New durable identity id')
+    .requiredOption('--by <principal>', 'Principal authorizing the migration')
+    .option('--label <label>', 'Optional replacement visible label')
+    .option('--allow-active-assignment', 'Intentionally migrate current roster pointer for active work', false)
+    .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'operator-surface identity rename',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => operatorSurfaceIdentityRenameCommand({
+        fromIdentity: opts.from as string | undefined,
+        toIdentity: opts.to as string | undefined,
+        by: opts.by as string | undefined,
+        label: opts.label as string | undefined,
+        allowActiveAssignment: opts.allowActiveAssignment as boolean | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),

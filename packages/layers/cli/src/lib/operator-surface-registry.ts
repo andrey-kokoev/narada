@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 
 export interface OperatorSurfaceIdentity {
   identity_id: string;
+  previous_identity_ids?: string[];
   site_id: string;
   role: string;
   agent_kind: string;
@@ -13,6 +14,15 @@ export interface OperatorSurfaceIdentity {
   admitted_at: string;
   updated_at: string;
   authority_limits: string[];
+  migration_history?: OperatorSurfaceIdentityMigration[];
+}
+
+export interface OperatorSurfaceIdentityMigration {
+  old_identity_id: string;
+  new_identity_id: string;
+  migrated_by: string;
+  migrated_at: string;
+  evidence_path?: string;
 }
 
 export type OperatorSurfaceInputCapability =

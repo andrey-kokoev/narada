@@ -1,5 +1,16 @@
 ---
-status: opened
+status: closed
+amended_by: builder
+amended_at: 2026-04-30T17:35:30.400Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T17:40:34.957Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777570804751_cxlh4w
+closed_at: 2026-04-30T17:40:49.569Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add governed Operator Surface identity rename and migration command
@@ -18,7 +29,7 @@ Inbox envelope env_09bc9fa6-68c8-4754-99f7-3be5a7dccc99 reports the User Site wa
 
 ## Required Work
 
-1. TBD
+1. Inspect the existing Operator Surface identity persistence, binding, roster, and task ownership references for rename-sensitive fields. 2. Implement a sanctioned Operator Surface identity rename/migration command or bounded command stub at the owning CLI layer. 3. Preserve role metadata while recording old_identity to new_identity migration evidence. 4. Update aliases, labels, bindings, capability announcements, and input strategies when safe, or fail closed with exact repair commands for unsupported surfaces. 5. Preserve historical immutable evidence attribution to the old identity while making current addressability resolve to the new identity. 6. Add focused tests for simple rename, active assignment handling, multi-locus refusal, immutable evidence preservation, and role-alias preservation. 7. Verify through TIZ, prove criteria, report, close, commit, push, then continue the builder work loop.
 
 ## Non-Goals
 
@@ -29,6 +40,7 @@ Inbox envelope env_09bc9fa6-68c8-4754-99f7-3be5a7dccc99 reports the User Site wa
 ## Execution Notes
 
 <!-- Record what was done, decisions made, and files changed during execution. -->
+- Amended by builder at 2026-04-30T17:35:30.400Z: required work
 
 ## Verification
 
@@ -36,9 +48,9 @@ Inbox envelope env_09bc9fa6-68c8-4754-99f7-3be5a7dccc99 reports the User Site wa
 
 ## Acceptance Criteria
 
-- [ ] A sanctioned identity rename/migration command or command stub exists for Operator Surface identities.
-- [ ] The command preserves role metadata and records old_identity -> new_identity migration evidence.
-- [ ] Aliases, labels, bindings, capability announcements, and input strategies are updated or explicitly deferred with exact follow-up commands.
-- [ ] Task roster/lifecycle references are migrated safely or the command fails closed with exact sanctioned repair commands.
-- [ ] Historical immutable evidence remains attributable to the old identity while current addressability resolves to the new identity.
-- [ ] Tests cover simple rename, active assignment, multi-locus refusal, immutable evidence preservation, and role-alias preservation.
+- [x] A sanctioned identity rename/migration command or command stub exists for Operator Surface identities.
+- [x] The command preserves role metadata and records old_identity -> new_identity migration evidence.
+- [x] Aliases, labels, bindings, capability announcements, and input strategies are updated or explicitly deferred with exact follow-up commands.
+- [x] Task roster/lifecycle references are migrated safely or the command fails closed with exact sanctioned repair commands.
+- [x] Historical immutable evidence remains attributable to the old identity while current addressability resolves to the new identity.
+- [x] Tests cover simple rename, active assignment, multi-locus refusal, immutable evidence preservation, and role-alias preservation.
