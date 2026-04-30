@@ -85,6 +85,10 @@ describe('sitesInitCommand', () => {
     delete process.env.NARADA_EXECUTOR_RUNTIME;
     delete process.env.COMPUTERNAME;
     delete process.env.HOSTNAME;
+    delete process.env.NARADA_WINDOWS_TOOL_WINDOWS_TERMINAL;
+    delete process.env.NARADA_WINDOWS_TOOL_KOMOREBI;
+    delete process.env.NARADA_WINDOWS_TOOL_YASB;
+    delete process.env.NARADA_WINDOWS_TOOL_POWERSHELL;
     process.env.USERPROFILE = 'C:\\Users\\Andrey';
     process.env.USERNAME = 'Andrey';
   });
@@ -467,6 +471,9 @@ describe('sitesInitCommand', () => {
       pc_site_id: string;
       pc_identity_source: string;
       validation_commands: string[];
+      substrate_readiness: Array<{ name: string; status: string; authority_locus: string; unblock_command?: string }>;
+      adapter_plan: Array<{ adapter: string; authority_locus: string; dry_run: boolean; execute_required: boolean; mutation_performed: boolean }>;
+      evidence: { bounded: boolean; raw_sqlite_read: boolean; direct_task_file_inspection: boolean; residual_manual_steps: unknown[] };
       user: { config: { locus: { authority_locus: string }; sync: { posture: string }; execution: { surface: string; target_authority_locus: string } } };
       pc: { config: { locus: { authority_locus: string }; execution: { surface: string; target_authority_locus: string; path_translation: { wsl_path: string }; permission_posture: string } } };
     };
@@ -488,8 +495,73 @@ describe('sitesInitCommand', () => {
     expect(data.validation_commands).toEqual([
       'narada sites doctor andrey-user --authority-locus user',
       'narada sites doctor desktop-sunroom --authority-locus pc',
+      'narada doctor --bootstrap --format json',
+      'narada operator-surface labels build --site <site-id-or-root> --format json',
     ]);
+    expect(data.substrate_readiness.map((check) => check.name)).toEqual([
+      'windows_terminal_available',
+      'komorebi_available',
+      'yasb_available',
+      'powershell_available',
+      'powershell_execution_policy_posture',
+      'wsl_path_translation',
+      'narada_cli_readiness',
+    ]);
+    expect(data.adapter_plan).toEqual(expect.arrayContaining([
+      expect.objectContaining({ adapter: 'windows_terminal_profile', authority_locus: 'windows_user', dry_run: true, execute_required: true, mutation_performed: false }),
+      expect.objectContaining({ adapter: 'komorebi_focus_rule', authority_locus: 'windows_pc', dry_run: true, execute_required: true, mutation_performed: false }),
+      expect.objectContaining({ adapter: 'yasb_focus_affordance', authority_locus: 'windows_user', dry_run: true, execute_required: true, mutation_performed: false }),
+    ]));
+    expect(data.evidence).toMatchObject({ bounded: true, raw_sqlite_read: false, direct_task_file_inspection: false });
     expect(mockRegistry.registerSite).not.toHaveBeenCalled();
+  });
+
+  it('reports exact Windows onboarding unblocks for missing Komorebi and YASB', async () => {
+    process.env.NARADA_EXECUTOR_RUNTIME = 'wsl';
+    process.env.COMPUTERNAME = 'DESKTOP-SUNROOM';
+    process.env.NARADA_WINDOWS_TOOL_WINDOWS_TERMINAL = 'present';
+    process.env.NARADA_WINDOWS_TOOL_KOMOREBI = 'missing';
+    process.env.NARADA_WINDOWS_TOOL_YASB = 'missing';
+    process.env.NARADA_WINDOWS_TOOL_POWERSHELL = 'present';
+
+    const result = await sitesBootstrapWindowsCommand({ format: 'json' }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const data = result.result as { substrate_readiness: Array<{ name: string; status: string; authority_locus: string; unblock_command?: string }> };
+    expect(data.substrate_readiness.find((check) => check.name === 'komorebi_available')).toMatchObject({
+      status: 'fail',
+      authority_locus: 'windows_pc',
+      unblock_command: 'Install or repair Komorebi in the PC Site, then rerun narada sites bootstrap-windows --format json.',
+    });
+    expect(data.substrate_readiness.find((check) => check.name === 'yasb_available')).toMatchObject({
+      status: 'fail',
+      authority_locus: 'windows_user',
+      unblock_command: 'Install or repair YASB in the Windows User Site, then rerun narada sites bootstrap-windows --format json.',
+    });
+  });
+
+  it('keeps adapter mutations dry-run by default for existing paired Windows Sites', async () => {
+    process.env.NARADA_EXECUTOR_RUNTIME = 'wsl';
+    process.env.COMPUTERNAME = 'DESKTOP-SUNROOM';
+    vol.mkdirSync('C:\\Users\\Andrey\\Narada', { recursive: true });
+    vol.mkdirSync('C:\\ProgramData\\Narada\\sites\\pc\\desktop-sunroom', { recursive: true });
+
+    const result = await sitesBootstrapWindowsCommand({
+      userSiteId: 'andrey-user',
+      pcSiteId: 'desktop-sunroom',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const data = result.result as {
+      mutation_performed: boolean;
+      adapter_plan: Array<{ dry_run: boolean; mutation_performed: boolean; authority_locus: string }>;
+      evidence: { site_creation: string };
+    };
+    expect(data.mutation_performed).toBe(false);
+    expect(data.adapter_plan.every((entry) => entry.dry_run && !entry.mutation_performed)).toBe(true);
+    expect(data.adapter_plan.map((entry) => entry.authority_locus)).toContain('windows_pc');
+    expect(data.evidence.site_creation).toBe('dry-run plan only');
   });
 
   it('honors explicit PC Site id and execution surface in paired Windows bootstrap', async () => {

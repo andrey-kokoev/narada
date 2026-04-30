@@ -265,6 +265,25 @@ narada sites agent-bootstrap <site-id-or-root> --role observer
 
 Neither contract admits additional AI roles. Operator remains the owner/client authority. The trace substrate records evidence and constrains future work; it is not a thinking role.
 
+### Windows 11 First-Time Path
+
+The Windows 11 front door composes paired User/PC Site bootstrap, substrate readiness, and Operator Surface adapter planning:
+
+```bash
+narada sites bootstrap-windows --format json
+narada sites bootstrap-windows --execute --format json
+```
+
+The command is dry-run by default. Its output includes:
+
+- `user` and `pc` Site bootstrap plans or execution results;
+- `substrate_readiness` for Windows Terminal, Komorebi, YASB, PowerShell, execution policy posture, WSL path translation, and Narada CLI readiness;
+- `adapter_plan` entries for Windows Terminal profile, Komorebi focus rule, YASB focus affordance, and Operator Surface runtime binding;
+- exact unblock commands for missing Windows Terminal, Komorebi, YASB, PowerShell, WSL/native execution mismatch, and stale CLI readiness;
+- bounded `evidence` naming Site creation/readiness, adapter plan/read-back requirements, residual manual steps, and authority locus for every adapter mutation.
+
+Windows Terminal and YASB adapter writes belong to the Windows User Site. Komorebi machine/session behavior belongs to the PC Site. Narada proper may plan and report this topology, but adapter mutation still requires explicit `--execute` at the owning locus plus read-back evidence.
+
 ### Step 3: Bind operation/config
 
 If `--operation` was not provided during `sites init`, bind the operation now:

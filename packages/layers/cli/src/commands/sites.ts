@@ -1829,6 +1829,14 @@ export interface SitesBootstrapWindowsOptions extends SitesOptions {
   execute?: boolean;
 }
 
+interface WindowsOnboardingCheck {
+  name: string;
+  status: 'pass' | 'warn' | 'fail';
+  authority_locus: 'windows_user' | 'windows_pc' | 'narada_proper';
+  detail: string;
+  unblock_command?: string;
+}
+
 const CLIENT_SITE_DIRECTORIES = [
   'chapters',
   'tasks',
@@ -3059,6 +3067,112 @@ function defaultWindowsPcSiteId(): { siteId: string; source: string } {
   return { siteId: hostname().toLowerCase(), source: 'hostname_fallback' };
 }
 
+function envToolStatus(name: string): 'present' | 'missing' | null {
+  const value = process.env[`NARADA_WINDOWS_TOOL_${name.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`]?.trim().toLowerCase();
+  return value === 'present' || value === 'missing' ? value : null;
+}
+
+async function commandAvailable(command: string): Promise<boolean> {
+  try {
+    await execFileAsync(command, ['--version'], { timeout: 1500, windowsHide: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function windowsToolCheck(args: {
+  name: string;
+  commands: string[];
+  authorityLocus: WindowsOnboardingCheck['authority_locus'];
+  unblockCommand: string;
+}): Promise<WindowsOnboardingCheck> {
+  const envStatus = envToolStatus(args.name);
+  const available = envStatus
+    ? envStatus === 'present'
+    : (await Promise.all(args.commands.map((command) => commandAvailable(command)))).some(Boolean);
+  return {
+    name: `${args.name}_available`,
+    status: available ? 'pass' : 'fail',
+    authority_locus: args.authorityLocus,
+    detail: available ? `${args.name} command available` : `${args.name} command not found on PATH (${args.commands.join(' or ')})`,
+    unblock_command: available ? undefined : args.unblockCommand,
+  };
+}
+
+async function inspectWindowsOnboardingReadiness(executionSurface?: string): Promise<WindowsOnboardingCheck[]> {
+  const checks: WindowsOnboardingCheck[] = [
+    await windowsToolCheck({
+      name: 'windows_terminal',
+      commands: ['wt'],
+      authorityLocus: 'windows_user',
+      unblockCommand: 'Install Windows Terminal, then rerun narada sites bootstrap-windows --format json.',
+    }),
+    await windowsToolCheck({
+      name: 'komorebi',
+      commands: ['komorebic'],
+      authorityLocus: 'windows_pc',
+      unblockCommand: 'Install or repair Komorebi in the PC Site, then rerun narada sites bootstrap-windows --format json.',
+    }),
+    await windowsToolCheck({
+      name: 'yasb',
+      commands: ['yasbc', 'yasb'],
+      authorityLocus: 'windows_user',
+      unblockCommand: 'Install or repair YASB in the Windows User Site, then rerun narada sites bootstrap-windows --format json.',
+    }),
+    await windowsToolCheck({
+      name: 'powershell',
+      commands: ['pwsh', 'powershell.exe', 'powershell'],
+      authorityLocus: 'windows_user',
+      unblockCommand: 'Install PowerShell 7 or enable Windows PowerShell, then rerun narada sites bootstrap-windows --format json.',
+    }),
+  ];
+  checks.push({
+    name: 'powershell_execution_policy_posture',
+    status: 'warn',
+    authority_locus: 'windows_user',
+    detail: 'Execution policy must permit User/PC Site-owned scripts at execution time; dry-run does not mutate policy.',
+    unblock_command: 'Run PowerShell as the owning Windows user and inspect: Get-ExecutionPolicy -List',
+  });
+  checks.push({
+    name: 'wsl_path_translation',
+    status: executionSurface === 'wsl_assisted' || process.env.NARADA_EXECUTOR_RUNTIME === 'wsl' ? 'pass' : 'warn',
+    authority_locus: 'narada_proper',
+    detail: executionSurface === 'wsl_assisted' || process.env.NARADA_EXECUTOR_RUNTIME === 'wsl'
+      ? 'WSL-assisted execution surface can translate Windows Site roots.'
+      : 'WSL path translation not selected; Windows-native execution must read native paths directly.',
+    unblock_command: executionSurface === 'wsl_assisted' || process.env.NARADA_EXECUTOR_RUNTIME === 'wsl'
+      ? undefined
+      : 'Use --execution-surface wsl_assisted when invoking from WSL, or run from native Windows.',
+  });
+  const cliDist = join(process.cwd(), 'packages', 'layers', 'cli', 'dist', 'main.js');
+  checks.push({
+    name: 'narada_cli_readiness',
+    status: existsSync(cliDist) ? 'pass' : 'fail',
+    authority_locus: 'narada_proper',
+    detail: existsSync(cliDist) ? `CLI dist exists: ${cliDist}` : `CLI dist missing: ${cliDist}`,
+    unblock_command: existsSync(cliDist) ? undefined : 'pnpm --filter @narada2/cli build && pnpm run narada:install-shim',
+  });
+  return checks;
+}
+
+function windowsAdapterPlan(execute: boolean): Array<Record<string, unknown>> {
+  return [
+    ['windows_terminal_profile', 'windows_user', 'narada operator-surface agent instantiate --site <user-site> --role builder --agent-kind codex_cli --by <principal>'],
+    ['komorebi_focus_rule', 'windows_pc', 'Route Komorebi rule materialization through the PC Site CEIZ path.'],
+    ['yasb_focus_affordance', 'windows_user', 'Route YASB button materialization through the Windows User Site CEIZ path.'],
+    ['operator_surface_runtime_binding', 'windows_user', 'narada operator-surface bind-focused --as self'],
+  ].map(([adapter, authorityLocus, command]) => ({
+    adapter,
+    authority_locus: authorityLocus,
+    dry_run: !execute,
+    mutation_performed: false,
+    execute_required: true,
+    command,
+    evidence: `${adapter} dry-run/read-back artifact required before execute`,
+  }));
+}
+
 export async function sitesBootstrapWindowsCommand(
   options: SitesBootstrapWindowsOptions,
   context: CommandContext,
@@ -3069,6 +3183,7 @@ export async function sitesBootstrapWindowsCommand(
   const pcSiteId = options.pcSiteId ?? pcDefault.siteId;
   const execute = options.execute === true;
   const sync = options.sync ?? 'hybrid_capable_plain_folder';
+  const substrateReadiness = await inspectWindowsOnboardingReadiness(options.executionSurface);
 
   const userResult = await sitesInitCommand(userSiteId, {
     substrate: 'windows-native',
@@ -3122,9 +3237,24 @@ export async function sitesBootstrapWindowsCommand(
     pc_identity_source: options.pcSiteId ? 'explicit' : pcDefault.source,
     user: userResult.result,
     pc: pcResult.result,
+    substrate_readiness: substrateReadiness,
+    adapter_plan: windowsAdapterPlan(execute),
+    evidence: {
+      bounded: true,
+      raw_sqlite_read: false,
+      direct_task_file_inspection: false,
+      site_creation: execute ? 'site bootstrap commands executed through sites init' : 'dry-run plan only',
+      readiness: 'substrate_readiness checks and validation_commands',
+      adapter: 'adapter_plan names authority locus and required execute/read-back evidence',
+      residual_manual_steps: substrateReadiness
+        .filter((check) => check.status !== 'pass')
+        .map((check) => ({ check: check.name, unblock_command: check.unblock_command })),
+    },
     validation_commands: [
       `narada sites doctor ${userSiteId} --authority-locus user`,
       `narada sites doctor ${pcSiteId} --authority-locus pc`,
+      'narada doctor --bootstrap --format json',
+      'narada operator-surface labels build --site <site-id-or-root> --format json',
     ],
   };
 
@@ -3137,6 +3267,11 @@ export async function sitesBootstrapWindowsCommand(
     fmt.section('Validation');
     for (const command of result.validation_commands) {
       fmt.message(command, 'info');
+    }
+    fmt.section('Substrate readiness');
+    for (const check of substrateReadiness) {
+      fmt.message(`${check.status}: ${check.name} (${check.authority_locus})`, check.status === 'pass' ? 'success' : check.status === 'warn' ? 'warning' : 'error');
+      if (check.unblock_command && options.verbose) fmt.message(`  unblock: ${check.unblock_command}`, 'info');
     }
   }
 

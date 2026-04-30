@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-30T03:42:44.639Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T03:48:03.895Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-30T03:48:04.383Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Materialize Windows 11 substrate onboarding path
@@ -45,9 +54,9 @@ The generic first-time Operator front door now exists, and Windows Operator Surf
 
 ## Acceptance Criteria
 
-- [ ] A single first-time Windows onboarding command or front-door path exists and composes User Site bootstrap, PC Site bootstrap, substrate readiness checks, and operator-surface role setup
-- [ ] The path detects or guides installation/readiness for Windows Terminal, Komorebi, YASB, PowerShell execution policy posture, WSL path translation, and Narada shim/CLI readiness
-- [ ] All adapter mutations are dry-run by default and require explicit execution; output names the authority locus for each mutation
-- [ ] The command reports exact unblock commands for missing Komorebi, missing YASB, missing Windows Terminal profile support, missing runtime binding, and stale CLI/native dependency state
-- [ ] The path emits bounded evidence for Site creation/readiness, adapter plan/read-back, and residual manual steps without raw SQLite or direct task-file inspection
-- [ ] Focused tests or fixtures cover fresh Windows posture, existing User/PC Sites, missing Komorebi, missing YASB, and dry-run adapter plan output
+- [x] A single first-time Windows onboarding command or front-door path exists and composes User Site bootstrap, PC Site bootstrap, substrate readiness checks, and operator-surface role setup
+- [x] The path detects or guides installation/readiness for Windows Terminal, Komorebi, YASB, PowerShell execution policy posture, WSL path translation, and Narada shim/CLI readiness
+- [x] All adapter mutations are dry-run by default and require explicit execution; output names the authority locus for each mutation
+- [x] The command reports exact unblock commands for missing Komorebi, missing YASB, missing Windows Terminal profile support, missing runtime binding, and stale CLI/native dependency state
+- [x] The path emits bounded evidence for Site creation/readiness, adapter plan/read-back, and residual manual steps without raw SQLite or direct task-file inspection
+- [x] Focused tests or fixtures cover fresh Windows posture, existing User/PC Sites, missing Komorebi, missing YASB, and dry-run adapter plan output
