@@ -1,6 +1,16 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T05:38:12.628Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-30T05:38:12.835Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
+
 # Correct Windows execution-surface readiness semantics
 
 ## Chapter
@@ -37,7 +47,7 @@ Inbox observation env_ffeed7c4 reports that `wsl_path_translation` warns wheneve
 
 ## Acceptance Criteria
 
-- [ ] Native Windows execution does not warn about missing WSL path translation
-- [ ] WSL-assisted execution still validates path translation and reports actionable blockers
-- [ ] Unknown or unsupported execution surfaces produce bounded warnings with unblock guidance
-- [ ] Tests cover native, WSL-assisted, override, and unknown postures
+- [x] Native Windows execution does not warn about missing WSL path translation
+- [x] WSL-assisted execution still validates path translation and reports actionable blockers
+- [x] Unknown or unsupported execution surfaces produce bounded warnings with unblock guidance
+- [x] Tests cover native, WSL-assisted, override, and unknown postures

@@ -3120,6 +3120,7 @@ async function windowsToolCheck(args: {
 }
 
 async function inspectWindowsOnboardingReadiness(executionSurface?: string): Promise<WindowsOnboardingCheck[]> {
+  const effectiveSurface = executionSurface ?? (process.env.NARADA_EXECUTOR_RUNTIME === 'wsl' ? 'wsl_assisted' : 'windows_native');
   const checks: WindowsOnboardingCheck[] = [
     await windowsToolCheck({
       name: 'windows_terminal',
@@ -3155,14 +3156,20 @@ async function inspectWindowsOnboardingReadiness(executionSurface?: string): Pro
   });
   checks.push({
     name: 'wsl_path_translation',
-    status: executionSurface === 'wsl_assisted' || process.env.NARADA_EXECUTOR_RUNTIME === 'wsl' ? 'pass' : 'warn',
+    status: effectiveSurface === 'wsl_assisted'
+      ? 'pass'
+      : effectiveSurface === 'windows_native'
+        ? 'pass'
+        : 'warn',
     authority_locus: 'narada_proper',
-    detail: executionSurface === 'wsl_assisted' || process.env.NARADA_EXECUTOR_RUNTIME === 'wsl'
-      ? 'WSL-assisted execution surface can translate Windows Site roots.'
-      : 'WSL path translation not selected; Windows-native execution must read native paths directly.',
-    unblock_command: executionSurface === 'wsl_assisted' || process.env.NARADA_EXECUTOR_RUNTIME === 'wsl'
+    detail: effectiveSurface === 'wsl_assisted'
+      ? 'WSL-assisted execution surface validates Windows/WSL path translation.'
+      : effectiveSurface === 'windows_native'
+        ? 'Native Windows execution uses native paths directly; WSL path translation is not required.'
+        : `Unsupported execution surface for Windows bootstrap readiness: ${effectiveSurface}`,
+    unblock_command: effectiveSurface === 'wsl_assisted' || effectiveSurface === 'windows_native'
       ? undefined
-      : 'Use --execution-surface wsl_assisted when invoking from WSL, or run from native Windows.',
+      : 'Use --execution-surface windows_native or --execution-surface wsl_assisted.',
   });
   const cli = resolveCliReadinessCoordinates();
   const distExists = existsSync(cli.dist_entrypoint);
@@ -3210,13 +3217,16 @@ export async function sitesBootstrapWindowsCommand(
   const execute = options.execute === true;
   const sync = options.sync ?? 'hybrid_capable_plain_folder';
   const substrateReadiness = await inspectWindowsOnboardingReadiness(options.executionSurface);
+  const initExecutionSurface = options.executionSurface && VALID_EXECUTION_SURFACES.includes(options.executionSurface as ExecutionSurface)
+    ? options.executionSurface
+    : undefined;
 
   const userResult = await sitesInitCommand(userSiteId, {
     substrate: 'windows-native',
     authorityLocus: 'user',
     sync,
     root: defaultWindowsUserSiteRoot(),
-    executionSurface: options.executionSurface,
+    executionSurface: initExecutionSurface,
     dryRun: !execute,
     format: 'json',
     verbose: options.verbose,
@@ -3236,7 +3246,7 @@ export async function sitesBootstrapWindowsCommand(
   const pcResult = await sitesInitCommand(pcSiteId, {
     substrate: 'windows-native',
     authorityLocus: 'pc',
-    executionSurface: options.executionSurface,
+    executionSurface: initExecutionSurface,
     dryRun: !execute,
     format: 'json',
     verbose: options.verbose,

@@ -635,4 +635,69 @@ describe('sitesInitCommand', () => {
     expect(data.user.config.locus.principal.username).toBe('andrey');
     expect(data.user.config.execution.path_translation.wsl_path).toBe('/mnt/c/Users/andrey/Narada');
   });
+
+  it('does not warn about WSL path translation for native Windows execution', async () => {
+    process.env.COMPUTERNAME = 'DESKTOP-SUNROOM';
+
+    const result = await sitesBootstrapWindowsCommand({
+      executionSurface: 'windows_native',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const data = result.result as { substrate_readiness: Array<{ name: string; status: string; detail: string; unblock_command?: string }> };
+    expect(data.substrate_readiness.find((check) => check.name === 'wsl_path_translation')).toMatchObject({
+      status: 'pass',
+      detail: 'Native Windows execution uses native paths directly; WSL path translation is not required.',
+    });
+    expect(data.substrate_readiness.find((check) => check.name === 'wsl_path_translation')?.unblock_command).toBeUndefined();
+  });
+
+  it('validates WSL-assisted execution path translation posture', async () => {
+    process.env.NARADA_EXECUTOR_RUNTIME = 'wsl';
+    process.env.COMPUTERNAME = 'DESKTOP-SUNROOM';
+
+    const result = await sitesBootstrapWindowsCommand({
+      executionSurface: 'wsl_assisted',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const data = result.result as { substrate_readiness: Array<{ name: string; status: string; detail: string }> };
+    expect(data.substrate_readiness.find((check) => check.name === 'wsl_path_translation')).toMatchObject({
+      status: 'pass',
+      detail: 'WSL-assisted execution surface validates Windows/WSL path translation.',
+    });
+  });
+
+  it('uses WSL-assisted path translation posture when inferred from runtime', async () => {
+    process.env.NARADA_EXECUTOR_RUNTIME = 'wsl';
+    process.env.COMPUTERNAME = 'DESKTOP-SUNROOM';
+
+    const result = await sitesBootstrapWindowsCommand({ format: 'json' }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const data = result.result as { substrate_readiness: Array<{ name: string; status: string; detail: string }> };
+    expect(data.substrate_readiness.find((check) => check.name === 'wsl_path_translation')).toMatchObject({
+      status: 'pass',
+      detail: 'WSL-assisted execution surface validates Windows/WSL path translation.',
+    });
+  });
+
+  it('reports unknown Windows execution surfaces with bounded unblock guidance', async () => {
+    process.env.COMPUTERNAME = 'DESKTOP-SUNROOM';
+
+    const result = await sitesBootstrapWindowsCommand({
+      executionSurface: 'unknown_surface',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const data = result.result as { substrate_readiness: Array<{ name: string; status: string; detail: string; unblock_command?: string }> };
+    expect(data.substrate_readiness.find((check) => check.name === 'wsl_path_translation')).toMatchObject({
+      status: 'warn',
+      detail: 'Unsupported execution surface for Windows bootstrap readiness: unknown_surface',
+      unblock_command: 'Use --execution-surface windows_native or --execution-surface wsl_assisted.',
+    });
+  });
 });
