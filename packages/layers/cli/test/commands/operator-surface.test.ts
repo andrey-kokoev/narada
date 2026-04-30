@@ -298,6 +298,68 @@ describe('operator-surface commands', () => {
     });
   });
 
+  it('projects input capabilities and submit strategy with type-only default', async () => {
+    const cwd = await tempRepo();
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-proper-builder',
+      role: 'builder',
+      agentKind: 'codex_cli',
+      site: 'narada-proper',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    const defaultLabels = await operatorSurfaceLabelsBuildCommand({
+      cwd,
+      site: 'narada-proper',
+      format: 'json',
+    }, createMockContext());
+
+    expect(defaultLabels.result).toMatchObject({
+      labels: [{
+        input_posture: {
+          capabilities: ['focus', 'type_text', 'clear_pending_input', 'recover_surface_state'],
+          submit_strategy: 'type_only',
+          automation_default: 'type_only',
+          blind_submit_chord_probe_limit: 0,
+          authority: 'ergonomic_projection_hint',
+        },
+      }],
+    });
+  });
+
+  it('admits known submit strategy only when explicitly declared', async () => {
+    const cwd = await tempRepo();
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-proper-builder',
+      role: 'builder',
+      agentKind: 'codex_cli',
+      site: 'narada-proper',
+      inputCapabilities: 'focus,type_text,submit,clear_pending_input,recover_surface_state',
+      submitStrategy: 'known_surface_submit',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    const labels = await operatorSurfaceLabelsBuildCommand({
+      cwd,
+      site: 'narada-proper',
+      format: 'json',
+    }, createMockContext());
+
+    expect(labels.result).toMatchObject({
+      labels: [{
+        input_posture: {
+          capabilities: ['focus', 'type_text', 'submit', 'clear_pending_input', 'recover_surface_state'],
+          submit_strategy: 'known_surface_submit',
+          blind_submit_chord_probe_limit: 0,
+        },
+      }],
+    });
+  });
+
   it('resolves bind-as-self from governed runtime context and defers volatile handle mutation', async () => {
     const cwd = await tempRepo();
     process.env.NARADA_AGENT_ID = 'narada-proper-builder';

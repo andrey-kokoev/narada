@@ -39,6 +39,8 @@ A v0 `OperatorSurface` declaration should be able to carry:
 | `adapter_kind` | Presentation adapter such as `windows_terminal`, `komorebi_window`, `vscode_workspace`, `browser_profile`, `mcp_console`, or `http_console`. |
 | `launch_identity` | Stable launch coordinate, for example a terminal profile name or URL. |
 | `focus_identity` | Stable focus coordinate, for example window title, workspace id, URI, or process label. |
+| `input_capabilities` | Declared input abilities such as `focus`, `type_text`, `submit`, `clear_pending_input`, and `recover_surface_state`. |
+| `submit_strategy` | Submission posture: `type_only`, `operator_confirmed_submit`, or `known_surface_submit`. |
 | `placement_hints` | Optional layout hints such as desktop, monitor, workspace, or tab group. |
 | `recovery_posture` | How the surface participates in resume: `reopen`, `focus_if_present`, `read_only_projection`, or `manual`. |
 | `authority_limits` | Explicit statement that the surface does not confer mutation authority, capability authority, review authority, or Operator authority. |
@@ -170,6 +172,26 @@ narada operator-surface labels build --site <site-id>
 `agent instantiate` is the canonical high-level Operator path. It admits or reuses the durable role identity, emits bounded bootstrap/copy text, and includes `narada operator-surface bind-focused --as self`. The lower-level `identity add` and `labels build` commands remain primitives.
 
 Operator-surface identity metadata may include optional `affinity_color` hints for the Site and role projection lines. The supported command flags are `--site-affinity-color <color>` and `--role-affinity-color <color>` on the identity-admission and agent-instantiation paths. These colors are ergonomic recognition hints only: they are not identity proof, authority boundaries, capability grants, review evidence, or runtime-handle binding.
+
+Operator-surface identity metadata may also include input posture:
+
+| Capability | Meaning | Authority posture |
+| --- | --- | --- |
+| `focus` | Bring or identify the surface. | Ergonomic only; not proof of correct locus. |
+| `type_text` | Type inert text into the surface. | Allowed only as input preparation unless a later crossing admits execution. |
+| `submit` | Send the pending input through the surface's channel. | Disabled by default; requires an admitted submit strategy. |
+| `clear_pending_input` | Clear staged text before retry/recovery. | Recovery convenience; must not destroy authoritative traces. |
+| `recover_surface_state` | Reconcile visible/current surface state. | Observation/recovery only. |
+
+Submit strategies are:
+
+| Strategy | Meaning |
+| --- | --- |
+| `type_only` | Default. Automation may focus/type but must not submit. |
+| `operator_confirmed_submit` | Automation may submit only after explicit Operator confirmation for that pending input. |
+| `known_surface_submit` | Surface-specific evidence admits submit for this exact surface/channel/posture. |
+
+Default automation is always `type_only`. A surface may expose `submit` only when its identity or surface declaration carries an admitted submit strategy. Repeated blind submit-chord probing against live agent surfaces is forbidden; the bounded projection sets blind submit probe limit to zero unless a surface-specific adapter later admits a safer recovery protocol.
 
 Projection precedence is:
 

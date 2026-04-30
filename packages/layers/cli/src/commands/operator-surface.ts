@@ -6,6 +6,8 @@ import {
   operatorSurfaceIdentityPath,
   readOperatorSurfaceIdentities,
   writeOperatorSurfaceIdentities,
+  type OperatorSurfaceInputCapability,
+  type OperatorSurfaceSubmitStrategy,
 } from '../lib/operator-surface-registry.js';
 import { loadRoster } from '../lib/task-governance.js';
 import { sitesAgentBootstrapCommand } from './sites.js';
@@ -19,6 +21,8 @@ export interface OperatorSurfaceIdentityAddOptions {
   label?: string;
   siteAffinityColor?: string;
   roleAffinityColor?: string;
+  inputCapabilities?: string;
+  submitStrategy?: string;
   by?: string;
   format?: string;
 }
@@ -50,6 +54,8 @@ export interface OperatorSurfaceAgentInstantiateOptions {
   label?: string;
   siteAffinityColor?: string;
   roleAffinityColor?: string;
+  inputCapabilities?: string;
+  submitStrategy?: string;
   dryRun?: boolean;
   bindFocused?: boolean;
   runtimeLocus?: string;
@@ -78,6 +84,24 @@ function normalizeInstantiateRole(role: string | undefined): OperatorSurfaceAgen
 
 function defaultIdentityName(site: string, role: string): string {
   return `${site}-${role}`.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function parseInputCapabilities(value: string | undefined): OperatorSurfaceInputCapability[] | undefined {
+  if (!value?.trim()) return undefined;
+  const allowed: OperatorSurfaceInputCapability[] = ['focus', 'type_text', 'submit', 'clear_pending_input', 'recover_surface_state'];
+  const parsed = value.split(',').map((part) => part.trim()).filter(Boolean);
+  const invalid = parsed.find((part) => !allowed.includes(part as OperatorSurfaceInputCapability));
+  if (invalid) throw new Error(`Unsupported input capability: ${invalid}`);
+  return parsed as OperatorSurfaceInputCapability[];
+}
+
+function parseSubmitStrategy(value: string | undefined): OperatorSurfaceSubmitStrategy {
+  if (!value?.trim()) return 'type_only';
+  const allowed: OperatorSurfaceSubmitStrategy[] = ['type_only', 'operator_confirmed_submit', 'known_surface_submit'];
+  if (!allowed.includes(value.trim() as OperatorSurfaceSubmitStrategy)) {
+    throw new Error(`Unsupported submit strategy: ${value}`);
+  }
+  return value.trim() as OperatorSurfaceSubmitStrategy;
 }
 
 function fallbackBootstrapText(role: OperatorSurfaceAgentRole): string {
@@ -140,6 +164,8 @@ export async function operatorSurfaceAgentInstantiateCommand(
         label: options.label ?? identityName,
         siteAffinityColor: options.siteAffinityColor,
         roleAffinityColor: options.roleAffinityColor,
+        inputCapabilities: options.inputCapabilities,
+        submitStrategy: options.submitStrategy,
         format: 'json',
       }, context);
       if (admitted.exitCode !== ExitCode.SUCCESS) return admitted;
@@ -226,12 +252,16 @@ export async function operatorSurfaceIdentityAddCommand(
     const now = new Date().toISOString();
     const registry = await readOperatorSurfaceIdentities(cwd);
     const existing = registry.identities.find((entry) => entry.identity_id === identityId);
+    const inputCapabilities = parseInputCapabilities(options.inputCapabilities);
+    const submitStrategy = parseSubmitStrategy(options.submitStrategy);
     const record = {
       identity_id: identityId,
       site_id: siteId,
       role,
       agent_kind: agentKind,
       label: options.label?.trim() || identityId,
+      input_capabilities: inputCapabilities,
+      submit_strategy: submitStrategy,
       admitted_by: by,
       admitted_at: existing?.admitted_at ?? now,
       updated_at: now,

@@ -7,11 +7,25 @@ export interface OperatorSurfaceIdentity {
   role: string;
   agent_kind: string;
   label: string;
+  input_capabilities?: OperatorSurfaceInputCapability[];
+  submit_strategy?: OperatorSurfaceSubmitStrategy;
   admitted_by: string;
   admitted_at: string;
   updated_at: string;
   authority_limits: string[];
 }
+
+export type OperatorSurfaceInputCapability =
+  | 'focus'
+  | 'type_text'
+  | 'submit'
+  | 'clear_pending_input'
+  | 'recover_surface_state';
+
+export type OperatorSurfaceSubmitStrategy =
+  | 'type_only'
+  | 'operator_confirmed_submit'
+  | 'known_surface_submit';
 
 export interface OperatorSurfaceAffinityColor {
   value: string;
@@ -85,6 +99,13 @@ export function makeOperatorSurfaceLabel(
     site_id: identity.site_id,
     role: identity.role,
     agent_kind: identity.agent_kind,
+    input_posture: {
+      capabilities: identity.input_capabilities ?? ['focus', 'type_text', 'clear_pending_input', 'recover_surface_state'],
+      submit_strategy: identity.submit_strategy ?? 'type_only',
+      automation_default: 'type_only',
+      blind_submit_chord_probe_limit: 0,
+      authority: 'ergonomic_projection_hint',
+    },
     projection_hints: {
       site_line: {
         affinity_color: siteColor

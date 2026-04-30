@@ -26,6 +26,8 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--label <label>', 'UI label projection for new identity')
     .option('--site-affinity-color <color>', 'Optional ergonomic color hint for the Site line')
     .option('--role-affinity-color <color>', 'Optional ergonomic color hint for the role line')
+    .option('--input-capabilities <csv>', 'Input capabilities: focus,type_text,submit,clear_pending_input,recover_surface_state')
+    .option('--submit-strategy <strategy>', 'Submit strategy: type_only, operator_confirmed_submit, known_surface_submit', 'type_only')
     .option('--dry-run', 'Preview without identity mutation', false)
     .option('--bind-focused', 'Request focused runtime binding; defers to owning runtime locus', false)
     .option('--runtime-locus <locus>', 'Owning User/PC runtime locus for binding deferral')
@@ -44,6 +46,8 @@ export function registerOperatorSurfaceCommands(program: Command): void {
         label: opts.label as string | undefined,
         siteAffinityColor: opts.siteAffinityColor as string | undefined,
         roleAffinityColor: opts.roleAffinityColor as string | undefined,
+        inputCapabilities: opts.inputCapabilities as string | undefined,
+        submitStrategy: opts.submitStrategy as string | undefined,
         dryRun: opts.dryRun as boolean | undefined,
         bindFocused: opts.bindFocused as boolean | undefined,
         runtimeLocus: opts.runtimeLocus as string | undefined,
@@ -63,6 +67,8 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--label <label>', 'UI label projection')
     .option('--site-affinity-color <color>', 'Optional ergonomic color hint for the Site line')
     .option('--role-affinity-color <color>', 'Optional ergonomic color hint for the role line')
+    .option('--input-capabilities <csv>', 'Input capabilities: focus,type_text,submit,clear_pending_input,recover_surface_state')
+    .option('--submit-strategy <strategy>', 'Submit strategy: type_only, operator_confirmed_submit, known_surface_submit', 'type_only')
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[string, Record<string, unknown>]>({
@@ -78,6 +84,8 @@ export function registerOperatorSurfaceCommands(program: Command): void {
         label: opts.label as string | undefined,
         siteAffinityColor: opts.siteAffinityColor as string | undefined,
         roleAffinityColor: opts.roleAffinityColor as string | undefined,
+        inputCapabilities: opts.inputCapabilities as string | undefined,
+        submitStrategy: opts.submitStrategy as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),

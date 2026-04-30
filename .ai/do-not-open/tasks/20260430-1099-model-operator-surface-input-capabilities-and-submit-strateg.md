@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T00:18:20.966Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Defined Operator Surface input capability taxonomy (focus, type_text, submit, clear_pending_input, recover_surface_state), submit_strategy values (type_only, operator_confirmed_submit, known_surface_submit), default type_only automation posture, and blind submit probe limit zero. Added CLI metadata admission and label projection tests plus docs.
+closed_at: 2026-04-30T00:18:42.828Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Model Operator Surface input capabilities and submit strategies
@@ -41,8 +50,8 @@ Model operator-surface input as explicit focus/type/submit capabilities with saf
 
 ## Acceptance Criteria
 
-- [ ] Define Operator Surface input capability taxonomy covering at least focus, type_text, submit, clear_pending_input, and recover_surface_state.
-- [ ] Represent submit_strategy per surface with safe postures such as type_only, operator_confirmed_submit, and known_surface_submit.
-- [ ] Default automation must be type_only unless surface-specific evidence admits a submit strategy.
-- [ ] Add guardrails preventing repeated blind submit-chord probing against live agent surfaces.
-- [ ] Update relevant Operator Surface documentation and focused tests for the new posture.
+- [x] Define Operator Surface input capability taxonomy covering at least focus, type_text, submit, clear_pending_input, and recover_surface_state.
+- [x] Represent submit_strategy per surface with safe postures such as type_only, operator_confirmed_submit, and known_surface_submit.
+- [x] Default automation must be type_only unless surface-specific evidence admits a submit strategy.
+- [x] Add guardrails preventing repeated blind submit-chord probing against live agent surfaces.
+- [x] Update relevant Operator Surface documentation and focused tests for the new posture.

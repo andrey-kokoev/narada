@@ -405,6 +405,8 @@ Deferred roles are intentionally listed only as non-admitted names. A Site may r
 
 Site and role metadata may declare optional `affinity_color` projection hints for operator surfaces. These hints support visual recognition across windows, labels, and consoles. They do not prove identity, grant capability, bind runtime handles, or create an authority boundary. Consumers should apply the precedence documented in [`Operator Surface`](../concepts/operator-surface.md): explicit presentation override, Site line color, role line color, then neutral agent/name line.
 
+Operator surface declarations may also declare input capabilities and submit strategy. The coherent default is `type_only`: automation may focus and type staged text, but it must not submit into a live agent surface. Submit requires either `operator_confirmed_submit` for the pending input or `known_surface_submit` admitted by surface-specific evidence. Blind submit-chord probing is not a discovery method.
+
 Declarations are advisory unless a separate governed command admits or materializes them. For example:
 
 - a Windows Terminal profile is materialized only by a future adapter/materializer command;
