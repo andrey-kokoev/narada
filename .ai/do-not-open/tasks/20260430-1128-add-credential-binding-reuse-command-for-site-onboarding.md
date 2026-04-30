@@ -1,5 +1,5 @@
 ---
-status: opened
+status: claimed
 ---
 
 # Add credential binding reuse command for Site onboarding
