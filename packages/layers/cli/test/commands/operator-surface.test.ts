@@ -558,6 +558,78 @@ describe('operator-surface commands', () => {
     });
   });
 
+  it('rejects identity rename when the old identity Site is not registered as canonical', async () => {
+    const cwd = await tempRepo();
+    mkdirSync(join(cwd, 'operator-surfaces'), { recursive: true });
+    await writeFile(join(cwd, 'operator-surfaces', 'identities.json'), JSON.stringify({
+      schema: 'https://narada.dev/schemas/operator-surface-identities/v1',
+      updated_at: '2026-04-30T00:00:00.000Z',
+      sites: {
+        'narada-andrey': {},
+      },
+      identities: [{
+        identity_id: 'andrey-user.architect',
+        site_id: 'andrey-user',
+        role: 'architect',
+        agent_kind: 'codex_cli',
+        label: 'Architect',
+        admitted_by: 'operator',
+        admitted_at: '2026-04-30T00:00:00.000Z',
+        updated_at: '2026-04-30T00:00:00.000Z',
+        authority_limits: [],
+      }],
+    }, null, 2));
+
+    const result = await operatorSurfaceIdentityRenameCommand({
+      cwd,
+      fromIdentity: 'andrey-user.architect',
+      toIdentity: 'andrey-user.Kevin',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      reason: 'site_identity_unregistered',
+      mutation_performed: false,
+      old_site_id: 'andrey-user',
+      registered_site_ids: ['narada-andrey'],
+      canonical_site_id: 'narada-andrey',
+      unblock_command: expect.stringContaining('Reconcile operator-surface identity Site ids before rename'),
+    });
+  });
+
+  it('accepts identity rename under the registered canonical Site id', async () => {
+    const cwd = await tempRepo();
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-andrey.architect',
+      role: 'architect',
+      agentKind: 'codex_cli',
+      site: 'narada-andrey',
+      siteAffinityColor: '#123456',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    const result = await operatorSurfaceIdentityRenameCommand({
+      cwd,
+      fromIdentity: 'narada-andrey.architect',
+      toIdentity: 'narada-andrey.Kevin',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      mutation_performed: true,
+      new_identity_id: 'narada-andrey.Kevin',
+      site_id: 'narada-andrey',
+    });
+  });
+
   it('migrates active roster pointer when identity rename is explicitly allowed', async () => {
     const cwd = await tempRepo();
     await operatorSurfaceIdentityAddCommand({

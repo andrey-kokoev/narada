@@ -1153,7 +1153,42 @@ export async function operatorSurfaceIdentityRenameCommand(
         },
       };
     }
+    const registeredSiteIds = Object.keys(registry.sites ?? {});
+    const registryHasSiteAuthority = registeredSiteIds.length > 0;
+    if (registryHasSiteAuthority && !registeredSiteIds.includes(oldIdentity.site_id)) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          reason: 'site_identity_unregistered',
+          mutation_performed: false,
+          old_identity_id: oldIdentityId,
+          new_identity_id: newIdentityId,
+          old_site_id: oldIdentity.site_id,
+          registered_site_ids: registeredSiteIds,
+          canonical_site_id: registeredSiteIds.length === 1 ? registeredSiteIds[0] : null,
+          unblock_command: `Reconcile operator-surface identity Site ids before rename; registered Sites: ${registeredSiteIds.join(', ') || '(none)'}.`,
+        },
+      };
+    }
     const newSitePrefix = sitePrefixFromIdentityId(newIdentityId);
+    if (newSitePrefix && registryHasSiteAuthority && !registeredSiteIds.includes(newSitePrefix)) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          reason: 'requested_site_identity_unregistered',
+          mutation_performed: false,
+          old_identity_id: oldIdentityId,
+          new_identity_id: newIdentityId,
+          old_site_id: oldIdentity.site_id,
+          requested_new_site_id: newSitePrefix,
+          registered_site_ids: registeredSiteIds,
+          canonical_site_id: registeredSiteIds.length === 1 ? registeredSiteIds[0] : null,
+          unblock_command: `Use a registered Site id (${registeredSiteIds.join(', ')}) or reconcile Site identity aliases before rename.`,
+        },
+      };
+    }
     if (newSitePrefix && newSitePrefix !== oldIdentity.site_id) {
       return {
         exitCode: ExitCode.INVALID_CONFIG,
