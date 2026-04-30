@@ -1,6 +1,16 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T02:51:09.316Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-30T02:51:10.407Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
+
 # Define first-time Operator success path
 
 ## Chapter
@@ -38,8 +48,8 @@ Current first-time flow is scattered across site bootstrap, site doctor, role bo
 
 ## Acceptance Criteria
 
-- [ ] A written canonical first-time Operator path exists in product documentation or task evidence and names each authority-affecting crossing.
-- [ ] The path distinguishes Operation Specification, Site/runtime locus, role identity, operator surface binding, inbox intake, work-next, and readiness proof.
-- [ ] The path includes a bounded failure posture for missing dependencies, missing native SQLite bindings, stale clones, or absent operator-surface transport.
-- [ ] The path states what command or command family later tasks must expose as the ergonomic front door.
-- [ ] Verification uses sanctioned CLI/read surfaces only and avoids raw SQLite or direct task-file editing.
+- [x] A written canonical first-time Operator path exists in product documentation or task evidence and names each authority-affecting crossing.
+- [x] The path distinguishes Operation Specification, Site/runtime locus, role identity, operator surface binding, inbox intake, work-next, and readiness proof.
+- [x] The path includes a bounded failure posture for missing dependencies, missing native SQLite bindings, stale clones, or absent operator-surface transport.
+- [x] The path states what command or command family later tasks must expose as the ergonomic front door.
+- [x] Verification uses sanctioned CLI/read surfaces only and avoids raw SQLite or direct task-file editing.

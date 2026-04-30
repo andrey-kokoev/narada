@@ -12,6 +12,7 @@
 > For the factorization of Site authority object, realization, interface, projection, crossing, and lineage, see [`site-factorization.md`](site-factorization.md).
 > For explicit Site-level law source, authority locus, embodiment, evidence, capability, readiness, and federation coordinates, see [`site-governance-coordinates.md`](site-governance-coordinates.md).
 > For the maturation phase after first-run setup, see [`inhabited-onboarding.md`](inhabited-onboarding.md).
+> For the complete first-time Operator route across Operation, Site, role identity, Operator Surface, inbox intake, work-next, and readiness proof, see [`first-time-operator-success-path.md`](first-time-operator-success-path.md).
 
 ---
 

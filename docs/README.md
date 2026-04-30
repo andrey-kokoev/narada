@@ -15,6 +15,7 @@ Semantic and architecture-boundary concepts. These documents define how the syst
 User-facing product proofs, onboarding, operator loop, and runbooks. These are the documents an operator reads to understand what Narada does and how to use it.
 
 - [`bootstrap-contract.md`](product/bootstrap-contract.md) — Canonical intent-to-operation bootstrap path
+- [`first-time-operator-success-path.md`](product/first-time-operator-success-path.md) — First-time Operator path across Operation, Site, role, surface, intake, work-next, and readiness
 - [`agent-reconstruction-specification.md`](product/agent-reconstruction-specification.md) — Agent-readable reconstruction path for blocked/internal environments
 - [`site-bootstrap-contract.md`](product/site-bootstrap-contract.md) — Canonical Site first-run path (realization/runtime locus setup)
 - [`first-operation-proof.md`](product/first-operation-proof.md) — Canonical mailbox operation product proof
