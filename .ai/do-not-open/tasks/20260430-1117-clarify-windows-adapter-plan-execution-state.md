@@ -1,6 +1,16 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T05:52:37.621Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Focused tests, typecheck/build, and bounded CLI readback prove adapter_plan planned_only semantics, non-execution under Site bootstrap --execute, owning-locus command hints, and non-misleading dry-run/execute output.
+closed_at: 2026-04-30T05:52:45.804Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
+
 # Clarify Windows adapter plan execution state
 
 ## Chapter
@@ -38,7 +48,7 @@ Inbox observation env_ffeed7c4 reports that with `--execute`, adapter_plan entri
 
 ## Acceptance Criteria
 
-- [ ] adapter_plan output distinguishes planned_only from executed mutations
-- [ ] --execute does not mark adapter entries as executed when only paired Site bootstrap ran
-- [ ] Output includes owning-locus command hints for each adapter mutation class
-- [ ] Tests prove dry-run and execute output are not misleading
+- [x] adapter_plan output distinguishes planned_only from executed mutations
+- [x] --execute does not mark adapter entries as executed when only paired Site bootstrap ran
+- [x] Output includes owning-locus command hints for each adapter mutation class
+- [x] Tests prove dry-run and execute output are not misleading

@@ -3230,17 +3230,21 @@ async function inspectWindowsOnboardingReadiness(executionSurface?: string): Pro
 
 function windowsAdapterPlan(execute: boolean): Array<Record<string, unknown>> {
   return [
-    ['windows_terminal_profile', 'windows_user', 'narada operator-surface agent instantiate --site <user-site> --role builder --agent-kind codex_cli --by <principal>'],
-    ['komorebi_focus_rule', 'windows_pc', 'Route Komorebi rule materialization through the PC Site CEIZ path.'],
-    ['yasb_focus_affordance', 'windows_user', 'Route YASB button materialization through the Windows User Site CEIZ path.'],
-    ['operator_surface_runtime_binding', 'windows_user', 'narada operator-surface bind-focused --as self'],
-  ].map(([adapter, authorityLocus, command]) => ({
+    ['windows_terminal_profile', 'windows_user', 'narada operator-surface agent instantiate --site <user-site> --role builder --agent-kind codex_cli --by <principal>', 'Create or update a Windows Terminal profile only through the Windows User Site owning-locus command path.'],
+    ['komorebi_focus_rule', 'windows_pc', 'narada command-exec request --site <pc-site> --intent komorebi.focus-rule --format json', 'Materialize Komorebi focus rules only through the PC Site CEIZ path and read-back evidence.'],
+    ['yasb_focus_affordance', 'windows_user', 'narada command-exec request --site <user-site> --intent yasb.focus-affordance --format json', 'Materialize YASB affordances only through the Windows User Site CEIZ path and read-back evidence.'],
+    ['operator_surface_runtime_binding', 'windows_user', 'narada operator-surface bind-focused --as self', 'Bind runtime identity only at the owning User/runtime locus; Narada proper may defer if locus is not local authority.'],
+  ].map(([adapter, authorityLocus, command, owningLocusHint]) => ({
     adapter,
     authority_locus: authorityLocus,
-    dry_run: !execute,
+    execution_state: 'planned_only',
+    dry_run: true,
+    site_bootstrap_execute_requested: execute,
+    site_bootstrap_execute_affects_adapter: false,
     mutation_performed: false,
     execute_required: true,
-    command,
+    owning_locus_command: command,
+    owning_locus_command_hint: owningLocusHint,
     evidence: `${adapter} dry-run/read-back artifact required before execute`,
   }));
 }

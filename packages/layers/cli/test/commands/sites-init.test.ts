@@ -494,7 +494,17 @@ describe('sitesInitCommand', () => {
         command_resolution?: { status: string; command: string | null; candidates: string[]; probe: string };
         semantic_readiness?: { status: string; reason: string };
       }>;
-      adapter_plan: Array<{ adapter: string; authority_locus: string; dry_run: boolean; execute_required: boolean; mutation_performed: boolean }>;
+      adapter_plan: Array<{
+        adapter: string;
+        authority_locus: string;
+        execution_state: string;
+        dry_run: boolean;
+        execute_required: boolean;
+        mutation_performed: boolean;
+        site_bootstrap_execute_affects_adapter: boolean;
+        owning_locus_command: string;
+        owning_locus_command_hint: string;
+      }>;
       evidence: { bounded: boolean; raw_sqlite_read: boolean; direct_task_file_inspection: boolean; residual_manual_steps: unknown[] };
       preflight: { user: { siteId: string }; pc: { siteId: string } };
       user: { config: { locus: { authority_locus: string }; sync: { posture: string }; execution: { surface: string; target_authority_locus: string } } };
@@ -537,10 +547,11 @@ describe('sitesInitCommand', () => {
     expect(powershell?.command_resolution).toBeDefined();
     expect(powershell?.semantic_readiness).toBeDefined();
     expect(data.adapter_plan).toEqual(expect.arrayContaining([
-      expect.objectContaining({ adapter: 'windows_terminal_profile', authority_locus: 'windows_user', dry_run: true, execute_required: true, mutation_performed: false }),
-      expect.objectContaining({ adapter: 'komorebi_focus_rule', authority_locus: 'windows_pc', dry_run: true, execute_required: true, mutation_performed: false }),
-      expect.objectContaining({ adapter: 'yasb_focus_affordance', authority_locus: 'windows_user', dry_run: true, execute_required: true, mutation_performed: false }),
+      expect.objectContaining({ adapter: 'windows_terminal_profile', authority_locus: 'windows_user', execution_state: 'planned_only', dry_run: true, execute_required: true, mutation_performed: false, site_bootstrap_execute_affects_adapter: false }),
+      expect.objectContaining({ adapter: 'komorebi_focus_rule', authority_locus: 'windows_pc', execution_state: 'planned_only', dry_run: true, execute_required: true, mutation_performed: false, site_bootstrap_execute_affects_adapter: false }),
+      expect.objectContaining({ adapter: 'yasb_focus_affordance', authority_locus: 'windows_user', execution_state: 'planned_only', dry_run: true, execute_required: true, mutation_performed: false, site_bootstrap_execute_affects_adapter: false }),
     ]));
+    expect(data.adapter_plan.every((entry) => entry.owning_locus_command && entry.owning_locus_command_hint)).toBe(true);
     expect(data.evidence).toMatchObject({ bounded: true, raw_sqlite_read: false, direct_task_file_inspection: false });
     expect(mockRegistry.registerSite).not.toHaveBeenCalled();
   });
@@ -771,6 +782,54 @@ describe('sitesInitCommand', () => {
     expect(data.adapter_plan.every((entry) => entry.dry_run && !entry.mutation_performed)).toBe(true);
     expect(data.adapter_plan.map((entry) => entry.authority_locus)).toContain('windows_pc');
     expect(data.evidence.site_creation).toBe('dry-run plan only');
+  });
+
+  it('keeps Windows adapter plan planned-only even when paired Site bootstrap executes', async () => {
+    process.env.NARADA_EXECUTOR_RUNTIME = 'wsl';
+    process.env.COMPUTERNAME = 'DESKTOP-SUNROOM';
+
+    const result = await sitesBootstrapWindowsCommand({
+      userSiteId: 'andrey-user',
+      pcSiteId: 'desktop-sunroom',
+      execute: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const data = result.result as {
+      mutation_performed: boolean;
+      adapter_plan: Array<{
+        adapter: string;
+        authority_locus: string;
+        execution_state: string;
+        dry_run: boolean;
+        mutation_performed: boolean;
+        site_bootstrap_execute_requested: boolean;
+        site_bootstrap_execute_affects_adapter: boolean;
+        owning_locus_command: string;
+        owning_locus_command_hint: string;
+      }>;
+    };
+    expect(data.mutation_performed).toBe(true);
+    expect(data.adapter_plan.every((entry) => entry.execution_state === 'planned_only')).toBe(true);
+    expect(data.adapter_plan.every((entry) => entry.dry_run === true)).toBe(true);
+    expect(data.adapter_plan.every((entry) => entry.mutation_performed === false)).toBe(true);
+    expect(data.adapter_plan.every((entry) => entry.site_bootstrap_execute_requested === true)).toBe(true);
+    expect(data.adapter_plan.every((entry) => entry.site_bootstrap_execute_affects_adapter === false)).toBe(true);
+    expect(data.adapter_plan).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        adapter: 'komorebi_focus_rule',
+        authority_locus: 'windows_pc',
+        owning_locus_command: 'narada command-exec request --site <pc-site> --intent komorebi.focus-rule --format json',
+        owning_locus_command_hint: 'Materialize Komorebi focus rules only through the PC Site CEIZ path and read-back evidence.',
+      }),
+      expect.objectContaining({
+        adapter: 'yasb_focus_affordance',
+        authority_locus: 'windows_user',
+        owning_locus_command: 'narada command-exec request --site <user-site> --intent yasb.focus-affordance --format json',
+        owning_locus_command_hint: 'Materialize YASB affordances only through the Windows User Site CEIZ path and read-back evidence.',
+      }),
+    ]));
   });
 
   it.each([
