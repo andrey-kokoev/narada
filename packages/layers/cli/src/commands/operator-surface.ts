@@ -84,6 +84,13 @@ export interface OperatorSurfaceStatusOptions {
   format?: CliFormat;
 }
 
+export interface OperatorSurfaceInspectCompactOptions {
+  cwd?: string;
+  site?: string;
+  limit?: number;
+  format?: CliFormat;
+}
+
 export interface OperatorSurfaceVoiceTranscriptionCheckOptions {
   cwd?: string;
   site?: string;
@@ -431,6 +438,30 @@ async function readVisibleLabelEvidence(cwd: string): Promise<OperatorSurfaceVis
   if (!existsSync(path)) return [];
   const parsed = JSON.parse(await readFile(path, 'utf8')) as { labels?: OperatorSurfaceVisibleLabelEvidence[] } | OperatorSurfaceVisibleLabelEvidence[];
   return Array.isArray(parsed) ? parsed : Array.isArray(parsed.labels) ? parsed.labels : [];
+}
+
+async function readVisibleLabelEvidenceStrict(cwd: string): Promise<{
+  status: 'success';
+  labels: OperatorSurfaceVisibleLabelEvidence[];
+} | {
+  status: 'error';
+  reason: 'operator_surface_visible_labels_schema_mismatch';
+  path: string;
+  repair_guidance: string;
+}> {
+  const path = visibleLabelEvidencePath(cwd);
+  if (!existsSync(path)) return { status: 'success', labels: [] };
+  const parsed = JSON.parse(await readFile(path, 'utf8')) as unknown;
+  if (Array.isArray(parsed)) return { status: 'success', labels: parsed as OperatorSurfaceVisibleLabelEvidence[] };
+  if (parsed && typeof parsed === 'object' && Array.isArray((parsed as { labels?: unknown }).labels)) {
+    return { status: 'success', labels: (parsed as { labels: OperatorSurfaceVisibleLabelEvidence[] }).labels };
+  }
+  return {
+    status: 'error',
+    reason: 'operator_surface_visible_labels_schema_mismatch',
+    path,
+    repair_guidance: 'Use narada operator-surface inspect compact or update the carrier wrapper to emit { "labels": [...] }; do not Select-Object a guessed labels property from raw overlay JSON.',
+  };
 }
 
 async function writeRuntimeBindings(cwd: string, bindings: OperatorSurfaceRuntimeBinding[]): Promise<string> {
@@ -1464,6 +1495,96 @@ export async function operatorSurfaceStatusCommand(
         agent.current_task == null ? 'task=none' : `task=${agent.current_task}(${agent.lifecycle_status ?? 'unknown'})`,
         `next=${agent.next_command}`,
       ].filter(Boolean).join(' | ')),
+    },
+  };
+}
+
+export async function operatorSurfaceInspectCompactCommand(
+  options: OperatorSurfaceInspectCompactOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const cwd = options.cwd ?? '.';
+  const registry = await readOperatorSurfaceIdentities(cwd);
+  const labelEvidence = await readVisibleLabelEvidenceStrict(cwd);
+  if (labelEvidence.status === 'error') {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        status: 'error',
+        mutation_performed: false,
+        reason: labelEvidence.reason,
+        inspected_path: labelEvidence.path,
+        expected_schema: {
+          labels: [{
+            identity_id: 'string optional',
+            site_id: 'string optional',
+            role: 'string optional',
+            label: 'string optional',
+            runtime_locus: 'string optional',
+            status: 'visible | stale | revoked optional',
+          }],
+        },
+        repair_guidance: labelEvidence.repair_guidance,
+      },
+    };
+  }
+  const bindings = await readRuntimeBindings(cwd);
+  const compatibilityIssues = operatorSurfaceCarrierProjectionIssues(registry);
+  if (compatibilityIssues.length > 0) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        status: 'error',
+        mutation_performed: false,
+        reason: 'operator_surface_identity_registry_incompatible_with_carrier_projection',
+        issues: compatibilityIssues,
+        repair_guidance: 'Repair durable identity records through narada operator-surface identity add or identity rename before compact inspection.',
+      },
+    };
+  }
+
+  const identities = registry.identities
+    .filter((identity) => !options.site || identity.site_id === options.site)
+    .slice(0, options.limit ?? 50);
+  const labels = identities.map((identity) => makeOperatorSurfaceLabel(identity, registry));
+  const rows = identities.map((identity) => {
+    const label = labels.find((entry) => entry.identity_id === identity.identity_id) ?? null;
+    const visible = visibleLabelForIdentity(identity, labelEvidence.labels);
+    const posture = bindingPosture(identity, bindings, visible);
+    return {
+      identity_id: identity.identity_id,
+      identity_name: label?.identity_name ?? identity.identity_id,
+      site_id: identity.site_id,
+      role: identity.role,
+      label: label?.label ?? identity.label ?? identity.identity_id,
+      runtime_locus: posture.runtime_locus,
+      binding_status: posture.binding_status,
+      addressability_status: posture.addressability_status,
+      visible_label_status: posture.label_evidence_status,
+      repair_command: posture.next_command,
+    };
+  });
+
+  return {
+    exitCode: ExitCode.SUCCESS,
+    result: {
+      status: 'success',
+      mutation_performed: false,
+      schema: 'https://narada.dev/schemas/operator-surface-compact-inspect/v1',
+      inspected_paths: {
+        identities: operatorSurfaceIdentityPath(cwd),
+        runtime_bindings: runtimeBindingPath(cwd),
+        visible_labels: visibleLabelEvidencePath(cwd),
+      },
+      projection_boundary: {
+        durable_identity_authority: operatorSurfaceIdentityPath(cwd),
+        runtime_binding_authority: 'owning runtime locus',
+        visible_labels_are_carrier_evidence: true,
+      },
+      count: rows.length,
+      labels,
+      rows,
+      architect_loop_guidance: 'Use this compact schema instead of ad hoc Select-Object projections against carrier-specific overlay JSON.',
     },
   };
 }

@@ -97,6 +97,7 @@ narada doctor --bootstrap --format json
 narada task preflight --format json
 narada sites doctor <site-id-or-root> --format json
 narada operator-surface labels build --site <site-id-or-root> --format json
+narada operator-surface inspect compact --site <site-id-or-root> --format json
 narada task workboard --format json
 ```
 

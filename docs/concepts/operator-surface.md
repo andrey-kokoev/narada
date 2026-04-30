@@ -251,6 +251,14 @@ These commands write/read Site-local durable identity records. They do not bind 
 
 `operator-surface labels build` is the carrier projection boundary for window labels and Windows focused-window binding helpers. The durable Site identity field is `identity_id`; the Windows carrier-facing `identity_name` field is generated from that value and is not a second identity authority. If an identity registry cannot project `identity_name`, label build fails closed with repair guidance to use `narada operator-surface identity add` or `identity rename` rather than editing carrier JSON by hand.
 
+Architect-loop inspection must use the schema-stable compact surface instead of ad hoc projections against raw carrier JSON:
+
+```bash
+narada operator-surface inspect compact --site <site-id-or-root> --format json
+```
+
+The compact inspect output joins durable identities, projected labels, runtime binding posture, and visible-label carrier evidence into one bounded schema. If a carrier wrapper changes shape, compact inspect fails once with `operator_surface_visible_labels_schema_mismatch` and repair guidance; callers must not repeatedly `Select-Object` guessed properties such as `labels` from unknown PowerShell output.
+
 The runtime binding command surface exists as an authority-preserving deferral surface:
 
 ```bash

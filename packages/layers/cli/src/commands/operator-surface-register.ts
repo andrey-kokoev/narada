@@ -8,6 +8,7 @@ import {
   operatorSurfaceBindFocusedCommand,
   operatorSurfaceIdentityAddCommand,
   operatorSurfaceIdentityRenameCommand,
+  operatorSurfaceInspectCompactCommand,
   operatorSurfaceLabelsBuildCommand,
   operatorSurfaceSendCommand,
   operatorSurfaceStatusCommand,
@@ -167,6 +168,26 @@ export function registerOperatorSurfaceCommands(program: Command): void {
       emit: emitCommandResult,
       format: (opts: Record<string, unknown>) => opts.format,
       invocation: (opts) => operatorSurfaceLabelsBuildCommand({
+        site: opts.site as string | undefined,
+        limit: opts.limit ? Number(opts.limit) : undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  const inspectCmd = surfaceCmd.command('inspect').description('Operator Surface compact inspection surfaces');
+  inspectCmd
+    .command('compact')
+    .description('Return schema-stable compact identity, label, and binding posture for Architect loops')
+    .option('--site <site-id>', 'Filter by Site')
+    .option('--limit <n>', 'Maximum identities', '50')
+    .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'operator-surface inspect compact',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => operatorSurfaceInspectCompactCommand({
         site: opts.site as string | undefined,
         limit: opts.limit ? Number(opts.limit) : undefined,
         cwd: opts.cwd as string | undefined,

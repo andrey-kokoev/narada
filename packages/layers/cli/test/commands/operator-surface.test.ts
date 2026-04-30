@@ -17,6 +17,7 @@ import {
   operatorSurfaceBindFocusedCommand,
   operatorSurfaceIdentityAddCommand,
   operatorSurfaceIdentityRenameCommand,
+  operatorSurfaceInspectCompactCommand,
   operatorSurfaceLabelsBuildCommand,
   operatorSurfaceSendCommand,
   operatorSurfaceStatusCommand,
@@ -760,6 +761,109 @@ describe('operator-surface commands', () => {
         repair_command: expect.stringContaining('narada operator-surface identity add'),
       }],
       repair_guidance: expect.stringContaining('do not edit Windows carrier files as identity authority'),
+    });
+  });
+
+  it('returns compact schema-stable operator surface inspection for Architect loops', async () => {
+    const cwd = await tempRepo();
+    const add = await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-proper-builder',
+      role: 'builder',
+      agentKind: 'codex_cli',
+      site: 'narada-proper',
+      label: 'Narada Proper Builder',
+      inputCapabilities: 'type_text,submit',
+      submitStrategy: 'known_surface_submit',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+    expect(add.exitCode).toBe(ExitCode.SUCCESS);
+    mkdirSync(join(cwd, 'operator-surfaces'), { recursive: true });
+    await writeFile(join(cwd, 'operator-surfaces', 'visible-labels.json'), JSON.stringify({
+      labels: [{
+        identity_id: 'narada-proper-builder',
+        site_id: 'narada-proper',
+        role: 'builder',
+        label: 'Narada Proper Builder',
+        runtime_locus: 'pc-site',
+        status: 'visible',
+      }],
+    }, null, 2));
+    await writeFile(join(cwd, 'operator-surfaces', 'runtime-bindings.json'), JSON.stringify({
+      bindings: [{
+        binding_id: 'bind-1',
+        identity_id: 'narada-proper-builder',
+        runtime_locus: 'pc-site',
+        handle: 'hwnd:123',
+        transport: 'windows-terminal',
+        input_capabilities: ['type_text', 'submit'],
+        submit_strategy: 'known_surface_submit',
+        status: 'active',
+      }],
+    }, null, 2));
+
+    const inspect = await operatorSurfaceInspectCompactCommand({
+      cwd,
+      site: 'narada-proper',
+      format: 'json',
+    }, createMockContext());
+
+    expect(inspect.exitCode).toBe(ExitCode.SUCCESS);
+    expect(inspect.result).toMatchObject({
+      status: 'success',
+      schema: 'https://narada.dev/schemas/operator-surface-compact-inspect/v1',
+      count: 1,
+      projection_boundary: {
+        visible_labels_are_carrier_evidence: true,
+      },
+      rows: [{
+        identity_id: 'narada-proper-builder',
+        identity_name: 'narada-proper-builder',
+        role: 'builder',
+        runtime_locus: 'pc-site',
+        binding_status: 'bound',
+        addressability_status: 'reachable',
+        visible_label_status: 'none',
+      }],
+      architect_loop_guidance: expect.stringContaining('compact schema'),
+    });
+  });
+
+  it('fails compact inspection once when visible label evidence has an unknown schema', async () => {
+    const cwd = await tempRepo();
+    const add = await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-proper-builder',
+      role: 'builder',
+      agentKind: 'codex_cli',
+      site: 'narada-proper',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+    expect(add.exitCode).toBe(ExitCode.SUCCESS);
+    mkdirSync(join(cwd, 'operator-surfaces'), { recursive: true });
+    await writeFile(join(cwd, 'operator-surfaces', 'visible-labels.json'), JSON.stringify({
+      windows: [{ title: 'narada.builder' }],
+    }, null, 2));
+
+    const inspect = await operatorSurfaceInspectCompactCommand({
+      cwd,
+      site: 'narada-proper',
+      format: 'json',
+    }, createMockContext());
+
+    expect(inspect.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(inspect.result).toMatchObject({
+      status: 'error',
+      mutation_performed: false,
+      reason: 'operator_surface_visible_labels_schema_mismatch',
+      expected_schema: {
+        labels: [expect.objectContaining({
+          identity_id: 'string optional',
+        })],
+      },
+      repair_guidance: expect.stringContaining('do not Select-Object a guessed labels property'),
     });
   });
 

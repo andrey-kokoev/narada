@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T23:31:32.938Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777591851132_lgog28
+closed_at: 2026-04-30T23:31:47.957Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add schema-aware compact operator-surface overlay inspect
@@ -32,8 +41,8 @@ Source inbox envelope env_6424109c-2502-4a0e-89ea-7cdefd43e137 reports Inspect-W
 
 ## Acceptance Criteria
 
-- [ ] There is a stable compact operator-surface inspect path for current bindings/labels.
-- [ ] Inspect consumers no longer need to guess a labels property from raw output.
-- [ ] Schema mismatch produces one bounded error with repair guidance.
-- [ ] Tests or fixtures cover compact inspect and missing-property failure behavior.
-- [ ] Architect-loop docs/guidance point to the compact helper instead of ad hoc JSON projection.
+- [x] There is a stable compact operator-surface inspect path for current bindings/labels.
+- [x] Inspect consumers no longer need to guess a labels property from raw output.
+- [x] Schema mismatch produces one bounded error with repair guidance.
+- [x] Tests or fixtures cover compact inspect and missing-property failure behavior.
+- [x] Architect-loop docs/guidance point to the compact helper instead of ad hoc JSON projection.
