@@ -1,6 +1,16 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T05:41:51.444Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-30T05:41:51.883Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
+
 # Split Windows tool command resolution from semantic readiness
 
 ## Chapter
@@ -38,7 +48,7 @@ Inbox observation env_ffeed7c4 reports that tool availability is probed by invok
 
 ## Acceptance Criteria
 
-- [ ] Substrate readiness output separates command resolution from semantic readiness
-- [ ] Windows Terminal, Komorebi, YASB/YASBC, and PowerShell each have tool-appropriate non-destructive probe posture
-- [ ] Missing or ambiguous readiness returns exact unblock guidance without giant transcripts
-- [ ] Focused tests cover found/no-version, missing command, unknown semantic readiness, and ready cases
+- [x] Substrate readiness output separates command resolution from semantic readiness
+- [x] Windows Terminal, Komorebi, YASB/YASBC, and PowerShell each have tool-appropriate non-destructive probe posture
+- [x] Missing or ambiguous readiness returns exact unblock guidance without giant transcripts
+- [x] Focused tests cover found/no-version, missing command, unknown semantic readiness, and ready cases

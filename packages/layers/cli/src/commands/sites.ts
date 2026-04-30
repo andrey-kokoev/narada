@@ -1836,7 +1836,19 @@ interface WindowsOnboardingCheck {
   authority_locus: 'windows_user' | 'windows_pc' | 'narada_proper';
   detail: string;
   unblock_command?: string;
+  command_resolution?: {
+    status: 'found' | 'missing' | 'ambiguous' | 'unknown';
+    command: string | null;
+    candidates: string[];
+    probe: string;
+  };
+  semantic_readiness?: {
+    status: 'ready' | 'not_ready' | 'unknown';
+    reason: string;
+  };
 }
+
+type WindowsToolCommandResolution = NonNullable<WindowsOnboardingCheck['command_resolution']>;
 
 const CLIENT_SITE_DIRECTORIES = [
   'chapters',
@@ -3068,9 +3080,9 @@ function defaultWindowsPcSiteId(): { siteId: string; source: string } {
   return { siteId: hostname().toLowerCase(), source: 'hostname_fallback' };
 }
 
-function envToolStatus(name: string): 'present' | 'missing' | null {
+function envToolStatus(name: string): 'present' | 'missing' | 'ambiguous' | null {
   const value = process.env[`NARADA_WINDOWS_TOOL_${name.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`]?.trim().toLowerCase();
-  return value === 'present' || value === 'missing' ? value : null;
+  return value === 'present' || value === 'missing' || value === 'ambiguous' ? value : null;
 }
 
 function resolveCliReadinessCoordinates(): {
@@ -3100,22 +3112,49 @@ async function commandAvailable(command: string): Promise<boolean> {
   }
 }
 
+async function resolveWindowsToolCommand(name: string, commands: string[]): Promise<WindowsToolCommandResolution> {
+  const envStatus = envToolStatus(name);
+  if (envStatus === 'missing') {
+    return { status: 'missing', command: null, candidates: commands, probe: 'env:NARADA_WINDOWS_TOOL_*' };
+  }
+  if (envStatus === 'present') {
+    return { status: 'found', command: commands[0] ?? null, candidates: commands, probe: 'env:NARADA_WINDOWS_TOOL_*' };
+  }
+  if (envStatus === 'ambiguous') {
+    return { status: 'ambiguous', command: commands[0] ?? null, candidates: commands, probe: 'env:NARADA_WINDOWS_TOOL_*' };
+  }
+  const found = (await Promise.all(commands.map(async (command) => (await commandAvailable(command)) ? command : null))).filter((command): command is string => Boolean(command));
+  if (found.length === 0) return { status: 'missing', command: null, candidates: commands, probe: '--version' };
+  if (found.length > 1) return { status: 'ambiguous', command: found[0]!, candidates: found, probe: '--version' };
+  return { status: 'found', command: found[0]!, candidates: commands, probe: '--version' };
+}
+
 async function windowsToolCheck(args: {
   name: string;
   commands: string[];
   authorityLocus: WindowsOnboardingCheck['authority_locus'];
   unblockCommand: string;
 }): Promise<WindowsOnboardingCheck> {
-  const envStatus = envToolStatus(args.name);
-  const available = envStatus
-    ? envStatus === 'present'
-    : (await Promise.all(args.commands.map((command) => commandAvailable(command)))).some(Boolean);
+  const commandResolution = await resolveWindowsToolCommand(args.name, args.commands);
+  const available = commandResolution.status === 'found' || commandResolution.status === 'ambiguous';
+  const semanticStatus = available ? 'unknown' : 'not_ready';
   return {
     name: `${args.name}_available`,
-    status: available ? 'pass' : 'fail',
+    status: commandResolution.status === 'ambiguous' ? 'warn' : available ? 'pass' : 'fail',
     authority_locus: args.authorityLocus,
-    detail: available ? `${args.name} command available` : `${args.name} command not found on PATH (${args.commands.join(' or ')})`,
+    detail: commandResolution.status === 'ambiguous'
+      ? `${args.name} command resolution is ambiguous: ${commandResolution.candidates.join(', ')}`
+      : available
+        ? `${args.name} command resolved: ${commandResolution.command}`
+        : `${args.name} command not found on PATH (${args.commands.join(' or ')})`,
     unblock_command: available ? undefined : args.unblockCommand,
+    command_resolution: commandResolution,
+    semantic_readiness: {
+      status: semanticStatus,
+      reason: semanticStatus === 'unknown'
+        ? 'Command resolution succeeded; semantic readiness requires adapter-specific read-back in the owning Windows locus.'
+        : 'Command resolution failed.',
+    },
   };
 }
 

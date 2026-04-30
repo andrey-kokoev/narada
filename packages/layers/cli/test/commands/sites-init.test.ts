@@ -472,7 +472,14 @@ describe('sitesInitCommand', () => {
       pc_site_id: string;
       pc_identity_source: string;
       validation_commands: string[];
-      substrate_readiness: Array<{ name: string; status: string; authority_locus: string; unblock_command?: string }>;
+      substrate_readiness: Array<{
+        name: string;
+        status: string;
+        authority_locus: string;
+        unblock_command?: string;
+        command_resolution?: { status: string; command: string | null; candidates: string[]; probe: string };
+        semantic_readiness?: { status: string; reason: string };
+      }>;
       adapter_plan: Array<{ adapter: string; authority_locus: string; dry_run: boolean; execute_required: boolean; mutation_performed: boolean }>;
       evidence: { bounded: boolean; raw_sqlite_read: boolean; direct_task_file_inspection: boolean; residual_manual_steps: unknown[] };
       user: { config: { locus: { authority_locus: string }; sync: { posture: string }; execution: { surface: string; target_authority_locus: string } } };
@@ -508,6 +515,9 @@ describe('sitesInitCommand', () => {
       'wsl_path_translation',
       'narada_cli_readiness',
     ]);
+    const powershell = data.substrate_readiness.find((check) => check.name === 'powershell_available');
+    expect(powershell?.command_resolution).toBeDefined();
+    expect(powershell?.semantic_readiness).toBeDefined();
     expect(data.adapter_plan).toEqual(expect.arrayContaining([
       expect.objectContaining({ adapter: 'windows_terminal_profile', authority_locus: 'windows_user', dry_run: true, execute_required: true, mutation_performed: false }),
       expect.objectContaining({ adapter: 'komorebi_focus_rule', authority_locus: 'windows_pc', dry_run: true, execute_required: true, mutation_performed: false }),
@@ -533,11 +543,57 @@ describe('sitesInitCommand', () => {
       status: 'fail',
       authority_locus: 'windows_pc',
       unblock_command: 'Install or repair Komorebi in the PC Site, then rerun narada sites bootstrap-windows --format json.',
+      command_resolution: {
+        status: 'missing',
+        command: null,
+        candidates: ['komorebic'],
+        probe: 'env:NARADA_WINDOWS_TOOL_*',
+      },
+      semantic_readiness: {
+        status: 'not_ready',
+        reason: 'Command resolution failed.',
+      },
     });
     expect(data.substrate_readiness.find((check) => check.name === 'yasb_available')).toMatchObject({
       status: 'fail',
       authority_locus: 'windows_user',
       unblock_command: 'Install or repair YASB in the Windows User Site, then rerun narada sites bootstrap-windows --format json.',
+    });
+  });
+
+  it('separates found command resolution from unknown semantic readiness', async () => {
+    process.env.COMPUTERNAME = 'DESKTOP-SUNROOM';
+    process.env.NARADA_WINDOWS_TOOL_WINDOWS_TERMINAL = 'present';
+    process.env.NARADA_WINDOWS_TOOL_KOMOREBI = 'present';
+    process.env.NARADA_WINDOWS_TOOL_YASB = 'present';
+    process.env.NARADA_WINDOWS_TOOL_POWERSHELL = 'present';
+
+    const result = await sitesBootstrapWindowsCommand({ format: 'json' }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const data = result.result as { substrate_readiness: Array<{ name: string; status: string; command_resolution?: { status: string; command: string | null; probe: string }; semantic_readiness?: { status: string; reason: string } }> };
+    expect(data.substrate_readiness.find((check) => check.name === 'windows_terminal_available')).toMatchObject({
+      status: 'pass',
+      command_resolution: { status: 'found', command: 'wt', probe: 'env:NARADA_WINDOWS_TOOL_*' },
+      semantic_readiness: {
+        status: 'unknown',
+        reason: 'Command resolution succeeded; semantic readiness requires adapter-specific read-back in the owning Windows locus.',
+      },
+    });
+  });
+
+  it('reports ambiguous command resolution without claiming semantic readiness', async () => {
+    process.env.COMPUTERNAME = 'DESKTOP-SUNROOM';
+    process.env.NARADA_WINDOWS_TOOL_YASB = 'ambiguous';
+
+    const result = await sitesBootstrapWindowsCommand({ format: 'json' }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const data = result.result as { substrate_readiness: Array<{ name: string; status: string; command_resolution?: { status: string; candidates: string[] }; semantic_readiness?: { status: string } }> };
+    expect(data.substrate_readiness.find((check) => check.name === 'yasb_available')).toMatchObject({
+      status: 'warn',
+      command_resolution: { status: 'ambiguous', candidates: ['yasbc', 'yasb'] },
+      semantic_readiness: { status: 'unknown' },
     });
   });
 
