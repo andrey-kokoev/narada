@@ -1,0 +1,31 @@
+{
+  "envelope_id": "env_0d5125ed-4aec-462a-8c3b-16c8caddc4f0",
+  "received_at": "2026-04-30T01:46:52.729Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey:chapter-batch-commissioning-ergonomics-20260430"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Chapter-level batch commissioning needs first-class CLI support",
+    "summary": "Commissioning a coherent chapter plus ten related tasks required manual chapter file creation, repeated task create calls, fragile cross-shell quoting, careful avoidance of comma-sensitive criteria wording, and a full lifecycle snapshot export with high-volume output. This is too much friction for a normal architect operation and makes context burn likely.",
+    "evidence": [
+      "The operator asked to proceed with all related operator-surface maturity work; the architect created one chapter and tasks 20-29.",
+      "A first batch creation attempt failed because the PowerShell helper used for shell quoting was unavailable.",
+      "Criteria wording had to avoid commas because task create criteria parsing can split comma-containing text unexpectedly.",
+      "Lifecycle export updated a large snapshot even though the architect only needed bounded confirmation that tasks were created."
+    ],
+    "proposal": [
+      "Add a first-class chapter commission or task create-batch command that accepts a structured file containing chapter metadata and ordered task specs.",
+      "Batch commissioning should admit chapter and tasks atomically or fail with bounded diagnostics, preserving task-number authority.",
+      "Criteria should be structured arrays in batch input, not comma-sensitive CLI text.",
+      "Return a bounded summary: chapter path, task numbers, task ids, dirty/published posture, and next recommended command, without dumping lifecycle internals."
+    ],
+    "recommendation": "Treat as task-governance and architect-ergonomics execution work."
+  },
+  "status": "received"
+}
