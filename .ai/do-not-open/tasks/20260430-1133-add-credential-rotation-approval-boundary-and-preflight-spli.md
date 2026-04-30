@@ -1,7 +1,16 @@
 ---
-status: claimed
+status: closed
 amended_by: architect
 amended_at: 2026-04-30T16:16:51.162Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T16:22:18.527Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777566082897_fm7rs4
+closed_at: 2026-04-30T16:22:37.049Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add credential rotation approval boundary and preflight split
@@ -45,9 +54,9 @@ Inbox envelope env_77de9362-565d-4690-8ed4-9c2526889a48 records a CAPA incident:
 
 ## Acceptance Criteria
 
-- [ ] Remote secret creation and rotation are classified as distinct dangerous external effects requiring explicit approval.
-- [ ] Preflight distinguishes existing local credential binding, missing local binding, create-new-secret, rotate-remote-secret, and set-local-runtime-env paths.
-- [ ] Operator-facing repair suggestions present reuse existing, bind new local value, or rotate remote secret as separate choices.
-- [ ] Adapter setup commands cannot rotate upstream secrets as an incidental side effect of local wiring.
-- [ ] The Harmonia 2026-04-30 rotation incident is recorded with affected worker, secret name, local env name, and credential reference, without raw token disclosure.
-- [ ] Tests or fixtures cover no-rotation local binding and explicit rotation approval behavior.
+- [x] Remote secret creation and rotation are classified as distinct dangerous external effects requiring explicit approval.
+- [x] Preflight distinguishes existing local credential binding, missing local binding, create-new-secret, rotate-remote-secret, and set-local-runtime-env paths.
+- [x] Operator-facing repair suggestions present reuse existing, bind new local value, or rotate remote secret as separate choices.
+- [x] Adapter setup commands cannot rotate upstream secrets as an incidental side effect of local wiring.
+- [x] The Harmonia 2026-04-30 rotation incident is recorded with affected worker, secret name, local env name, and credential reference, without raw token disclosure.
+- [x] Tests or fixtures cover no-rotation local binding and explicit rotation approval behavior.

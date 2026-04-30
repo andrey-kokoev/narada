@@ -16,6 +16,7 @@ import {
   capabilityAnnouncementShowCommand,
   capabilityAnnouncementSupersedeCommand,
   capabilityBindCredentialCommand,
+  capabilityCredentialPreflightCommand,
   capabilityExplainCommand,
   capabilityGrantCommand,
   capabilityListCommand,
@@ -174,6 +175,15 @@ describe('capability consent registry', () => {
         grant: { credential_provenance: { reused_from_site: string; raw_secret_stored: boolean } };
       };
       expect(data.secret_values_stored).toBe(false);
+      expect(result.result).toMatchObject({
+        credential_operation: {
+          kind: 'bind_existing_secret',
+          remote_secret_mutation: false,
+          local_runtime_env_mutation: false,
+          requires_remote_secret_approval: false,
+          authority_note: expect.stringContaining('must not create or rotate upstream secrets'),
+        },
+      });
       expect(data.local_secret_material_available).toBe(true);
       expect(data.credential_binding).toMatchObject({
         reused_from_site: 'narada.sonar',
@@ -238,6 +248,105 @@ describe('capability consent registry', () => {
       format: 'json',
     }, createMockContext());
     expect((explainResult.result as { blockers: string[] }).blockers).toContain('grant expired');
+  });
+
+  it('preflights local credential binding without remote secret mutation', async () => {
+    const cwd = await tempRepo();
+    const result = await capabilityCredentialPreflightCommand({
+      cwd,
+      site: 'narada-proper',
+      principal: 'operator',
+      kind: 'voice.transcription.remote',
+      operation: 'bind_existing_secret',
+      credentialRef: 'env:HARMONIA_VOICE_TRANSCRIPTION_TOKEN',
+      localEnv: 'HARMONIA_VOICE_TRANSCRIPTION_TOKEN',
+      by: 'builder',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      mutation_performed: false,
+      operation: 'bind_existing_secret',
+      operation_classification: {
+        effect_class: 'local_reference_binding',
+        requires_explicit_approval: false,
+        remote_secret_mutation: false,
+        adapter_setup_may_perform_as_side_effect: false,
+      },
+      preflight_paths: {
+        existing_local_credential_binding: 'candidate',
+        create_new_secret: 'not_selected',
+        rotate_remote_secret: 'not_selected',
+      },
+      recommended_safe_default: 'bind_existing_secret',
+      raw_secret_exposed: false,
+    });
+  });
+
+  it('blocks remote secret rotation unless explicit approval is present', async () => {
+    const cwd = await tempRepo();
+    const blocked = await capabilityCredentialPreflightCommand({
+      cwd,
+      site: 'narada-proper',
+      principal: 'operator',
+      kind: 'voice.transcription.remote',
+      operation: 'rotate_remote_secret',
+      remoteWorker: 'harmonia-voice-transcription',
+      remoteSecretName: 'TRANSCRIPTION_BEARER_TOKEN',
+      by: 'builder',
+      format: 'json',
+    }, createMockContext());
+
+    expect(blocked.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(blocked.result).toMatchObject({
+      status: 'error',
+      operation: 'rotate_remote_secret',
+      operation_classification: {
+        effect_class: 'dangerous_external_effect',
+        requires_explicit_approval: true,
+        remote_secret_mutation: true,
+        approval_recorded: false,
+        adapter_setup_may_perform_as_side_effect: false,
+      },
+      blockers: ['rotate_remote_secret requires explicit --approve-remote-secret-mutation'],
+      preflight_paths: {
+        rotate_remote_secret: 'requires_approval',
+      },
+    });
+
+    const approved = await capabilityCredentialPreflightCommand({
+      cwd,
+      site: 'narada-proper',
+      principal: 'operator',
+      kind: 'voice.transcription.remote',
+      operation: 'rotate_remote_secret',
+      remoteWorker: 'harmonia-voice-transcription',
+      remoteSecretName: 'TRANSCRIPTION_BEARER_TOKEN',
+      approveRemoteSecretMutation: true,
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    expect(approved.exitCode).toBe(ExitCode.SUCCESS);
+    expect(approved.result).toMatchObject({
+      status: 'success',
+      operation_classification: {
+        approval_recorded: true,
+        remote_secret_mutation: true,
+      },
+      credential_posture: {
+        remote_secret_target: {
+          worker: 'harmonia-voice-transcription',
+          secret_name: 'TRANSCRIPTION_BEARER_TOKEN',
+        },
+        raw_secret_exposed: false,
+      },
+      preflight_paths: {
+        rotate_remote_secret: 'approved',
+      },
+    });
   });
 });
 

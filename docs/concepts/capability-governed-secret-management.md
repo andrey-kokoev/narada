@@ -47,6 +47,43 @@ Secret management has distinct transitions:
 
 These transitions must not be collapsed. Knowing a `secret_ref` is not authorization. Authorization is not retrieval. Retrieval is not permission to use outside the declared purpose.
 
+## Credential Operation Split
+
+Credential repair must distinguish four operation kinds:
+
+| Operation | Meaning | Remote secret mutation | Approval posture |
+| --- | --- | --- | --- |
+| `bind_existing_secret` | Record or reuse a reference to already-existing secret material. | No | Safe default for setup and onboarding. |
+| `set_local_runtime_env` | Repair local runtime material for an existing reference. | No | Local runtime-locus action; still must not reveal raw values. |
+| `create_new_secret` | Create new upstream secret material or a new remote secret binding. | Yes | Dangerous external effect; requires explicit approval. |
+| `rotate_remote_secret` | Replace existing upstream secret material or remote secret binding. | Yes | Dangerous external effect; requires explicit approval. |
+
+Adapter setup commands must not perform `create_new_secret` or `rotate_remote_secret` as an incidental side effect of local wiring. If remote secret mutation is required, the command name, dry-run/preflight output, and execution confirmation must all declare that remote secret mutation is the intended effect.
+
+The v0 preflight surface is:
+
+```bash
+narada capability credential-preflight \
+  --site <site-id> \
+  --principal <principal> \
+  --kind <capability-kind> \
+  --operation bind_existing_secret \
+  --credential-ref env:<VAR>
+```
+
+Remote secret creation or rotation remains blocked unless explicitly approved:
+
+```bash
+narada capability credential-preflight \
+  --site <site-id> \
+  --principal <principal> \
+  --kind <capability-kind> \
+  --operation rotate_remote_secret \
+  --remote-worker <worker> \
+  --remote-secret-name <secret> \
+  --approve-remote-secret-mutation
+```
+
 ## Locus-Aware Stores
 
 | Locus | Appropriate Store Posture |

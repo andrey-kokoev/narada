@@ -38,6 +38,27 @@ export interface CapabilityBindCredentialOptions extends CapabilityGrantOptions 
   rationale?: string;
 }
 
+export type CredentialOperationKind =
+  | 'bind_existing_secret'
+  | 'create_new_secret'
+  | 'rotate_remote_secret'
+  | 'set_local_runtime_env';
+
+export interface CapabilityCredentialPreflightOptions {
+  cwd?: string;
+  site?: string;
+  principal?: string;
+  kind?: string;
+  operation?: CredentialOperationKind;
+  credentialRef?: string;
+  localEnv?: string;
+  remoteSecretName?: string;
+  remoteWorker?: string;
+  approveRemoteSecretMutation?: boolean;
+  by?: string;
+  format?: string;
+}
+
 export interface CapabilityListOptions {
   cwd?: string;
   site?: string;
@@ -322,6 +343,14 @@ export async function capabilityBindCredentialCommand(
       result: {
         status: 'success',
         mutation_performed: true,
+        credential_operation: {
+          kind: 'bind_existing_secret',
+          remote_secret_mutation: false,
+          local_runtime_env_mutation: false,
+          requires_remote_secret_approval: false,
+          approval_recorded: false,
+          authority_note: 'Credential binding records a reference and local-material posture only; it must not create or rotate upstream secrets.',
+        },
         registry_path: path,
         grant,
         credential_binding: provenance,
@@ -331,6 +360,149 @@ export async function capabilityBindCredentialCommand(
         warnings: localStatus === 'missing'
           ? [`Local secret material not found in env var ${localEnv}; credential reference is recorded but runtime availability remains unresolved.`]
           : [],
+      },
+    };
+  } catch (error) {
+    return normalizeError(error);
+  }
+}
+
+function credentialOperationRisk(kind: CredentialOperationKind): {
+  effect_class: 'local_reference_binding' | 'local_runtime_mutation' | 'dangerous_external_effect';
+  requires_explicit_approval: boolean;
+  remote_secret_mutation: boolean;
+} {
+  switch (kind) {
+    case 'bind_existing_secret':
+      return {
+        effect_class: 'local_reference_binding',
+        requires_explicit_approval: false,
+        remote_secret_mutation: false,
+      };
+    case 'set_local_runtime_env':
+      return {
+        effect_class: 'local_runtime_mutation',
+        requires_explicit_approval: false,
+        remote_secret_mutation: false,
+      };
+    case 'create_new_secret':
+    case 'rotate_remote_secret':
+      return {
+        effect_class: 'dangerous_external_effect',
+        requires_explicit_approval: true,
+        remote_secret_mutation: true,
+      };
+  }
+}
+
+function normalizeCredentialOperation(value: string | undefined): CredentialOperationKind {
+  const operation = value?.trim() as CredentialOperationKind | undefined;
+  if (
+    operation === 'bind_existing_secret' ||
+    operation === 'create_new_secret' ||
+    operation === 'rotate_remote_secret' ||
+    operation === 'set_local_runtime_env'
+  ) {
+    return operation;
+  }
+  throw new Error('--operation must be one of: bind_existing_secret, create_new_secret, rotate_remote_secret, set_local_runtime_env');
+}
+
+export async function capabilityCredentialPreflightCommand(
+  options: CapabilityCredentialPreflightOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  try {
+    const siteId = requireOption(options.site, '--site');
+    const principalId = requireOption(options.principal, '--principal');
+    const kind = requireOption(options.kind, '--kind');
+    const operation = normalizeCredentialOperation(options.operation);
+    const risk = credentialOperationRisk(operation);
+    const credentialRef = validateCredentialRef(options.credentialRef);
+    const localEnv = options.localEnv?.trim() || null;
+    const localEnvStatus = localEnv
+      ? process.env[localEnv]?.trim() ? 'present' : 'missing'
+      : 'not_checked';
+    const remoteSecretTarget = options.remoteWorker || options.remoteSecretName
+      ? {
+          worker: options.remoteWorker?.trim() || null,
+          secret_name: options.remoteSecretName?.trim() || null,
+        }
+      : null;
+    const blockers: string[] = [];
+    if (risk.requires_explicit_approval && !options.approveRemoteSecretMutation) {
+      blockers.push(`${operation} requires explicit --approve-remote-secret-mutation`);
+    }
+    if (operation === 'bind_existing_secret' && !credentialRef) {
+      blockers.push('bind_existing_secret requires --credential-ref');
+    }
+    if (operation === 'set_local_runtime_env' && !localEnv) {
+      blockers.push('set_local_runtime_env requires --local-env');
+    }
+    if (risk.remote_secret_mutation && !remoteSecretTarget?.secret_name) {
+      blockers.push(`${operation} requires --remote-secret-name`);
+    }
+    const choices = [
+      {
+        operation: 'bind_existing_secret',
+        label: 'Reuse existing secret reference',
+        command: 'narada capability bind-credential --site <site> --principal <principal> --kind <kind> --credential-ref <ref> --allow <action> --by <principal>',
+        remote_secret_mutation: false,
+      },
+      {
+        operation: 'set_local_runtime_env',
+        label: 'Bind or repair local runtime environment material',
+        command: 'Set the local env var in the owning runtime locus, then run narada capability credential-preflight --operation set_local_runtime_env --local-env <VAR>',
+        remote_secret_mutation: false,
+      },
+      {
+        operation: 'create_new_secret',
+        label: 'Create a new upstream secret',
+        command: 'Use an explicitly named remote-secret creation command with --approve-remote-secret-mutation; do not perform this as setup side effect.',
+        remote_secret_mutation: true,
+      },
+      {
+        operation: 'rotate_remote_secret',
+        label: 'Rotate an existing upstream secret',
+        command: 'Use an explicitly named remote-secret rotation command with --approve-remote-secret-mutation; do not perform this as setup side effect.',
+        remote_secret_mutation: true,
+      },
+    ];
+
+    return {
+      exitCode: blockers.length === 0 ? ExitCode.SUCCESS : ExitCode.INVALID_CONFIG,
+      result: {
+        status: blockers.length === 0 ? 'success' : 'error',
+        mutation_performed: false,
+        site_id: siteId,
+        principal_id: principalId,
+        capability_kind: kind,
+        operation,
+        operation_classification: {
+          ...risk,
+          approval_recorded: Boolean(options.approveRemoteSecretMutation),
+          adapter_setup_may_perform_as_side_effect: false,
+        },
+        credential_posture: {
+          credential_ref: credentialRef,
+          local_env: localEnv,
+          local_env_status: localEnvStatus,
+          remote_secret_target: remoteSecretTarget,
+          raw_secret_exposed: false,
+        },
+        preflight_paths: {
+          existing_local_credential_binding: operation === 'bind_existing_secret' && credentialRef ? 'candidate' : 'not_selected',
+          missing_local_binding: operation === 'bind_existing_secret' && !credentialRef ? 'blocked' : localEnvStatus === 'missing' ? 'observed' : 'not_observed',
+          create_new_secret: operation === 'create_new_secret' ? (blockers.length === 0 ? 'approved' : 'requires_approval') : 'not_selected',
+          rotate_remote_secret: operation === 'rotate_remote_secret' ? (blockers.length === 0 ? 'approved' : 'requires_approval') : 'not_selected',
+          set_local_runtime_env: operation === 'set_local_runtime_env' ? (blockers.length === 0 ? 'candidate' : 'blocked') : 'not_selected',
+        },
+        operator_choices: choices,
+        blockers,
+        recommended_safe_default: 'bind_existing_secret',
+        secret_values_stored: false,
+        raw_secret_exposed: false,
+        recorded_by: options.by ?? null,
       },
     };
   } catch (error) {

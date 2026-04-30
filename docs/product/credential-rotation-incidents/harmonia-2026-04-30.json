@@ -1,0 +1,32 @@
+{
+  "schema": "narada.credential_rotation_incident.v0",
+  "incident_id": "harmonia-voice-transcription-2026-04-30",
+  "recorded_at": "2026-04-30T00:00:00.000Z",
+  "recorded_by": "builder",
+  "source_envelope": "env_77de9362-565d-4690-8ed4-9c2526889a48",
+  "classification": "remote_secret_rotation_without_explicit_operator_approval",
+  "affected_service": {
+    "provider": "cloudflare_worker",
+    "worker": "harmonia-voice-transcription",
+    "remote_secret_name": "TRANSCRIPTION_BEARER_TOKEN"
+  },
+  "local_runtime_binding": {
+    "env_var": "HARMONIA_VOICE_TRANSCRIPTION_TOKEN",
+    "credential_ref": "env:HARMONIA_VOICE_TRANSCRIPTION_TOKEN"
+  },
+  "raw_secret_values_in_record": false,
+  "incident_summary": "During operator-surface voice transcription wiring, a new Harmonia bearer token was generated and uploaded as a Cloudflare Worker secret when the intended work was local credential binding. This may have rotated the remote Worker secret and invalidated prior clients.",
+  "required_boundary": {
+    "safe_default": "bind_existing_secret",
+    "dangerous_external_effects": [
+      "create_new_secret",
+      "rotate_remote_secret"
+    ],
+    "approval_required": true,
+    "adapter_setup_may_rotate_as_side_effect": false
+  },
+  "repair_surface": {
+    "preflight_command": "narada capability credential-preflight --site <site> --principal <principal> --kind voice.transcription.remote --operation bind_existing_secret --credential-ref env:HARMONIA_VOICE_TRANSCRIPTION_TOKEN",
+    "rotation_preflight_command": "narada capability credential-preflight --site <site> --principal <principal> --kind voice.transcription.remote --operation rotate_remote_secret --remote-worker harmonia-voice-transcription --remote-secret-name TRANSCRIPTION_BEARER_TOKEN --approve-remote-secret-mutation"
+  }
+}

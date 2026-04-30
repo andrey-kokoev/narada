@@ -24,6 +24,19 @@ narada capability explain <grant-id>
 narada capability revoke <grant-id> --by <principal> --reason <reason>
 ```
 
+Credential binding and remote secret mutation are separate operation classes. Use preflight before repair:
+
+```bash
+narada capability credential-preflight \
+  --site <site-id> \
+  --principal <principal-id> \
+  --kind <capability-kind> \
+  --operation bind_existing_secret \
+  --credential-ref env:<VAR>
+```
+
+`create_new_secret` and `rotate_remote_secret` are dangerous external effects and require `--approve-remote-secret-mutation`. Ordinary adapter setup and `bind-credential` must not rotate upstream secrets as a side effect.
+
 The v0 registry persists at:
 
 ```text

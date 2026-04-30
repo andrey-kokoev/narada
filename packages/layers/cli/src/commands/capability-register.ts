@@ -6,6 +6,7 @@ import {
   capabilityAnnouncementShowCommand,
   capabilityAnnouncementSupersedeCommand,
   capabilityBindCredentialCommand,
+  capabilityCredentialPreflightCommand,
   capabilityExplainCommand,
   capabilityGrantCommand,
   capabilityListCommand,
@@ -138,6 +139,41 @@ export function registerCapabilityCommands(program: Command): void {
         replacementId: opts.replacement as string | undefined,
         by: opts.by as string | undefined,
         reason: opts.reason as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  capabilityCmd
+    .command('credential-preflight')
+    .description('Classify credential binding, local env repair, and remote secret mutation before any secret effect')
+    .requiredOption('--site <id>', 'Site receiving or exercising the capability')
+    .requiredOption('--principal <id>', 'Principal covered by the credential operation')
+    .requiredOption('--kind <kind>', 'Capability kind, e.g. voice.transcription.remote')
+    .requiredOption('--operation <kind>', 'Credential operation: bind_existing_secret, create_new_secret, rotate_remote_secret, set_local_runtime_env')
+    .option('--credential-ref <ref>', 'Secret reference only: env:, keychain:, credential-manager:, secret-service:, pass:, vault:, config-ref:, or none')
+    .option('--local-env <name>', 'Local env var to check without printing its value')
+    .option('--remote-secret-name <name>', 'Remote secret name for explicitly approved create/rotate operations')
+    .option('--remote-worker <name>', 'Remote worker/service affected by explicitly approved create/rotate operations')
+    .option('--approve-remote-secret-mutation', 'Explicitly approve dangerous remote secret creation or rotation', false)
+    .option('--by <id>', 'Principal recording the preflight')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'capability credential-preflight',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => capabilityCredentialPreflightCommand({
+        site: opts.site as string | undefined,
+        principal: opts.principal as string | undefined,
+        kind: opts.kind as string | undefined,
+        operation: opts.operation as never,
+        credentialRef: opts.credentialRef as string | undefined,
+        localEnv: opts.localEnv as string | undefined,
+        remoteSecretName: opts.remoteSecretName as string | undefined,
+        remoteWorker: opts.remoteWorker as string | undefined,
+        approveRemoteSecretMutation: opts.approveRemoteSecretMutation as boolean | undefined,
+        by: opts.by as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),
