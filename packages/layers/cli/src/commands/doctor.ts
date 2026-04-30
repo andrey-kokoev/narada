@@ -18,6 +18,7 @@ export interface DoctorOptions {
   mode?: string;
   bootstrap?: boolean;
   cwd?: string;
+  strict?: boolean;
 }
 
 interface DoctorCheck {
@@ -49,6 +50,12 @@ interface DoctorReport {
 interface BootstrapDoctorReport {
   status: 'healthy' | 'degraded';
   checks: DoctorCheck[];
+  cli_execution_posture: {
+    strict_mode: boolean;
+    governance_commands_allowed: boolean;
+    dist_fresh: boolean | null;
+    reason: string;
+  };
   repair_plan: Array<{
     check: string;
     command: string;
@@ -70,13 +77,61 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
+async function newestSourceFile(root: string): Promise<{ path: string; mtimeMs: number } | null> {
+  const { readdir } = await import('node:fs/promises');
+  const sourceRoot = join(root, 'packages', 'layers', 'cli', 'src');
+  async function walk(dir: string): Promise<{ path: string; mtimeMs: number } | null> {
+    let newest: { path: string; mtimeMs: number } | null = null;
+    let entries: Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }>;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return null;
+    }
+    for (const entry of entries) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        const nested = await walk(path);
+        if (nested && (!newest || nested.mtimeMs > newest.mtimeMs)) newest = nested;
+      } else if (entry.isFile() && /\.(ts|tsx)$/.test(entry.name)) {
+        const info = await stat(path);
+        if (!newest || info.mtimeMs > newest.mtimeMs) newest = { path, mtimeMs: info.mtimeMs };
+      }
+    }
+    return newest;
+  }
+  return walk(sourceRoot);
+}
+
+async function inspectCliDistFreshness(root: string, distPath: string): Promise<{ fresh: boolean | null; detail: string }> {
+  try {
+    const source = await newestSourceFile(root);
+    if (!source) return { fresh: null, detail: 'CLI source tree not found; freshness unknown' };
+    const dist = await stat(distPath);
+    if (source.mtimeMs > dist.mtimeMs) {
+      return {
+        fresh: false,
+        detail: `stale: source ${source.path} is newer than dist ${distPath}`,
+      };
+    }
+    return { fresh: true, detail: `fresh: dist ${distPath} is newer than CLI source` };
+  } catch (error) {
+    return {
+      fresh: null,
+      detail: `freshness unknown: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
 async function doctorBootstrap(
   cwd: string,
   fmt: ReturnType<typeof createFormatter>,
+  options: { strict?: boolean } = {},
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const root = resolve(cwd);
   const checks: DoctorCheck[] = [];
   const nodeMajor = Number(process.versions.node.split('.')[0] ?? '0');
+  const strictMode = Boolean(options.strict);
 
   checks.push({
     name: 'node-version',
@@ -112,23 +167,67 @@ async function doctorBootstrap(
   });
 
   const cliMain = join(root, 'packages', 'layers', 'cli', 'dist', 'main.js');
+  const cliMainExists = await pathExists(cliMain);
   checks.push({
     name: 'cli-built',
-    status: await pathExists(cliMain) ? 'pass' : 'fail',
-    detail: await pathExists(cliMain) ? 'CLI dist entry exists' : 'CLI dist entry is missing',
+    status: cliMainExists ? 'pass' : 'fail',
+    detail: cliMainExists ? 'CLI dist entry exists' : 'CLI dist entry is missing',
     remediation: 'Run `pnpm -r build` from the repository root.',
     remediation_command: 'pnpm -r build',
     remediation_args: ['pnpm', '-r', 'build'],
   });
 
   const naradaBin = join(root, 'node_modules', '.bin', 'narada');
+  const shellShim = join(process.env.HOME ?? '', '.local', 'bin', 'narada');
+  const naradaBinExists = await pathExists(naradaBin);
+  const shellShimExists = Boolean(process.env.HOME) && await pathExists(shellShim);
   checks.push({
     name: 'narada-bin-linked',
-    status: await pathExists(naradaBin) ? 'pass' : 'warn',
-    detail: await pathExists(naradaBin) ? 'node_modules/.bin/narada exists' : 'node_modules/.bin/narada is missing',
+    status: naradaBinExists ? 'pass' : 'warn',
+    detail: naradaBinExists ? 'node_modules/.bin/narada exists' : 'node_modules/.bin/narada is missing',
     remediation: 'Run `pnpm install`; for shell-level access run `pnpm run narada:install-shim`.',
     remediation_command: 'pnpm run narada:install-shim',
     remediation_args: ['pnpm', 'run', 'narada:install-shim'],
+  });
+  checks.push({
+    name: 'cli-shim-source',
+    status: naradaBinExists || shellShimExists ? 'pass' : 'warn',
+    detail: `workspace_bin=${naradaBinExists ? naradaBin : 'missing'}; shell_shim=${shellShimExists ? shellShim : 'missing'}`,
+    remediation: 'Run `pnpm install` for workspace bin or `pnpm run narada:install-shim` for shell shim.',
+    remediation_command: 'pnpm run narada:install-shim',
+    remediation_args: ['pnpm', 'run', 'narada:install-shim'],
+  });
+
+  const freshness = await inspectCliDistFreshness(root, cliMain);
+  checks.push({
+    name: 'cli-dist-freshness',
+    status: freshness.fresh === null ? 'warn' : freshness.fresh ? 'pass' : strictMode ? 'fail' : 'warn',
+    detail: freshness.detail,
+    remediation: freshness.fresh === true ? undefined : 'Run `pnpm --filter @narada2/cli build && pnpm run narada:install-shim`.',
+    remediation_command: freshness.fresh === true ? undefined : 'pnpm --filter @narada2/cli build && pnpm run narada:install-shim',
+    remediation_args: freshness.fresh === true ? undefined : ['pnpm', '--filter', '@narada2/cli', 'build'],
+  });
+  checks.push({
+    name: 'package-build-posture',
+    status: cliMainExists && freshness.fresh !== false ? 'pass' : strictMode && freshness.fresh === false ? 'fail' : 'warn',
+    detail: cliMainExists
+      ? `@narada2/cli dist=${cliMain}; freshness=${freshness.fresh === null ? 'unknown' : freshness.fresh ? 'fresh' : 'stale'}`
+      : '@narada2/cli dist missing',
+    remediation: cliMainExists && freshness.fresh !== false ? undefined : 'Run `pnpm --filter @narada2/cli build`.',
+    remediation_command: cliMainExists && freshness.fresh !== false ? undefined : 'pnpm --filter @narada2/cli build',
+    remediation_args: cliMainExists && freshness.fresh !== false ? undefined : ['pnpm', '--filter', '@narada2/cli', 'build'],
+  });
+  checks.push({
+    name: 'governance-commands-allowed',
+    status: freshness.fresh === false && strictMode ? 'fail' : 'pass',
+    detail: freshness.fresh === false
+      ? strictMode
+        ? 'strict mode blocks governance commands until CLI dist is rebuilt'
+        : 'permissive mode allows read-only governance commands with stale dist warning'
+      : 'governance commands may proceed',
+    remediation: freshness.fresh === false ? 'Run `pnpm --filter @narada2/cli build && pnpm run narada:install-shim`.' : undefined,
+    remediation_command: freshness.fresh === false ? 'pnpm --filter @narada2/cli build && pnpm run narada:install-shim' : undefined,
+    remediation_args: freshness.fresh === false ? ['pnpm', '--filter', '@narada2/cli', 'build'] : undefined,
   });
 
   const authorityClone = inspectAuthorityClonePosture(root);
@@ -197,7 +296,20 @@ async function doctorBootstrap(
   const fail = checks.filter((check) => check.status === 'fail').length;
   const warn = checks.filter((check) => check.status === 'warn').length;
   const status: BootstrapDoctorReport['status'] = fail > 0 ? 'degraded' : 'healthy';
-  const report: BootstrapDoctorReport = { status, checks, repair_plan: repairPlan, summary: { pass, fail, warn } };
+  const report: BootstrapDoctorReport = {
+    status,
+    checks,
+    cli_execution_posture: {
+      strict_mode: strictMode,
+      governance_commands_allowed: !(freshness.fresh === false && strictMode),
+      dist_fresh: freshness.fresh,
+      reason: freshness.fresh === false
+        ? strictMode ? 'strict stale dist block' : 'permissive stale dist warning'
+        : freshness.detail,
+    },
+    repair_plan: repairPlan,
+    summary: { pass, fail, warn },
+  };
 
   if (fmt.getFormat() === 'json') {
     return {
@@ -577,7 +689,7 @@ export async function doctorCommand(
   const staleThresholdMinutes = options.staleThresholdMinutes ?? 60;
 
   if (options.bootstrap) {
-    return doctorBootstrap(options.cwd ?? process.cwd(), fmt);
+    return doctorBootstrap(options.cwd ?? process.cwd(), fmt, { strict: options.strict });
   }
 
   // Site path: --site takes precedence over config

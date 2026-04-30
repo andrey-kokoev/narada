@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-30T02:55:54.746Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T03:20:50.379Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-30T03:20:50.589Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add stale CLI dist repair guidance to operator ergonomics
@@ -44,8 +53,8 @@ The Narada shim can detect that the installed dist is stale relative to source a
 
 ## Acceptance Criteria
 
-- [ ] The stale-dist warning names the exact source/dist mismatch and the safe rebuild or refresh command
-- [ ] A bounded doctor/preflight surface reports CLI shim source, dist freshness, package build posture, and whether governance commands are allowed to proceed
-- [ ] First-time Operator guidance includes stale-dist repair when detected
-- [ ] The behavior avoids giant transcripts and does not block read-only governance commands unless strict mode is explicitly enabled
-- [ ] Focused tests cover clean dist, stale dist permissive mode, stale dist strict mode, and missing rebuild dependency cases
+- [x] The stale-dist warning names the exact source/dist mismatch and the safe rebuild or refresh command
+- [x] A bounded doctor/preflight surface reports CLI shim source, dist freshness, package build posture, and whether governance commands are allowed to proceed
+- [x] First-time Operator guidance includes stale-dist repair when detected
+- [x] The behavior avoids giant transcripts and does not block read-only governance commands unless strict mode is explicitly enabled
+- [x] Focused tests cover clean dist, stale dist permissive mode, stale dist strict mode, and missing rebuild dependency cases

@@ -47,6 +47,7 @@ export function registerInspectionAdminCommands(program: Command): void {
     .option('--site <id>', 'Diagnose a Site by site ID instead of reading config')
     .option('--mode <mode>', 'Site mode: system or user (Linux Sites)')
     .option('--bootstrap', 'Check repository bootstrap readiness instead of operation health', false)
+    .option('--strict', 'Fail bootstrap doctor when CLI dist is stale instead of warning', false)
     .option('--cwd <path>', 'Repository root for --bootstrap (defaults to cwd)', '.')
     .action(wrapCommand('doctor', (opts, ctx) =>
       doctorCommand({

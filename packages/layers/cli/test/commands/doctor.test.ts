@@ -276,17 +276,88 @@ describe('doctor command', () => {
       '/repo/pnpm-lock.yaml': '',
       '/repo/node_modules/.bin/narada': '',
       '/repo/packages/layers/cli/dist/main.js': '',
+      '/repo/packages/layers/cli/src/main.ts': '',
     });
+    vol.utimesSync('/repo/packages/layers/cli/src/main.ts', new Date('2026-01-01T00:00:00Z'), new Date('2026-01-01T00:00:00Z'));
+    vol.utimesSync('/repo/packages/layers/cli/dist/main.js', new Date('2026-01-02T00:00:00Z'), new Date('2026-01-02T00:00:00Z'));
 
     const result = await doctorCommand({ bootstrap: true, cwd: '/repo', format: 'json' }, createMockContext());
 
-    const report = result.result as { status: string; checks: Array<{ name: string; status: string }> };
+    const report = result.result as {
+      status: string;
+      cli_execution_posture: { governance_commands_allowed: boolean; dist_fresh: boolean | null };
+      checks: Array<{ name: string; status: string; detail?: string }>;
+    };
     expect(['healthy', 'degraded']).toContain(report.status);
     expect(report.checks.find((check) => check.name === 'package-manifest')?.status).toBe('pass');
     expect(report.checks.find((check) => check.name === 'dependencies-installed')?.status).toBe('pass');
     expect(report.checks.find((check) => check.name === 'cli-built')?.status).toBe('pass');
+    expect(report.checks.find((check) => check.name === 'cli-shim-source')?.detail).toContain('workspace_bin=/repo/node_modules/.bin/narada');
+    expect(report.checks.find((check) => check.name === 'cli-dist-freshness')?.status).toBe('pass');
+    expect(report.checks.find((check) => check.name === 'package-build-posture')?.status).toBe('pass');
+    expect(report.checks.find((check) => check.name === 'governance-commands-allowed')?.status).toBe('pass');
+    expect(report.cli_execution_posture).toMatchObject({ governance_commands_allowed: true, dist_fresh: true });
     expect(report.checks.find((check) => check.name === 'better-sqlite3-native')).toBeDefined();
     expect(report.checks.find((check) => check.name === 'sqlite-runtime-posture')).toBeDefined();
+  });
+
+  it('reports stale CLI dist as permissive bootstrap warning by default', async () => {
+    vol.fromJSON({
+      '/repo/package.json': '{}',
+      '/repo/pnpm-lock.yaml': '',
+      '/repo/node_modules/.bin/narada': '',
+      '/repo/node_modules/better-sqlite3/index.js': '',
+      '/repo/packages/layers/cli/dist/main.js': '',
+      '/repo/packages/layers/cli/src/main.ts': '',
+    });
+    vol.utimesSync('/repo/packages/layers/cli/dist/main.js', new Date('2026-01-01T00:00:00Z'), new Date('2026-01-01T00:00:00Z'));
+    vol.utimesSync('/repo/packages/layers/cli/src/main.ts', new Date('2026-01-02T00:00:00Z'), new Date('2026-01-02T00:00:00Z'));
+
+    const result = await doctorCommand({ bootstrap: true, cwd: '/repo', format: 'json' }, createMockContext());
+
+    const report = result.result as {
+      cli_execution_posture: { governance_commands_allowed: boolean; dist_fresh: boolean | null; reason: string };
+      checks: Array<{ name: string; status: string; detail: string; remediation_command?: string }>;
+    };
+    const freshness = report.checks.find((check) => check.name === 'cli-dist-freshness');
+    expect(freshness).toMatchObject({
+      status: 'warn',
+      remediation_command: 'pnpm --filter @narada2/cli build && pnpm run narada:install-shim',
+    });
+    expect(freshness?.detail).toContain('source /repo/packages/layers/cli/src/main.ts is newer than dist /repo/packages/layers/cli/dist/main.js');
+    expect(report.checks.find((check) => check.name === 'governance-commands-allowed')?.status).toBe('pass');
+    expect(report.cli_execution_posture).toMatchObject({
+      governance_commands_allowed: true,
+      dist_fresh: false,
+      reason: 'permissive stale dist warning',
+    });
+  });
+
+  it('fails stale CLI dist only in explicit strict bootstrap mode', async () => {
+    vol.fromJSON({
+      '/repo/package.json': '{}',
+      '/repo/pnpm-lock.yaml': '',
+      '/repo/node_modules/.bin/narada': '',
+      '/repo/packages/layers/cli/dist/main.js': '',
+      '/repo/packages/layers/cli/src/main.ts': '',
+    });
+    vol.utimesSync('/repo/packages/layers/cli/dist/main.js', new Date('2026-01-01T00:00:00Z'), new Date('2026-01-01T00:00:00Z'));
+    vol.utimesSync('/repo/packages/layers/cli/src/main.ts', new Date('2026-01-02T00:00:00Z'), new Date('2026-01-02T00:00:00Z'));
+
+    const result = await doctorCommand({ bootstrap: true, strict: true, cwd: '/repo', format: 'json' }, createMockContext());
+
+    const report = result.result as {
+      cli_execution_posture: { strict_mode: boolean; governance_commands_allowed: boolean; dist_fresh: boolean | null };
+      checks: Array<{ name: string; status: string }>;
+    };
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(report.checks.find((check) => check.name === 'cli-dist-freshness')?.status).toBe('fail');
+    expect(report.checks.find((check) => check.name === 'governance-commands-allowed')?.status).toBe('fail');
+    expect(report.cli_execution_posture).toMatchObject({
+      strict_mode: true,
+      governance_commands_allowed: false,
+      dist_fresh: false,
+    });
   });
 
   it('reports degraded bootstrap readiness with bounded remediations', async () => {
@@ -307,6 +378,7 @@ describe('doctor command', () => {
     expect(report.checks.find((check) => check.name === 'dependencies-installed')?.remediation).toContain('pnpm install');
     expect(report.checks.find((check) => check.name === 'dependencies-installed')?.remediation_args).toEqual(['pnpm', 'install']);
     expect(report.checks.find((check) => check.name === 'cli-built')?.remediation).toContain('pnpm -r build');
+    expect(report.checks.find((check) => check.name === 'package-build-posture')?.remediation).toContain('pnpm --filter @narada2/cli build');
     expect(report.repair_plan).toContainEqual({
       check: 'dependencies-installed',
       command: 'pnpm install',

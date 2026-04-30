@@ -49,7 +49,7 @@ Failures must return bounded repair commands instead of pushing the Operator tow
 
 | Failure | Bounded posture | Preferred command |
 | --- | --- | --- |
-| Missing dependencies or stale build | Report bootstrap readiness and repair plan | `narada doctor --bootstrap --format json` |
+| Missing dependencies or stale CLI dist | Report bootstrap readiness, shim source, dist freshness, package build posture, and repair plan. Stale dist warns by default and only blocks governance commands under explicit strict mode. | `narada doctor --bootstrap --format json`; strict: `narada doctor --bootstrap --strict --format json` |
 | Missing native SQLite binding | Report delegated CLI/native binding health | `narada inbox doctor --format json` or `narada doctor --bootstrap --format json` |
 | Stale clone or embodiment mismatch | Name authority locus and clone posture | `narada task preflight --format json`, `narada inbox doctor --format json` |
 | Absent Operator Surface transport | Return runtime-locus deferral, not guessed handles | `narada operator-surface bind-focused --as self` |
