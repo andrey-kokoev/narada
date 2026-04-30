@@ -1,0 +1,49 @@
+{
+  "envelope_id": "env_7124588f-fa33-4bdd-8a97-225899a2a07c",
+  "received_at": "2026-04-30T14:01:15.599Z",
+  "source": {
+    "kind": "system_observation",
+    "ref": "narada-andrey.architect/cpy-client-site-onboarding-capa"
+  },
+  "kind": "incident",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Client Site onboarding can admit operator-surface identity into wrong registry without explicit --cwd",
+    "summary": "During CPY client Site setup, bootstrap-client worked coherently, but the next doctor command suggested operator-surface agent instantiate. Running instantiate from the Narada proper CLI clone with --site pointing at CPY but without --cwd would have written the identity into Narada proper's operator-surfaces/identities.json. Re-running with --cwd set to the CPY .narada root correctly targeted the CPY Site registry.",
+    "classification": "CAPA_candidate",
+    "observed_sequence": [
+      "narada sites bootstrap-client --workspace <CPY> --sync onedrive_non_git --execute succeeded.",
+      "narada sites doctor reported ready_missing_role_binding and suggested narada operator-surface agent instantiate --site <CPY/.narada> ...",
+      "Dry-run instantiate without --cwd reported registry_path /home/andrey/src/narada/operator-surfaces/identities.json.",
+      "Dry-run instantiate with --cwd <CPY/.narada> reported registry_path <CPY/.narada>/operator-surfaces/identities.json.",
+      "Execution with --cwd <CPY/.narada> succeeded and doctor then reported fully_idle."
+    ],
+    "risk": "A fresh operator or architect following the generated next_command can mutate the caller clone's operator-surface identity registry instead of the target Site's registry. This violates authority-locus expectations and creates hidden cross-Site state leakage.",
+    "proposed_corrective_action": [
+      "Generated next_command from sites doctor should include --cwd equal to the target Site root when the command will mutate Site-local state.",
+      "operator-surface agent instantiate should fail closed or warn when --site resolves to a different Site root than --cwd and the target registry would not live under --site.",
+      "Dry-run output should explicitly classify registry_path as target_site_local or caller_context so the operator sees authority locus before execute."
+    ],
+    "proposed_preventive_action": [
+      "Add regression coverage for invoking operator-surface agent instantiate from Narada proper against an external client Site root.",
+      "Update first-time client Site onboarding docs to show numbered operator choices and exact CLI commands with --cwd when subsequent local Site mutation is intended.",
+      "Consider a higher-level client onboarding command that runs bootstrap, doctor, and local architect identity admission without exposing this footgun."
+    ]
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1125",
+    "promoted_at": "2026-04-30T14:04:20.167Z",
+    "promoted_by": "builder",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1125,
+      "task_id": "20260430-1125-prevent-cross-site-operator-surface-registry-mutation-during"
+    }
+  }
+}

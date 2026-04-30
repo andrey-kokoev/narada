@@ -1,0 +1,50 @@
+{
+  "envelope_id": "env_a0778f0d-f9e3-447e-b128-d33612a7718a",
+  "received_at": "2026-04-30T14:02:33.561Z",
+  "source": {
+    "kind": "system_observation",
+    "ref": "narada-andrey.architect/cpy-mailbox-onboarding-omission"
+  },
+  "kind": "incident",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Client Site onboarding did not surface mailbox posture as a numbered Operator choice",
+    "summary": "During CPY client Site setup, the architect used bootstrap-client and reached fully_idle readiness, but failed to ask whether the client Site should have mailbox/intake capability. For a client-service Site, mailbox posture is a real Operator choice, not an implementation detail.",
+    "classification": "CAPA_candidate",
+    "observed_sequence": [
+      "Operator requested a fresh-style setup of a Narada Site for OneDrive !Business/!Clients/!CPY using CLI as much as possible and asking Operator when choices need to be made.",
+      "Architect asked only about CPY vs !CPY path and then proceeded through bootstrap-client, doctor, and architect identity admission.",
+      "Doctor reported fully_idle, but no mailbox/intake posture was discussed.",
+      "Operator identified the omission: architect did not ask whether the Site needs a mailbox."
+    ],
+    "risk": "Client-service Sites can be declared ready while lacking an intended intake/mailbox surface. This creates false readiness, weakens inhabited onboarding, and may force later retrofits after expectations have already formed.",
+    "root_cause_hypothesis": "The current bootstrap/doctor path validates structural Site readiness but does not require an onboarding choice inventory for client-service capabilities such as mailbox, admission rules, draft/send posture, agent roles, data/ELT affiliations, or reporting surfaces.",
+    "corrective_action_requested": [
+      "Define a client-service onboarding choice inventory with numbered Operator choices. Mailbox posture should be a first-class item: none yet, existing mailbox, or provision/request mailbox.",
+      "Extend bootstrap-client or a higher-level onboarding command to emit unresolved optional-but-material choices separately from structural blockers.",
+      "Update doctor/readiness language so fully_idle does not imply business-capability readiness when onboarding choices remain unanswered."
+    ],
+    "preventive_action_requested": [
+      "Add regression/docs coverage for fresh Operator onboarding flow where architect must surface numbered choices before declaring setup complete.",
+      "Add an onboarding checklist or command output section for client-service Site capabilities: mailbox, allowed correspondents/domains, runtime behavior, sync posture, source data loci, affiliated Data/ELT Sites, and operator-surface roles.",
+      "Teach architects that structural bootstrap success is not the same as inhabited onboarding completion."
+    ],
+    "local_follow_up": "Return to CPY onboarding and ask the Operator numbered mailbox/intake choices before configuring or deferring mailbox setup."
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1126",
+    "promoted_at": "2026-04-30T14:07:32.269Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1126,
+      "task_id": "20260430-1126-surface-client-service-onboarding-capability-choices-before-"
+    }
+  }
+}
