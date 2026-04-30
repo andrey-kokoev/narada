@@ -27,7 +27,7 @@ import {
 } from '../lib/task-spec.js';
 
 export interface TaskCreateOptions {
-  title: string;
+  title?: string;
   goal?: string;
   context?: string;
   requiredWork?: string;
@@ -37,6 +37,7 @@ export interface TaskCreateOptions {
   number?: number;
   dryRun?: boolean;
   fromFile?: string;
+  inputJson?: string;
   format?: 'json' | 'human' | 'auto';
   cwd?: string;
 }
@@ -103,12 +104,107 @@ function parseDependsOn(input: string | undefined): number[] | undefined {
     .filter((n) => !Number.isNaN(n));
 }
 
+function stringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const values = value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+  return values.length > 0 ? values : undefined;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) ? value : undefined;
+}
+
+async function readStructuredInput(cwd: string, inputJson: string | undefined): Promise<Partial<TaskCreateOptions> | { error: string }> {
+  if (!inputJson) return {};
+  try {
+    const raw = await readFile(resolve(cwd, inputJson), 'utf8');
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { error: '--input-json must contain a JSON object.' };
+    }
+    const dependsOn = Array.isArray(parsed.depends_on)
+      ? parsed.depends_on.map((item) => Number(item)).filter((item) => Number.isInteger(item)).join(',')
+      : stringValue(parsed.depends_on);
+    return {
+      title: stringValue(parsed.title),
+      goal: stringValue(parsed.goal),
+      context: stringValue(parsed.context),
+      requiredWork: stringValue(parsed.required_work) ?? stringValue(parsed.requiredWork),
+      chapter: stringValue(parsed.chapter),
+      dependsOn,
+      criteria: stringArray(parsed.acceptance_criteria) ?? stringArray(parsed.criteria),
+      number: numberValue(parsed.number),
+      fromFile: stringValue(parsed.from_file) ?? stringValue(parsed.fromFile),
+    };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return { error: `Failed to read --input-json: ${msg}` };
+  }
+}
+
+function mergeTaskCreateOptions(base: Partial<TaskCreateOptions>, override: TaskCreateOptions): TaskCreateOptions {
+  return {
+    ...base,
+    ...(override.title !== undefined ? { title: override.title } : {}),
+    ...(override.goal !== undefined ? { goal: override.goal } : {}),
+    ...(override.context !== undefined ? { context: override.context } : {}),
+    ...(override.requiredWork !== undefined ? { requiredWork: override.requiredWork } : {}),
+    ...(override.chapter !== undefined ? { chapter: override.chapter } : {}),
+    ...(override.dependsOn !== undefined ? { dependsOn: override.dependsOn } : {}),
+    ...(override.criteria !== undefined ? { criteria: override.criteria } : {}),
+    ...(override.number !== undefined ? { number: override.number } : {}),
+    ...(override.dryRun !== undefined ? { dryRun: override.dryRun } : {}),
+    ...(override.fromFile !== undefined ? { fromFile: override.fromFile } : {}),
+    ...(override.inputJson !== undefined ? { inputJson: override.inputJson } : {}),
+    ...(override.format !== undefined ? { format: override.format } : {}),
+    ...(override.cwd !== undefined ? { cwd: override.cwd } : {}),
+  };
+}
+
+function suspiciousInlineField(value: string): boolean {
+  return (
+    value.includes('\n') ||
+    value.includes('```') ||
+    value.includes('$(') ||
+    value.includes('|') ||
+    /^\s*[>$]\s+/m.test(value)
+  );
+}
+
+function rejectSuspiciousInline(options: TaskCreateOptions): string | null {
+  if (options.inputJson || options.fromFile) return null;
+  const fields: Array<[string, string | undefined]> = [
+    ['--goal', options.goal],
+    ['--context', options.context],
+    ['--required-work', options.requiredWork],
+    ['--chapter', options.chapter],
+    ...(options.criteria ?? []).map((criterion, index) => [`--criteria[${index}]`, criterion] as [string, string]),
+  ];
+  const suspicious = fields.find(([, value]) => value && suspiciousInlineField(value));
+  return suspicious
+    ? `${suspicious[0]} contains shell-sensitive rich text. Use --input-json <file> or --from-file <path> so backticks, $(), pipes, quotes, and multiline text are preserved literally.`
+    : null;
+}
+
 export async function taskCreateCommand(
   options: TaskCreateOptions,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const fmt = createFormatter({ format: options.format || 'auto', verbose: false });
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
-  const title = options.title;
+
+  const structured = await readStructuredInput(cwd, options.inputJson);
+  if ('error' in structured) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: { status: 'error', error: structured.error },
+    };
+  }
+  const effective = mergeTaskCreateOptions(structured, options);
+  const title = effective.title;
 
   // ── Validation ──
 
@@ -118,22 +214,30 @@ export async function taskCreateCommand(
       result: { status: 'error', error: '--title is required.' },
     };
   }
+  const normalizedTitle = title.trim();
+  const inlineRejection = rejectSuspiciousInline(effective);
+  if (inlineRejection) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: { status: 'error', error: inlineRejection },
+    };
+  }
 
-  const dependsOn = parseDependsOn(options.dependsOn);
+  const dependsOn = parseDependsOn(effective.dependsOn);
 
   // ── Determine task number ──
 
   let taskNumber: number;
-  if (options.number !== undefined) {
-    taskNumber = options.number;
-  } else if (options.dryRun) {
+  if (effective.number !== undefined) {
+    taskNumber = effective.number;
+  } else if (effective.dryRun) {
     taskNumber = await previewNextTaskNumber(cwd);
   } else {
     taskNumber = await allocateTaskNumber(cwd);
   }
 
   const datePrefix = formatDatePrefix();
-  const slug = slugifyTitle(title);
+  const slug = slugifyTitle(normalizedTitle);
   const taskId = `${datePrefix}-${taskNumber}-${slug}`;
   const fileName = `${taskId}.md`;
   const tasksDir = join(cwd, '.ai', 'do-not-open', 'tasks');
@@ -156,9 +260,9 @@ export async function taskCreateCommand(
   let body: string;
   let spec: TaskSpecRecord;
   let effectiveDependsOn = dependsOn;
-  if (options.fromFile) {
+  if (effective.fromFile) {
     try {
-      const rawBody = await readFile(resolve(cwd, options.fromFile), 'utf8');
+      const rawBody = await readFile(resolve(cwd, effective.fromFile), 'utf8');
       const parsed = parseFrontMatter(rawBody);
       body = parsed.body;
       spec = parseTaskSpecFromMarkdown({
@@ -190,12 +294,12 @@ export async function taskCreateCommand(
     spec = buildTaskSpec({
       taskId,
       taskNumber,
-      title,
-      goal: options.goal,
-      context: options.context,
-      requiredWork: options.requiredWork,
-      chapter: options.chapter,
-      criteria: options.criteria,
+      title: normalizedTitle,
+      goal: effective.goal,
+      context: effective.context,
+      requiredWork: effective.requiredWork,
+      chapter: effective.chapter,
+      criteria: effective.criteria,
       dependsOn,
     });
     body = buildTaskBody(spec);
@@ -214,7 +318,7 @@ export async function taskCreateCommand(
 
   // ── Dry run: preview only ──
 
-  if (options.dryRun) {
+  if (effective.dryRun) {
     const preview = {
       task_id: taskId,
       task_number: taskNumber,
@@ -237,7 +341,7 @@ export async function taskCreateCommand(
     fmt.kv('Task ID', taskId);
     fmt.kv('Task number', String(taskNumber));
     fmt.kv('File', fileName);
-    fmt.kv('Title', title);
+    fmt.kv('Title', normalizedTitle);
     return {
       exitCode: ExitCode.SUCCESS,
       result: { status: 'dry_run', ...preview },
@@ -293,7 +397,7 @@ export async function taskCreateCommand(
         task_number: taskNumber,
         file_name: fileName,
         file_path: filePath,
-        title,
+        title: normalizedTitle,
       },
     };
   }
@@ -301,7 +405,7 @@ export async function taskCreateCommand(
   fmt.message(`Created task ${taskId}`, 'success');
   fmt.kv('Task number', String(taskNumber));
   fmt.kv('File', fileName);
-  fmt.kv('Title', title);
+  fmt.kv('Title', normalizedTitle);
 
   return {
     exitCode: ExitCode.SUCCESS,
@@ -311,7 +415,7 @@ export async function taskCreateCommand(
       task_number: taskNumber,
       file_name: fileName,
       file_path: filePath,
-      title,
+      title: normalizedTitle,
     },
   };
 }

@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T14:00:39.837Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Focused tests, typecheck/build, help output, and bounded dry-run/refusal checks prove structured input, literal preservation, suspicious inline refusal, normal inline success, and recorded task-1119 failure prevention.
+closed_at: 2026-04-30T14:00:47.578Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Make rich task authoring structurally shell-safe
@@ -43,9 +52,9 @@ Architect created task 1119 with backticked command text inside double-quoted sh
 
 ## Acceptance Criteria
 
-- [ ] `narada task create --input-json <file>` or equivalent structured input path exists and is documented in help
-- [ ] Structured input preserves backticks, `$()`, quotes, pipes, and multiline text literally
-- [ ] Inline rich text that looks like command output or shell-expanded artifact is refused with a clear instruction to use structured input or from-file
-- [ ] Normal short inline task creation still works without extra ceremony
-- [ ] Focused tests cover structured literal preservation, suspicious inline refusal, and normal inline success
-- [ ] The task report records the original failure mode from task 1119 and the exact prevention now enforced
+- [x] `narada task create --input-json <file>` or equivalent structured input path exists and is documented in help
+- [x] Structured input preserves backticks, `$()`, quotes, pipes, and multiline text literally
+- [x] Inline rich text that looks like command output or shell-expanded artifact is refused with a clear instruction to use structured input or from-file
+- [x] Normal short inline task creation still works without extra ceremony
+- [x] Focused tests cover structured literal preservation, suspicious inline refusal, and normal inline success
+- [x] The task report records the original failure mode from task 1119 and the exact prevention now enforced

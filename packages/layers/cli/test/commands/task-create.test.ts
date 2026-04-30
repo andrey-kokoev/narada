@@ -202,6 +202,78 @@ describe('task create operator', () => {
     expect(content).toContain('- [ ] Thing B is clean');
   });
 
+  it('preserves shell-sensitive rich text literally through --input-json', async () => {
+    const payload = {
+      title: 'Shell safe task',
+      goal: 'Preserve `code`, $(not-expanded), "quotes", pipes | and\nmultiple lines.',
+      required_work: [
+        '1. Keep output literal:',
+        '```text',
+        '$ echo hello | tee out',
+        '```',
+      ].join('\n'),
+      acceptance_criteria: [
+        'Backticks `x` remain literal',
+        '$() remains literal and is not shell-expanded',
+        'Pipes | remain literal',
+      ],
+    };
+    writeFileSync(join(tempDir, 'task-input.json'), JSON.stringify(payload, null, 2));
+
+    const result = await taskCreateCommand({
+      cwd: tempDir,
+      inputJson: 'task-input.json',
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const filePath = (result.result as Record<string, unknown>).file_path as string;
+    const content = readFileSync(filePath, 'utf8');
+    expect(content).toContain('Preserve `code`, $(not-expanded), "quotes", pipes | and');
+    expect(content).toContain('$ echo hello | tee out');
+    expect(content).toContain('- [ ] $() remains literal and is not shell-expanded');
+
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      const spec = store.getTaskSpecByNumber((result.result as { task_number: number }).task_number);
+      expect(JSON.parse(spec!.acceptance_criteria_json)).toEqual(payload.acceptance_criteria);
+      expect(spec!.goal_markdown).toBe(payload.goal);
+      expect(spec!.required_work_markdown).toBe(payload.required_work);
+    } finally {
+      store.db.close();
+    }
+  });
+
+  it('refuses suspicious rich inline text and points to structured input', async () => {
+    const result = await taskCreateCommand({
+      cwd: tempDir,
+      title: 'Suspicious inline',
+      criteria: ['Run `narada task evidence list --range 1113-1118 | jq .tasks`'],
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      error: expect.stringContaining('Use --input-json <file> or --from-file <path>'),
+    });
+  });
+
+  it('keeps normal short inline task creation ergonomic', async () => {
+    const result = await taskCreateCommand({
+      cwd: tempDir,
+      title: 'Short inline task',
+      goal: 'Keep simple authoring simple.',
+      criteria: ['Simple criterion'],
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const content = readFileSync((result.result as Record<string, unknown>).file_path as string, 'utf8');
+    expect(content).toContain('Keep simple authoring simple.');
+    expect(content).toContain('- [ ] Simple criterion');
+  });
+
   it('preserves comma-containing repeatable --criteria values and requires explicit CSV mode', async () => {
     const repeated = collectCriteriaValue('Preserve Smith, Jane as one criterion', []);
     expect(repeated).toEqual(['Preserve Smith, Jane as one criterion']);

@@ -29,13 +29,14 @@ export function registerTaskAuthoringCommands(taskCmd: Command): void {
   taskCmd
     .command('create')
     .description('Create a standalone task (allocate number + write spec + init lifecycle)')
-    .requiredOption('--title <title>', 'Task title')
+    .option('--title <title>', 'Task title; optional when --input-json supplies title')
     .option('--goal <text>', 'Task goal (defaults to title)')
     .option('--chapter <name>', 'Chapter name for task grouping')
     .option('--depends-on <numbers>', 'Comma-separated dependency task numbers')
     .option('--criteria <text>', 'Acceptance criterion; repeatable; preserves commas inside the criterion', collectCriteriaValue, [])
     .option('--criteria-csv <csv>', 'Explicit CSV acceptance criteria input; use --criteria for comma-containing text')
     .option('--number <n>', 'Use a pre-allocated task number (skips allocation)')
+    .option('--input-json <path>', 'Read structured task fields from JSON; preserves rich shell-sensitive text literally')
     .option('--from-file <path>', 'Read task body from a file instead of generating scaffold')
     .option('--dry-run', 'Preview task without creating files', false)
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
@@ -47,7 +48,7 @@ export function registerTaskAuthoringCommands(taskCmd: Command): void {
       invocation: (opts) => {
         const cwd = opts.cwd as string | undefined;
         return taskCreateCommand({
-          title: opts.title as string,
+          title: opts.title as string | undefined,
           goal: opts.goal as string | undefined,
           chapter: opts.chapter as string | undefined,
           dependsOn: opts.dependsOn as string | undefined,
@@ -55,6 +56,7 @@ export function registerTaskAuthoringCommands(taskCmd: Command): void {
           number: opts.number ? Number(opts.number) : undefined,
           dryRun: opts.dryRun as boolean,
           fromFile: opts.fromFile as string | undefined,
+          inputJson: opts.inputJson as string | undefined,
           format: resolveCommandFormat(opts.format, 'auto'),
           cwd,
         });
