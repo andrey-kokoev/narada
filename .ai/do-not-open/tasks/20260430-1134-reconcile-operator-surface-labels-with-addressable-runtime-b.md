@@ -1,5 +1,5 @@
 ---
-status: opened
+status: claimed
 ---
 
 # Reconcile Operator Surface labels with addressable runtime bindings
