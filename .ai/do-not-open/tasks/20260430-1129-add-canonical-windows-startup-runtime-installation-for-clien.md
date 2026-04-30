@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T15:19:58.978Z
+criteria_proof_verification:
+  state: unbound
+  rationale: runtime windows-startup install/status provide the sanctioned Windows startup runtime surface; dry-run declares all required startup, authority, command, credential, path, read-back, and uninstall fields; modes distinguish separate client runtime from shared User Site runtime; deferred posture and status readback avoid hand-rolled Task Scheduler mutation outside the owning Windows locus; focused tests and live readbacks verify behavior.
+closed_at: 2026-04-30T15:20:20.994Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add canonical Windows startup runtime installation for client Sites
@@ -43,9 +52,9 @@ This should not be hand-rolled through Task Scheduler, Startup folder, ad hoc `p
 
 ## Acceptance Criteria
 
-- [ ] A sanctioned Windows startup runtime command or documented stub exists for client Site operations
-- [ ] Dry-run output includes authority locus, startup substrate, service/task name, command line, env/credential posture, log paths, PID/health paths, read-back checks, and uninstall command
-- [ ] Command distinguishes shared User Site runtime from separate client Site runtime
-- [ ] Status or doctor output can reconcile installed startup entry, expected Site/operation, and process/health reality
-- [ ] Tests cover dry-run plan, separate-client-runtime mode, shared-runtime distinction, read-back verification, and uninstall/disable output
-- [ ] CPY-like desired runtime posture can be recorded as deferred without hand-rolled Windows startup machinery
+- [x] A sanctioned Windows startup runtime command or documented stub exists for client Site operations
+- [x] Dry-run output includes authority locus, startup substrate, service/task name, command line, env/credential posture, log paths, PID/health paths, read-back checks, and uninstall command
+- [x] Command distinguishes shared User Site runtime from separate client Site runtime
+- [x] Status or doctor output can reconcile installed startup entry, expected Site/operation, and process/health reality
+- [x] Tests cover dry-run plan, separate-client-runtime mode, shared-runtime distinction, read-back verification, and uninstall/disable output
+- [x] CPY-like desired runtime posture can be recorded as deferred without hand-rolled Windows startup machinery

@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import { GroupedHelp } from './lib/grouped-help.js';
 import { loadEnvFile } from '@narada2/control-plane';
 import { registerRuntimeCoreCommands } from './commands/runtime-core-register.js';
+import { registerRuntimeCommands } from './commands/runtime-register.js';
 import { registerProductUtilityCommands } from './commands/product-utility-register.js';
 import { registerInspectionAdminCommands } from './commands/inspection-admin-register.js';
 import { registerSitesCommands } from './commands/sites-register.js';
@@ -75,6 +76,7 @@ program
   });
 
 registerRuntimeCoreCommands(program);
+registerRuntimeCommands(program);
 registerProductUtilityCommands(program);
 registerInspectionAdminCommands(program);
 registerSitesCommands(program);

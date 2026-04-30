@@ -157,6 +157,7 @@ Activate the operation and start the daemon when ready.
 **Commands:**
 - `narada activate <operation>` — mark as live
 - `pnpm daemon` — start the long-running daemon
+- `narada runtime windows-startup install --site <site-root> --operation <operation-id> --mode separate-client-runtime --defer` — record desired Windows auto-start posture without hand-rolled Task Scheduler mutation
 
 **Required artifacts after this step:**
 
@@ -164,6 +165,34 @@ Activate the operation and start the daemon when ready.
 |----------|---------|
 | `<root_dir>/.activated` | Activation marker with timestamp |
 | Running daemon process | Processes sync, work items, charters, outbound |
+
+For a CPY-like client Site that should run as a separate Windows startup runtime, first use dry-run:
+
+```bash
+narada runtime windows-startup install \
+  --site <client-site-root> \
+  --operation <operation-id> \
+  --mode separate-client-runtime \
+  --credential-ref env:GRAPH_CLIENT_SECRET \
+  --format json
+```
+
+The dry-run plan declares the authority locus, Windows Task Scheduler substrate, task name, command line, credential posture, log/PID/health paths, read-back checks, and uninstall/disable commands. If the Operator wants the posture but is not at the Windows runtime locus, record it as deferred:
+
+```bash
+narada runtime windows-startup install \
+  --site <client-site-root> \
+  --operation <operation-id> \
+  --mode separate-client-runtime \
+  --defer \
+  --by <principal>
+```
+
+Inspect later with:
+
+```bash
+narada runtime windows-startup status --site <client-site-root> --operation <operation-id> --format json
+```
 
 **Validation gate:** `preflight` passes all blocking checks before activation.
 
