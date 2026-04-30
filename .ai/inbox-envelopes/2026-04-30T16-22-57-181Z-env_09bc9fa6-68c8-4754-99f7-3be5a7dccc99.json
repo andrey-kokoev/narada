@@ -1,0 +1,38 @@
+{
+  "envelope_id": "env_09bc9fa6-68c8-4754-99f7-3be5a7dccc99",
+  "received_at": "2026-04-30T16:22:57.181Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "operator-surface-identity-rename-kevin-20260430"
+  },
+  "kind": "upstream_task_candidate",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Add governed operator-surface identity rename and migration",
+    "summary": "The User Site wants to rename its architect surface from role-shaped narada-andrey.architect to personal identity narada-andrey.Kevin while preserving role metadata architect. Current CLI exposes operator-surface identity add/update, but no governed rename/migration path. A plain add would leave aliases, runtime bindings, labels, roster ownership, and task assignment references split across old and new identities.",
+    "observed_case": {
+      "old_identity": "narada-andrey.architect",
+      "new_identity": "narada-andrey.Kevin",
+      "role": "architect",
+      "reason": "Identity should be a durable personal/name-like handle; role should remain metadata and role-address alias, not the identity name."
+    },
+    "proposal": [
+      "Add a sanctioned operator-surface identity rename or migrate command.",
+      "Command should admit the new identity, preserve role metadata, and record old_identity -> new_identity migration evidence.",
+      "Command should update or propose updates for operator-surface aliases, label projections, runtime bindings, capability announcements, and input strategies.",
+      "Command should coordinate with task roster/lifecycle authority: either migrate active assignment ownership safely or fail closed with exact manual lifecycle commands needed.",
+      "Command should fail closed if the old identity is referenced from multiple Sites or authority loci that the current command cannot mutate.",
+      "Output should include changed surfaces, deferred surfaces, and post-migration verification commands."
+    ],
+    "non_goals": [
+      "Do not make role names naming authority.",
+      "Do not silently rewrite historical evidence where immutable provenance should retain the old identity.",
+      "Do not require hand-editing JSON files for ordinary identity rename."
+    ],
+    "operator_expected_path": "narada operator-surface identity rename narada-andrey.architect narada-andrey.Kevin --role architect --by operator --cwd <user-site>"
+  },
+  "status": "received"
+}
