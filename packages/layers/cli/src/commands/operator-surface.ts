@@ -55,6 +55,9 @@ export interface OperatorSurfaceBindingOptions {
 export interface OperatorSurfaceSendOptions {
   cwd?: string;
   identity?: string;
+  from?: string;
+  to?: string;
+  currentSite?: string;
   runtimeLocus?: string;
   text?: string;
   dryRun?: boolean;
@@ -210,6 +213,21 @@ function looksSiteQualifiedAgentAddress(value: string): boolean {
   return dot > 0 && dot < trimmed.length - 1;
 }
 
+function inferCurrentSite(registry: OperatorSurfaceIdentityRegistry): string | null {
+  const sites = [...new Set(registry.identities.map((identity) => identity.site_id).filter(Boolean))];
+  return sites.length === 1 ? sites[0]! : null;
+}
+
+function sitePrefixFromAddress(value: string): string | null {
+  const trimmed = value.trim();
+  const dot = trimmed.lastIndexOf('.');
+  return dot > 0 && dot < trimmed.length - 1 ? trimmed.slice(0, dot) : null;
+}
+
+function isBareRoleAddress(value: string): boolean {
+  return normalizeInstantiateRole(value) !== null;
+}
+
 async function resolveOperatorSurfaceSendIdentity(
   cwd: string,
   registry: OperatorSurfaceIdentityRegistry,
@@ -283,6 +301,34 @@ function agentResolutionFields(agentResolution: AgentAddressResolution | null): 
         agent_address_resolution: agentAddressResolutionPublic(agentResolution),
       }
     : {};
+}
+
+function routeFields(args: {
+  sender: string;
+  requestedRecipient: string;
+  currentSite: string | null;
+  targetSite: string | null;
+  resolvedRecipient: string | null;
+  bindingStatus?: string;
+  legacyIdentityAlias: boolean;
+}): Record<string, unknown> {
+  return {
+    requested_address: args.requestedRecipient,
+    current_site: args.currentSite,
+    target_site: args.targetSite,
+    message_route: {
+      sender: args.sender,
+      requested_recipient: args.requestedRecipient,
+      resolved_recipient: args.resolvedRecipient,
+      current_site: args.currentSite,
+      target_site: args.targetSite,
+      binding_status: args.bindingStatus ?? null,
+      identity_flag_mode: args.legacyIdentityAlias ? 'deprecated_recipient_alias' : 'explicit_to',
+    },
+    ...(args.legacyIdentityAlias
+      ? { warning: '--identity is deprecated for message recipient routing; use --to <recipient> and --from <sender>.' }
+      : {}),
+  };
 }
 
 function parseInputCapabilities(value: string | undefined): OperatorSurfaceInputCapability[] | undefined {
@@ -1080,34 +1126,85 @@ export async function operatorSurfaceSendCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   try {
     const cwd = options.cwd ?? '.';
-    const requestedIdentity = requireText(options.identity, '--identity');
+    const requestedRecipient = (options.to?.trim() || options.identity?.trim()) ?? '';
+    if (!requestedRecipient) throw new Error('--to is required');
+    const legacyIdentityAlias = !options.to?.trim() && Boolean(options.identity?.trim());
     const text = requireText(options.text, '--text');
     const registry = await readOperatorSurfaceIdentities(cwd);
-    const sendIdentity = await resolveOperatorSurfaceSendIdentity(cwd, registry, requestedIdentity);
+    const sender = options.from?.trim() || 'operator';
+    const currentSite = options.currentSite?.trim() || inferCurrentSite(registry);
+    if (isBareRoleAddress(requestedRecipient) && !currentSite) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          reason: 'current_site_required_for_bare_role',
+          mutation_performed: false,
+          unblock_command: 'Rerun with --current-site <site-id> or use a Site-qualified recipient such as <site>.builder.',
+          ...routeFields({
+            sender,
+            requestedRecipient,
+            currentSite,
+            targetSite: null,
+            resolvedRecipient: null,
+            legacyIdentityAlias,
+          }),
+        },
+      };
+    }
+    const sendIdentity = await resolveOperatorSurfaceSendIdentity(cwd, registry, requestedRecipient);
     const identityResolution = sendIdentity.identityResolution;
     const admittedIdentity = sendIdentity.admittedIdentity;
     const identity = sendIdentity.identity;
     const agentFields = agentResolutionFields(sendIdentity.agentResolution);
+    const targetSite = sendIdentity.agentResolution?.site_prefix
+      ?? admittedIdentity?.site_id
+      ?? sitePrefixFromAddress(requestedRecipient)
+      ?? (isBareRoleAddress(requestedRecipient) ? currentSite : null);
+    const baseRoute = {
+      sender,
+      requestedRecipient,
+      currentSite,
+      targetSite,
+      resolvedRecipient: admittedIdentity?.identity_id ?? sendIdentity.agentResolution?.resolved_agent ?? null,
+      legacyIdentityAlias,
+    };
+    if (isBareRoleAddress(requestedRecipient) && admittedIdentity && currentSite && admittedIdentity.site_id !== currentSite) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          reason: 'site_plane_mismatch',
+          identity,
+          identity_resolution: publicIdentityResolution(identityResolution),
+          ...agentFields,
+          ...routeFields(baseRoute),
+          mutation_performed: false,
+          unblock_command: `Use a Site-qualified recipient such as ${admittedIdentity.site_id}.${admittedIdentity.role}, or rerun with --current-site ${admittedIdentity.site_id} if that is the intended Site plane.`,
+        },
+      };
+    }
     if (sendIdentity.agentResolution && !sendIdentity.agentResolution.resolved_agent) {
       return {
         exitCode: ExitCode.INVALID_CONFIG,
         result: {
           status: 'error',
           reason: sendIdentity.agentResolution.status === 'multi_match' ? 'agent_address_ambiguous' : 'agent_not_in_roster',
-          identity: requestedIdentity,
+          identity: requestedRecipient,
           identity_resolution: publicIdentityResolution(identityResolution),
           ...agentFields,
+          ...routeFields(baseRoute),
           mutation_performed: false,
           candidates: sendIdentity.agentResolution.candidates,
           unblock_command: 'repair_command' in sendIdentity.agentResolution
             ? sendIdentity.agentResolution.repair_command
-            : `narada task roster add ${requestedIdentity}`,
+            : `narada task roster add ${requestedRecipient}`,
         },
       };
     }
     if (!admittedIdentity) {
-      const roleRepair = normalizeInstantiateRole(requestedIdentity)
-        ? `narada operator-surface agent instantiate --site <site-id-or-root> --role ${normalizeInstantiateRole(requestedIdentity)} --agent-kind codex_cli --by <principal>`
+      const roleRepair = normalizeInstantiateRole(requestedRecipient)
+        ? `narada operator-surface agent instantiate --site <site-id-or-root> --role ${normalizeInstantiateRole(requestedRecipient)} --agent-kind codex_cli --by <principal>`
         : `narada operator-surface agent instantiate --site <site-id-or-root> --role <role> --agent-kind codex_cli --by <principal> --identity ${identity}`;
       return {
         exitCode: ExitCode.INVALID_CONFIG,
@@ -1117,6 +1214,7 @@ export async function operatorSurfaceSendCommand(
           identity,
           identity_resolution: publicIdentityResolution(identityResolution),
           ...agentFields,
+          ...routeFields(baseRoute),
           available_aliases: identityResolution.known_aliases,
           mutation_performed: false,
           unblock_command: roleRepair,
@@ -1132,6 +1230,7 @@ export async function operatorSurfaceSendCommand(
           identity,
           mutation_performed: false,
           ...agentFields,
+          ...routeFields(baseRoute),
           unblock_command: 'Route secrets through capability consent and secret references; do not send raw secret-like text through Operator Surface input.',
         },
       };
@@ -1150,6 +1249,7 @@ export async function operatorSurfaceSendCommand(
           identity,
           identity_resolution: publicIdentityResolution(identityResolution),
           ...agentFields,
+          ...routeFields({ ...baseRoute, bindingStatus: 'stale' }),
           mutation_performed: false,
           unblock_command: `narada operator-surface bind-focused --identity ${identity} --runtime-locus ${options.runtimeLocus ?? '<pc-or-user-site>'}`,
         },
@@ -1166,6 +1266,7 @@ export async function operatorSurfaceSendCommand(
           identity,
           identity_resolution: publicIdentityResolution(identityResolution),
           ...agentFields,
+          ...routeFields({ ...baseRoute, bindingStatus: labelEvidence ? 'labeled_unbound' : 'unbound' }),
           visible_label: labelEvidence,
           label_evidence_status: labelEvidence ? 'visible_label_without_binding' : 'none',
           explanation: labelEvidence
@@ -1186,6 +1287,7 @@ export async function operatorSurfaceSendCommand(
           identity,
           identity_resolution: publicIdentityResolution(identityResolution),
           ...agentFields,
+          ...routeFields({ ...baseRoute, bindingStatus: 'ambiguous' }),
           mutation_performed: false,
           matching_bindings: activeBindings.map((binding) => ({
             binding_id: binding.binding_id ?? null,
@@ -1209,6 +1311,7 @@ export async function operatorSurfaceSendCommand(
           identity,
           identity_resolution: publicIdentityResolution(identityResolution),
           ...agentFields,
+          ...routeFields({ ...baseRoute, bindingStatus: 'missing_transport' }),
           mutation_performed: false,
           binding: {
             binding_id: binding.binding_id ?? null,
@@ -1230,6 +1333,18 @@ export async function operatorSurfaceSendCommand(
       text_digest: textDigest(text),
       text_length: text.length,
       ...agentFields,
+      ...routeFields({ ...baseRoute, bindingStatus: 'bound', resolvedRecipient: identity }),
+      sender,
+      recipient: identity,
+      site_plane: {
+        current_site: currentSite,
+        target_site: targetSite,
+      },
+      binding_proof: {
+        binding_id: binding.binding_id ?? null,
+        runtime_locus: binding.runtime_locus ?? options.runtimeLocus ?? null,
+        status: 'bound',
+      },
       dry_run: Boolean(options.dryRun || !options.execute),
       status: options.execute ? 'event_recorded_for_runtime_locus' : 'validated_dry_run',
     };
@@ -1242,6 +1357,7 @@ export async function operatorSurfaceSendCommand(
         event_artifact: eventArtifact,
         identity_resolution: publicIdentityResolution(identityResolution),
         ...agentFields,
+        ...routeFields({ ...baseRoute, bindingStatus: 'bound', resolvedRecipient: identity }),
         send,
       },
     };

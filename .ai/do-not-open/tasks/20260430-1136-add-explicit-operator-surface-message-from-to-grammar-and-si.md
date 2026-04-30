@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T17:02:51.147Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777568514653_6ls9z2
+closed_at: 2026-04-30T17:03:30.560Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add explicit Operator Surface message from-to grammar and Site-plane CAPA guard
@@ -36,9 +45,9 @@ CAPA source: narada.architect misrouted an Operator Surface message by treating 
 
 ## Acceptance Criteria
 
-- [ ] Operator Surface message routing has explicit sender and recipient semantics in command/API shape or a documented transitional command that cannot be mistaken for recipient-only identity.
-- [ ] Bare role names resolve only within the current Site plane and cross-Site addresses require Site qualification.
-- [ ] Send dry-run and failure output identify requested address, current Site, target Site, resolved identity if any, binding status, and exact repair command.
-- [ ] Successful send evidence records requested address, resolved address, sender, recipient, Site plane, runtime locus, and binding proof without collapsing them.
-- [ ] Agent onboarding/law states that labels are observations, identity admission is not addressability, and cross-Site routing must be explicit.
-- [ ] Regression tests cover same-Site builder, narada-andrey.builder from Narada proper, label-visible-but-unbound, and --identity ambiguity prevention.
+- [x] Operator Surface message routing has explicit sender and recipient semantics in command/API shape or a documented transitional command that cannot be mistaken for recipient-only identity.
+- [x] Bare role names resolve only within the current Site plane and cross-Site addresses require Site qualification.
+- [x] Send dry-run and failure output identify requested address, current Site, target Site, resolved identity if any, binding status, and exact repair command.
+- [x] Successful send evidence records requested address, resolved address, sender, recipient, Site plane, runtime locus, and binding proof without collapsing them.
+- [x] Agent onboarding/law states that labels are observations, identity admission is not addressability, and cross-Site routing must be explicit.
+- [x] Regression tests cover same-Site builder, narada-andrey.builder from Narada proper, label-visible-but-unbound, and --identity ambiguity prevention.

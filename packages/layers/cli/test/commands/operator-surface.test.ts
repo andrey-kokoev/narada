@@ -438,14 +438,139 @@ describe('operator-surface commands', () => {
       status: 'success',
       mutation_performed: false,
       event_artifact: null,
+      requested_address: 'narada-proper-builder',
+      current_site: 'narada-proper',
+      target_site: 'narada-proper',
+      message_route: {
+        sender: 'operator',
+        requested_recipient: 'narada-proper-builder',
+        resolved_recipient: 'narada-proper-builder',
+        current_site: 'narada-proper',
+        target_site: 'narada-proper',
+        binding_status: 'bound',
+        identity_flag_mode: 'deprecated_recipient_alias',
+      },
       send: {
         identity: 'narada-proper-builder',
+        sender: 'operator',
+        recipient: 'narada-proper-builder',
+        requested_address: 'narada-proper-builder',
+        current_site: 'narada-proper',
+        target_site: 'narada-proper',
+        message_route: {
+          sender: 'operator',
+          requested_recipient: 'narada-proper-builder',
+          resolved_recipient: 'narada-proper-builder',
+          current_site: 'narada-proper',
+          target_site: 'narada-proper',
+          binding_status: 'bound',
+        },
+        site_plane: {
+          current_site: 'narada-proper',
+          target_site: 'narada-proper',
+        },
+        binding_proof: {
+          binding_id: 'bind-1',
+          runtime_locus: 'pc-site',
+          status: 'bound',
+        },
         runtime_locus: 'pc-site',
         resolved_runtime_handle: 'hwnd:123',
         submit_strategy: 'known_surface_submit',
         dry_run: true,
         status: 'validated_dry_run',
       },
+    });
+  });
+
+  it('dry-runs operator-surface send with explicit from/to grammar for same-Site bare role', async () => {
+    const cwd = await tempRepo();
+    await admitIdentity(cwd);
+    await writeBindings(cwd, [{
+      binding_id: 'bind-1',
+      identity_id: 'narada-proper-builder',
+      runtime_locus: 'pc-site',
+      handle: 'hwnd:123',
+      transport: 'operator_surface_input',
+      submit_strategy: 'known_surface_submit',
+      input_capabilities: ['type_text', 'submit'],
+      status: 'active',
+    }]);
+
+    const result = await operatorSurfaceSendCommand({
+      cwd,
+      from: 'Operator',
+      to: 'builder',
+      currentSite: 'narada-proper',
+      text: 'next',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      requested_address: 'builder',
+      current_site: 'narada-proper',
+      target_site: 'narada-proper',
+      message_route: {
+        sender: 'Operator',
+        requested_recipient: 'builder',
+        resolved_recipient: 'narada-proper-builder',
+        current_site: 'narada-proper',
+        target_site: 'narada-proper',
+        identity_flag_mode: 'explicit_to',
+      },
+      send: {
+        identity: 'narada-proper-builder',
+        sender: 'Operator',
+        recipient: 'narada-proper-builder',
+        requested_address: 'builder',
+        site_plane: {
+          current_site: 'narada-proper',
+          target_site: 'narada-proper',
+        },
+      },
+    });
+  });
+
+  it('requires current Site plane for bare role recipients when Site cannot be inferred', async () => {
+    const cwd = await tempRepo();
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-proper-builder',
+      role: 'builder',
+      agentKind: 'codex_cli',
+      site: 'narada-proper',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-andrey-builder',
+      role: 'builder',
+      agentKind: 'codex_cli',
+      site: 'narada-andrey',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    const result = await operatorSurfaceSendCommand({
+      cwd,
+      to: 'builder',
+      text: 'next',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      reason: 'current_site_required_for_bare_role',
+      requested_address: 'builder',
+      current_site: null,
+      target_site: null,
+      unblock_command: 'Rerun with --current-site <site-id> or use a Site-qualified recipient such as <site>.builder.',
     });
   });
 
@@ -484,7 +609,9 @@ describe('operator-surface commands', () => {
 
     const result = await operatorSurfaceSendCommand({
       cwd,
-      identity: 'narada-andrey.builder',
+      from: 'narada-proper.builder',
+      to: 'narada-andrey.builder',
+      currentSite: 'narada-proper',
       text: 'next',
       dryRun: true,
       format: 'json',
@@ -493,8 +620,19 @@ describe('operator-surface commands', () => {
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
       status: 'success',
+      requested_address: 'narada-andrey.builder',
+      current_site: 'narada-proper',
+      target_site: 'narada-andrey',
       requested_agent: 'narada-andrey.builder',
       resolved_agent: 'narada-andrey.Bob',
+      message_route: {
+        sender: 'narada-proper.builder',
+        requested_recipient: 'narada-andrey.builder',
+        resolved_recipient: 'narada-andrey.Bob',
+        current_site: 'narada-proper',
+        target_site: 'narada-andrey',
+        binding_status: 'bound',
+      },
       agent_address_resolution: {
         status: 'role_exact_one',
         candidates: ['narada-andrey.Bob'],
@@ -508,6 +646,10 @@ describe('operator-surface commands', () => {
         identity: 'narada-andrey.Bob',
         requested_agent: 'narada-andrey.builder',
         resolved_agent: 'narada-andrey.Bob',
+        sender: 'narada-proper.builder',
+        recipient: 'narada-andrey.Bob',
+        requested_address: 'narada-andrey.builder',
+        target_site: 'narada-andrey',
         runtime_locus: 'pc-site',
       },
     });
@@ -608,6 +750,12 @@ describe('operator-surface commands', () => {
     expect(result.result).toMatchObject({
       status: 'error',
       reason: 'no_binding',
+      requested_address: 'narada-proper-builder',
+      current_site: 'narada-proper',
+      target_site: 'narada-proper',
+      message_route: {
+        binding_status: 'unbound',
+      },
       unblock_command: 'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <pc-or-user-site>',
     });
   });
@@ -673,6 +821,12 @@ describe('operator-surface commands', () => {
     expect(send.exitCode).toBe(ExitCode.INVALID_CONFIG);
     expect(send.result).toMatchObject({
       reason: 'no_binding',
+      requested_address: 'narada-proper-builder',
+      current_site: 'narada-proper',
+      target_site: 'narada-proper',
+      message_route: {
+        binding_status: 'labeled_unbound',
+      },
       label_evidence_status: 'visible_label_without_binding',
       visible_label: {
         label: 'narada.builder',
@@ -708,6 +862,9 @@ describe('operator-surface commands', () => {
       status: 'error',
       reason: 'no_binding',
       identity: 'narada-proper-observer',
+      requested_address: 'observer',
+      current_site: 'narada-proper',
+      target_site: 'narada-proper',
       identity_resolution: {
         requested_identity: 'observer',
         resolved_identity: 'narada-proper-observer',
@@ -747,12 +904,27 @@ describe('operator-surface commands', () => {
     });
   });
 
-  it('gives observer admission repair when observer alias is not admitted', async () => {
+  it('requires Site plane before giving observer admission repair for bare role recipient', async () => {
     const cwd = await tempRepo();
+
+    const missingSite = await operatorSurfaceSendCommand({
+      cwd,
+      to: 'observer',
+      text: 'Observe only.',
+      format: 'json',
+    }, createMockContext());
+
+    expect(missingSite.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(missingSite.result).toMatchObject({
+      status: 'error',
+      reason: 'current_site_required_for_bare_role',
+      requested_address: 'observer',
+    });
 
     const result = await operatorSurfaceSendCommand({
       cwd,
-      identity: 'observer',
+      to: 'observer',
+      currentSite: 'narada-proper',
       text: 'Observe only.',
       format: 'json',
     }, createMockContext());
@@ -762,6 +934,9 @@ describe('operator-surface commands', () => {
       status: 'error',
       reason: 'identity_not_admitted',
       identity: 'observer',
+      requested_address: 'observer',
+      current_site: 'narada-proper',
+      target_site: 'narada-proper',
       unblock_command: 'narada operator-surface agent instantiate --site <site-id-or-root> --role observer --agent-kind codex_cli --by <principal>',
     });
   });

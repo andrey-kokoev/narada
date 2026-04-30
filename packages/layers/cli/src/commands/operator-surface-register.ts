@@ -136,7 +136,10 @@ export function registerOperatorSurfaceCommands(program: Command): void {
   surfaceCmd
     .command('send')
     .description('Validate or record bounded input send through an admitted Operator Surface binding')
-    .requiredOption('--identity <id-or-alias>', 'Durable Operator Surface identity or admitted role alias such as observer')
+    .option('--from <sender>', 'Message sender/principal (defaults to operator)')
+    .option('--to <recipient>', 'Message recipient address; bare roles are scoped to --current-site, cross-Site recipients must be Site-qualified')
+    .option('--current-site <site-id>', 'Current Site plane for bare role recipients')
+    .option('--identity <id-or-alias>', 'Deprecated recipient alias for --to; retained for transition')
     .requiredOption('--text <text>', 'Text to send; secret-like text is refused')
     .option('--runtime-locus <locus>', 'Owning User/PC runtime locus')
     .option('--dry-run', 'Validate binding and strategy without recording send evidence', false)
@@ -149,6 +152,9 @@ export function registerOperatorSurfaceCommands(program: Command): void {
       format: (opts: Record<string, unknown>) => opts.format,
       invocation: (opts) => operatorSurfaceSendCommand({
         identity: opts.identity as string | undefined,
+        from: opts.from as string | undefined,
+        to: opts.to as string | undefined,
+        currentSite: opts.currentSite as string | undefined,
         text: opts.text as string | undefined,
         runtimeLocus: opts.runtimeLocus as string | undefined,
         dryRun: opts.dryRun as boolean | undefined,

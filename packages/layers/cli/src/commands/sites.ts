@@ -2012,6 +2012,8 @@ function siteAgentsContract(args: {
     '',
     'If Narada proper returns a runtime-locus deferral, route the deferred binding to the owning User/PC/runtime Site. Do not guess volatile window, process, terminal, API-thread, or MCP-client identity.',
     '',
+    'Operator Surface labels are observations, not addressable bindings. Identity admission proves that a durable identity exists; it does not prove that input can be sent. Cross-Site message routing must use an explicit Site-qualified recipient such as `<site>.builder`, or a bare role only inside a declared current Site plane.',
+    '',
     '## Architect Thread Bootstrap',
     '',
     'You are `architect`.',
