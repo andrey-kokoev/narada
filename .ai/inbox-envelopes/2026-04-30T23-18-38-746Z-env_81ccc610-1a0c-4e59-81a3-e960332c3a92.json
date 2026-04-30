@@ -1,0 +1,67 @@
+{
+  "envelope_id": "env_81ccc610-1a0c-4e59-81a3-e960332c3a92",
+  "received_at": "2026-04-30T23:18:38.746Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey.architect:operator-surface-delivery-promises-20260430"
+  },
+  "kind": "proposal",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Extend operator-surface message queue with delivery promises and timeout fallback policy",
+    "summary": "Operator-surface messages must be higher-level than Windows virtual desktops. Sending should enqueue a durable message and return a delivery promise; PC-local delivery should attempt only when the target surface is visible/focusable. The envelope must define what happens if delivery is not made within a bounded time.",
+    "refinement_of": "operator-surface-message-queue-process-20260430",
+    "problem": {
+      "scenario": "Operator asks architect to nudge another agent, then switches Windows virtual desktops before delivery. The target window may exist but be hidden/cloaked on another desktop.",
+      "incorrect_behavior": "Synchronous delivery either fails, types into the wrong place, or depends on current desktop visibility.",
+      "desired_behavior": "Submission returns queued/awaiting_visible_surface. A delivery worker attempts delivery only when target HWND is visible/focusable, with confirmation, retry, and governed fallback."
+    },
+    "proposed_invariant": "Message authority is Site/user-level. Delivery opportunity is PC/window/desktop-level. A durable promise bridges them without collapsing them.",
+    "envelope_requirements": [
+      "recipient identity and optional target surface binding",
+      "delivery mode such as when_visible or immediate_if_visible",
+      "delivery timeout duration",
+      "on-timeout action",
+      "fallback target locus",
+      "retry/escalation policy",
+      "reconciliation requirement and evidence links"
+    ],
+    "typed_timeout_actions": [
+      "route_to_recipient_inbox",
+      "route_to_sender_inbox",
+      "notify_sender",
+      "cancel",
+      "escalate_to_operator",
+      "retry_until_session_end",
+      "require_manual_delivery"
+    ],
+    "requests": [
+      {
+        "kind": "execution_request",
+        "text": "Add delivery_promise records for operator-surface messages: queued, awaiting_visible_surface, delivery_attempted, delivered_to_surface, admitted_by_recipient, timed_out, fallback_routed, reconciled."
+      },
+      {
+        "kind": "execution_request",
+        "text": "Add visibility-gated delivery semantics: target HWND must exist, be visible/focusable, not minimized/cloaked, and input escrow must be available before keystroke delivery."
+      },
+      {
+        "kind": "execution_request",
+        "text": "Add explicit undelivered policy to message envelopes with typed timeout actions such as route_to_recipient_inbox, route_to_sender_inbox, notify_sender, cancel, escalate_to_operator, retry_until_session_end, and require_manual_delivery."
+      },
+      {
+        "kind": "execution_request",
+        "text": "Ensure fallback routing creates another governed inbox/message artifact rather than silently dropping the original message."
+      },
+      {
+        "kind": "doctrinal_request",
+        "text": "Document the scale distinction: queue authority is Site/user-level and shared across desktops; delivery attempt is PC/window/desktop-local and opportunistic."
+      }
+    ],
+    "source_site": "narada-andrey User Site",
+    "authority_note": "Operator refined the operator-surface queue proposal with visibility-gated delivery and explicit undelivered policy."
+  },
+  "status": "received"
+}
