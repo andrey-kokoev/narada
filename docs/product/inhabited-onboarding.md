@@ -66,6 +66,23 @@ It does not turn conversation into Site authority. Operator pressure must enter 
 10. Record exit criteria.
     The Site can exit only when common first workflows are routable, observable, and safe under declared authority.
 
+## Client-Service Capability Choices
+
+Structural readiness is not inhabited readiness for a `client_service` Site. A client-service Site may have config, `.ai`, an admitted operator surface, and no pending inbox while still missing material business-capability choices.
+
+Before declaring client-service inhabited readiness, answer or explicitly defer these numbered choices:
+
+1. Mailbox/intake posture: `none_for_now`, `bind_existing_mailbox`, or `provision_or_request_mailbox`.
+2. Allowed correspondents or domains: `none_declared`, `specific_correspondents`, or `domain_predicates`.
+3. Runtime behavior: `manual_only`, `scheduled_polling`, or `continuous_background`.
+4. Sync posture: `metadata_only`, `headers_and_bodies`, or `attachments_with_bounds`.
+5. Source data loci: `none_declared`, `mailbox`, `filesystem`, or `external_system`.
+6. Affiliated Data/ELT Sites: `none_for_now`, `existing_site_refs`, or `request_new_site`.
+7. Reporting surfaces: `operator_console_only`, `site_inbox_observations`, or `external_report_artifacts`.
+8. Operator-surface roles: `architect_only`, `architect_builder_observer`, or `custom_declared_roles`.
+
+Record these under `capability_choices` or an onboarding governance surface. `narada operator start` and Site readiness output must distinguish structural posture from unresolved business-capability readiness instead of silently treating an uninhabited client-service Site as fully ready.
+
 ## Canonical Artifact
 
 Each Site should record an Inhabited Onboarding artifact under its governance surface, for example:

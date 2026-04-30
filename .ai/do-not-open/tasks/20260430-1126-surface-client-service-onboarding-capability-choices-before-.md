@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T14:52:11.347Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Readiness output now carries structural and business-capability strata; client_service Sites expose eight numbered choices including mailbox/intake posture; unresolved choices warn before inhabited readiness; docs and operator tests verify the behavior; source inbox items for this arc were already promoted/pending in canonical inbox state.
+closed_at: 2026-04-30T14:52:33.828Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Surface client-service onboarding capability choices before readiness
@@ -41,8 +50,8 @@ This is adjacent to task 1125, but not the same fault. Task 1125 covers cross-Si
 
 ## Acceptance Criteria
 
-- [ ] Client-service onboarding exposes numbered Operator choices for mailbox/intake posture: none, existing mailbox, or provision/request mailbox
-- [ ] Readiness output distinguishes structural readiness from unresolved onboarding capability choices
-- [ ] Client-service capability inventory covers mailbox/intake, allowed correspondents or domains, runtime behavior, sync posture, source data loci, affiliated Data/ELT Sites, reporting surfaces, and operator-surface roles
-- [ ] Fresh onboarding docs or tests prove the flow cannot silently declare fully inhabited readiness before material choices are answered or explicitly deferred
-- [ ] The source inbox envelope is promoted or recorded pending to the created task with durable evidence
+- [x] Client-service onboarding exposes numbered Operator choices for mailbox/intake posture: none, existing mailbox, or provision/request mailbox
+- [x] Readiness output distinguishes structural readiness from unresolved onboarding capability choices
+- [x] Client-service capability inventory covers mailbox/intake, allowed correspondents or domains, runtime behavior, sync posture, source data loci, affiliated Data/ELT Sites, reporting surfaces, and operator-surface roles
+- [x] Fresh onboarding docs or tests prove the flow cannot silently declare fully inhabited readiness before material choices are answered or explicitly deferred
+- [x] The source inbox envelope is promoted or recorded pending to the created task with durable evidence

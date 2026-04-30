@@ -11,10 +11,12 @@ import { SqliteInboxStore } from '@narada2/control-plane';
 import { operatorStartCommand } from '../../src/commands/operator.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
-function writeConfig(siteRoot: string, options: { governance?: boolean } = {}): void {
+function writeConfig(siteRoot: string, options: { governance?: boolean; siteKind?: string; capabilityChoices?: Record<string, unknown> } = {}): void {
   mkdirSync(join(siteRoot, '.ai'), { recursive: true });
   writeFileSync(join(siteRoot, 'config.json'), JSON.stringify({
     site_id: 'test-site',
+    ...(options.siteKind ? { site_kind: options.siteKind } : {}),
+    ...(options.capabilityChoices ? { capability_choices: options.capabilityChoices } : {}),
     ...(options.governance ? {
       governance: {
         governing_law_source: { source_site_id: 'narada-proper', mode: 'inherited' },
@@ -206,6 +208,89 @@ describe('operator start command', () => {
       mutation_performed: false,
       bounded_output: true,
     });
+  });
+
+  it('surfaces unresolved client-service onboarding choices before inhabited readiness', async () => {
+    const site = join(tempDir, 'site');
+    mkdirSync(site);
+    writeConfig(site, { governance: true, siteKind: 'client_service' });
+    writeIdentity(site);
+
+    const result = await operatorStartCommand({ site, role: 'architect', format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      posture: 'fully_idle',
+      readiness: {
+        posture: 'fully_idle',
+        blockers: [],
+        readiness_strata: {
+          structural: 'fully_idle',
+          business_capability: {
+            status: 'choices_unresolved',
+            unresolved_count: 8,
+          },
+        },
+        capability_choices: {
+          site_kind: 'client_service',
+          required_before_inhabited_readiness: true,
+          choices: expect.arrayContaining([
+            expect.objectContaining({
+              number: 1,
+              id: 'mailbox_intake_posture',
+              status: 'unresolved',
+              options: ['none_for_now', 'bind_existing_mailbox', 'provision_or_request_mailbox'],
+            }),
+          ]),
+        },
+        warnings: expect.arrayContaining([
+          expect.objectContaining({ name: 'client_service_capability_choices', status: 'warn' }),
+        ]),
+      },
+    });
+  });
+
+  it('treats answered or deferred client-service capability choices as business-ready', async () => {
+    const site = join(tempDir, 'site');
+    mkdirSync(site);
+    writeConfig(site, {
+      governance: true,
+      siteKind: 'client_service',
+      capabilityChoices: {
+        mailbox_intake_posture: 'none_for_now',
+        allowed_correspondents_or_domains: { status: 'deferred' },
+        runtime_behavior: 'manual_only',
+        sync_posture: 'metadata_only',
+        source_data_loci: 'none_declared',
+        affiliated_data_or_elt_sites: 'none_for_now',
+        reporting_surfaces: 'operator_console_only',
+        operator_surface_roles: 'architect_builder_observer',
+      },
+    });
+    writeIdentity(site);
+
+    const result = await operatorStartCommand({ site, role: 'architect', format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      posture: 'fully_idle',
+      readiness: {
+        readiness_strata: {
+          structural: 'fully_idle',
+          business_capability: {
+            status: 'ready',
+            unresolved_count: 0,
+          },
+        },
+        capability_choices: {
+          site_kind: 'client_service',
+          required_before_inhabited_readiness: true,
+        },
+      },
+    });
+    expect(result.result.readiness.warnings).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'client_service_capability_choices' }),
+    ]));
   });
 
   it('proves first-time Operator onboarding from fresh posture to next governed work guidance', async () => {
