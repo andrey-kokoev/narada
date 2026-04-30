@@ -13,7 +13,9 @@ import {
   operatorSurfaceLabelsBuildCommand,
   operatorSurfaceSendCommand,
   operatorSurfaceStatusCommand,
+  operatorSurfaceVoiceTranscriptionCheckCommand,
 } from '../../src/commands/operator-surface.js';
+import { capabilityGrantCommand } from '../../src/commands/capability.js';
 
 function createMockContext(): CommandContext {
   const logger = {
@@ -626,6 +628,136 @@ describe('operator-surface commands', () => {
     expect(secretLike.result).toMatchObject({
       reason: 'secret_like_text_refused',
       unblock_command: expect.stringContaining('secret references'),
+    });
+  });
+
+  it('allows microphone-only voice capture without remote transcription capability', async () => {
+    const cwd = await tempRepo();
+    const result = await operatorSurfaceVoiceTranscriptionCheckCommand({
+      cwd,
+      site: 'narada-proper',
+      principal: 'operator',
+      micOnly: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      mode: 'mic_only',
+      remote_transcription_admissible: false,
+      remote_audio_will_be_sent: false,
+      capability: { required: false },
+      raw_secret_exposed: false,
+    });
+  });
+
+  it('requires active capability consent before remote voice transcription', async () => {
+    const cwd = await tempRepo();
+    const result = await operatorSurfaceVoiceTranscriptionCheckCommand({
+      cwd,
+      site: 'narada-proper',
+      principal: 'operator',
+      credentialRef: 'env:HARMONIA_VOICE_TRANSCRIPTION_TOKEN',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      reason: 'missing_capability_consent',
+      remote_transcription_admissible: false,
+      remote_audio_will_be_sent: false,
+      capability: {
+        required: true,
+        kind: 'voice.transcription.remote',
+        action: 'remote_audio_transcribe',
+      },
+      credential: {
+        credential_ref: 'env:HARMONIA_VOICE_TRANSCRIPTION_TOKEN',
+        credential_ref_kind: 'env',
+        raw_secret_exposed: false,
+      },
+      raw_secret_exposed: false,
+    });
+  });
+
+  it('checks env credential material without exposing raw voice transcription token', async () => {
+    const cwd = await tempRepo();
+    const original = process.env.HARMONIA_VOICE_TRANSCRIPTION_TOKEN;
+    process.env.HARMONIA_VOICE_TRANSCRIPTION_TOKEN = 'voice-secret-token';
+    try {
+      const grantResult = await capabilityGrantCommand({
+        cwd,
+        site: 'narada-proper',
+        principal: 'operator',
+        kind: 'voice.transcription.remote',
+        allow: 'remote_audio_transcribe',
+        credentialRef: 'env:HARMONIA_VOICE_TRANSCRIPTION_TOKEN',
+        by: 'operator',
+        format: 'json',
+      }, createMockContext());
+      const grantId = (grantResult.result as { grant: { grant_id: string } }).grant.grant_id;
+
+      const result = await operatorSurfaceVoiceTranscriptionCheckCommand({
+        cwd,
+        site: 'narada-proper',
+        principal: 'operator',
+        capabilityGrantId: grantId,
+        format: 'json',
+      }, createMockContext());
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      expect(JSON.stringify(result.result)).not.toContain('voice-secret-token');
+      expect(result.result).toMatchObject({
+        status: 'success',
+        remote_transcription_admissible: true,
+        remote_audio_will_be_sent: false,
+        transcription_credential_available: true,
+        credential: {
+          credential_ref: 'env:HARMONIA_VOICE_TRANSCRIPTION_TOKEN',
+          credential_ref_kind: 'env',
+          local_secret_material_status: 'present',
+          raw_secret_exposed: false,
+        },
+      });
+    } finally {
+      if (original === undefined) delete process.env.HARMONIA_VOICE_TRANSCRIPTION_TOKEN;
+      else process.env.HARMONIA_VOICE_TRANSCRIPTION_TOKEN = original;
+    }
+  });
+
+  it('documents Windows Credential Manager voice credential resolution as Site-local', async () => {
+    const cwd = await tempRepo();
+    const grantResult = await capabilityGrantCommand({
+      cwd,
+      site: 'narada-proper',
+      principal: 'operator',
+      kind: 'voice.transcription.remote',
+      allow: 'remote_audio_transcribe',
+      credentialRef: 'credential-manager:Narada/HarmoniaVoiceTranscription',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+    const grantId = (grantResult.result as { grant: { grant_id: string } }).grant.grant_id;
+
+    const result = await operatorSurfaceVoiceTranscriptionCheckCommand({
+      cwd,
+      site: 'narada-proper',
+      principal: 'operator',
+      capabilityGrantId: grantId,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      remote_transcription_admissible: true,
+      credential: {
+        credential_ref_kind: 'windows_credential_manager',
+        local_secret_material_status: 'site_local_extension_required',
+        raw_secret_exposed: false,
+        repair: expect.stringContaining('owning Windows Site adapter'),
+      },
     });
   });
 

@@ -159,6 +159,37 @@ Use [`Runtime Identity Binding`](runtime-identity-binding.md) when a live runtim
 
 Use [`Capability Announcement`](capability-announcement.md) when a Site needs to publish that an Operator Surface-adjacent capability exists. Announcements are discovery metadata with entrypoints, prerequisites, evidence, and constraints; they do not grant execution authority or substitute for runtime identity binding.
 
+## Voice Transcription
+
+Voice input has two distinct postures:
+
+| Posture | Authority |
+| --- | --- |
+| Mic-only capture | Local diagnostic capture. It must not require a remote transcription credential and must not send audio off-locus. |
+| Remote transcription | Capability-bearing effect. Audio may be sent only after an active `voice.transcription.remote` capability grant admits `remote_audio_transcribe`. |
+
+Remote transcription credentials must be references, not raw tokens. Supported references include `env:<VAR>` for local runtime material and `credential-manager:<target>` for Windows Credential Manager. Narada proper may check whether an env reference is present, but Windows Credential Manager access belongs to the owning Windows Site adapter; Narada proper records the reference and extension requirement, not the secret.
+
+The readiness surface is:
+
+```bash
+narada operator-surface voice transcription-check \
+  --site <site-id> \
+  --principal <principal> \
+  --capability-grant-id <grant-id>
+```
+
+For debugging microphone capture without remote transcription:
+
+```bash
+narada operator-surface voice transcription-check \
+  --site <site-id> \
+  --principal <principal> \
+  --mic-only
+```
+
+The command intentionally separates microphone availability from transcription credential availability. Output must not include raw tokens in config, logs, traces, recognition artifacts, or task evidence.
+
 ## Inspection Posture
 
 The first coherent command posture is read-only inspection.

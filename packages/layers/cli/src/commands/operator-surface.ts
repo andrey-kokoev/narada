@@ -17,6 +17,7 @@ import {
 } from '../lib/operator-surface-registry.js';
 import { loadRoster, resolveTaskStatus } from '../lib/task-governance.js';
 import { sitesAgentBootstrapCommand } from './sites.js';
+import { grantEffectiveStatus, readCapabilityRegistry, validateCredentialRef } from '../lib/capability-consent-registry.js';
 
 export interface OperatorSurfaceIdentityAddOptions {
   cwd?: string;
@@ -64,6 +65,16 @@ export interface OperatorSurfaceStatusOptions {
   cwd?: string;
   site?: string;
   limit?: number;
+  format?: CliFormat;
+}
+
+export interface OperatorSurfaceVoiceTranscriptionCheckOptions {
+  cwd?: string;
+  site?: string;
+  principal?: string;
+  capabilityGrantId?: string;
+  credentialRef?: string;
+  micOnly?: boolean;
   format?: CliFormat;
 }
 
@@ -253,6 +264,51 @@ function looksSecretLike(text: string): boolean {
 
 function textDigest(text: string): string {
   return createHash('sha256').update(text).digest('hex');
+}
+
+function resolveCredentialReferencePosture(credentialRef: string | null): {
+  credential_ref: string | null;
+  credential_ref_kind: 'none' | 'env' | 'windows_credential_manager' | 'site_local_extension';
+  local_secret_material_status: 'not_required' | 'present' | 'missing' | 'site_local_extension_required';
+  raw_secret_exposed: false;
+  repair: string | null;
+} {
+  if (!credentialRef) {
+    return {
+      credential_ref: null,
+      credential_ref_kind: 'none',
+      local_secret_material_status: 'missing',
+      raw_secret_exposed: false,
+      repair: 'Bind a credential reference: narada capability bind-credential --kind voice.transcription.remote --credential-ref env:<VAR> --allow remote_audio_transcribe --by <principal>',
+    };
+  }
+  if (credentialRef.startsWith('env:')) {
+    const envVar = credentialRef.slice('env:'.length);
+    const present = Boolean(envVar && process.env[envVar]?.trim());
+    return {
+      credential_ref: credentialRef,
+      credential_ref_kind: 'env',
+      local_secret_material_status: present ? 'present' : 'missing',
+      raw_secret_exposed: false,
+      repair: present ? null : `Set local secret material for ${envVar} in the owning runtime locus; do not put the raw token in config, logs, traces, artifacts, or task evidence.`,
+    };
+  }
+  if (credentialRef.startsWith('credential-manager:')) {
+    return {
+      credential_ref: credentialRef,
+      credential_ref_kind: 'windows_credential_manager',
+      local_secret_material_status: 'site_local_extension_required',
+      raw_secret_exposed: false,
+      repair: 'Resolve this credential through the owning Windows Site adapter; Narada proper records only the credential-manager reference.',
+    };
+  }
+  return {
+    credential_ref: credentialRef,
+    credential_ref_kind: 'site_local_extension',
+    local_secret_material_status: 'site_local_extension_required',
+    raw_secret_exposed: false,
+    repair: 'Resolve this credential through a Site-local secret resolver extension; Narada proper must not receive raw secret material.',
+  };
 }
 
 async function writeOperatorSurfaceSendEvent(cwd: string, event: Record<string, unknown>): Promise<string> {
@@ -672,6 +728,128 @@ export async function operatorSurfaceStatusCommand(
       ].join(' | ')),
     },
   };
+}
+
+export async function operatorSurfaceVoiceTranscriptionCheckCommand(
+  options: OperatorSurfaceVoiceTranscriptionCheckOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  try {
+    const cwd = options.cwd ?? '.';
+    const site = requireText(options.site, '--site');
+    const principal = requireText(options.principal, '--principal');
+    const micOnly = Boolean(options.micOnly);
+
+    if (micOnly) {
+      return {
+        exitCode: ExitCode.SUCCESS,
+        result: {
+          status: 'success',
+          mutation_performed: false,
+          mode: 'mic_only',
+          site,
+          principal,
+          microphone_capture_available: 'not_tested_by_narada_proper',
+          remote_transcription_admissible: false,
+          remote_audio_will_be_sent: false,
+          credential: resolveCredentialReferencePosture(null),
+          capability: {
+            required: false,
+            grant_id: null,
+            kind: 'voice.transcription.remote',
+            action: 'remote_audio_transcribe',
+          },
+          repair: null,
+          raw_secret_exposed: false,
+        },
+      };
+    }
+
+    const registry = await readCapabilityRegistry(cwd);
+    const grant = options.capabilityGrantId
+      ? registry.grants.find((entry) => entry.grant_id === options.capabilityGrantId)
+      : registry.grants.find((entry) =>
+        entry.site_id === site &&
+        entry.principal_id === principal &&
+        entry.capability_kind === 'voice.transcription.remote' &&
+        entry.allowed_actions.includes('remote_audio_transcribe') &&
+        grantEffectiveStatus(entry) === 'active'
+      );
+
+    if (!grant) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          reason: 'missing_capability_consent',
+          mode: 'remote_transcription',
+          site,
+          principal,
+          microphone_capture_available: 'not_tested_by_narada_proper',
+          transcription_credential_available: false,
+          remote_transcription_admissible: false,
+          remote_audio_will_be_sent: false,
+          capability: {
+            required: true,
+            grant_id: options.capabilityGrantId ?? null,
+            kind: 'voice.transcription.remote',
+            action: 'remote_audio_transcribe',
+            effective_status: null,
+          },
+          credential: resolveCredentialReferencePosture(validateCredentialRef(options.credentialRef)),
+          repair: 'Grant consent before remote audio transcription: narada capability grant --site <site> --principal <principal> --kind voice.transcription.remote --allow remote_audio_transcribe --credential-ref env:<VAR> --by <principal>',
+          raw_secret_exposed: false,
+        },
+      };
+    }
+
+    const effectiveStatus = grantEffectiveStatus(grant);
+    const actionAllowed = grant.allowed_actions.includes('remote_audio_transcribe');
+    const kindAllowed = grant.capability_kind === 'voice.transcription.remote';
+    const siteAllowed = grant.site_id === site;
+    const principalAllowed = grant.principal_id === principal;
+    const credentialRef = validateCredentialRef(options.credentialRef) ?? grant.credential_ref;
+    const credential = resolveCredentialReferencePosture(credentialRef);
+    const blockers: string[] = [];
+    if (effectiveStatus !== 'active') blockers.push(`grant ${effectiveStatus}`);
+    if (!kindAllowed) blockers.push('grant kind is not voice.transcription.remote');
+    if (!actionAllowed) blockers.push('grant does not allow remote_audio_transcribe');
+    if (!siteAllowed) blockers.push('grant site does not match requested Site');
+    if (!principalAllowed) blockers.push('grant principal does not match requested principal');
+    if (!credentialRef) blockers.push('credential reference missing');
+    if (credential.local_secret_material_status === 'missing') blockers.push('credential material missing');
+
+    return {
+      exitCode: blockers.length === 0 ? ExitCode.SUCCESS : ExitCode.INVALID_CONFIG,
+      result: {
+        status: blockers.length === 0 ? 'success' : 'error',
+        reason: blockers.length === 0 ? null : 'remote_transcription_not_admissible',
+        mode: 'remote_transcription',
+        site,
+        principal,
+        microphone_capture_available: 'not_tested_by_narada_proper',
+        transcription_credential_available: credential.local_secret_material_status === 'present' || credential.local_secret_material_status === 'site_local_extension_required',
+        remote_transcription_admissible: blockers.length === 0,
+        remote_audio_will_be_sent: false,
+        capability: {
+          required: true,
+          grant_id: grant.grant_id,
+          kind: grant.capability_kind,
+          action: 'remote_audio_transcribe',
+          effective_status: effectiveStatus,
+          allowed: kindAllowed && actionAllowed && siteAllowed && principalAllowed,
+        },
+        credential,
+        blockers,
+        repair: blockers.length === 0
+          ? 'Remote adapter may proceed only after its own dry-run/output-admission path; this check does not send audio.'
+          : credential.repair ?? 'Repair capability consent before remote audio transcription.',
+        raw_secret_exposed: false,
+      },
+    };
+  } catch (error) {
+    return errorResult(error);
+  }
 }
 
 async function resolveSelfIdentity(cwd: string): Promise<{ identity: string | null; source: string; blockers: string[] }> {

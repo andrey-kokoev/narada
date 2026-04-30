@@ -9,6 +9,7 @@ import {
   operatorSurfaceLabelsBuildCommand,
   operatorSurfaceSendCommand,
   operatorSurfaceStatusCommand,
+  operatorSurfaceVoiceTranscriptionCheckCommand,
 } from './operator-surface.js';
 
 export function registerOperatorSurfaceCommands(program: Command): void {
@@ -152,6 +153,32 @@ export function registerOperatorSurfaceCommands(program: Command): void {
         runtimeLocus: opts.runtimeLocus as string | undefined,
         dryRun: opts.dryRun as boolean | undefined,
         execute: opts.execute as boolean | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  const voiceCmd = surfaceCmd.command('voice').description('Operator Surface voice input readiness operators');
+  voiceCmd
+    .command('transcription-check')
+    .description('Check governed voice transcription credential and capability posture without sending audio')
+    .requiredOption('--site <site-id>', 'Site whose operator surface owns the voice input')
+    .requiredOption('--principal <principal>', 'Principal requesting transcription')
+    .option('--capability-grant-id <id>', 'Specific voice.transcription.remote grant to use')
+    .option('--credential-ref <ref>', 'Credential reference override, e.g. env:VAR or credential-manager:target')
+    .option('--mic-only', 'Check local microphone-only posture; no remote transcription or credential required', false)
+    .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'operator-surface voice transcription-check',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => operatorSurfaceVoiceTranscriptionCheckCommand({
+        site: opts.site as string | undefined,
+        principal: opts.principal as string | undefined,
+        capabilityGrantId: opts.capabilityGrantId as string | undefined,
+        credentialRef: opts.credentialRef as string | undefined,
+        micOnly: opts.micOnly as boolean | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),
