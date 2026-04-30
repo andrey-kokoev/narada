@@ -20,6 +20,7 @@ import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { parseFrontMatter } from '../lib/task-governance.js';
 import {
+  extractSection,
   parseTaskSpecFromMarkdown,
   renderTaskBodyFromSpec,
   type TaskSpecRecord,
@@ -166,6 +167,15 @@ export async function taskCreateCommand(
         frontMatter: parsed.frontMatter,
         body: parsed.body,
       });
+      if (extractSection(parsed.body, 'Acceptance Criteria') && spec.acceptance_criteria.length === 0) {
+        return {
+          exitCode: ExitCode.GENERAL_ERROR,
+          result: {
+            status: 'error',
+            error: 'Failed to parse --from-file Acceptance Criteria: use checkbox items (`- [ ]`), bullet items (`- item`), or numbered items (`1. item`).',
+          },
+        };
+      }
       if (!effectiveDependsOn && spec.dependencies.length > 0) {
         effectiveDependsOn = spec.dependencies;
       }

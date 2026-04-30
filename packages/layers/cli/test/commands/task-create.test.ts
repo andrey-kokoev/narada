@@ -6,6 +6,7 @@ vi.unmock('node:fs/promises');
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskCreateCommand } from '../../src/commands/task-create.js';
 import { taskListCommand } from '../../src/commands/task-list.js';
+import { taskReadCommand } from '../../src/commands/task-read.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import {
@@ -273,6 +274,72 @@ describe('task create operator', () => {
     } finally {
       store.db.close();
     }
+  });
+
+  it('preserves plain and numbered --from-file acceptance criteria in lifecycle authority', async () => {
+    const bodyContent = [
+      '# Template Task',
+      '',
+      '## Acceptance Criteria',
+      '',
+      '- Plain bullet criterion',
+      '1. Numbered criterion',
+      '',
+    ].join('\n');
+    writeFileSync(join(tempDir, 'source-criteria.md'), bodyContent);
+
+    const result = await taskCreateCommand({
+      cwd: tempDir,
+      title: 'From file criteria',
+      fromFile: 'source-criteria.md',
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const taskNumber = (result.result as { task_number: number }).task_number;
+
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      const spec = store.getTaskSpecByNumber(taskNumber);
+      expect(JSON.parse(spec!.acceptance_criteria_json)).toEqual([
+        'Plain bullet criterion',
+        'Numbered criterion',
+      ]);
+    } finally {
+      store.db.close();
+    }
+
+    const read = await taskReadCommand({ cwd: tempDir, taskNumber: String(taskNumber), format: 'json' });
+    expect(read.exitCode).toBe(ExitCode.SUCCESS);
+    expect((read.result as { task: { acceptance_criteria: Array<{ text: string; checked: boolean }> } }).task.acceptance_criteria).toEqual([
+      { text: 'Plain bullet criterion', checked: false },
+      { text: 'Numbered criterion', checked: false },
+    ]);
+  });
+
+  it('returns a clear diagnostic for unparseable --from-file acceptance criteria sections', async () => {
+    const bodyContent = [
+      '# Template Task',
+      '',
+      '## Acceptance Criteria',
+      '',
+      'Criteria are described in prose but not list items.',
+      '',
+    ].join('\n');
+    writeFileSync(join(tempDir, 'source-bad-criteria.md'), bodyContent);
+
+    const result = await taskCreateCommand({
+      cwd: tempDir,
+      title: 'Bad criteria',
+      fromFile: 'source-bad-criteria.md',
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      error: expect.stringContaining('Failed to parse --from-file Acceptance Criteria'),
+    });
   });
 
   it('errors when --from-file does not exist', async () => {

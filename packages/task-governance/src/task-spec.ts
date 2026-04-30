@@ -57,11 +57,28 @@ export function extractAcceptanceCriteriaState(
   for (const line of section.split('\n')) {
     const trimmed = line.trim();
     const itemMatch = trimmed.match(/^-\s+\[([xX ])\]\s*(.*)$/);
-    if (!itemMatch) continue;
-    items.push({
-      text: itemMatch[2].trim(),
-      checked: itemMatch[1].toLowerCase() === 'x',
-    });
+    if (itemMatch) {
+      items.push({
+        text: itemMatch[2].trim(),
+        checked: itemMatch[1].toLowerCase() === 'x',
+      });
+      continue;
+    }
+    const bulletMatch = trimmed.match(/^[-*]\s+(.*)$/);
+    if (bulletMatch) {
+      items.push({
+        text: bulletMatch[1].trim(),
+        checked: false,
+      });
+      continue;
+    }
+    const numberedMatch = trimmed.match(/^\d+\.\s+(.*)$/);
+    if (numberedMatch) {
+      items.push({
+        text: numberedMatch[1].trim(),
+        checked: false,
+      });
+    }
   }
   return items;
 }
