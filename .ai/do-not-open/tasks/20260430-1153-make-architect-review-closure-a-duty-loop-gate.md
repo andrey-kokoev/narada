@@ -1,5 +1,5 @@
 ---
-status: opened
+status: claimed
 ---
 
 # Make Architect review closure a duty-loop gate
