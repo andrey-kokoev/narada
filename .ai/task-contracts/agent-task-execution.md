@@ -83,6 +83,21 @@ narada work-next --agent architect --peek --format json
 
 Builder-facing `narada work-next --agent <builder>` output must surface pending review/closure context as Architect duty-loop work when that posture suppresses further Builder assignment. Builders finish, report, and provide evidence. Architects/reviewers review, unblock, admit, close, or route blockers.
 
+## Completion Claim Reconciliation
+
+Chat, operator-surface, or spoken claims such as `done`, `completed`, or `ready` are observations, not lifecycle authority.
+
+Before Architect treats a Builder completion claim as review-ready, reconcile it through the compact sanctioned surface:
+
+```bash
+narada task reconcile claim --task <number> --format json
+narada task reconcile claim --agent <builder-id> --format json
+```
+
+The reconciliation must report lifecycle status, criteria posture, report presence, verification evidence, dirty worktree posture, latest commits, exact blockers, and `recommended_action`. If the result is `return_to_builder`, Architect returns the blocker list to Builder. If the result is `review_ready`, Architect may proceed through `narada task review`, `task evidence admit`, `task close`, or the relevant governed closure path.
+
+Builders complete work through durable task surfaces: `task report`, `task finish`, `task evidence prove-criteria`, `task evidence admit`, and `task close` as applicable. A chat completion claim never substitutes for those surfaces.
+
 ## Safety
 
 - Do not interpret, narrow, relax, or silently carve exceptions into operator-set constraints.

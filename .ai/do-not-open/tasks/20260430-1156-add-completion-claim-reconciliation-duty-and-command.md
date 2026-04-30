@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T23:37:35.965Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777592200239_mh6bhe
+closed_at: 2026-04-30T23:37:53.743Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add completion-claim reconciliation duty and command
@@ -32,8 +41,8 @@ Source inbox envelope env_75d1eabe-e310-46c2-8059-f75fee63d2fd reports a User Si
 
 ## Acceptance Criteria
 
-- [ ] Architect docs or guidance state that chat and operator-surface completion claims are observations, not lifecycle authority.
-- [ ] A compact reconcile-claim command or specified equivalent reports lifecycle, criteria, report, verification, dirty files, and recommended action.
-- [ ] Builder guidance requires durable task report, finish, or close path for completion.
-- [ ] Reconciliation output can return review-ready or return-to-builder with exact blockers.
-- [ ] Tests or fixtures cover the incident shape where Builder says done but task is still claimed with missing evidence.
+- [x] Architect docs or guidance state that chat and operator-surface completion claims are observations, not lifecycle authority.
+- [x] A compact reconcile-claim command or specified equivalent reports lifecycle, criteria, report, verification, dirty files, and recommended action.
+- [x] Builder guidance requires durable task report, finish, or close path for completion.
+- [x] Reconciliation output can return review-ready or return-to-builder with exact blockers.
+- [x] Tests or fixtures cover the incident shape where Builder says done but task is still claimed with missing evidence.

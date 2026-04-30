@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import {
   findTaskFile,
   getActiveAssignment,
   inspectTaskEvidence,
+  listReportsForTask,
   loadAssignment,
   loadRoster,
   readTaskFile,
@@ -38,6 +40,13 @@ export interface TaskReconcileRepairOptions {
   format?: 'json' | 'human' | 'auto';
 }
 
+export interface TaskReconcileClaimOptions {
+  taskNumber?: string;
+  agent?: string;
+  cwd?: string;
+  format?: 'json' | 'human' | 'auto';
+}
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -52,6 +61,48 @@ function findingId(kind: string, taskNumber: number | null, identity: unknown = 
 
 function repairId(findingIdValue: string): string {
   return `rr_${findingIdValue}_${Date.now()}`;
+}
+
+function gitLines(cwd: string, args: string[]): string[] {
+  try {
+    return execFileSync('git', args, {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function compactDirtyState(cwd: string): Record<string, unknown> {
+  const allEntries = gitLines(cwd, ['status', '--porcelain']);
+  const entries = allEntries.slice(0, 12);
+  const count = allEntries.length;
+  return {
+    dirty: count > 0,
+    count,
+    entries,
+    truncated: count > entries.length,
+  };
+}
+
+function latestCommits(cwd: string): Array<{ commit: string; subject: string }> {
+  return gitLines(cwd, ['log', '--oneline', '-3']).map((line) => {
+    const [commit = '', ...rest] = line.split(/\s+/);
+    return { commit, subject: rest.join(' ') };
+  });
+}
+
+async function resolveClaimTaskNumber(cwd: string, options: TaskReconcileClaimOptions): Promise<number | null> {
+  if (options.taskNumber) {
+    const parsed = Number(options.taskNumber);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (!options.agent) return null;
+  const roster = await loadRoster(cwd);
+  const agent = roster.agents.find((entry) => entry.agent_id === options.agent || entry.role === options.agent);
+  return agent?.task ?? null;
 }
 
 function inferClosureMode(governedBy: string | null | undefined): TaskClosureMode {
@@ -215,6 +266,91 @@ export async function taskReconcileInspectCommand(
     exitCode: ExitCode.SUCCESS,
     result: { status: 'success', count: findings.length, range, persisted: false, findings },
   };
+}
+
+export async function taskReconcileClaimCommand(
+  options: TaskReconcileClaimOptions,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
+  const taskNumber = await resolveClaimTaskNumber(cwd, options);
+  if (taskNumber === null) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: {
+        status: 'error',
+        reason: 'task_or_agent_required',
+        error: 'Provide --task <number> or --agent <id> whose roster entry has a current task.',
+      },
+    };
+  }
+
+  const store = openTaskLifecycleStore(cwd);
+  try {
+    const taskFile = await findTaskFile(cwd, String(taskNumber));
+    const lifecycle = store.getLifecycleByNumber(taskNumber);
+    const evidence = await inspectTaskEvidence(cwd, String(taskNumber), store);
+    const reports = evidence.task_id ? await listReportsForTask(cwd, evidence.task_id) : [];
+    const verificationRuns = evidence.task_id ? store.listVerificationRunsForTask(evidence.task_id) : [];
+    const dirty = compactDirtyState(cwd);
+    const blockers: string[] = [];
+    if (lifecycle?.status !== 'in_review' && lifecycle?.status !== 'closed' && lifecycle?.status !== 'confirmed') {
+      blockers.push(`lifecycle_status:${lifecycle?.status ?? evidence.status ?? 'unknown'}`);
+    }
+    if (!evidence.all_criteria_checked) blockers.push(`unchecked_criteria:${evidence.unchecked_count}`);
+    if (!evidence.has_report) blockers.push('missing_report');
+    if (!evidence.has_verification && verificationRuns.length === 0) blockers.push('missing_verification');
+    if (dirty.dirty) blockers.push(`dirty_worktree:${dirty.count}`);
+
+    const ready = blockers.length === 0 && ['needs_review', 'needs_closure', 'complete'].includes(evidence.verdict);
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: {
+        status: 'success',
+        mutation_performed: false,
+        claim_authority: 'observation_only',
+        task_number: taskNumber,
+        task_id: evidence.task_id,
+        task_file: taskFile?.path ?? null,
+        lifecycle: {
+          status: lifecycle?.status ?? evidence.status ?? null,
+          governed_by: lifecycle?.governed_by ?? null,
+          updated_at: lifecycle?.updated_at ?? null,
+        },
+        evidence: {
+          verdict: evidence.verdict,
+          all_criteria_checked: evidence.all_criteria_checked,
+          unchecked_count: evidence.unchecked_count,
+          has_execution_notes: evidence.has_execution_notes,
+          has_report: evidence.has_report,
+          has_review: evidence.has_review,
+          has_verification: evidence.has_verification,
+          has_governed_provenance: evidence.has_governed_provenance,
+          warnings: evidence.warnings,
+          violations: evidence.violations,
+        },
+        reports: {
+          count: reports.length,
+          latest: reports[reports.length - 1]?.report_id ?? null,
+          latest_by: reports[reports.length - 1]?.agent_id ?? null,
+        },
+        verification_runs: {
+          count: verificationRuns.length,
+          latest: verificationRuns[verificationRuns.length - 1]?.run_id ?? null,
+          latest_status: verificationRuns[verificationRuns.length - 1]?.status ?? null,
+        },
+        dirty_state: dirty,
+        latest_commits: latestCommits(cwd),
+        blockers,
+        recommended_action: ready ? 'review_ready' : 'return_to_builder',
+        recommended_command: ready
+          ? `narada task review ${taskNumber} --agent architect --verdict accepted`
+          : `narada task work-next --agent ${options.agent ?? '<builder-agent>'}`,
+        guidance: 'Treat chat/operator-surface completion claims as observations. Reconcile durable lifecycle, evidence, verification, and git state before review.',
+      },
+    };
+  } finally {
+    store.db.close();
+  }
 }
 
 export async function taskReconcileRecordCommand(

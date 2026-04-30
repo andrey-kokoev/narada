@@ -5,9 +5,10 @@ vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { taskReconcileInspectCommand, taskReconcileRecordCommand, taskReconcileRepairCommand } from '../../src/commands/task-reconcile.js';
+import { taskReconcileClaimCommand, taskReconcileInspectCommand, taskReconcileRecordCommand, taskReconcileRepairCommand } from '../../src/commands/task-reconcile.js';
 import { taskCreateCommand } from '../../src/commands/task-create.js';
 import { taskClaimCommand } from '../../src/commands/task-claim.js';
 import { taskReportCommand } from '../../src/commands/task-report.js';
@@ -44,6 +45,17 @@ describe('task reconcile operator', () => {
     );
     const store = openTaskLifecycleStore(tempDir);
     try {
+      store.upsertRosterEntry({
+        agent_id: 'a1',
+        role: 'implementer',
+        capabilities_json: JSON.stringify(['claim']),
+        first_seen_at: '2026-04-25T00:00:00Z',
+        last_active_at: '2026-04-25T00:00:00Z',
+        status: 'idle',
+        task_number: null,
+        last_done: null,
+        updated_at: '2026-04-25T00:00:00Z',
+      });
       store.upsertLifecycle({
         task_id: '20260425-655-drift',
         task_number: 655,
@@ -100,6 +112,44 @@ describe('task reconcile operator', () => {
     expect(repair.exitCode).toBe(ExitCode.SUCCESS);
     const content = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260425-655-drift.md'), 'utf8');
     expect(content).toContain('status: claimed');
+  });
+
+  it('reconciles informal completion claims back to Builder when durable evidence is missing', async () => {
+    execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['init', '-b', 'main'], { cwd: tempDir });
+    execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['config', 'user.email', 'test@example.invalid'], { cwd: tempDir });
+    execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['config', 'user.name', 'Test Agent'], { cwd: tempDir });
+    execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['add', '.'], { cwd: tempDir });
+    execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['commit', '-m', 'base'], { cwd: tempDir });
+    writeFileSync(join(tempDir, 'dirty-source.ts'), 'export const dirty = true;\n');
+
+    const result = await taskReconcileClaimCommand({ cwd: tempDir, taskNumber: '655', agent: 'a1', format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      mutation_performed: false,
+      claim_authority: 'observation_only',
+      task_number: 655,
+      lifecycle: {
+        status: 'claimed',
+      },
+      evidence: {
+        all_criteria_checked: false,
+        has_report: false,
+      },
+      dirty_state: {
+        dirty: true,
+      },
+      recommended_action: 'return_to_builder',
+      guidance: expect.stringContaining('completion claims as observations'),
+    });
+    expect((result.result as { blockers: string[] }).blockers).toEqual(expect.arrayContaining([
+      'lifecycle_status:claimed',
+      'unchecked_criteria:1',
+      'missing_report',
+      'missing_verification',
+    ]));
+    expect((result.result as { blockers: string[] }).blockers.join(' ')).toContain('dirty_worktree:');
   });
 
   it('repairs roster assignment lifecycle drift by clearing stale roster work', async () => {

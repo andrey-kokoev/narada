@@ -1,5 +1,6 @@
 import type { Command } from 'commander';
 import {
+  taskReconcileClaimCommand,
   taskReconcileInspectCommand,
   taskReconcileRecordCommand,
   taskReconcileRepairCommand,
@@ -11,6 +12,25 @@ export function registerTaskReconcileCommands(taskCmd: Command): void {
   const reconcileCmd = taskCmd
     .command('reconcile')
     .description('Task reconciliation operators (inspect, record, repair)');
+
+  reconcileCmd
+    .command('claim')
+    .description('Reconcile an informal completion claim against lifecycle, evidence, verification, and git state')
+    .option('--task <number>', 'Task number to reconcile')
+    .option('--agent <id>', 'Agent whose current task should be reconciled')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'task reconcile claim',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => taskReconcileClaimCommand({
+        taskNumber: opts.task as string | undefined,
+        agent: opts.agent as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
 
   reconcileCmd
     .command('inspect')
