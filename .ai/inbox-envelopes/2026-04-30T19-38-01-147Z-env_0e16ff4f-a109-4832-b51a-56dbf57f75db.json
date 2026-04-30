@@ -1,0 +1,30 @@
+{
+  "envelope_id": "env_0e16ff4f-a109-4832-b51a-56dbf57f75db",
+  "received_at": "2026-04-30T19:38:01.147Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-cpy.architect-chat"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-cpy.architect"
+  },
+  "payload": {
+    "title": "Operator-surface identity schema mismatch between Narada CLI and Windows carrier scripts",
+    "summary": "Admitting narada-cpy.builder through narada operator-surface identity add produced a modern identity_id-shaped record, while current Windows carrier scripts still require legacy identity_name, role_metadata, narada_site_relation, and label_projection fields. The identity was not bindable until compatibility fields were manually added.",
+    "evidence": [
+      "narada operator-surface agent instantiate admitted narada-cpy.builder into CPY Site registry successfully.",
+      "narada operator-surface identity add admitted narada-cpy.builder into User Site registry but wrote identity_id rather than identity_name.",
+      "Set-FocusedWindowIdentityBinding.ps1 searches registry.identities by $_.identity_name and would not find the new record shape.",
+      "Build-WindowLabelsFromIdentities.ps1 also reads identity_name, role_metadata, narada_site_relation, and label_projection."
+    ],
+    "proposal": [
+      "Make Windows carrier scripts accept canonical identity_id records directly, or make narada operator-surface identity add emit a carrier-compatible projection for the current Windows User Site schema.",
+      "Add regression coverage for bind-focused / Set-FocusedWindowIdentityBinding against identity records emitted by narada operator-surface identity add.",
+      "Add an operator-surface doctor/preflight check that reports schema incompatibility before a forked builder reaches a failed bind step."
+    ],
+    "local_repair": "Added compatibility fields for narada-cpy.builder in C:/Users/Andrey/Narada/operator-surfaces/identities.json and rebuilt window-labels.json."
+  },
+  "status": "received"
+}
