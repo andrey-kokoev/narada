@@ -1,6 +1,16 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T05:48:59.912Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Focused site bootstrap tests, CLI typecheck/build, and live dry-run readback verify all acceptance criteria for paired preflight, partial-state evidence, success coordinates, and coverage.
+closed_at: 2026-04-30T05:49:17.893Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
+
 # Make paired Windows User/PC bootstrap two-phase safe
 
 ## Chapter
@@ -38,7 +48,7 @@ Inbox observation env_ffeed7c4 reports that `--execute` initializes the User Sit
 
 ## Acceptance Criteria
 
-- [ ] bootstrap-windows performs paired preflight before creating either Site
-- [ ] PC Site failure after User Site creation produces explicit partial-state evidence and exact repair guidance
-- [ ] Successful execution records both User and PC Site coordinates and validation commands
-- [ ] Tests cover preflight failure, partial creation, repair evidence, and success
+- [x] bootstrap-windows performs paired preflight before creating either Site
+- [x] PC Site failure after User Site creation produces explicit partial-state evidence and exact repair guidance
+- [x] Successful execution records both User and PC Site coordinates and validation commands
+- [x] Tests cover preflight failure, partial creation, repair evidence, and success

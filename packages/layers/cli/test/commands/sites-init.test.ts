@@ -77,9 +77,23 @@ vi.mock('@narada2/linux-site', async (importOriginal) => {
   };
 });
 
+vi.mock('../../src/lib/task-lifecycle-store.js', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('../../src/lib/task-lifecycle-store.js')>();
+  return {
+    ...mod,
+    openTaskLifecycleStore: vi.fn(() => ({
+      db: {
+        close: vi.fn(),
+      },
+    })),
+  };
+});
+
 describe('sitesInitCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockRegistry.registerSite.mockReset();
+    mockRegistry.close.mockReset();
     vi.restoreAllMocks();
     vol.reset();
     vol.mkdirSync('/tmp', { recursive: true });
@@ -482,6 +496,7 @@ describe('sitesInitCommand', () => {
       }>;
       adapter_plan: Array<{ adapter: string; authority_locus: string; dry_run: boolean; execute_required: boolean; mutation_performed: boolean }>;
       evidence: { bounded: boolean; raw_sqlite_read: boolean; direct_task_file_inspection: boolean; residual_manual_steps: unknown[] };
+      preflight: { user: { siteId: string }; pc: { siteId: string } };
       user: { config: { locus: { authority_locus: string }; sync: { posture: string }; execution: { surface: string; target_authority_locus: string } } };
       pc: { config: { locus: { authority_locus: string }; execution: { surface: string; target_authority_locus: string; path_translation: { wsl_path: string }; permission_posture: string } } };
     };
@@ -500,6 +515,9 @@ describe('sitesInitCommand', () => {
     expect(data.pc.config.execution.target_authority_locus).toBe('windows_pc');
     expect(data.pc.config.execution.path_translation.wsl_path).toBe('/mnt/c/ProgramData/Narada/sites/pc/desktop-sunroom');
     expect(data.pc.config.execution.permission_posture).toBe('pc_locus_programdata_write_required');
+    expect(data.preflight).toBeDefined();
+    expect(data.preflight.user.siteId).toBe('andrey-user');
+    expect(data.preflight.pc.siteId).toBe('desktop-sunroom');
     expect(data.validation_commands).toEqual([
       'narada sites doctor andrey-user --authority-locus user',
       'narada sites doctor desktop-sunroom --authority-locus pc',
@@ -525,6 +543,140 @@ describe('sitesInitCommand', () => {
     ]));
     expect(data.evidence).toMatchObject({ bounded: true, raw_sqlite_read: false, direct_task_file_inspection: false });
     expect(mockRegistry.registerSite).not.toHaveBeenCalled();
+  });
+
+  it('performs paired preflight before creating either Windows Site', async () => {
+    process.env.NARADA_EXECUTOR_RUNTIME = 'wsl';
+    process.env.COMPUTERNAME = 'DESKTOP-SUNROOM';
+
+    const result = await sitesBootstrapWindowsCommand({
+      sync: 'unsupported-sync',
+      execute: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    const data = result.result as {
+      status: string;
+      phase: string;
+      mutation_performed: boolean;
+      repair_guidance: string;
+      preflight: { user: { status: string; error: string }; pc: null };
+    };
+    expect(data).toMatchObject({
+      status: 'error',
+      phase: 'paired_preflight_user_site',
+      mutation_performed: false,
+    });
+    expect(data.preflight.user.error).toContain('Unsupported sync posture');
+    expect(data.preflight.pc).toBeNull();
+    expect(data.repair_guidance).toBe('Fix the Windows User Site preflight error, then rerun narada sites bootstrap-windows --execute --format json.');
+    expect(mockRegistry.registerSite).not.toHaveBeenCalled();
+    expect(Object.keys(vol.toJSON()).sort()).toEqual(['/tmp']);
+  });
+
+  it('reports partial-state evidence when PC Site execution fails after User Site creation', async () => {
+    process.env.NARADA_EXECUTOR_RUNTIME = 'wsl';
+    process.env.COMPUTERNAME = 'DESKTOP-SUNROOM';
+    mockRegistry.registerSite.mockImplementation((site: { siteId: string }) => {
+      if (site.siteId === 'desktop-sunroom') {
+        throw new Error('pc registry write denied');
+      }
+      return undefined;
+    });
+
+    const result = await sitesBootstrapWindowsCommand({
+      userSiteId: 'andrey-user',
+      pcSiteId: 'desktop-sunroom',
+      execute: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    const data = result.result as {
+      status: string;
+      phase: string;
+      mutation_performed: boolean;
+      error: string;
+      repair_guidance: string[];
+      partial_state: {
+        kind: string;
+        user_site_created: boolean;
+        pc_site_created: boolean;
+        user_site_id: string;
+        pc_site_id: string;
+        evidence: string;
+      };
+      preflight: { user: { siteId: string }; pc: { siteId: string } };
+      user: { siteId: string };
+      pc: { status: string };
+    };
+    expect(data).toMatchObject({
+      status: 'partial',
+      phase: 'pc_site_execute',
+      mutation_performed: true,
+      partial_state: {
+        kind: 'user_created_pc_failed',
+        user_site_created: true,
+        pc_site_created: false,
+        user_site_id: 'andrey-user',
+        pc_site_id: 'desktop-sunroom',
+        evidence: 'User Site execute succeeded before PC Site execute failed.',
+      },
+    });
+    expect(data.preflight.user.siteId).toBe('andrey-user');
+    expect(data.preflight.pc.siteId).toBe('desktop-sunroom');
+    expect(data.user.siteId).toBe('andrey-user');
+    expect(data.error).toContain('pc registry write denied');
+    expect(data.repair_guidance).toEqual([
+      'A Windows User Site was created but the paired PC Site was not confirmed.',
+      'Inspect User Site: narada sites doctor andrey-user --authority-locus user',
+      'Repair PC Site creation, then rerun: narada sites bootstrap-windows --user-site-id andrey-user --pc-site-id desktop-sunroom --execute --format json',
+    ]);
+    expect(mockRegistry.registerSite).toHaveBeenCalledTimes(2);
+    expect(vol.existsSync('C:\\Users\\Andrey\\Narada\\config.json')).toBe(true);
+    expect(vol.existsSync('C:\\ProgramData\\Narada\\sites\\pc\\desktop-sunroom\\config.json')).toBe(true);
+  });
+
+  it('records both Windows Site coordinates and validation commands after successful execution', async () => {
+    process.env.NARADA_EXECUTOR_RUNTIME = 'wsl';
+    process.env.COMPUTERNAME = 'DESKTOP-SUNROOM';
+
+    const result = await sitesBootstrapWindowsCommand({
+      userSiteId: 'andrey-user',
+      pcSiteId: 'desktop-sunroom',
+      execute: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const data = result.result as {
+      status: string;
+      mutation_performed: boolean;
+      user_site_id: string;
+      pc_site_id: string;
+      preflight: { user: { siteRoot: string }; pc: { siteRoot: string } };
+      user: { siteRoot: string; configPath: string };
+      pc: { siteRoot: string; configPath: string };
+      validation_commands: string[];
+      evidence: { site_creation: string };
+    };
+    expect(data.status).toBe('success');
+    expect(data.mutation_performed).toBe(true);
+    expect(data.user_site_id).toBe('andrey-user');
+    expect(data.pc_site_id).toBe('desktop-sunroom');
+    expect(data.preflight.user.siteRoot).toBe('C:\\Users\\Andrey\\Narada');
+    expect(data.preflight.pc.siteRoot).toBe('C:\\ProgramData\\Narada\\sites\\pc\\desktop-sunroom');
+    expect(data.user.configPath).toBe('C:\\Users\\Andrey\\Narada\\config.json');
+    expect(data.pc.configPath).toBe('C:\\ProgramData\\Narada\\sites\\pc\\desktop-sunroom\\config.json');
+    expect(data.validation_commands).toEqual([
+      'narada sites doctor andrey-user --authority-locus user',
+      'narada sites doctor desktop-sunroom --authority-locus pc',
+      'narada doctor --bootstrap --format json',
+      'narada operator-surface labels build --site <site-id-or-root> --format json',
+    ]);
+    expect(data.evidence.site_creation).toBe('site bootstrap commands executed through sites init');
+    expect(mockRegistry.registerSite).toHaveBeenCalledTimes(2);
   });
 
   it('reports exact Windows onboarding unblocks for missing Komorebi and YASB', async () => {

@@ -3245,6 +3245,30 @@ function windowsAdapterPlan(execute: boolean): Array<Record<string, unknown>> {
   }));
 }
 
+function windowsBootstrapInitOptions(args: {
+  authorityLocus: 'user' | 'pc';
+  sync?: string;
+  root?: string;
+  executionSurface?: ExecutionSurface;
+  dryRun: boolean;
+  verbose?: boolean;
+}): SitesInitOptions {
+  return {
+    substrate: 'windows-native',
+    authorityLocus: args.authorityLocus,
+    ...(args.authorityLocus === 'user' ? { sync: args.sync } : {}),
+    ...(args.root ? { root: args.root } : {}),
+    executionSurface: args.executionSurface,
+    dryRun: args.dryRun,
+    format: 'json',
+    verbose: args.verbose,
+  };
+}
+
+function siteInitError(result: unknown, fallback: string): string {
+  return (result as { error?: string }).error ?? fallback;
+}
+
 export async function sitesBootstrapWindowsCommand(
   options: SitesBootstrapWindowsOptions,
   context: CommandContext,
@@ -3256,51 +3280,121 @@ export async function sitesBootstrapWindowsCommand(
   const execute = options.execute === true;
   const sync = options.sync ?? 'hybrid_capable_plain_folder';
   const substrateReadiness = await inspectWindowsOnboardingReadiness(options.executionSurface);
-  const initExecutionSurface = options.executionSurface && VALID_EXECUTION_SURFACES.includes(options.executionSurface as ExecutionSurface)
-    ? options.executionSurface
+  const initExecutionSurface: ExecutionSurface | undefined = options.executionSurface && VALID_EXECUTION_SURFACES.includes(options.executionSurface as ExecutionSurface)
+    ? options.executionSurface as ExecutionSurface
     : undefined;
-
-  const userResult = await sitesInitCommand(userSiteId, {
-    substrate: 'windows-native',
+  const userInitOptions = windowsBootstrapInitOptions({
     authorityLocus: 'user',
     sync,
     root: defaultWindowsUserSiteRoot(),
     executionSurface: initExecutionSurface,
-    dryRun: !execute,
-    format: 'json',
+    dryRun: true,
     verbose: options.verbose,
-  }, context);
-  if (userResult.exitCode !== ExitCode.SUCCESS) {
+  });
+  const pcInitOptions = windowsBootstrapInitOptions({
+    authorityLocus: 'pc',
+    executionSurface: initExecutionSurface,
+    dryRun: true,
+    verbose: options.verbose,
+  });
+
+  const userPreflight = await sitesInitCommand(userSiteId, userInitOptions, context);
+  if (userPreflight.exitCode !== ExitCode.SUCCESS) {
     return {
-      exitCode: userResult.exitCode,
+      exitCode: userPreflight.exitCode,
       result: {
         status: 'error',
-        phase: 'user_site',
-        error: (userResult.result as { error?: string }).error ?? 'Failed to plan Windows User Site',
-        user: userResult.result,
+        phase: 'paired_preflight_user_site',
+        mutation_performed: false,
+        error: siteInitError(userPreflight.result, 'Failed to preflight Windows User Site'),
+        repair_guidance: 'Fix the Windows User Site preflight error, then rerun narada sites bootstrap-windows --execute --format json.',
+        preflight: {
+          user: userPreflight.result,
+          pc: null,
+        },
       },
     };
   }
 
-  const pcResult = await sitesInitCommand(pcSiteId, {
-    substrate: 'windows-native',
-    authorityLocus: 'pc',
-    executionSurface: initExecutionSurface,
-    dryRun: !execute,
-    format: 'json',
-    verbose: options.verbose,
-  }, context);
-  if (pcResult.exitCode !== ExitCode.SUCCESS) {
+  const pcPreflight = await sitesInitCommand(pcSiteId, pcInitOptions, context);
+  if (pcPreflight.exitCode !== ExitCode.SUCCESS) {
     return {
-      exitCode: pcResult.exitCode,
+      exitCode: pcPreflight.exitCode,
       result: {
         status: 'error',
-        phase: 'pc_site',
-        error: (pcResult.result as { error?: string }).error ?? 'Failed to plan Windows PC Site',
-        user: userResult.result,
-        pc: pcResult.result,
+        phase: 'paired_preflight_pc_site',
+        mutation_performed: false,
+        error: siteInitError(pcPreflight.result, 'Failed to preflight Windows PC Site'),
+        repair_guidance: 'Fix the Windows PC Site preflight error. No User Site was created; rerun narada sites bootstrap-windows --execute --format json.',
+        preflight: {
+          user: userPreflight.result,
+          pc: pcPreflight.result,
+        },
       },
     };
+  }
+
+  let userResult = userPreflight;
+  let pcResult = pcPreflight;
+
+  if (execute) {
+    userResult = await sitesInitCommand(userSiteId, { ...userInitOptions, dryRun: false }, context);
+    if (userResult.exitCode !== ExitCode.SUCCESS) {
+      return {
+        exitCode: userResult.exitCode,
+        result: {
+          status: 'error',
+          phase: 'user_site_execute',
+          mutation_performed: false,
+          error: siteInitError(userResult.result, 'Failed to create Windows User Site after successful preflight'),
+          repair_guidance: 'Fix the Windows User Site execute error, then rerun narada sites bootstrap-windows --execute --format json.',
+          preflight: {
+            user: userPreflight.result,
+            pc: pcPreflight.result,
+          },
+          user: userResult.result,
+          pc: null,
+          partial_state: {
+            kind: 'none_confirmed',
+            user_site_created: false,
+            pc_site_created: false,
+            evidence: 'User Site execution failed before paired bootstrap could create a confirmed pair.',
+          },
+        },
+      };
+    }
+
+    pcResult = await sitesInitCommand(pcSiteId, { ...pcInitOptions, dryRun: false }, context);
+    if (pcResult.exitCode !== ExitCode.SUCCESS) {
+      return {
+        exitCode: pcResult.exitCode,
+        result: {
+          status: 'partial',
+          phase: 'pc_site_execute',
+          mutation_performed: true,
+          error: siteInitError(pcResult.result, 'Failed to create Windows PC Site after Windows User Site was created'),
+          repair_guidance: [
+            'A Windows User Site was created but the paired PC Site was not confirmed.',
+            `Inspect User Site: narada sites doctor ${userSiteId} --authority-locus user`,
+            `Repair PC Site creation, then rerun: narada sites bootstrap-windows --user-site-id ${userSiteId} --pc-site-id ${pcSiteId} --execute --format json`,
+          ],
+          preflight: {
+            user: userPreflight.result,
+            pc: pcPreflight.result,
+          },
+          user: userResult.result,
+          pc: pcResult.result,
+          partial_state: {
+            kind: 'user_created_pc_failed',
+            user_site_created: true,
+            pc_site_created: false,
+            user_site_id: userSiteId,
+            pc_site_id: pcSiteId,
+            evidence: 'User Site execute succeeded before PC Site execute failed.',
+          },
+        },
+      };
+    }
   }
 
   const result = {
@@ -3310,6 +3404,10 @@ export async function sitesBootstrapWindowsCommand(
     user_site_id: userSiteId,
     pc_site_id: pcSiteId,
     pc_identity_source: options.pcSiteId ? 'explicit' : pcDefault.source,
+    preflight: {
+      user: userPreflight.result,
+      pc: pcPreflight.result,
+    },
     user: userResult.result,
     pc: pcResult.result,
     substrate_readiness: substrateReadiness,
