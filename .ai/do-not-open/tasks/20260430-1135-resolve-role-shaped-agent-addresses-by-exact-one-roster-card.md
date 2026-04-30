@@ -1,5 +1,5 @@
 ---
-status: opened
+status: claimed
 ---
 
 # Resolve role-shaped agent addresses by exact-one roster cardinality
