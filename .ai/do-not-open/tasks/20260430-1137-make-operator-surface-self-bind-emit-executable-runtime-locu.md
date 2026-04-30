@@ -1,5 +1,5 @@
 ---
-status: opened
+status: claimed
 ---
 
 # Make Operator Surface self-bind emit executable runtime-locus handoff
