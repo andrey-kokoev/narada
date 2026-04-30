@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T23:13:21.557Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777590766638_x50sxr
+closed_at: 2026-04-30T23:13:36.634Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add first-class KB lookup aliases and symptom indexes
@@ -32,8 +41,8 @@ Source inbox envelope env_c33e90e7-1c7c-4b5d-9ec3-1b840446f733 reports CPY produ
 
 ## Acceptance Criteria
 
-- [ ] KB metadata supports lookup_aliases and symptoms as first-class searchable fields or an equivalent governed structure.
-- [ ] KB search/find returns runbooks for symptom phrases that do not appear in canonical titles.
-- [ ] CLI or documented command path exists for adding lookup aliases without manual prose editing as the primary path.
-- [ ] Incident/runbook closure guidance asks what future Operator/agent search phrase should find the entry.
-- [ ] Tests or fixtures cover the CPY-style parquet desync lookup alias case.
+- [x] KB metadata supports lookup_aliases and symptoms as first-class searchable fields or an equivalent governed structure.
+- [x] KB search/find returns runbooks for symptom phrases that do not appear in canonical titles.
+- [x] CLI or documented command path exists for adding lookup aliases without manual prose editing as the primary path.
+- [x] Incident/runbook closure guidance asks what future Operator/agent search phrase should find the entry.
+- [x] Tests or fixtures cover the CPY-style parquet desync lookup alias case.

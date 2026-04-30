@@ -44,6 +44,7 @@ import { registerMcpCommands } from './commands/mcp-register.js';
 import { registerOperatorSurfaceCommands } from './commands/operator-surface-register.js';
 import { registerOperatorCommands } from './commands/operator-register.js';
 import { registerLawCommands } from './commands/law-register.js';
+import { registerKbCommands } from './commands/kb-register.js';
 
 loadEnvFile('./.env');
 
@@ -108,6 +109,7 @@ registerAdmissionCommands(program);
 registerOutboxCommands(program);
 registerMutationEvidenceCommands(program);
 registerCapabilityCommands(program);
+registerKbCommands(program);
 registerRoutingCommands(program);
 registerCoherenceCommands(program);
 registerChapterCommands(program);

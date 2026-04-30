@@ -28,7 +28,7 @@ export const DEFAULT_COMMAND_GROUPS: CommandGroup[] = [
   },
   {
     label: 'Intent & Intake Zones',
-    commands: ['inbox', 'outbox', 'admission', 'observation', 'capability', 'routing', 'command-run', 'test-run'],
+    commands: ['inbox', 'outbox', 'admission', 'observation', 'capability', 'kb', 'routing', 'command-run', 'test-run'],
   },
   {
     label: 'Site & Console',
