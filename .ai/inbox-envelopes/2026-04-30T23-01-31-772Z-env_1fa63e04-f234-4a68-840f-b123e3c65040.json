@@ -1,0 +1,74 @@
+{
+  "envelope_id": "env_1fa63e04-f234-4a68-840f-b123e3c65040",
+  "received_at": "2026-04-30T23:01:31.772Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey.architect:operator-loop-ergonomics-gaps-20260430"
+  },
+  "kind": "proposal",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Consolidate operator-loop ergonomics gaps after local evidence-pipeline commissioning",
+    "summary": "Recent narada-andrey operator-surface work exposed several recurring ergonomics gaps that slow architect/builder loops and increase context burn. These are adjacent to the compact workboard, compact inbox-submit, and overlay-inspect CAPAs already submitted, but this proposal groups the remaining loop-level issues.",
+    "observations": [
+      {
+        "finding": "No compact sanctioned architect next-loop command",
+        "detail": "Architect still hand-rolls workboard parsing and review/nudge checks instead of using one canonical command.",
+        "impact": "Role-loop behavior depends on social memory and ad hoc shell parsing."
+      },
+      {
+        "finding": "PowerShell formatting damages compact output",
+        "detail": "Even compact Select-Object/Format-List output wraps long scalar fields like submitted_with_known_strategy across multiple lines.",
+        "impact": "Readable compact evidence becomes noisy and harder to scan."
+      },
+      {
+        "finding": "Task creation and work-next output shapes are inconsistent for automation",
+        "detail": "task create echoes full JSON, while work-next may return a string packet or structured JSON depending on outcome.",
+        "impact": "Agents need conditional parsing and may dump more text than needed."
+      },
+      {
+        "finding": "Dirty working tree ownership is not visible enough",
+        "detail": "After builder/architect loops, dirty files remain, but local tools do not clearly classify ownership: Bob-owned, architect-owned, stale, evidence-only, or unrelated.",
+        "impact": "Architect spends time manually deciding what can be committed or ignored."
+      },
+      {
+        "finding": "Operator-surface inspect remains schema-unsafe locally",
+        "detail": "CAPA was submitted, but the local workflow can still trigger repeated property-missing errors.",
+        "impact": "Until fixed, inspect commands need guardrails or a compact helper."
+      },
+      {
+        "finding": "Role loop remains informal",
+        "detail": "Operator says next, architect interprets duties, builder interprets next, but Narada does not yet expose this as a first-class role-loop primitive.",
+        "impact": "Correct behavior depends on remembered convention rather than governed machinery."
+      }
+    ],
+    "requests": [
+      {
+        "kind": "execution_request",
+        "text": "Implement a canonical compact architect-loop command that summarizes pending reviews, architect-owned work, blocked builder tasks, underspecified handoffs, dirty ownership posture, and recommended next action."
+      },
+      {
+        "kind": "execution_request",
+        "text": "Add output modes that are stable for agent consumption and chat display, avoiding PowerShell table/list wrapping and full payload echo by default."
+      },
+      {
+        "kind": "execution_request",
+        "text": "Normalize work-next/task-create output shapes so success, blocked, no-work, and pulled-work states are consistently machine-readable and compact-renderable."
+      },
+      {
+        "kind": "execution_request",
+        "text": "Add a dirty ownership classifier for Narada Sites that groups changed files by task/report/evidence/agent ownership and flags unknown ownership."
+      },
+      {
+        "kind": "doctrinal_request",
+        "text": "Document role-loop primitives: an operator nudge such as next should enter an intent interpretation path that resolves to architect duties, builder work processing, review closure, or blocker reporting without relying on magic-spell memory."
+      }
+    ],
+    "source_site": "narada-andrey User Site",
+    "authority_note": "Operator asked to submit observed ergonomics issues after commissioning the local scale-relative evidence pipeline."
+  },
+  "status": "received"
+}
