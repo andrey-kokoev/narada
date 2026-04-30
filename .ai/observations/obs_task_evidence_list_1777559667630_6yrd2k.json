@@ -1,0 +1,131 @@
+{
+  "status": "success",
+  "count": 5,
+  "filter": {
+    "verdict": [
+      "incomplete"
+    ],
+    "status": null,
+    "range": {
+      "start": 1124,
+      "end": 1129
+    }
+  },
+  "summary": {
+    "verdicts": {
+      "complete": 0,
+      "attempt_complete": 0,
+      "needs_review": 0,
+      "needs_closure": 0,
+      "incomplete": 5,
+      "unknown": 0
+    }
+  },
+  "tasks": [
+    {
+      "task_number": 1124,
+      "task_id": "20260430-1124-make-chapter-commission-structured-input-atomic-and-literal-",
+      "title": "Make chapter commission structured input atomic and literal-safe",
+      "status": "opened",
+      "verdict": "incomplete",
+      "missing": {
+        "unchecked_criteria": 7,
+        "execution_notes": true,
+        "verification": true,
+        "report": true,
+        "review": true,
+        "closure": true
+      },
+      "warnings": [
+        "7 acceptance criteria remain unchecked"
+      ],
+      "violations": [],
+      "assigned_agent": null,
+      "active_assignment_intent": null
+    },
+    {
+      "task_number": 1126,
+      "task_id": "20260430-1126-surface-client-service-onboarding-capability-choices-before-",
+      "title": "Surface client-service onboarding capability choices before readiness",
+      "status": "opened",
+      "verdict": "incomplete",
+      "missing": {
+        "unchecked_criteria": 5,
+        "execution_notes": true,
+        "verification": true,
+        "report": true,
+        "review": true,
+        "closure": true
+      },
+      "warnings": [
+        "5 acceptance criteria remain unchecked"
+      ],
+      "violations": [],
+      "assigned_agent": null,
+      "active_assignment_intent": null
+    },
+    {
+      "task_number": 1127,
+      "task_id": "20260430-1127-extend-client-service-mailbox-intent-authoring",
+      "title": "Extend client-service mailbox intent authoring",
+      "status": "opened",
+      "verdict": "incomplete",
+      "missing": {
+        "unchecked_criteria": 6,
+        "execution_notes": true,
+        "verification": true,
+        "report": true,
+        "review": true,
+        "closure": true
+      },
+      "warnings": [
+        "6 acceptance criteria remain unchecked"
+      ],
+      "violations": [],
+      "assigned_agent": null,
+      "active_assignment_intent": null
+    },
+    {
+      "task_number": 1128,
+      "task_id": "20260430-1128-add-credential-binding-reuse-command-for-site-onboarding",
+      "title": "Add credential binding reuse command for Site onboarding",
+      "status": "opened",
+      "verdict": "incomplete",
+      "missing": {
+        "unchecked_criteria": 5,
+        "execution_notes": true,
+        "verification": true,
+        "report": true,
+        "review": true,
+        "closure": true
+      },
+      "warnings": [
+        "5 acceptance criteria remain unchecked"
+      ],
+      "violations": [],
+      "assigned_agent": null,
+      "active_assignment_intent": null
+    },
+    {
+      "task_number": 1129,
+      "task_id": "20260430-1129-add-canonical-windows-startup-runtime-installation-for-clien",
+      "title": "Add canonical Windows startup runtime installation for client Sites",
+      "status": "opened",
+      "verdict": "incomplete",
+      "missing": {
+        "unchecked_criteria": 6,
+        "execution_notes": true,
+        "verification": true,
+        "report": true,
+        "review": true,
+        "closure": true
+      },
+      "warnings": [
+        "6 acceptance criteria remain unchecked"
+      ],
+      "violations": [],
+      "assigned_agent": null,
+      "active_assignment_intent": null
+    }
+  ]
+}
