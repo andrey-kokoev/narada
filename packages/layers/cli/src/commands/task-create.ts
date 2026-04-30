@@ -283,6 +283,28 @@ export async function taskCreateCommand(
       if (!effectiveDependsOn && spec.dependencies.length > 0) {
         effectiveDependsOn = spec.dependencies;
       }
+      const hasExplicitBodyOverride = Boolean(
+        effective.goal
+          || effective.context
+          || effective.requiredWork
+          || effective.chapter
+          || (effective.criteria && effective.criteria.length > 0),
+      );
+      spec = {
+        ...spec,
+        title: normalizedTitle,
+        chapter: effective.chapter ?? spec.chapter,
+        goal: effective.goal ?? spec.goal,
+        context: effective.context ?? spec.context,
+        required_work: effective.requiredWork ?? spec.required_work,
+        acceptance_criteria: effective.criteria && effective.criteria.length > 0 ? effective.criteria : spec.acceptance_criteria,
+        updated_at: new Date().toISOString(),
+      };
+      body = hasExplicitBodyOverride
+        ? buildTaskBody(spec)
+        : parsed.body.match(/^#\s+/m)
+          ? parsed.body.replace(/^#\s+.+$/m, `# ${normalizedTitle}`)
+          : `# ${normalizedTitle}\n\n${parsed.body.trimStart()}`;
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       return {

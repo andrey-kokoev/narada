@@ -381,13 +381,62 @@ describe('task create operator', () => {
     expect(content.match(/^---$/gm)).toHaveLength(2);
     expect(content).toContain('status: opened');
     expect(content).toContain('depends_on: [100]');
-    expect(content).toContain('# Template Task');
+    expect(content).toContain('# From file with front matter');
 
     const store = openTaskLifecycleStore(tempDir);
     try {
       const spec = store.getTaskSpecByNumber((result.result as { task_number: number }).task_number);
       expect(JSON.parse(spec!.dependencies_json)).toEqual([100]);
       expect(JSON.parse(spec!.acceptance_criteria_json)).toEqual(['Template criterion']);
+    } finally {
+      store.db.close();
+    }
+  });
+
+  it('preserves explicit metadata flags when using --from-file', async () => {
+    const bodyContent = [
+      '# Template Task',
+      '',
+      '## Goal',
+      '',
+      'Template goal.',
+      '',
+      '## Acceptance Criteria',
+      '',
+      '- [ ] Template criterion',
+      '',
+    ].join('\n');
+    writeFileSync(join(tempDir, 'metadata-template.md'), bodyContent);
+
+    const result = await taskCreateCommand({
+      cwd: tempDir,
+      title: 'Explicit title',
+      goal: 'Explicit goal',
+      chapter: 'Explicit Chapter',
+      dependsOn: '100,200',
+      criteria: ['Explicit criterion A', 'Explicit criterion B'],
+      fromFile: 'metadata-template.md',
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const content = readFileSync((result.result as Record<string, unknown>).file_path as string, 'utf8');
+    expect(content).toContain('# Explicit title');
+    expect(content).toContain('## Chapter');
+    expect(content).toContain('Explicit Chapter');
+    expect(content).toContain('Explicit goal');
+    expect(content).toContain('depends_on: [100, 200]');
+    expect(content).toContain('- [ ] Explicit criterion A');
+    expect(content).not.toContain('Template criterion');
+
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      const spec = store.getTaskSpecByNumber((result.result as { task_number: number }).task_number);
+      expect(spec!.title).toBe('Explicit title');
+      expect(spec!.goal_markdown).toBe('Explicit goal');
+      expect(spec!.chapter_markdown).toBe('Explicit Chapter');
+      expect(JSON.parse(spec!.dependencies_json)).toEqual([100, 200]);
+      expect(JSON.parse(spec!.acceptance_criteria_json)).toEqual(['Explicit criterion A', 'Explicit criterion B']);
     } finally {
       store.db.close();
     }

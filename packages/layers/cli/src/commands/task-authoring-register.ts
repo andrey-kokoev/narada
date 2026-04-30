@@ -72,8 +72,10 @@ export function registerTaskAuthoringCommands(taskCmd: Command): void {
     .option('--context <text>', 'New context text')
     .option('--required-work <text>', 'New required work text')
     .option('--non-goals <text>', 'New non-goals text')
-    .option('--criteria <csv>', 'Replace acceptance criteria (comma-separated)')
-    .option('--append-criteria <csv>', 'Append acceptance criteria (comma-separated)')
+    .option('--criteria <text>', 'Replacement acceptance criterion; repeatable; preserves commas inside the criterion', collectCriteriaValue, [])
+    .option('--criteria-csv <csv>', 'Explicit CSV replacement criteria input; use --criteria for comma-containing text')
+    .option('--append-criteria <text>', 'Acceptance criterion to append; repeatable; preserves commas inside the criterion', collectCriteriaValue, [])
+    .option('--append-criteria-csv <csv>', 'Explicit CSV append criteria input; use --append-criteria for comma-containing text')
     .option('--check-all-criteria', 'Deprecated; use task evidence prove-criteria <task-number> --by <id>')
     .option('--depends-on <csv>', 'Replace dependencies (comma-separated task numbers)')
     .option('--from-file <path>', 'Replace entire body from file')
@@ -91,8 +93,8 @@ export function registerTaskAuthoringCommands(taskCmd: Command): void {
         context: opts.context as string | undefined,
         requiredWork: opts.requiredWork as string | undefined,
         nonGoals: opts.nonGoals as string | undefined,
-        criteria: opts.criteria ? String(opts.criteria).split(',').map((s: string) => s.trim()).filter(Boolean) : undefined,
-        appendCriteria: opts.appendCriteria ? String(opts.appendCriteria).split(',').map((s: string) => s.trim()).filter(Boolean) : undefined,
+        criteria: mergeCriteriaInputs(opts.criteria, opts.criteriaCsv),
+        appendCriteria: mergeCriteriaInputs(opts.appendCriteria, opts.appendCriteriaCsv),
         checkAllCriteria: opts.checkAllCriteria as boolean | undefined,
         dependsOn: opts.dependsOn ? String(opts.dependsOn).split(',').map((s: string) => Number(s.trim())).filter((n: number) => Number.isFinite(n)) : undefined,
         fromFile: opts.fromFile as string | undefined,

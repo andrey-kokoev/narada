@@ -21,6 +21,11 @@ export function registerChapterCommands(program: Command): void {
     .option('--dry-run', 'Preview allocation and files without writing', false)
     .option('--format <format>', 'Output format: json, human, or auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .addHelpText('after', [
+      '',
+      'Structured input supports array-valued required_work and non_goals; arrays render as Markdown lists.',
+      'Example: narada chapter commission --input chapter.json --dry-run --format json',
+    ].join('\n'))
     .action(directCommandAction<[Record<string, unknown>]>({
       command: 'chapter commission',
       emit: emitCommandResult,

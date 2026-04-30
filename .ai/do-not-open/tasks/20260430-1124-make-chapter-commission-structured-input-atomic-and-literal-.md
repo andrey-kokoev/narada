@@ -1,7 +1,16 @@
 ---
-status: claimed
+status: closed
 amended_by: architect
 amended_at: 2026-04-30T14:00:19.433Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T14:44:43.404Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Focused tests, typecheck/build, help output, and bounded dry-run prove structured list rendering, task spec SQL binding health, malformed-input no-mutation behavior, from-file metadata preservation, and repeatable criteria handling.
+closed_at: 2026-04-30T14:44:53.628Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Make chapter commission structured input atomic and literal-safe
@@ -45,10 +54,10 @@ This is a governance-command reliability fault. A failed command must not leave 
 
 ## Acceptance Criteria
 
-- [ ] Structured input arrays render as numbered Markdown or bullets instead of comma-joined text
-- [ ] Task spec upsert uses matching SQL placeholders and bound values in source and built output
-- [ ] A failed chapter commission leaves no partial task files, lifecycle rows, specs, or registry drift
-- [ ] `task create --from-file` preserves explicit title, goal, chapter, dependency, and criteria flags unless explicitly overridden
-- [ ] `task amend --criteria` can replace multiple criteria without repeated-flag loss or accidental comma splitting
-- [ ] Focused tests cover successful structured input, malformed input rollback, SQL binding-count regression, from-file metadata preservation, and criteria replacement
-- [ ] Help or examples show the safe structured chapter/task commissioning path
+- [x] Structured input arrays render as numbered Markdown or bullets instead of comma-joined text
+- [x] Task spec upsert uses matching SQL placeholders and bound values in source and built output
+- [x] A failed chapter commission leaves no partial task files, lifecycle rows, specs, or registry drift
+- [x] `task create --from-file` preserves explicit title, goal, chapter, dependency, and criteria flags unless explicitly overridden
+- [x] `task amend --criteria` can replace multiple criteria without repeated-flag loss or accidental comma splitting
+- [x] Focused tests cover successful structured input, malformed input rollback, SQL binding-count regression, from-file metadata preservation, and criteria replacement
+- [x] Help or examples show the safe structured chapter/task commissioning path

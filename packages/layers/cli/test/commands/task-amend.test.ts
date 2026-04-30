@@ -6,6 +6,7 @@ vi.unmock('node:fs/promises');
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskAmendCommand } from '../../src/commands/task-amend.js';
 import { taskReadCommand } from '../../src/commands/task-read.js';
+import { collectCriteriaValue, mergeCriteriaInputs } from '../../src/commands/task-authoring-register.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { Database } from '@narada2/control-plane';
 import { SqliteTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
@@ -285,6 +286,28 @@ describe('task amend operator', () => {
     expect(task.acceptance_criteria).toHaveLength(2);
     expect(task.acceptance_criteria[0].text).toBe('Criterion X');
     expect(task.acceptance_criteria[1].text).toBe('Criterion Y');
+  });
+
+  it('preserves repeated comma-containing replacement criteria helpers', async () => {
+    createTask(tempDir, 209, 'opened');
+    const repeated = collectCriteriaValue('Criterion A, with comma', []);
+    const criteria = mergeCriteriaInputs(
+      collectCriteriaValue('Criterion B', repeated),
+      undefined,
+    );
+
+    const result = await taskAmendCommand({
+      taskNumber: '209',
+      by: 'operator-1',
+      criteria,
+      format: 'json',
+      cwd: tempDir,
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const readResult = await taskReadCommand({ taskNumber: '209', cwd: tempDir, format: 'json' });
+    const task = (readResult.result as { task: { acceptance_criteria: Array<{ text: string }> } }).task;
+    expect(task.acceptance_criteria.map((item) => item.text)).toEqual(['Criterion A, with comma', 'Criterion B']);
   });
 
   it('appends acceptance criteria', async () => {

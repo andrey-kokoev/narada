@@ -1,7 +1,7 @@
-import { mkdir, readFile } from 'node:fs/promises';
+import { mkdir, readFile, unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { allocateTaskNumbers, atomicWriteFile } from '../lib/task-governance.js';
+import { atomicWriteFile } from '../lib/task-governance.js';
 import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
@@ -26,19 +26,26 @@ interface CommissionTaskInput {
   title?: string;
   goal?: string;
   context?: string;
-  required_work?: string;
-  requiredWork?: string;
-  non_goals?: string;
-  nonGoals?: string;
+  required_work?: string | string[];
+  requiredWork?: string | string[];
+  non_goals?: string | string[];
+  nonGoals?: string | string[];
   acceptance_criteria?: string[];
   acceptanceCriteria?: string[];
   depends_on?: number[];
   dependsOn?: number[];
 }
 
-type ParsedCommissionTask = CommissionTaskInput & {
+type ParsedCommissionTask = {
   title: string;
   goal: string;
+  context?: string;
+  required_work?: string;
+  requiredWork?: string;
+  non_goals?: string;
+  nonGoals?: string;
+  depends_on?: number[];
+  dependsOn?: number[];
   acceptance_criteria: string[];
 };
 
@@ -116,6 +123,23 @@ function parseStringArray(value: unknown, path: string): string[] {
   return (value as string[]).map((item) => item.trim());
 }
 
+function parseMarkdownField(value: unknown, path: string, options: { ordered?: boolean } = {}): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === 'string') return value.trim().length > 0 ? value.trim() : undefined;
+  if (Array.isArray(value)) {
+    const items = value.map((item) => {
+      if (typeof item !== 'string' || item.trim().length === 0) {
+        throw new Error(`${path} must be a string or array of non-empty strings`);
+      }
+      return item.trim();
+    });
+    return items
+      .map((item, index) => options.ordered ? `${index + 1}. ${item}` : `- ${item}`)
+      .join('\n');
+  }
+  throw new Error(`${path} must be a string or array of strings`);
+}
+
 function parseInput(raw: string): ParsedCommissionInput {
   const parsed = JSON.parse(raw) as CommissionInput;
   if (!parsed || typeof parsed !== 'object') throw new Error('input must be a JSON object');
@@ -132,10 +156,10 @@ function parseInput(raw: string): ParsedCommissionInput {
       title: requireText(task.title, `tasks[${index}].title`),
       goal: requireText(task.goal, `tasks[${index}].goal`),
       context: task.context,
-      required_work: task.required_work,
-      requiredWork: task.requiredWork,
-      non_goals: task.non_goals,
-      nonGoals: task.nonGoals,
+      required_work: parseMarkdownField(task.required_work, `tasks[${index}].required_work`, { ordered: true }),
+      requiredWork: parseMarkdownField(task.requiredWork, `tasks[${index}].requiredWork`, { ordered: true }),
+      non_goals: parseMarkdownField(task.non_goals, `tasks[${index}].non_goals`),
+      nonGoals: parseMarkdownField(task.nonGoals, `tasks[${index}].nonGoals`),
       depends_on: task.depends_on,
       dependsOn: task.dependsOn,
       acceptance_criteria: parseStringArray(acceptanceCriteria, `tasks[${index}].acceptance_criteria`),
@@ -250,9 +274,7 @@ export async function chapterCommissionCommand(
   const tasksDir = join(cwd, '.ai', 'do-not-open', 'tasks');
   const prefix = datePrefix();
   const dryRun = options.dryRun ?? false;
-  const numbers = dryRun
-    ? await previewNumbers(cwd, input.tasks.length)
-    : await allocateTaskNumbers(cwd, input.tasks.length);
+  const numbers = await previewNumbers(cwd, input.tasks.length);
   const from = numbers[0]!;
   const to = numbers[numbers.length - 1]!;
   const chapterPath = join(tasksDir, `${prefix}-${from}-${to}-${input.slug}.md`);
@@ -319,12 +341,20 @@ export async function chapterCommissionCommand(
     dependsOn: input.depends_on,
     tasks: plannedTasks,
   }));
-  for (let index = 0; index < specs.length; index += 1) {
-    await atomicWriteFile(plannedTasks[index]!.file_path, renderTaskFile(specs[index]!));
-  }
-
   const store = openTaskLifecycleStore(cwd);
+  const writtenFiles: string[] = [chapterPath];
   try {
+    store.db.exec('begin immediate;');
+    for (const expected of numbers) {
+      const allocated = store.allocateTaskNumber();
+      if (allocated !== expected) {
+        throw new Error(`Task number allocation drift: expected ${expected}, allocated ${allocated}`);
+      }
+    }
+    for (let index = 0; index < specs.length; index += 1) {
+      await atomicWriteFile(plannedTasks[index]!.file_path, renderTaskFile(specs[index]!));
+      writtenFiles.push(plannedTasks[index]!.file_path);
+    }
     for (const spec of specs) {
       store.upsertLifecycle({
         task_id: spec.task_id,
@@ -352,6 +382,12 @@ export async function chapterCommissionCommand(
         updated_at: spec.updated_at,
       });
     }
+    store.db.exec('commit;');
+  } catch (error) {
+    try { store.db.exec('rollback;'); } catch { /* ignore rollback errors */ }
+    await Promise.all(writtenFiles.map((path) => unlink(path).catch(() => undefined)));
+    const msg = error instanceof Error ? error.message : String(error);
+    return { exitCode: ExitCode.GENERAL_ERROR, result: { status: 'error', error: `Commissioning failed without durable partial artifacts: ${msg}` } };
   } finally {
     store.db.close();
   }

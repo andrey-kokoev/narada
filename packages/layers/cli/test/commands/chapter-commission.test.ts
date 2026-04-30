@@ -50,6 +50,8 @@ describe('chapter commission command', () => {
         {
           title: 'Preserve criteria arrays',
           goal: 'Criteria arrays survive commissioning.',
+          required_work: ['Do first thing', 'Do second thing'],
+          non_goals: ['Do not comma-join Alpha, Beta', 'Do not flatten lists'],
           acceptance_criteria: ['Preserve Smith, Jane as one item', 'Create lifecycle row'],
         },
         {
@@ -81,13 +83,20 @@ describe('chapter commission command', () => {
     ]);
     expect(commissioned.bounded_output).toBe(true);
     expect(readFileSync(commissioned.chapter.path, 'utf8')).toContain('Batch Ergonomics');
-    expect(readFileSync(commissioned.tasks[0]!.file_path, 'utf8')).toContain('- [ ] Preserve Smith, Jane as one item');
+    const firstTaskContent = readFileSync(commissioned.tasks[0]!.file_path, 'utf8');
+    expect(firstTaskContent).toContain('1. Do first thing');
+    expect(firstTaskContent).toContain('2. Do second thing');
+    expect(firstTaskContent).toContain('- Do not comma-join Alpha, Beta');
+    expect(firstTaskContent).not.toContain('Do first thing,Do second thing');
+    expect(firstTaskContent).toContain('- [ ] Preserve Smith, Jane as one item');
 
     const store = openTaskLifecycleStore(tempDir);
     try {
       expect(store.getLastAllocated()).toBe(122);
       expect(store.getLifecycleByNumber(121)?.status).toBe('opened');
       const spec = store.getTaskSpecByNumber(121);
+      expect(spec!.required_work_markdown).toContain('1. Do first thing');
+      expect(spec!.non_goals_markdown).toContain('- Do not comma-join Alpha, Beta');
       expect(JSON.parse(spec!.acceptance_criteria_json)).toEqual([
         'Preserve Smith, Jane as one item',
         'Create lifecycle row',
