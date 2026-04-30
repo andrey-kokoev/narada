@@ -3,6 +3,7 @@ import { directCommandAction, silentCommandContext } from '../lib/command-wrappe
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 import {
   operatorSurfaceAgentInstantiateCommand,
+  operatorSurfaceAgentForkCommand,
   operatorSurfaceBindingDeferredCommand,
   operatorSurfaceBindFocusedCommand,
   operatorSurfaceIdentityAddCommand,
@@ -55,6 +56,39 @@ export function registerOperatorSurfaceCommands(program: Command): void {
         dryRun: opts.dryRun as boolean | undefined,
         bindFocused: opts.bindFocused as boolean | undefined,
         runtimeLocus: opts.runtimeLocus as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  agentCmd
+    .command('fork')
+    .description('Prepare a governed operator-surface child-agent handoff/adoption packet')
+    .requiredOption('--site <site-id-or-root>', 'Site plane for the child agent')
+    .requiredOption('--role <role>', 'Role to fork: architect, builder, or observer')
+    .requiredOption('--agent-kind <kind>', 'Runtime/agent kind, e.g. codex_cli')
+    .option('--identity <id>', 'Override durable identity id')
+    .option('--task <number>', 'Task number backing the child-agent prompt')
+    .option('--work-packet <ref>', 'External work packet reference when no task number exists')
+    .option('--runtime-locus <locus>', 'Owning User/PC/runtime locus for process launch')
+    .requiredOption('--by <principal>', 'Principal requesting the fork')
+    .option('--exec', 'Request process launch; still defers to owning runtime locus in Narada proper', false)
+    .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'operator-surface agent fork',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => operatorSurfaceAgentForkCommand({
+        site: opts.site as string | undefined,
+        role: opts.role as string | undefined,
+        agentKind: opts.agentKind as string | undefined,
+        identityName: opts.identity as string | undefined,
+        taskNumber: opts.task as string | undefined,
+        workPacket: opts.workPacket as string | undefined,
+        runtimeLocus: opts.runtimeLocus as string | undefined,
+        by: opts.by as string | undefined,
+        exec: opts.exec as boolean | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),

@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T23:19:48.924Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777591147703_o3966f
+closed_at: 2026-04-30T23:20:04.597Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Create canonical operator-surface agent fork orchestration
@@ -32,8 +41,8 @@ Source inbox envelope env_31d1d128-c453-4a20-a1bf-d70484b4ddc4 reports that User
 
 ## Acceptance Criteria
 
-- [ ] There is a canonical command path for operator-surface agent fork/start or a fully specified executable surface if implementation is split.
-- [ ] Dry-run is default; process launch requires explicit --exec or equivalent confirmation.
-- [ ] Fork handoff and adoption evidence are durable and inspectable.
-- [ ] Ambiguous identity, Site, runtime locus, carrier projection, submit strategy, or task authority fails closed with repair guidance.
-- [ ] Task-backed launch can derive a builder prompt from a task/work packet without manual prompt copying as the authority boundary.
+- [x] There is a canonical command path for operator-surface agent fork/start or a fully specified executable surface if implementation is split.
+- [x] Dry-run is default; process launch requires explicit --exec or equivalent confirmation.
+- [x] Fork handoff and adoption evidence are durable and inspectable.
+- [x] Ambiguous identity, Site, runtime locus, carrier projection, submit strategy, or task authority fails closed with repair guidance.
+- [x] Task-backed launch can derive a builder prompt from a task/work packet without manual prompt copying as the authority boundary.

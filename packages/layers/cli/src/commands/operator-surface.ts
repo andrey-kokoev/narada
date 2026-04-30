@@ -17,7 +17,7 @@ import {
   type OperatorSurfaceIdentityRegistry,
   type OperatorSurfaceSubmitStrategy,
 } from '../lib/operator-surface-registry.js';
-import { loadRoster, saveRoster, resolveTaskStatus, type AgentRoster } from '../lib/task-governance.js';
+import { findTaskFile, loadRoster, readTaskFile, saveRoster, resolveTaskStatus, type AgentRoster } from '../lib/task-governance.js';
 import { sitesAgentBootstrapCommand } from './sites.js';
 import { grantEffectiveStatus, readCapabilityRegistry, validateCredentialRef } from '../lib/capability-consent-registry.js';
 import { agentAddressResolutionPublic, resolveAgentAddress, type AgentAddressResolution } from '../lib/agent-address.js';
@@ -132,6 +132,20 @@ export interface OperatorSurfaceAgentInstantiateOptions {
   dryRun?: boolean;
   bindFocused?: boolean;
   runtimeLocus?: string;
+  format?: CliFormat;
+}
+
+export interface OperatorSurfaceAgentForkOptions {
+  cwd?: string;
+  site?: string;
+  role?: string;
+  agentKind?: string;
+  identityName?: string;
+  taskNumber?: string;
+  workPacket?: string;
+  runtimeLocus?: string;
+  by?: string;
+  exec?: boolean;
   format?: CliFormat;
 }
 
@@ -850,6 +864,150 @@ export async function operatorSurfaceAgentInstantiateCommand(
     return {
       exitCode: ExitCode.SUCCESS,
       result: formattedResult(result, lines, options.format ?? 'auto'),
+    };
+  } catch (error) {
+    return errorResult(error);
+  }
+}
+
+export async function operatorSurfaceAgentForkCommand(
+  options: OperatorSurfaceAgentForkOptions,
+  context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  try {
+    const cwd = options.cwd ?? '.';
+    const site = requireText(options.site, '--site');
+    const role = normalizeInstantiateRole(options.role);
+    if (!role) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: { status: 'error', error: `Unsupported role: ${options.role ?? ''}`, allowed_roles: ['architect', 'builder', 'observer'] },
+      };
+    }
+    const agentKind = requireText(options.agentKind, '--agent-kind');
+    const by = requireText(options.by, '--by');
+    const identityName = options.identityName?.trim() || defaultIdentityName(site, role);
+    const taskNumber = options.taskNumber?.trim() || null;
+    if (!taskNumber && !options.workPacket?.trim()) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          reason: 'task_or_work_packet_required',
+          repair_command: 'narada operator-surface agent fork --site <site> --role builder --agent-kind codex_cli --task <number> --by <principal>',
+        },
+      };
+    }
+
+    const instantiate = await operatorSurfaceAgentInstantiateCommand({
+      cwd,
+      site,
+      role,
+      agentKind,
+      by,
+      identityName,
+      inputCapabilities: 'type_text,submit',
+      submitStrategy: 'known_surface_submit',
+      dryRun: false,
+      bindFocused: true,
+      runtimeLocus: options.runtimeLocus,
+      format: 'json',
+    }, context);
+    if (instantiate.exitCode !== ExitCode.SUCCESS) return instantiate;
+
+    let taskContext: Record<string, unknown> | null = null;
+    if (taskNumber) {
+      const taskFile = await findTaskFile(cwd, taskNumber);
+      if (!taskFile) {
+        return {
+          exitCode: ExitCode.INVALID_CONFIG,
+          result: {
+            status: 'error',
+            reason: 'task_not_found',
+            task_number: taskNumber,
+            repair_command: `narada task read ${taskNumber} --format json`,
+          },
+        };
+      }
+      const { frontMatter, body } = await readTaskFile(taskFile.path);
+      const title = /^#\s+(.+)$/m.exec(body)?.[1]?.trim() ?? taskFile.taskId;
+      taskContext = {
+        task_id: taskFile.taskId,
+        task_number: Number(taskNumber),
+        title,
+        status: frontMatter.status ?? null,
+        source: 'task',
+      };
+    }
+
+    const now = new Date().toISOString();
+    const forkId = `fork_${createHash('sha256').update(`${identityName}:${taskNumber ?? options.workPacket}:${now}`).digest('hex').slice(0, 16)}`;
+    const evidenceDir = join(resolve(cwd), '.ai', 'operator-surface-forks');
+    await mkdir(evidenceDir, { recursive: true });
+    const handoffPath = join(evidenceDir, `${forkId}-handoff.json`);
+    const adoptionPath = join(evidenceDir, `${forkId}-adoption.json`);
+    const prompt = [
+      `You are ${identityName}.`,
+      'The human is Operator. We are governed by Narada law.',
+      role === 'builder' ? 'Run the builder duty loop: claim/continue assigned work, verify through TIZ, report, close with evidence, commit, and push.' : `Run the ${role} duty loop.`,
+      taskContext ? `Current task: ${taskContext.task_number} - ${taskContext.title}` : `Work packet: ${options.workPacket}`,
+      'Do not widen role authority. Preserve Site and runtime locus boundaries.',
+    ].join('\n');
+    const handoff = {
+      fork_id: forkId,
+      evidence_kind: 'fork_handoff',
+      created_at: now,
+      created_by: by,
+      identity_id: identityName,
+      site,
+      role,
+      agent_kind: agentKind,
+      runtime_locus: options.runtimeLocus ?? null,
+      task_context: taskContext,
+      work_packet_ref: options.workPacket ?? null,
+      prompt,
+      dry_run_default: true,
+      exec_requested: Boolean(options.exec),
+      authority_limits: [
+        'fork_handoff_is_prompt_and_readiness_evidence_not_process_authority',
+        'runtime_process_launch_belongs_to_owning_runtime_locus',
+        'task_authority_remains_in_task_lifecycle',
+      ],
+    };
+    const adoption = {
+      fork_id: forkId,
+      evidence_kind: 'fork_adoption',
+      status: options.exec ? 'pending_runtime_locus_execution' : 'pending_agent_ack',
+      expected_identity_id: identityName,
+      expected_adoption_command: `narada operator-surface bind-focused --identity ${identityName} --runtime-locus ${options.runtimeLocus ?? '<runtime-locus-from-status>'}`,
+      created_at: now,
+    };
+    await writeFile(handoffPath, `${JSON.stringify(handoff, null, 2)}\n`, 'utf8');
+    await writeFile(adoptionPath, `${JSON.stringify(adoption, null, 2)}\n`, 'utf8');
+    const result = {
+      status: 'success',
+      mutation_performed: true,
+      action: 'operator_surface_agent_fork',
+      fork_id: forkId,
+      execution_status: options.exec ? 'deferred_to_runtime_locus' : 'dry_run_prepared',
+      process_launch_performed: false,
+      handoff_artifact: handoffPath,
+      adoption_artifact: adoptionPath,
+      identity_readiness: instantiate.result,
+      prompt,
+      next_command: options.exec
+        ? `Route ${handoffPath} to the owning runtime locus ${options.runtimeLocus ?? '<runtime-locus>'} for process launch.`
+        : `Inspect ${handoffPath}; rerun with --exec only from/through the owning runtime locus when launch is intended.`,
+    };
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: formattedResult(result, [
+        `Prepared agent fork: ${forkId}`,
+        `Identity: ${identityName}`,
+        `Execution: ${result.execution_status}`,
+        `Handoff: ${handoffPath}`,
+        `Adoption: ${adoptionPath}`,
+      ], options.format ?? 'auto'),
     };
   } catch (error) {
     return errorResult(error);

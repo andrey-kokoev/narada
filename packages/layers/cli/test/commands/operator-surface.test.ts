@@ -12,6 +12,7 @@ import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import {
   operatorSurfaceAgentInstantiateCommand,
+  operatorSurfaceAgentForkCommand,
   operatorSurfaceBindingDeferredCommand,
   operatorSurfaceBindFocusedCommand,
   operatorSurfaceIdentityAddCommand,
@@ -168,6 +169,58 @@ describe('operator-surface commands', () => {
       resolved_agent: 'narada-proper-builder',
     });
     expect((result.result as { copyable_text: string }).copyable_text).toContain('When Operator says `next`, run the normal duty loop for this role.');
+  });
+
+  it('prepares a task-backed operator-surface agent fork with durable handoff and adoption evidence', async () => {
+    const cwd = await tempRepo();
+    mkdirSync(join(cwd, '.ai', 'do-not-open', 'tasks'), { recursive: true });
+    await writeFile(
+      join(cwd, '.ai', 'do-not-open', 'tasks', '20260430-42-build-widget.md'),
+      '---\nstatus: opened\n---\n\n# Build Widget\n\n## Acceptance Criteria\n- [ ] Widget built.\n',
+    );
+
+    const result = await operatorSurfaceAgentForkCommand({
+      cwd,
+      site: 'narada-cpy',
+      role: 'builder',
+      agentKind: 'codex_cli',
+      identityName: 'narada-cpy.builder',
+      taskNumber: '42',
+      runtimeLocus: 'pc-site',
+      by: 'architect',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      action: 'operator_surface_agent_fork',
+      execution_status: 'dry_run_prepared',
+      process_launch_performed: false,
+      prompt: expect.stringContaining('Current task: 42 - Build Widget'),
+      identity_readiness: {
+        readiness: {
+          task_roster: {
+            status: 'created',
+            agent_id: 'narada-cpy.builder',
+          },
+        },
+      },
+    });
+    const data = result.result as { handoff_artifact: string; adoption_artifact: string };
+    expect(existsSync(data.handoff_artifact)).toBe(true);
+    expect(existsSync(data.adoption_artifact)).toBe(true);
+    const handoff = JSON.parse(await readFile(data.handoff_artifact, 'utf8')) as Record<string, unknown>;
+    expect(handoff).toMatchObject({
+      evidence_kind: 'fork_handoff',
+      identity_id: 'narada-cpy.builder',
+      task_context: {
+        task_number: 42,
+        title: 'Build Widget',
+      },
+      dry_run_default: true,
+      exec_requested: false,
+    });
   });
 
   it('admits a CPY-style builder as message-addressable and task-roster-ready without manual JSON edits', async () => {
