@@ -26,5 +26,32 @@
     ],
     "recommendation": "Treat this as a Narada proper product task or doctrine addition for operator-surface action posture."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1099",
+    "promoted_at": "2026-04-30T00:06:53.077Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "inbox architect-process",
+    "target_result": {
+      "task": {
+        "status": "success",
+        "task_id": "20260430-1099-model-operator-surface-input-capabilities-and-submit-strateg",
+        "task_number": 1099,
+        "file_name": "20260430-1099-model-operator-surface-input-capabilities-and-submit-strateg.md",
+        "file_path": "/home/andrey/src/narada/.ai/do-not-open/tasks/20260430-1099-model-operator-surface-input-capabilities-and-submit-strateg.md",
+        "title": "Model Operator Surface input capabilities and submit strategies"
+      },
+      "assignment": {
+        "status": "success",
+        "task_id": "20260430-1099-model-operator-surface-input-capabilities-and-submit-strateg",
+        "agent_id": "builder",
+        "claimed_at": "2026-04-30T00:06:51.913Z",
+        "assignment_intent_id": "air_claim_1099_builder_1777507611671_q7i8sw"
+      },
+      "builder": "builder",
+      "execution_performed": false
+    }
+  }
 }

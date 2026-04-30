@@ -24,5 +24,32 @@
     ],
     "recommendation": "Create an execution task in Narada proper for task create --from-file criteria admission."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1100",
+    "promoted_at": "2026-04-30T00:07:03.434Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "inbox architect-process",
+    "target_result": {
+      "task": {
+        "status": "success",
+        "task_id": "20260430-1100-preserve-from-file-task-criteria-in-lifecycle-authority",
+        "task_number": 1100,
+        "file_name": "20260430-1100-preserve-from-file-task-criteria-in-lifecycle-authority.md",
+        "file_path": "/home/andrey/src/narada/.ai/do-not-open/tasks/20260430-1100-preserve-from-file-task-criteria-in-lifecycle-authority.md",
+        "title": "Preserve from-file task criteria in lifecycle authority"
+      },
+      "assignment": {
+        "status": "success",
+        "task_id": "20260430-1100-preserve-from-file-task-criteria-in-lifecycle-authority",
+        "agent_id": "builder",
+        "claimed_at": "2026-04-30T00:07:01.647Z",
+        "assignment_intent_id": "air_claim_1100_builder_1777507621416_iwib4b"
+      },
+      "builder": "builder",
+      "execution_performed": false
+    }
+  }
 }
