@@ -90,6 +90,17 @@ interface OperatorSurfaceRuntimeBinding {
   stale_after?: string;
 }
 
+interface OperatorSurfaceVisibleLabelEvidence {
+  identity_id?: string;
+  site_id?: string;
+  role?: string;
+  label?: string;
+  runtime_locus?: string;
+  source?: string;
+  observed_at?: string;
+  status?: 'visible' | 'stale' | 'revoked';
+}
+
 export interface OperatorSurfaceAgentInstantiateOptions {
   cwd?: string;
   site?: string;
@@ -214,6 +225,10 @@ function runtimeBindingPath(cwd: string): string {
   return join(resolve(cwd), 'operator-surfaces', 'runtime-bindings.json');
 }
 
+function visibleLabelEvidencePath(cwd: string): string {
+  return join(resolve(cwd), 'operator-surfaces', 'visible-labels.json');
+}
+
 function resolveSiteLocalRegistryCwd(cwd: string, site: string): {
   registryCwd: string;
   registryAuthority: 'target_site_local' | 'caller_context';
@@ -249,6 +264,27 @@ async function readRuntimeBindings(cwd: string): Promise<OperatorSurfaceRuntimeB
   if (!existsSync(path)) return [];
   const parsed = JSON.parse(await readFile(path, 'utf8')) as { bindings?: OperatorSurfaceRuntimeBinding[] } | OperatorSurfaceRuntimeBinding[];
   return Array.isArray(parsed) ? parsed : Array.isArray(parsed.bindings) ? parsed.bindings : [];
+}
+
+async function readVisibleLabelEvidence(cwd: string): Promise<OperatorSurfaceVisibleLabelEvidence[]> {
+  const path = visibleLabelEvidencePath(cwd);
+  if (!existsSync(path)) return [];
+  const parsed = JSON.parse(await readFile(path, 'utf8')) as { labels?: OperatorSurfaceVisibleLabelEvidence[] } | OperatorSurfaceVisibleLabelEvidence[];
+  return Array.isArray(parsed) ? parsed : Array.isArray(parsed.labels) ? parsed.labels : [];
+}
+
+function visibleLabelForIdentity(
+  identity: OperatorSurfaceIdentity,
+  labels: OperatorSurfaceVisibleLabelEvidence[],
+): OperatorSurfaceVisibleLabelEvidence | null {
+  return labels.find((entry) => {
+    if (entry.status === 'stale' || entry.status === 'revoked') return false;
+    if (entry.identity_id && entry.identity_id === identity.identity_id) return true;
+    if (entry.site_id && entry.role && entry.site_id === identity.site_id && entry.role === identity.role) return true;
+    if (entry.label && normalizeAlias(entry.label) === normalizeAlias(identity.label)) return true;
+    if (entry.label && normalizeAlias(entry.label) === normalizeAlias(identity.identity_id)) return true;
+    return false;
+  }) ?? null;
 }
 
 function isStaleBinding(binding: OperatorSurfaceRuntimeBinding, now = new Date()): boolean {
@@ -610,12 +646,17 @@ export async function operatorSurfaceLabelsBuildCommand(
 function bindingPosture(
   identity: OperatorSurfaceIdentity,
   bindings: OperatorSurfaceRuntimeBinding[],
+  labelEvidence: OperatorSurfaceVisibleLabelEvidence | null = null,
 ): {
   runtime_locus: string | null;
-  binding_status: 'bound' | 'unbound' | 'stale' | 'ambiguous' | 'missing_transport';
-  addressability_status: 'reachable' | 'unbound' | 'stale' | 'ambiguous' | 'missing_transport';
+  binding_status: 'bound' | 'unbound' | 'stale' | 'ambiguous' | 'missing_transport' | 'labeled_unbound';
+  addressability_status: 'reachable' | 'unbound' | 'stale' | 'ambiguous' | 'missing_transport' | 'labeled_unbound';
   next_command: string | null;
+  label_evidence_status: 'none' | 'visible_label_without_binding';
+  visible_label: OperatorSurfaceVisibleLabelEvidence | null;
+  reconciliation_command: string | null;
 } {
+  const bindCommand = `narada operator-surface bind-focused --identity ${identity.identity_id} --runtime-locus ${labelEvidence?.runtime_locus ?? '<pc-or-user-site>'}`;
   const matching = bindings.filter((binding) => binding.identity_id === identity.identity_id);
   const active = matching.filter((binding) => !isStaleBinding(binding));
   if (matching.length > 0 && active.length === 0) {
@@ -624,14 +665,20 @@ function bindingPosture(
       binding_status: 'stale',
       addressability_status: 'stale',
       next_command: `narada operator-surface bind-focused --identity ${identity.identity_id} --runtime-locus ${matching[0]?.runtime_locus ?? '<pc-or-user-site>'}`,
+      label_evidence_status: 'none',
+      visible_label: null,
+      reconciliation_command: null,
     };
   }
   if (active.length === 0) {
     return {
-      runtime_locus: null,
-      binding_status: 'unbound',
-      addressability_status: 'unbound',
-      next_command: `narada operator-surface bind-focused --identity ${identity.identity_id} --runtime-locus <pc-or-user-site>`,
+      runtime_locus: labelEvidence?.runtime_locus ?? null,
+      binding_status: labelEvidence ? 'labeled_unbound' : 'unbound',
+      addressability_status: labelEvidence ? 'labeled_unbound' : 'unbound',
+      next_command: bindCommand,
+      label_evidence_status: labelEvidence ? 'visible_label_without_binding' : 'none',
+      visible_label: labelEvidence,
+      reconciliation_command: bindCommand,
     };
   }
   if (active.length > 1) {
@@ -640,6 +687,9 @@ function bindingPosture(
       binding_status: 'ambiguous',
       addressability_status: 'ambiguous',
       next_command: 'narada operator-surface bindings clean-stale --runtime-locus <pc-or-user-site>',
+      label_evidence_status: 'none',
+      visible_label: null,
+      reconciliation_command: null,
     };
   }
   const binding = active[0]!;
@@ -651,6 +701,9 @@ function bindingPosture(
       binding_status: 'missing_transport',
       addressability_status: 'missing_transport',
       next_command: `Admit or repair Operator Surface transport for ${identity.identity_id}.`,
+      label_evidence_status: 'none',
+      visible_label: null,
+      reconciliation_command: null,
     };
   }
   return {
@@ -658,6 +711,9 @@ function bindingPosture(
     binding_status: 'bound',
     addressability_status: 'reachable',
     next_command: null,
+    label_evidence_status: 'none',
+    visible_label: null,
+    reconciliation_command: null,
   };
 }
 
@@ -668,6 +724,7 @@ export async function operatorSurfaceStatusCommand(
   const cwd = options.cwd ?? '.';
   const registry = await readOperatorSurfaceIdentities(cwd);
   const bindings = await readRuntimeBindings(cwd);
+  const labelEvidence = await readVisibleLabelEvidence(cwd);
   const roster = await loadRoster(cwd).catch(async () => {
     try {
       const raw = await readFile(join(resolve(cwd), '.ai', 'agents', 'roster.json'), 'utf8');
@@ -689,7 +746,7 @@ export async function operatorSurfaceStatusCommand(
     ));
     const currentTask = rosterAgent?.task ?? null;
     const lifecycle = currentTask == null ? { status: null, source: null } : await resolveTaskStatus(cwd, currentTask);
-    const posture = bindingPosture(identity, bindings);
+    const posture = bindingPosture(identity, bindings, visibleLabelForIdentity(identity, labelEvidence));
     const workStatus = rosterAgent?.status ?? 'untracked';
     const nextCommand = posture.next_command
       ?? (currentTask != null
@@ -702,6 +759,9 @@ export async function operatorSurfaceStatusCommand(
       runtime_locus: posture.runtime_locus,
       binding_status: posture.binding_status,
       addressability_status: posture.addressability_status,
+      label_evidence_status: posture.label_evidence_status,
+      visible_label: posture.visible_label,
+      reconciliation_command: posture.reconciliation_command,
       work_status: workStatus,
       current_task: currentTask,
       lifecycle_status: lifecycle.status,
@@ -723,9 +783,10 @@ export async function operatorSurfaceStatusCommand(
         `${agent.role}: ${agent.work_status}`,
         `identity=${agent.identity_id}`,
         `addressability=${agent.addressability_status}`,
+        agent.label_evidence_status === 'none' ? null : `label=${agent.label_evidence_status}`,
         agent.current_task == null ? 'task=none' : `task=${agent.current_task}(${agent.lifecycle_status ?? 'unknown'})`,
         `next=${agent.next_command}`,
-      ].join(' | ')),
+      ].filter(Boolean).join(' | ')),
     },
   };
 }
@@ -982,6 +1043,8 @@ export async function operatorSurfaceSendCommand(
       };
     }
     if (activeBindings.length === 0) {
+      const labelEvidence = visibleLabelForIdentity(admittedIdentity, await readVisibleLabelEvidence(cwd));
+      const bindCommand = `narada operator-surface bind-focused --identity ${identity} --runtime-locus ${labelEvidence?.runtime_locus ?? options.runtimeLocus ?? '<pc-or-user-site>'}`;
       return {
         exitCode: ExitCode.INVALID_CONFIG,
         result: {
@@ -989,8 +1052,14 @@ export async function operatorSurfaceSendCommand(
           reason: 'no_binding',
           identity,
           identity_resolution: publicIdentityResolution(identityResolution),
+          visible_label: labelEvidence,
+          label_evidence_status: labelEvidence ? 'visible_label_without_binding' : 'none',
+          explanation: labelEvidence
+            ? 'A visible title/label is evidence that a surface may be present, but it is not an addressable runtime binding and does not authorize message send.'
+            : 'The identity is admitted, but no active runtime binding exists. A window title or label alone is not enough to send input.',
           mutation_performed: false,
-          unblock_command: `narada operator-surface bind-focused --identity ${identity} --runtime-locus ${options.runtimeLocus ?? '<pc-or-user-site>'}`,
+          unblock_command: bindCommand,
+          reconciliation_command: bindCommand,
         },
       };
     }

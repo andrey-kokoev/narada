@@ -157,6 +157,14 @@ Use [`Visibility Domain Reconciliation`](visibility-domain-reconciliation.md) wh
 
 Use [`Runtime Identity Binding`](runtime-identity-binding.md) when a live runtime object must be related to a durable Site, role, surface, participant, or workflow identity. Handles such as HWNDs, process ids, session ids, tab ids, MCP client ids, or API thread ids are volatile substrate facts; titles, profiles, process metadata, and transcript labels are carrier evidence, not naming authority.
 
+Visible labels and addressable runtime bindings are separate. A window title such as `narada.builder` may be useful label evidence, but it does not prove that Narada can send input to that surface. Status surfaces should report this as `labeled_unbound` when label evidence exists without an active runtime binding. The repair path is to bind the durable identity in the owning runtime locus:
+
+```bash
+narada operator-surface bind-focused --identity <identity> --runtime-locus <pc-or-user-site>
+```
+
+Sending input must fail closed until an active binding exists. The role remains metadata on an admitted identity; Narada must not infer Architect, Builder, or Observer authority solely from a title string.
+
 Use [`Capability Announcement`](capability-announcement.md) when a Site needs to publish that an Operator Surface-adjacent capability exists. Announcements are discovery metadata with entrypoints, prerequisites, evidence, and constraints; they do not grant execution authority or substitute for runtime identity binding.
 
 ## Voice Transcription

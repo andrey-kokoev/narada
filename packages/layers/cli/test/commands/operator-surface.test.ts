@@ -58,6 +58,10 @@ async function writeBindings(cwd: string, bindings: unknown[]): Promise<void> {
   await writeFile(join(cwd, 'operator-surfaces', 'runtime-bindings.json'), `${JSON.stringify({ bindings }, null, 2)}\n`, 'utf8');
 }
 
+async function writeVisibleLabels(cwd: string, labels: unknown[]): Promise<void> {
+  await writeFile(join(cwd, 'operator-surfaces', 'visible-labels.json'), `${JSON.stringify({ labels }, null, 2)}\n`, 'utf8');
+}
+
 afterEach(async () => {
   delete process.env.NARADA_AGENT_ID;
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
@@ -482,6 +486,78 @@ describe('operator-surface commands', () => {
       status: 'error',
       reason: 'no_binding',
       unblock_command: 'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <pc-or-user-site>',
+    });
+  });
+
+  it('reconciles visible label evidence with missing addressable runtime binding', async () => {
+    const cwd = await tempRepo();
+    await admitIdentity(cwd);
+    await writeVisibleLabels(cwd, [{
+      identity_id: 'narada-proper-builder',
+      site_id: 'narada-proper',
+      role: 'builder',
+      label: 'narada.builder',
+      runtime_locus: 'pc-site',
+      source: 'window-title',
+      observed_at: '2026-04-30T16:00:00.000Z',
+      status: 'visible',
+    }]);
+    mkdirSync(join(cwd, '.ai', 'agents'), { recursive: true });
+    await writeFile(join(cwd, '.ai', 'agents', 'roster.json'), JSON.stringify({
+      version: 2,
+      updated_at: '2026-04-30T16:00:00.000Z',
+      agents: [{
+        agent_id: 'builder',
+        role: 'builder',
+        capabilities: [],
+        first_seen_at: '2026-04-30T16:00:00.000Z',
+        last_active_at: '2026-04-30T16:00:00.000Z',
+        status: 'working',
+        task: 1134,
+      }],
+    }, null, 2));
+
+    const status = await operatorSurfaceStatusCommand({
+      cwd,
+      site: 'narada-proper',
+      format: 'json',
+    }, createMockContext());
+
+    expect(status.exitCode).toBe(ExitCode.SUCCESS);
+    const agent = (status.result as { agents: Array<Record<string, unknown>> }).agents.find((entry) => entry.identity_id === 'narada-proper-builder');
+    expect(agent).toMatchObject({
+      identity_id: 'narada-proper-builder',
+      role: 'builder',
+      work_status: 'working',
+      current_task: 1134,
+      binding_status: 'labeled_unbound',
+      addressability_status: 'labeled_unbound',
+      label_evidence_status: 'visible_label_without_binding',
+      visible_label: {
+        label: 'narada.builder',
+        runtime_locus: 'pc-site',
+      },
+      reconciliation_command: 'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus pc-site',
+    });
+
+    const send = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-proper-builder',
+      text: 'next',
+      format: 'json',
+    }, createMockContext());
+
+    expect(send.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(send.result).toMatchObject({
+      reason: 'no_binding',
+      label_evidence_status: 'visible_label_without_binding',
+      visible_label: {
+        label: 'narada.builder',
+        runtime_locus: 'pc-site',
+      },
+      explanation: expect.stringContaining('visible title/label'),
+      unblock_command: 'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus pc-site',
+      reconciliation_command: 'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus pc-site',
     });
   });
 
