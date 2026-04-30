@@ -75,6 +75,18 @@ describe('task workboard command', () => {
     seedTask(store, 401, 'claimed', 'Build feature', 'Operator Surface', 'builder');
     seedTask(store, 402, 'in_review', 'Review feature', 'Operator Surface', 'builder');
     seedTask(store, 403, 'opened', 'Follow up', 'Operator Surface');
+    seedTask(store, 404, 'claimed', 'Roster-only active work', 'Operator Surface');
+    store.upsertRosterEntry({
+      agent_id: 'observer',
+      role: 'observer',
+      capabilities_json: '[]',
+      first_seen_at: '2026-01-01T00:00:00Z',
+      last_active_at: '2026-01-01T00:00:00Z',
+      status: 'working',
+      task_number: 404,
+      last_done: null,
+      updated_at: '2026-01-01T00:00:00Z',
+    });
     store.upsertRepoPublication({
       publication_id: 'rpi_test',
       repo_root: tempDir,
@@ -130,8 +142,9 @@ describe('task workboard command', () => {
 
     expect(workboard.pending_reviews.map((task) => task.task_number)).toEqual([402]);
     expect(workboard.in_progress).toContainEqual(expect.objectContaining({ task_number: 401, assigned_agent: 'builder' }));
+    expect(workboard.in_progress).toContainEqual(expect.objectContaining({ task_number: 404, assigned_agent: 'observer' }));
     expect(workboard.local_followups.map((task) => task.task_number)).toContain(403);
-    expect(workboard.active_chapters[0]).toMatchObject({ chapter: 'Operator Surface', pending_reviews: 1, in_progress: 1 });
+    expect(workboard.active_chapters[0]).toMatchObject({ chapter: 'Operator Surface', pending_reviews: 1, in_progress: 2 });
     expect(workboard.source_envelopes).toEqual([expect.objectContaining({ envelope_id: 'env_workboard', source_ref: 'operator:workboard' })]);
     expect(JSON.stringify(workboard.source_envelopes)).not.toContain('payload should not be surfaced');
     expect(workboard.upstream_publications).toEqual([expect.objectContaining({ publication_id: 'rpi_test' })]);

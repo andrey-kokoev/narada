@@ -264,33 +264,33 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
   const checked: WorkNextCheckedZone[] = [];
   const doctrineGuard = await buildDoctrineGuard(cwd);
 
-  if (options.peek) {
-    const currentTask = await findCurrentTaskWork(cwd, options.agent);
-    if (currentTask) {
-      checked.push({ zone: 'task_work', status: 'selected', selected_ref: taskSelectedRef(currentTask) });
-      const result = {
-        status: 'success',
-        action_kind: 'task_work',
+  const currentTask = await findCurrentTaskWork(cwd, options.agent);
+  if (currentTask) {
+    checked.push({ zone: 'task_work', status: 'selected', selected_ref: taskSelectedRef(currentTask) });
+    const result = {
+      status: 'success',
+      action_kind: 'task_work',
+      agent_id: options.agent,
+      primary: currentTask,
+      checked,
+      task_result: {
+        status: 'ok',
+        agent: options.agent,
         agent_id: options.agent,
+        action: options.peek ? 'peek_current' : 'continue_current',
         primary: currentTask,
-        checked,
-        task_result: {
-          status: 'ok',
-          agent: options.agent,
-          agent_id: options.agent,
-          action: 'peek_current',
-          primary: currentTask,
-          task: currentTask,
-        },
-        dispatch_result: null,
-        doctrine_guard: doctrineGuard,
-        next_step: 'Inspect only; this agent already has current task work.',
-      };
-      return {
-        exitCode: ExitCode.SUCCESS,
-        result: formattedResult(result, formatHuman(result), format),
-      };
-    }
+        task: currentTask,
+      },
+      dispatch_result: null,
+      doctrine_guard: doctrineGuard,
+      next_step: options.peek
+        ? 'Inspect only; this agent already has current task work.'
+        : 'Continue the current claimed task before requesting new work.',
+    };
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: formattedResult(result, formatHuman(result), format),
+    };
   }
 
   const taskResult = options.peek ? await taskPeekNextCommand({

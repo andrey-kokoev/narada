@@ -17,7 +17,7 @@ import {
   formatGuidanceForJson,
   type LearningGuidance,
 } from '../lib/learning-recall.js';
-import { loadRoster } from '../lib/task-governance.js';
+import { findTaskFile, loadRoster, readTaskFile, resolveTaskStatus } from '../lib/task-governance.js';
 import { loadPosture, type CCCPosture } from './posture.js';
 
 export interface TaskRecommendOptions {
@@ -272,10 +272,50 @@ export async function taskRecommendCommand(
     if (agentFilter) {
       try {
         const roster = await loadRoster(cwd);
-        if (!roster.agents.some((agent) => agent.agent_id === agentFilter)) {
+        const rosterAgent = roster.agents.find((agent) => agent.agent_id === agentFilter);
+        if (!rosterAgent) {
           return {
             exitCode: ExitCode.GENERAL_ERROR,
             result: agentNotFoundResult(agentFilter),
+          };
+        }
+        if (rosterAgent.task != null) {
+          const taskFile = await findTaskFile(cwd, String(rosterAgent.task)).catch(() => null);
+          const taskBody = taskFile ? await readTaskFile(taskFile.path).catch(() => null) : null;
+          const title = taskBody ? /^#\s+(.+)$/m.exec(taskBody.body)?.[1] ?? null : null;
+          const lifecycle = await resolveTaskStatus(cwd, rosterAgent.task).catch(() => ({ status: undefined, source: 'markdown' as const }));
+          const result = {
+            recommendation_id: `continuation-${agentFilter}-${rosterAgent.task}`,
+            generated_at: new Date().toISOString(),
+            recommender_id: 'system',
+            status: 'success',
+            mode: 'continuation',
+            primary: {
+              task_number: rosterAgent.task,
+              task_id: taskFile?.taskId ?? null,
+              title,
+              principal_id: agentFilter,
+              reason: 'claimed_by_self',
+              lifecycle_status: lifecycle.status ?? 'claimed',
+              lifecycle_status_source: lifecycle.source,
+              next_commands: {
+                continue: `narada task continue ${rosterAgent.task} --agent ${agentFilter}`,
+                report: `narada task report ${rosterAgent.task} --agent ${agentFilter} --summary <summary> --verification <json> --residuals <json>`,
+                release: `narada task release ${rosterAgent.task} --agent ${agentFilter} --reason <reason>`,
+              },
+            },
+            alternatives: [],
+            abstained: [],
+            summary: `Active claimed work: task ${rosterAgent.task} is already assigned to ${agentFilter}.`,
+            next_step: 'Continue, report, or release the active task before requesting a new recommendation.',
+          };
+          return {
+            exitCode: ExitCode.SUCCESS,
+            result: attachFormattedOutput(
+              result,
+              `Active claimed work: ${rosterAgent.task} -> ${agentFilter}\nNext: ${result.primary.next_commands.continue}`,
+              options.format || 'auto',
+            ),
           };
         }
       } catch (error) {

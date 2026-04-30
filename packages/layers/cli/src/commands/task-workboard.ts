@@ -133,13 +133,14 @@ function workboardTaskFromRow(
   if (row.task_number === null) return null;
   const spec = store.getTaskSpecByNumber(row.task_number);
   const assignment = store.getActiveAssignment(row.task_id);
+  const rosterAgent = assignment ? null : store.getRoster().find((agent) => agent.task_number === row.task_number);
   return {
     task_number: row.task_number,
     task_id: row.task_id,
     title: titleForSpec(spec, row.task_id),
     status: row.status,
     chapter: spec?.chapter_markdown ?? null,
-    assigned_agent: assignment?.agent_id ?? null,
+    assigned_agent: assignment?.agent_id ?? rosterAgent?.agent_id ?? null,
   };
 }
 

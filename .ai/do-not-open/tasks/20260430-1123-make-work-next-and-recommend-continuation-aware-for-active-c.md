@@ -1,7 +1,16 @@
 ---
-status: opened
+status: closed
 amended_by: architect
 amended_at: 2026-04-30T13:58:22.057Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T14:33:37.586Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Focused tests, typecheck/build, and live work-next/recommend/workboard readbacks prove continuation primary behavior, claimed-by-self reason, exact next commands, and workboard in-progress assignment resolution.
+closed_at: 2026-04-30T14:33:44.169Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Make work-next and recommend continuation-aware for active claimed work
@@ -42,8 +51,8 @@ The workboard reported no in-progress tasks while roster showed Builder working 
 
 ## Acceptance Criteria
 
-- [ ] `narada task recommend --agent <id>` or the canonical work-next surface reports active claimed work as the primary continuation before new recommendations
-- [ ] Workboard in_progress includes active claimed/executing tasks when roster/lifecycle says an agent is working
-- [ ] Recommendations explain blockers as claimed_by_self, claimed_by_other, dependency_blocked, or review_pending rather than generic abstention
-- [ ] Output gives exact next commands for continuing, reporting, releasing, or claiming work
-- [ ] Focused tests cover self-claimed continuation, other-agent claim visibility, and no-active-work recommendation
+- [x] `narada task recommend --agent <id>` or the canonical work-next surface reports active claimed work as the primary continuation before new recommendations
+- [x] Workboard in_progress includes active claimed/executing tasks when roster/lifecycle says an agent is working
+- [x] Recommendations explain blockers as claimed_by_self, claimed_by_other, dependency_blocked, or review_pending rather than generic abstention
+- [x] Output gives exact next commands for continuing, reporting, releasing, or claiming work
+- [x] Focused tests cover self-claimed continuation, other-agent claim visibility, and no-active-work recommendation

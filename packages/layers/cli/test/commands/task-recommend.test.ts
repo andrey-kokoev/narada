@@ -427,6 +427,29 @@ describe('task recommend operator', () => {
     expect(afterRoster).toBe(beforeRoster);
   });
 
+  it('returns active claimed work before new recommendations for the same agent', async () => {
+    await taskClaimCommand({ taskNumber: '998', agent: 'agent-alpha', cwd: tempDir, format: 'json' });
+
+    const result = await taskRecommendCommand({ cwd: tempDir, agent: 'agent-alpha', format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      mode: 'continuation',
+      primary: {
+        task_number: 998,
+        principal_id: 'agent-alpha',
+        reason: 'claimed_by_self',
+        next_commands: {
+          continue: 'narada task continue 998 --agent agent-alpha',
+          release: 'narada task release 998 --agent agent-alpha --reason <reason>',
+        },
+      },
+      alternatives: [],
+      summary: 'Active claimed work: task 998 is already assigned to agent-alpha.',
+    });
+  });
+
   it('produces stable JSON output', async () => {
     const result1 = await taskRecommendCommand({ cwd: tempDir, format: 'json' });
     const result2 = await taskRecommendCommand({ cwd: tempDir, format: 'json' });

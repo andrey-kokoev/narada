@@ -124,6 +124,30 @@ describe('work-next unified next action', () => {
     expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-101-future.md'), 'utf8')).toContain('status: opened');
   });
 
+  it('continues current task before claiming future work', async () => {
+    seedRoster(tempDir, 'working', 100);
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-current.md'),
+      '---\ntask_id: 100\nstatus: claimed\n---\n\n# Task 100 Current\n\n## Acceptance Criteria\n- [ ] Do current work.\n',
+    );
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-101-future.md'),
+      '---\ntask_id: 101\nstatus: opened\n---\n\n# Task 101 Future\n\n## Acceptance Criteria\n- [ ] Do future work.\n',
+    );
+
+    const result = await workNextCommand({ agent: 'architect', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      action_kind: 'task_work',
+      primary: { task_number: 100, current: true },
+      task_result: { action: 'continue_current' },
+      next_step: 'Continue the current claimed task before requesting new work.',
+    });
+    expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-101-future.md'), 'utf8')).toContain('status: opened');
+  });
+
   it('claims task work when SQLite says opened and markdown has no status', async () => {
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-102-sqlite-opened.md'),
