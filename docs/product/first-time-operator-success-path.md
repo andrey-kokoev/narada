@@ -56,12 +56,12 @@ Failures must return bounded repair commands instead of pushing the Operator tow
 | No admitted work | Return no-work reason with blockers | `narada task workboard --format json`, `narada work-next --format json` |
 | Deferred dependency | Require explicit unblock evidence | `narada task unblock <n> --agent <id> --evidence <text> --rationale <text>` |
 
-## Ergonomic Front Door Target
+## Ergonomic Front Door
 
-Later tasks should expose one first-time Operator front door:
+The first-time Operator front door is:
 
 ```bash
-narada operator start --site <site-id-or-root> --operation <operation-id>
+narada operator start --site <site-id-or-root> --operation <operation-id> --format json
 ```
 
 The command is the orchestrated guide over the crossings above. It is read-only by default and must not become a hidden authority shortcut. Its output is bounded:
@@ -71,6 +71,14 @@ The command is the orchestrated guide over the crossings above. It is read-only 
 - exact next command;
 - bootstrap text or Operator Surface handoff when appropriate;
 - readiness proof or residual blockers.
+
+Focused verification:
+
+```bash
+pnpm --dir packages/layers/cli exec vitest run test/commands/operator.test.ts --pool=forks --no-file-parallelism --maxWorkers=1 --minWorkers=1 --testTimeout=120000 --hookTimeout=120000
+```
+
+Observed result for the onboarding proof: the fixture walks from an absent Site to a configured Site with missing role binding, then to a fully idle Site with a bound architect identity. It asserts bounded JSON fields, explicit blockers, precise unblock commands, governance coordinates, and final next-work guidance.
 
 ## Verification Rule
 

@@ -1,6 +1,16 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T03:10:44.234Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-30T03:10:44.941Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
+
 # Prove first-time Operator onboarding end-to-end
 
 ## Chapter
@@ -39,8 +49,8 @@ The strongest ergonomics improvement must be protected by a fixture or integrati
 
 ## Acceptance Criteria
 
-- [ ] A focused test or fixture proves the first-time Operator path from fresh Site posture to next governed work guidance.
-- [ ] The proof asserts bounded output behavior and stable JSON fields for automation.
-- [ ] The proof covers at least one missing-capability case with a precise unblock command.
-- [ ] Documentation or execution notes name the exact verification command and observed result.
-- [ ] The chapter can be closed using standard task evidence without relying on direct task-file edits or raw SQLite reads.
+- [x] A focused test or fixture proves the first-time Operator path from fresh Site posture to next governed work guidance.
+- [x] The proof asserts bounded output behavior and stable JSON fields for automation.
+- [x] The proof covers at least one missing-capability case with a precise unblock command.
+- [x] Documentation or execution notes name the exact verification command and observed result.
+- [x] The chapter can be closed using standard task evidence without relying on direct task-file edits or raw SQLite reads.

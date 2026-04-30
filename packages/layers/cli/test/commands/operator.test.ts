@@ -204,4 +204,71 @@ describe('operator start command', () => {
       bounded_output: true,
     });
   });
+
+  it('proves first-time Operator onboarding from fresh posture to next governed work guidance', async () => {
+    const missing = join(tempDir, 'missing-site');
+    const absent = await operatorStartCommand({ site: missing, role: 'architect', format: 'json' });
+    expect(absent.exitCode).toBe(ExitCode.SUCCESS);
+    expect(absent.result).toMatchObject({
+      status: 'success',
+      posture: 'site_absent',
+      mutation_performed: false,
+      bounded_output: true,
+      target_locus: { site_root: missing },
+      command_authority: { read_only: true, mutates_site_state: false },
+      readiness: {
+        onboarding: { state: 'not_yet_onboarded' },
+        blockers: expect.arrayContaining([expect.objectContaining({
+          name: 'site_root_exists',
+          next_command: `narada sites init --root ${JSON.stringify(missing)}`,
+        })]),
+      },
+      next_command: `narada sites init --root ${JSON.stringify(missing)}`,
+    });
+
+    const site = join(tempDir, 'site');
+    mkdirSync(site);
+    writeConfig(site, { governance: true });
+    const missingCapability = await operatorStartCommand({ site, role: 'architect', format: 'json' });
+    expect(missingCapability.exitCode).toBe(ExitCode.SUCCESS);
+    expect(missingCapability.result).toMatchObject({
+      status: 'success',
+      posture: 'ready_missing_role_binding',
+      readiness: {
+        coordinates: {
+          governing_law_source: { source_site_id: 'narada-proper' },
+          authority_locus: { locus_kind: 'project' },
+          evidence_locus: { kind: 'git' },
+        },
+        blockers: expect.arrayContaining([expect.objectContaining({
+          name: 'role_identity_exists',
+          next_command: expect.stringContaining('operator-surface agent instantiate'),
+        })]),
+      },
+      next_command: expect.stringContaining('operator-surface agent instantiate'),
+    });
+
+    writeIdentity(site);
+    const ready = await operatorStartCommand({ site, role: 'architect', format: 'json' });
+    expect(ready.exitCode).toBe(ExitCode.SUCCESS);
+    expect(ready.result).toMatchObject({
+      status: 'success',
+      posture: 'fully_idle',
+      bounded_output: true,
+      pending_inbox: [],
+      readiness: {
+        posture: 'fully_idle',
+        blockers: [],
+        warnings: [],
+        coordinates: {
+          operator_surface_posture: {
+            role: 'architect',
+            identity_id: 'test-site-architect',
+            bound_transport: true,
+          },
+        },
+      },
+      next_command: 'narada work-next --agent architect --format json',
+    });
+  });
 });
