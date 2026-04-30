@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T14:17:24.070Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Focused tests, typecheck/build, and bounded live send trial prove observer alias resolution, unknown-recipient repair output, missing binding deferral, and no expansion of Observer authority.
+closed_at: 2026-04-30T14:17:30.958Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Make Observer reachable through operator-surface send aliases
@@ -40,8 +49,8 @@ An Architect trial attempted to send Observer a bounded coherence question about
 
 ## Acceptance Criteria
 
-- [ ] Observer can be addressed by a canonical alias through the operator-surface send path
-- [ ] Unknown-recipient output lists Observer when Observer is admitted but unbound or gives a precise admission repair command when not admitted
-- [ ] Missing Observer runtime binding returns a bind/deferred-bind command rather than alias failure
-- [ ] Tests cover observer alias resolution and missing binding posture
-- [ ] Verification records a bounded Observer message trial without granting Observer build or review authority
+- [x] Observer can be addressed by a canonical alias through the operator-surface send path
+- [x] Unknown-recipient output lists Observer when Observer is admitted but unbound or gives a precise admission repair command when not admitted
+- [x] Missing Observer runtime binding returns a bind/deferred-bind command rather than alias failure
+- [x] Tests cover observer alias resolution and missing binding posture
+- [x] Verification records a bounded Observer message trial without granting Observer build or review authority

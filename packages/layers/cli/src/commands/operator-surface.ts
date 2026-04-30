@@ -10,7 +10,9 @@ import {
   operatorSurfaceIdentityPath,
   readOperatorSurfaceIdentities,
   writeOperatorSurfaceIdentities,
+  type OperatorSurfaceIdentity,
   type OperatorSurfaceInputCapability,
+  type OperatorSurfaceIdentityRegistry,
   type OperatorSurfaceSubmitStrategy,
 } from '../lib/operator-surface-registry.js';
 import { loadRoster } from '../lib/task-governance.js';
@@ -110,6 +112,66 @@ function normalizeInstantiateRole(role: string | undefined): OperatorSurfaceAgen
 
 function defaultIdentityName(site: string, role: string): string {
   return `${site}-${role}`.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function normalizeAlias(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function operatorSurfaceAliases(identity: OperatorSurfaceIdentity): string[] {
+  const aliases = new Set([
+    identity.identity_id,
+    identity.label,
+    identity.role,
+    `${identity.site_id}-${identity.role}`,
+    `narada-${identity.role}`,
+    `${identity.site_id} ${identity.role}`,
+    `narada ${identity.role}`,
+  ]);
+  return [...aliases].filter(Boolean);
+}
+
+function resolveSendIdentity(registry: OperatorSurfaceIdentityRegistry, requestedIdentity: string): {
+  admittedIdentity: OperatorSurfaceIdentity | null;
+  requested_identity: string;
+  resolved_identity: string | null;
+  resolution: 'identity_id' | 'alias' | 'unresolved';
+  matched_alias: string | null;
+  known_aliases: string[];
+} {
+  const exact = registry.identities.find((entry) => entry.identity_id === requestedIdentity);
+  const knownAliases = registry.identities.flatMap(operatorSurfaceAliases);
+  if (exact) {
+    return {
+      admittedIdentity: exact,
+      requested_identity: requestedIdentity,
+      resolved_identity: exact.identity_id,
+      resolution: 'identity_id',
+      matched_alias: exact.identity_id,
+      known_aliases: knownAliases,
+    };
+  }
+
+  const requestedAlias = normalizeAlias(requestedIdentity);
+  const matched = registry.identities.find((entry) => operatorSurfaceAliases(entry).some((alias) => normalizeAlias(alias) === requestedAlias));
+  return {
+    admittedIdentity: matched ?? null,
+    requested_identity: requestedIdentity,
+    resolved_identity: matched?.identity_id ?? null,
+    resolution: matched ? 'alias' : 'unresolved',
+    matched_alias: matched ? operatorSurfaceAliases(matched).find((alias) => normalizeAlias(alias) === requestedAlias) ?? null : null,
+    known_aliases: knownAliases,
+  };
+}
+
+function publicIdentityResolution(resolution: ReturnType<typeof resolveSendIdentity>): Record<string, unknown> {
+  return {
+    requested_identity: resolution.requested_identity,
+    resolved_identity: resolution.resolved_identity,
+    resolution: resolution.resolution,
+    matched_alias: resolution.matched_alias,
+    known_aliases: resolution.known_aliases,
+  };
 }
 
 function parseInputCapabilities(value: string | undefined): OperatorSurfaceInputCapability[] | undefined {
@@ -558,19 +620,26 @@ export async function operatorSurfaceSendCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   try {
     const cwd = options.cwd ?? '.';
-    const identity = requireText(options.identity, '--identity');
+    const requestedIdentity = requireText(options.identity, '--identity');
     const text = requireText(options.text, '--text');
     const registry = await readOperatorSurfaceIdentities(cwd);
-    const admittedIdentity = registry.identities.find((entry) => entry.identity_id === identity);
+    const identityResolution = resolveSendIdentity(registry, requestedIdentity);
+    const admittedIdentity = identityResolution.admittedIdentity;
+    const identity = identityResolution.resolved_identity ?? requestedIdentity;
     if (!admittedIdentity) {
+      const roleRepair = normalizeInstantiateRole(requestedIdentity)
+        ? `narada operator-surface agent instantiate --site <site-id-or-root> --role ${normalizeInstantiateRole(requestedIdentity)} --agent-kind codex_cli --by <principal>`
+        : `narada operator-surface agent instantiate --site <site-id-or-root> --role <role> --agent-kind codex_cli --by <principal> --identity ${requestedIdentity}`;
       return {
         exitCode: ExitCode.INVALID_CONFIG,
         result: {
           status: 'error',
           reason: 'identity_not_admitted',
-          identity,
+          identity: requestedIdentity,
+          identity_resolution: publicIdentityResolution(identityResolution),
+          available_aliases: identityResolution.known_aliases,
           mutation_performed: false,
-          unblock_command: `narada operator-surface agent instantiate --site <site-id-or-root> --role <role> --agent-kind codex_cli --by <principal> --identity ${identity}`,
+          unblock_command: roleRepair,
         },
       };
     }
@@ -598,6 +667,7 @@ export async function operatorSurfaceSendCommand(
           status: 'error',
           reason: 'stale_binding',
           identity,
+          identity_resolution: publicIdentityResolution(identityResolution),
           mutation_performed: false,
           unblock_command: `narada operator-surface bind-focused --identity ${identity} --runtime-locus ${options.runtimeLocus ?? '<pc-or-user-site>'}`,
         },
@@ -610,6 +680,7 @@ export async function operatorSurfaceSendCommand(
           status: 'error',
           reason: 'no_binding',
           identity,
+          identity_resolution: publicIdentityResolution(identityResolution),
           mutation_performed: false,
           unblock_command: `narada operator-surface bind-focused --identity ${identity} --runtime-locus ${options.runtimeLocus ?? '<pc-or-user-site>'}`,
         },
@@ -622,6 +693,7 @@ export async function operatorSurfaceSendCommand(
           status: 'error',
           reason: 'ambiguous_binding',
           identity,
+          identity_resolution: publicIdentityResolution(identityResolution),
           mutation_performed: false,
           matching_bindings: activeBindings.map((binding) => ({
             binding_id: binding.binding_id ?? null,
@@ -643,6 +715,7 @@ export async function operatorSurfaceSendCommand(
           status: 'error',
           reason: 'missing_transport',
           identity,
+          identity_resolution: publicIdentityResolution(identityResolution),
           mutation_performed: false,
           binding: {
             binding_id: binding.binding_id ?? null,
@@ -673,6 +746,7 @@ export async function operatorSurfaceSendCommand(
         status: 'success',
         mutation_performed: Boolean(options.execute),
         event_artifact: eventArtifact,
+        identity_resolution: publicIdentityResolution(identityResolution),
         send,
       },
     };

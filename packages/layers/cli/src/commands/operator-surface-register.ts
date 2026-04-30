@@ -115,7 +115,7 @@ export function registerOperatorSurfaceCommands(program: Command): void {
   surfaceCmd
     .command('send')
     .description('Validate or record bounded input send through an admitted Operator Surface binding')
-    .requiredOption('--identity <id>', 'Durable Operator Surface identity')
+    .requiredOption('--identity <id-or-alias>', 'Durable Operator Surface identity or admitted role alias such as observer')
     .requiredOption('--text <text>', 'Text to send; secret-like text is refused')
     .option('--runtime-locus <locus>', 'Owning User/PC runtime locus')
     .option('--dry-run', 'Validate binding and strategy without recording send evidence', false)

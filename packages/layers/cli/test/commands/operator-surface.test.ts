@@ -482,6 +482,88 @@ describe('operator-surface commands', () => {
     });
   });
 
+  it('resolves observer alias before reporting missing runtime binding', async () => {
+    const cwd = await tempRepo();
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-proper-observer',
+      role: 'observer',
+      agentKind: 'codex_cli',
+      site: 'narada-proper',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    const result = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'observer',
+      text: 'Please observe coherence only.',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      reason: 'no_binding',
+      identity: 'narada-proper-observer',
+      identity_resolution: {
+        requested_identity: 'observer',
+        resolved_identity: 'narada-proper-observer',
+        resolution: 'alias',
+        matched_alias: 'observer',
+      },
+      unblock_command: 'narada operator-surface bind-focused --identity narada-proper-observer --runtime-locus <pc-or-user-site>',
+    });
+  });
+
+  it('lists admitted observer aliases when send identity is unknown', async () => {
+    const cwd = await tempRepo();
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-proper-observer',
+      role: 'observer',
+      agentKind: 'codex_cli',
+      site: 'narada-proper',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    const result = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'coherence-watcher',
+      text: 'Observe only.',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      reason: 'identity_not_admitted',
+      identity: 'coherence-watcher',
+      available_aliases: expect.arrayContaining(['observer', 'narada observer', 'narada-proper-observer']),
+      unblock_command: 'narada operator-surface agent instantiate --site <site-id-or-root> --role <role> --agent-kind codex_cli --by <principal> --identity coherence-watcher',
+    });
+  });
+
+  it('gives observer admission repair when observer alias is not admitted', async () => {
+    const cwd = await tempRepo();
+
+    const result = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'observer',
+      text: 'Observe only.',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      reason: 'identity_not_admitted',
+      identity: 'observer',
+      unblock_command: 'narada operator-surface agent instantiate --site <site-id-or-root> --role observer --agent-kind codex_cli --by <principal>',
+    });
+  });
+
   it('reports ambiguous operator-surface bindings with a runtime-locus unblock', async () => {
     const cwd = await tempRepo();
     await admitIdentity(cwd);
