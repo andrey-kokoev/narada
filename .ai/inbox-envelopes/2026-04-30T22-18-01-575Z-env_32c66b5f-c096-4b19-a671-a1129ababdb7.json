@@ -1,0 +1,29 @@
+{
+  "envelope_id": "env_32c66b5f-c096-4b19-a671-a1129ababdb7",
+  "received_at": "2026-04-30T22:18:01.575Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-cpy.architect:operator-surface-admission-incomplete-for-cpy-builder-20260430"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-cpy.architect"
+  },
+  "payload": {
+    "title": "Operator-surface identity admission should complete messaging and task-roster readiness",
+    "summary": "After admitting narada-cpy.builder, the identity existed in the User Site registry and could be labeled, but architect could not nudge it through the normal operator-surface intent path. The alias layer did not resolve narada-cpy.builder, the submit-strategy registry had no entry for it, and CPY task peek-next refused the same identity because it was not in the task roster. The architect manually added User Site input aliases, a submit strategy, and a CPY task roster entry before nudge worked.",
+    "evidence": [
+      "Send-OperatorSurfaceIntent nudge narada-cpy.builder failed with unknown_operator_surface_target.",
+      "Direct Send-OperatorSurfaceInput failed with submit_strategy_unavailable: no enabled known_surface_submit strategy for narada-cpy.builder.",
+      "narada task peek-next --agent narada-cpy.builder failed with agent_not_in_roster and repair_command narada task roster add <agent-id> --role builder.",
+      "After adding aliases, submit strategy, and task roster entry, the nudge submitted successfully to HWND 3346276 and restored previous focus."
+    ],
+    "proposal": [
+      "Agent/operator-surface admission should either populate all required projections for the requested capabilities, or emit a bounded readiness checklist with exact commands for alias, submit-strategy, runtime binding, and task-roster completion.",
+      "Role-shaped identities admitted for a Site builder should be registered consistently across operator-surface identity, message aliases, submit strategy, and task roster when those capabilities are requested."
+    ],
+    "recommendation": "Create a Narada proper task to make operator-surface agent instantiate/admit produce a complete ready-to-nudge builder surface for client Sites."
+  },
+  "status": "received"
+}
