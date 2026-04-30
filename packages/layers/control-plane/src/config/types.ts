@@ -96,6 +96,19 @@ export interface AdmissionConfig {
   mail?: MailAdmissionConfig;
 }
 
+export interface ClientServiceMailboxProfile {
+  /** Marks this mailbox scope as authored from a client-service onboarding path. */
+  enabled: boolean;
+  /** Client correspondence scope this mailbox serves. Defaults to scope_id. */
+  correspondence_scope_id: string;
+  /** Mailbox user id bound at Graph/source level. */
+  mailbox_user_id: string;
+  /** Draft/send posture chosen by the Operator. Mirrors the policy posture used to derive allowed actions. */
+  draft_send_posture: string;
+  /** Site-local material/KB note posture for onboarding. */
+  material_notes_posture: 'none' | 'site_local_kb' | 'deferred' | string;
+}
+
 export interface OperationIntakeRouteMatchConfig {
   sender_addresses?: string[];
   sender_domains?: string[];
@@ -174,6 +187,8 @@ export interface ScopeConfig {
   policy: RuntimePolicy;
   /** Source-record admission policy. Controls which synced source records may produce work. */
   admission?: AdmissionConfig;
+  /** Client-service onboarding metadata for mailbox scopes. */
+  client_service?: ClientServiceMailboxProfile;
   /** External tool catalogs bound into this scope */
   tool_catalogs?: ToolCatalogRef[];
   /** Executor bindings */

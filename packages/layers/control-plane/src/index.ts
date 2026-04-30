@@ -709,6 +709,8 @@ export type { SecureRef } from "./config/secure-config.js";
 // Type exports
 export type {
   ExchangeFsSyncConfig,
+  ClientServiceMailboxProfile,
+  MailParticipantField,
   ScopeConfig,
   RuntimePolicy,
   StuckWorkThresholds,
@@ -719,6 +721,10 @@ export type {
   ConfirmationProvider,
   ConfirmationProvidersConfig,
 } from "./config/types.js";
+export type {
+  AttachmentPolicy,
+  BodyPolicy,
+} from "./types/index.js";
 export type {
   GraphAdapterConfig,
 } from "./adapter/graph/adapter.js";

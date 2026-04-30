@@ -21,12 +21,23 @@ import type { PosturePreset } from "../intents/posture.js";
 
 export interface WantMailboxOptions {
   configPath?: string;
+  scopeId?: string;
   primaryCharter?: string;
   secondaryCharters?: string[];
   posture?: string;
   graphUserId?: string;
+  mailboxUserId?: string;
+  correspondenceScopeId?: string;
   folders?: string[];
   dataRootDir?: string;
+  clientService?: boolean;
+  participantDomains?: string[];
+  excludedParticipantDomains?: string[];
+  participantFields?: string[];
+  attachmentPolicy?: string;
+  bodyPolicy?: string;
+  includeHeaders?: boolean;
+  materialNotesPosture?: string;
   scaffold?: boolean;
 }
 
@@ -39,20 +50,30 @@ export function wantMailbox(
   const dataRoot =
     options.dataRootDir ??
     path.join(config.root_dir, mailboxId.replace(/[@.]/g, "-"));
-  const scopeId = mailboxId;
+  const scopeId = options.scopeId ?? options.correspondenceScopeId ?? mailboxId;
   const contextId = `mail:${mailboxId}`;
   const existed = !!findScope(config, scopeId);
 
   const posture = (options.posture ?? "draft-only") as PosturePreset;
+  const mailboxUserId = options.mailboxUserId ?? options.graphUserId ?? mailboxId;
 
   const scope = buildMailboxScope({
     scopeId,
-    graphUserId: options.graphUserId ?? mailboxId,
+    graphUserId: mailboxUserId,
     dataRootDir: dataRoot,
     folders: options.folders,
     primaryCharter: options.primaryCharter,
     secondaryCharters: options.secondaryCharters,
     posture,
+    clientService: options.clientService,
+    correspondenceScopeId: options.correspondenceScopeId ?? scopeId,
+    participantDomains: options.participantDomains,
+    excludedParticipantDomains: options.excludedParticipantDomains,
+    participantFields: options.participantFields,
+    attachmentPolicy: options.attachmentPolicy as any,
+    bodyPolicy: options.bodyPolicy as any,
+    includeHeaders: options.includeHeaders,
+    materialNotesPosture: options.materialNotesPosture,
   });
 
   upsertScope(config, scope);
@@ -80,6 +101,13 @@ export function wantMailbox(
           ]
         : []),
       `- posture: \`${posture}\``,
+      ...(options.clientService
+        ? [
+            `- client-service mailbox user id: \`${mailboxUserId}\``,
+            `- correspondence scope: \`${scopeId}\``,
+            `- material notes posture: \`${scope.client_service?.material_notes_posture ?? "deferred"}\``,
+          ]
+        : []),
       `- data root: \`${scope.root_dir}\``,
       "",
       "## Contents",
@@ -103,6 +131,7 @@ export function wantMailbox(
       `Mailbox ${mailboxId} ${existed ? "updated" : "created"}. ` +
       `Primary charter: ${scope.policy.primary_charter}. ` +
       `Posture: ${posture} (${allowed.length} allowed actions). ` +
+      (options.clientService ? `Client-service scope: ${scopeId}. ` : "") +
       `Folders: ${scope.scope.included_container_refs.join(", ")}.`,
     nextSteps: [
       "narada setup",

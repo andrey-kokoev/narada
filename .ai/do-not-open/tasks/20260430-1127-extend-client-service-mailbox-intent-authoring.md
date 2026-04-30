@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T15:02:36.219Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Structured client-service mailbox setup is now command-authored through want-mailbox: participant-domain predicates span from/sender/to/cc/bcc; attachment policy, mailbox user id, correspondence scope id, draft/send posture, and KB/material note posture are captured; minimal mailbox defaults remain unchanged; docs/help/tests and live readback verify the guided path.
+closed_at: 2026-04-30T15:03:09.635Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Extend client-service mailbox intent authoring
@@ -41,9 +50,9 @@ This follows task 1126. Task 1126 covers surfacing choices before readiness. Thi
 
 ## Acceptance Criteria
 
-- [ ] Client-service mailbox authoring supports participant-domain predicates across from/sender/to/cc/bcc
-- [ ] Client-service mailbox authoring supports attachment policy, mailbox user id, correspondence scope id, draft/send posture, and KB/material note posture
-- [ ] CPY-like setup can be represented without direct config file editing
-- [ ] Existing simple `want-mailbox` behavior remains compatible
-- [ ] Help or docs show the guided client-service mailbox command path
-- [ ] Tests cover structured client-service mailbox setup and minimal mailbox setup
+- [x] Client-service mailbox authoring supports participant-domain predicates across from/sender/to/cc/bcc
+- [x] Client-service mailbox authoring supports attachment policy, mailbox user id, correspondence scope id, draft/send posture, and KB/material note posture
+- [x] CPY-like setup can be represented without direct config file editing
+- [x] Existing simple `want-mailbox` behavior remains compatible
+- [x] Help or docs show the guided client-service mailbox command path
+- [x] Tests cover structured client-service mailbox setup and minimal mailbox setup

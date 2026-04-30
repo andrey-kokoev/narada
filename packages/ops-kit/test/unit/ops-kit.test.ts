@@ -52,6 +52,72 @@ describe("ops-kit", () => {
     expect(scope.root_dir).toBe("./custom-data");
   });
 
+  it("want-mailbox authors client-service participant-domain admission and material policy choices", () => {
+    const { root, configPath } = makeOpsRepo();
+    const result = wantMailbox("support@cpy.example", {
+      configPath,
+      scopeId: "cpy-correspondence",
+      clientService: true,
+      posture: "draft-only",
+      mailboxUserId: "shared-support@cpy.example",
+      folders: ["inbox", "sentitems"],
+      participantDomains: ["client.example", "partner.example"],
+      excludedParticipantDomains: ["spam.example"],
+      attachmentPolicy: "include_content",
+      bodyPolicy: "text_and_html",
+      includeHeaders: true,
+      materialNotesPosture: "site_local_kb",
+    });
+
+    const config = readConfig(configPath)!;
+    const scope = findScope(config, "cpy-correspondence")!;
+    expect(result.scopeId).toBe("cpy-correspondence");
+    expect(scope.sources.find((source) => source.type === "graph")?.user_id).toBe("shared-support@cpy.example");
+    expect(scope.scope.included_container_refs).toEqual(["inbox", "sentitems"]);
+    expect(scope.normalize).toMatchObject({
+      attachment_policy: "include_content",
+      body_policy: "text_and_html",
+      include_headers: true,
+    });
+    expect(scope.admission?.mail?.predicates?.include).toEqual([
+      {
+        kind: "participant",
+        fields: ["from", "sender", "to", "cc", "bcc"],
+        domains: ["client.example", "partner.example"],
+      },
+    ]);
+    expect(scope.admission?.mail?.predicates?.exclude).toEqual([
+      {
+        kind: "participant",
+        fields: ["from", "sender", "to", "cc", "bcc"],
+        domains: ["spam.example"],
+      },
+    ]);
+    expect(scope.client_service).toEqual({
+      enabled: true,
+      correspondence_scope_id: "cpy-correspondence",
+      mailbox_user_id: "shared-support@cpy.example",
+      draft_send_posture: "draft-only",
+      material_notes_posture: "site_local_kb",
+    });
+    const readme = fs.readFileSync(path.join(root, "mailboxes", "support@cpy.example", "README.md"), "utf-8");
+    expect(readme).toContain("client-service mailbox user id");
+    expect(readme).toContain("material notes posture");
+  });
+
+  it("want-mailbox preserves minimal mailbox defaults without client-service metadata", () => {
+    const { configPath } = makeOpsRepo();
+    wantMailbox("help@example.com", { configPath, posture: "draft-only" });
+    const scope = findScope(readConfig(configPath)!, "help@example.com")!;
+    expect(scope.client_service).toBeUndefined();
+    expect(scope.admission).toBeUndefined();
+    expect(scope.normalize).toMatchObject({
+      attachment_policy: "metadata_only",
+      body_policy: "text_only",
+      include_headers: false,
+    });
+  });
+
   it("shapes a workflow and writes schedule declaration", () => {
     const { root, configPath } = makeOpsRepo();
     const result = wantWorkflow("sonar-postgres-watch", { configPath, schedule: "* * * * *", posture: "observe-only" });

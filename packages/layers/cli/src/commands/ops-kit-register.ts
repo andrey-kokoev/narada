@@ -28,6 +28,11 @@ function listLines(title: string, lines: string[]): string[] {
   return [title, ...lines.map((line) => `  ${line}`)];
 }
 
+function csvOption(value: unknown): string[] | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  return String(value).split(',').map((item) => item.trim()).filter(Boolean);
+}
+
 function formatInitRepo(result: ReturnType<typeof initRepo>): string {
   return [
     result.summary,
@@ -108,25 +113,54 @@ export function registerOpsKitCommands(program: Command): void {
     .command('want-mailbox')
     .argument('<mailbox-id>')
     .option('-c, --config <path>')
+    .option('--scope-id <id>', 'Operation scope ID (defaults to mailbox ID)')
     .option('--primary-charter <charter>')
     .option('--secondary-charters <charters>')
-    .option('--posture <preset>')
+    .option('--posture <preset>', 'Draft/send posture preset')
+    .option('--draft-send-posture <preset>', 'Alias for --posture when authoring client-service mailbox setup')
     .option('--graph-user-id <id>', 'Graph API user ID (defaults to mailbox ID)')
+    .option('--mailbox-user-id <id>', 'Mailbox user ID alias for client-service setup')
+    .option('--correspondence-scope-id <id>', 'Client-service correspondence scope ID')
     .option('--folders <list>', 'Comma-separated folder list (defaults to inbox)', 'inbox')
     .option('--data-root-dir <path>', 'Data root directory for this operation')
+    .option('--client-service', 'Author client-service mailbox onboarding metadata and predicates', false)
+    .option('--participant-domain <domains>', 'Comma-separated participant domains to admit across from/sender/to/cc/bcc')
+    .option('--exclude-participant-domain <domains>', 'Comma-separated participant domains to reject across from/sender/to/cc/bcc')
+    .option('--participant-fields <fields>', 'Comma-separated participant fields: from,sender,to,cc,bcc,any_participant')
+    .option('--attachment-policy <policy>', 'Attachment policy: exclude, metadata_only, include_content')
+    .option('--body-policy <policy>', 'Body policy: text_only, plain_text_only, html_only, text_and_html, original, best_effort')
+    .option('--include-headers', 'Include message headers during normalization', false)
+    .option('--material-notes-posture <posture>', 'Client-service KB/material note posture: none, site_local_kb, deferred')
     .description('Declare a mailbox operation')
+    .addHelpText('after', [
+      '',
+      'Examples:',
+      '  narada want-mailbox help@example.com --posture draft-only',
+      '  narada want-mailbox support@client.com --client-service --scope-id client-correspondence --mailbox-user-id support@client.com --participant-domain client.com --attachment-policy metadata_only --draft-send-posture draft-only --material-notes-posture site_local_kb',
+    ].join('\n'))
     .action(directCommandAction<[string, Record<string, unknown>]>({
       command: 'want-mailbox',
       emit: emitCommandResult,
       invocation: async (mailboxId, opts) => {
         const result = wantMailbox(mailboxId, {
           configPath: opts.config as string | undefined,
+          scopeId: opts.scopeId as string | undefined,
           primaryCharter: opts.primaryCharter as string | undefined,
-          secondaryCharters: opts.secondaryCharters ? String(opts.secondaryCharters).split(',') : undefined,
-          posture: opts.posture as string | undefined,
+          secondaryCharters: csvOption(opts.secondaryCharters),
+          posture: (opts.draftSendPosture ?? opts.posture) as string | undefined,
           graphUserId: opts.graphUserId as string | undefined,
-          folders: opts.folders ? String(opts.folders).split(',') : undefined,
+          mailboxUserId: opts.mailboxUserId as string | undefined,
+          correspondenceScopeId: opts.correspondenceScopeId as string | undefined,
+          folders: csvOption(opts.folders),
           dataRootDir: opts.dataRootDir as string | undefined,
+          clientService: opts.clientService as boolean | undefined,
+          participantDomains: csvOption(opts.participantDomain),
+          excludedParticipantDomains: csvOption(opts.excludeParticipantDomain),
+          participantFields: csvOption(opts.participantFields),
+          attachmentPolicy: opts.attachmentPolicy as string | undefined,
+          bodyPolicy: opts.bodyPolicy as string | undefined,
+          includeHeaders: opts.includeHeaders as boolean | undefined,
+          materialNotesPosture: opts.materialNotesPosture as string | undefined,
         });
         return {
           exitCode: ExitCode.SUCCESS,

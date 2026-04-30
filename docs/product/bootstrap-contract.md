@@ -59,6 +59,22 @@ Declare what Narada should operate on and how cautiously it should act.
 - Live workflow: `narada want-workflow <workflow-id>`
 - Demo/trial: scope is pre-declared by `init-repo --demo`
 
+For client-service mailbox onboarding, use the structured `want-mailbox` authoring path rather than direct config edits. A CPY-like setup can express mailbox user, correspondence scope, participant-domain admission across `from`/`sender`/`to`/`cc`/`bcc`, attachment/body/header policy, draft/send posture, and Site-local material note posture in one command:
+
+```bash
+narada want-mailbox support@client.example \
+  --client-service \
+  --scope-id client-correspondence \
+  --mailbox-user-id support@client.example \
+  --participant-domain client.example \
+  --attachment-policy metadata_only \
+  --body-policy text_only \
+  --draft-send-posture draft-only \
+  --material-notes-posture site_local_kb
+```
+
+Minimal mailbox operations remain valid: `narada want-mailbox help@example.com --posture draft-only` keeps the safe defaults and does not create client-service onboarding metadata.
+
 **Required artifacts after this step:**
 
 | Artifact | Purpose |

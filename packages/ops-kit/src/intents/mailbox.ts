@@ -7,6 +7,8 @@
 
 import type { PosturePreset } from "./posture.js";
 
+export type ClientServiceMaterialNotesPosture = "none" | "site_local_kb" | "deferred" | string;
+
 /** User intent to create or update a mailbox scope. */
 export interface WantMailboxIntent {
   /** Mailbox identifier (e.g. helpdesk@example.com). */
@@ -24,8 +26,35 @@ export interface WantMailboxIntent {
   /** Graph API user ID (defaults to mailboxId). */
   graphUserId?: string;
 
+  /** Graph/mailbox user ID alias used by client-service onboarding. */
+  mailboxUserId?: string;
+
+  /** Explicit correspondence scope ID. Defaults to mailboxId. */
+  correspondenceScopeId?: string;
+
   /** Sync folders. */
   folders?: string[];
+
+  /** Admission participant domains matched across configured participant fields. */
+  participantDomains?: string[];
+
+  /** Admission participant domains to exclude. */
+  excludedParticipantDomains?: string[];
+
+  /** Participant fields to evaluate for domain predicates. */
+  participantFields?: string[];
+
+  /** Attachment normalization policy. */
+  attachmentPolicy?: string;
+
+  /** Body normalization policy. */
+  bodyPolicy?: string;
+
+  /** Whether to include headers during normalization. */
+  includeHeaders?: boolean;
+
+  /** Site-local KB/material note posture for client-service onboarding. */
+  materialNotesPosture?: ClientServiceMaterialNotesPosture;
 
   /** Data directory root. */
   rootDir?: string;
