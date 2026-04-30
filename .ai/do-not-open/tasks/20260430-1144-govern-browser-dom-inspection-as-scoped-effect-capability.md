@@ -1,5 +1,5 @@
 ---
-status: opened
+status: claimed
 ---
 
 # Govern browser DOM inspection as scoped effect capability
