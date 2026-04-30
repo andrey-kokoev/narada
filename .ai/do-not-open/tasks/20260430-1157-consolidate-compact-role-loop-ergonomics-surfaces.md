@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T23:43:45.811Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777592552038_v1civk
+closed_at: 2026-04-30T23:44:03.718Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Consolidate compact role-loop ergonomics surfaces
@@ -32,8 +41,8 @@ Source inbox envelope env_1fa63e04-f234-4a68-840f-b123e3c65040 groups operator-l
 
 ## Acceptance Criteria
 
-- [ ] There is a documented or implemented compact Architect loop surface with recommended next action.
-- [ ] Agent/chat output modes avoid full payload echo and table wrapping by default.
-- [ ] Task create and work-next success/blocked/no-work/pulled-work states have consistent machine-readable shape or a task captures the exact remaining delta.
-- [ ] Dirty working tree ownership can be classified or a precise implementation task is created for it.
-- [ ] Role-loop docs explain how next resolves into governed duties rather than remembered convention.
+- [x] There is a documented or implemented compact Architect loop surface with recommended next action.
+- [x] Agent/chat output modes avoid full payload echo and table wrapping by default.
+- [x] Task create and work-next success/blocked/no-work/pulled-work states have consistent machine-readable shape or a task captures the exact remaining delta.
+- [x] Dirty working tree ownership can be classified or a precise implementation task is created for it.
+- [x] Role-loop docs explain how next resolves into governed duties rather than remembered convention.

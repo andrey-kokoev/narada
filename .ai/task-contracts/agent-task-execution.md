@@ -98,6 +98,19 @@ The reconciliation must report lifecycle status, criteria posture, report presen
 
 Builders complete work through durable task surfaces: `task report`, `task finish`, `task evidence prove-criteria`, `task evidence admit`, and `task close` as applicable. A chat completion claim never substitutes for those surfaces.
 
+## Role Loop Primitive
+
+The Operator nudge `next` resolves to a governed role-loop inspection, not to remembered chat convention.
+
+Canonical compact surface:
+
+```bash
+narada role-loop next --agent <agent-id> --format json
+narada role-loop next --role architect --format json
+```
+
+This surface is read-only by default. It composes current/next work, review duty, workboard counts, dirty ownership groups, and a recommended command without claiming tasks, echoing full inbox payloads, or relying on terminal table wrapping. Role-specific loops must prefer this compact surface before ad hoc parsing of `work-next`, `workboard`, task-create output, or operator-surface status.
+
 ## Safety
 
 - Do not interpret, narrow, relax, or silently carve exceptions into operator-set constraints.

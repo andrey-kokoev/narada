@@ -11,6 +11,7 @@ import { registerConsoleCommands } from './commands/console-register.js';
 import { registerWorkbenchCommands } from './commands/workbench-register.js';
 import { registerResumeCommands } from './commands/resume-register.js';
 import { registerWorkNextCommands } from './commands/work-next-register.js';
+import { registerRoleLoopCommands } from './commands/role-loop-register.js';
 import { registerPrincipalCommands } from './commands/principal-register.js';
 import { registerTaskAuthoringCommands } from './commands/task-authoring-register.js';
 import { registerTaskLifecycleCommands } from './commands/task-lifecycle-register.js';
@@ -89,6 +90,7 @@ registerOperatorCommands(program);
 registerLawCommands(program);
 registerResumeCommands(program);
 registerWorkNextCommands(program);
+registerRoleLoopCommands(program);
 registerPrincipalCommands(program);
 
 const taskCmd = program
