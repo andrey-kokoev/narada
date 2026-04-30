@@ -1,5 +1,5 @@
 ---
-status: opened
+status: claimed
 ---
 
 # Create canonical operator-surface agent fork orchestration
