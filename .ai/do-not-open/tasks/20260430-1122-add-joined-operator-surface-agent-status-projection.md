@@ -1,5 +1,5 @@
 ---
-status: opened
+status: claimed
 amended_by: architect
 amended_at: 2026-04-30T13:58:15.516Z
 ---
