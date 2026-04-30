@@ -123,10 +123,13 @@ describe('operator start command', () => {
     expect(result.result).toMatchObject({
       posture: 'ready_missing_role_binding',
       role_binding: { role: 'architect', identity_id: null },
-      next_command: expect.stringContaining('operator-surface agent instantiate'),
+      next_command: `narada operator-surface agent instantiate --cwd ${JSON.stringify(site)} --site ${JSON.stringify(site)} --role architect --agent-kind codex_cli --by <principal>`,
       readiness: {
         posture: 'ready_missing_role_binding',
-        blockers: expect.arrayContaining([expect.objectContaining({ name: 'role_identity_exists' })]),
+        blockers: expect.arrayContaining([expect.objectContaining({
+          name: 'role_identity_exists',
+          next_command: `narada operator-surface agent instantiate --cwd ${JSON.stringify(site)} --site ${JSON.stringify(site)} --role architect --agent-kind codex_cli --by <principal>`,
+        })]),
       },
     });
   });

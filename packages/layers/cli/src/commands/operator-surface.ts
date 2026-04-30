@@ -134,6 +134,36 @@ function runtimeBindingPath(cwd: string): string {
   return join(resolve(cwd), 'operator-surfaces', 'runtime-bindings.json');
 }
 
+function resolveSiteLocalRegistryCwd(cwd: string, site: string): {
+  registryCwd: string;
+  registryAuthority: 'target_site_local' | 'caller_context';
+  authorityWarning: string | null;
+} {
+  const callerCwd = resolve(cwd);
+  const directSiteRoot = resolve(cwd, site);
+  const containedSiteRoot = join(directSiteRoot, '.narada');
+  const siteRoot = existsSync(join(directSiteRoot, 'AGENTS.md'))
+    ? directSiteRoot
+    : existsSync(join(containedSiteRoot, 'AGENTS.md'))
+      ? containedSiteRoot
+      : null;
+  if (!siteRoot) {
+    return {
+      registryCwd: callerCwd,
+      registryAuthority: 'caller_context',
+      authorityWarning: null,
+    };
+  }
+  const resolvedSiteRoot = resolve(siteRoot);
+  return {
+    registryCwd: resolvedSiteRoot,
+    registryAuthority: 'target_site_local',
+    authorityWarning: resolvedSiteRoot === callerCwd
+      ? null
+      : `--site resolves to ${resolvedSiteRoot}; operator-surface identity registry is target Site-local. Use --cwd ${JSON.stringify(resolvedSiteRoot)} for explicit authority-locus targeting.`,
+  };
+}
+
 async function readRuntimeBindings(cwd: string): Promise<OperatorSurfaceRuntimeBinding[]> {
   const path = runtimeBindingPath(cwd);
   if (!existsSync(path)) return [];
@@ -232,7 +262,8 @@ export async function operatorSurfaceAgentInstantiateCommand(
     const agentKind = requireText(options.agentKind, '--agent-kind');
     const by = requireText(options.by, '--by');
     const identityName = options.identityName?.trim() || defaultIdentityName(site, role);
-    const registry = await readOperatorSurfaceIdentities(cwd);
+    const registryTarget = resolveSiteLocalRegistryCwd(cwd, site);
+    const registry = await readOperatorSurfaceIdentities(registryTarget.registryCwd);
     const existing = registry.identities.find((entry) => entry.identity_id === identityName);
     let identityResult: unknown = null;
     let mutationPerformed = false;
@@ -249,7 +280,7 @@ export async function operatorSurfaceAgentInstantiateCommand(
       };
     } else {
       const admitted = await operatorSurfaceIdentityAddCommand({
-        cwd,
+        cwd: registryTarget.registryCwd,
         identityName,
         role,
         agentKind,
@@ -307,7 +338,13 @@ export async function operatorSurfaceAgentInstantiateCommand(
       role,
       agent_kind: agentKind,
       identity_id: identityName,
-      registry_path: operatorSurfaceIdentityPath(cwd),
+      registry_path: operatorSurfaceIdentityPath(registryTarget.registryCwd),
+      registry_authority: {
+        classification: registryTarget.registryAuthority,
+        cwd: resolve(cwd),
+        target_registry_cwd: registryTarget.registryCwd,
+        warning: registryTarget.authorityWarning,
+      },
       identity: identityResult,
       bootstrap: {
         source: bootstrap.exitCode === ExitCode.SUCCESS ? 'site_agent_bootstrap' : 'fallback',

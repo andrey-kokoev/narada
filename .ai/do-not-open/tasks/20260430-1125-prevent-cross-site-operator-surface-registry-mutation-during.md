@@ -1,7 +1,16 @@
 ---
-status: claimed
+status: closed
 amended_by: architect
 amended_at: 2026-04-30T14:08:30.542Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T14:09:48.496Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Focused tests, typecheck/build, and live dry-run prove target-locus next_command, target Site-local registry resolution warning/classification, and no caller-registry mutation for external Site invocation.
+closed_at: 2026-04-30T14:10:19.835Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Prevent cross-Site operator-surface registry mutation during onboarding
@@ -43,8 +52,8 @@ This violates Plural Embodiment, Singular Authority: the shell/clone that runs t
 
 ## Acceptance Criteria
 
-- [ ] `sites doctor` next_command includes explicit target-locus arguments for target Site-local operator-surface mutation
-- [ ] `operator-surface agent instantiate` fails closed or warns when `--site` and `--cwd` resolve to different Site-local registries
-- [ ] Dry-run/status output classifies `registry_path` authority locus as `target_site_local`, `caller_context`, or `ambiguous`
-- [ ] Focused tests cover external client Site invocation from Narada proper without mutating Narada proper's registry
-- [ ] Final report records the source inbox envelope, changed files, verification, and residuals
+- [x] `sites doctor` next_command includes explicit target-locus arguments for target Site-local operator-surface mutation
+- [x] `operator-surface agent instantiate` fails closed or warns when `--site` and `--cwd` resolve to different Site-local registries
+- [x] Dry-run/status output classifies `registry_path` authority locus as `target_site_local`, `caller_context`, or `ambiguous`
+- [x] Focused tests cover external client Site invocation from Narada proper without mutating Narada proper's registry
+- [x] Final report records the source inbox envelope, changed files, verification, and residuals

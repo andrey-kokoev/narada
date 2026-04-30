@@ -188,6 +188,35 @@ describe('operator-surface commands', () => {
     expect(existsSync(join(cwd, 'operator-surfaces', 'identities.json'))).toBe(false);
   });
 
+  it('targets external Site-local operator-surface registry instead of caller cwd', async () => {
+    const caller = await tempRepo();
+    const site = await tempRepo();
+    await writeFile(join(site, 'AGENTS.md'), '# Site Contract\n');
+    await writeFile(join(site, 'config.json'), JSON.stringify({ site_id: 'client-site' }));
+
+    const result = await operatorSurfaceAgentInstantiateCommand({
+      cwd: caller,
+      site,
+      role: 'architect',
+      agentKind: 'codex_cli',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      registry_path: join(site, 'operator-surfaces', 'identities.json'),
+      registry_authority: {
+        classification: 'target_site_local',
+        cwd: caller,
+        target_registry_cwd: site,
+        warning: expect.stringContaining('--site resolves to'),
+      },
+    });
+    expect(existsSync(join(caller, 'operator-surfaces', 'identities.json'))).toBe(false);
+    expect(existsSync(join(site, 'operator-surfaces', 'identities.json'))).toBe(true);
+  });
+
   it('reuses an existing instantiate identity instead of rewriting it', async () => {
     const cwd = await tempRepo();
     await operatorSurfaceIdentityAddCommand({

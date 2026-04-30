@@ -93,7 +93,7 @@ function nextCommandFor(posture: SiteReadinessPosture, siteRoot: string, role: s
     case 'initialized_unready':
       return `narada sites doctor ${JSON.stringify(siteRoot)} --format json`;
     case 'ready_missing_role_binding':
-      return `narada operator-surface agent instantiate --site ${JSON.stringify(siteRoot)} --role ${role} --agent-kind codex_cli --by <principal>`;
+      return `narada operator-surface agent instantiate --cwd ${JSON.stringify(siteRoot)} --site ${JSON.stringify(siteRoot)} --role ${role} --agent-kind codex_cli --by <principal>`;
     case 'ready_missing_transport':
       return 'narada operator-surface bind-focused --as self';
     case 'ready_pending_inbox':
