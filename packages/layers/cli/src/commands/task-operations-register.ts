@@ -7,6 +7,7 @@ import { taskGraphCommand } from './task-graph.js';
 import { taskHandoffCommand } from './task-handoff.js';
 import { taskSearchCommand } from './task-search.js';
 import { taskReadCommand } from './task-read.js';
+import { taskPreflightCommand } from './task-preflight.js';
 import {
   taskPeekNextCommand,
   taskPullNextCommand,
@@ -21,6 +22,21 @@ function outputFormat(format?: unknown): 'json' | 'human' | 'auto' {
 }
 
 export function registerTaskOperationsCommands(taskCmd: Command): void {
+  taskCmd
+    .command('preflight')
+    .description('Bounded task authority, lifecycle, allocation, and dirty-state commissioning preflight')
+    .option('--format <fmt>', 'Output format: json or human', 'human')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'task preflight',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => taskPreflightCommand({
+        cwd: opts.cwd as string | undefined,
+        format: outputFormat(opts.format),
+      }),
+    }));
+
   taskCmd
     .command('recommend')
     .description('Recommend task/agent assignments (advisory, read-only)')

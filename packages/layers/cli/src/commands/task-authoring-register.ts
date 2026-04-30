@@ -33,7 +33,8 @@ export function registerTaskAuthoringCommands(taskCmd: Command): void {
     .option('--goal <text>', 'Task goal (defaults to title)')
     .option('--chapter <name>', 'Chapter name for task grouping')
     .option('--depends-on <numbers>', 'Comma-separated dependency task numbers')
-    .option('--criteria <text>', 'Acceptance criterion; repeatable, comma-separated values also accepted', collectCsvValues, [])
+    .option('--criteria <text>', 'Acceptance criterion; repeatable; preserves commas inside the criterion', collectCriteriaValue, [])
+    .option('--criteria-csv <csv>', 'Explicit CSV acceptance criteria input; use --criteria for comma-containing text')
     .option('--number <n>', 'Use a pre-allocated task number (skips allocation)')
     .option('--from-file <path>', 'Read task body from a file instead of generating scaffold')
     .option('--dry-run', 'Preview task without creating files', false)
@@ -50,7 +51,7 @@ export function registerTaskAuthoringCommands(taskCmd: Command): void {
           goal: opts.goal as string | undefined,
           chapter: opts.chapter as string | undefined,
           dependsOn: opts.dependsOn as string | undefined,
-          criteria: Array.isArray(opts.criteria) && opts.criteria.length > 0 ? opts.criteria as string[] : undefined,
+          criteria: mergeCriteriaInputs(opts.criteria, opts.criteriaCsv),
           number: opts.number ? Number(opts.number) : undefined,
           dryRun: opts.dryRun as boolean,
           fromFile: opts.fromFile as string | undefined,
@@ -126,10 +127,21 @@ export function registerTaskAuthoringCommands(taskCmd: Command): void {
     }));
 }
 
-function collectCsvValues(value: string, previous: string[]): string[] {
-  const values = value
+export function collectCriteriaValue(value: string, previous: string[]): string[] {
+  const trimmed = value.trim();
+  return trimmed ? [...previous, trimmed] : previous;
+}
+
+export function collectCriteriaCsvValues(value: string): string[] {
+  return value
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
-  return [...previous, ...values];
+}
+
+export function mergeCriteriaInputs(criteria: unknown, criteriaCsv: unknown): string[] | undefined {
+  const repeated = Array.isArray(criteria) ? criteria.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : [];
+  const csv = typeof criteriaCsv === 'string' && criteriaCsv.trim().length > 0 ? collectCriteriaCsvValues(criteriaCsv) : [];
+  const merged = [...repeated, ...csv];
+  return merged.length > 0 ? merged : undefined;
 }

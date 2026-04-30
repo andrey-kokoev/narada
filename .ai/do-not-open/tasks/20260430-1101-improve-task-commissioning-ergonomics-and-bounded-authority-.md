@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T01:32:18.022Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-30T01:32:18.228Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Improve task commissioning ergonomics and bounded authority inspection
@@ -41,8 +50,8 @@ Reduce avoidable context burn during task commissioning by adding bounded task-a
 
 ## Acceptance Criteria
 
-- [ ] Provide a bounded task authority doctor/preflight command that identifies canonical task DB, task spec path, legacy task DB/spec surfaces, last allocated number, and dirty state without dumping full lifecycle snapshots.
-- [ ] Make task create criteria input less footgun-prone by preserving repeatable --criteria arguments as units; comma splitting should be opt-in, explicit CSV mode, or clearly diagnosed.
-- [ ] Provide bounded lifecycle summary output intended for agent context instead of requiring lifecycle export or snapshot inspection for ordinary commissioning diagnosis.
-- [ ] Add focused tests covering canonical authority detection, legacy-surface warning, comma-containing criteria preservation or diagnostic, and compact lifecycle summary output.
-- [ ] Update CLI help/docs so agents know the bounded preflight path and avoid raw lifecycle snapshot inspection.
+- [x] Provide a bounded task authority doctor/preflight command that identifies canonical task DB, task spec path, legacy task DB/spec surfaces, last allocated number, and dirty state without dumping full lifecycle snapshots.
+- [x] Make task create criteria input less footgun-prone by preserving repeatable --criteria arguments as units; comma splitting should be opt-in, explicit CSV mode, or clearly diagnosed.
+- [x] Provide bounded lifecycle summary output intended for agent context instead of requiring lifecycle export or snapshot inspection for ordinary commissioning diagnosis.
+- [x] Add focused tests covering canonical authority detection, legacy-surface warning, comma-containing criteria preservation or diagnostic, and compact lifecycle summary output.
+- [x] Update CLI help/docs so agents know the bounded preflight path and avoid raw lifecycle snapshot inspection.

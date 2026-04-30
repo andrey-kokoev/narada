@@ -44,6 +44,14 @@ pnpm narada:guard-task-db
 
 The guard performs a bounded freshness check when a local DB exists: it runs a sanctioned export to a temporary file and byte-compares that export to `.ai/task-lifecycle-snapshot.json`. `pnpm verify` runs this guard after build, so verification fails if local lifecycle state has not been exported into the tracked handoff.
 
+For ordinary task commissioning diagnosis, use the bounded preflight surface instead of reading the raw SQLite DB, exported lifecycle snapshot, or task directories directly:
+
+```bash
+narada task preflight --format json
+```
+
+The preflight output is intentionally compact: canonical task DB/spec paths, legacy surface warnings, allocation posture, lifecycle counts, and a bounded dirty-state sample.
+
 ## Deferred Task Resumption
 
 Deferred tasks do not auto-resume. A deferred task can re-enter normal work only through a sanctioned unblock transition:

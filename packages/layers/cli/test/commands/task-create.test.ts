@@ -5,6 +5,11 @@ vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskCreateCommand } from '../../src/commands/task-create.js';
+import {
+  collectCriteriaCsvValues,
+  collectCriteriaValue,
+  mergeCriteriaInputs,
+} from '../../src/commands/task-authoring-register.js';
 import { taskListCommand } from '../../src/commands/task-list.js';
 import { taskReadCommand } from '../../src/commands/task-read.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
@@ -195,6 +200,46 @@ describe('task create operator', () => {
     const content = readFileSync(filePath, 'utf8');
     expect(content).toContain('- [ ] Thing A works');
     expect(content).toContain('- [ ] Thing B is clean');
+  });
+
+  it('preserves comma-containing repeatable --criteria values and requires explicit CSV mode', async () => {
+    const repeated = collectCriteriaValue('Preserve Smith, Jane as one criterion', []);
+    expect(repeated).toEqual(['Preserve Smith, Jane as one criterion']);
+    expect(collectCriteriaCsvValues('A, B')).toEqual(['A', 'B']);
+    expect(mergeCriteriaInputs(repeated, 'Explicit CSV one, Explicit CSV two')).toEqual([
+      'Preserve Smith, Jane as one criterion',
+      'Explicit CSV one',
+      'Explicit CSV two',
+    ]);
+
+    const result = await taskCreateCommand({
+      cwd: tempDir,
+      title: 'Comma criteria',
+      criteria: repeated,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      const spec = store.getTaskSpecByNumber((result.result as { task_number: number }).task_number);
+      expect(JSON.parse(spec!.acceptance_criteria_json)).toEqual([
+        'Preserve Smith, Jane as one criterion',
+      ]);
+    } finally {
+      store.db.close();
+    }
+
+    const dryRun = await taskCreateCommand({
+      cwd: tempDir,
+      title: 'Comma criteria dry run',
+      criteria: repeated,
+      dryRun: true,
+      format: 'json',
+    });
+    expect((dryRun.result as { acceptance_criteria: string[] }).acceptance_criteria).toEqual([
+      'Preserve Smith, Jane as one criterion',
+    ]);
   });
 
   it('uses --goal when provided', async () => {

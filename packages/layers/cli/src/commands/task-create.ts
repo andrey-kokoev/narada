@@ -221,6 +221,8 @@ export async function taskCreateCommand(
       file_name: fileName,
       file_path: filePath,
       front_matter: frontMatter,
+      acceptance_criteria: spec.acceptance_criteria,
+      dependencies: spec.dependencies,
       body_preview: body.slice(0, 500),
     };
 
