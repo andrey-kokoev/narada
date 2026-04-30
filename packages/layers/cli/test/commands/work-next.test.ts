@@ -511,6 +511,85 @@ describe('work-next unified next action', () => {
     });
   });
 
+  it('surfaces Architect review duty when Builder has no task work because review is pending', async () => {
+    seedRosterEntry(tempDir, 'builder', 'builder', 'idle', null);
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260430-77-pending-review.md'),
+      '---\ntask_id: 20260430-77-pending-review\nstatus: in_review\n---\n\n# Pending review\n\n## Goal\nAwait review.\n',
+    );
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.upsertLifecycle({
+        task_id: '20260430-77-pending-review',
+        task_number: 77,
+        status: 'in_review',
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: '2026-04-30T22:00:00.000Z',
+      });
+      store.upsertTaskSpec({
+        task_id: '20260430-77-pending-review',
+        task_number: 77,
+        title: 'Pending review',
+        chapter_markdown: null,
+        goal_markdown: 'Await review.',
+        context_markdown: null,
+        required_work_markdown: '1. Review it.',
+        non_goals_markdown: null,
+        acceptance_criteria_json: JSON.stringify(['Reviewed.']),
+        dependencies_json: JSON.stringify([]),
+        updated_at: '2026-04-30T22:00:00.000Z',
+      });
+      store.upsertReportRecord({
+        report_id: 'wrr_pending_review_builder',
+        task_id: '20260430-77-pending-review',
+        assignment_id: 'assign-77',
+        agent_id: 'builder',
+        reported_at: '2026-04-30T22:00:00.000Z',
+        report_json: JSON.stringify({
+          report_id: 'wrr_pending_review_builder',
+          task_number: 77,
+          task_id: '20260430-77-pending-review',
+          agent_id: 'builder',
+          assignment_id: 'assign-77',
+          reported_at: '2026-04-30T22:00:00.000Z',
+          summary: 'Ready for review.',
+          changed_files: [],
+          verification: [],
+          known_residuals: [],
+          ready_for_review: true,
+          report_status: 'submitted',
+        }),
+      });
+    } finally {
+      store.db.close();
+    }
+
+    const result = await workNextCommand({ agent: 'builder', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'empty',
+      action_kind: 'idle',
+      next_step: 'Builder no-work is not system idle; Architect/reviewer must clear pending review or closure work.',
+      architect_duty_loop: {
+        status: 'review_or_closure_pending',
+        pending_reviews: [{
+          task_number: 77,
+          title: 'Pending review',
+          report_id: 'wrr_pending_review_builder',
+          reported_by: 'builder',
+          suggested_owner: 'architect',
+          suggested_command: 'narada task review 77 --agent architect --verdict accepted',
+        }],
+      },
+    });
+  });
+
   it('surfaces doctrine guard warnings before recommending mutation work', async () => {
     mkdirSync(join(tempDir, 'docs', 'concepts'), { recursive: true });
     mkdirSync(join(tempDir, 'packages', 'layers', 'cli', 'src', 'commands'), { recursive: true });

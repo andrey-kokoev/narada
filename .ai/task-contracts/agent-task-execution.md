@@ -63,6 +63,26 @@ When the Operator asks to check or process inbox work and `narada inbox work-nex
 
 Stop only for real blockers: unclear target locus, explicit Operator constraint, external permission, destructive-risk boundary, missing credentials, or a task whose scope is not locally executable.
 
+## Duty Loop Review Gate
+
+Builder no-work is not proof that the system is idle.
+
+When a Builder reports no admissible task work, Architect/reviewer/operator must check the review and closure gate before accepting idle posture:
+
+- pending task reports awaiting review;
+- tasks in `in_review` awaiting accepted/rejected verdicts;
+- tasks closed by Builder-side evidence but not yet admitted or confirmed;
+- blocked Builder tasks whose blockers are review-owned;
+- underspecified handoffs that require Architect clarification.
+
+The canonical compact surface is:
+
+```bash
+narada work-next --agent architect --peek --format json
+```
+
+Builder-facing `narada work-next --agent <builder>` output must surface pending review/closure context as Architect duty-loop work when that posture suppresses further Builder assignment. Builders finish, report, and provide evidence. Architects/reviewers review, unblock, admit, close, or route blockers.
+
 ## Safety
 
 - Do not interpret, narrow, relax, or silently carve exceptions into operator-set constraints.

@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T23:26:51.182Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777591540458_n2pezh
+closed_at: 2026-04-30T23:27:08.328Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Make Architect review closure a duty-loop gate
@@ -32,8 +41,8 @@ Source inbox envelope env_fe6ba6d8-1043-47ef-adff-865e12ea9be1 reports a User Si
 
 ## Acceptance Criteria
 
-- [ ] Architect duty-loop documentation requires checking reviews/blockers before accepting Builder no-work as idle.
-- [ ] A compact command or output path surfaces pending review/closure as Architect/operator-owned blocker work.
-- [ ] Builder-facing no-work/recommendation output gives actionable blocker-owner context when reviews or closures block new work.
-- [ ] Docs distinguish Builder finish/report duties from Architect/reviewer closure duties.
-- [ ] Tests or fixtures cover Builder no-work caused by pending reviews/closures.
+- [x] Architect duty-loop documentation requires checking reviews/blockers before accepting Builder no-work as idle.
+- [x] A compact command or output path surfaces pending review/closure as Architect/operator-owned blocker work.
+- [x] Builder-facing no-work/recommendation output gives actionable blocker-owner context when reviews or closures block new work.
+- [x] Docs distinguish Builder finish/report duties from Architect/reviewer closure duties.
+- [x] Tests or fixtures cover Builder no-work caused by pending reviews/closures.

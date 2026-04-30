@@ -60,6 +60,17 @@ interface DoctrineGuardStatus {
   next_commands: string[];
 }
 
+interface PendingReviewWork {
+  task_number: number | null;
+  task_id: string;
+  title: string | null;
+  status: string;
+  report_id: string | null;
+  reported_by: string | null;
+  suggested_owner: string;
+  suggested_command: string | null;
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -132,6 +143,15 @@ function formatHuman(result: Record<string, unknown>): string {
       lines.push(`- task ${String(record.task_number)}: ${String(record.reason)}`);
     }
   }
+  const architectLoop = asRecord(result.architect_duty_loop);
+  const pendingReviews = Array.isArray(architectLoop.pending_reviews) ? architectLoop.pending_reviews : [];
+  if (pendingReviews.length > 0) {
+    lines.push('Architect duty loop:');
+    for (const item of pendingReviews.slice(0, 5)) {
+      const record = asRecord(item);
+      lines.push(`- review task ${String(record.task_number)}: owner ${String(record.suggested_owner)}`);
+    }
+  }
   const doctrineGuard = asRecord(result.doctrine_guard);
   if (doctrineGuard.status && doctrineGuard.status !== 'clear') {
     lines.push(`Doctrine guard: ${String(doctrineGuard.status)}`);
@@ -139,6 +159,11 @@ function formatHuman(result: Record<string, unknown>): string {
     for (const command of commands.slice(0, 3)) lines.push(`- ${String(command)}`);
   }
   return lines.join('\n');
+}
+
+function canOwnReviewWork(role: string | undefined, agentId: string): boolean {
+  const normalized = `${role ?? ''} ${agentId}`.toLowerCase();
+  return /\b(architect|reviewer|operator)\b/.test(normalized);
 }
 
 function taskTitleFromStore(store: ReturnType<typeof openTaskLifecycleStore>, taskNumber: number): string | null {
@@ -202,6 +227,67 @@ function summarizeBlockedOrHiddenWork(cwd: string, agentId: string, limit = 5): 
   }
 }
 
+async function summarizeArchitectDutyLoop(cwd: string, limit = 5): Promise<Record<string, unknown>> {
+  const pendingReviews = await listPendingReviewWork(cwd, limit);
+  const checklist = [
+    'Check pending reviews and closures before treating Builder no-work as system idle.',
+    'Check blocked tasks and underspecified handoffs.',
+    'Nudge the owner shown by blocking_owner/suggested_owner, or run the suggested review command.',
+  ];
+  return {
+    status: pendingReviews.length > 0 ? 'review_or_closure_pending' : 'clear',
+    pending_reviews: pendingReviews,
+    blocked_tasks: [],
+    underspecified_handoffs: [],
+    checklist,
+    next_command: pendingReviews[0]?.suggested_command ?? 'narada work-next --agent architect --peek --format json',
+  };
+}
+
+async function listPendingReviewWork(cwd: string, limit = 5): Promise<PendingReviewWork[]> {
+  const tasks = await scanTasksByRange(cwd, 1, 999999);
+  let store;
+  try {
+    store = openTaskLifecycleStore(cwd);
+  } catch {
+    // Markdown scan remains a fallback for test repos without initialized SQLite.
+  }
+  try {
+    const rows: PendingReviewWork[] = [];
+    const ordered = tasks
+      .filter((task) => task.taskNumber !== null)
+      .sort((a, b) => (a.taskNumber ?? 0) - (b.taskNumber ?? 0));
+
+    for (const task of ordered) {
+      const lifecycleStatus = store?.getLifecycle(task.taskId)?.status;
+      const status = lifecycleStatus ?? task.status;
+      if (status !== 'in_review') continue;
+
+      const reports = await listReportsForTask(cwd, task.taskId);
+      const report = reports[reports.length - 1] ?? null;
+      const reviews = await listReviewsForTask(cwd, task.taskId).catch(() => []);
+      if (reviews.length > 0) continue;
+
+      rows.push({
+        task_id: task.taskId,
+        task_number: task.taskNumber,
+        title: store && task.taskNumber !== null ? taskTitleFromStore(store, task.taskNumber) : null,
+        status,
+        report_id: report?.report_id ?? null,
+        reported_by: report?.agent_id ?? null,
+        suggested_owner: 'architect',
+        suggested_command: task.taskNumber === null
+          ? null
+          : `narada task review ${task.taskNumber} --agent architect --verdict accepted`,
+      });
+      if (rows.length >= limit) break;
+    }
+    return rows;
+  } finally {
+    if (store) store.db.close();
+  }
+}
+
 async function buildDoctrineGuard(cwd: string): Promise<DoctrineGuardStatus> {
   const changedFiles = currentChangedFiles(cwd);
   const authorityWarnings = await evaluateAuthorityInversionForChangedFiles(cwd, changedFiles.join(','));
@@ -250,7 +336,8 @@ function gitLines(cwd: string, args: string[]): string[] {
   }
 }
 
-async function findReviewWork(cwd: string, agentId: string): Promise<Record<string, unknown> | null> {
+async function findReviewWork(cwd: string, agentId: string, role?: string): Promise<Record<string, unknown> | null> {
+  if (!canOwnReviewWork(role, agentId)) return null;
   const tasks = await scanTasksByRange(cwd, 1, 999999);
   let store;
   try {
@@ -369,6 +456,7 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
   const requestedAgent = options.agent;
   const resolvedAgent = agentResolution.resolved_agent;
   const agentAddressResolution = agentAddressResolutionPublic(agentResolution);
+  const resolvedRosterEntry = roster.agents.find((entry) => entry.agent_id === resolvedAgent);
 
   const currentTask = await findCurrentTaskWork(cwd, resolvedAgent);
   if (currentTask) {
@@ -512,8 +600,9 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
   }
   checked.push({ zone: 'task_work', status: 'empty', reason: emptyReason(taskResult.result, 'no_admissible_task') });
   const blockedOrHiddenWork = summarizeBlockedOrHiddenWork(cwd, resolvedAgent);
+  const architectDutyLoop = await summarizeArchitectDutyLoop(cwd);
 
-  const reviewWork = await findReviewWork(cwd, resolvedAgent);
+  const reviewWork = await findReviewWork(cwd, resolvedAgent, resolvedRosterEntry?.role);
   if (reviewWork) {
     checked.push({ zone: 'review_work', status: 'selected', selected_ref: taskSelectedRef(reviewWork) });
     const result = {
@@ -526,6 +615,7 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
       primary: reviewWork,
       checked,
       blocked_or_hidden_work: blockedOrHiddenWork,
+      architect_duty_loop: architectDutyLoop,
       doctrine_guard: doctrineGuard,
       next_step: 'Review the task report through the governed task review command.',
     };
@@ -584,9 +674,12 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
     reason: 'no_task_or_inbox_work',
     checked,
     blocked_or_hidden_work: blockedOrHiddenWork,
+    architect_duty_loop: architectDutyLoop,
     doctrine_guard: doctrineGuard,
     next_step: (asRecord(blockedOrHiddenWork).status === 'open_work_suppressed_or_hidden')
       ? 'Open task work exists but is suppressed for this agent; inspect blocked_or_hidden_work for the blocker and repair command.'
+      : (asRecord(architectDutyLoop).status === 'review_or_closure_pending')
+        ? 'Builder no-work is not system idle; Architect/reviewer must clear pending review or closure work.'
       : 'No task or inbox work is currently available for this agent.',
   };
   return {
