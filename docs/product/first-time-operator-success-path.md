@@ -4,6 +4,14 @@ This is the canonical path for a first-time Operator to move from fresh material
 
 The path is deliberately explicit about authority-affecting crossings. Each crossing has a command family that should own the mutation or observation. Later ergonomics work should expose this path as one front door, but not hide the crossings.
 
+## Substrate Evidence Boundary
+
+Narada is not a Windows-only product. Its core CLI, documentation, task governance, inbox, and Site concepts are intended to remain portable across supported substrates.
+
+The intensively exercised first-time Operator substrate today is narrower: Windows 11 with WSL, Windows Terminal, PowerShell carrier scripts, local Git, Node tooling, and Windows User/PC Site coordination. The Operator Surface inhabitation path involving stable window labels, focused input, runtime binding, PC-locus messaging, and multi-agent ergonomics has the strongest evidence on that stack. macOS and Linux paths may run core flows, but they do not yet have equivalent evidence for spatial Operator Surface inhabitation.
+
+First-time Operator guidance should therefore point new Operators to the Windows 11 path first when they want the currently proven inhabited-agent experience, while avoiding any claim that Narada itself is Windows-only.
+
 ## Success Definition
 
 A first-time Operator succeeds when they can:

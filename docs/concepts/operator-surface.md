@@ -6,6 +6,12 @@ It is not the adapter that presents it. A Windows Terminal profile, Komorebi win
 
 Operator Surfaces were earned by inhabited work friction: recurring Narada role windows needed stable launch/focus identities, but API agents and MCP tools also needed a way to describe non-spatial inhabited work without pretending that every session is a terminal tab.
 
+## Current Substrate Evidence
+
+The most intensively tested spatial Operator Surface substrate is Windows 11 with WSL, Windows Terminal, PowerShell carrier scripts, local Git, Node tooling, and paired Windows User/PC Site coordination. That is the evidence-backed path for stable labels, focused input, runtime binding, PC-locus messaging, and multi-agent inhabited ergonomics.
+
+This is an evidence boundary, not a product identity claim. Narada's core CLI and Site model are not Windows-only, and API/MCP/control-channel surfaces may be governed without a Windows terminal. macOS and Linux Operator Surface adapters require their own read-back evidence before documentation or UI should imply parity with the Windows 11 path.
+
 ## Adjacent Concepts
 
 | Concept | Definition | Authority posture |

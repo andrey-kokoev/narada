@@ -276,6 +276,8 @@ Neither contract admits additional AI roles. Operator remains the owner/client a
 
 The Windows 11 front door composes paired User/PC Site bootstrap, substrate readiness, and Operator Surface adapter planning:
 
+This is the currently proven Operator-substrate path. Windows 11 with WSL, Windows Terminal, PowerShell carrier scripts, local Git, Node tooling, and paired User/PC Site coordination is where Narada's inhabited Operator Surface loop has been intensively exercised. Core Site bootstrap concepts and CLI surfaces remain portable, but non-Windows substrates should not be presented as equally proven for window labeling, focused input, runtime binding, PC-locus messaging, or multi-agent ergonomics until they have comparable evidence.
+
 ```bash
 narada sites bootstrap-windows --format json
 narada sites bootstrap-windows --execute --format json

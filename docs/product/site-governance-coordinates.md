@@ -433,6 +433,8 @@ Materialization commands are future governed crossings. They should default to d
 
 For the first concrete spatial adapter posture on Windows, see [`windows-operator-surface-adapter-path.md`](windows-operator-surface-adapter-path.md). That plan treats Windows Terminal, Komorebi, YASB, and AHK as adapters owned by the Windows User or PC authority locus, not by Narada proper by convenience.
 
+When exposing Operator-facing setup guidance, keep the evidence boundary visible: Windows 11 with WSL, Windows Terminal, PowerShell carrier scripts, local Git, Node tooling, and paired User/PC Sites is the intensively exercised Operator Surface substrate. Non-Windows Site coordinates may still be valid for core CLI/Site work, but their Operator Surface adapter maturity should be stated as unproven unless the Site carries comparable read-back evidence.
+
 ## State Projections And Transition Protocols
 
 `state_projections` are optional read models for current runtime posture. They let a Site expose current adapter/process/display/session state without making private logs or scripts authoritative.

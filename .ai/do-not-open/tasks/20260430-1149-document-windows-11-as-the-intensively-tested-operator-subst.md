@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T22:38:34.604Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777588613881_cuxyce
+closed_at: 2026-04-30T22:37:31.629Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Document Windows 11 as the intensively tested Operator substrate
@@ -32,7 +41,7 @@ Operator asked whether potential Operator-facing documentation should state that
 
 ## Acceptance Criteria
 
-- [ ] First-time Operator-facing docs state the Windows 11 evidence boundary plainly.
-- [ ] Site bootstrap or onboarding docs distinguish core CLI portability from operator-surface substrate maturity.
-- [ ] Operator-surface docs mention Windows 11/WSL/Windows Terminal/PowerShell carrier scripts as the currently proven path.
-- [ ] No documentation claims unsupported substrate parity or Windows-only product identity.
+- [x] First-time Operator-facing docs state the Windows 11 evidence boundary plainly.
+- [x] Site bootstrap or onboarding docs distinguish core CLI portability from operator-surface substrate maturity.
+- [x] Operator-surface docs mention Windows 11/WSL/Windows Terminal/PowerShell carrier scripts as the currently proven path.
+- [x] No documentation claims unsupported substrate parity or Windows-only product identity.

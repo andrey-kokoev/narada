@@ -4,6 +4,8 @@ This document plans the first concrete spatial adapter path for [`Operator Surfa
 
 It does not materialize profiles, edit Komorebi or YASB configuration, launch terminals, or mutate the Windows User Site. It records the adapter posture that a future materializer must obey.
 
+This path is also the current evidence-heavy Operator substrate path for inhabited Narada work. Windows 11 plus WSL, Windows Terminal, PowerShell carrier scripts, local Git, Node tooling, and paired User/PC Site coordination are the stack on which stable labels, focused input, runtime binding, PC-locus messaging, and multi-agent ergonomics have been exercised most heavily. Other substrates need their own adapter proof before being described as equivalent; Narada itself remains substrate-portable at the core CLI/Site/doctrine level.
+
 ## Adapter Chain
 
 The earned Windows chain is:
