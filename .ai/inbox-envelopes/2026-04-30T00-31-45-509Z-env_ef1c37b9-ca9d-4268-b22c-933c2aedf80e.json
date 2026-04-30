@@ -1,0 +1,29 @@
+{
+  "envelope_id": "env_ef1c37b9-ca9d-4268-b22c-933c2aedf80e",
+  "received_at": "2026-04-30T00:31:45.509Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey.architect:deferred-task-resumption-gap"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Deferred task needs governed unblock/resume transition",
+    "summary": "In the narada-andrey User Site, task 13 was deferred while blocked by Windows LockApp foreground activation. After the external unblock condition was satisfied, implementation and verification proceeded and were committed, but task lifecycle authority remains deferred because task continue rejects deferred tasks and task reopen only accepts terminal tasks. This leaves completed work unable to re-enter the normal proof/finish/close path.",
+    "evidence": [
+      "task continue 13 rejected status deferred: only claimed and needs_continuation are supported.",
+      "task reopen 13 --force rejected status deferred: not terminal, nothing to reopen.",
+      "task workboard shows task 13 under deferred, with no local followup or pending review path.",
+      "User Site commits e178466 and c045628 contain the implementation and admitted Bob submit strategy, while task 13 remains deferred."
+    ],
+    "proposal": [
+      "Add a governed task unblock/resume transition for deferred tasks, with required evidence that the unblock condition is satisfied.",
+      "Alternatively represent deferral as needs_continuation plus blocker metadata when the task should return to a work queue."
+    ],
+    "recommendation": "Create an execution task in Narada proper to implement deferred-task resumption semantics and regression tests."
+  },
+  "status": "received"
+}
