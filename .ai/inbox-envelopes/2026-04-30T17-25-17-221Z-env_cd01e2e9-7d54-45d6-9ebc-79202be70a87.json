@@ -1,0 +1,46 @@
+{
+  "envelope_id": "env_cd01e2e9-7d54-45d6-9ebc-79202be70a87",
+  "received_at": "2026-04-30T17:25:17.221Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey.architect:compact-inbox-submit-output-20260430"
+  },
+  "kind": "proposal",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Add compact inbox-submit output for architect loops",
+    "summary": "narada inbox submit currently echoes the full submitted payload plus delivery metadata. In interactive architect/operator loops this repeats information the caller just supplied and burns context. The full echo should remain available for debugging, but compact output should be the default or a first-class mode.",
+    "observations": [
+      {
+        "finding": "inbox submit repeats the full submitted payload in command output",
+        "detail": "A proposal submission returned the full envelope payload, including the observations and requests that were just sent, plus delivery metadata. This produced dozens of transcript lines for a successful routine submission.",
+        "impact": "The operator/architect chat pays twice for the same text: once in the command construction and again in the echoed result."
+      },
+      {
+        "finding": "Interactive and debugging output needs are conflated",
+        "detail": "For routine architect use, the needed result is status, envelope_id, portable artifact path, routing/preflight warnings, and commit/push guidance. Full payload echo is useful for debug or machine validation, but not for the default human loop.",
+        "impact": "Agents must manually ignore large output or build ad hoc filters, both of which increase friction and error risk."
+      }
+    ],
+    "requests": [
+      {
+        "kind": "execution_request",
+        "text": "Add compact output for narada inbox submit, e.g. --format compact-json or --view architect-loop, returning status, envelope_id, portable artifact, routing/preflight warnings, and next_steps only."
+      },
+      {
+        "kind": "execution_request",
+        "text": "Move full payload echo behind explicit --verbose, --format full-json, or equivalent debugging mode."
+      },
+      {
+        "kind": "execution_request",
+        "text": "Ensure compact submit output is safe to paste into chat transcripts without repeating the submitted payload."
+      }
+    ],
+    "source_site": "narada-andrey User Site",
+    "authority_note": "Operator explicitly identified inbox submit return echo as token waste and asked to submit."
+  },
+  "status": "received"
+}
