@@ -1,0 +1,43 @@
+{
+  "envelope_id": "env_6424109c-2502-4a0e-89ea-7cdefd43e137",
+  "received_at": "2026-04-30T22:42:41.135Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey.architect:overlay-inspect-context-burn-capa-20260430"
+  },
+  "kind": "incident",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "CAPA: schema-unaware overlay inspect parsing caused context burn",
+    "summary": "While checking whether the current terminal was bound to the operator surface, the architect used Inspect-WindowSurfaceOverlay.ps1 with an assumed labels property. The command emitted a large repeated PowerShell error stream instead of a compact schema-aware failure. This is a local tooling and architect-loop ergonomics CAPA.",
+    "incident": {
+      "what_happened": "Architect tried to pipe Inspect-WindowSurfaceOverlay.ps1 output through ConvertFrom-Json and Select-Object -ExpandProperty labels. The inspect output did not have a labels property, causing repeated Select-Object errors and substantial transcript/context waste.",
+      "root_cause": "The caller assumed inspect JSON shape instead of using a documented compact inspect contract or schema-aware helper. The inspect command/output shape is not easy enough to consume safely from architect loops.",
+      "correction_taken": "Architect answered from the runtime binding file instead and identified the inspect parsing as an ergonomics defect."
+    },
+    "capa_requests": [
+      {
+        "kind": "corrective_action",
+        "text": "Add or update an operator-surface compact inspect command/helper that returns current bindings/labels in a stable documented shape for architect loops."
+      },
+      {
+        "kind": "corrective_action",
+        "text": "Make Inspect-WindowSurfaceOverlay.ps1 support a compact mode or documented properties so callers do not guess JSON shape."
+      },
+      {
+        "kind": "preventive_action",
+        "text": "Add tests ensuring overlay inspect consumers fail once with a compact schema error rather than repeating property-missing errors for every object."
+      },
+      {
+        "kind": "preventive_action",
+        "text": "Architect-loop guidance should prefer sanctioned compact inspect helpers over ad hoc Select-Object against unknown JSON."
+      }
+    ],
+    "source_site": "narada-andrey User Site",
+    "authority_note": "Operator requested CAPA after observing the context-burning overlay inspect failure."
+  },
+  "status": "received"
+}
