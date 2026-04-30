@@ -59,6 +59,20 @@ export interface CapabilityCredentialPreflightOptions {
   format?: string;
 }
 
+export interface CapabilityRequestOptions {
+  cwd?: string;
+  site?: string;
+  principal?: string;
+  agent?: string;
+  kind?: string;
+  origin?: string;
+  path?: string;
+  interaction?: string;
+  evidenceSink?: string;
+  redaction?: string;
+  format?: string;
+}
+
 export interface CapabilityListOptions {
   cwd?: string;
   site?: string;
@@ -68,6 +82,57 @@ export interface CapabilityListOptions {
   status?: string;
   limit?: number;
   format?: string;
+}
+
+const BROWSER_DOM_INSPECTION_MUTATION_LIKE_INTERACTIONS = new Set([
+  'submit_form',
+  'revalidate',
+  'download',
+  'delete',
+  'approve',
+  'send',
+  'purchase',
+  'publish',
+  'deploy',
+  'mutate_business_data',
+]);
+
+const BROWSER_DOM_INSPECTION_DEFAULT_REDACTIONS = [
+  'cookies',
+  'tokens',
+  'signed_urls',
+  'secrets',
+  'sensitive_query_strings',
+];
+
+function stringArrayField(value: unknown, field: string): string[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+  const record = value as Record<string, unknown>;
+  const raw = record[field];
+  return Array.isArray(raw) ? raw.filter((entry): entry is string => typeof entry === 'string') : [];
+}
+
+function hasScopeMatch(scope: unknown, field: string, requested: string | null): boolean {
+  if (!requested) return true;
+  const allowed = stringArrayField(scope, field);
+  return allowed.length === 0 || allowed.includes(requested);
+}
+
+function grantMatchesCapabilityRequest(
+  grant: { site_id: string; principal_id: string; agent_id: string | null; capability_kind: string; allowed_actions: string[]; denied_actions: string[]; scope_json: unknown },
+  request: { siteId: string; principalId: string; agentId: string | null; kind: string; origin: string | null; path: string | null; interaction: string; evidenceSink: string | null },
+): boolean {
+  if (grant.site_id !== request.siteId) return false;
+  if (grant.principal_id !== request.principalId) return false;
+  if (grant.agent_id && grant.agent_id !== request.agentId) return false;
+  if (grant.capability_kind !== request.kind) return false;
+  if (!grant.allowed_actions.includes(request.interaction)) return false;
+  if (grant.denied_actions.includes(request.interaction)) return false;
+  return (
+    hasScopeMatch(grant.scope_json, 'allowed_origins', request.origin) &&
+    hasScopeMatch(grant.scope_json, 'allowed_paths', request.path) &&
+    hasScopeMatch(grant.scope_json, 'allowed_evidence_sinks', request.evidenceSink)
+  );
 }
 
 export interface CapabilityExplainOptions {
@@ -503,6 +568,97 @@ export async function capabilityCredentialPreflightCommand(
         secret_values_stored: false,
         raw_secret_exposed: false,
         recorded_by: options.by ?? null,
+      },
+    };
+  } catch (error) {
+    return normalizeError(error);
+  }
+}
+
+export async function capabilityRequestCommand(
+  options: CapabilityRequestOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  try {
+    const cwd = options.cwd ?? '.';
+    const siteId = requireOption(options.site, '--site');
+    const principalId = requireOption(options.principal, '--principal');
+    const kind = requireOption(options.kind, '--kind');
+    const interaction = requireOption(options.interaction, '--interaction');
+    const agentId = options.agent?.trim() || null;
+    const origin = options.origin?.trim() || null;
+    const path = options.path?.trim() || null;
+    const evidenceSink = options.evidenceSink?.trim() || null;
+    const requestedRedactions = parseCsv(options.redaction);
+    const redactionPolicy = Array.from(new Set([
+      ...BROWSER_DOM_INSPECTION_DEFAULT_REDACTIONS,
+      ...requestedRedactions,
+    ])).sort();
+    const blockers: string[] = [];
+    if (kind === 'browser_dom_inspection' && BROWSER_DOM_INSPECTION_MUTATION_LIKE_INTERACTIONS.has(interaction)) {
+      blockers.push(`${interaction} is mutation-like and must use a separate command/execution intent, not browser_dom_inspection`);
+    }
+
+    const registry = await readCapabilityRegistry(cwd);
+    const activeMatches = registry.grants
+      .map((grant) => ({ ...grant, effective_status: grantEffectiveStatus(grant) }))
+      .filter((grant) => grant.effective_status === 'active')
+      .filter((grant) => grantMatchesCapabilityRequest(grant, {
+        siteId,
+        principalId,
+        agentId,
+        kind,
+        origin,
+        path,
+        interaction,
+        evidenceSink,
+      }));
+
+    if (activeMatches.length === 0) {
+      blockers.push('no active matching capability grant');
+    }
+
+    const admitted = blockers.length === 0;
+    return {
+      exitCode: admitted ? ExitCode.SUCCESS : ExitCode.INVALID_CONFIG,
+      result: {
+        status: admitted ? 'success' : 'error',
+        mutation_performed: false,
+        request_status: admitted ? 'admitted' : 'deferred',
+        capability_kind: kind,
+        site_id: siteId,
+        principal_id: principalId,
+        agent_id: agentId,
+        requested_scope: {
+          origin,
+          path,
+          interaction,
+          evidence_sink: evidenceSink,
+        },
+        admission: {
+          default_posture: 'denied_until_operator_approval_or_explicit_site_capability_grant',
+          admitted,
+          grant_id: admitted ? activeMatches[0]?.grant_id : null,
+          blockers,
+          repair_guidance: admitted
+            ? 'Capability request is admitted by an active scoped grant; execution surface must still obey action-specific law and evidence redaction.'
+            : 'Ask Operator for interactive approval or create a scoped grant with narada capability grant --kind browser_dom_inspection --allow <interaction> --scope <json> --expires-at <iso>.',
+        },
+        browser_dom_inspection: kind === 'browser_dom_inspection'
+          ? {
+              readonly_modes: ['inspect_dom_readonly', 'inspect_network_readonly', 'screenshot_evidence'],
+              mutation_like_modes_require_separate_intent: Array.from(BROWSER_DOM_INSPECTION_MUTATION_LIKE_INTERACTIONS).sort(),
+              evidence_redaction_policy: redactionPolicy,
+              use_ephemeral_browser_context_by_default: true,
+              raw_cookies_tokens_signed_urls_or_secrets_allowed: false,
+            }
+          : null,
+        matching_grants: activeMatches.map((grant) => ({
+          grant_id: grant.grant_id,
+          effective_status: grant.effective_status,
+          evidence_ref: grant.evidence_ref,
+          expires_at: grant.expires_at,
+        })),
       },
     };
   } catch (error) {

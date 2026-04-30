@@ -20,6 +20,7 @@ import {
   capabilityExplainCommand,
   capabilityGrantCommand,
   capabilityListCommand,
+  capabilityRequestCommand,
   capabilityRevokeCommand,
 } from '../../src/commands/capability.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
@@ -347,6 +348,124 @@ describe('capability consent registry', () => {
         rotate_remote_secret: 'approved',
       },
     });
+  });
+
+  it('default-denies browser DOM inspection when no explicit scoped grant exists', async () => {
+    const cwd = await tempRepo();
+    const result = await capabilityRequestCommand({
+      cwd,
+      site: 'cpy',
+      principal: 'narada-cpy.architect',
+      kind: 'browser_dom_inspection',
+      origin: 'https://cpy.tools',
+      path: '/analysis/studio-week',
+      interaction: 'inspect_dom_readonly',
+      evidenceSink: 'task:1144',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      mutation_performed: false,
+      request_status: 'deferred',
+      admission: {
+        default_posture: 'denied_until_operator_approval_or_explicit_site_capability_grant',
+        admitted: false,
+        blockers: ['no active matching capability grant'],
+      },
+      browser_dom_inspection: {
+        use_ephemeral_browser_context_by_default: true,
+        raw_cookies_tokens_signed_urls_or_secrets_allowed: false,
+      },
+    });
+    expect(JSON.stringify(result.result)).toContain('cookies');
+    expect(JSON.stringify(result.result)).toContain('sensitive_query_strings');
+  });
+
+  it('admits browser DOM inspection through an active grant scoped by origin path interaction evidence sink and expiry', async () => {
+    const cwd = await tempRepo();
+    const grantResult = await capabilityGrantCommand({
+      cwd,
+      site: 'cpy',
+      principal: 'narada-cpy.architect',
+      agent: 'architect',
+      kind: 'browser_dom_inspection',
+      scope: JSON.stringify({
+        allowed_origins: ['https://cpy.tools'],
+        allowed_paths: ['/analysis/studio-week'],
+        allowed_evidence_sinks: ['task:1144'],
+      }),
+      allow: 'inspect_dom_readonly,inspect_network_readonly,screenshot_evidence',
+      deny: 'submit_form,delete,approve,send,download,mutate_business_data',
+      evidenceRef: 'inbox:env_fa18b567-c790-4a6e-afd6-6689e54a58c5',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+    const grantId = (grantResult.result as { grant: { grant_id: string } }).grant.grant_id;
+
+    const result = await capabilityRequestCommand({
+      cwd,
+      site: 'cpy',
+      principal: 'narada-cpy.architect',
+      agent: 'architect',
+      kind: 'browser_dom_inspection',
+      origin: 'https://cpy.tools',
+      path: '/analysis/studio-week',
+      interaction: 'inspect_dom_readonly',
+      evidenceSink: 'task:1144',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      mutation_performed: false,
+      request_status: 'admitted',
+      admission: {
+        admitted: true,
+        grant_id: grantId,
+        blockers: [],
+      },
+      matching_grants: [
+        {
+          grant_id: grantId,
+          evidence_ref: 'inbox:env_fa18b567-c790-4a6e-afd6-6689e54a58c5',
+          expires_at: '2099-01-01T00:00:00.000Z',
+        },
+      ],
+    });
+  });
+
+  it('keeps mutation-like browser actions out of DOM inspection even when a broad grant exists', async () => {
+    const cwd = await tempRepo();
+    await capabilityGrantCommand({
+      cwd,
+      site: 'cpy',
+      principal: 'narada-cpy.architect',
+      kind: 'browser_dom_inspection',
+      allow: 'submit_form',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    const result = await capabilityRequestCommand({
+      cwd,
+      site: 'cpy',
+      principal: 'narada-cpy.architect',
+      kind: 'browser_dom_inspection',
+      origin: 'https://cpy.tools',
+      path: '/analysis/studio-week',
+      interaction: 'submit_form',
+      evidenceSink: 'task:1144',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect((result.result as { admission: { blockers: string[] } }).admission.blockers).toContain(
+      'submit_form is mutation-like and must use a separate command/execution intent, not browser_dom_inspection',
+    );
   });
 });
 

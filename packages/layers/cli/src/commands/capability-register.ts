@@ -10,6 +10,7 @@ import {
   capabilityExplainCommand,
   capabilityGrantCommand,
   capabilityListCommand,
+  capabilityRequestCommand,
   capabilityRevokeCommand,
 } from './capability.js';
 import { directCommandAction, silentCommandContext } from '../lib/command-wrapper.js';
@@ -174,6 +175,39 @@ export function registerCapabilityCommands(program: Command): void {
         remoteWorker: opts.remoteWorker as string | undefined,
         approveRemoteSecretMutation: opts.approveRemoteSecretMutation as boolean | undefined,
         by: opts.by as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  capabilityCmd
+    .command('request')
+    .description('Classify a capability request without executing it')
+    .requiredOption('--site <id>', 'Site receiving or exercising the capability')
+    .requiredOption('--principal <id>', 'Principal requesting the capability')
+    .option('--agent <id>', 'Agent identity requesting the capability')
+    .requiredOption('--kind <kind>', 'Capability kind, e.g. browser_dom_inspection')
+    .option('--origin <origin>', 'Requested browser origin or comparable authority origin')
+    .option('--path <path>', 'Requested path or comparable bounded resource path')
+    .requiredOption('--interaction <mode>', 'Requested interaction mode')
+    .option('--evidence-sink <sink>', 'Requested evidence sink')
+    .option('--redaction <csv>', 'Additional redaction categories')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'capability request',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => capabilityRequestCommand({
+        site: opts.site as string | undefined,
+        principal: opts.principal as string | undefined,
+        agent: opts.agent as string | undefined,
+        kind: opts.kind as string | undefined,
+        origin: opts.origin as string | undefined,
+        path: opts.path as string | undefined,
+        interaction: opts.interaction as string | undefined,
+        evidenceSink: opts.evidenceSink as string | undefined,
+        redaction: opts.redaction as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),

@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T22:44:33.298Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777589047352_jctraj
+closed_at: 2026-04-30T22:45:05.554Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Govern browser DOM inspection as scoped effect capability
@@ -47,8 +56,8 @@ Summary: Browser DOM inspection is useful for diagnosing live UI/data-flow behav
 
 ## Acceptance Criteria
 
-- [ ] Browser DOM inspection is default-denied unless admitted by Operator approval or explicit Site capability grant.
-- [ ] Capability grants are scoped by principal or role, Site, origin, path, allowed interaction mode, evidence sink, redaction policy, and expiry or revocation posture.
-- [ ] Readonly DOM/network/screenshot evidence modes are separated from mutation-like browser actions.
-- [ ] CLI or documented command shape lets agents request the capability and receive admitted, deferred, or rejected status with repair guidance.
-- [ ] Evidence redacts cookies, tokens, signed URLs, secrets, and sensitive query strings by default.
+- [x] Browser DOM inspection is default-denied unless admitted by Operator approval or explicit Site capability grant.
+- [x] Capability grants are scoped by principal or role, Site, origin, path, allowed interaction mode, evidence sink, redaction policy, and expiry or revocation posture.
+- [x] Readonly DOM/network/screenshot evidence modes are separated from mutation-like browser actions.
+- [x] CLI or documented command shape lets agents request the capability and receive admitted, deferred, or rejected status with repair guidance.
+- [x] Evidence redacts cookies, tokens, signed URLs, secrets, and sensitive query strings by default.
