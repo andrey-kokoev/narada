@@ -1,5 +1,6 @@
 import type { Command } from 'commander';
 import { chapterCloseCommand } from './chapter-close.js';
+import { chapterCommissionCommand } from './chapter-commission.js';
 import { chapterFinishRangeCommand } from './chapter-finish-range.js';
 import { chapterInitCommand, chapterValidateTasksFileCommand } from './chapter-init.js';
 import { chapterPreflightCommand } from './chapter-preflight.js';
@@ -12,6 +13,25 @@ export function registerChapterCommands(program: Command): void {
   const chapterCmd = program
     .command('chapter')
     .description('Chapter governance operators');
+
+  chapterCmd
+    .command('commission')
+    .description('Create a chapter plus ordered tasks from structured input with bounded output')
+    .requiredOption('--input <path>', 'JSON file containing chapter metadata and ordered task specs')
+    .option('--dry-run', 'Preview allocation and files without writing', false)
+    .option('--format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'chapter commission',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => resolveCommandFormat(opts.format, 'auto'),
+      invocation: (opts) => chapterCommissionCommand({
+        input: opts.input as string | undefined,
+        dryRun: opts.dryRun as boolean | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
 
   chapterCmd
     .command('finish-range <range>')

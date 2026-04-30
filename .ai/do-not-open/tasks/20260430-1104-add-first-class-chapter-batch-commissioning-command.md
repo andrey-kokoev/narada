@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T01:54:53.991Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-30T01:54:54.235Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add first-class chapter batch commissioning command
@@ -41,8 +50,8 @@ Add a first-class chapter commission or task create-batch command that creates a
 
 ## Acceptance Criteria
 
-- [ ] Accept a structured input file containing chapter metadata and ordered task specs with criteria represented as arrays, not comma-sensitive CLI text.
-- [ ] Admit chapter and tasks atomically or fail with bounded diagnostics while preserving task-number authority and avoiding partial untracked residue.
-- [ ] Return a compact summary containing chapter path, task numbers, task ids, lifecycle statuses, dirty/published posture, and next recommended command without dumping lifecycle internals.
-- [ ] Add focused tests covering successful batch commissioning, atomic failure, criteria array preservation, task-number authority, and compact JSON/human output.
-- [ ] Update architect/operator documentation to prefer the batch commissioning command for multi-task chapters.
+- [x] Accept a structured input file containing chapter metadata and ordered task specs with criteria represented as arrays, not comma-sensitive CLI text.
+- [x] Admit chapter and tasks atomically or fail with bounded diagnostics while preserving task-number authority and avoiding partial untracked residue.
+- [x] Return a compact summary containing chapter path, task numbers, task ids, lifecycle statuses, dirty/published posture, and next recommended command without dumping lifecycle internals.
+- [x] Add focused tests covering successful batch commissioning, atomic failure, criteria array preservation, task-number authority, and compact JSON/human output.
+- [x] Update architect/operator documentation to prefer the batch commissioning command for multi-task chapters.
