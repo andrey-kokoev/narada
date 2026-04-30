@@ -950,12 +950,12 @@ describe('operator-surface commands', () => {
         status: 'discovery_required',
         command: null,
         discovery_commands: [
-          'narada sites list --authority-locus',
+          'narada sites list --format json',
           'narada operator-surface status --format json',
           'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <runtime-locus-from-status>',
         ],
       },
-      unblock_command: 'narada sites list --authority-locus && narada operator-surface status --format json && narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <runtime-locus-from-status>',
+      unblock_command: 'narada sites list --format json && narada operator-surface status --format json && narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <runtime-locus-from-status>',
     });
   });
 
@@ -1070,7 +1070,7 @@ describe('operator-surface commands', () => {
         resolution: 'alias',
         matched_alias: 'observer',
       },
-      unblock_command: 'narada sites list --authority-locus && narada operator-surface status --format json && narada operator-surface bind-focused --identity narada-proper-observer --runtime-locus <runtime-locus-from-status>',
+      unblock_command: 'narada sites list --format json && narada operator-surface status --format json && narada operator-surface bind-focused --identity narada-proper-observer --runtime-locus <runtime-locus-from-status>',
     });
   });
 
@@ -1511,7 +1511,7 @@ describe('operator-surface commands', () => {
           addressability_status: 'unbound',
           work_status: 'untracked',
           current_task: null,
-          next_command: 'narada sites list --authority-locus && narada operator-surface status --format json && narada operator-surface bind-focused --identity narada-proper-observer --runtime-locus <runtime-locus-from-status>',
+          next_command: 'narada sites list --format json && narada operator-surface status --format json && narada operator-surface bind-focused --identity narada-proper-observer --runtime-locus <runtime-locus-from-status>',
         }),
       ]),
     });
@@ -1556,16 +1556,16 @@ describe('operator-surface commands', () => {
         status: 'discovery_required',
         command: null,
         discovery_commands: [
-          'narada sites list --authority-locus',
+          'narada sites list --format json',
           'narada operator-surface status --format json',
           'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <runtime-locus-from-status>',
         ],
       },
-      deferred_command: 'narada sites list --authority-locus && narada operator-surface status --format json && narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <runtime-locus-from-status>',
+      deferred_command: 'narada sites list --format json && narada operator-surface status --format json && narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <runtime-locus-from-status>',
     });
   });
 
-  it('emits exact executable handoff when bind-focused receives a runtime locus', async () => {
+  it('admits runtime binding when bind-focused receives a runtime locus and observed handle', async () => {
     const cwd = await tempRepo();
     await operatorSurfaceIdentityAddCommand({
       cwd,
@@ -1581,26 +1581,35 @@ describe('operator-surface commands', () => {
       cwd,
       identity: 'narada-proper-builder',
       runtimeLocus: 'pc-site',
+      handle: 'codex-thread:test-thread',
       format: 'json',
     }, createMockContext());
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
-      status: 'deferred',
-      reason: 'runtime_locus_required',
-      mutation_performed: false,
-      runtime_binding_mutated: false,
+      status: 'success',
+      reason: 'runtime_binding_admitted',
+      mutation_performed: true,
+      runtime_binding_mutated: true,
       authority_split: {
         volatile_handle_authority: 'pc-site',
       },
-      handoff: {
-        status: 'executable',
-        command: 'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus pc-site',
-        discovery_commands: [],
+      binding: {
+        identity_id: 'narada-proper-builder',
+        runtime_locus: 'pc-site',
+        handle: 'codex-thread:test-thread',
+        transport: 'explicit_runtime_handle',
+        status: 'active',
       },
-      deferred_command: 'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus pc-site',
-      next_commands: [],
     });
+    const bindings = JSON.parse(await readFile(join(cwd, 'operator-surfaces', 'runtime-bindings.json'), 'utf8')) as { bindings: Array<Record<string, unknown>> };
+    expect(bindings.bindings).toEqual([
+      expect.objectContaining({
+        identity_id: 'narada-proper-builder',
+        runtime_locus: 'pc-site',
+        handle: 'codex-thread:test-thread',
+      }),
+    ]);
   });
 
   it('refuses unknown identities for binding and reports authority split', async () => {

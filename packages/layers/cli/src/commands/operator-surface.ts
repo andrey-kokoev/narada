@@ -463,7 +463,7 @@ function bindFocusedHandoff(identity: string, runtimeLocus: string | null): {
     status: 'discovery_required',
     command: null,
     discovery_commands: [
-      'narada sites list --authority-locus',
+      'narada sites list --format json',
       `narada operator-surface status --format json`,
       `narada operator-surface bind-focused --identity ${identity} --runtime-locus <runtime-locus-from-status>`,
     ],
@@ -474,6 +474,36 @@ function bindFocusedHandoff(identity: string, runtimeLocus: string | null): {
 function bindFocusedRepairCommand(identity: string, runtimeLocus: string | null): string {
   return bindFocusedHandoff(identity, runtimeLocus).command
     ?? bindFocusedHandoff(identity, runtimeLocus).discovery_commands.join(' && ');
+}
+
+function observedCurrentRuntimeHandle(options: OperatorSurfaceBindingOptions): {
+  handle: string;
+  transport: string;
+  source: string;
+} {
+  const explicit = options.handle?.trim();
+  if (explicit) {
+    return { handle: explicit, transport: 'explicit_runtime_handle', source: '--handle' };
+  }
+  if (process.env.CODEX_THREAD_ID?.trim()) {
+    return {
+      handle: `codex-thread:${process.env.CODEX_THREAD_ID.trim()}`,
+      transport: 'codex_cli_thread',
+      source: 'CODEX_THREAD_ID',
+    };
+  }
+  if (process.env.WT_SESSION?.trim()) {
+    return {
+      handle: `windows-terminal:${process.env.WT_SESSION.trim()}`,
+      transport: 'windows_terminal_session',
+      source: 'WT_SESSION',
+    };
+  }
+  return {
+    handle: `process:${process.pid}`,
+    transport: 'process_session',
+    source: 'process.pid',
+  };
 }
 
 function isStaleBinding(binding: OperatorSurfaceRuntimeBinding, now = new Date()): boolean {
@@ -1333,6 +1363,46 @@ export async function operatorSurfaceBindFocusedCommand(
   }
   const registry = await readOperatorSurfaceIdentities(cwd);
   const known = registry.identities.some((entry) => entry.identity_id === identity);
+  if (known && options.runtimeLocus?.trim()) {
+    const observed = observedCurrentRuntimeHandle(options);
+    const bindings = await readRuntimeBindings(cwd);
+    const now = new Date().toISOString();
+    const binding: OperatorSurfaceRuntimeBinding = {
+      binding_id: `bind_${createHash('sha256').update(`${identity}:${options.runtimeLocus}:${observed.handle}`).digest('hex').slice(0, 16)}`,
+      identity_id: identity,
+      runtime_locus: options.runtimeLocus.trim(),
+      handle: observed.handle,
+      transport: observed.transport,
+      submit_strategy: 'known_surface_submit',
+      input_capabilities: ['type_text', 'submit'],
+      status: 'active',
+      stale_after: options.staleAfter?.trim() || undefined,
+    };
+    const nextBindings = [
+      ...bindings.filter((entry) => !(entry.identity_id === identity && entry.runtime_locus === options.runtimeLocus?.trim())),
+      binding,
+    ];
+    const bindingPath = await writeRuntimeBindings(cwd, nextBindings);
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: {
+        status: 'success',
+        reason: 'runtime_binding_admitted',
+        identity,
+        self_resolution: selfResolution,
+        mutation_performed: true,
+        runtime_binding_mutated: true,
+        binding,
+        binding_path: bindingPath,
+        observed_handle_source: observed.source,
+        admitted_at: now,
+        authority_split: {
+          durable_identity_authority: operatorSurfaceIdentityPath(cwd),
+          volatile_handle_authority: options.runtimeLocus.trim(),
+        },
+      },
+    };
+  }
   return {
     exitCode: known ? ExitCode.SUCCESS : ExitCode.INVALID_CONFIG,
     result: {

@@ -222,6 +222,8 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--identity <id>', 'Durable identity to bind')
     .option('--as <kind>', 'Resolve identity as self')
     .option('--runtime-locus <locus>', 'Owning User/PC runtime locus')
+    .option('--handle <handle>', 'Explicit observed runtime handle; defaults to CODEX_THREAD_ID, WT_SESSION, or process pid')
+    .option('--stale-after <timestamp>', 'Optional ISO timestamp after which the binding is stale')
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[Record<string, unknown>]>({
@@ -232,6 +234,8 @@ export function registerOperatorSurfaceCommands(program: Command): void {
         identity: opts.identity as string | undefined,
         as: opts.as as string | undefined,
         runtimeLocus: opts.runtimeLocus as string | undefined,
+        handle: opts.handle as string | undefined,
+        staleAfter: opts.staleAfter as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),
