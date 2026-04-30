@@ -1,6 +1,7 @@
 ---
-status: opened
+status: claimed
 ---
+
 # Make Observer reachable through operator-surface send aliases
 
 ## Chapter
