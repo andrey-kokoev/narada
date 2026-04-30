@@ -1,0 +1,29 @@
+{
+  "envelope_id": "env_110efd23-1c2f-4403-83e9-ef5ba85879cc",
+  "received_at": "2026-04-30T00:49:42.247Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey:task-commissioning-20260430"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Task commissioning ergonomics caused avoidable context burn",
+    "summary": "While commissioning a User Site task, the architect burned context by inspecting a legacy task DB before discovering the active canonical task authority, by relying on criteria arguments that split on commas, and by exposing large lifecycle snapshot output during diagnosis. The current tools make it too easy to inspect noisy authority surfaces instead of asking for a bounded task-authority/preflight view.",
+    "evidence": [
+      "User Site contained both .ai/tasks/task-lifecycle.db and .ai/task-lifecycle.db; only the latter matched the current CLI authority.",
+      "task create --criteria with a comma-containing sentence produced multiple criteria instead of one.",
+      "task lifecycle export and snapshot inspection produced very high-volume output during a simple commissioning flow."
+    ],
+    "proposal": [
+      "Provide a bounded task authority doctor/preflight command that identifies canonical task DB, task spec path, legacy surfaces, last allocated number, and dirty state.",
+      "Make task create criteria input less footgun-prone: repeatable criteria should be preserved as units, with comma splitting opt-in or explicit CSV mode.",
+      "Provide bounded lifecycle summary commands intended for agent context, avoiding accidental wholesale snapshot inspection."
+    ],
+    "recommendation": "Treat as ergonomics execution work for Narada proper task-governance CLI."
+  },
+  "status": "received"
+}
