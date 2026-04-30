@@ -1,0 +1,27 @@
+{
+  "envelope_id": "env_b506be04-f0a0-46ff-93e4-af8152e57ffb",
+  "received_at": "2026-04-30T22:23:27.751Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-cpy.builder:work-next-open-task-hidden-20260430"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-cpy.builder"
+  },
+  "payload": {
+    "title": "task work-next should explain why open tasks are unavailable",
+    "summary": "While processing CPY tasks, task work-next for narada-cpy.builder returned No work available, but task list showed task 2 still opened. The likely reason is a concurrency/review posture: the same builder has tasks 1 and 3 in_review. The CLI should explain that reason instead of making an open task look invisible.",
+    "evidence": [
+      "narada task work-next --agent narada-cpy.builder returned No work available.",
+      "Immediately afterward, narada task list --limit 10 showed task 2 opened: Create CPY diagnostics command surface and related-systems registry."
+    ],
+    "proposal": [
+      "When work-next suppresses an open task because of claimed/in_review/concurrency/affinity policy, return a blocked_or_hidden_work section naming the task and the exact reason.",
+      "Add a suggested next command, such as wait for review, ask architect to review tasks 1 and 3, or override concurrency with explicit command if allowed."
+    ],
+    "recommendation": "Improve task work-next explainability before relying on it as the natural role-loop entrypoint."
+  },
+  "status": "received"
+}
