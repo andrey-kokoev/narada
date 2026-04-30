@@ -86,6 +86,32 @@ describe('inbox mutation evidence', () => {
     });
   });
 
+  it('normalizes task pending targets without duplicating the task prefix', async () => {
+    setupRepo(tempDir);
+    const submitted = await submitEnvelope(tempDir, 'proposal', { title: 'Maybe task follow-up' });
+    const envelope = (submitted.result as { envelope: { envelope_id: string } }).envelope;
+
+    const pending = await inboxPendingCommand({
+      cwd: tempDir,
+      format: 'json',
+      envelopeId: envelope.envelope_id,
+      to: 'task:100',
+      by: 'operator',
+    });
+
+    expect(pending.exitCode).toBe(ExitCode.SUCCESS);
+    const promoted = (pending.result as { envelope: { promotion: { target_kind: string; target_ref: string } } }).envelope;
+    expect(promoted.promotion).toMatchObject({
+      target_kind: 'task',
+      target_ref: '100',
+    });
+    const evidence = findEvidence(tempDir, 'inbox promote task target', envelope.envelope_id);
+    expect(evidence.after).toMatchObject({
+      promotion_target_kind: 'task',
+      promotion_target_ref: '100',
+    });
+  });
+
   it('emits task promotion evidence after creating target task', async () => {
     setupRepo(tempDir);
     const submitted = await submitEnvelope(tempDir, 'task_candidate', {

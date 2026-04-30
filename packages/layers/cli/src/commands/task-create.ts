@@ -8,7 +8,7 @@
  */
 
 import { resolve, join } from 'node:path';
-import { readFile, access } from 'node:fs/promises';
+import { readFile, access, mkdir } from 'node:fs/promises';
 import {
   allocateTaskNumber,
   previewNextTaskNumber,
@@ -251,6 +251,9 @@ export async function taskCreateCommand(
   const fileName = `${taskId}.md`;
   const tasksDir = join(cwd, '.ai', 'do-not-open', 'tasks');
   const filePath = join(tasksDir, fileName);
+  if (!effective.dryRun) {
+    await mkdir(tasksDir, { recursive: true });
+  }
 
   // ── Collision check ──
 

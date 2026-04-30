@@ -16,6 +16,7 @@ import { ExitCode } from '../../src/lib/exit-codes.js';
 import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import {
   mkdtempSync,
+  existsSync,
   writeFileSync,
   mkdirSync,
   rmSync,
@@ -78,6 +79,30 @@ describe('task create operator', () => {
     const created = list.tasks.find((t) => t.task_id === r.task_id);
     expect(created).toBeDefined();
     expect(created!.status).toBe('opened');
+  });
+
+  it('bootstraps the canonical task spec directory for a fresh Site before allocation and create', async () => {
+    const freshSite = mkdtempSync(join(tmpdir(), 'narada-create-fresh-site-'));
+    try {
+      mkdirSync(join(freshSite, '.ai'), { recursive: true });
+      const result = await taskCreateCommand({
+        cwd: freshSite,
+        title: 'Fresh Site task substrate',
+        requiredWork: '1. Prove task creation repairs the missing canonical task directory.',
+        criteria: ['Task file is created under canonical task spec directory.'],
+        format: 'json',
+      });
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      expect(result.result).toMatchObject({
+        status: 'success',
+        task_number: 1,
+      });
+      expect(existsSync(join(freshSite, '.ai', 'do-not-open', 'tasks'))).toBe(true);
+      expect(existsSync((result.result as { file_path: string }).file_path)).toBe(true);
+    } finally {
+      rmSync(freshSite, { recursive: true, force: true });
+    }
   });
 
   it('initializes lifecycle and task spec authority rows together', async () => {

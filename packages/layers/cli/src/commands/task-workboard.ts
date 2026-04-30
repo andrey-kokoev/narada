@@ -188,11 +188,16 @@ function listSourceEnvelopes(cwd: string, limit: number): TaskWorkboard['source_
         status: envelope.status,
         source_kind: envelope.source.kind,
         source_ref: envelope.source.ref,
-        target: envelope.promotion ? `${envelope.promotion.target_kind}:${envelope.promotion.target_ref}` : null,
+        target: envelope.promotion ? formatPromotionTarget(envelope.promotion.target_kind, envelope.promotion.target_ref) : null,
       }));
   } finally {
     store.close();
   }
+}
+
+function formatPromotionTarget(kind: string, ref: string): string {
+  const normalizedRef = ref.startsWith(`${kind}:`) ? ref.slice(kind.length + 1) : ref;
+  return `${kind}:${normalizedRef}`;
 }
 
 function compactWorkboard(workboard: TaskWorkboard, includeGuidance: boolean, view: string | undefined): TaskWorkboard | Record<string, unknown> {

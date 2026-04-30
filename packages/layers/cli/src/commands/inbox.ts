@@ -1100,7 +1100,7 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
         if (existingTaskTarget) {
           const envelope = store.promote(options.envelopeId!, {
             target_kind: 'task',
-            target_ref: `task:${existingTaskTarget.task_number}`,
+            target_ref: String(existingTaskTarget.task_number),
             promoted_at: new Date().toISOString(),
             promoted_by: options.by!,
             enactment_status: 'enacted',
@@ -1157,7 +1157,7 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
         }
         const envelope = store.promote(options.envelopeId!, {
           target_kind: 'task',
-          target_ref: `task:${task.task_number}`,
+          target_ref: String(task.task_number),
           promoted_at: new Date().toISOString(),
           promoted_by: options.by!,
           enactment_status: 'enacted',
@@ -1409,7 +1409,7 @@ export async function inboxArchitectProcessCommand(options: InboxArchitectProces
 
     const envelope = store.promote(options.envelopeId!, {
       target_kind: 'task',
-      target_ref: `task:${task.task_number}`,
+      target_ref: String(task.task_number),
       promoted_at: new Date().toISOString(),
       promoted_by: options.by!,
       enactment_status: 'enacted',

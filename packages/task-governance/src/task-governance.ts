@@ -1734,6 +1734,7 @@ export async function previewNextTaskNumbers(cwd: string, count: number): Promis
  */
 async function acquireRegistryLock(cwd: string, maxRetries = 10, delayMs = 50): Promise<string> {
   const lockPath = join(resolveRepoPath(cwd), REGISTRY_LOCK_PATH);
+  await mkdir(dirname(lockPath), { recursive: true });
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       const fh = await open(lockPath, 'wx');
