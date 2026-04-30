@@ -1,0 +1,39 @@
+{
+  "envelope_id": "env_46558519-ea7d-4330-80fd-bf4ae3a38e0d",
+  "received_at": "2026-04-30T15:50:21.035Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "role-alias-cardinality-20260430"
+  },
+  "kind": "upstream_task_candidate",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Role aliases should resolve by exact-one roster cardinality",
+    "summary": "The User Site exposed a coherence gap: narada-andrey.Bob is the actual builder-role agent in the roster, while narada-andrey.builder is the role-address the operator naturally expects to use. Task and operator-surface command paths should not require the operator to remember the concrete agent name when there is exactly one agent with the requested role in the target Site roster.",
+    "observed_case": {
+      "site": "andrey-user",
+      "role_alias": "narada-andrey.builder",
+      "concrete_agent": "narada-andrey.Bob",
+      "roster_fact": "Exactly one builder-role agent is present in the target Site roster.",
+      "current_failure": "narada task work-next --agent narada-andrey.builder fails with agent_not_in_roster even though narada-andrey.Bob is the single builder-role agent."
+    },
+    "proposal": [
+      "Introduce a canonical agent-address resolver before task command admission and operator-surface sends.",
+      "Treat a concrete agent id as direct identity authority when present in the target roster.",
+      "Treat role-shaped addresses such as <site>.builder, <site>.architect, or builder as role aliases scoped to the target Site only when they resolve to exactly one active roster agent with that role.",
+      "If no active agent has that role, fail closed with a repair suggestion to instantiate/admit an agent for the role or use an explicit concrete agent id.",
+      "If more than one active agent has that role, fail closed with the competing agent ids and require either an explicit concrete agent id or an explicit role-routing policy.",
+      "Expose the resolution in command output so downstream evidence records both requested_agent and resolved_agent."
+    ],
+    "non_goals": [
+      "Do not make role names naming authority for durable identities.",
+      "Do not create a second identity named narada-andrey.builder when narada-andrey.Bob is the actual identity.",
+      "Do not resolve across Sites unless the target Site/locus is explicit."
+    ],
+    "local_mitigation": "Added User Site operator-surface aliases narada-andrey.builder and spoken narada andrey builder -> narada-andrey.Bob. This is only a local mitigation; task CLI roster resolution still belongs upstream."
+  },
+  "status": "received"
+}
