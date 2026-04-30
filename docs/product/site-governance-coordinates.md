@@ -246,7 +246,7 @@ When durable governance coordinates, runtime truth, and operator/session knowled
       "compatibility": "legacy shorthand for agent_role_contracts.architect"
     },
     "agent_role_contracts": {
-      "admitted_roles": ["architect", "builder"],
+      "admitted_roles": ["architect", "builder", "observer"],
       "deferred_roles": ["inspector", "clerk", "superintendent", "project_manager"],
       "architect": {
         "role_id": "architect",
@@ -294,6 +294,30 @@ When durable governance coordinates, runtime truth, and operator/session knowled
           "report_verification",
           "report_residuals_and_blockers",
           "return_field_conditions_to_architect_or_operator"
+        ]
+      },
+      "observer": {
+        "role_id": "observer",
+        "bootstrap_contract": {
+          "path": "/repo/.narada/AGENTS.md",
+          "section": "Observer Thread Bootstrap"
+        },
+        "default_first_actions": [
+          "read_site_contract",
+          "identify_target_locus",
+          "inspect_inbox_workboard_coherence_posture_read_only",
+          "report_or_route_bounded_findings_without_lifecycle_review"
+        ],
+        "authority_limits": [
+          "does_not_build",
+          "does_not_lifecycle_review_tasks",
+          "does_not_assign_or_close_tasks",
+          "does_not_mutate_implementation_state"
+        ],
+        "handoff_obligations": [
+          "submit_observation_proposal_or_appeal_when_incoherence_is_detected",
+          "keep_observation_distinct_from_task_review",
+          "route_construction_need_to_architect_or_builder_path"
         ]
       }
     },

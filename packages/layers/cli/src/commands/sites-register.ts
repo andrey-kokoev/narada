@@ -49,8 +49,8 @@ export function registerSitesCommands(program: Command): void {
 
   sitesCmd
     .command('agent-bootstrap <site-id-or-root>')
-    .description('Show the bounded Architect or Builder bootstrap contract for a Site')
-    .requiredOption('--role <role>', 'Role to inspect: architect or builder')
+    .description('Show the bounded Architect, Builder, or Observer bootstrap contract for a Site')
+    .requiredOption('--role <role>', 'Role to inspect: architect, builder, or observer')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
     .action(async (siteIdOrRoot: string, opts: Record<string, unknown>) => {

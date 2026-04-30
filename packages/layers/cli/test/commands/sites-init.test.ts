@@ -131,13 +131,17 @@ describe('sitesInitCommand', () => {
     const files = vol.toJSON();
     expect(files['/tmp/linux-user/test-site/config.json']).toBeDefined();
     const agents = files['/tmp/linux-user/test-site/AGENTS.md'];
+    expect(agents).toContain('You are either `architect`, `builder`, or `observer`, as assigned by the Operator.');
     expect(agents).toContain('You are `architect`.');
     expect(agents).toContain('You are `builder`.');
+    expect(agents).toContain('You are `observer`.');
     expect(agents).toContain('## Architect Thread Bootstrap');
     expect(agents).toContain('## Builder Thread Bootstrap');
+    expect(agents).toContain('## Observer Thread Bootstrap');
     expect(agents).toContain('The human is `Operator`.');
     expect(agents).toContain('This Site is governed by Narada law.');
-    expect(agents).toContain('Treat this file as the Site-local execution contract for fresh Architect and Builder threads.');
+    expect(agents).toContain('Treat this file as the Site-local execution contract for fresh Architect, Builder, and Observer threads.');
+    expect(agents).toContain('Do not build, assign, implement, review, accept, reject, close, or mutate tasks.');
     expect(agents).toContain('site_kind: linux-user');
     expect(agents).not.toContain('inspector');
     expect(agents).not.toContain('superintendent');
@@ -171,6 +175,35 @@ describe('sitesInitCommand', () => {
     expect(data.bootstrap_text).toContain('Interpret Operator pressure into governed work packages.');
     expect(data.bootstrap_text).not.toContain('## Builder Thread Bootstrap');
     expect(data.bootstrap_text).not.toContain('You are `builder`.');
+  });
+
+  it('returns bounded Observer bootstrap text without lifecycle review authority', async () => {
+    const ctx = createMockContext();
+    await sitesInitCommand('test-site', {
+      substrate: 'linux-user',
+      format: 'json',
+    }, ctx);
+
+    const result = await sitesAgentBootstrapCommand('/tmp/linux-user/test-site', {
+      role: 'observer',
+      format: 'json',
+    }, ctx);
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const data = result.result as {
+      mutation_performed: boolean;
+      role: string;
+      section_title: string;
+      bootstrap_text: string;
+    };
+    expect(data.mutation_performed).toBe(false);
+    expect(data.role).toBe('observer');
+    expect(data.section_title).toBe('Observer Thread Bootstrap');
+    expect(data.bootstrap_text).toContain('You are `observer`.');
+    expect(data.bootstrap_text).toContain('Observe whether Site work preserves Narada law');
+    expect(data.bootstrap_text).toContain('Do not build, assign, implement, review, accept, reject, close, or mutate tasks.');
+    expect(data.bootstrap_text).not.toContain('## Architect Thread Bootstrap');
+    expect(data.bootstrap_text).not.toContain('You are `architect`.');
   });
 
   it('returns distinct Builder bootstrap text from contained workspace root', async () => {
@@ -238,7 +271,7 @@ describe('sitesInitCommand', () => {
     };
     expect(data.status).toBe('error');
     expect(data.error).toContain('Unsupported agent role');
-    expect(data.allowed_roles).toEqual(['architect', 'builder']);
+    expect(data.allowed_roles).toEqual(['architect', 'builder', 'observer']);
     expect(data.mutation_performed).toBe(false);
   });
 

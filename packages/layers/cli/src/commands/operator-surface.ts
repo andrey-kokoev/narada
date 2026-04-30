@@ -69,20 +69,25 @@ function errorResult(error: unknown): { exitCode: ExitCode; result: unknown } {
   };
 }
 
-function normalizeInstantiateRole(role: string | undefined): 'architect' | 'builder' | null {
+type OperatorSurfaceAgentRole = 'architect' | 'builder' | 'observer';
+
+function normalizeInstantiateRole(role: string | undefined): OperatorSurfaceAgentRole | null {
   const value = role?.trim().toLowerCase();
-  return value === 'architect' || value === 'builder' ? value : null;
+  return value === 'architect' || value === 'builder' || value === 'observer' ? value : null;
 }
 
 function defaultIdentityName(site: string, role: string): string {
   return `${site}-${role}`.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
-function fallbackBootstrapText(role: 'architect' | 'builder'): string {
-  const title = role === 'architect' ? 'Architect' : 'Builder';
+function fallbackBootstrapText(role: OperatorSurfaceAgentRole): string {
+  const title = role === 'architect' ? 'Architect' : role === 'builder' ? 'Builder' : 'Observer';
+  const rolePosture = role === 'observer'
+    ? 'Observe coherence without building, lifecycle-reviewing, assigning, closing, or mutating tasks.'
+    : `Inhabit the ${title} role without claiming authority from the chat surface.`;
   return [
     `You are ${role}. Operator is Operator. We are governed by Narada law.`,
-    `Inhabit the ${title} role without claiming authority from the chat surface.`,
+    rolePosture,
     'Before work, run: narada operator-surface bind-focused --as self',
   ].join('\n');
 }
@@ -101,7 +106,7 @@ export async function operatorSurfaceAgentInstantiateCommand(
         result: {
           status: 'error',
           error: `Unsupported role: ${options.role ?? ''}`,
-          allowed_roles: ['architect', 'builder'],
+          allowed_roles: ['architect', 'builder', 'observer'],
           mutation_performed: false,
         },
       };

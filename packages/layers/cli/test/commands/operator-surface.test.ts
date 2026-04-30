@@ -65,6 +65,28 @@ describe('operator-surface commands', () => {
     expect(existsSync(join(cwd, 'operator-surfaces', 'identities.json'))).toBe(true);
   });
 
+  it('instantiates an observer surface without review authority', async () => {
+    const cwd = await tempRepo();
+    const result = await operatorSurfaceAgentInstantiateCommand({
+      cwd,
+      site: 'narada-proper',
+      role: 'observer',
+      agentKind: 'codex_cli',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      mutation_performed: true,
+      role: 'observer',
+      identity_id: 'narada-proper-observer',
+      self_bind_instruction: 'narada operator-surface bind-focused --as self',
+    });
+    expect(JSON.stringify(result.result)).toContain('Observe coherence without building');
+  });
+
   it('rejects unknown instantiate roles without mutation', async () => {
     const cwd = await tempRepo();
     const result = await operatorSurfaceAgentInstantiateCommand({
@@ -80,7 +102,7 @@ describe('operator-surface commands', () => {
     expect(result.result).toMatchObject({
       status: 'error',
       mutation_performed: false,
-      allowed_roles: ['architect', 'builder'],
+      allowed_roles: ['architect', 'builder', 'observer'],
     });
     expect(existsSync(join(cwd, 'operator-surfaces', 'identities.json'))).toBe(false);
   });

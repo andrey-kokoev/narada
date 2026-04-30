@@ -767,7 +767,7 @@ export async function sitesAgentBootstrapCommand(
       result: {
         status: 'error',
         error: `Unsupported agent role: "${options.role ?? ''}"`,
-        allowed_roles: ['architect', 'builder'],
+        allowed_roles: ['architect', 'builder', 'observer'],
         mutation_performed: false,
       },
     };
@@ -1853,15 +1853,19 @@ function clientSiteRootFromWorkspace(workspaceRoot: string): string {
   return join(workspaceRoot, '.narada');
 }
 
-function normalizeBootstrapRole(role?: string): 'architect' | 'builder' | null {
-  if (role === 'architect' || role === 'builder') {
+type BootstrapRole = 'architect' | 'builder' | 'observer';
+
+function normalizeBootstrapRole(role?: string): BootstrapRole | null {
+  if (role === 'architect' || role === 'builder' || role === 'observer') {
     return role;
   }
   return null;
 }
 
-function bootstrapSectionTitle(role: 'architect' | 'builder'): string {
-  return role === 'architect' ? 'Architect Thread Bootstrap' : 'Builder Thread Bootstrap';
+function bootstrapSectionTitle(role: BootstrapRole): string {
+  if (role === 'architect') return 'Architect Thread Bootstrap';
+  if (role === 'builder') return 'Builder Thread Bootstrap';
+  return 'Observer Thread Bootstrap';
 }
 
 function extractMarkdownSection(markdown: string, sectionTitle: string): string | null {
@@ -1945,7 +1949,7 @@ function siteAgentsContract(args: {
     '',
     '## Common Site Identity',
     '',
-    'You are either `architect` or `builder`, as assigned by the Operator.',
+    'You are either `architect`, `builder`, or `observer`, as assigned by the Operator.',
     'The human is `Operator`.',
     'The Site value-producing inhabitant role is `resident` unless the Site config declares a narrower domain name.',
     'This Site is governed by Narada law.',
@@ -1969,7 +1973,8 @@ function siteAgentsContract(args: {
     '- `resident` lives in or uses the Site to produce the Site\'s intended value. Resident is not a synonym for Operator authority.',
     '- `architect` specifies topology, doctrine fit, acceptance criteria, and review posture.',
     '- `builder` executes approved construction work and reports evidence.',
-    '- Additional roles such as `receptionist` or `inspector` require explicit Site config and capability/admission rules before use.',
+    '- `observer` watches Narada law, Aim, authority-boundary, and inhabited-evolution coherence without building or lifecycle-reviewing tasks.',
+    '- Additional roles require explicit Site config and capability/admission rules before use.',
     '- A declared role, runtime, or embodiment does not grant capability, mutation authority, or evidence admission by itself.',
     '',
     '## Operator Surface Self-Binding',
@@ -2008,9 +2013,21 @@ function siteAgentsContract(args: {
     '',
     'Default first actions: read this contract, confirm the assigned task and acceptance criteria, inspect the minimum implementation context needed, execute the approved work, verify, and report evidence.',
     '',
+    '## Observer Thread Bootstrap',
+    '',
+    'You are `observer`.',
+    '',
+    '- Observe whether Site work preserves Narada law, Aim, authority boundaries, and inhabited-evolution discipline.',
+    '- Run only read-only coherence, inbox, workboard, evidence, and doctrine inspection commands unless the Operator grants a bounded mutation path.',
+    '- Submit bounded observations, proposals, or appeal/grievance filings when you detect incoherence.',
+    '- Do not build, assign, implement, review, accept, reject, close, or mutate tasks.',
+    '- Do not silently repair the incoherence you observe.',
+    '',
+    'Default first actions: read this contract, identify the target locus, inspect current inbox/workboard/coherence posture in read-only mode, and report or route bounded findings without lifecycle review.',
+    '',
     '## Standing Rules',
     '',
-    '- Treat this file as the Site-local execution contract for fresh Architect and Builder threads.',
+    '- Treat this file as the Site-local execution contract for fresh Architect, Builder, and Observer threads.',
     '- Do not infer authority from the current shell, clone, process, MCP facade, path, or convenience surface.',
     '- Do not mutate outside the declared authority locus without a governed crossing.',
     '- Use canonical inbox, task, lifecycle, command, evidence, and publication surfaces instead of direct state edits.',
@@ -2136,7 +2153,7 @@ function siteGovernanceCoordinates(args: {
       compatibility: 'legacy shorthand for agent_role_contracts.architect',
     },
     agent_role_contracts: {
-      admitted_roles: ['architect', 'builder'],
+      admitted_roles: ['architect', 'builder', 'observer'],
       architect: {
         role_id: 'architect',
         bootstrap_contract: {
@@ -2183,6 +2200,30 @@ function siteGovernanceCoordinates(args: {
           'report_verification',
           'report_residuals_and_blockers',
           'return_field_conditions_to_architect_or_operator',
+        ],
+      },
+      observer: {
+        role_id: 'observer',
+        bootstrap_contract: {
+          path: join(args.siteRoot, 'AGENTS.md'),
+          section: 'Observer Thread Bootstrap',
+        },
+        default_first_actions: [
+          'read_site_contract',
+          'identify_target_locus',
+          'inspect_inbox_workboard_coherence_posture_read_only',
+          'report_or_route_bounded_findings_without_lifecycle_review',
+        ],
+        authority_limits: [
+          'does_not_build',
+          'does_not_lifecycle_review_tasks',
+          'does_not_assign_or_close_tasks',
+          'does_not_mutate_implementation_state',
+        ],
+        handoff_obligations: [
+          'submit_observation_proposal_or_appeal_when_incoherence_is_detected',
+          'keep_observation_distinct_from_task_review',
+          'route_construction_need_to_architect_or_builder_path',
         ],
       },
     },

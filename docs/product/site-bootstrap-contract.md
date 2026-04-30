@@ -216,7 +216,7 @@ Site bootstrap also declares Site participant roles. The default active roles ar
 The compact thread bootstrap form is:
 
 ```text
-You are `<architect|builder>`.
+You are `<architect|builder|observer>`.
 The human is `Operator`.
 This Site is governed by Narada law.
 ```
@@ -243,15 +243,22 @@ Builder thread default:
 Read AGENTS.md, confirm the assigned task and acceptance criteria, inspect the minimum implementation context needed, execute the approved work package, run verification, and report changed files, verification, residuals, and blockers.
 ```
 
+Observer thread default:
+
+```text
+Read AGENTS.md, identify the target locus, inspect current inbox/workboard/coherence posture in read-only mode, observe whether work preserves Narada law, Aim, authority boundaries, and inhabited-evolution discipline, and report or route bounded findings without lifecycle-reviewing tasks.
+```
+
 The Operator can extract the bounded bootstrap text for a fresh thread without opening the full contract:
 
 ```bash
 narada operator-surface agent instantiate --site <site-id-or-root> --role architect --agent-kind codex_cli --by <principal>
 narada sites agent-bootstrap <site-id-or-root> --role architect
 narada sites agent-bootstrap <site-id-or-root> --role builder
+narada sites agent-bootstrap <site-id-or-root> --role observer
 ```
 
-`operator-surface agent instantiate` is the Operator-facing path when a durable role identity should be admitted or reused before copy/paste bootstrap. `sites agent-bootstrap` remains the read-only primitive: it reads the generated Site `AGENTS.md` and `config.json`, rejects roles other than `architect` or `builder`, and emits only the selected role section so it can be copied into a fresh AI thread without widening the active role set.
+`operator-surface agent instantiate` is the Operator-facing path when a durable role identity should be admitted or reused before copy/paste bootstrap. `sites agent-bootstrap` remains the read-only primitive: it reads the generated Site `AGENTS.md` and `config.json`, rejects roles other than `architect`, `builder`, or `observer`, and emits only the selected role section so it can be copied into a fresh AI thread without widening the active role set.
 
 Neither contract admits additional AI roles. Operator remains the owner/client authority. The trace substrate records evidence and constrains future work; it is not a thinking role.
 
