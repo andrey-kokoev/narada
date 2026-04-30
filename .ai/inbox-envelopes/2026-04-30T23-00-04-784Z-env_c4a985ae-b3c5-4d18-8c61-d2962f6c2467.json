@@ -1,0 +1,24 @@
+{
+  "envelope_id": "env_c4a985ae-b3c5-4d18-8c61-d2962f6c2467",
+  "received_at": "2026-04-30T23:00:04.784Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada.architect:mcp-runtime-locus-policy-20260430"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada.architect"
+  },
+  "payload": {
+    "title": "MCP runtime should be managed by top-level execution Site",
+    "summary": "MCP facades should not imply that each target Site runs an always-on daemon. Narada proper defines MCP facade contracts, while the User/PC Site that hosts the local agent/client runtime should launch and supervise MCP server processes for addressed Sites.",
+    "proposal": [
+      "On Windows, PC Site or User Site should own MCP process launch, client config, lifecycle supervision, and health checks for narada-mcp connections.",
+      "Target Sites should expose facade contracts and authority posture; they should not become implicit runtime supervisors by convenience.",
+      "Cross-Site MCP use should remain governed: execution machine Site launches the channel, target Site admits the consequence."
+    ],
+    "recommendation": "Route to narada-andrey User/PC Site policy and Narada proper docs as MCP runtime-locus guidance."
+  },
+  "status": "received"
+}
