@@ -291,7 +291,11 @@ describe('operator-surface commands', () => {
       runtime_binding: {
         status: 'deferred',
         runtime_binding_mutated: false,
-        deferred_command: 'Route to owning runtime locus: narada operator-surface bind-focused --identity narada-proper-architect --runtime-locus pc-site',
+        handoff: {
+          status: 'executable',
+          command: 'narada operator-surface bind-focused --identity narada-proper-architect --runtime-locus pc-site',
+        },
+        deferred_command: 'narada operator-surface bind-focused --identity narada-proper-architect --runtime-locus pc-site',
       },
       binding_verification: {
         expected_identity_id: 'narada-proper-architect',
@@ -756,7 +760,16 @@ describe('operator-surface commands', () => {
       message_route: {
         binding_status: 'unbound',
       },
-      unblock_command: 'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <pc-or-user-site>',
+      handoff: {
+        status: 'discovery_required',
+        command: null,
+        discovery_commands: [
+          'narada sites list --authority-locus',
+          'narada operator-surface status --format json',
+          'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <runtime-locus-from-status>',
+        ],
+      },
+      unblock_command: 'narada sites list --authority-locus && narada operator-surface status --format json && narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <runtime-locus-from-status>',
     });
   });
 
@@ -871,7 +884,7 @@ describe('operator-surface commands', () => {
         resolution: 'alias',
         matched_alias: 'observer',
       },
-      unblock_command: 'narada operator-surface bind-focused --identity narada-proper-observer --runtime-locus <pc-or-user-site>',
+      unblock_command: 'narada sites list --authority-locus && narada operator-surface status --format json && narada operator-surface bind-focused --identity narada-proper-observer --runtime-locus <runtime-locus-from-status>',
     });
   });
 
@@ -1312,7 +1325,7 @@ describe('operator-surface commands', () => {
           addressability_status: 'unbound',
           work_status: 'untracked',
           current_task: null,
-          next_command: 'narada operator-surface bind-focused --identity narada-proper-observer --runtime-locus <pc-or-user-site>',
+          next_command: 'narada sites list --authority-locus && narada operator-surface status --format json && narada operator-surface bind-focused --identity narada-proper-observer --runtime-locus <runtime-locus-from-status>',
         }),
       ]),
     });
@@ -1349,6 +1362,58 @@ describe('operator-surface commands', () => {
         identity: 'narada-proper-builder',
         source: 'environment',
       },
+      authority_split: {
+        durable_identity_authority: expect.stringContaining('operator-surfaces/identities.json'),
+        volatile_handle_authority: 'owning_runtime_locus_required',
+      },
+      handoff: {
+        status: 'discovery_required',
+        command: null,
+        discovery_commands: [
+          'narada sites list --authority-locus',
+          'narada operator-surface status --format json',
+          'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <runtime-locus-from-status>',
+        ],
+      },
+      deferred_command: 'narada sites list --authority-locus && narada operator-surface status --format json && narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <runtime-locus-from-status>',
+    });
+  });
+
+  it('emits exact executable handoff when bind-focused receives a runtime locus', async () => {
+    const cwd = await tempRepo();
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-proper-builder',
+      role: 'builder',
+      agentKind: 'codex_cli',
+      site: 'narada-proper',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    const result = await operatorSurfaceBindFocusedCommand({
+      cwd,
+      identity: 'narada-proper-builder',
+      runtimeLocus: 'pc-site',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'deferred',
+      reason: 'runtime_locus_required',
+      mutation_performed: false,
+      runtime_binding_mutated: false,
+      authority_split: {
+        volatile_handle_authority: 'pc-site',
+      },
+      handoff: {
+        status: 'executable',
+        command: 'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus pc-site',
+        discovery_commands: [],
+      },
+      deferred_command: 'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus pc-site',
+      next_commands: [],
     });
   });
 

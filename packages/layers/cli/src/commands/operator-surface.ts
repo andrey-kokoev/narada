@@ -415,6 +415,37 @@ function visibleLabelForIdentity(
   }) ?? null;
 }
 
+function bindFocusedHandoff(identity: string, runtimeLocus: string | null): {
+  status: 'executable' | 'discovery_required';
+  command: string | null;
+  discovery_commands: string[];
+  explanation: string;
+} {
+  if (runtimeLocus?.trim()) {
+    return {
+      status: 'executable',
+      command: `narada operator-surface bind-focused --identity ${identity} --runtime-locus ${runtimeLocus.trim()}`,
+      discovery_commands: [],
+      explanation: 'Run this command in the User/PC/runtime Site that owns the focused volatile surface handle.',
+    };
+  }
+  return {
+    status: 'discovery_required',
+    command: null,
+    discovery_commands: [
+      'narada sites list --authority-locus',
+      `narada operator-surface status --format json`,
+      `narada operator-surface bind-focused --identity ${identity} --runtime-locus <runtime-locus-from-status>`,
+    ],
+    explanation: 'Runtime-locus id is not known in this authority locus. Discover the owning User/PC/runtime Site before mutating volatile handle bindings.',
+  };
+}
+
+function bindFocusedRepairCommand(identity: string, runtimeLocus: string | null): string {
+  return bindFocusedHandoff(identity, runtimeLocus).command
+    ?? bindFocusedHandoff(identity, runtimeLocus).discovery_commands.join(' && ');
+}
+
 function isStaleBinding(binding: OperatorSurfaceRuntimeBinding, now = new Date()): boolean {
   if (binding.status === 'stale' || binding.status === 'revoked') return true;
   if (!binding.stale_after) return false;
@@ -615,7 +646,8 @@ export async function operatorSurfaceAgentInstantiateCommand(
           status: 'deferred',
           reason: 'runtime_locus_required',
           runtime_binding_mutated: false,
-          deferred_command: `Route to owning runtime locus: narada operator-surface bind-focused --identity ${identityName} --runtime-locus ${options.runtimeLocus ?? '<pc-or-user-site>'}`,
+          handoff: bindFocusedHandoff(identityName, options.runtimeLocus ?? null),
+          deferred_command: bindFocusedRepairCommand(identityName, options.runtimeLocus ?? null),
         }
       : null;
 
@@ -784,7 +816,7 @@ function bindingPosture(
   visible_label: OperatorSurfaceVisibleLabelEvidence | null;
   reconciliation_command: string | null;
 } {
-  const bindCommand = `narada operator-surface bind-focused --identity ${identity.identity_id} --runtime-locus ${labelEvidence?.runtime_locus ?? '<pc-or-user-site>'}`;
+  const bindCommand = bindFocusedRepairCommand(identity.identity_id, labelEvidence?.runtime_locus ?? null);
   const matching = bindings.filter((binding) => binding.identity_id === identity.identity_id);
   const active = matching.filter((binding) => !isStaleBinding(binding));
   if (matching.length > 0 && active.length === 0) {
@@ -792,7 +824,7 @@ function bindingPosture(
       runtime_locus: matching[0]?.runtime_locus ?? null,
       binding_status: 'stale',
       addressability_status: 'stale',
-      next_command: `narada operator-surface bind-focused --identity ${identity.identity_id} --runtime-locus ${matching[0]?.runtime_locus ?? '<pc-or-user-site>'}`,
+      next_command: bindFocusedRepairCommand(identity.identity_id, matching[0]?.runtime_locus ?? null),
       label_evidence_status: 'none',
       visible_label: null,
       reconciliation_command: null,
@@ -814,7 +846,7 @@ function bindingPosture(
       runtime_locus: null,
       binding_status: 'ambiguous',
       addressability_status: 'ambiguous',
-      next_command: 'narada operator-surface bindings clean-stale --runtime-locus <pc-or-user-site>',
+      next_command: 'narada operator-surface bindings clean-stale --runtime-locus <runtime-locus-from-status>',
       label_evidence_status: 'none',
       visible_label: null,
       reconciliation_command: null,
@@ -1112,9 +1144,9 @@ export async function operatorSurfaceBindFocusedCommand(
         durable_identity_authority: operatorSurfaceIdentityPath(cwd),
         volatile_handle_authority: options.runtimeLocus ?? 'owning_runtime_locus_required',
       },
-      deferred_command: known
-        ? `Route to owning runtime locus: narada operator-surface bind-focused --identity ${identity} --runtime-locus <pc-or-user-site>`
-        : undefined,
+      handoff: known ? bindFocusedHandoff(identity, options.runtimeLocus ?? null) : null,
+      deferred_command: known ? bindFocusedRepairCommand(identity, options.runtimeLocus ?? null) : undefined,
+      next_commands: known ? bindFocusedHandoff(identity, options.runtimeLocus ?? null).discovery_commands : [],
       blockers: known ? [] : [`identity not admitted: ${identity}`],
     },
   };
@@ -1251,13 +1283,14 @@ export async function operatorSurfaceSendCommand(
           ...agentFields,
           ...routeFields({ ...baseRoute, bindingStatus: 'stale' }),
           mutation_performed: false,
-          unblock_command: `narada operator-surface bind-focused --identity ${identity} --runtime-locus ${options.runtimeLocus ?? '<pc-or-user-site>'}`,
+          handoff: bindFocusedHandoff(identity, options.runtimeLocus ?? null),
+          unblock_command: bindFocusedRepairCommand(identity, options.runtimeLocus ?? null),
         },
       };
     }
     if (activeBindings.length === 0) {
       const labelEvidence = visibleLabelForIdentity(admittedIdentity, await readVisibleLabelEvidence(cwd));
-      const bindCommand = `narada operator-surface bind-focused --identity ${identity} --runtime-locus ${labelEvidence?.runtime_locus ?? options.runtimeLocus ?? '<pc-or-user-site>'}`;
+      const bindCommand = bindFocusedRepairCommand(identity, labelEvidence?.runtime_locus ?? options.runtimeLocus ?? null);
       return {
         exitCode: ExitCode.INVALID_CONFIG,
         result: {
@@ -1273,6 +1306,7 @@ export async function operatorSurfaceSendCommand(
             ? 'A visible title/label is evidence that a surface may be present, but it is not an addressable runtime binding and does not authorize message send.'
             : 'The identity is admitted, but no active runtime binding exists. A window title or label alone is not enough to send input.',
           mutation_performed: false,
+          handoff: bindFocusedHandoff(identity, labelEvidence?.runtime_locus ?? options.runtimeLocus ?? null),
           unblock_command: bindCommand,
           reconciliation_command: bindCommand,
         },
@@ -1294,7 +1328,7 @@ export async function operatorSurfaceSendCommand(
             runtime_locus: binding.runtime_locus ?? null,
             handle: binding.handle ?? null,
           })),
-          unblock_command: `Pass --runtime-locus or run narada operator-surface bindings clean-stale --runtime-locus ${options.runtimeLocus ?? '<pc-or-user-site>'}`,
+          unblock_command: `Pass --runtime-locus or run narada operator-surface bindings clean-stale --runtime-locus ${options.runtimeLocus ?? '<runtime-locus-from-status>'}`,
         },
       };
     }
@@ -1317,7 +1351,8 @@ export async function operatorSurfaceSendCommand(
             binding_id: binding.binding_id ?? null,
             runtime_locus: binding.runtime_locus ?? null,
           },
-          unblock_command: `Admit or repair Operator Surface transport for ${identity}, then rerun narada operator-surface send --identity ${identity}.`,
+          handoff: bindFocusedHandoff(identity, binding.runtime_locus ?? options.runtimeLocus ?? null),
+          unblock_command: `Admit or repair Operator Surface transport for ${identity}, then rerun narada operator-surface send --to ${identity}.`,
         },
       };
     }
