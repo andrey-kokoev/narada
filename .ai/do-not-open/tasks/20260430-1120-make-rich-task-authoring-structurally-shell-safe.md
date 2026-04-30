@@ -1,6 +1,7 @@
 ---
-status: opened
+status: claimed
 ---
+
 # Make rich task authoring structurally shell-safe
 
 ## Chapter
