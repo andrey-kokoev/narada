@@ -1,5 +1,10 @@
 import type { Command } from 'commander';
 import {
+  capabilityAnnouncementCreateCommand,
+  capabilityAnnouncementListCommand,
+  capabilityAnnouncementPublishCommand,
+  capabilityAnnouncementShowCommand,
+  capabilityAnnouncementSupersedeCommand,
   capabilityExplainCommand,
   capabilityGrantCommand,
   capabilityListCommand,
@@ -12,6 +17,130 @@ export function registerCapabilityCommands(program: Command): void {
   const capabilityCmd = program
     .command('capability')
     .description('Capability and consent registry operators');
+
+  capabilityCmd
+    .command('announce')
+    .description('Create a typed capability announcement for discovery, not execution consent')
+    .requiredOption('--id <id>', 'Capability announcement id')
+    .requiredOption('--summary <text>', 'Human-readable capability summary')
+    .requiredOption('--owner-site <id>', 'Site that owns the capability')
+    .requiredOption('--authority-scope <text>', 'Authority scope where the capability is valid')
+    .option('--usable-by <csv>', 'Roles or identities that may use or inspect this capability')
+    .option('--entrypoint <csv>', 'Command/script/UI entrypoints')
+    .option('--prerequisite <csv>', 'Prerequisites before use')
+    .option('--evidence <csv>', 'Evidence references proving the capability exists')
+    .option('--constraint <csv>', 'Constraints and safety limits')
+    .option('--safety-posture <text>', 'Safety posture label', 'metadata_only')
+    .option('--adoption-posture <text>', 'Adoption posture label', 'operator_entrypoint')
+    .option('--supersedes <id>', 'Prior announcement superseded by this one')
+    .requiredOption('--by <id>', 'Principal announcing the capability')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'capability announce',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => capabilityAnnouncementCreateCommand({
+        id: opts.id as string | undefined,
+        summary: opts.summary as string | undefined,
+        ownerSite: opts.ownerSite as string | undefined,
+        authorityScope: opts.authorityScope as string | undefined,
+        usableBy: opts.usableBy as string | undefined,
+        entrypoint: opts.entrypoint as string | undefined,
+        prerequisite: opts.prerequisite as string | undefined,
+        evidence: opts.evidence as string | undefined,
+        constraint: opts.constraint as string | undefined,
+        safetyPosture: opts.safetyPosture as string | undefined,
+        adoptionPosture: opts.adoptionPosture as string | undefined,
+        supersedes: opts.supersedes as string | undefined,
+        by: opts.by as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  capabilityCmd
+    .command('announcements')
+    .description('List typed capability announcements')
+    .option('--owner-site <id>', 'Filter by owner Site')
+    .option('--status <status>', 'Filter by status: active, superseded, withdrawn')
+    .option('--limit <n>', 'Maximum announcements', '20')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'capability announcements',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => capabilityAnnouncementListCommand({
+        ownerSite: opts.ownerSite as string | undefined,
+        status: opts.status as string | undefined,
+        limit: opts.limit ? Number(opts.limit) : undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  const announcementCmd = capabilityCmd
+    .command('announcement')
+    .description('Inspect, publish, or supersede one capability announcement');
+
+  announcementCmd
+    .command('show <id>')
+    .description('Show one typed capability announcement')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[string, Record<string, unknown>]>({
+      command: 'capability announcement show',
+      emit: emitCommandResult,
+      format: (_id: string, opts: Record<string, unknown>) => opts.format,
+      invocation: (id, opts) => capabilityAnnouncementShowCommand({
+        id,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  announcementCmd
+    .command('publish <id>')
+    .description('Publish a capability announcement as an inert Canonical Inbox observation')
+    .requiredOption('--by <id>', 'Principal publishing the announcement')
+    .option('--target-locus <locus>', 'Target locus routing hint')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[string, Record<string, unknown>]>({
+      command: 'capability announcement publish',
+      emit: emitCommandResult,
+      format: (_id: string, opts: Record<string, unknown>) => opts.format,
+      invocation: (id, opts) => capabilityAnnouncementPublishCommand({
+        id,
+        by: opts.by as string | undefined,
+        targetLocus: opts.targetLocus as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  announcementCmd
+    .command('supersede <id>')
+    .description('Mark one capability announcement superseded by another')
+    .requiredOption('--replacement <id>', 'Replacement announcement id')
+    .requiredOption('--by <id>', 'Principal recording supersession')
+    .option('--reason <text>', 'Supersession reason')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[string, Record<string, unknown>]>({
+      command: 'capability announcement supersede',
+      emit: emitCommandResult,
+      format: (_id: string, opts: Record<string, unknown>) => opts.format,
+      invocation: (id, opts) => capabilityAnnouncementSupersedeCommand({
+        id,
+        replacementId: opts.replacement as string | undefined,
+        by: opts.by as string | undefined,
+        reason: opts.reason as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
 
   capabilityCmd
     .command('grant')

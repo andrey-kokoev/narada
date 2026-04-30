@@ -157,6 +157,8 @@ Use [`Visibility Domain Reconciliation`](visibility-domain-reconciliation.md) wh
 
 Use [`Runtime Identity Binding`](runtime-identity-binding.md) when a live runtime object must be related to a durable Site, role, surface, participant, or workflow identity. Handles such as HWNDs, process ids, session ids, tab ids, MCP client ids, or API thread ids are volatile substrate facts; titles, profiles, process metadata, and transcript labels are carrier evidence, not naming authority.
 
+Use [`Capability Announcement`](capability-announcement.md) when a Site needs to publish that an Operator Surface-adjacent capability exists. Announcements are discovery metadata with entrypoints, prerequisites, evidence, and constraints; they do not grant execution authority or substitute for runtime identity binding.
+
 ## Inspection Posture
 
 The first coherent command posture is read-only inspection.

@@ -220,6 +220,8 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
     };
   }
 
+  await mkdir(join(authorityCwd, '.ai'), { recursive: true });
+
   return withInboxStoreAsync({ ...options, cwd: authorityCwd }, async (store) => {
     const delivery = inspectInboxDelivery(authorityCwd);
     const envelope = store.insert({
@@ -2216,7 +2218,22 @@ async function withInboxStoreAsync(
   run: (store: SqliteInboxStore) => Promise<{ exitCode: ExitCode; result: unknown }>,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   if (options.store) return run(options.store);
-  const store = new SqliteInboxStore(join(options.cwd ?? process.cwd(), '.ai', 'inbox.db'));
+  const cwd = options.cwd ?? process.cwd();
+  await mkdir(join(cwd, '.ai'), { recursive: true });
+  const inboxParent = join(cwd, '.ai');
+  if (!existsSync(inboxParent)) {
+    throw new Error(`Inbox store parent directory was not created: ${join(cwd, '.ai')}`);
+  }
+  const dbPath = join(cwd, '.ai', 'inbox.db');
+  let store: SqliteInboxStore;
+  try {
+    store = new SqliteInboxStore(dbPath);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const parentExists = existsSync(inboxParent);
+    const parentKind = parentExists ? (statSync(inboxParent).isDirectory() ? 'directory' : 'not_directory') : 'missing';
+    throw new Error(`Failed to open inbox store at ${dbPath} (parent=${parentKind}): ${message}`);
+  }
   try {
     return await run(store);
   } finally {

@@ -1,9 +1,20 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.unmock('node:child_process');
+vi.unmock('node:fs');
+vi.unmock('node:fs/promises');
+
 import {
+  capabilityAnnouncementCreateCommand,
+  capabilityAnnouncementListCommand,
+  capabilityAnnouncementPublishCommand,
+  capabilityAnnouncementShowCommand,
+  capabilityAnnouncementSupersedeCommand,
   capabilityExplainCommand,
   capabilityGrantCommand,
   capabilityListCommand,
@@ -33,6 +44,12 @@ async function tempRepo(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'narada-capability-'));
   tempDirs.push(dir);
   return dir;
+}
+
+function setupGitRepo(cwd: string): void {
+  execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['init'], { cwd, stdio: 'ignore' });
+  execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['config', 'user.email', 'test@example.com'], { cwd });
+  execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['config', 'user.name', 'Test'], { cwd });
 }
 
 afterEach(async () => {
@@ -148,5 +165,99 @@ describe('capability consent registry', () => {
       format: 'json',
     }, createMockContext());
     expect((explainResult.result as { blockers: string[] }).blockers).toContain('grant expired');
+  });
+});
+
+describe('capability announcement registry', () => {
+  it('creates, lists, discovers, publishes, and supersedes typed capability announcements', async () => {
+    const cwd = await tempRepo();
+    setupGitRepo(cwd);
+
+    const created = await capabilityAnnouncementCreateCommand({
+      cwd,
+      id: 'operator_surface_message_passing',
+      summary: 'Send bounded text to a known Operator Surface channel',
+      ownerSite: 'user-pc-site',
+      authorityScope: 'runtime-locus operator surface input only',
+      usableBy: 'Operator,Architect,Builder',
+      entrypoint: 'tools/operator-surface/Send-Os.ps1,tools/operator-surface/Send-OperatorSurfaceInput.ps1',
+      prerequisite: 'runtime identity binding,known_surface_submit strategy',
+      evidence: 'observation:successful-send-20260430',
+      constraint: 'no raw secrets,no blind submit probing',
+      safetyPosture: 'known_surface_submit_required',
+      adoptionPosture: 'operator_entrypoint',
+      by: 'builder',
+      format: 'json',
+    }, createMockContext());
+
+    expect(created.exitCode).toBe(ExitCode.SUCCESS);
+    const announcement = (created.result as { announcement: { capability_id: string; entrypoints: string[]; constraints: string[] } }).announcement;
+    expect(announcement.capability_id).toBe('operator_surface_message_passing');
+    expect(announcement.entrypoints).toContain('tools/operator-surface/Send-Os.ps1');
+    expect(announcement.constraints).toContain('no raw secrets');
+    expect(existsSync(join(cwd, '.ai', 'capability-announcements.json'))).toBe(true);
+
+    const listed = await capabilityAnnouncementListCommand({
+      cwd,
+      ownerSite: 'user-pc-site',
+      status: 'active',
+      format: 'json',
+    }, createMockContext());
+    expect((listed.result as { count: number }).count).toBe(1);
+
+    const shown = await capabilityAnnouncementShowCommand({
+      cwd,
+      id: 'operator_surface_message_passing',
+      format: 'json',
+    }, createMockContext());
+    expect((shown.result as { announcement: { authority_scope: string } }).announcement.authority_scope).toContain('runtime-locus');
+
+    const published = await capabilityAnnouncementPublishCommand({
+      cwd,
+      id: 'operator_surface_message_passing',
+      by: 'builder',
+      format: 'json',
+    }, createMockContext());
+    expect(published.exitCode).toBe(ExitCode.SUCCESS);
+    expect((published.result as { inbox: { envelope: { kind: string; payload: { capability_announcement: { capability_id: string } } } } }).inbox.envelope).toMatchObject({
+      kind: 'observation',
+      payload: {
+        capability_announcement: {
+          capability_id: 'operator_surface_message_passing',
+        },
+      },
+    });
+
+    await capabilityAnnouncementCreateCommand({
+      cwd,
+      id: 'operator_surface_message_passing_v2',
+      summary: 'Send bounded text to a known Operator Surface channel with explicit confirmation',
+      ownerSite: 'user-pc-site',
+      authorityScope: 'runtime-locus operator surface input only',
+      usableBy: 'Operator,Architect,Builder',
+      entrypoint: 'tools/operator-surface/Send-OperatorSurfaceInput.ps1',
+      prerequisite: 'runtime identity binding,operator_confirmed_submit strategy',
+      evidence: 'observation:successful-send-20260430',
+      constraint: 'no raw secrets,no blind submit probing',
+      safetyPosture: 'operator_confirmed_submit_required',
+      adoptionPosture: 'operator_entrypoint',
+      by: 'builder',
+      format: 'json',
+    }, createMockContext());
+
+    const superseded = await capabilityAnnouncementSupersedeCommand({
+      cwd,
+      id: 'operator_surface_message_passing',
+      replacementId: 'operator_surface_message_passing_v2',
+      by: 'builder',
+      reason: 'Require explicit submit posture naming',
+      format: 'json',
+    }, createMockContext());
+
+    expect(superseded.exitCode).toBe(ExitCode.SUCCESS);
+    expect((superseded.result as { announcement: { status: string; superseded_by: string } }).announcement).toMatchObject({
+      status: 'superseded',
+      superseded_by: 'operator_surface_message_passing_v2',
+    });
   });
 });

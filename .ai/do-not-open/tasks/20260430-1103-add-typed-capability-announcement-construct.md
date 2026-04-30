@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T01:41:26.364Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-30T01:41:26.629Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add typed capability announcement construct
@@ -41,8 +50,8 @@ Define and implement a first-class capability announcement construct so Sites ca
 
 ## Acceptance Criteria
 
-- [ ] Define CapabilityAnnouncement as a typed envelope and/or durable Site registry projection with fields for capability id, summary, owner Site, authority scope, usable-by identities or roles, entrypoints, prerequisites, evidence, constraints, safety posture, adoption posture, and supersession/versioning.
-- [ ] Allow a Site to publish a capability announcement to relevant Sites through canonical inbox publication or an equivalent governed crossing.
-- [ ] Use operator_surface_message_passing as the first test case, including Send-Os.ps1 or Send-OperatorSurfaceInput.ps1 entrypoints, runtime identity binding prerequisite, known submit strategy requirement, no-secrets constraint, and observed successful sends.
-- [ ] Add focused tests for announcement creation, publication/admission, discovery, supersession, and JSON output.
-- [ ] Document how agents discover and use admitted capability announcements without relying on chat memory.
+- [x] Define CapabilityAnnouncement as a typed envelope and/or durable Site registry projection with fields for capability id, summary, owner Site, authority scope, usable-by identities or roles, entrypoints, prerequisites, evidence, constraints, safety posture, adoption posture, and supersession/versioning.
+- [x] Allow a Site to publish a capability announcement to relevant Sites through canonical inbox publication or an equivalent governed crossing.
+- [x] Use operator_surface_message_passing as the first test case, including Send-Os.ps1 or Send-OperatorSurfaceInput.ps1 entrypoints, runtime identity binding prerequisite, known submit strategy requirement, no-secrets constraint, and observed successful sends.
+- [x] Add focused tests for announcement creation, publication/admission, discovery, supersession, and JSON output.
+- [x] Document how agents discover and use admitted capability announcements without relying on chat memory.
