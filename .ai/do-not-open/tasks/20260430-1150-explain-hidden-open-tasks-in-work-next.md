@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T23:07:25.241Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777590376523_wayxho
+closed_at: 2026-04-30T23:07:42.116Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Explain hidden open tasks in work-next
@@ -32,8 +41,8 @@ Source inbox envelope env_b506be04-f0a0-46ff-93e4-af8152e57ffb reports CPY build
 
 ## Acceptance Criteria
 
-- [ ] work-next output distinguishes true no-work from open-but-suppressed work.
-- [ ] Suppressed tasks include task number/title and exact reason where available.
-- [ ] If review or closure blocks new work, output names the responsible role or owner when known.
-- [ ] Human and JSON output remain bounded and do not produce large transcripts by default.
-- [ ] Focused tests cover the CPY-style open task hidden by in_review/concurrency scenario.
+- [x] work-next output distinguishes true no-work from open-but-suppressed work.
+- [x] Suppressed tasks include task number/title and exact reason where available.
+- [x] If review or closure blocks new work, output names the responsible role or owner when known.
+- [x] Human and JSON output remain bounded and do not produce large transcripts by default.
+- [x] Focused tests cover the CPY-style open task hidden by in_review/concurrency scenario.

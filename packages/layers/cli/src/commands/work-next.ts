@@ -123,6 +123,15 @@ function formatHuman(result: Record<string, unknown>): string {
     }
   }
   if (result.next_step) lines.push(`Next step: ${String(result.next_step)}`);
+  const hidden = asRecord(result.blocked_or_hidden_work);
+  const hiddenRows = Array.isArray(hidden.items) ? hidden.items : [];
+  if (hiddenRows.length > 0) {
+    lines.push('Blocked or hidden work:');
+    for (const item of hiddenRows.slice(0, 5)) {
+      const record = asRecord(item);
+      lines.push(`- task ${String(record.task_number)}: ${String(record.reason)}`);
+    }
+  }
   const doctrineGuard = asRecord(result.doctrine_guard);
   if (doctrineGuard.status && doctrineGuard.status !== 'clear') {
     lines.push(`Doctrine guard: ${String(doctrineGuard.status)}`);
@@ -130,6 +139,67 @@ function formatHuman(result: Record<string, unknown>): string {
     for (const command of commands.slice(0, 3)) lines.push(`- ${String(command)}`);
   }
   return lines.join('\n');
+}
+
+function taskTitleFromStore(store: ReturnType<typeof openTaskLifecycleStore>, taskNumber: number): string | null {
+  return store.getTaskSpecByNumber(taskNumber)?.title ?? null;
+}
+
+function blockingWorkForAgent(
+  store: ReturnType<typeof openTaskLifecycleStore>,
+  agentId: string,
+): Array<Record<string, unknown>> {
+  const rows = store.getAllLifecycle();
+  return rows
+    .filter((row) => row.task_number !== null)
+    .filter((row) => ['claimed', 'needs_continuation', 'in_review'].includes(row.status))
+    .filter((row) => store.getActiveAssignment(row.task_id)?.agent_id === agentId || store.getRosterEntry(agentId)?.task_number === row.task_number)
+    .map((row) => ({
+      task_number: row.task_number,
+      task_id: row.task_id,
+      title: row.task_number === null ? null : taskTitleFromStore(store, row.task_number),
+      status: row.status,
+      assigned_agent: agentId,
+    }));
+}
+
+function summarizeBlockedOrHiddenWork(cwd: string, agentId: string, limit = 5): Record<string, unknown> {
+  const store = openTaskLifecycleStore(cwd);
+  try {
+    const blockers = blockingWorkForAgent(store, agentId);
+    const rows = store.getAllLifecycle()
+      .filter((row) => row.task_number !== null)
+      .filter((row) => row.status === 'opened' || row.status === 'needs_continuation')
+      .sort((a, b) => (a.task_number ?? 0) - (b.task_number ?? 0))
+      .slice(0, limit)
+      .map((row) => ({
+        task_number: row.task_number,
+        task_id: row.task_id,
+        title: row.task_number === null ? null : taskTitleFromStore(store, row.task_number),
+        status: row.status,
+        reason: blockers.length > 0
+          ? 'agent_has_active_or_review_pending_work'
+          : 'not_selected_by_task_recommender_or_dependency_filter',
+        blocking_owner: blockers.length > 0 ? agentId : null,
+        blocking_tasks: blockers.map((blocker) => ({
+          task_number: blocker.task_number,
+          title: blocker.title,
+          status: blocker.status,
+          owner: blocker.assigned_agent,
+        })),
+        suggested_next_command: blockers.length > 0
+          ? `finish, report, or request review/closure for task ${blockers[0]?.task_number}`
+          : `narada task recommend --agent ${agentId} --format json`,
+      }));
+    return {
+      status: rows.length > 0 ? 'open_work_suppressed_or_hidden' : 'none',
+      count: rows.length,
+      limit,
+      items: rows,
+    };
+  } finally {
+    store.db.close();
+  }
 }
 
 async function buildDoctrineGuard(cwd: string): Promise<DoctrineGuardStatus> {
@@ -441,6 +511,7 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
     };
   }
   checked.push({ zone: 'task_work', status: 'empty', reason: emptyReason(taskResult.result, 'no_admissible_task') });
+  const blockedOrHiddenWork = summarizeBlockedOrHiddenWork(cwd, resolvedAgent);
 
   const reviewWork = await findReviewWork(cwd, resolvedAgent);
   if (reviewWork) {
@@ -454,6 +525,7 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
       agent_address_resolution: agentAddressResolution,
       primary: reviewWork,
       checked,
+      blocked_or_hidden_work: blockedOrHiddenWork,
       doctrine_guard: doctrineGuard,
       next_step: 'Review the task report through the governed task review command.',
     };
@@ -511,8 +583,11 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
     primary: null,
     reason: 'no_task_or_inbox_work',
     checked,
+    blocked_or_hidden_work: blockedOrHiddenWork,
     doctrine_guard: doctrineGuard,
-    next_step: 'No task or inbox work is currently available for this agent.',
+    next_step: (asRecord(blockedOrHiddenWork).status === 'open_work_suppressed_or_hidden')
+      ? 'Open task work exists but is suppressed for this agent; inspect blocked_or_hidden_work for the blocker and repair command.'
+      : 'No task or inbox work is currently available for this agent.',
   };
   return {
     exitCode: ExitCode.SUCCESS,

@@ -423,6 +423,94 @@ describe('work-next unified next action', () => {
     });
   });
 
+  it('explains open task work hidden by active review posture instead of returning opaque emptiness', async () => {
+    seedRosterEntry(tempDir, 'narada-cpy.builder', 'builder', 'idle', null);
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.upsertLifecycle({
+        task_id: '20260430-1-current-review',
+        task_number: 1,
+        status: 'in_review',
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: '2026-04-30T22:00:00.000Z',
+      });
+      store.upsertTaskSpec({
+        task_id: '20260430-1-current-review',
+        task_number: 1,
+        title: 'Current review',
+        chapter_markdown: null,
+        goal_markdown: 'Review pending.',
+        context_markdown: null,
+        required_work_markdown: '1. Wait for review.',
+        non_goals_markdown: null,
+        acceptance_criteria_json: JSON.stringify(['Reviewed.']),
+        dependencies_json: JSON.stringify([]),
+        updated_at: '2026-04-30T22:00:00.000Z',
+      });
+      store.upsertLifecycle({
+        task_id: '20260430-2-open-hidden',
+        task_number: 2,
+        status: 'opened',
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: '2026-04-30T22:00:00.000Z',
+      });
+      store.upsertTaskSpec({
+        task_id: '20260430-2-open-hidden',
+        task_number: 2,
+        title: 'Open but suppressed',
+        chapter_markdown: null,
+        goal_markdown: 'Should be explained.',
+        context_markdown: null,
+        required_work_markdown: '1. Do hidden work.',
+        non_goals_markdown: null,
+        acceptance_criteria_json: JSON.stringify(['Explained.']),
+        dependencies_json: JSON.stringify([]),
+        updated_at: '2026-04-30T22:00:00.000Z',
+      });
+      store.insertAssignment({
+        assignment_id: 'assign-review',
+        task_id: '20260430-1-current-review',
+        agent_id: 'narada-cpy.builder',
+        claimed_at: '2026-04-30T22:00:00.000Z',
+        released_at: null,
+        release_reason: null,
+        intent: 'primary',
+      });
+    } finally {
+      store.db.close();
+    }
+    const result = await workNextCommand({ agent: 'narada-cpy.builder', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      blocked_or_hidden_work: {
+        status: 'open_work_suppressed_or_hidden',
+        items: [{
+          task_number: 2,
+          title: 'Open but suppressed',
+          reason: 'agent_has_active_or_review_pending_work',
+          blocking_owner: 'narada-cpy.builder',
+          blocking_tasks: [{
+            task_number: 1,
+            title: 'Current review',
+            status: 'in_review',
+            owner: 'narada-cpy.builder',
+          }],
+        }],
+      },
+    });
+  });
+
   it('surfaces doctrine guard warnings before recommending mutation work', async () => {
     mkdirSync(join(tempDir, 'docs', 'concepts'), { recursive: true });
     mkdirSync(join(tempDir, 'packages', 'layers', 'cli', 'src', 'commands'), { recursive: true });
