@@ -1,0 +1,26 @@
+{
+  "envelope_id": "env_b5db834e-12e4-48db-b24f-8f93381930db",
+  "received_at": "2026-04-30T23:28:44.225Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey-task-review-loop-20260430"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Task lifecycle drift repair path is too high-friction",
+    "summary": "During narada-andrey next loop, task 40 had frontmatter status closed while task-lifecycle SQLite still said claimed. task close refused claimed->closed, task report refused because another surface saw closed, reconcile repair first had to be recorded before it could be applied, then report/review could close. The path is principled but too hard to discover during normal architect duty.",
+    "evidence": [
+      "reconcile inspect found rf_lifecycle_frontmatter_40_297f1ab292bd and rf_terminal_evidence_40_34cb67c21f64",
+      "task reconcile repair required a prior task reconcile record; direct repair by finding id failed with Finding not found"
+    ],
+    "proposal": [
+      "Provide a single guided lifecycle-reconcile command for this common split-brain case, with a compact diagnosis and the exact next sanctioned command."
+    ],
+    "recommendation": "Treat as execution-priority ergonomics/CAPA for task lifecycle authority surfaces."
+  },
+  "status": "received"
+}

@@ -23,5 +23,17 @@
     ],
     "recommendation": "Improve task work-next explainability before relying on it as the natural role-loop entrypoint."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1150",
+    "promoted_at": "2026-04-30T22:39:33.473Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1150,
+      "task_id": "20260430-1150-explain-hidden-open-tasks-in-work-next"
+    }
+  }
 }

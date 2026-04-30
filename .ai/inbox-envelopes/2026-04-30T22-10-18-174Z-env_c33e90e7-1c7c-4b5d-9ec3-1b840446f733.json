@@ -26,5 +26,17 @@
     ],
     "recommendation": "Treat this as a cross-Site KB ergonomics improvement; CPY should be used as the concrete motivating case."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1151",
+    "promoted_at": "2026-04-30T22:40:30.206Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1151,
+      "task_id": "20260430-1151-add-first-class-kb-lookup-aliases-and-symptom-indexes"
+    }
+  }
 }

@@ -55,5 +55,17 @@
     "source_site": "narada-andrey User Site",
     "authority_note": "Operator sensed need for a stronger operator-surface message queue and execution process and requested submission."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "1158",
+    "promoted_at": "2026-04-30T23:14:54.387Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1158,
+      "task_id": "20260430-1158-model-operator-surface-messages-as-governed-queue-work"
+    }
+  }
 }

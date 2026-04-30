@@ -31,5 +31,36 @@
     ],
     "source_context": "Observed while using operator-surface messaging to coordinate CPY/Narada agents; overlapping sends during the bridge delay window would be unsafe."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1143",
+    "promoted_at": "2026-04-30T21:07:29.387Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task create",
+    "target_result": {
+      "task": {
+        "status": "success",
+        "task_id": "20260430-1143-serialize-operator-surface-message-sending-at-pc-locus",
+        "task_number": 1143,
+        "file_name": "20260430-1143-serialize-operator-surface-message-sending-at-pc-locus.md",
+        "file_path": "/home/andrey/src/narada/.ai/do-not-open/tasks/20260430-1143-serialize-operator-surface-message-sending-at-pc-locus.md",
+        "title": "Serialize operator-surface message sending at PC locus",
+        "handoff_actionability": {
+          "status": "actionable",
+          "reason": null,
+          "repair_command": null,
+          "required_work_excerpt": "0. Source summary: If more than one operator surface attempts to send an operator-surface message at the same time, overlapping focus/clipboard/type/submit windows can interfere with each other. The current bridge has a timing-sensitive delivery phase, including stabilization waits, so concurrent senders should not run independently.\n1. Read source inbox envelope env_22404261-c4a8-4abb-897a-1ea6a625919a and preserve its authority context.\n2. Identify the owning Narada authority boundary before mutating any target state."
+        }
+      },
+      "assignment": {
+        "status": "success",
+        "task_id": "20260430-1143-serialize-operator-surface-message-sending-at-pc-locus",
+        "agent_id": "builder",
+        "claimed_at": "2026-04-30T21:07:27.947Z",
+        "assignment_intent_id": "air_claim_1143_builder_1777583247514_6fkol2"
+      }
+    }
+  }
 }

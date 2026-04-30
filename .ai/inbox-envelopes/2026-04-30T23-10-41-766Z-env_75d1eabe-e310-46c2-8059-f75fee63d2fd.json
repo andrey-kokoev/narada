@@ -40,5 +40,17 @@
     "source_site": "narada-andrey User Site",
     "authority_note": "Operator identified this as a responsibility hole and requested submission."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "1156",
+    "promoted_at": "2026-04-30T23:12:39.345Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1156,
+      "task_id": "20260430-1156-add-completion-claim-reconciliation-duty-and-command"
+    }
+  }
 }

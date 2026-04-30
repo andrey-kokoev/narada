@@ -51,5 +51,13 @@
       "Mic capture without remote transcription remains usable for debugging."
     ]
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "site_config_change",
+    "target_ref": "voice-transcription-credential-reference-upgrade-after-1124",
+    "promoted_at": "2026-04-30T14:41:06.595Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'site_config_change' is not implemented yet."
+  }
 }

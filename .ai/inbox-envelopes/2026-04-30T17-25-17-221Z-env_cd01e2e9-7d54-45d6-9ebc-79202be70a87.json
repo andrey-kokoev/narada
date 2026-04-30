@@ -42,5 +42,17 @@
     "source_site": "narada-andrey User Site",
     "authority_note": "Operator explicitly identified inbox submit return echo as token waste and asked to submit."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1140",
+    "promoted_at": "2026-04-30T17:27:55.558Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1140,
+      "task_id": "20260430-1140-add-compact-inbox-submit-output-for-architect-loops"
+    }
+  }
 }

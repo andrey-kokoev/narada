@@ -47,5 +47,13 @@
       "credential_manager_target": "Narada/narada-andrey/harmonia_voice_transcription_token"
     }
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "site_config_change",
+    "target_ref": "credential-rotation-intent-approval-boundary",
+    "promoted_at": "2026-04-30T14:43:12.148Z",
+    "promoted_by": "architect",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'site_config_change' is not implemented yet."
+  }
 }

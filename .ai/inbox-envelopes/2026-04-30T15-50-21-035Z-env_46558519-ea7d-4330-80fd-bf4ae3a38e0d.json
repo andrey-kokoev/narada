@@ -35,5 +35,17 @@
     ],
     "local_mitigation": "Added User Site operator-surface aliases narada-andrey.builder and spoken narada andrey builder -> narada-andrey.Bob. This is only a local mitigation; task CLI roster resolution still belongs upstream."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1135",
+    "promoted_at": "2026-04-30T15:54:14.823Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1135,
+      "task_id": "20260430-1135-resolve-role-shaped-agent-addresses-by-exact-one-roster-card"
+    }
+  }
 }

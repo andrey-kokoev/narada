@@ -105,5 +105,30 @@
     "proposed_command_shape": "narada capability request browser_dom_inspection --site <site> --principal <agent> --intent <intent> --origin <origin> --path <path> --interaction <mode>",
     "motivation_evidence": "In CPY smart-scheduling work, browser automation authenticated with the app diagnostic login route, opened /analysis/studio-week, clicked a non-mutating expander, and inspected the live Violated Rules DOM card. This produced useful evidence while also demonstrating why origin/path/interaction/redaction controls are needed."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1144",
+    "promoted_at": "2026-04-30T21:08:19.259Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task create",
+    "target_result": {
+      "task": {
+        "status": "success",
+        "task_id": "20260430-1144-govern-browser-dom-inspection-as-scoped-effect-capability",
+        "task_number": 1144,
+        "file_name": "20260430-1144-govern-browser-dom-inspection-as-scoped-effect-capability.md",
+        "file_path": "/home/andrey/src/narada/.ai/do-not-open/tasks/20260430-1144-govern-browser-dom-inspection-as-scoped-effect-capability.md",
+        "title": "Govern browser DOM inspection as scoped effect capability",
+        "handoff_actionability": {
+          "status": "actionable",
+          "reason": null,
+          "repair_command": null,
+          "required_work_excerpt": "0. Source summary: Browser DOM inspection is useful for diagnosing live UI/data-flow behavior, but it must not become ambient browsing authority. Any role may request it, but use must be admitted by Operator approval or explicit Site capability grants scoped to principal/role/origin/path/interaction/evidence.\n1. Read source inbox envelope env_fa18b567-c790-4a6e-afd6-6689e54a58c5 and preserve its authority context.\n2. Identify the owning Narada authority boundary before mutating any target state."
+        }
+      },
+      "assignment": null
+    }
+  }
 }

@@ -25,5 +25,17 @@
     ],
     "recommendation": "Create a Narada proper machinery task covering client Site task-substrate preflight/repair and inbox pending target normalization."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1148",
+    "promoted_at": "2026-04-30T22:23:50.753Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1148,
+      "task_id": "20260430-1148-repair-client-site-task-substrate-bootstrap-and-pending-targ"
+    }
+  }
 }

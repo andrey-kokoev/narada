@@ -34,5 +34,17 @@
     ],
     "operator_expected_path": "narada operator-surface identity rename narada-andrey.architect narada-andrey.Kevin --role architect --by operator --cwd <user-site>"
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1139",
+    "promoted_at": "2026-04-30T16:24:43.213Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1139,
+      "task_id": "20260430-1139-add-governed-operator-surface-identity-rename-and-migration-"
+    }
+  }
 }

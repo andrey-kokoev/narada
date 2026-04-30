@@ -1,0 +1,26 @@
+{
+  "envelope_id": "env_22caf944-9dbf-48cd-9dd2-fa69c6298b31",
+  "received_at": "2026-04-30T23:29:02.399Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey-task-review-loop-20260430"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Architect review duty lacks a direct sanctioned identity path",
+    "summary": "During the next loop, task review with --agent narada-andrey.architect was rejected because architect role is not reviewer/admin. The correct local action was to review as operator. That boundary is defensible, but the duty loop needs a clearer command or doctrine so architect-as-agent does not attempt an unauthorized review first.",
+    "evidence": [
+      "task review 57 --agent narada-andrey.architect failed: role architect but only reviewer or admin may review tasks",
+      "task review 57 --agent operator succeeded and closed the task"
+    ],
+    "proposal": [
+      "Add explicit architect duty-loop guidance or a wrapper command for operator-mediated review closure, making the authority crossing visible and compact."
+    ],
+    "recommendation": "Treat as ergonomics/doctrine improvement for role-loop execution."
+  },
+  "status": "received"
+}

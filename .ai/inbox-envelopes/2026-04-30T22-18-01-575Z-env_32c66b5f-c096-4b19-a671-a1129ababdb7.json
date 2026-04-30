@@ -25,5 +25,17 @@
     ],
     "recommendation": "Create a Narada proper task to make operator-surface agent instantiate/admit produce a complete ready-to-nudge builder surface for client Sites."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1147",
+    "promoted_at": "2026-04-30T22:22:55.404Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1147,
+      "task_id": "20260430-1147-complete-operator-surface-agent-admission-readiness"
+    }
+  }
 }

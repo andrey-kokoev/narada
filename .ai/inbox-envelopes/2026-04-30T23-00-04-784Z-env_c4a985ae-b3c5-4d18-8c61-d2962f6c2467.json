@@ -20,5 +20,17 @@
     ],
     "recommendation": "Route to narada-andrey User/PC Site policy and Narada proper docs as MCP runtime-locus guidance."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "1155",
+    "promoted_at": "2026-04-30T23:14:02.196Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1155,
+      "task_id": "20260430-1155-document-mcp-runtime-locus-under-execution-machine-site"
+    }
+  }
 }

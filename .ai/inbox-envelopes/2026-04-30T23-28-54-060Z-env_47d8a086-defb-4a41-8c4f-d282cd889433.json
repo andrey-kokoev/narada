@@ -1,0 +1,26 @@
+{
+  "envelope_id": "env_47d8a086-defb-4a41-8c4f-d282cd889433",
+  "received_at": "2026-04-30T23:28:54.060Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey-task-review-loop-20260430"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Task commands can silently inspect the wrong Site when --cwd is misplaced",
+    "summary": "While diagnosing task 40, I ran task evidence inspect 40 with --cwd after the positional argument. The command returned evidence for Narada proper task 40 instead of the intended narada-andrey User Site task 40. Placing --cwd before the task number returned the intended behavior. This is a dangerous footgun because the output looked valid but belonged to another Site.",
+    "evidence": [
+      "task evidence inspect 40 --cwd /mnt/c/Users/Andrey/Narada returned task_id 20260415-040-generalize-outbound-into-intent-log from Narada proper",
+      "task evidence inspect --cwd /mnt/c/Users/Andrey/Narada 40 was the required shape"
+    ],
+    "proposal": [
+      "Make --cwd position-invariant where possible, or reject commands when --cwd appears after a positional argument and would be ignored/misapplied."
+    ],
+    "recommendation": "Treat as CAPA because cross-Site authority confusion can lead to wrong repairs or conclusions."
+  },
+  "status": "received"
+}
