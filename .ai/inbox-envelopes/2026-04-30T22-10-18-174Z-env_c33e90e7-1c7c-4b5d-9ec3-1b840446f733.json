@@ -1,0 +1,30 @@
+{
+  "envelope_id": "env_c33e90e7-1c7c-4b5d-9ec3-1b840446f733",
+  "received_at": "2026-04-30T22:10:18.174Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-cpy.builder:kb-lookup-aliases-20260430"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-cpy.builder"
+  },
+  "payload": {
+    "title": "KB entries need first-class lookup aliases and symptom indexes",
+    "summary": "During CPY production debugging, the incident was recorded in a KB page, but future discoverability depended on whether the page happened to contain the operator phrase likely to be searched later: parquet desync from class sessions on sonar.cloud. We had to add lookup aliases manually so future searches would find the runbook.",
+    "evidence": [
+      "The KB was findable for stale, class sessions, R2, and sonar.cloud, but not for the operator phrase parquet desync until a Lookup Aliases section was added.",
+      "The useful future entry point is often a symptom phrase, not the canonical system name or implementation term."
+    ],
+    "proposal": [
+      "Add first-class KB metadata fields such as lookup_aliases, symptoms, systems, failure_modes, and related_runbooks.",
+      "Teach Site search and narada kb find to index lookup aliases and symptoms, not only body prose.",
+      "Add CLI affordances such as narada kb add-alias --file <path> --alias <text> and narada kb find <query>.",
+      "Incident or repair KB closure should require asking: what would the Operator or future agent search for next time?",
+      "Add a lint/check that flags incident runbooks without lookup aliases or symptom phrases."
+    ],
+    "recommendation": "Treat this as a cross-Site KB ergonomics improvement; CPY should be used as the concrete motivating case."
+  },
+  "status": "received"
+}
