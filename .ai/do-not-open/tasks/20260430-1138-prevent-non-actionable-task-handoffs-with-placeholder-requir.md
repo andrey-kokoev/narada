@@ -1,7 +1,16 @@
 ---
-status: claimed
+status: closed
 amended_by: architect
 amended_at: 2026-04-30T17:26:03.316Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T17:33:56.351Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777570337876_pg6rh3
+closed_at: 2026-04-30T17:31:18.616Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Prevent non-actionable task handoffs with placeholder required work
@@ -45,9 +54,9 @@ CAPA source: task 1133 was claimed by Builder and had acceptance criteria, but i
 
 ## Acceptance Criteria
 
-- [ ] Executable task creation/commissioning rejects or flags placeholder Required Work before Builder handoff.
-- [ ] Claim/work-next/recommend detect when the active claimed task is underspecified and return repair guidance rather than only continue/report/release.
-- [ ] Task read/evidence/workboard expose handoff_actionability or equivalent actionable/underspecified state.
-- [ ] A sanctioned amendment path can repair Required Work and clear the blocker without releasing the task.
-- [ ] Tests cover `1. TBD`, empty Required Work, valid multi-step Required Work, and non-executable planning/deferred exceptions.
-- [ ] The 1133 failure mode is represented as a regression fixture or explicit test case.
+- [x] Executable task creation/commissioning rejects or flags placeholder Required Work before Builder handoff.
+- [x] Claim/work-next/recommend detect when the active claimed task is underspecified and return repair guidance rather than only continue/report/release.
+- [x] Task read/evidence/workboard expose handoff_actionability or equivalent actionable/underspecified state.
+- [x] A sanctioned amendment path can repair Required Work and clear the blocker without releasing the task.
+- [x] Tests cover `1. TBD`, empty Required Work, valid multi-step Required Work, and non-executable planning/deferred exceptions.
+- [x] The 1133 failure mode is represented as a regression fixture or explicit test case.

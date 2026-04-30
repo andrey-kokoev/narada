@@ -27,6 +27,8 @@ import { inboxWorkNextCommand } from './inbox.js';
 import { taskDispatchCommand } from './task-dispatch.js';
 import { taskPeekNextCommand, taskWorkNextCommand } from './task-next.js';
 import { agentAddressResolutionPublic, resolveAgentAddress } from '../lib/agent-address.js';
+import { classifyTaskHandoffActionability } from '../lib/task-actionability.js';
+import { parseTaskSpecFromMarkdown } from '../lib/task-spec.js';
 
 export interface WorkNextOptions {
   agent?: string;
@@ -236,11 +238,23 @@ async function findCurrentTaskWork(cwd: string, agentId: string): Promise<Record
   }
   const { frontMatter, body } = await readTaskFile(taskFile.path);
   const title = /^#\s+(.+)$/m.exec(body)?.[1] ?? null;
+  const spec = parseTaskSpecFromMarkdown({
+    taskId: taskFile.taskId,
+    taskNumber,
+    frontMatter,
+    body,
+  });
+  const handoffActionability = classifyTaskHandoffActionability({
+    taskNumber,
+    status: frontMatter.status as string | undefined,
+    requiredWork: spec.required_work,
+  });
   return {
     task_id: taskFile.taskId,
     task_number: taskNumber,
     title,
     status: frontMatter.status ?? 'claimed',
+    handoff_actionability: handoffActionability,
     file_path: taskFile.path,
     current: true,
   };
@@ -289,6 +303,27 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
   const currentTask = await findCurrentTaskWork(cwd, resolvedAgent);
   if (currentTask) {
     checked.push({ zone: 'task_work', status: 'selected', selected_ref: taskSelectedRef(currentTask) });
+    const handoffActionability = asRecord(currentTask.handoff_actionability);
+    if (handoffActionability.status === 'underspecified') {
+      const result = {
+        status: 'blocked',
+        reason: 'task_handoff_underspecified',
+        action_kind: 'task_work',
+        agent_id: resolvedAgent,
+        requested_agent: requestedAgent,
+        resolved_agent: resolvedAgent,
+        agent_address_resolution: agentAddressResolution,
+        primary: currentTask,
+        checked,
+        doctrine_guard: doctrineGuard,
+        repair_command: handoffActionability.repair_command,
+        next_step: handoffActionability.repair_command,
+      };
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: formattedResult(result, formatHuman(result), format),
+      };
+    }
     const result = {
       status: 'success',
       action_kind: 'task_work',

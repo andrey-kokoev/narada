@@ -23,6 +23,7 @@ import {
   parseTaskSpecFromMarkdown,
   renderTaskBodyFromSpec,
 } from '../lib/task-spec.js';
+import { classifyTaskHandoffActionability } from '../lib/task-actionability.js';
 
 export interface TaskEvidenceOptions {
   taskNumber: string;
@@ -89,6 +90,22 @@ export async function taskEvidenceCommand(
 
   const format = options.format === 'json' ? 'json' : 'human';
   const roleGuardOverrides = await readRoleGuardOverrides(cwd, Number(taskNumber));
+  let handoffActionability = null;
+  const taskFile = await findTaskFile(cwd, taskNumber).catch(() => null);
+  if (taskFile) {
+    const { frontMatter, body } = await readTaskFile(taskFile.path);
+    const spec = parseTaskSpecFromMarkdown({
+      taskId: taskFile.taskId,
+      taskNumber: Number(taskNumber),
+      frontMatter,
+      body,
+    });
+    handoffActionability = classifyTaskHandoffActionability({
+      taskNumber: Number(taskNumber),
+      status: evidence.status,
+      requiredWork: spec.required_work,
+    });
+  }
 
   if (format === 'json') {
     return {
@@ -96,6 +113,7 @@ export async function taskEvidenceCommand(
       result: {
         status: 'ok',
         evidence,
+        handoff_actionability: handoffActionability,
         role_guard_overrides: roleGuardOverrides,
       },
     };
@@ -114,6 +132,9 @@ export async function taskEvidenceCommand(
     `  closure:             ${evidence.has_closure ? 'yes' : 'no'}`,
     `  assignment intent:   ${evidence.active_assignment_intent ?? 'none'}`,
   ];
+  if (handoffActionability) {
+    lines.push(`  handoff action:     ${handoffActionability.status}`);
+  }
 
   if (roleGuardOverrides.length > 0) {
     lines.push('');

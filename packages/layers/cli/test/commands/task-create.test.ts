@@ -58,6 +58,10 @@ describe('task create operator', () => {
     expect(r.status).toBe('success');
     expect(r.task_number).toBe(101);
     expect(r.task_id).toMatch(/^\d{8}-101-test-the-create-operator$/);
+    expect(r.handoff_actionability).toMatchObject({
+      status: 'underspecified',
+      repair_command: 'narada task amend 101 --required-work <actionable-work-plan>',
+    });
 
     // File exists and has content
     const filePath = r.file_path as string;
@@ -123,6 +127,9 @@ describe('task create operator', () => {
     });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      handoff_actionability: { status: 'underspecified' },
+    });
     const r = result.result as Record<string, unknown>;
     expect(r.status).toBe('dry_run');
     expect(r.task_number).toBe(101);
@@ -446,6 +453,10 @@ describe('task create operator', () => {
     const bodyContent = [
       '# Template Task',
       '',
+      '## Required Work',
+      '',
+      '1. Preserve parsed acceptance criteria.',
+      '',
       '## Acceptance Criteria',
       '',
       '- Plain bullet criterion',
@@ -477,6 +488,7 @@ describe('task create operator', () => {
 
     const read = await taskReadCommand({ cwd: tempDir, taskNumber: String(taskNumber), format: 'json' });
     expect(read.exitCode).toBe(ExitCode.SUCCESS);
+    expect((read.result as { task: { handoff_actionability: { status: string } } }).task.handoff_actionability.status).toBe('actionable');
     expect((read.result as { task: { acceptance_criteria: Array<{ text: string; checked: boolean }> } }).task.acceptance_criteria).toEqual([
       { text: 'Plain bullet criterion', checked: false },
       { text: 'Numbered criterion', checked: false },

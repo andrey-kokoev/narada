@@ -158,6 +158,30 @@ describe('work-next unified next action', () => {
     expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-101-future.md'), 'utf8')).toContain('status: opened');
   });
 
+  it('blocks current claimed task when Required Work is placeholder', async () => {
+    seedRoster(tempDir, 'working', 1133);
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-1133-placeholder.md'),
+      '---\ntask_id: 1133\nstatus: claimed\n---\n\n# Task 1133 Placeholder\n\n## Required Work\n1. TBD\n\n## Acceptance Criteria\n- [ ] Do current work.\n',
+    );
+
+    const result = await workNextCommand({ agent: 'architect', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({
+      status: 'blocked',
+      reason: 'task_handoff_underspecified',
+      primary: {
+        task_number: 1133,
+        handoff_actionability: {
+          status: 'underspecified',
+          repair_command: 'narada task amend 1133 --required-work <actionable-work-plan>',
+        },
+      },
+      next_step: 'narada task amend 1133 --required-work <actionable-work-plan>',
+    });
+  });
+
   it('claims task work when SQLite says opened and markdown has no status', async () => {
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-102-sqlite-opened.md'),

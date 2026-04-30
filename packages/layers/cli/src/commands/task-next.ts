@@ -27,6 +27,7 @@ import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { parseTaskSpecFromMarkdown } from '../lib/task-spec.js';
 import { agentAddressResolutionPublic, resolveAgentAddress, type AgentAddressResolution } from '../lib/agent-address.js';
+import { classifyTaskHandoffActionability } from '../lib/task-actionability.js';
 
 export interface TaskPeekNextOptions {
   agent: string;
@@ -563,6 +564,11 @@ export async function taskWorkNextCommand(
       ? getActiveAssignment(assignmentRecord)
       : null;
 
+    const handoffActionability = classifyTaskHandoffActionability({
+      taskNumber,
+      status: frontMatter.status as string | undefined,
+      requiredWork: spec?.required_work_markdown ?? null,
+    });
     const packet = {
       task_id: taskFile.taskId,
       task_number: taskNumber,
@@ -570,6 +576,7 @@ export async function taskWorkNextCommand(
       status: frontMatter.status as string | undefined,
       goal: spec?.goal_markdown ?? null,
       required_work: spec?.required_work_markdown ?? null,
+      handoff_actionability: handoffActionability,
       acceptance_criteria: spec
         ? (JSON.parse(spec.acceptance_criteria_json) as string[]).join('\n')
         : null,
@@ -583,6 +590,23 @@ export async function taskWorkNextCommand(
         : null,
       pulled,
     };
+
+    if (handoffActionability.status === 'underspecified') {
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: withAgentResolution({
+          status: 'blocked',
+          reason: 'task_handoff_underspecified',
+          agent: agentId,
+          agent_id: agentId,
+          action: 'work_next',
+          primary: packet,
+          packet,
+          repair_command: handoffActionability.repair_command,
+          next_step: handoffActionability.repair_command,
+        }, agentCheck),
+      };
+    }
 
     if (fmt.getFormat() === 'json') {
       return {

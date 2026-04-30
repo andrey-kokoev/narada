@@ -13,6 +13,7 @@ import { taskReportCommand } from '../../src/commands/task-report.js';
 import { taskReviewCommand } from '../../src/commands/task-review.js';
 import { taskRosterDoneCommand } from '../../src/commands/task-roster.js';
 import { loadRoster } from '../../src/lib/task-governance.js';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -54,6 +55,27 @@ function setupRepo(tempDir: string) {
       ],
     }, null, 2),
   );
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    for (const agent of [
+      { agent_id: 'a1', role: 'implementer', capabilities: ['claim', 'execute'] },
+      { agent_id: 'a2', role: 'reviewer', capabilities: ['review'] },
+    ]) {
+      store.upsertRosterEntry({
+        agent_id: agent.agent_id,
+        role: agent.role,
+        capabilities_json: JSON.stringify(agent.capabilities),
+        first_seen_at: '2026-01-01T00:00:00Z',
+        last_active_at: '2026-01-01T00:00:00Z',
+        status: 'idle',
+        task_number: null,
+        last_done: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+    }
+  } finally {
+    store.db.close();
+  }
 }
 
 describe('task-next surfaces', () => {
@@ -262,6 +284,59 @@ describe('task-next surfaces', () => {
       expect(data.status).toBe('ok');
       expect(data.packet.task_number).toBe(100);
       expect(data.packet.pulled).toBe(false);
+      expect(data.packet).toMatchObject({
+        handoff_actionability: { status: 'actionable' },
+      });
+    });
+
+    it('blocks already-assigned task whose Required Work is a placeholder', async () => {
+      writeFileSync(
+        join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-1133-placeholder.md'),
+        '---\ntask_id: 1133\nstatus: claimed\n---\n\n# Task 1133\n\n## Goal\nDo something.\n\n## Required Work\n1. TBD\n',
+      );
+      writeFileSync(
+        join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-1133-placeholder.json'),
+        JSON.stringify({
+          task_id: '20260420-1133-placeholder',
+          assignments: [{ agent_id: 'a1', claimed_at: '2026-01-01T00:00:00Z', claim_context: null, released_at: null, release_reason: null, intent: 'primary' }],
+        }),
+      );
+      const roster = JSON.parse(readFileSync(join(tempDir, '.ai', 'agents', 'roster.json'), 'utf8'));
+      roster.agents[0].status = 'working';
+      roster.agents[0].task = 1133;
+      writeFileSync(join(tempDir, '.ai', 'agents', 'roster.json'), JSON.stringify(roster, null, 2));
+      const store = openTaskLifecycleStore(tempDir);
+      try {
+        store.upsertRosterEntry({
+          agent_id: 'a1',
+          role: 'implementer',
+          capabilities_json: JSON.stringify(['claim', 'execute']),
+          first_seen_at: '2026-01-01T00:00:00Z',
+          last_active_at: '2026-01-01T00:00:00Z',
+          status: 'working',
+          task_number: 1133,
+          last_done: null,
+          updated_at: '2026-01-01T00:00:00Z',
+        });
+      } finally {
+        store.db.close();
+      }
+
+      const result = await taskWorkNextCommand({ agent: 'a1', cwd: tempDir, format: 'json' });
+
+      expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+      expect(result.result).toMatchObject({
+        status: 'blocked',
+        reason: 'task_handoff_underspecified',
+        primary: {
+          task_number: 1133,
+          handoff_actionability: {
+            status: 'underspecified',
+            repair_command: 'narada task amend 1133 --required-work <actionable-work-plan>',
+          },
+        },
+        next_step: 'narada task amend 1133 --required-work <actionable-work-plan>',
+      });
     });
 
     it('pulls next and returns packet when no current task', async () => {

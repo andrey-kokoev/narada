@@ -3,6 +3,7 @@ import { SqliteInboxStore } from '@narada2/control-plane';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { openTaskLifecycleStore, type TaskLifecycleRow, type TaskSpecRow } from '../lib/task-lifecycle-store.js';
+import { classifyTaskHandoffActionability, type TaskHandoffActionability } from '../lib/task-actionability.js';
 
 export interface TaskWorkboardOptions {
   cwd?: string;
@@ -17,6 +18,7 @@ type WorkboardTask = {
   status: string;
   chapter: string | null;
   assigned_agent: string | null;
+  handoff_actionability: TaskHandoffActionability;
 };
 
 export interface TaskWorkboard {
@@ -141,6 +143,11 @@ function workboardTaskFromRow(
     status: row.status,
     chapter: spec?.chapter_markdown ?? null,
     assigned_agent: assignment?.agent_id ?? rosterAgent?.agent_id ?? null,
+    handoff_actionability: classifyTaskHandoffActionability({
+      taskNumber: row.task_number,
+      status: row.status,
+      requiredWork: spec?.required_work_markdown ?? null,
+    }),
   };
 }
 
@@ -212,5 +219,5 @@ function renderHuman(workboard: TaskWorkboard): string[] {
 
 function renderTaskLines(tasks: WorkboardTask[]): string[] {
   if (tasks.length === 0) return ['  none'];
-  return tasks.map((task) => `  ${task.task_number} ${task.status} ${task.assigned_agent ?? 'unassigned'} - ${task.title}`);
+  return tasks.map((task) => `  ${task.task_number} ${task.status} ${task.assigned_agent ?? 'unassigned'}${task.handoff_actionability.status === 'underspecified' ? ' underspecified' : ''} - ${task.title}`);
 }

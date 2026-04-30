@@ -25,6 +25,7 @@ import {
   renderTaskBodyFromSpec,
   type TaskSpecRecord,
 } from '../lib/task-spec.js';
+import { classifyTaskHandoffActionability } from '../lib/task-actionability.js';
 
 export interface TaskCreateOptions {
   title?: string;
@@ -337,6 +338,11 @@ export async function taskCreateCommand(
     frontMatter.depends_on = effectiveDependsOn;
     spec = { ...spec, dependencies: effectiveDependsOn, updated_at: new Date().toISOString() };
   }
+  const handoffActionability = classifyTaskHandoffActionability({
+    taskNumber,
+    status: 'opened',
+    requiredWork: spec.required_work,
+  });
 
   // ── Dry run: preview only ──
 
@@ -349,6 +355,7 @@ export async function taskCreateCommand(
       front_matter: frontMatter,
       acceptance_criteria: spec.acceptance_criteria,
       dependencies: spec.dependencies,
+      handoff_actionability: handoffActionability,
       body_preview: body.slice(0, 500),
     };
 
@@ -420,6 +427,7 @@ export async function taskCreateCommand(
         file_name: fileName,
         file_path: filePath,
         title: normalizedTitle,
+        handoff_actionability: handoffActionability,
       },
     };
   }

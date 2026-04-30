@@ -32,6 +32,7 @@ import {
   parseTaskSpecFromMarkdown,
 } from '../lib/task-spec.js';
 import type { TaskStatus } from '../lib/task-lifecycle-store.js';
+import { classifyTaskHandoffActionability, type TaskHandoffActionability } from '../lib/task-actionability.js';
 
 export interface TaskReadOptions {
   taskNumber: string;
@@ -48,6 +49,7 @@ export interface TaskReadResult {
   goal: string | null;
   context: string | null;
   required_work: string | null;
+  handoff_actionability: TaskHandoffActionability;
   non_goals: string | null;
   acceptance_criteria: Array<{ text: string; checked: boolean }>;
   execution_notes: string | null;
@@ -379,6 +381,11 @@ export async function taskReadCommand(
     goal: specRow?.goal_markdown ?? null,
     context: specRow?.context_markdown ?? null,
     required_work: specRow?.required_work_markdown ?? null,
+    handoff_actionability: classifyTaskHandoffActionability({
+      taskNumber: num,
+      status,
+      requiredWork: specRow?.required_work_markdown ?? null,
+    }),
     non_goals: specRow?.non_goals_markdown ?? null,
     acceptance_criteria: acceptanceCriteria,
     execution_notes: projectionSections.executionNotes,
@@ -454,6 +461,15 @@ export async function taskReadCommand(
     }
     lines.push('');
   }
+
+  lines.push(`Handoff Actionability: ${result.handoff_actionability.status}`);
+  if (result.handoff_actionability.reason) {
+    lines.push(`  ${result.handoff_actionability.reason}`);
+  }
+  if (result.handoff_actionability.repair_command) {
+    lines.push(`  Repair: ${result.handoff_actionability.repair_command}`);
+  }
+  lines.push('');
 
   if (result.non_goals && options.verbose) {
     lines.push('Non-Goals:');

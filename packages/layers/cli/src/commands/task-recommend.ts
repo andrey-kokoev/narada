@@ -19,6 +19,7 @@ import {
 } from '../lib/learning-recall.js';
 import { findTaskFile, loadRoster, readTaskFile, resolveTaskStatus } from '../lib/task-governance.js';
 import { loadPosture, type CCCPosture } from './posture.js';
+import { classifyTaskHandoffActionability } from '../lib/task-actionability.js';
 
 export interface TaskRecommendOptions {
   taskNumber?: string;
@@ -284,6 +285,45 @@ export async function taskRecommendCommand(
           const taskBody = taskFile ? await readTaskFile(taskFile.path).catch(() => null) : null;
           const title = taskBody ? /^#\s+(.+)$/m.exec(taskBody.body)?.[1] ?? null : null;
           const lifecycle = await resolveTaskStatus(cwd, rosterAgent.task).catch(() => ({ status: undefined, source: 'markdown' as const }));
+          const requiredWork = taskBody ? /## Required Work\s*\n([\s\S]*?)(?:\n## |\n# |$)/.exec(taskBody.body)?.[1]?.trim() ?? null : null;
+          const handoffActionability = classifyTaskHandoffActionability({
+            taskNumber: rosterAgent.task,
+            status: lifecycle.status ?? 'claimed',
+            requiredWork,
+          });
+          if (handoffActionability.status === 'underspecified') {
+            const blocked = {
+              recommendation_id: `continuation-${agentFilter}-${rosterAgent.task}`,
+              generated_at: new Date().toISOString(),
+              recommender_id: 'system',
+              status: 'blocked',
+              reason: 'task_handoff_underspecified',
+              mode: 'continuation',
+              primary: {
+                task_number: rosterAgent.task,
+                task_id: taskFile?.taskId ?? null,
+                title,
+                principal_id: agentFilter,
+                reason: 'claimed_by_self',
+                lifecycle_status: lifecycle.status ?? 'claimed',
+                lifecycle_status_source: lifecycle.source,
+                handoff_actionability: handoffActionability,
+                repair_command: handoffActionability.repair_command,
+              },
+              alternatives: [],
+              abstained: [],
+              summary: `Active claimed work: task ${rosterAgent.task} is assigned to ${agentFilter} but its handoff is underspecified.`,
+              next_step: handoffActionability.repair_command,
+            };
+            return {
+              exitCode: ExitCode.SUCCESS,
+              result: attachFormattedOutput(
+                blocked,
+                `Active claimed work is underspecified: ${rosterAgent.task}\nRepair: ${handoffActionability.repair_command}`,
+                options.format || 'auto',
+              ),
+            };
+          }
           const result = {
             recommendation_id: `continuation-${agentFilter}-${rosterAgent.task}`,
             generated_at: new Date().toISOString(),

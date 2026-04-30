@@ -39,7 +39,7 @@ function setupRepo(tempDir: string) {
   // Task 998: opened, TypeScript/CLI task
   writeFileSync(
     join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-typescript-task.md'),
-    '---\ntask_id: 998\nstatus: opened\n---\n\n# Task 998: TypeScript CLI Feature\n\nImplement a new CLI command in TypeScript.\n',
+    '---\ntask_id: 998\nstatus: opened\n---\n\n# Task 998: TypeScript CLI Feature\n\nImplement a new CLI command in TypeScript.\n\n## Required Work\n1. Implement the command.\n',
   );
 
   // Task 999: opened, database task
@@ -447,6 +447,48 @@ describe('task recommend operator', () => {
       },
       alternatives: [],
       summary: 'Active claimed work: task 998 is already assigned to agent-alpha.',
+    });
+  });
+
+  it('returns repair guidance when active claimed work has placeholder Required Work', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-1133-placeholder-task.md'),
+      '---\ntask_id: 1133\nstatus: opened\n---\n\n# Task 1133: Placeholder Task\n\n## Required Work\n1. TBD\n',
+    );
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      seedLifecycle(store, 1133, 'claimed');
+      seedSpec(store, 1133, 'Placeholder Task', []);
+      const spec = store.getTaskSpecByNumber(1133)!;
+      store.upsertTaskSpec({
+        ...spec,
+        required_work_markdown: '1. TBD',
+      });
+      const agent = store.getRosterEntry('agent-alpha')!;
+      store.upsertRosterEntry({
+        ...agent,
+        status: 'working',
+        task_number: 1133,
+        updated_at: new Date().toISOString(),
+      });
+    } finally {
+      store.db.close();
+    }
+
+    const result = await taskRecommendCommand({ cwd: tempDir, agent: 'agent-alpha', format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'blocked',
+      reason: 'task_handoff_underspecified',
+      primary: {
+        task_number: 1133,
+        handoff_actionability: {
+          status: 'underspecified',
+          repair_command: 'narada task amend 1133 --required-work <actionable-work-plan>',
+        },
+      },
+      next_step: 'narada task amend 1133 --required-work <actionable-work-plan>',
     });
   });
 
