@@ -64,7 +64,7 @@ Later tasks should expose one first-time Operator front door:
 narada operator start --site <site-id-or-root> --operation <operation-id>
 ```
 
-The command should be an orchestrated guide over the crossings above. It should not become a hidden authority shortcut. Its output should be bounded:
+The command is the orchestrated guide over the crossings above. It is read-only by default and must not become a hidden authority shortcut. Its output is bounded:
 
 - current Site and Operation coordinates;
 - missing prerequisite checks;

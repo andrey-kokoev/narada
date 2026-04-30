@@ -1,6 +1,16 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T02:56:22.953Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-30T02:56:01.743Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
+
 # Add first-time Operator front-door command
 
 ## Chapter
@@ -39,8 +49,8 @@ The Operator currently has to know whether to run sites doctor, inbox import, in
 
 ## Acceptance Criteria
 
-- [ ] A documented command exists for first-time Operator guidance, with help text that names the target locus and mutation posture.
-- [ ] The command reports whether the Site is absent, initialized but unready, ready without bound agents, ready with pending inbox/work, or fully idle.
-- [ ] The command emits compact bounded output by default and a stable JSON shape for automation.
-- [ ] The command never mutates Site state unless an explicit execution flag is supplied.
-- [ ] Focused tests cover at least ready, missing Site, missing role binding, pending inbox, and missing transport cases.
+- [x] A documented command exists for first-time Operator guidance, with help text that names the target locus and mutation posture.
+- [x] The command reports whether the Site is absent, initialized but unready, ready without bound agents, ready with pending inbox/work, or fully idle.
+- [x] The command emits compact bounded output by default and a stable JSON shape for automation.
+- [x] The command never mutates Site state unless an explicit execution flag is supplied.
+- [x] Focused tests cover at least ready, missing Site, missing role binding, pending inbox, and missing transport cases.

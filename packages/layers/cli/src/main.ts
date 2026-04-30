@@ -41,6 +41,7 @@ import { registerPostureCommands } from './commands/posture-register.js';
 import { registerMutationEvidenceCommands } from './commands/mutation-evidence-register.js';
 import { registerMcpCommands } from './commands/mcp-register.js';
 import { registerOperatorSurfaceCommands } from './commands/operator-surface-register.js';
+import { registerOperatorCommands } from './commands/operator-register.js';
 import { registerLawCommands } from './commands/law-register.js';
 
 loadEnvFile('./.env');
@@ -81,6 +82,7 @@ registerConsoleCommands(program);
 registerWorkbenchCommands(program);
 registerMcpCommands(program);
 registerOperatorSurfaceCommands(program);
+registerOperatorCommands(program);
 registerLawCommands(program);
 registerResumeCommands(program);
 registerWorkNextCommands(program);
