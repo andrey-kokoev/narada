@@ -15,7 +15,7 @@ import {
   type OperatorSurfaceIdentityRegistry,
   type OperatorSurfaceSubmitStrategy,
 } from '../lib/operator-surface-registry.js';
-import { loadRoster } from '../lib/task-governance.js';
+import { loadRoster, resolveTaskStatus } from '../lib/task-governance.js';
 import { sitesAgentBootstrapCommand } from './sites.js';
 
 export interface OperatorSurfaceIdentityAddOptions {
@@ -57,6 +57,13 @@ export interface OperatorSurfaceSendOptions {
   text?: string;
   dryRun?: boolean;
   execute?: boolean;
+  format?: CliFormat;
+}
+
+export interface OperatorSurfaceStatusOptions {
+  cwd?: string;
+  site?: string;
+  limit?: number;
   format?: CliFormat;
 }
 
@@ -540,6 +547,129 @@ export async function operatorSurfaceLabelsBuildCommand(
       count: identities.length,
       limit,
       labels: identities.map((identity) => makeOperatorSurfaceLabel(identity, registry)),
+    },
+  };
+}
+
+function bindingPosture(
+  identity: OperatorSurfaceIdentity,
+  bindings: OperatorSurfaceRuntimeBinding[],
+): {
+  runtime_locus: string | null;
+  binding_status: 'bound' | 'unbound' | 'stale' | 'ambiguous' | 'missing_transport';
+  addressability_status: 'reachable' | 'unbound' | 'stale' | 'ambiguous' | 'missing_transport';
+  next_command: string | null;
+} {
+  const matching = bindings.filter((binding) => binding.identity_id === identity.identity_id);
+  const active = matching.filter((binding) => !isStaleBinding(binding));
+  if (matching.length > 0 && active.length === 0) {
+    return {
+      runtime_locus: matching[0]?.runtime_locus ?? null,
+      binding_status: 'stale',
+      addressability_status: 'stale',
+      next_command: `narada operator-surface bind-focused --identity ${identity.identity_id} --runtime-locus ${matching[0]?.runtime_locus ?? '<pc-or-user-site>'}`,
+    };
+  }
+  if (active.length === 0) {
+    return {
+      runtime_locus: null,
+      binding_status: 'unbound',
+      addressability_status: 'unbound',
+      next_command: `narada operator-surface bind-focused --identity ${identity.identity_id} --runtime-locus <pc-or-user-site>`,
+    };
+  }
+  if (active.length > 1) {
+    return {
+      runtime_locus: null,
+      binding_status: 'ambiguous',
+      addressability_status: 'ambiguous',
+      next_command: 'narada operator-surface bindings clean-stale --runtime-locus <pc-or-user-site>',
+    };
+  }
+  const binding = active[0]!;
+  const capabilities = binding.input_capabilities ?? identity.input_capabilities ?? [];
+  const hasInput = capabilities.includes('type_text') || capabilities.includes('submit');
+  if (!hasInput) {
+    return {
+      runtime_locus: binding.runtime_locus ?? null,
+      binding_status: 'missing_transport',
+      addressability_status: 'missing_transport',
+      next_command: `Admit or repair Operator Surface transport for ${identity.identity_id}.`,
+    };
+  }
+  return {
+    runtime_locus: binding.runtime_locus ?? null,
+    binding_status: 'bound',
+    addressability_status: 'reachable',
+    next_command: null,
+  };
+}
+
+export async function operatorSurfaceStatusCommand(
+  options: OperatorSurfaceStatusOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const cwd = options.cwd ?? '.';
+  const registry = await readOperatorSurfaceIdentities(cwd);
+  const bindings = await readRuntimeBindings(cwd);
+  const roster = await loadRoster(cwd).catch(async () => {
+    try {
+      const raw = await readFile(join(resolve(cwd), '.ai', 'agents', 'roster.json'), 'utf8');
+      const parsed = JSON.parse(raw) as { agents?: unknown[] };
+      return Array.isArray(parsed.agents) ? parsed as Awaited<ReturnType<typeof loadRoster>> : null;
+    } catch {
+      return null;
+    }
+  });
+  const identities = registry.identities
+    .filter((identity) => !options.site || identity.site_id === options.site)
+    .slice(0, options.limit ?? 50);
+
+  const agents = await Promise.all(identities.map(async (identity) => {
+    const rosterAgent = (roster?.agents ?? []).find((agent) => (
+      agent.agent_id === identity.identity_id
+      || agent.agent_id === identity.role
+      || agent.role === identity.role
+    ));
+    const currentTask = rosterAgent?.task ?? null;
+    const lifecycle = currentTask == null ? { status: null, source: null } : await resolveTaskStatus(cwd, currentTask);
+    const posture = bindingPosture(identity, bindings);
+    const workStatus = rosterAgent?.status ?? 'untracked';
+    const nextCommand = posture.next_command
+      ?? (currentTask != null
+        ? `narada task continue ${currentTask} --agent ${rosterAgent?.agent_id ?? identity.role}`
+        : `narada work-next --agent ${rosterAgent?.agent_id ?? identity.role} --format json`);
+    return {
+      identity_id: identity.identity_id,
+      role: identity.role,
+      site_id: identity.site_id,
+      runtime_locus: posture.runtime_locus,
+      binding_status: posture.binding_status,
+      addressability_status: posture.addressability_status,
+      work_status: workStatus,
+      current_task: currentTask,
+      lifecycle_status: lifecycle.status,
+      lifecycle_status_source: lifecycle.source,
+      last_activity_at: rosterAgent?.last_active_at ?? rosterAgent?.updated_at ?? null,
+      next_command: nextCommand,
+    };
+  }));
+
+  return {
+    exitCode: ExitCode.SUCCESS,
+    result: {
+      status: 'success',
+      mutation_performed: false,
+      registry_path: operatorSurfaceIdentityPath(cwd),
+      count: agents.length,
+      agents,
+      human: agents.map((agent) => [
+        `${agent.role}: ${agent.work_status}`,
+        `identity=${agent.identity_id}`,
+        `addressability=${agent.addressability_status}`,
+        agent.current_task == null ? 'task=none' : `task=${agent.current_task}(${agent.lifecycle_status ?? 'unknown'})`,
+        `next=${agent.next_command}`,
+      ].join(' | ')),
     },
   };
 }

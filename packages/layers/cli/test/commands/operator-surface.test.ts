@@ -1,5 +1,5 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -12,6 +12,7 @@ import {
   operatorSurfaceIdentityAddCommand,
   operatorSurfaceLabelsBuildCommand,
   operatorSurfaceSendCommand,
+  operatorSurfaceStatusCommand,
 } from '../../src/commands/operator-surface.js';
 
 function createMockContext(): CommandContext {
@@ -688,6 +689,128 @@ describe('operator-surface commands', () => {
         },
       }],
     });
+  });
+
+  it('joins operator-surface identity, binding, roster, and work status', async () => {
+    const cwd = await tempRepo();
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-proper-builder',
+      role: 'builder',
+      agentKind: 'codex_cli',
+      site: 'narada-proper',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-proper-architect',
+      role: 'architect',
+      agentKind: 'codex_cli',
+      site: 'narada-proper',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-proper-observer',
+      role: 'observer',
+      agentKind: 'codex_cli',
+      site: 'narada-proper',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+    await writeBindings(cwd, [
+      {
+        binding_id: 'builder-binding',
+        identity_id: 'narada-proper-builder',
+        runtime_locus: 'pc-site',
+        handle: 'hwnd:builder',
+        input_capabilities: ['type_text'],
+        status: 'active',
+      },
+      {
+        binding_id: 'architect-binding',
+        identity_id: 'narada-proper-architect',
+        runtime_locus: 'pc-site',
+        handle: 'hwnd:architect',
+        input_capabilities: ['type_text'],
+        stale_after: '2000-01-01T00:00:00Z',
+        status: 'active',
+      },
+    ]);
+    mkdirSync(join(cwd, '.ai', 'agents'), { recursive: true });
+    await writeFile(join(cwd, '.ai', 'agents', 'roster.json'), JSON.stringify({
+      version: 2,
+      updated_at: '2026-01-01T00:00:00Z',
+      agents: [
+        {
+          agent_id: 'builder',
+          role: 'builder',
+          capabilities: [],
+          first_seen_at: '2026-01-01T00:00:00Z',
+          last_active_at: '2026-01-01T00:00:00Z',
+          status: 'working',
+          task: 1122,
+        },
+        {
+          agent_id: 'architect',
+          role: 'architect',
+          capabilities: [],
+          first_seen_at: '2026-01-01T00:00:00Z',
+          last_active_at: '2026-01-02T00:00:00Z',
+          status: 'idle',
+          task: null,
+        },
+      ],
+    }, null, 2));
+
+    const result = await operatorSurfaceStatusCommand({
+      cwd,
+      site: 'narada-proper',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      mutation_performed: false,
+      count: 3,
+      agents: expect.arrayContaining([
+        expect.objectContaining({
+          identity_id: 'narada-proper-builder',
+          role: 'builder',
+          runtime_locus: 'pc-site',
+          binding_status: 'bound',
+          addressability_status: 'reachable',
+          work_status: 'working',
+          current_task: 1122,
+          next_command: 'narada task continue 1122 --agent builder',
+        }),
+        expect.objectContaining({
+          identity_id: 'narada-proper-architect',
+          role: 'architect',
+          runtime_locus: 'pc-site',
+          binding_status: 'stale',
+          addressability_status: 'stale',
+          work_status: 'idle',
+          current_task: null,
+          last_activity_at: '2026-01-02T00:00:00Z',
+          next_command: 'narada operator-surface bind-focused --identity narada-proper-architect --runtime-locus pc-site',
+        }),
+        expect.objectContaining({
+          identity_id: 'narada-proper-observer',
+          role: 'observer',
+          runtime_locus: null,
+          binding_status: 'unbound',
+          addressability_status: 'unbound',
+          work_status: 'untracked',
+          current_task: null,
+          next_command: 'narada operator-surface bind-focused --identity narada-proper-observer --runtime-locus <pc-or-user-site>',
+        }),
+      ]),
+    });
+    expect((result.result as { human: string[] }).human.join('\n')).toContain('observer: untracked');
   });
 
   it('resolves bind-as-self from governed runtime context and defers volatile handle mutation', async () => {

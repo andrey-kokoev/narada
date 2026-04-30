@@ -8,6 +8,7 @@ import {
   operatorSurfaceIdentityAddCommand,
   operatorSurfaceLabelsBuildCommand,
   operatorSurfaceSendCommand,
+  operatorSurfaceStatusCommand,
 } from './operator-surface.js';
 
 export function registerOperatorSurfaceCommands(program: Command): void {
@@ -105,6 +106,25 @@ export function registerOperatorSurfaceCommands(program: Command): void {
       emit: emitCommandResult,
       format: (opts: Record<string, unknown>) => opts.format,
       invocation: (opts) => operatorSurfaceLabelsBuildCommand({
+        site: opts.site as string | undefined,
+        limit: opts.limit ? Number(opts.limit) : undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  surfaceCmd
+    .command('status')
+    .description('Join Operator Surface identity, binding, roster, and work status')
+    .option('--site <site-id>', 'Filter by Site')
+    .option('--limit <n>', 'Maximum identities', '50')
+    .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'operator-surface status',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => operatorSurfaceStatusCommand({
         site: opts.site as string | undefined,
         limit: opts.limit ? Number(opts.limit) : undefined,
         cwd: opts.cwd as string | undefined,

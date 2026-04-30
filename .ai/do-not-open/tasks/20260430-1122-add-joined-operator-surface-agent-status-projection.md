@@ -1,7 +1,16 @@
 ---
-status: claimed
+status: closed
 amended_by: architect
 amended_at: 2026-04-30T13:58:15.516Z
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T14:26:13.281Z
+criteria_proof_verification:
+  state: unbound
+  rationale: Focused tests, typecheck/build, and live status readback prove joined status fields, concise human lines, unbound/stale/working states, exact bind commands, and no authority replacement.
+closed_at: 2026-04-30T14:26:22.731Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add joined operator-surface agent status projection
@@ -42,8 +51,8 @@ Architect can partially reconstruct status through task roster, workboard, and o
 
 ## Acceptance Criteria
 
-- [ ] One command answers whether Architect, Builder, or Observer is idle, working, unreachable, unbound, or stale
-- [ ] JSON output includes identity_id, role, runtime_locus, binding_status, addressability_status, work_status, current_task, lifecycle_status, last_activity_at, and next_command fields where applicable
-- [ ] Human output is concise and does not require reading roster, bindings, and workboard separately
-- [ ] Missing runtime-locus binding returns an exact bind command rather than a generic failure
-- [ ] Tests cover working, idle, admitted-unbound, stale, and missing-locus states
+- [x] One command answers whether Architect, Builder, or Observer is idle, working, unreachable, unbound, or stale
+- [x] JSON output includes identity_id, role, runtime_locus, binding_status, addressability_status, work_status, current_task, lifecycle_status, last_activity_at, and next_command fields where applicable
+- [x] Human output is concise and does not require reading roster, bindings, and workboard separately
+- [x] Missing runtime-locus binding returns an exact bind command rather than a generic failure
+- [x] Tests cover working, idle, admitted-unbound, stale, and missing-locus states
