@@ -1,0 +1,46 @@
+{
+  "envelope_id": "env_e06bcad8-9dfa-4c87-8057-df22c628256c",
+  "received_at": "2026-04-30T17:23:48.363Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey.architect:compact-workboard-context-ergonomics-20260430"
+  },
+  "kind": "proposal",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Add compact architect-loop workboard output to avoid context burn",
+    "summary": "During operator/architect work, narada task workboard --format json emitted hundreds of lines for a routine status check. The information is valuable, but the default loop needs a compact task-oriented surface that avoids dumping repeated guidance into chat context.",
+    "observations": [
+      {
+        "finding": "Workboard JSON is too verbose for routine architect-loop checks",
+        "detail": "A normal workboard call produced roughly 428 transcript lines, including repeated source envelopes, closure semantics, review requirements, and concurrency boundaries. This burns context when the architect only needs pending reviews, in-progress tasks, local followups, and blockers.",
+        "impact": "Operator and agent context is spent on stable boilerplate instead of decisions, task review, and actual work."
+      },
+      {
+        "finding": "Machine-readable and operator-loop-readable surfaces are being conflated",
+        "detail": "The full JSON is appropriate for tooling, but the architect duties loop needs a compact, stable summary shape with optional expansion flags.",
+        "impact": "Agents either waste tokens by dumping full JSON or risk missing key state by ad hoc filtering."
+      }
+    ],
+    "requests": [
+      {
+        "kind": "execution_request",
+        "text": "Add a compact workboard mode, e.g. narada task workboard --format compact-json or --view architect-loop, containing only counts, pending reviews, in-progress tasks, local followups, deferred blockers, and high-priority diagnostics."
+      },
+      {
+        "kind": "execution_request",
+        "text": "Move stable guidance such as closure semantics, review handoff requirements, and concurrency boundaries behind explicit --include-guidance or --verbose flags for routine loop use."
+      },
+      {
+        "kind": "execution_request",
+        "text": "Provide a single recommended command for architect next-loop checks that is compact by construction and safe for chat transcript use."
+      }
+    ],
+    "source_site": "narada-andrey User Site",
+    "authority_note": "Operator explicitly identified the workboard transcript as possible token waste and asked to submit if so."
+  },
+  "status": "received"
+}
