@@ -1,0 +1,59 @@
+{
+  "envelope_id": "env_fa1dbd0c-2e46-42af-9930-9a73a7c6a7e0",
+  "received_at": "2026-04-30T23:13:21.336Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey.architect:operator-surface-message-queue-process-20260430"
+  },
+  "kind": "proposal",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "narada-andrey.architect"
+  },
+  "payload": {
+    "title": "Add governed operator-surface message queue and intake process",
+    "summary": "The current operator-surface message bridge can deliver text into agent windows, but it does not yet model messages as governed work. Narada needs a stronger queue/intake/execution process so nudges, notes, handoffs, review requests, CAPAs, and command intents are typed, tracked, admitted, and reconciled.",
+    "current_gap": {
+      "current_shape": "operator/architect sends text -> target window receives text",
+      "missing_boundaries": [
+        "message type: command, note, review request, CAPA, nudge, handoff, question",
+        "recipient admission: accepted as work, converted to task, ignored, deferred, rejected, or replied",
+        "expected response posture and timeout/escalation",
+        "delivery versus processing distinction",
+        "sender/recipient authority and allowed loci",
+        "reply/report linkage to source message",
+        "reconciliation of message claim against task/inbox/runtime state"
+      ]
+    },
+    "proposed_shape": "message intent -> addressed envelope -> delivery attempt -> recipient intake -> execution/admission -> reply/report -> reconciliation",
+    "requests": [
+      {
+        "kind": "doctrinal_request",
+        "text": "Treat operator-surface messaging as a governed crossing, not simulated keystrokes. Text delivery is only one transport for a typed message envelope."
+      },
+      {
+        "kind": "execution_request",
+        "text": "Add a local/operator-surface message queue model with typed message records, sender identity, recipient identity, message kind, expected response posture, delivery status, intake/admission status, and evidence links."
+      },
+      {
+        "kind": "execution_request",
+        "text": "Add recipient work-next/intake commands so agents can process queued operator-surface messages without relying only on visible terminal text."
+      },
+      {
+        "kind": "execution_request",
+        "text": "Distinguish delivery_attempt, delivered_to_surface, admitted_by_recipient, acted, replied, and reconciled states."
+      },
+      {
+        "kind": "execution_request",
+        "text": "Add reply/report linkage so a builder completion claim, review request, or note can be traced back to the message that caused it."
+      },
+      {
+        "kind": "capa_request",
+        "text": "Use this queue model to prevent prior failures where informal chat/operator-surface claims were mistaken for lifecycle truth or where messages bypassed architect routing authority."
+      }
+    ],
+    "source_site": "narada-andrey User Site",
+    "authority_note": "Operator sensed need for a stronger operator-surface message queue and execution process and requested submission."
+  },
+  "status": "received"
+}
