@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T16:52:22.830Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777567864946_kwlvdk
+closed_at: 2026-04-30T16:54:25.043Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Resolve role-shaped agent addresses by exact-one roster cardinality
@@ -36,9 +45,9 @@ Inbox envelope env_46558519-ea7d-4330-80fd-bf4ae3a38e0d reports that narada-andr
 
 ## Acceptance Criteria
 
-- [ ] A canonical agent-address resolver runs before task command admission and Operator Surface sends.
-- [ ] Concrete agent ids remain authoritative when present in the target roster.
-- [ ] Role-shaped addresses resolve only when exactly one active target-Site roster agent has that role.
-- [ ] Zero-match and multi-match cases fail closed with concrete repair guidance and competing agent ids when applicable.
-- [ ] Command output and mutation evidence record requested_agent and resolved_agent where resolution occurs.
-- [ ] Tests cover exact-one, zero-match, multi-match, and cross-Site ambiguity cases.
+- [x] A canonical agent-address resolver runs before task command admission and Operator Surface sends.
+- [x] Concrete agent ids remain authoritative when present in the target roster.
+- [x] Role-shaped addresses resolve only when exactly one active target-Site roster agent has that role.
+- [x] Zero-match and multi-match cases fail closed with concrete repair guidance and competing agent ids when applicable.
+- [x] Command output and mutation evidence record requested_agent and resolved_agent where resolution occurs.
+- [x] Tests cover exact-one, zero-match, multi-match, and cross-Site ambiguity cases.

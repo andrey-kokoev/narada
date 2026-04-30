@@ -16,15 +16,25 @@ import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 function setupRepo(tempDir: string): void {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments'), { recursive: true });
-  seedRoster(tempDir, 'idle', null);
+  seedRosterEntry(tempDir, 'architect', 'architect', 'idle', null);
 }
 
 function seedRoster(tempDir: string, status: 'idle' | 'working', task: number | null): void {
+  seedRosterEntry(tempDir, 'architect', 'architect', status, task);
+}
+
+function seedRosterEntry(
+  tempDir: string,
+  agentId: string,
+  role: string,
+  status: 'idle' | 'working' | 'done',
+  task: number | null,
+): void {
   const store = openTaskLifecycleStore(tempDir);
   try {
     store.upsertRosterEntry({
-      agent_id: 'architect',
-      role: 'architect',
+      agent_id: agentId,
+      role,
       capabilities_json: JSON.stringify(['claim', 'execute', 'review']),
       first_seen_at: '2026-01-01T00:00:00Z',
       last_active_at: '2026-01-01T00:00:00Z',
@@ -452,7 +462,128 @@ describe('work-next unified next action', () => {
       status: 'error',
       reason: 'agent_not_in_roster',
       agent_id: 'ghost',
-      repair_command: 'narada task roster add ghost',
+      repair_command: 'narada task roster add <agent-id> --role ghost',
+    });
+  });
+
+  it('resolves site-qualified role address to the exact-one active roster agent before claiming work', async () => {
+    seedRosterEntry(tempDir, 'narada-andrey.Bob', 'builder', 'idle', null);
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260430-1100-builder.md'),
+      '---\ntask_id: 1100\nstatus: opened\n---\n\n# Task 1100\n\n## Acceptance Criteria\n- [ ] Do builder work.\n',
+    );
+
+    const result = await workNextCommand({ agent: 'narada-andrey.builder', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      action_kind: 'task_work',
+      agent_id: 'narada-andrey.Bob',
+      requested_agent: 'narada-andrey.builder',
+      resolved_agent: 'narada-andrey.Bob',
+      agent_address_resolution: {
+        status: 'role_exact_one',
+        role: 'builder',
+        site_prefix: 'narada-andrey',
+        candidates: ['narada-andrey.Bob'],
+      },
+      primary: { task_number: 1100 },
+      task_result: {
+        agent_id: 'narada-andrey.Bob',
+        requested_agent: 'narada-andrey.Bob',
+        resolved_agent: 'narada-andrey.Bob',
+      },
+    });
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      expect(store.getRosterEntry('narada-andrey.Bob')?.task_number).toBe(1100);
+    } finally {
+      store.db.close();
+    }
+  });
+
+  it('keeps concrete agent ids authoritative when a same-role roster agent exists', async () => {
+    seedRosterEntry(tempDir, 'narada-andrey.Bob', 'builder', 'idle', null);
+    seedRosterEntry(tempDir, 'narada-andrey.builder', 'builder', 'idle', null);
+
+    const result = await workNextCommand({ agent: 'narada-andrey.builder', cwd: tempDir, format: 'json', peek: true });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      agent_id: 'narada-andrey.builder',
+      requested_agent: 'narada-andrey.builder',
+      resolved_agent: 'narada-andrey.builder',
+      agent_address_resolution: {
+        status: 'exact',
+        candidates: ['narada-andrey.builder'],
+      },
+    });
+  });
+
+  it('fails closed when a site-qualified role address has no active roster match', async () => {
+    const result = await workNextCommand({ agent: 'narada-andrey.builder', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      reason: 'agent_not_in_roster',
+      requested_agent: 'narada-andrey.builder',
+      resolved_agent: null,
+      agent_address_resolution: {
+        status: 'zero_match',
+        role: 'builder',
+        site_prefix: 'narada-andrey',
+        candidates: [],
+      },
+      repair_command: 'narada task roster add <agent-id> --role builder',
+    });
+  });
+
+  it('fails closed with competing ids when a role-shaped address is ambiguous', async () => {
+    seedRosterEntry(tempDir, 'narada-andrey.Bob', 'builder', 'idle', null);
+    seedRosterEntry(tempDir, 'narada-andrey.Alice', 'builder', 'idle', null);
+
+    const result = await workNextCommand({ agent: 'narada-andrey.builder', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      reason: 'agent_address_ambiguous',
+      requested_agent: 'narada-andrey.builder',
+      resolved_agent: null,
+      agent_address_resolution: {
+        status: 'multi_match',
+        candidates: ['narada-andrey.Alice', 'narada-andrey.Bob'],
+      },
+      repair_command: 'Use one concrete agent id: narada-andrey.Alice, narada-andrey.Bob',
+    });
+  });
+
+  it('treats unqualified role addresses as cross-Site ambiguous while site-qualified addresses resolve locally', async () => {
+    seedRosterEntry(tempDir, 'site-a.Bob', 'builder', 'idle', null);
+    seedRosterEntry(tempDir, 'site-b.Alice', 'builder', 'idle', null);
+
+    const ambiguous = await workNextCommand({ agent: 'builder', cwd: tempDir, format: 'json' });
+    expect(ambiguous.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(ambiguous.result).toMatchObject({
+      reason: 'agent_address_ambiguous',
+      agent_address_resolution: {
+        status: 'multi_match',
+        candidates: ['site-a.Bob', 'site-b.Alice'],
+      },
+    });
+
+    const qualified = await workNextCommand({ agent: 'site-a.builder', cwd: tempDir, format: 'json', peek: true });
+    expect(qualified.exitCode).toBe(ExitCode.SUCCESS);
+    expect(qualified.result).toMatchObject({
+      agent_id: 'site-a.Bob',
+      requested_agent: 'site-a.builder',
+      resolved_agent: 'site-a.Bob',
+      agent_address_resolution: {
+        status: 'role_exact_one',
+        candidates: ['site-a.Bob'],
+      },
     });
   });
 });

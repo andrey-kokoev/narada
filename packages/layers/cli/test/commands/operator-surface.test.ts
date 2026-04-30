@@ -1,8 +1,13 @@
+import { vi } from 'vitest';
+
+vi.unmock('node:fs');
+vi.unmock('node:fs/promises');
+
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import {
@@ -60,6 +65,15 @@ async function writeBindings(cwd: string, bindings: unknown[]): Promise<void> {
 
 async function writeVisibleLabels(cwd: string, labels: unknown[]): Promise<void> {
   await writeFile(join(cwd, 'operator-surfaces', 'visible-labels.json'), `${JSON.stringify({ labels }, null, 2)}\n`, 'utf8');
+}
+
+async function writeRoster(cwd: string, agents: unknown[]): Promise<void> {
+  mkdirSync(join(cwd, '.ai', 'agents'), { recursive: true });
+  await writeFile(join(cwd, '.ai', 'agents', 'roster.json'), `${JSON.stringify({
+    version: 2,
+    updated_at: '2026-04-30T16:00:00.000Z',
+    agents,
+  }, null, 2)}\n`, 'utf8');
 }
 
 afterEach(async () => {
@@ -432,6 +446,115 @@ describe('operator-surface commands', () => {
         dry_run: true,
         status: 'validated_dry_run',
       },
+    });
+  });
+
+  it('resolves site-qualified role address to exact-one roster identity before operator-surface send', async () => {
+    const cwd = await tempRepo();
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-andrey.Bob',
+      role: 'builder',
+      agentKind: 'codex_cli',
+      site: 'narada-andrey',
+      by: 'operator',
+      inputCapabilities: 'type_text,submit',
+      submitStrategy: 'known_surface_submit',
+      format: 'json',
+    }, createMockContext());
+    await writeBindings(cwd, [{
+      binding_id: 'bind-bob',
+      identity_id: 'narada-andrey.Bob',
+      runtime_locus: 'pc-site',
+      handle: 'hwnd:456',
+      transport: 'operator_surface_input',
+      submit_strategy: 'known_surface_submit',
+      input_capabilities: ['type_text', 'submit'],
+      status: 'active',
+    }]);
+    await writeRoster(cwd, [{
+      agent_id: 'narada-andrey.Bob',
+      role: 'builder',
+      capabilities: [],
+      first_seen_at: '2026-04-30T16:00:00.000Z',
+      last_active_at: '2026-04-30T16:00:00.000Z',
+      status: 'idle',
+      task: null,
+    }]);
+
+    const result = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-andrey.builder',
+      text: 'next',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      requested_agent: 'narada-andrey.builder',
+      resolved_agent: 'narada-andrey.Bob',
+      agent_address_resolution: {
+        status: 'role_exact_one',
+        candidates: ['narada-andrey.Bob'],
+      },
+      identity_resolution: {
+        requested_identity: 'narada-andrey.Bob',
+        resolved_identity: 'narada-andrey.Bob',
+        resolution: 'identity_id',
+      },
+      send: {
+        identity: 'narada-andrey.Bob',
+        requested_agent: 'narada-andrey.builder',
+        resolved_agent: 'narada-andrey.Bob',
+        runtime_locus: 'pc-site',
+      },
+    });
+  });
+
+  it('fails operator-surface send closed when site-qualified role address has multiple active agents', async () => {
+    const cwd = await tempRepo();
+    await writeRoster(cwd, [
+      {
+        agent_id: 'narada-andrey.Bob',
+        role: 'builder',
+        capabilities: [],
+        first_seen_at: '2026-04-30T16:00:00.000Z',
+        last_active_at: '2026-04-30T16:00:00.000Z',
+        status: 'idle',
+        task: null,
+      },
+      {
+        agent_id: 'narada-andrey.Alice',
+        role: 'builder',
+        capabilities: [],
+        first_seen_at: '2026-04-30T16:00:00.000Z',
+        last_active_at: '2026-04-30T16:00:00.000Z',
+        status: 'working',
+        task: 1135,
+      },
+    ]);
+
+    const result = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-andrey.builder',
+      text: 'next',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      reason: 'agent_address_ambiguous',
+      requested_agent: 'narada-andrey.builder',
+      resolved_agent: null,
+      agent_address_resolution: {
+        status: 'multi_match',
+        candidates: ['narada-andrey.Alice', 'narada-andrey.Bob'],
+      },
+      unblock_command: 'Use one concrete agent id: narada-andrey.Alice, narada-andrey.Bob',
     });
   });
 

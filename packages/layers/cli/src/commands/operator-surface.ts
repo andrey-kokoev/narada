@@ -18,6 +18,7 @@ import {
 import { loadRoster, resolveTaskStatus } from '../lib/task-governance.js';
 import { sitesAgentBootstrapCommand } from './sites.js';
 import { grantEffectiveStatus, readCapabilityRegistry, validateCredentialRef } from '../lib/capability-consent-registry.js';
+import { agentAddressResolutionPublic, resolveAgentAddress, type AgentAddressResolution } from '../lib/agent-address.js';
 
 export interface OperatorSurfaceIdentityAddOptions {
   cwd?: string;
@@ -201,6 +202,87 @@ function publicIdentityResolution(resolution: ReturnType<typeof resolveSendIdent
     matched_alias: resolution.matched_alias,
     known_aliases: resolution.known_aliases,
   };
+}
+
+function looksSiteQualifiedAgentAddress(value: string): boolean {
+  const trimmed = value.trim();
+  const dot = trimmed.lastIndexOf('.');
+  return dot > 0 && dot < trimmed.length - 1;
+}
+
+async function resolveOperatorSurfaceSendIdentity(
+  cwd: string,
+  registry: OperatorSurfaceIdentityRegistry,
+  requestedIdentity: string,
+): Promise<{
+  admittedIdentity: OperatorSurfaceIdentity | null;
+  identity: string;
+  identityResolution: ReturnType<typeof resolveSendIdentity>;
+  agentResolution: AgentAddressResolution | null;
+}> {
+  const initialIdentityResolution = resolveSendIdentity(registry, requestedIdentity);
+  if (initialIdentityResolution.resolution === 'identity_id') {
+    return {
+      admittedIdentity: initialIdentityResolution.admittedIdentity,
+      identity: initialIdentityResolution.resolved_identity ?? requestedIdentity,
+      identityResolution: initialIdentityResolution,
+      agentResolution: null,
+    };
+  }
+
+  if (looksSiteQualifiedAgentAddress(requestedIdentity)) {
+    const roster = await loadRosterForAgentAddress(cwd);
+    const agentResolution = resolveAgentAddress(roster, requestedIdentity);
+    if (!agentResolution.resolved_agent) {
+      return {
+        admittedIdentity: null,
+        identity: requestedIdentity,
+        identityResolution: initialIdentityResolution,
+        agentResolution,
+      };
+    }
+    const resolvedIdentityResolution = resolveSendIdentity(registry, agentResolution.resolved_agent);
+    return {
+      admittedIdentity: resolvedIdentityResolution.admittedIdentity,
+      identity: resolvedIdentityResolution.resolved_identity ?? agentResolution.resolved_agent,
+      identityResolution: resolvedIdentityResolution,
+      agentResolution,
+    };
+  }
+
+  return {
+    admittedIdentity: initialIdentityResolution.admittedIdentity,
+    identity: initialIdentityResolution.resolved_identity ?? requestedIdentity,
+    identityResolution: initialIdentityResolution,
+    agentResolution: null,
+  };
+}
+
+async function loadRosterForAgentAddress(cwd: string): Promise<Awaited<ReturnType<typeof loadRoster>>> {
+  try {
+    const roster = await loadRoster(cwd);
+    if (roster.agents.length > 0) return roster;
+  } catch {
+    // Fall through to the compatibility projection below.
+  }
+  try {
+    const raw = await readFile(join(resolve(cwd), '.ai', 'agents', 'roster.json'), 'utf8');
+    const parsed = JSON.parse(raw) as Awaited<ReturnType<typeof loadRoster>>;
+    if (!Array.isArray(parsed.agents)) throw new Error('Invalid roster JSON projection shape');
+    return parsed;
+  } catch {
+    return await loadRoster(cwd);
+  }
+}
+
+function agentResolutionFields(agentResolution: AgentAddressResolution | null): Record<string, unknown> {
+  return agentResolution
+    ? {
+        requested_agent: agentResolution.requested_agent,
+        resolved_agent: agentResolution.resolved_agent,
+        agent_address_resolution: agentAddressResolutionPublic(agentResolution),
+      }
+    : {};
 }
 
 function parseInputCapabilities(value: string | undefined): OperatorSurfaceInputCapability[] | undefined {
@@ -725,7 +807,16 @@ export async function operatorSurfaceStatusCommand(
   const registry = await readOperatorSurfaceIdentities(cwd);
   const bindings = await readRuntimeBindings(cwd);
   const labelEvidence = await readVisibleLabelEvidence(cwd);
-  const roster = await loadRoster(cwd).catch(async () => {
+  const roster = await loadRoster(cwd).then(async (loaded) => {
+    if (loaded.agents.length > 0) return loaded;
+    try {
+      const raw = await readFile(join(resolve(cwd), '.ai', 'agents', 'roster.json'), 'utf8');
+      const parsed = JSON.parse(raw) as { agents?: unknown[] };
+      return Array.isArray(parsed.agents) ? parsed as Awaited<ReturnType<typeof loadRoster>> : loaded;
+    } catch {
+      return loaded;
+    }
+  }).catch(async () => {
     try {
       const raw = await readFile(join(resolve(cwd), '.ai', 'agents', 'roster.json'), 'utf8');
       const parsed = JSON.parse(raw) as { agents?: unknown[] };
@@ -992,20 +1083,40 @@ export async function operatorSurfaceSendCommand(
     const requestedIdentity = requireText(options.identity, '--identity');
     const text = requireText(options.text, '--text');
     const registry = await readOperatorSurfaceIdentities(cwd);
-    const identityResolution = resolveSendIdentity(registry, requestedIdentity);
-    const admittedIdentity = identityResolution.admittedIdentity;
-    const identity = identityResolution.resolved_identity ?? requestedIdentity;
+    const sendIdentity = await resolveOperatorSurfaceSendIdentity(cwd, registry, requestedIdentity);
+    const identityResolution = sendIdentity.identityResolution;
+    const admittedIdentity = sendIdentity.admittedIdentity;
+    const identity = sendIdentity.identity;
+    const agentFields = agentResolutionFields(sendIdentity.agentResolution);
+    if (sendIdentity.agentResolution && !sendIdentity.agentResolution.resolved_agent) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          reason: sendIdentity.agentResolution.status === 'multi_match' ? 'agent_address_ambiguous' : 'agent_not_in_roster',
+          identity: requestedIdentity,
+          identity_resolution: publicIdentityResolution(identityResolution),
+          ...agentFields,
+          mutation_performed: false,
+          candidates: sendIdentity.agentResolution.candidates,
+          unblock_command: 'repair_command' in sendIdentity.agentResolution
+            ? sendIdentity.agentResolution.repair_command
+            : `narada task roster add ${requestedIdentity}`,
+        },
+      };
+    }
     if (!admittedIdentity) {
       const roleRepair = normalizeInstantiateRole(requestedIdentity)
         ? `narada operator-surface agent instantiate --site <site-id-or-root> --role ${normalizeInstantiateRole(requestedIdentity)} --agent-kind codex_cli --by <principal>`
-        : `narada operator-surface agent instantiate --site <site-id-or-root> --role <role> --agent-kind codex_cli --by <principal> --identity ${requestedIdentity}`;
+        : `narada operator-surface agent instantiate --site <site-id-or-root> --role <role> --agent-kind codex_cli --by <principal> --identity ${identity}`;
       return {
         exitCode: ExitCode.INVALID_CONFIG,
         result: {
           status: 'error',
           reason: 'identity_not_admitted',
-          identity: requestedIdentity,
+          identity,
           identity_resolution: publicIdentityResolution(identityResolution),
+          ...agentFields,
           available_aliases: identityResolution.known_aliases,
           mutation_performed: false,
           unblock_command: roleRepair,
@@ -1020,6 +1131,7 @@ export async function operatorSurfaceSendCommand(
           reason: 'secret_like_text_refused',
           identity,
           mutation_performed: false,
+          ...agentFields,
           unblock_command: 'Route secrets through capability consent and secret references; do not send raw secret-like text through Operator Surface input.',
         },
       };
@@ -1037,6 +1149,7 @@ export async function operatorSurfaceSendCommand(
           reason: 'stale_binding',
           identity,
           identity_resolution: publicIdentityResolution(identityResolution),
+          ...agentFields,
           mutation_performed: false,
           unblock_command: `narada operator-surface bind-focused --identity ${identity} --runtime-locus ${options.runtimeLocus ?? '<pc-or-user-site>'}`,
         },
@@ -1052,6 +1165,7 @@ export async function operatorSurfaceSendCommand(
           reason: 'no_binding',
           identity,
           identity_resolution: publicIdentityResolution(identityResolution),
+          ...agentFields,
           visible_label: labelEvidence,
           label_evidence_status: labelEvidence ? 'visible_label_without_binding' : 'none',
           explanation: labelEvidence
@@ -1071,6 +1185,7 @@ export async function operatorSurfaceSendCommand(
           reason: 'ambiguous_binding',
           identity,
           identity_resolution: publicIdentityResolution(identityResolution),
+          ...agentFields,
           mutation_performed: false,
           matching_bindings: activeBindings.map((binding) => ({
             binding_id: binding.binding_id ?? null,
@@ -1093,6 +1208,7 @@ export async function operatorSurfaceSendCommand(
           reason: 'missing_transport',
           identity,
           identity_resolution: publicIdentityResolution(identityResolution),
+          ...agentFields,
           mutation_performed: false,
           binding: {
             binding_id: binding.binding_id ?? null,
@@ -1113,6 +1229,7 @@ export async function operatorSurfaceSendCommand(
       submit_strategy: submitStrategy,
       text_digest: textDigest(text),
       text_length: text.length,
+      ...agentFields,
       dry_run: Boolean(options.dryRun || !options.execute),
       status: options.execute ? 'event_recorded_for_runtime_locus' : 'validated_dry_run',
     };
@@ -1124,6 +1241,7 @@ export async function operatorSurfaceSendCommand(
         mutation_performed: Boolean(options.execute),
         event_artifact: eventArtifact,
         identity_resolution: publicIdentityResolution(identityResolution),
+        ...agentFields,
         send,
       },
     };

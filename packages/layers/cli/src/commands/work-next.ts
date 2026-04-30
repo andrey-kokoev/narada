@@ -26,6 +26,7 @@ import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 import { inboxWorkNextCommand } from './inbox.js';
 import { taskDispatchCommand } from './task-dispatch.js';
 import { taskPeekNextCommand, taskWorkNextCommand } from './task-next.js';
+import { agentAddressResolutionPublic, resolveAgentAddress } from '../lib/agent-address.js';
 
 export interface WorkNextOptions {
   agent?: string;
@@ -263,20 +264,47 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
   const format = options.format ?? 'auto';
   const checked: WorkNextCheckedZone[] = [];
   const doctrineGuard = await buildDoctrineGuard(cwd);
+  const roster = await loadRoster(cwd);
+  const agentResolution = resolveAgentAddress(roster, options.agent);
+  if (!agentResolution.resolved_agent) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: {
+        status: 'error',
+        reason: agentResolution.status === 'multi_match' ? 'agent_address_ambiguous' : 'agent_not_in_roster',
+        agent_id: options.agent,
+        requested_agent: options.agent,
+        resolved_agent: null,
+        agent_address_resolution: agentAddressResolutionPublic(agentResolution),
+        error: 'error' in agentResolution ? agentResolution.error : `Agent ${options.agent} not found in roster`,
+        repair_command: 'repair_command' in agentResolution ? agentResolution.repair_command : `narada task roster add ${options.agent}`,
+        primary: null,
+      },
+    };
+  }
+  const requestedAgent = options.agent;
+  const resolvedAgent = agentResolution.resolved_agent;
+  const agentAddressResolution = agentAddressResolutionPublic(agentResolution);
 
-  const currentTask = await findCurrentTaskWork(cwd, options.agent);
+  const currentTask = await findCurrentTaskWork(cwd, resolvedAgent);
   if (currentTask) {
     checked.push({ zone: 'task_work', status: 'selected', selected_ref: taskSelectedRef(currentTask) });
     const result = {
       status: 'success',
       action_kind: 'task_work',
-      agent_id: options.agent,
+      agent_id: resolvedAgent,
+      requested_agent: requestedAgent,
+      resolved_agent: resolvedAgent,
+      agent_address_resolution: agentAddressResolution,
       primary: currentTask,
       checked,
       task_result: {
         status: 'ok',
-        agent: options.agent,
-        agent_id: options.agent,
+        agent: resolvedAgent,
+        agent_id: resolvedAgent,
+        requested_agent: requestedAgent,
+        resolved_agent: resolvedAgent,
+        agent_address_resolution: agentAddressResolution,
         action: options.peek ? 'peek_current' : 'continue_current',
         primary: currentTask,
         task: currentTask,
@@ -294,11 +322,11 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
   }
 
   const taskResult = options.peek ? await taskPeekNextCommand({
-    agent: options.agent,
+    agent: resolvedAgent,
     cwd,
     format: 'json',
   }) : await taskWorkNextCommand({
-    agent: options.agent,
+    agent: resolvedAgent,
     cwd,
     format: 'json',
   });
@@ -333,7 +361,7 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
         const pickup = await taskDispatchCommand({
           action: 'pickup',
           taskNumber: String(taskNumber),
-          agent: options.agent,
+      agent: resolvedAgent,
           cwd,
           format: 'json',
           store,
@@ -341,7 +369,7 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
         if (pickup.exitCode !== ExitCode.SUCCESS) return pickup;
         const start = await taskDispatchCommand({
           action: 'start',
-          agent: options.agent,
+          agent: resolvedAgent,
           cwd,
           format: 'json',
           exec: options.execTask,
@@ -359,7 +387,10 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
     const result = {
       status: 'success',
       action_kind: 'task_work',
-      agent_id: options.agent,
+      agent_id: resolvedAgent,
+      requested_agent: requestedAgent,
+      resolved_agent: resolvedAgent,
+      agent_address_resolution: agentAddressResolution,
       primary,
       checked,
       task_result: taskResult.result,
@@ -376,13 +407,16 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
   }
   checked.push({ zone: 'task_work', status: 'empty', reason: emptyReason(taskResult.result, 'no_admissible_task') });
 
-  const reviewWork = await findReviewWork(cwd, options.agent);
+  const reviewWork = await findReviewWork(cwd, resolvedAgent);
   if (reviewWork) {
     checked.push({ zone: 'review_work', status: 'selected', selected_ref: taskSelectedRef(reviewWork) });
     const result = {
       status: 'success',
       action_kind: 'review_work',
-      agent_id: options.agent,
+      agent_id: resolvedAgent,
+      requested_agent: requestedAgent,
+      resolved_agent: resolvedAgent,
+      agent_address_resolution: agentAddressResolution,
       primary: reviewWork,
       checked,
       doctrine_guard: doctrineGuard,
@@ -399,7 +433,7 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
     cwd,
     format: 'json',
     claim: !options.peek,
-    by: options.peek ? undefined : options.agent,
+    by: options.peek ? undefined : resolvedAgent,
   });
 
   if (inboxResult.exitCode !== ExitCode.SUCCESS) {
@@ -413,7 +447,10 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
     const result = {
       status: 'success',
       action_kind: 'inbox_work',
-      agent_id: options.agent,
+      agent_id: resolvedAgent,
+      requested_agent: requestedAgent,
+      resolved_agent: resolvedAgent,
+      agent_address_resolution: agentAddressResolution,
       primary,
       checked,
       inbox_result: inboxResult.result,
@@ -432,7 +469,10 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
   const result = {
     status: 'empty',
     action_kind: 'idle',
-    agent_id: options.agent,
+    agent_id: resolvedAgent,
+    requested_agent: requestedAgent,
+    resolved_agent: resolvedAgent,
+    agent_address_resolution: agentAddressResolution,
     primary: null,
     reason: 'no_task_or_inbox_work',
     checked,

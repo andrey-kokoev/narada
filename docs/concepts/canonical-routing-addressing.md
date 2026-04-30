@@ -56,3 +56,11 @@ Each route records:
 Route resolution is read-only. It selects the active route with the lowest priority for a target and returns alternatives. Execution still needs a matching capability grant and the destination crossing law.
 
 This prevents broadcast-by-default and prevents address knowledge from becoming authority.
+
+## Agent Address Resolution
+
+Agent-facing command surfaces may accept a concrete agent id or a role-shaped address.
+
+Concrete agent ids remain authoritative when present in the target Site roster. Role-shaped addresses such as `narada-andrey.builder` are routing requests, not identities. They may resolve only when the active roster contains exactly one matching agent for the requested role and Site prefix. Zero matches and multiple matches fail closed with the competing candidates or repair command.
+
+When a command resolves a role-shaped address, its output and mutation evidence must preserve both `requested_agent` and `resolved_agent`. The resolved concrete agent id is the only identity used for task claims, roster mutation, Operator Surface sends, and downstream lifecycle evidence.
