@@ -61,8 +61,44 @@ describe('operator-surface commands', () => {
       role: 'architect',
       identity_id: 'narada-proper-architect',
       self_bind_instruction: 'narada operator-surface bind-focused --as self',
+      role_contract: {
+        duties: expect.arrayContaining([expect.stringContaining('governed work packages')]),
+        boundaries: expect.arrayContaining([expect.stringContaining('`next` means run this role normal duty loop')]),
+        normal_loop_trigger: 'next',
+      },
+      binding_verification: {
+        command: 'narada operator-surface labels build --site "narada-proper" --format json',
+        expected_identity_id: 'narada-proper-architect',
+        expected_role: 'architect',
+        misbinding_error: expect.stringContaining('misbound'),
+      },
     });
+    expect((result.result as { copyable_text: string }).copyable_text).toContain('When Operator says `next`, run the normal duty loop for this role.');
+    expect((result.result as { copyable_text: string }).copyable_text).toContain('Verify binding: narada operator-surface labels build --site "narada-proper" --format json');
     expect(existsSync(join(cwd, 'operator-surfaces', 'identities.json'))).toBe(true);
+  });
+
+  it('instantiates a builder surface with builder-specific duty loop text', async () => {
+    const cwd = await tempRepo();
+    const result = await operatorSurfaceAgentInstantiateCommand({
+      cwd,
+      site: 'narada-proper',
+      role: 'builder',
+      agentKind: 'codex_cli',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      role: 'builder',
+      identity_id: 'narada-proper-builder',
+      role_contract: {
+        duties: expect.arrayContaining([expect.stringContaining('Execute approved local work packages')]),
+        boundaries: expect.arrayContaining([expect.stringContaining('`next` means run this role normal duty loop')]),
+      },
+    });
+    expect((result.result as { copyable_text: string }).copyable_text).toContain('When Operator says `next`, run the normal duty loop for this role.');
   });
 
   it('instantiates an observer surface without review authority', async () => {
@@ -83,6 +119,10 @@ describe('operator-surface commands', () => {
       role: 'observer',
       identity_id: 'narada-proper-observer',
       self_bind_instruction: 'narada operator-surface bind-focused --as self',
+      role_contract: {
+        duties: expect.arrayContaining([expect.stringContaining('Observe Narada law')]),
+        boundaries: expect.arrayContaining([expect.stringContaining('Observer must not build')]),
+      },
     });
     expect(JSON.stringify(result.result)).toContain('Observe coherence without building');
   });
@@ -183,6 +223,10 @@ describe('operator-surface commands', () => {
         status: 'deferred',
         runtime_binding_mutated: false,
         deferred_command: 'Route to owning runtime locus: narada operator-surface bind-focused --identity narada-proper-architect --runtime-locus pc-site',
+      },
+      binding_verification: {
+        expected_identity_id: 'narada-proper-architect',
+        misbinding_error: expect.stringContaining('narada-proper-architect'),
       },
     });
   });

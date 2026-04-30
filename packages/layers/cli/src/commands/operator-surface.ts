@@ -116,6 +116,40 @@ function fallbackBootstrapText(role: OperatorSurfaceAgentRole): string {
   ].join('\n');
 }
 
+function roleDuties(role: OperatorSurfaceAgentRole): string[] {
+  switch (role) {
+    case 'architect':
+      return [
+        'Convert Operator pressure into governed work packages.',
+        'Preserve Narada doctrine, topology, authority boundaries, and acceptance criteria.',
+        'Do not become builder merely because execution is convenient.',
+      ];
+    case 'builder':
+      return [
+        'Execute approved local work packages within accepted scope.',
+        'Verify changes and preserve evidence before reporting completion.',
+        'Do not redesign doctrine or widen scope by convenience.',
+      ];
+    case 'observer':
+      return [
+        'Observe Narada law, Aim, authority-boundary, and inhabited-evolution coherence.',
+        'Submit bounded observations or proposals without building or lifecycle-reviewing tasks.',
+        'Do not silently repair the incoherence you observe.',
+      ];
+  }
+}
+
+function roleBoundaries(role: OperatorSurfaceAgentRole): string[] {
+  const common = [
+    'The human is Operator.',
+    'This role does not grant effect authority or mutation authority outside the declared Site locus.',
+    '`next` means run this role normal duty loop before asking for new work.',
+  ];
+  return role === 'observer'
+    ? [...common, 'Observer must not build, assign, implement, review, accept, reject, close, or mutate tasks.']
+    : common;
+}
+
 export async function operatorSurfaceAgentInstantiateCommand(
   options: OperatorSurfaceAgentInstantiateOptions,
   context: CommandContext,
@@ -189,6 +223,13 @@ export async function operatorSurfaceAgentInstantiateCommand(
       ? bootstrapResult.bootstrap_text
       : fallbackBootstrapText(role);
     const selfBindInstruction = 'narada operator-surface bind-focused --as self';
+    const labelVerificationCommand = `narada operator-surface labels build --site ${JSON.stringify(site)} --format json`;
+    const bindingVerification = {
+      command: labelVerificationCommand,
+      expected_identity_id: identityName,
+      expected_role: role,
+      misbinding_error: `Focused surface is misbound if ${labelVerificationCommand} does not include identity ${identityName} with role ${role}.`,
+    };
     const runtimeBinding = options.bindFocused
       ? {
           status: 'deferred',
@@ -213,13 +254,22 @@ export async function operatorSurfaceAgentInstantiateCommand(
         warning: bootstrap.exitCode === ExitCode.SUCCESS ? null : bootstrapResult.error ?? 'Site bootstrap contract unavailable',
         text: bootstrapText,
       },
+      role_contract: {
+        duties: roleDuties(role),
+        boundaries: roleBoundaries(role),
+        normal_loop_trigger: 'next',
+      },
       self_bind_instruction: selfBindInstruction,
+      binding_verification: bindingVerification,
       runtime_binding: runtimeBinding,
       copyable_text: [
         bootstrapText,
         '',
         `Identity: ${identityName}`,
         `Self-bind: ${selfBindInstruction}`,
+        `Verify binding: ${bindingVerification.command}`,
+        `Expected label identity: ${identityName}`,
+        'When Operator says `next`, run the normal duty loop for this role.',
       ].join('\n'),
     };
 

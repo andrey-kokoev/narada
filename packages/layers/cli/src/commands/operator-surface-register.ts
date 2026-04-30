@@ -19,7 +19,7 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .command('instantiate')
     .description('Admit/reuse a Site role identity and emit bootstrap handoff text')
     .requiredOption('--site <site-id-or-root>', 'Site id or root for the agent surface')
-    .requiredOption('--role <role>', 'Role to instantiate: architect or builder')
+    .requiredOption('--role <role>', 'Role to instantiate: architect, builder, or observer')
     .requiredOption('--agent-kind <kind>', 'Runtime/agent kind, e.g. codex_cli, kimi_cli')
     .requiredOption('--by <principal>', 'Principal requesting/admitting identity')
     .option('--identity <id>', 'Override durable identity id')

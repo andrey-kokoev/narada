@@ -1,6 +1,16 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-04-30T03:07:47.509Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-04-30T03:07:48.889Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
+
 # Make agent role instantiation copy path first-class
 
 ## Chapter
@@ -39,8 +49,8 @@ Current role onboarding is improved but still fragmented: role bootstrap text, i
 
 ## Acceptance Criteria
 
-- [ ] The role-instantiation path can produce copyable bootstrap text for architect, builder, and observer with role-specific duties and boundaries.
-- [ ] The path includes self-bind or deferred-bind instructions appropriate to the current runtime locus.
-- [ ] The path verifies the focused binding/label after binding and reports misbinding clearly.
-- [ ] Generated or documented instructions state that `next` triggers the role's normal duty loop.
-- [ ] Focused tests cover architect, builder, observer, and missing runtime-locus binding cases.
+- [x] The role-instantiation path can produce copyable bootstrap text for architect, builder, and observer with role-specific duties and boundaries.
+- [x] The path includes self-bind or deferred-bind instructions appropriate to the current runtime locus.
+- [x] The path verifies the focused binding/label after binding and reports misbinding clearly.
+- [x] Generated or documented instructions state that `next` triggers the role's normal duty loop.
+- [x] Focused tests cover architect, builder, observer, and missing runtime-locus binding cases.
