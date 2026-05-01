@@ -1,0 +1,35 @@
+{
+  "envelope_id": "env_01cb73bc-deab-44a6-8099-9b92d8aa8f8c",
+  "received_at": "2026-05-01T13:59:20.570Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey:osa-activity-projection"
+  },
+  "kind": "proposal",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "Define Operator Surface Agent activity projection as first-class state",
+    "summary": "Narada-andrey discovered that overlay labels should not merely project current task affinity. They should project an Operator Surface Agent activity state machine: idle as hidden/default, with non-idle states such as executing, in_review/awaiting_review, reviewing, blocked, processing inbox, and messaging visible to the operator surface. The local User Site commissioned task 79 to implement this for labels.",
+    "rationale": [
+      "The operator needs to see what inhabited agents are doing without opening every terminal or workboard.",
+      "Task state alone is insufficient because an OSA can be busy with review, inbox, messaging, or blocked coordination.",
+      "Idle is the unit state and should not add label noise.",
+      "This projection likely belongs in Narada doctrine/product surface because it generalizes beyond one Windows overlay."
+    ],
+    "local_task": {
+      "site": "narada-andrey",
+      "task_number": 79,
+      "title": "Implement live OSA activity projection for overlay labels"
+    },
+    "recommendation": [
+      "Add doctrinal/product language for OSA activity projection as separate from task lifecycle authority.",
+      "Define canonical activity-state enum or extensible typed state family.",
+      "Clarify which states are operator-visible and which are internal/evidence-only.",
+      "Ensure future operator-surface adapters can render this projection consistently."
+    ]
+  },
+  "status": "received"
+}
