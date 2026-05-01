@@ -1,5 +1,5 @@
 ---
-status: opened
+status: claimed
 ---
 
 # Define Operator Surface Agent activity projection state
