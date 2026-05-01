@@ -167,6 +167,16 @@ narada qualification status --agent builder --role builder --work-class task_con
 narada qualification effectiveness-check --agent builder --role builder --work-class task_construction --format json
 ```
 
+Git-visible record mutation commands:
+
+```bash
+narada qualification record-add --agent builder --role builder --site narada --work-class task_construction --law-sources AGENTS.md,SEMANTICS.md --evidence task:1184 --issuer operator --admitted-by operator --effectiveness-interval 10
+narada qualification effectiveness-record --agent builder --role builder --work-class task_construction --result pass --checked-by architect --evidence verification_run:<run-id>
+narada qualification effectiveness-record --agent builder --role builder --work-class task_construction --result fail --checked-by architect --evidence review:<review-id> --escalation-command "narada inbox submit --kind task_candidate --topic 'CAPA for builder qualification'"
+```
+
+These commands write `.ai/site-qualification.json`, a Git-visible mutation artifact. They do not treat prompt text, chat history, or roster membership as authority.
+
 Law receipt and absorption commands remain under the law surface:
 
 ```bash

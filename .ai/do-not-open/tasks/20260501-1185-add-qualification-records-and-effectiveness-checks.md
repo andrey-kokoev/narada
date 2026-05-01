@@ -1,6 +1,15 @@
 ---
-status: opened
+status: closed
 depends_on: [1183]
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T05:04:08.375Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777611795644_evtl7x
+closed_at: 2026-05-01T05:04:46.262Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add qualification records and effectiveness checks
@@ -37,8 +46,8 @@ Design and implement qualification record artifacts or store rows; add commands 
 
 ## Acceptance Criteria
 
-- [ ] Qualification records identify principal, role, work class, Site, law/context surfaces, evidence, effective time, expiry, and issuer/admitter.
-- [ ] Effectiveness checks are distinct from read receipts and can be required before sensitive work.
-- [ ] Blocked or failed qualification creates explicit escalation/CAPA path.
-- [ ] Records are Git-visible or have canonical mutation evidence consistent with Narada authority posture.
-- [ ] Tests cover receipt-only, effectiveness pass, effectiveness fail, expiry, and escalation.
+- [x] Qualification records identify principal, role, work class, Site, law/context surfaces, evidence, effective time, expiry, and issuer/admitter.
+- [x] Effectiveness checks are distinct from read receipts and can be required before sensitive work.
+- [x] Blocked or failed qualification creates explicit escalation/CAPA path.
+- [x] Records are Git-visible or have canonical mutation evidence consistent with Narada authority posture.
+- [x] Tests cover receipt-only, effectiveness pass, effectiveness fail, expiry, and escalation.
