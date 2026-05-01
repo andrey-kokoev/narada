@@ -1,0 +1,33 @@
+{
+  "envelope_id": "env_e64d0e27-d024-4dba-abc7-f3e59d0abc5f",
+  "received_at": "2026-05-01T13:47:28.304Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey:task-60-61-unblock"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "Task authority did not follow operator-surface identity migration",
+    "summary": "In narada-andrey, the active architect surface was renamed/bound as narada-andrey.Kevin in operator-surfaces/identities.json, but task review authority still knew only narada-andrey.architect. When Kevin attempted to review task 60 to unblock dependent task 61, narada task review refused with missing_reviewer_identity. This left OSM envelope-context work blocked even though it was directly relevant to current OSM defects.",
+    "observations": [
+      "Operator-surface identity and task roster/review authority can drift after an agent identity migration.",
+      "The responsible architect can fail to recognize a pending review as self-owned because task machinery does not project the active operator-surface identity into task authority.",
+      "task review emitted a CAPA recommendation whose text referenced rejected findings/rejection even though the verdict was accepted_with_notes."
+    ],
+    "recommendation": [
+      "Provide a canonical identity migration/admission path that updates operator-surface identity, task roster projection, role/review authority, and aliases together.",
+      "Add a doctor/preflight that reports active operator-surface identity is not admitted to task authority before review/close attempts.",
+      "Fix CAPA recommendation wording so accepted review verdicts do not mention rejection-specific rationale."
+    ],
+    "evidence": [
+      "narada task review 60 --agent narada-andrey.Kevin refused with Agent not found in roster: narada-andrey.Kevin.",
+      "Repair required narada task roster add narada-andrey.Kevin --role architect --capability ... review, then task review 60 succeeded and unblocked task 61.",
+      "After closure, narada task work-next --agent narada-andrey.Bob returned task 61."
+    ]
+  },
+  "status": "received"
+}
