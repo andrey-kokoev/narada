@@ -21,7 +21,7 @@ import {
 import { findTaskFile, loadRoster, readTaskFile, saveRoster, resolveTaskStatus, type AgentRoster } from '../lib/task-governance.js';
 import { sitesAgentBootstrapCommand } from './sites.js';
 import { grantEffectiveStatus, readCapabilityRegistry, validateCredentialRef } from '../lib/capability-consent-registry.js';
-import { agentAddressResolutionPublic, resolveAgentAddress, type AgentAddressResolution } from '../lib/agent-address.js';
+import { agentAddressResolutionPublic, type AgentAddressResolution } from '../lib/agent-address.js';
 
 export interface OperatorSurfaceIdentityAddOptions {
   cwd?: string;
@@ -284,9 +284,10 @@ function resolveSendIdentity(registry: OperatorSurfaceIdentityRegistry, requeste
   admittedIdentity: OperatorSurfaceIdentity | null;
   requested_identity: string;
   resolved_identity: string | null;
-  resolution: 'identity_id' | 'alias' | 'unresolved';
+  resolution: 'identity_id' | 'alias' | 'scoped_role_alias_exact_one' | 'scoped_role_alias_zero_match' | 'scoped_role_alias_multi_match' | 'unresolved';
   matched_alias: string | null;
   known_aliases: string[];
+  resolution_evidence?: Record<string, unknown>;
 } {
   const exact = registry.identities.find((entry) => entry.identity_id === requestedIdentity);
   const knownAliases = registry.identities.flatMap(operatorSurfaceAliases);
@@ -313,6 +314,47 @@ function resolveSendIdentity(registry: OperatorSurfaceIdentityRegistry, requeste
   };
 }
 
+function resolveScopedRoleAlias(registry: OperatorSurfaceIdentityRegistry, requestedIdentity: string): ReturnType<typeof resolveSendIdentity> | null {
+  const site = sitePrefixFromAddress(requestedIdentity);
+  const dot = requestedIdentity.lastIndexOf('.');
+  const role = dot > 0 ? requestedIdentity.slice(dot + 1) : null;
+  if (!site || !role) return null;
+  const candidates = registry.identities
+    .filter((identity) => identity.site_id === site && identity.role === role)
+    .map((identity) => identity.identity_id)
+    .sort();
+  const knownAliases = registry.identities.flatMap(operatorSurfaceAliases);
+  if (candidates.length === 1) {
+    const admittedIdentity = registry.identities.find((identity) => identity.identity_id === candidates[0]) ?? null;
+    return {
+      admittedIdentity,
+      requested_identity: requestedIdentity,
+      resolved_identity: candidates[0] ?? null,
+      resolution: 'scoped_role_alias_exact_one',
+      matched_alias: requestedIdentity,
+      known_aliases: knownAliases,
+      resolution_evidence: {
+        site_id: site,
+        role,
+        candidates,
+      },
+    };
+  }
+  return {
+    admittedIdentity: null,
+    requested_identity: requestedIdentity,
+    resolved_identity: null,
+    resolution: candidates.length === 0 ? 'scoped_role_alias_zero_match' : 'scoped_role_alias_multi_match',
+    matched_alias: requestedIdentity,
+    known_aliases: knownAliases,
+    resolution_evidence: {
+      site_id: site,
+      role,
+      candidates,
+    },
+  };
+}
+
 function publicIdentityResolution(resolution: ReturnType<typeof resolveSendIdentity>): Record<string, unknown> {
   return {
     requested_identity: resolution.requested_identity,
@@ -320,6 +362,7 @@ function publicIdentityResolution(resolution: ReturnType<typeof resolveSendIdent
     resolution: resolution.resolution,
     matched_alias: resolution.matched_alias,
     known_aliases: resolution.known_aliases,
+    resolution_evidence: resolution.resolution_evidence ?? null,
   };
 }
 
@@ -369,22 +412,13 @@ async function resolveOperatorSurfaceSendIdentity(
   }
 
   if (looksSiteQualifiedAgentAddress(requestedIdentity)) {
-    const roster = await loadRosterForAgentAddress(cwd);
-    const agentResolution = resolveAgentAddress(roster, requestedIdentity);
-    if (!agentResolution.resolved_agent) {
-      return {
-        admittedIdentity: null,
-        identity: requestedIdentity,
-        identityResolution: initialIdentityResolution,
-        agentResolution,
-      };
-    }
-    const resolvedIdentityResolution = resolveSendIdentity(registry, agentResolution.resolved_agent);
+    const scopedRoleResolution = resolveScopedRoleAlias(registry, requestedIdentity);
+    const resolvedIdentityResolution = scopedRoleResolution ?? initialIdentityResolution;
     return {
       admittedIdentity: resolvedIdentityResolution.admittedIdentity,
-      identity: resolvedIdentityResolution.resolved_identity ?? agentResolution.resolved_agent,
+      identity: resolvedIdentityResolution.resolved_identity ?? requestedIdentity,
       identityResolution: resolvedIdentityResolution,
-      agentResolution,
+      agentResolution: null,
     };
   }
 
@@ -394,23 +428,6 @@ async function resolveOperatorSurfaceSendIdentity(
     identityResolution: initialIdentityResolution,
     agentResolution: null,
   };
-}
-
-async function loadRosterForAgentAddress(cwd: string): Promise<Awaited<ReturnType<typeof loadRoster>>> {
-  try {
-    const roster = await loadRoster(cwd);
-    if (roster.agents.length > 0) return roster;
-  } catch {
-    // Fall through to the compatibility projection below.
-  }
-  try {
-    const raw = await readFile(join(resolve(cwd), '.ai', 'agents', 'roster.json'), 'utf8');
-    const parsed = JSON.parse(raw) as Awaited<ReturnType<typeof loadRoster>>;
-    if (!Array.isArray(parsed.agents)) throw new Error('Invalid roster JSON projection shape');
-    return parsed;
-  } catch {
-    return await loadRoster(cwd);
-  }
 }
 
 function agentResolutionFields(agentResolution: AgentAddressResolution | null): Record<string, unknown> {
@@ -429,17 +446,26 @@ function routeFields(args: {
   currentSite: string | null;
   targetSite: string | null;
   resolvedRecipient: string | null;
+  resolution?: Record<string, unknown>;
   bindingStatus?: string;
   legacyIdentityAlias: boolean;
 }): Record<string, unknown> {
   return {
     requested_address: args.requestedRecipient,
+    requested_to: args.requestedRecipient,
+    resolved_to: args.resolvedRecipient,
+    resolution: args.resolution?.resolution ?? null,
+    resolution_evidence: args.resolution?.resolution_evidence ?? null,
     current_site: args.currentSite,
     target_site: args.targetSite,
     message_route: {
       sender: args.sender,
       requested_recipient: args.requestedRecipient,
+      requested_to: args.requestedRecipient,
       resolved_recipient: args.resolvedRecipient,
+      resolved_to: args.resolvedRecipient,
+      resolution: args.resolution?.resolution ?? null,
+      resolution_evidence: args.resolution?.resolution_evidence ?? null,
       current_site: args.currentSite,
       target_site: args.targetSite,
       binding_status: args.bindingStatus ?? null,
@@ -2304,6 +2330,7 @@ export async function operatorSurfaceSendCommand(
       currentSite,
       targetSite,
       resolvedRecipient: admittedIdentity?.identity_id ?? sendIdentity.agentResolution?.resolved_agent ?? null,
+      resolution: publicIdentityResolution(identityResolution),
       legacyIdentityAlias,
     };
     if (isBareRoleAddress(requestedRecipient) && admittedIdentity && currentSite && admittedIdentity.site_id !== currentSite) {
@@ -2336,6 +2363,28 @@ export async function operatorSurfaceSendCommand(
           unblock_command: 'repair_command' in sendIdentity.agentResolution
             ? sendIdentity.agentResolution.repair_command
             : `narada task roster add ${requestedRecipient}`,
+        },
+      };
+    }
+    if (identityResolution.resolution === 'scoped_role_alias_zero_match' || identityResolution.resolution === 'scoped_role_alias_multi_match') {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          reason: identityResolution.resolution === 'scoped_role_alias_zero_match'
+            ? 'scoped_role_alias_unresolved'
+            : 'scoped_role_alias_ambiguous',
+          identity: requestedRecipient,
+          identity_resolution: publicIdentityResolution(identityResolution),
+          ...agentFields,
+          ...routeFields(baseRoute),
+          mutation_performed: false,
+          candidates: Array.isArray(identityResolution.resolution_evidence?.candidates)
+            ? identityResolution.resolution_evidence.candidates
+            : [],
+          unblock_command: identityResolution.resolution === 'scoped_role_alias_zero_match'
+            ? `Admit exactly one ${targetSite ?? '<site>'}.${requestedRecipient.split('.').pop() ?? '<role>'} identity, or address an exact identity_id.`
+            : `Use one concrete identity_id: ${Array.isArray(identityResolution.resolution_evidence?.candidates) ? identityResolution.resolution_evidence.candidates.join(', ') : '<identity-id>'}`,
         },
       };
     }

@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T18:21:01.050Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777659634192_0sdwho
+closed_at: 2026-05-01T18:21:39.380Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Resolve scoped role aliases to unique active admitted identities
@@ -36,8 +45,8 @@ Define and implement a canonical address resolution path for exact operator-surf
 
 ## Acceptance Criteria
 
-- [ ] Exact identity addresses resolve only to the named admitted identity and do not pass through role-alias matching.
-- [ ] Scoped role aliases resolve only when exactly one active admitted identity in the requested Site has the requested role.
-- [ ] Zero-match and multiple-match role aliases fail with explicit machine-readable outcomes and bounded human-readable diagnostics.
-- [ ] Routing artifacts preserve requested_to, resolved_to, resolution, and resolution_evidence where an addressed crossing is recorded.
-- [ ] Regression coverage proves exact identity, unique role alias, unresolved alias, and ambiguous alias behavior.
+- [x] Exact identity addresses resolve only to the named admitted identity and do not pass through role-alias matching.
+- [x] Scoped role aliases resolve only when exactly one active admitted identity in the requested Site has the requested role.
+- [x] Zero-match and multiple-match role aliases fail with explicit machine-readable outcomes and bounded human-readable diagnostics.
+- [x] Routing artifacts preserve requested_to, resolved_to, resolution, and resolution_evidence where an addressed crossing is recorded.
+- [x] Regression coverage proves exact identity, unique role alias, unresolved alias, and ambiguous alias behavior.

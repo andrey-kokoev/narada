@@ -1152,7 +1152,7 @@ describe('operator-surface commands', () => {
     });
   });
 
-  it('resolves site-qualified role address to exact-one roster identity before operator-surface send', async () => {
+  it('resolves site-qualified role address to exact-one admitted identity before operator-surface send', async () => {
     const cwd = await tempRepo();
     await operatorSurfaceIdentityAddCommand({
       cwd,
@@ -1175,15 +1175,6 @@ describe('operator-surface commands', () => {
       input_capabilities: ['type_text', 'submit'],
       status: 'active',
     }]);
-    await writeRoster(cwd, [{
-      agent_id: 'narada-andrey.Bob',
-      role: 'builder',
-      capabilities: [],
-      first_seen_at: '2026-04-30T16:00:00.000Z',
-      last_active_at: '2026-04-30T16:00:00.000Z',
-      status: 'idle',
-      task: null,
-    }]);
 
     const result = await operatorSurfaceSendCommand({
       cwd,
@@ -1201,60 +1192,118 @@ describe('operator-surface commands', () => {
       requested_address: 'narada-andrey.builder',
       current_site: 'narada-proper',
       target_site: 'narada-andrey',
-      requested_agent: 'narada-andrey.builder',
-      resolved_agent: 'narada-andrey.Bob',
+      requested_to: 'narada-andrey.builder',
+      resolved_to: 'narada-andrey.Bob',
+      resolution: 'scoped_role_alias_exact_one',
       message_route: {
         sender: 'narada-proper.builder',
         requested_recipient: 'narada-andrey.builder',
         resolved_recipient: 'narada-andrey.Bob',
+        requested_to: 'narada-andrey.builder',
+        resolved_to: 'narada-andrey.Bob',
+        resolution: 'scoped_role_alias_exact_one',
         current_site: 'narada-proper',
         target_site: 'narada-andrey',
         binding_status: 'bound',
       },
-      agent_address_resolution: {
-        status: 'role_exact_one',
-        candidates: ['narada-andrey.Bob'],
-      },
       identity_resolution: {
-        requested_identity: 'narada-andrey.Bob',
+        requested_identity: 'narada-andrey.builder',
         resolved_identity: 'narada-andrey.Bob',
-        resolution: 'identity_id',
+        resolution: 'scoped_role_alias_exact_one',
+        resolution_evidence: {
+          site_id: 'narada-andrey',
+          role: 'builder',
+          candidates: ['narada-andrey.Bob'],
+        },
       },
       send: {
         identity: 'narada-andrey.Bob',
-        requested_agent: 'narada-andrey.builder',
-        resolved_agent: 'narada-andrey.Bob',
         sender: 'narada-proper.builder',
         recipient: 'narada-andrey.Bob',
         requested_address: 'narada-andrey.builder',
+        requested_to: 'narada-andrey.builder',
+        resolved_to: 'narada-andrey.Bob',
+        resolution: 'scoped_role_alias_exact_one',
         target_site: 'narada-andrey',
         runtime_locus: 'pc-site',
       },
     });
   });
 
-  it('fails operator-surface send closed when site-qualified role address has multiple active agents', async () => {
+  it('keeps exact identity address out of role-alias matching', async () => {
     const cwd = await tempRepo();
-    await writeRoster(cwd, [
-      {
-        agent_id: 'narada-andrey.Bob',
-        role: 'builder',
-        capabilities: [],
-        first_seen_at: '2026-04-30T16:00:00.000Z',
-        last_active_at: '2026-04-30T16:00:00.000Z',
-        status: 'idle',
-        task: null,
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-andrey.builder',
+      role: 'observer',
+      agentKind: 'codex_cli',
+      site: 'narada-andrey',
+      by: 'operator',
+      inputCapabilities: 'type_text',
+      format: 'json',
+    }, createMockContext());
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-andrey.Alice',
+      role: 'builder',
+      agentKind: 'codex_cli',
+      site: 'narada-andrey',
+      by: 'operator',
+      inputCapabilities: 'type_text',
+      format: 'json',
+    }, createMockContext());
+    await writeBindings(cwd, [{
+      binding_id: 'bind-exact',
+      identity_id: 'narada-andrey.builder',
+      runtime_locus: 'pc-site',
+      handle: 'hwnd:exact',
+      transport: 'operator_surface_input',
+      input_capabilities: ['type_text'],
+      status: 'active',
+    }]);
+
+    const result = await operatorSurfaceSendCommand({
+      cwd,
+      to: 'narada-andrey.builder',
+      text: 'exact',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      identity_resolution: {
+        requested_identity: 'narada-andrey.builder',
+        resolved_identity: 'narada-andrey.builder',
+        resolution: 'identity_id',
       },
-      {
-        agent_id: 'narada-andrey.Alice',
-        role: 'builder',
-        capabilities: [],
-        first_seen_at: '2026-04-30T16:00:00.000Z',
-        last_active_at: '2026-04-30T16:00:00.000Z',
-        status: 'working',
-        task: 1135,
+      send: {
+        identity: 'narada-andrey.builder',
+        recipient: 'narada-andrey.builder',
       },
-    ]);
+    });
+  });
+
+  it('fails operator-surface send closed when scoped role address has multiple admitted identities', async () => {
+    const cwd = await tempRepo();
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-andrey.Bob',
+      role: 'builder',
+      agentKind: 'codex_cli',
+      site: 'narada-andrey',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-andrey.Alice',
+      role: 'builder',
+      agentKind: 'codex_cli',
+      site: 'narada-andrey',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
 
     const result = await operatorSurfaceSendCommand({
       cwd,
@@ -1267,14 +1316,44 @@ describe('operator-surface commands', () => {
     expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
     expect(result.result).toMatchObject({
       status: 'error',
-      reason: 'agent_address_ambiguous',
-      requested_agent: 'narada-andrey.builder',
-      resolved_agent: null,
-      agent_address_resolution: {
-        status: 'multi_match',
-        candidates: ['narada-andrey.Alice', 'narada-andrey.Bob'],
+      reason: 'scoped_role_alias_ambiguous',
+      requested_to: 'narada-andrey.builder',
+      resolved_to: null,
+      identity_resolution: {
+        resolution: 'scoped_role_alias_multi_match',
+        resolution_evidence: {
+          candidates: ['narada-andrey.Alice', 'narada-andrey.Bob'],
+        },
       },
-      unblock_command: 'Use one concrete agent id: narada-andrey.Alice, narada-andrey.Bob',
+      unblock_command: 'Use one concrete identity_id: narada-andrey.Alice, narada-andrey.Bob',
+    });
+  });
+
+  it('fails operator-surface send closed when scoped role address has no admitted identity', async () => {
+    const cwd = await tempRepo();
+
+    const result = await operatorSurfaceSendCommand({
+      cwd,
+      to: 'narada-andrey.builder',
+      text: 'next',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      reason: 'scoped_role_alias_unresolved',
+      requested_to: 'narada-andrey.builder',
+      resolved_to: null,
+      identity_resolution: {
+        resolution: 'scoped_role_alias_zero_match',
+        resolution_evidence: {
+          site_id: 'narada-andrey',
+          role: 'builder',
+          candidates: [],
+        },
+      },
     });
   });
 
