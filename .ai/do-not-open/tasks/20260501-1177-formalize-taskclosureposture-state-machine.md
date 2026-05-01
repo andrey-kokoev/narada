@@ -1,5 +1,5 @@
 ---
-status: opened
+status: claimed
 ---
 
 # Formalize TaskClosurePosture state machine
