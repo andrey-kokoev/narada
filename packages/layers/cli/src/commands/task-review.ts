@@ -88,6 +88,33 @@ export async function taskReviewCommand(
     };
   }
 
+  const emitReviewDiagnostics = () => {
+    const diagnostics = (result as {
+      review_diagnostics?: {
+        findings?: Array<{
+          index: number;
+          posture: string;
+          authority_class: string;
+          blocking: boolean;
+          compatibility_only: boolean;
+          projection_only: boolean;
+        }>;
+      };
+    }).review_diagnostics;
+    if (!diagnostics?.findings?.length) return;
+    const summary = diagnostics.findings
+      .map((finding) => {
+        const flags = [
+          finding.blocking ? 'blocking' : 'non-blocking',
+          finding.compatibility_only ? 'compatibility-only' : null,
+          finding.projection_only ? 'projection-only' : null,
+        ].filter(Boolean).join('/');
+        return `#${finding.index + 1} ${finding.posture} ${finding.authority_class} (${flags})`;
+      })
+      .join('; ');
+    fmt.message(`Review diagnostics: ${summary}`, 'info');
+  };
+
   if (serviceResult.exitCode !== ExitCode.SUCCESS) {
     fmt.message((result as { error?: string }).error ?? 'Review failed', 'error');
     const repair = (result as { review_authority_repair?: { commands: string[]; no_workaround: string } }).review_authority_repair;
@@ -109,6 +136,7 @@ export async function taskReviewCommand(
     } else {
       fmt.message(`Reviewed task ${String((result as { task_id?: string }).task_id)}: ${(result as { verdict: string }).verdict} → ${target}`, 'success');
     }
+    emitReviewDiagnostics();
     if (capa?.recommended) {
       fmt.message(`CAPA recommended: ${capa.triggers.join(', ')}`, 'warning');
       if (capa.next_command) fmt.message(capa.next_command, 'info');

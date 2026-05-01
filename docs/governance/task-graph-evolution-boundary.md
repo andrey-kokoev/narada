@@ -138,6 +138,19 @@ Lifecycle transitions are documented in the task body under `## Execution Notes`
 - `deferred` and `closed` are terminal unless explicitly reopened.
 - A task review, closure, deferral, supersession, or reopen refusal may be challenged through [`Canonical Appeal And Grievance`](../concepts/canonical-appeal-grievance.md). Filing an appeal does not automatically suspend the task state unless the governing regime or Operator grants a stay.
 
+### 2.4 Legacy Compatibility Projections
+
+SQLite lifecycle rows are the canonical authority for task lifecycle state. Markdown task files and legacy roster files remain compatibility projections unless a command explicitly names them as the authority being amended.
+
+`last_done`, roster task pointers, and similar projection fields are not monotonic lifecycle truth. Closing an older-numbered task after a newer-numbered task may move a projection field backward without creating an authority defect. Reviews MUST classify that condition as projection-only compatibility noise unless independent evidence shows a lifecycle row, transition, admission, or closure artifact is wrong.
+
+Accepted and `accepted_with_notes` reviews MUST NOT emit rejection-grade CAPA wording solely for compatibility projection drift. They MAY still record bounded review diagnostics so operators can distinguish:
+
+- blocking lifecycle authority defects;
+- non-blocking review notes;
+- compatibility-only projection concerns;
+- projection-only legacy roster noise.
+
 ---
 
 ## 3. Numeric Allocation and Range Reservation

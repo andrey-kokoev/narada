@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T19:20:38.390Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777663215324_o9ob3h
+closed_at: 2026-05-01T19:16:39.478Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Demote legacy roster projection noise in accepted review CAPA guidance
@@ -36,8 +45,8 @@ Audit task review and CAPA recommendation generation for lifecycle/roster mismat
 
 ## Acceptance Criteria
 
-- [ ] Accepted and accepted_with_notes reviews do not emit rejection-specific CAPA wording solely because of legacy roster projection drift.
-- [ ] Lifecycle authority defects and compatibility projection noise are classified separately in review diagnostics.
-- [ ] Human and JSON review outputs identify whether a finding is blocking, non-blocking, compatibility-only, or projection-only.
-- [ ] Legacy roster projection behavior is documented or encoded so older-task closure after newer-task closure is not misreported as an authority mismatch.
-- [ ] Regression coverage proves the narada-andrey task-75 style accepted_with_notes case does not produce misleading CAPA guidance.
+- [x] Accepted and accepted_with_notes reviews do not emit rejection-specific CAPA wording solely because of legacy roster projection drift.
+- [x] Lifecycle authority defects and compatibility projection noise are classified separately in review diagnostics.
+- [x] Human and JSON review outputs identify whether a finding is blocking, non-blocking, compatibility-only, or projection-only.
+- [x] Legacy roster projection behavior is documented or encoded so older-task closure after newer-task closure is not misreported as an authority mismatch.
+- [x] Regression coverage proves the narada-andrey task-75 style accepted_with_notes case does not produce misleading CAPA guidance.

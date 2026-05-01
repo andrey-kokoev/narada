@@ -87,6 +87,16 @@ function setupRepo(tempDir: string): void {
     join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-1004-facade-review-task.md'),
     '---\ntask_id: 1004\nstatus: opened\n---\n\n# Task 1004: Facade Review Task\n\n## Context\nThis is an MCP facade prototype.\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Execution Notes\nCompleted.\n\n## Verification\nFocused test passed.\n',
   );
+
+  writeFileSync(
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-1005-roster-projection-noise-task.md'),
+    '---\ntask_id: 1005\nstatus: opened\n---\n\n# Task 1005: Roster Projection Noise Task\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Execution Notes\nCompleted.\n\n## Verification\nFocused test passed.\n',
+  );
+
+  writeFileSync(
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-1006-accepted-authority-defect-task.md'),
+    '---\ntask_id: 1006\nstatus: opened\n---\n\n# Task 1006: Accepted Authority Defect Task\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Execution Notes\nCompleted.\n\n## Verification\nFocused test passed.\n',
+  );
 }
 
 describe('task review command', () => {
@@ -277,6 +287,138 @@ describe('task review command', () => {
     } finally {
       store.db.close();
     }
+  });
+
+  it('does not emit rejection CAPA guidance for accepted legacy roster projection noise', async () => {
+    await claimTaskService({ taskNumber: '1005', agent: 'worker', cwd: tempDir });
+    await releaseTaskService({ taskNumber: '1005', reason: 'completed', cwd: tempDir });
+
+    const findings = JSON.stringify([
+      {
+        severity: 'minor',
+        description: 'Legacy roster projection last_done moved from a newer task to an older task after accepted review; compatibility projection noise only, not a lifecycle authority defect.',
+        location: '.ai/agents/roster.json projection',
+      },
+    ]);
+    const result = await taskReviewCommand({
+      taskNumber: '1005',
+      agent: 'reviewer',
+      verdict: 'accepted_with_notes',
+      findings,
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      verdict: 'accepted_with_notes',
+      new_status: 'closed',
+      review_diagnostics: {
+        findings: [
+          {
+            posture: 'projection_only',
+            authority_class: 'compatibility_projection_noise',
+            blocking: false,
+            compatibility_only: true,
+            projection_only: true,
+            lifecycle_authority_defect: false,
+            capa_relevant: false,
+          },
+        ],
+        compatibility_projection_only: true,
+      },
+    });
+    const review = result.result as {
+      capa_recommendation?: { recommended: boolean; rationale?: string; next_command?: string };
+      review_diagnostics?: { findings: Array<{ triggers: string[] }> };
+    };
+    expect(review.capa_recommendation).toBeUndefined();
+    expect(JSON.stringify(result.result)).not.toContain('review rejection');
+  });
+
+  it('prints bounded human diagnostics for accepted legacy roster projection noise', async () => {
+    await claimTaskService({ taskNumber: '1005', agent: 'worker', cwd: tempDir });
+    await releaseTaskService({ taskNumber: '1005', reason: 'completed', cwd: tempDir });
+
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      const result = await taskReviewCommand({
+        taskNumber: '1005',
+        agent: 'reviewer',
+        verdict: 'accepted_with_notes',
+        findings: JSON.stringify([
+          {
+            severity: 'note',
+            description: 'Legacy roster projection last_done points at an older task; projection-only compatibility noise.',
+            location: 'roster projection',
+          },
+        ]),
+        cwd: tempDir,
+        format: 'human',
+      });
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      const output = consoleSpy.mock.calls.map((call) => call.join(' ')).join('\n');
+      expect(output).toContain('Review diagnostics: #1 projection_only compatibility_projection_noise');
+      expect(output).toContain('non-blocking/compatibility-only/projection-only');
+      expect(output).not.toContain('CAPA recommended');
+      expect(output).not.toContain('review rejection');
+    } finally {
+      consoleSpy.mockRestore();
+    }
+  });
+
+  it('keeps actual lifecycle authority defects CAPA-relevant without rejection wording on accepted reviews', async () => {
+    await claimTaskService({ taskNumber: '1006', agent: 'worker', cwd: tempDir });
+    await releaseTaskService({ taskNumber: '1006', reason: 'completed', cwd: tempDir });
+
+    const result = await taskReviewCommand({
+      taskNumber: '1006',
+      agent: 'reviewer',
+      verdict: 'accepted_with_notes',
+      findings: JSON.stringify([
+        {
+          severity: 'major',
+          description: 'Lifecycle authority defect: closure artifact and admission evidence disagree even though the review can accept current scope.',
+          location: 'task lifecycle row',
+        },
+      ]),
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      verdict: 'accepted_with_notes',
+      new_status: 'closed',
+      review_diagnostics: {
+        findings: [
+          {
+            posture: 'non_blocking',
+            authority_class: 'lifecycle_authority_defect',
+            lifecycle_authority_defect: true,
+            compatibility_only: false,
+            projection_only: false,
+            capa_relevant: true,
+          },
+        ],
+      },
+      capa_recommendation: {
+        recommended: true,
+      },
+    });
+    const review = result.result as {
+      capa_recommendation: { rationale: string; next_command: string; triggers: string[] };
+    };
+    expect(review.capa_recommendation.next_command).toContain('CAPA for task 1006 review findings');
+    expect(review.capa_recommendation.next_command).not.toContain('review rejection');
+    expect(review.capa_recommendation.rationale).not.toContain('Rejected review findings');
+    expect(review.capa_recommendation.triggers).toEqual(expect.arrayContaining([
+      'authority_boundary_bug',
+      'lifecycle_or_roster_authority_mismatch',
+    ]));
   });
 
   it('reports repair guidance and CAPA classification for missing reviewer identity', async () => {

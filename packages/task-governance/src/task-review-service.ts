@@ -32,6 +32,34 @@ export interface ReviewTaskServiceOptions {
   store?: TaskLifecycleStore;
 }
 
+export type ReviewFindingPosture = 'blocking' | 'non_blocking' | 'compatibility_only' | 'projection_only';
+
+export type ReviewFindingAuthorityClass =
+  | 'lifecycle_authority_defect'
+  | 'compatibility_projection_noise'
+  | 'review_content';
+
+export interface ReviewFindingDiagnostic {
+  index: number;
+  severity: ReviewFinding['severity'];
+  posture: ReviewFindingPosture;
+  authority_class: ReviewFindingAuthorityClass;
+  blocking: boolean;
+  compatibility_only: boolean;
+  projection_only: boolean;
+  lifecycle_authority_defect: boolean;
+  capa_relevant: boolean;
+  triggers: string[];
+  reason: string;
+}
+
+export interface ReviewDiagnostics {
+  findings: ReviewFindingDiagnostic[];
+  has_blocking_finding: boolean;
+  has_lifecycle_authority_defect: boolean;
+  compatibility_projection_only: boolean;
+}
+
 export interface ReviewTaskServiceResponse {
   exitCode: ExitCode;
   result: {
@@ -54,6 +82,7 @@ export interface ReviewTaskServiceResponse {
       next_command?: string;
       no_capa_reason?: string;
     };
+    review_diagnostics?: ReviewDiagnostics;
     review_authority_repair?: {
       reason: 'missing_reviewer_identity' | 'review_authority_not_admitted';
       commands: string[];
@@ -74,21 +103,109 @@ const CAPA_TRIGGER_PATTERNS: Array<{ trigger: string; pattern: RegExp }> = [
   { trigger: 'cross_site_recurrence_risk', pattern: /\bcross-site\b|\bacross sites\b|\bfuture sites\b|\brecurrence risk\b/i },
 ];
 
+const COMPATIBILITY_PROJECTION_PATTERN =
+  /\bcompatibility\b|\blegacy\b|\bprojection\b|\bprojection-only\b|\bprojection only\b|\bcompatibility-only\b|\bcompatibility only\b|\broster\.json\b|\blast_done\b/i;
+const ROSTER_PROJECTION_PATTERN =
+  /\broster\b|\blast_done\b|\bassignment projection\b|\bolder task\b|\bnewer task\b/i;
+const PROJECTION_NOISE_PATTERN =
+  /\bnoise\b|\bdrift\b|\bprojection-only\b|\bprojection only\b|\bcompatibility-only\b|\bcompatibility only\b|\blegacy roster\b|\blast_done\b.*\b(older|newer)\b|\bolder task\b|\bnewer task\b/i;
+const NEGATED_AUTHORITY_DEFECT_PATTERN =
+  /\bnot (?:a |an )?(?:lifecycle )?authority defect\b|\bno (?:lifecycle )?authority defect\b/i;
+const EXPLICIT_AUTHORITY_DEFECT_PATTERN =
+  /\bauthority defect\b|\blifecycle row\b|\btransition\b|\badmission\b|\bclosure artifact\b|\bstate machine\b|\btamper\b|\bcorrupt\b|\billicit crossing\b|\bunauthori[sz]ed\b/i;
+const LIFECYCLE_AUTHORITY_PATTERN =
+  /\blifecycle\b|\bauthority\b|\bboundary\b|\billicit crossing\b|\bstate machine\b|\bevidence\b|\btamper\b|\bunauthori[sz]ed\b|\bwrong authority\b/i;
+
+function findingText(finding: ReviewFinding): string {
+  return `${finding.severity} ${finding.description} ${finding.location ?? ''}`;
+}
+
+function triggersForFinding(finding: ReviewFinding): string[] {
+  const text = findingText(finding);
+  const triggers = new Set<string>();
+  for (const item of CAPA_TRIGGER_PATTERNS) {
+    if (item.pattern.test(text)) triggers.add(item.trigger);
+  }
+  return [...triggers].sort();
+}
+
+function isCompatibilityProjectionNoise(finding: ReviewFinding): boolean {
+  const text = findingText(finding);
+  const explicitAuthorityDefect =
+    EXPLICIT_AUTHORITY_DEFECT_PATTERN.test(text) && !NEGATED_AUTHORITY_DEFECT_PATTERN.test(text);
+  return (
+    COMPATIBILITY_PROJECTION_PATTERN.test(text) &&
+    ROSTER_PROJECTION_PATTERN.test(text) &&
+    PROJECTION_NOISE_PATTERN.test(text) &&
+    !explicitAuthorityDefect
+  );
+}
+
+function classifyReviewFinding(finding: ReviewFinding, index: number): ReviewFindingDiagnostic {
+  const blocking = finding.severity === 'blocking';
+  const triggers = triggersForFinding(finding);
+  const projectionOnly = isCompatibilityProjectionNoise(finding);
+  const lifecycleAuthorityDefect = !projectionOnly && LIFECYCLE_AUTHORITY_PATTERN.test(findingText(finding));
+  const compatibilityOnly = projectionOnly || (
+    COMPATIBILITY_PROJECTION_PATTERN.test(findingText(finding)) && !lifecycleAuthorityDefect
+  );
+  const posture: ReviewFindingPosture = projectionOnly
+    ? 'projection_only'
+    : compatibilityOnly
+      ? 'compatibility_only'
+      : blocking
+        ? 'blocking'
+        : 'non_blocking';
+  const authorityClass: ReviewFindingAuthorityClass = projectionOnly || compatibilityOnly
+    ? 'compatibility_projection_noise'
+    : lifecycleAuthorityDefect
+      ? 'lifecycle_authority_defect'
+      : 'review_content';
+
+  return {
+    index,
+    severity: finding.severity,
+    posture,
+    authority_class: authorityClass,
+    blocking,
+    compatibility_only: compatibilityOnly,
+    projection_only: projectionOnly,
+    lifecycle_authority_defect: lifecycleAuthorityDefect,
+    capa_relevant: !compatibilityOnly && (blocking || lifecycleAuthorityDefect || triggers.length > 0),
+    triggers,
+    reason: projectionOnly
+      ? 'Legacy roster compatibility projection drift is not lifecycle authority.'
+      : lifecycleAuthorityDefect
+        ? 'Finding names a lifecycle or authority defect.'
+        : blocking
+          ? 'Blocking finding requires review attention.'
+          : 'Finding is review content without authority-defect posture.',
+  };
+}
+
+function buildReviewDiagnostics(findings: ReviewFinding[]): ReviewDiagnostics {
+  const diagnostics = findings.map((finding, index) => classifyReviewFinding(finding, index));
+  return {
+    findings: diagnostics,
+    has_blocking_finding: diagnostics.some((finding) => finding.blocking),
+    has_lifecycle_authority_defect: diagnostics.some((finding) => finding.lifecycle_authority_defect),
+    compatibility_projection_only: diagnostics.length > 0 && diagnostics.every((finding) => finding.compatibility_only || finding.projection_only),
+  };
+}
+
 function capaRecommendationForReview(args: {
   verdict: 'accepted' | 'accepted_with_notes' | 'rejected';
-  findings: ReviewFinding[];
+  diagnostics: ReviewDiagnostics;
   taskNumber: string;
   noCapaReason?: string;
 }): ReviewTaskServiceResponse['result']['capa_recommendation'] | undefined {
   const triggers = new Set<string>();
-  if (args.verdict === 'rejected' && args.findings.some((finding) => finding.severity === 'blocking')) {
+  if (args.verdict === 'rejected' && args.diagnostics.has_blocking_finding) {
     triggers.add('blocking_rejected_review');
   }
-  for (const finding of args.findings) {
-    const text = `${finding.severity} ${finding.description} ${finding.location ?? ''}`;
-    for (const item of CAPA_TRIGGER_PATTERNS) {
-      if (item.pattern.test(text)) triggers.add(item.trigger);
-    }
+  for (const finding of args.diagnostics.findings) {
+    if (!finding.capa_relevant) continue;
+    for (const trigger of finding.triggers) triggers.add(trigger);
   }
   if (triggers.size === 0 && !args.noCapaReason) return undefined;
   if (triggers.size === 0 && args.noCapaReason) {
@@ -99,11 +216,16 @@ function capaRecommendationForReview(args: {
       no_capa_reason: args.noCapaReason,
     };
   }
+  const rejected = args.verdict === 'rejected';
   return {
     recommended: true,
     triggers: [...triggers].sort(),
-    rationale: 'Rejected review findings indicate recurrence risk; route containment/prevention/verification through CAPA if this is not a one-off local defect.',
-    next_command: `narada inbox submit --kind proposal --topic "CAPA for task ${args.taskNumber} review rejection" --payload-file <capa-proposal.json>`,
+    rationale: rejected
+      ? 'Rejected review findings indicate recurrence risk; route containment/prevention/verification through CAPA if this is not a one-off local defect.'
+      : 'Review findings indicate recurrence risk; route containment/prevention/verification through CAPA if this is not a one-off local defect.',
+    next_command: rejected
+      ? `narada inbox submit --kind proposal --topic "CAPA for task ${args.taskNumber} review rejection" --payload-file <capa-proposal.json>`
+      : `narada inbox submit --kind proposal --topic "CAPA for task ${args.taskNumber} review findings" --payload-file <capa-proposal.json>`,
     ...(args.noCapaReason ? { no_capa_reason: args.noCapaReason } : {}),
   };
 }
@@ -402,6 +524,7 @@ export async function reviewTaskService(
       };
     }
   }
+  const reviewDiagnostics = buildReviewDiagnostics(findings);
 
   let linkedReport = null;
   if (options.report) {
@@ -547,6 +670,9 @@ export async function reviewTaskService(
     admission_id: admission.result.admission_id,
     close_action: closeAction,
   };
+  if (reviewDiagnostics.findings.length > 0) {
+    result.review_diagnostics = reviewDiagnostics;
+  }
 
   if (closeBlockers.length > 0) {
     result.close_blockers = closeBlockers;
@@ -580,7 +706,7 @@ export async function reviewTaskService(
   }
   const capaRecommendation = capaRecommendationForReview({
     verdict,
-    findings,
+    diagnostics: reviewDiagnostics,
     taskNumber,
     noCapaReason: options.noCapaReason,
   });
