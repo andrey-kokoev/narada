@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T04:44:36.054Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777610660860_jbr3im
+closed_at: 2026-05-01T04:45:24.000Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Invert CLI shim freshness into embodiment readiness state
@@ -36,9 +45,9 @@ Define a CLI embodiment readiness state machine for narada shim execution; model
 
 ## Acceptance Criteria
 
-- [ ] Shim freshness is exposed as readiness state, not only warning text or command failure.
-- [ ] Commands distinguish read-only doctrine/task inspection, authority-affecting governance commands, and implementation/test commands under stale-dist conditions.
-- [ ] Auto-build is admitted only under explicit policy and does not smear over active Builder work.
-- [ ] Output includes exact repair command such as pnpm --filter @narada2/cli build when rebuild is required.
-- [ ] Tests cover source fresh, dist stale blocked, dist stale allowed for read-only, auto-build admitted, and active-work protection.
-- [ ] Documentation links this to Authority-Revealing Inversion and Plural Embodiment, Singular Authority.
+- [x] Shim freshness is exposed as readiness state, not only warning text or command failure.
+- [x] Commands distinguish read-only doctrine/task inspection, authority-affecting governance commands, and implementation/test commands under stale-dist conditions.
+- [x] Auto-build is admitted only under explicit policy and does not smear over active Builder work.
+- [x] Output includes exact repair command such as pnpm --filter @narada2/cli build when rebuild is required.
+- [x] Tests cover source fresh, dist stale blocked, dist stale allowed for read-only, auto-build admitted, and active-work protection.
+- [x] Documentation links this to Authority-Revealing Inversion and Plural Embodiment, Singular Authority.
