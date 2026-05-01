@@ -18,6 +18,7 @@ User-facing product proofs, onboarding, operator loop, and runbooks. These are t
 - [`first-time-operator-success-path.md`](product/first-time-operator-success-path.md) — First-time Operator path across Operation, Site, role, surface, intake, work-next, and readiness
 - [`agent-reconstruction-specification.md`](product/agent-reconstruction-specification.md) — Agent-readable reconstruction path for blocked/internal environments
 - [`site-bootstrap-contract.md`](product/site-bootstrap-contract.md) — Canonical Site first-run path (realization/runtime locus setup)
+- [`site-qualification-policy.md`](product/site-qualification-policy.md) — Site-level role/principal qualification and requalification policy
 - [`first-operation-proof.md`](product/first-operation-proof.md) — Canonical mailbox operation product proof
 - [`operator-loop.md`](product/operator-loop.md) — Minimal operator rhythm for live operations
 - [`runbook.md`](product/runbook.md) — Troubleshooting, setup, and lifecycle runbook

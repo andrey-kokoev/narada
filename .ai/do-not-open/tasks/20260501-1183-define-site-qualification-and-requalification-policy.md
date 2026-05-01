@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T04:48:04.045Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777610876856_2r18jl
+closed_at: 2026-05-01T04:48:41.225Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Define Site qualification and requalification policy
@@ -36,8 +45,8 @@ Define SiteQualificationPolicy doctrine and product shape; specify qualification
 
 ## Acceptance Criteria
 
-- [ ] Defines qualification as an authority object distinct from injected text or reminder messages.
-- [ ] Includes competence record, requalification trigger, effectiveness check, nonconforming work, training matrix, change impact assessment, and release gate concepts.
-- [ ] Specifies triggers including law change, role change, inactivity, repeated defect, new capability class, sensitive work, and N completed tasks.
-- [ ] Explains how qualification state blocks only governed work classes, not all agent activity.
-- [ ] Links to LawPropagationReceipt, AgentWorkDutyLoop, and Site governance docs.
+- [x] Defines qualification as an authority object distinct from injected text or reminder messages.
+- [x] Includes competence record, requalification trigger, effectiveness check, nonconforming work, training matrix, change impact assessment, and release gate concepts.
+- [x] Specifies triggers including law change, role change, inactivity, repeated defect, new capability class, sensitive work, and N completed tasks.
+- [x] Explains how qualification state blocks only governed work classes, not all agent activity.
+- [x] Links to LawPropagationReceipt, AgentWorkDutyLoop, and Site governance docs.

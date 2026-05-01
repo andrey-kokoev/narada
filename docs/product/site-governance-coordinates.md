@@ -29,6 +29,7 @@ When durable governance coordinates, runtime truth, and operator/session knowled
 | `operator_identity` | Principal label for human authority. | Chat labels should resolve to a declared principal. |
 | `agent_identity_contract` | Stable orientation for fresh architects. | Agent memory or chat habit is not the contract. |
 | `agent_role_contracts` | Role-specific bootstrap contracts for currently inhabited AI roles. | Role orientation metadata does not grant mutation, effect, or admission authority. |
+| `qualification_records` | Site-level records that a principal is qualified for specific governed work classes. | Prompt reminders, roster rows, and Operator Surface bindings are not competence or admission evidence. |
 | `local_overlays` | Site-local law, guidance, or policy overlays. | Local additions must not silently fork global doctrine. |
 | `federation_policy` | Receive/publish posture with peer Sites. | Federation is influence and handoff, not authority replication. |
 

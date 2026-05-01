@@ -45,6 +45,8 @@ An agent law receipt lives at `.ai/law/receipts/<agent>__<change-id>.json` and c
 
 The receipt proves only that the agent acknowledged reading the law change. It does not grant authority, admit evidence, bind a runtime handle, bypass role/locus/capability rules, or prove that the agent understood correctly.
 
+When a law change affects governed work admission, the receipt becomes one input to [Site Qualification Policy](../product/site-qualification-policy.md). Qualification decides whether the receipt plus competence evidence is enough to keep admitting a principal for a specific Site work class.
+
 ## Receipt State Machine
 
 Law propagation uses one explicit receipt state machine:

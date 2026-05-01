@@ -82,6 +82,7 @@ Admission must inspect bounded surfaces before selecting any next action:
 | Inbox | Are there received or claimed envelopes relevant to this role? |
 | Handoff | Is Builder or Architect waiting for report, review, or handoff artifact? |
 | Verification | Has required TIZ/CEIZ verification passed or is it missing/stale? |
+| Qualification | Is this principal qualified for the governed work class, or is requalification required? |
 | Residuals | Are blockers or field conditions already recorded? |
 | Worktree | Are there uncommitted source/governance changes, and are they role-partitioned? |
 | Authority posture | Would the next step mutate task, inbox, publication, external effects, or capabilities? |
@@ -159,6 +160,8 @@ Resident must not mutate Site governance or execute effects by convenience.
 | `handoff_needed` | Another role must review, admit, route, or execute before progress continues. |
 
 Role-loop, work-next, roster, and Operator Surface status should report this state or a compatible projection so Operator nudges produce deterministic next action.
+
+Qualification blockers follow [Site Qualification Policy](../product/site-qualification-policy.md). They should block only the affected governed work class; they should not prevent read-only inspection, status reporting, or submission of a bounded observation about the missing qualification.
 
 ## Admitted Outcomes
 
