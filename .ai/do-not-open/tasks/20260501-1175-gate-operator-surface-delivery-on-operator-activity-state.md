@@ -1,5 +1,5 @@
 ---
-status: opened
+status: claimed
 ---
 
 # Gate operator-surface delivery on operator activity state
