@@ -33,11 +33,19 @@ function setupRepo(tempDir: string): void {
   );
   const store = openTaskLifecycleStore(tempDir);
   try {
-    for (const agent of ['worker', 'reviewer']) {
+    for (const agent of ['worker', 'reviewer', 'architect-reviewer', 'architect-unadmitted']) {
       store.upsertRosterEntry({
         agent_id: agent,
-        role: agent === 'reviewer' ? 'reviewer' : 'implementer',
-        capabilities_json: JSON.stringify(agent === 'reviewer' ? ['review'] : ['claim']),
+        role: agent === 'reviewer'
+          ? 'reviewer'
+          : agent.startsWith('architect-')
+            ? 'architect'
+            : 'implementer',
+        capabilities_json: JSON.stringify(
+          agent === 'reviewer' || agent === 'architect-reviewer'
+            ? ['review']
+            : ['claim'],
+        ),
         first_seen_at: '2026-01-01T00:00:00Z',
         last_active_at: '2026-01-01T00:00:00Z',
         status: 'idle',
@@ -63,6 +71,16 @@ function setupRepo(tempDir: string): void {
   writeFileSync(
     join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-1001-capa-review-task.md'),
     '---\ntask_id: 1001\nstatus: opened\n---\n\n# Task 1001: CAPA Review Task\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Execution Notes\nCompleted.\n\n## Verification\nFocused test passed.\n',
+  );
+
+  writeFileSync(
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-1002-architect-review-task.md'),
+    '---\ntask_id: 1002\nstatus: opened\n---\n\n# Task 1002: Architect Review Task\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Execution Notes\nCompleted.\n\n## Verification\nFocused test passed.\n',
+  );
+
+  writeFileSync(
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-1003-unauthorized-review-task.md'),
+    '---\ntask_id: 1003\nstatus: opened\n---\n\n# Task 1003: Unauthorized Review Task\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Execution Notes\nCompleted.\n\n## Verification\nFocused test passed.\n',
   );
 }
 
@@ -246,6 +264,87 @@ describe('task review command', () => {
     const store = openTaskLifecycleStore(tempDir);
     try {
       expect(store.getLifecycle('20260420-1001-capa-review-task')?.status).toBe('opened');
+    } finally {
+      store.db.close();
+    }
+  });
+
+  it('reports repair guidance and CAPA classification for missing reviewer identity', async () => {
+    const result = await taskReviewCommand({
+      taskNumber: '999',
+      agent: 'missing-reviewer',
+      verdict: 'accepted',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      review_authority_repair: {
+        reason: 'missing_reviewer_identity',
+        commands: [
+          'narada task roster add missing-reviewer --role reviewer --capability review',
+          'narada task review 999 --agent missing-reviewer --verdict <accepted|accepted_with_notes|rejected>',
+        ],
+      },
+      capa_recommendation: {
+        recommended: true,
+        triggers: ['authority_boundary_bug', 'reviewer_identity_mismatch'],
+      },
+    });
+  });
+
+  it('reports repair guidance when reviewer role lacks admitted review authority', async () => {
+    await claimTaskService({ taskNumber: '1003', agent: 'worker', cwd: tempDir });
+    await releaseTaskService({ taskNumber: '1003', reason: 'completed', cwd: tempDir });
+
+    const result = await taskReviewCommand({
+      taskNumber: '1003',
+      agent: 'architect-unadmitted',
+      verdict: 'accepted',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      review_authority_repair: {
+        reason: 'review_authority_not_admitted',
+        commands: [
+          'narada task roster add architect-unadmitted --role architect --capability review',
+          'narada task review 1003 --agent architect-unadmitted --verdict <accepted|accepted_with_notes|rejected>',
+        ],
+      },
+      capa_recommendation: {
+        recommended: true,
+        triggers: ['authority_boundary_bug', 'reviewer_identity_mismatch'],
+      },
+    });
+  });
+
+  it('admits declared architect-as-reviewer authority without operator substitution', async () => {
+    await claimTaskService({ taskNumber: '1002', agent: 'worker', cwd: tempDir });
+    await releaseTaskService({ taskNumber: '1002', reason: 'completed', cwd: tempDir });
+
+    const result = await taskReviewCommand({
+      taskNumber: '1002',
+      agent: 'architect-reviewer',
+      verdict: 'accepted',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      verdict: 'accepted',
+      new_status: 'closed',
+    });
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      expect(store.listReviews('20260420-1002-architect-review-task')[0]?.reviewer_agent_id).toBe('architect-reviewer');
     } finally {
       store.db.close();
     }

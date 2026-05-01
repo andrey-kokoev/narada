@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T03:24:57.853Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777605871106_pn87dj
+closed_at: 2026-05-01T03:25:24.029Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Fix reviewer identity and role authority coherence
@@ -36,8 +45,8 @@ Define review authority semantics for named architect/reviewer identities; add r
 
 ## Acceptance Criteria
 
-- [ ] task review reports exact repair guidance when the requested reviewer identity is not admitted or lacks reviewer/admin authority.
-- [ ] A Site can declare named reviewer or architect-as-reviewer authority without recording reviews as operator workarounds.
-- [ ] Reviewer identity mismatch during governed review creates or recommends CAPA classification instead of silent principal substitution.
-- [ ] Tests cover missing reviewer identity, unauthorized reviewer role, and admitted reviewer identity.
-- [ ] Documentation distinguishes Operator, Architect, Reviewer, Builder, and Observer review authority boundaries.
+- [x] task review reports exact repair guidance when the requested reviewer identity is not admitted or lacks reviewer/admin authority.
+- [x] A Site can declare named reviewer or architect-as-reviewer authority without recording reviews as operator workarounds.
+- [x] Reviewer identity mismatch during governed review creates or recommends CAPA classification instead of silent principal substitution.
+- [x] Tests cover missing reviewer identity, unauthorized reviewer role, and admitted reviewer identity.
+- [x] Documentation distinguishes Operator, Architect, Reviewer, Builder, and Observer review authority boundaries.

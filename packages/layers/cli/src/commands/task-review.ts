@@ -90,6 +90,16 @@ export async function taskReviewCommand(
 
   if (serviceResult.exitCode !== ExitCode.SUCCESS) {
     fmt.message((result as { error?: string }).error ?? 'Review failed', 'error');
+    const repair = (result as { review_authority_repair?: { commands: string[]; no_workaround: string } }).review_authority_repair;
+    const capa = (result as { capa_recommendation?: { recommended: boolean; triggers: string[]; next_command?: string } }).capa_recommendation;
+    if (repair) {
+      fmt.message(repair.no_workaround, 'warning');
+      for (const command of repair.commands) fmt.message(command, 'info');
+    }
+    if (capa?.recommended) {
+      fmt.message(`CAPA recommended: ${capa.triggers.join(', ')}`, 'warning');
+      if (capa.next_command) fmt.message(capa.next_command, 'info');
+    }
   } else if (result.status === 'success' && 'new_status' in result) {
     const target = (result as { verdict: string; new_status: string }).new_status;
     const evidenceBlocked = (result as { evidence_blocked?: boolean }).evidence_blocked;

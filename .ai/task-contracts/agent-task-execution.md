@@ -83,7 +83,15 @@ narada work-next --agent architect --peek --format json
 
 Builder-facing `narada work-next --agent <builder>` output must surface pending review/closure context as Architect duty-loop work when that posture suppresses further Builder assignment. Builders finish, report, and provide evidence. Architects/reviewers review, unblock, admit, close, or route blockers.
 
-Architect coordination is not automatically review authority. If the local task review gate requires `reviewer`, `operator`, or `admin`, Architect must route the closure through that sanctioned identity instead of running `task review --agent <architect-id>`. The compact duty loop should surface `narada task review <task> --agent operator --verdict accepted` or the local reviewer identity as the review command when Architect itself lacks review authority.
+Architect coordination is not automatically review authority. Review authority belongs to a declared `reviewer` or `admin`, or to a declared `architect` whose Site roster grants review capability. If an Architect lacks that declaration, route the closure through an admitted reviewer instead of substituting `operator` or another principal as a workaround.
+
+Declare architect-as-reviewer authority through the roster authority surface:
+
+```bash
+narada task roster add <architect-id> --role architect --capability review
+```
+
+If `task review` refuses the requested reviewer identity, follow its `review_authority_repair` commands. Do not record the review as `operator` unless Operator is the actual reviewing principal.
 
 After any rejected review or blocking finding, the role loop must make a CAPA-needed decision instead of relying on memory:
 

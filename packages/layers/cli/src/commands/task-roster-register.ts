@@ -34,6 +34,7 @@ export function registerTaskRosterCommands(taskCmd: Command): void {
     .command('add <agent-id>')
     .description('Add an agent to the roster projection')
     .option('--role <role>', 'Agent role', 'implementer')
+    .option('--capability <name...>', 'Capability to declare for this agent; repeat or pass multiple values')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .action(directCommandAction<[string, Record<string, unknown>]>({
       command: 'task roster add',
@@ -41,6 +42,7 @@ export function registerTaskRosterCommands(taskCmd: Command): void {
       invocation: (agentId, opts) => taskRosterAddCommand({
         agent: agentId,
         role: opts.role as string | undefined,
+        capabilities: opts.capability as string[] | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(),
       }),

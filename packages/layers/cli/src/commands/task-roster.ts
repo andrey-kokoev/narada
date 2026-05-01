@@ -54,6 +54,7 @@ export interface TaskRosterAgentOptions extends TaskRosterOptions {
 
 export interface TaskRosterAddOptions extends TaskRosterAgentOptions {
   role?: string;
+  capabilities?: string[];
 }
 
 interface RosterOwnershipHint {
@@ -169,6 +170,18 @@ export async function taskRosterAddCommand(
     const roster = await loadRoster(cwd);
     const existing = roster.agents.find((agent) => agent.agent_id === agentId);
     if (existing) {
+      const capabilities = options.capabilities && options.capabilities.length > 0
+        ? [...new Set([...existing.capabilities, ...options.capabilities])]
+        : existing.capabilities;
+      const role = options.role ?? existing.role;
+      const changed = role !== existing.role || capabilities.join('\u0000') !== existing.capabilities.join('\u0000');
+      if (changed) {
+        existing.role = role;
+        existing.capabilities = capabilities;
+        existing.last_active_at = new Date().toISOString();
+        existing.updated_at = existing.last_active_at;
+        await saveRoster(cwd, roster);
+      }
       return {
         exitCode: ExitCode.SUCCESS,
         result: {
@@ -176,16 +189,22 @@ export async function taskRosterAddCommand(
           agent: agentId,
           agent_status: existing.status ?? 'idle',
           already_exists: true,
+          updated: changed,
+          role,
+          capabilities,
           roster_updated_at: roster.updated_at,
         },
       };
     }
 
     const now = new Date().toISOString();
+    const capabilities = options.capabilities && options.capabilities.length > 0
+      ? [...new Set(options.capabilities)]
+      : ['derive', 'propose', 'claim', 'execute', 'resolve', 'confirm'];
     roster.agents.push({
       agent_id: agentId,
       role: options.role ?? 'implementer',
-      capabilities: ['derive', 'propose', 'claim', 'execute', 'resolve', 'confirm'],
+      capabilities,
       first_seen_at: now,
       last_active_at: now,
       status: 'idle',
@@ -202,6 +221,7 @@ export async function taskRosterAddCommand(
         agent: agentId,
         agent_status: 'idle',
         role: options.role ?? 'implementer',
+        capabilities,
         roster_updated_at: roster.updated_at,
       },
     };

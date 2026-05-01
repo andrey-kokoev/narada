@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
 import {
+  type AgentRosterEntry,
   findTaskFile,
   isValidTransition,
   loadAssignment,
@@ -52,6 +53,11 @@ export interface ReviewTaskServiceResponse {
       next_command?: string;
       no_capa_reason?: string;
     };
+    review_authority_repair?: {
+      reason: 'missing_reviewer_identity' | 'review_authority_not_admitted';
+      commands: string[];
+      no_workaround: string;
+    };
     error?: string;
   };
 }
@@ -96,6 +102,43 @@ function capaRecommendationForReview(args: {
     rationale: 'Rejected review findings indicate recurrence risk; route containment/prevention/verification through CAPA if this is not a one-off local defect.',
     next_command: `narada inbox submit --kind proposal --topic "CAPA for task ${args.taskNumber} review rejection" --payload-file <capa-proposal.json>`,
     ...(args.noCapaReason ? { no_capa_reason: args.noCapaReason } : {}),
+  };
+}
+
+function hasReviewAuthority(agent: AgentRosterEntry): boolean {
+  if (agent.role === 'reviewer' || agent.role === 'admin') return true;
+  return agent.role === 'architect' && (
+    agent.capabilities.includes('review') ||
+    agent.capabilities.includes('task_review') ||
+    agent.capabilities.includes('architect_as_reviewer')
+  );
+}
+
+function reviewerAuthorityRepair(args: {
+  taskNumber: string;
+  agentId: string;
+  reason: 'missing_reviewer_identity' | 'review_authority_not_admitted';
+  role?: string;
+}): NonNullable<ReviewTaskServiceResponse['result']['review_authority_repair']> {
+  const authorityCommand = args.role === 'architect'
+    ? `narada task roster add ${args.agentId} --role architect --capability review`
+    : `narada task roster add ${args.agentId} --role reviewer --capability review`;
+  return {
+    reason: args.reason,
+    commands: [
+      authorityCommand,
+      `narada task review ${args.taskNumber} --agent ${args.agentId} --verdict <accepted|accepted_with_notes|rejected>`,
+    ],
+    no_workaround: 'Do not record this review as operator or another principal unless that principal is the actual admitted reviewer.',
+  };
+}
+
+function reviewerIdentityCapaRecommendation(agentId: string): NonNullable<ReviewTaskServiceResponse['result']['capa_recommendation']> {
+  return {
+    recommended: true,
+    triggers: ['authority_boundary_bug', 'reviewer_identity_mismatch'],
+    rationale: `Review requested by ${agentId} could not be admitted under declared review authority; route CAPA if this caused or could cause workaround principal substitution.`,
+    next_command: `narada inbox submit --kind proposal --topic "CAPA for reviewer identity mismatch: ${agentId}" --payload-file <capa-proposal.json>`,
   };
 }
 
@@ -152,15 +195,31 @@ export async function reviewTaskService(
   if (!agent) {
     return {
       exitCode: ExitCode.INVALID_CONFIG,
-      result: { status: 'error', error: `Agent not found in roster: ${agentId}` },
+      result: {
+        status: 'error',
+        error: `Agent not found in roster: ${agentId}`,
+        review_authority_repair: reviewerAuthorityRepair({
+          taskNumber,
+          agentId,
+          reason: 'missing_reviewer_identity',
+        }),
+        capa_recommendation: reviewerIdentityCapaRecommendation(agentId),
+      },
     };
   }
-  if (agent.role !== 'reviewer' && agent.role !== 'admin') {
+  if (!hasReviewAuthority(agent)) {
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: {
         status: 'error',
-        error: `Agent ${agentId} has role '${agent.role}' but only 'reviewer' or 'admin' may review tasks`,
+        error: `Agent ${agentId} has role '${agent.role}' without admitted review authority`,
+        review_authority_repair: reviewerAuthorityRepair({
+          taskNumber,
+          agentId,
+          reason: 'review_authority_not_admitted',
+          role: agent.role,
+        }),
+        capa_recommendation: reviewerIdentityCapaRecommendation(agentId),
       },
     };
   }
