@@ -1,5 +1,5 @@
 ---
-status: opened
+status: claimed
 ---
 
 # Fix accepted review lifecycle dead-end after evidence repair
