@@ -46,6 +46,7 @@ import { registerOperatorSurfaceCommands } from './commands/operator-surface-reg
 import { registerOperatorCommands } from './commands/operator-register.js';
 import { registerLawCommands } from './commands/law-register.js';
 import { registerKbCommands } from './commands/kb-register.js';
+import { registerQualificationCommands } from './commands/qualification-register.js';
 
 loadEnvFile('./.env');
 
@@ -92,6 +93,7 @@ registerResumeCommands(program);
 registerWorkNextCommands(program);
 registerRoleLoopCommands(program);
 registerPrincipalCommands(program);
+registerQualificationCommands(program);
 
 const taskCmd = program
   .command('task')

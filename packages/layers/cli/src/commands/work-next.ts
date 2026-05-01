@@ -29,6 +29,8 @@ import { taskPeekNextCommand, taskWorkNextCommand } from './task-next.js';
 import { agentAddressResolutionPublic, resolveAgentAddress } from '../lib/agent-address.js';
 import { classifyTaskHandoffActionability } from '../lib/task-actionability.js';
 import { parseTaskSpecFromMarkdown } from '../lib/task-spec.js';
+import { checkLawAdmission } from '../lib/law-sync.js';
+import { evaluateSiteQualification, qualificationBlocksGovernedWork } from '../lib/site-qualification.js';
 
 export interface WorkNextOptions {
   agent?: string;
@@ -457,6 +459,41 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
   const resolvedAgent = agentResolution.resolved_agent;
   const agentAddressResolution = agentAddressResolutionPublic(agentResolution);
   const resolvedRosterEntry = roster.agents.find((entry) => entry.agent_id === resolvedAgent);
+  const roleId = resolvedRosterEntry?.role ?? null;
+  const lawAdmission = await checkLawAdmission(cwd, resolvedAgent, roleId ?? undefined);
+  const taskConstructionQualification = evaluateSiteQualification({
+    cwd,
+    principalId: resolvedAgent,
+    roleId,
+    workClass: 'task_construction',
+    lawAdmission,
+  });
+  if (qualificationBlocksGovernedWork(taskConstructionQualification)) {
+    checked.push({ zone: 'task_work', status: 'blocked', reason: taskConstructionQualification.state });
+    const result = {
+      status: 'blocked',
+      reason: 'qualification_required_for_task_construction',
+      action_kind: 'qualification_block',
+      agent_id: resolvedAgent,
+      requested_agent: requestedAgent,
+      resolved_agent: resolvedAgent,
+      agent_address_resolution: agentAddressResolution,
+      primary: null,
+      checked,
+      qualification: taskConstructionQualification,
+      law_admission: lawAdmission,
+      doctrine_guard: doctrineGuard,
+      safe_actions: taskConstructionQualification.allowed_safe_actions,
+      next_step: taskConstructionQualification.commands.effectiveness_check
+        ?? taskConstructionQualification.commands.absorption
+        ?? taskConstructionQualification.commands.receipt
+        ?? taskConstructionQualification.commands.repair,
+    };
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: formattedResult(result, formatHuman(result), format),
+    };
+  }
 
   const currentTask = await findCurrentTaskWork(cwd, resolvedAgent);
   if (currentTask) {

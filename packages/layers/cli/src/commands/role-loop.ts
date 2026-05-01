@@ -64,6 +64,10 @@ function dirtyOwnership(cwd: string): Record<string, unknown> {
   };
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
 function compactWorkNext(result: unknown): Record<string, unknown> {
   const record = result && typeof result === 'object' ? result as Record<string, unknown> : {};
   const primary = record.primary && typeof record.primary === 'object' ? record.primary as Record<string, unknown> : null;
@@ -78,6 +82,8 @@ function compactWorkNext(result: unknown): Record<string, unknown> {
     envelope_id: primary?.envelope_id ?? null,
     reason: record.reason ?? null,
     next_step: record.next_step ?? null,
+    qualification_state: asRecord(record.qualification).state ?? null,
+    qualification: record.qualification ?? null,
     pending_reviews_count: pendingReviews.length,
     checked: Array.isArray(record.checked) ? record.checked : [],
   };
@@ -100,6 +106,7 @@ function deriveDutyLoopState(args: {
   dirty: Record<string, unknown>;
 }): AgentWorkDutyLoopState {
   if (args.lawBlocked) return 'blocked';
+  if (args.next.qualification_state && args.next.qualification_state !== 'qualification_current') return 'blocked';
   if (args.next.task_number != null) return 'has_active_task';
   if (Number(args.next.pending_reviews_count ?? 0) > 0) return 'handoff_needed';
   const counts = args.workboard.counts && typeof args.workboard.counts === 'object'
@@ -163,6 +170,7 @@ export async function roleLoopNextCommand(options: RoleLoopNextOptions): Promise
       duty_loop_state: dutyLoopState,
       duty_loop_transition_basis: {
         law_blocked: lawBlocks,
+        qualification_state: compactNext.qualification_state,
         active_task: compactNext.task_number,
         pending_reviews_count: compactNext.pending_reviews_count,
         dirty: dirty.dirty,
@@ -171,6 +179,7 @@ export async function roleLoopNextCommand(options: RoleLoopNextOptions): Promise
       workboard: compactBoard,
       dirty_ownership: dirty,
       pending_law_notices: pendingLawNotices,
+      qualification: compactNext.qualification,
       recommended_action: lawBlocks ? 'law_receipt_required' : compactNext.action_kind ?? 'inspect',
       recommended_command: lawBlocks
         ? `narada law unread --agent ${agent}${lawAdmission.role ? ` --role ${lawAdmission.role}` : ''} --format json`

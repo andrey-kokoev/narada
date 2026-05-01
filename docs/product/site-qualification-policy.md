@@ -158,6 +158,24 @@ Examples:
 
 Release gates should block only the affected work class and should return the exact missing qualification, requalification trigger, and repair path.
 
+## Commands
+
+Current read-only inspection commands:
+
+```bash
+narada qualification status --agent builder --role builder --work-class task_construction --format json
+narada qualification effectiveness-check --agent builder --role builder --work-class task_construction --format json
+```
+
+Law receipt and absorption commands remain under the law surface:
+
+```bash
+narada law ack <change-id> --agent builder --role builder --status acknowledged
+narada law ack <change-id> --agent builder --role builder --status absorbed
+```
+
+Duty-loop and work-next output should return one of these exact commands when qualification blocks a governed work class.
+
 ## Relationship To Existing Narada Surfaces
 
 | Surface | Relationship |

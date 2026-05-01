@@ -110,6 +110,42 @@ describe('work-next unified next action', () => {
     expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-test.md'), 'utf8')).toContain('status: opened');
   });
 
+  it('reports qualification blockers before governed task claim while preserving safe inspection', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'site-qualification.json'),
+      JSON.stringify({
+        policies: [{ role_id: 'architect', work_class: 'task_construction' }],
+        records: [{
+          principal_id: 'architect',
+          role_id: 'architect',
+          work_classes: ['task_construction'],
+          status: 'qualified',
+          expires_at: '2026-01-01T00:00:00.000Z',
+        }],
+      }, null, 2),
+    );
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-test.md'),
+      '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n\n## Goal\nDo task work.\n\n## Acceptance Criteria\n- [ ] Do task work.\n',
+    );
+
+    const result = await workNextCommand({ agent: 'architect', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'blocked',
+      action_kind: 'qualification_block',
+      reason: 'qualification_required_for_task_construction',
+      qualification: {
+        state: 'expired',
+        blocked_work_classes: ['task_construction'],
+        allowed_safe_actions: expect.arrayContaining(['narada work-next --agent architect --peek --format json']),
+      },
+      checked: [{ zone: 'task_work', status: 'blocked', reason: 'expired' }],
+    });
+    expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-test.md'), 'utf8')).toContain('status: opened');
+  });
+
   it('peeks current task before claimable future work', async () => {
     seedRoster(tempDir, 'working', 100);
     writeFileSync(
