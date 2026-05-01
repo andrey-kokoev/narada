@@ -75,6 +75,11 @@ export interface OperatorSurfaceBindingOptions {
   as?: string;
   runtimeLocus?: string;
   handle?: string;
+  observedHandle?: string;
+  windowTitle?: string;
+  windowClass?: string;
+  processName?: string;
+  processId?: string;
   staleAfter?: string;
   format?: string;
 }
@@ -138,6 +143,8 @@ interface OperatorSurfaceRuntimeBinding {
   status?: 'active' | 'stale' | 'revoked';
   stale_after?: string;
   desktop_id?: string;
+  target_evidence?: Record<string, unknown>;
+  postcondition_evidence?: Record<string, unknown>;
 }
 
 type OperatorActivityState = 'idle' | 'active_typing' | 'active_pointer' | 'unknown';
@@ -666,9 +673,9 @@ function bindFocusedHandoff(identity: string, runtimeLocus: string | null): {
   if (runtimeLocus?.trim()) {
     return {
       status: 'executable',
-      command: `narada operator-surface bind-focused --identity ${identity} --runtime-locus ${runtimeLocus.trim()}`,
+      command: `narada operator-surface bind-focused --identity ${identity} --runtime-locus ${runtimeLocus.trim()} --handle <captured-hwnd-or-stable-handle>`,
       discovery_commands: [],
-      explanation: 'Run this command in the User/PC/runtime Site that owns the focused volatile surface handle.',
+      explanation: 'Run this command in the User/PC/runtime Site after capturing the target volatile handle; ambient foreground focus is not authority.',
     };
   }
   return {
@@ -677,9 +684,9 @@ function bindFocusedHandoff(identity: string, runtimeLocus: string | null): {
     discovery_commands: [
       'narada sites list --format json',
       `narada operator-surface status --format json`,
-      `narada operator-surface bind-focused --identity ${identity} --runtime-locus <runtime-locus-from-status>`,
+      `narada operator-surface bind-focused --identity ${identity} --runtime-locus <runtime-locus-from-status> --handle <captured-hwnd-or-stable-handle>`,
     ],
-    explanation: 'Runtime-locus id is not known in this authority locus. Discover the owning User/PC/runtime Site before mutating volatile handle bindings.',
+    explanation: 'Runtime-locus id is not known in this authority locus. Discover the owning User/PC/runtime Site, capture the target handle, then mutate the binding.',
   };
 }
 
@@ -690,32 +697,70 @@ function bindFocusedRepairCommand(identity: string, runtimeLocus: string | null)
 
 function observedCurrentRuntimeHandle(options: OperatorSurfaceBindingOptions): {
   handle: string;
+  observedHandle: string;
   transport: string;
   source: string;
-} {
+  evidence: Record<string, unknown>;
+} | null {
   const explicit = options.handle?.trim();
   if (explicit) {
-    return { handle: explicit, transport: 'explicit_runtime_handle', source: '--handle' };
+    const observedHandle = options.observedHandle?.trim() || explicit;
+    return {
+      handle: explicit,
+      observedHandle,
+      transport: explicit.startsWith('hwnd:') ? 'windows_hwnd' : 'explicit_runtime_handle',
+      source: '--handle',
+      evidence: {
+        requested_handle: explicit,
+        observed_handle: observedHandle,
+        handle_source: '--handle',
+        window_title: options.windowTitle?.trim() || null,
+        window_class: options.windowClass?.trim() || null,
+        process_name: options.processName?.trim() || null,
+        process_id: options.processId?.trim() || null,
+        ambient_foreground_used: false,
+      },
+    };
   }
   if (process.env.CODEX_THREAD_ID?.trim()) {
+    const handle = `codex-thread:${process.env.CODEX_THREAD_ID.trim()}`;
     return {
-      handle: `codex-thread:${process.env.CODEX_THREAD_ID.trim()}`,
+      handle,
+      observedHandle: handle,
       transport: 'codex_cli_thread',
       source: 'CODEX_THREAD_ID',
+      evidence: {
+        requested_handle: handle,
+        observed_handle: handle,
+        handle_source: 'CODEX_THREAD_ID',
+        window_title: null,
+        window_class: null,
+        process_name: null,
+        process_id: null,
+        ambient_foreground_used: false,
+      },
     };
   }
   if (process.env.WT_SESSION?.trim()) {
+    const handle = `windows-terminal:${process.env.WT_SESSION.trim()}`;
     return {
-      handle: `windows-terminal:${process.env.WT_SESSION.trim()}`,
+      handle,
+      observedHandle: handle,
       transport: 'windows_terminal_session',
       source: 'WT_SESSION',
+      evidence: {
+        requested_handle: handle,
+        observed_handle: handle,
+        handle_source: 'WT_SESSION',
+        window_title: options.windowTitle?.trim() || null,
+        window_class: options.windowClass?.trim() || null,
+        process_name: options.processName?.trim() || null,
+        process_id: options.processId?.trim() || null,
+        ambient_foreground_used: false,
+      },
     };
   }
-  return {
-    handle: `process:${process.pid}`,
-    transport: 'process_session',
-    source: 'process.pid',
-  };
+  return null;
 }
 
 function isStaleBinding(binding: OperatorSurfaceRuntimeBinding, now = new Date()): boolean {
@@ -1496,7 +1541,7 @@ export async function operatorSurfaceAgentForkCommand(
       evidence_kind: 'fork_adoption',
       status: options.exec ? 'pending_runtime_locus_execution' : 'pending_agent_ack',
       expected_identity_id: identityName,
-      expected_adoption_command: `narada operator-surface bind-focused --identity ${identityName} --runtime-locus ${options.runtimeLocus ?? '<runtime-locus-from-status>'}`,
+      expected_adoption_command: `narada operator-surface bind-focused --identity ${identityName} --runtime-locus ${options.runtimeLocus ?? '<runtime-locus-from-status>'} --handle <captured-hwnd-or-stable-handle>`,
       created_at: now,
     };
     await writeFile(handoffPath, `${JSON.stringify(handoff, null, 2)}\n`, 'utf8');
@@ -2429,10 +2474,34 @@ export async function operatorSurfaceBindFocusedCommand(
   }
   if (known && requestedRuntimeLocus) {
     const observed = observedCurrentRuntimeHandle(options);
+    if (!observed) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          reason: 'runtime_binding_target_evidence_required',
+          identity,
+          requested_runtime_locus: requestedRuntimeLocus,
+          mutation_performed: false,
+          runtime_binding_mutated: false,
+          ambient_foreground_refused: true,
+          required_evidence: [
+            'requested_handle',
+            'observed_handle',
+            'window_title',
+            'window_class',
+            'process_name_or_id',
+            'postcondition_bound_handle',
+          ],
+          repair_command: `Capture the target HWND or stable runtime handle first, then run: narada operator-surface bind-focused --identity ${identity} --runtime-locus ${requestedRuntimeLocus} --handle <captured-hwnd-or-stable-handle>`,
+        },
+      };
+    }
     const bindings = await readRuntimeBindings(cwd);
     const now = new Date().toISOString();
+    const bindingId = `bind_${createHash('sha256').update(`${identity}:${canonicalSiteId(requestedRuntimeLocus)}:${observed.handle}`).digest('hex').slice(0, 16)}`;
     const binding: OperatorSurfaceRuntimeBinding = {
-      binding_id: `bind_${createHash('sha256').update(`${identity}:${canonicalSiteId(requestedRuntimeLocus)}:${observed.handle}`).digest('hex').slice(0, 16)}`,
+      binding_id: bindingId,
       identity_id: identity,
       runtime_locus: canonicalSiteId(requestedRuntimeLocus) ?? requestedRuntimeLocus,
       handle: observed.handle,
@@ -2441,6 +2510,19 @@ export async function operatorSurfaceBindFocusedCommand(
       input_capabilities: ['type_text', 'submit'],
       status: 'active',
       stale_after: options.staleAfter?.trim() || undefined,
+      target_evidence: {
+        ...observed.evidence,
+        asserted_identity: identity,
+        runtime_locus: canonicalSiteId(requestedRuntimeLocus) ?? requestedRuntimeLocus,
+        captured_at: now,
+      },
+      postcondition_evidence: {
+        asserted_identity: identity,
+        bound_handle: observed.observedHandle,
+        binding_id: bindingId,
+        verified_at: now,
+        ambient_foreground_used: false,
+      },
     };
     const nextBindings = [
       ...bindings.filter((entry) => entry.identity_id !== identity),
@@ -2463,6 +2545,9 @@ export async function operatorSurfaceBindFocusedCommand(
           after_site_id: siteNormalization.after_site_id,
         } : null,
         observed_handle_source: observed.source,
+        target_evidence: binding.target_evidence,
+        postcondition_evidence: binding.postcondition_evidence,
+        ambient_foreground_refused: true,
         admitted_at: now,
         authority_split: {
           durable_identity_authority: operatorSurfaceIdentityPath(cwd),

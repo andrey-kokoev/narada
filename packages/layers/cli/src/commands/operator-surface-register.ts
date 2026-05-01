@@ -318,11 +318,16 @@ export function registerOperatorSurfaceCommands(program: Command): void {
 
   surfaceCmd
     .command('bind-focused')
-    .description('Prepare focused runtime-handle binding; defers mutation to owning runtime locus')
+    .description('Bind a captured runtime handle; ambient foreground focus is refused as binding authority')
     .option('--identity <id>', 'Durable identity to bind')
     .option('--as <kind>', 'Resolve identity as self')
     .option('--runtime-locus <locus>', 'Owning User/PC runtime locus')
-    .option('--handle <handle>', 'Explicit observed runtime handle; defaults to CODEX_THREAD_ID, WT_SESSION, or process pid')
+    .option('--handle <handle>', 'Explicit captured runtime handle such as hwnd:<id>, codex-thread:<id>, or windows-terminal:<id>')
+    .option('--observed-handle <handle>', 'Observed handle at mutation time; defaults to --handle')
+    .option('--window-title <title>', 'Captured window title evidence')
+    .option('--window-class <class>', 'Captured window class evidence')
+    .option('--process-name <name>', 'Captured process name evidence')
+    .option('--process-id <pid>', 'Captured process id evidence')
     .option('--stale-after <timestamp>', 'Optional ISO timestamp after which the binding is stale')
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
@@ -335,6 +340,11 @@ export function registerOperatorSurfaceCommands(program: Command): void {
         as: opts.as as string | undefined,
         runtimeLocus: opts.runtimeLocus as string | undefined,
         handle: opts.handle as string | undefined,
+        observedHandle: opts.observedHandle as string | undefined,
+        windowTitle: opts.windowTitle as string | undefined,
+        windowClass: opts.windowClass as string | undefined,
+        processName: opts.processName as string | undefined,
+        processId: opts.processId as string | undefined,
         staleAfter: opts.staleAfter as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),

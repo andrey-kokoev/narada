@@ -201,7 +201,7 @@ Use [`Runtime Identity Binding`](runtime-identity-binding.md) when a live runtim
 Visible labels and addressable runtime bindings are separate. A window title such as `narada.builder` may be useful label evidence, but it does not prove that Narada can send input to that surface. Status surfaces should report this as `labeled_unbound` when label evidence exists without an active runtime binding. The repair path is to bind the durable identity in the owning runtime locus:
 
 ```bash
-narada operator-surface bind-focused --identity <identity> --runtime-locus <pc-or-user-site>
+narada operator-surface bind-focused --identity <identity> --runtime-locus <pc-or-user-site> --handle <captured-hwnd-or-stable-handle>
 ```
 
 Sending input must fail closed until an active binding exists. The role remains metadata on an admitted identity; Narada must not infer Architect, Builder, or Observer authority solely from a title string.
@@ -297,7 +297,7 @@ The compact inspect output joins durable identities, projected labels, runtime b
 The runtime binding command surface exists as an authority-preserving deferral surface:
 
 ```bash
-narada operator-surface bind-focused --identity <id>
+narada operator-surface bind-focused --identity <id> --runtime-locus <locus> --handle <captured-hwnd-or-stable-handle>
 narada operator-surface bind-focused --as self
 narada operator-surface rebind --identity <id>
 narada operator-surface unbind-focused
@@ -305,7 +305,7 @@ narada operator-surface bindings list
 narada operator-surface bindings clean-stale
 ```
 
-In Narada proper these commands either refuse unknown identities or return `status: "deferred"` with the required runtime locus. The actual volatile-handle mutation belongs to the User/PC/runtime Site that can observe the handle and admit the binding. `--as self` resolves from governed runtime context such as `NARADA_AGENT_ID` / `NARADA_PRINCIPAL_ID` or an unambiguous active roster assignment, so the Operator does not need to remember the exact identity string during inhabited work.
+In Narada proper these commands either refuse unknown identities, refuse missing target-handle evidence, or return `status: "deferred"` with the required runtime locus. The actual volatile-handle mutation belongs to the User/PC/runtime Site that can capture the target handle and admit the binding. Ambient foreground focus is not an authority source. Mutating binding must carry explicit captured target evidence such as `--handle hwnd:<id>` plus optional title/class/process evidence; `--as self` only resolves the durable identity from governed runtime context such as `NARADA_AGENT_ID` / `NARADA_PRINCIPAL_ID` or an unambiguous active roster assignment.
 
 The input front door is:
 

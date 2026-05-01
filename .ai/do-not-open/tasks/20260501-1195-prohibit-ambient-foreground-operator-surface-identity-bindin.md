@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T20:13:15.735Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777666376007_e56zfa
+closed_at: 2026-05-01T20:14:20.244Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Prohibit ambient foreground operator-surface identity binding
@@ -36,8 +45,8 @@ Refuse mutating operator-surface identity binding when no explicit captured HWND
 
 ## Acceptance Criteria
 
-- [ ] Identity binding mutation without explicit HWND or stable captured target evidence is refused.
-- [ ] Explicit HWND binding mutates only the requested HWND and records before/after evidence.
-- [ ] A focus-drift fixture proves mutation targets the captured HWND or fails rather than using current foreground at mutation time.
-- [ ] Operator-facing command names or diagnostics no longer imply ambient focus is an admitted authority source.
-- [ ] OSM/window-label repair workflows use captured-HWND discipline by construction or report a repair blocker.
+- [x] Identity binding mutation without explicit HWND or stable captured target evidence is refused.
+- [x] Explicit HWND binding mutates only the requested HWND and records before/after evidence.
+- [x] A focus-drift fixture proves mutation targets the captured HWND or fails rather than using current foreground at mutation time.
+- [x] Operator-facing command names or diagnostics no longer imply ambient focus is an admitted authority source.
+- [x] OSM/window-label repair workflows use captured-HWND discipline by construction or report a repair blocker.

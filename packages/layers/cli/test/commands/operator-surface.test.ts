@@ -256,7 +256,7 @@ describe('operator-surface commands', () => {
         },
         binding: {
           status: 'deferred',
-          repair_command: expect.stringContaining('narada operator-surface bind-focused --identity narada-cpy.builder --runtime-locus <runtime-locus-from-status>'),
+          repair_command: expect.stringContaining('narada operator-surface bind-focused --identity narada-cpy.builder --runtime-locus <runtime-locus-from-status> --handle <captured-hwnd-or-stable-handle>'),
         },
         label: {
           status: 'ready',
@@ -747,9 +747,9 @@ describe('operator-surface commands', () => {
         runtime_binding_mutated: false,
         handoff: {
           status: 'executable',
-          command: 'narada operator-surface bind-focused --identity narada-proper-architect --runtime-locus pc-site',
+          command: 'narada operator-surface bind-focused --identity narada-proper-architect --runtime-locus pc-site --handle <captured-hwnd-or-stable-handle>',
         },
-        deferred_command: 'narada operator-surface bind-focused --identity narada-proper-architect --runtime-locus pc-site',
+        deferred_command: 'narada operator-surface bind-focused --identity narada-proper-architect --runtime-locus pc-site --handle <captured-hwnd-or-stable-handle>',
       },
       binding_verification: {
         expected_identity_id: 'narada-proper-architect',
@@ -2000,10 +2000,10 @@ describe('operator-surface commands', () => {
         discovery_commands: [
           'narada sites list --format json',
           'narada operator-surface status --format json',
-          'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <runtime-locus-from-status>',
+          'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <runtime-locus-from-status> --handle <captured-hwnd-or-stable-handle>',
         ],
       },
-      unblock_command: 'narada sites list --format json && narada operator-surface status --format json && narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <runtime-locus-from-status>',
+      unblock_command: 'narada sites list --format json && narada operator-surface status --format json && narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <runtime-locus-from-status> --handle <captured-hwnd-or-stable-handle>',
     });
   });
 
@@ -2055,7 +2055,7 @@ describe('operator-surface commands', () => {
         label: 'narada.builder',
         runtime_locus: 'pc-site',
       },
-      reconciliation_command: 'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus pc-site',
+      reconciliation_command: 'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus pc-site --handle <captured-hwnd-or-stable-handle>',
     });
 
     const send = await operatorSurfaceSendCommand({
@@ -2080,8 +2080,8 @@ describe('operator-surface commands', () => {
         runtime_locus: 'pc-site',
       },
       explanation: expect.stringContaining('visible title/label'),
-      unblock_command: 'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus pc-site',
-      reconciliation_command: 'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus pc-site',
+      unblock_command: 'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus pc-site --handle <captured-hwnd-or-stable-handle>',
+      reconciliation_command: 'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus pc-site --handle <captured-hwnd-or-stable-handle>',
     });
   });
 
@@ -2118,7 +2118,7 @@ describe('operator-surface commands', () => {
         resolution: 'alias',
         matched_alias: 'observer',
       },
-      unblock_command: 'narada sites list --format json && narada operator-surface status --format json && narada operator-surface bind-focused --identity narada-proper-observer --runtime-locus <runtime-locus-from-status>',
+      unblock_command: 'narada sites list --format json && narada operator-surface status --format json && narada operator-surface bind-focused --identity narada-proper-observer --runtime-locus <runtime-locus-from-status> --handle <captured-hwnd-or-stable-handle>',
     });
   });
 
@@ -2580,7 +2580,7 @@ describe('operator-surface commands', () => {
           }),
           current_task: null,
           last_activity_at: '2026-01-02T00:00:00Z',
-          next_command: 'narada operator-surface bind-focused --identity narada-proper-architect --runtime-locus pc-site',
+          next_command: 'narada operator-surface bind-focused --identity narada-proper-architect --runtime-locus pc-site --handle <captured-hwnd-or-stable-handle>',
         }),
         expect.objectContaining({
           identity_id: 'narada-proper-observer',
@@ -2597,7 +2597,7 @@ describe('operator-surface commands', () => {
             freshness: 'unknown',
           }),
           current_task: null,
-          next_command: 'narada sites list --format json && narada operator-surface status --format json && narada operator-surface bind-focused --identity narada-proper-observer --runtime-locus <runtime-locus-from-status>',
+          next_command: 'narada sites list --format json && narada operator-surface status --format json && narada operator-surface bind-focused --identity narada-proper-observer --runtime-locus <runtime-locus-from-status> --handle <captured-hwnd-or-stable-handle>',
         }),
         expect.objectContaining({
           identity_id: 'narada-proper-resident',
@@ -2663,10 +2663,10 @@ describe('operator-surface commands', () => {
         discovery_commands: [
           'narada sites list --format json',
           'narada operator-surface status --format json',
-          'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <runtime-locus-from-status>',
+          'narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <runtime-locus-from-status> --handle <captured-hwnd-or-stable-handle>',
         ],
       },
-      deferred_command: 'narada sites list --format json && narada operator-surface status --format json && narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <runtime-locus-from-status>',
+      deferred_command: 'narada sites list --format json && narada operator-surface status --format json && narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <runtime-locus-from-status> --handle <captured-hwnd-or-stable-handle>',
     });
   });
 
@@ -2686,7 +2686,12 @@ describe('operator-surface commands', () => {
       cwd,
       identity: 'narada-proper-builder',
       runtimeLocus: 'pc-site',
-      handle: 'codex-thread:test-thread',
+      handle: 'hwnd:1001',
+      observedHandle: 'hwnd:1001',
+      windowTitle: 'narada.builder',
+      windowClass: 'CASCADIA_HOSTING_WINDOW_CLASS',
+      processName: 'WindowsTerminal.exe',
+      processId: '4242',
       format: 'json',
     }, createMockContext());
 
@@ -2702,19 +2707,100 @@ describe('operator-surface commands', () => {
       binding: {
         identity_id: 'narada-proper-builder',
         runtime_locus: 'pc-site',
-        handle: 'codex-thread:test-thread',
-        transport: 'explicit_runtime_handle',
+        handle: 'hwnd:1001',
+        transport: 'windows_hwnd',
         status: 'active',
+        target_evidence: {
+          requested_handle: 'hwnd:1001',
+          observed_handle: 'hwnd:1001',
+          window_title: 'narada.builder',
+          window_class: 'CASCADIA_HOSTING_WINDOW_CLASS',
+          process_name: 'WindowsTerminal.exe',
+          process_id: '4242',
+          ambient_foreground_used: false,
+          asserted_identity: 'narada-proper-builder',
+        },
+        postcondition_evidence: {
+          asserted_identity: 'narada-proper-builder',
+          bound_handle: 'hwnd:1001',
+          ambient_foreground_used: false,
+        },
       },
+      target_evidence: {
+        requested_handle: 'hwnd:1001',
+        observed_handle: 'hwnd:1001',
+      },
+      postcondition_evidence: {
+        bound_handle: 'hwnd:1001',
+      },
+      ambient_foreground_refused: true,
     });
     const bindings = JSON.parse(await readFile(join(cwd, 'operator-surfaces', 'runtime-bindings.json'), 'utf8')) as { bindings: Array<Record<string, unknown>> };
     expect(bindings.bindings).toEqual([
       expect.objectContaining({
         identity_id: 'narada-proper-builder',
         runtime_locus: 'pc-site',
-        handle: 'codex-thread:test-thread',
+        handle: 'hwnd:1001',
+        target_evidence: expect.objectContaining({
+          requested_handle: 'hwnd:1001',
+          observed_handle: 'hwnd:1001',
+          ambient_foreground_used: false,
+        }),
       }),
     ]);
+  });
+
+  it('refuses ambient foreground runtime binding without captured target evidence', async () => {
+    const cwd = await tempRepo();
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-proper-builder',
+      role: 'builder',
+      agentKind: 'codex_cli',
+      site: 'narada-proper',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+    const priorForeground = process.env.NARADA_FOREGROUND_HWND;
+    const priorCodexThread = process.env.CODEX_THREAD_ID;
+    const priorWtSession = process.env.WT_SESSION;
+    process.env.NARADA_FOREGROUND_HWND = 'hwnd:wrong-foreground';
+    delete process.env.CODEX_THREAD_ID;
+    delete process.env.WT_SESSION;
+    try {
+      const result = await operatorSurfaceBindFocusedCommand({
+        cwd,
+        identity: 'narada-proper-builder',
+        runtimeLocus: 'pc-site',
+        format: 'json',
+      }, createMockContext());
+
+      expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+      expect(result.result).toMatchObject({
+        status: 'error',
+        reason: 'runtime_binding_target_evidence_required',
+        mutation_performed: false,
+        runtime_binding_mutated: false,
+        ambient_foreground_refused: true,
+        repair_command: expect.stringContaining('--handle <captured-hwnd-or-stable-handle>'),
+      });
+    } finally {
+      if (priorForeground === undefined) {
+        delete process.env.NARADA_FOREGROUND_HWND;
+      } else {
+        process.env.NARADA_FOREGROUND_HWND = priorForeground;
+      }
+      if (priorCodexThread === undefined) {
+        delete process.env.CODEX_THREAD_ID;
+      } else {
+        process.env.CODEX_THREAD_ID = priorCodexThread;
+      }
+      if (priorWtSession === undefined) {
+        delete process.env.WT_SESSION;
+      } else {
+        process.env.WT_SESSION = priorWtSession;
+      }
+    }
   });
 
   it('normalizes legacy narada-proper identity site when binding to canonical narada locus', async () => {
