@@ -1,0 +1,38 @@
+{
+  "envelope_id": "env_e377c8f9-ea1d-4d0a-b6cb-50a9a3949838",
+  "received_at": "2026-05-01T03:19:22.840Z",
+  "source": {
+    "kind": "cli",
+    "ref": "narada-andrey:osm-active-typing-interruption-capa"
+  },
+  "kind": "incident",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "CAPA: OSM delivery must not interrupt active operator typing",
+    "summary": "While the Operator was typing in the current window, an operator-surface message delivery occurred and injected text/focus activity into another surface. This interrupted active human input. The existing input escrow/focus-restore behavior is insufficient because it treats delivery as safe once target resolution succeeds, rather than first proving the Operator is idle or explicitly permitting interruption.",
+    "incident": {
+      "source_site": "narada-andrey",
+      "surface": "operator-surface messaging",
+      "observed_defect": "OSM delivery occurred while Operator was actively typing, causing disruptive focus/input behavior.",
+      "operator_assessment": "Defect; solution unclear. Needs principled delivery safety model."
+    },
+    "risk": [
+      "Partial operator input may be split, misdirected, or submitted in the wrong surface.",
+      "Operator loses trust in OSM because background delivery can seize attention at arbitrary times.",
+      "Cross-desktop delivery may amplify the issue by changing context while the Operator is mid-thought."
+    ],
+    "proposed_capa": [
+      "Introduce an OSM delivery admission gate that distinguishes idle, active-typing, and explicit-interrupt states before any focus/window mutation.",
+      "Default policy should refuse or queue delivery while recent operator keyboard/mouse activity is detected, unless the message is declared urgent and authorized for interruption.",
+      "Delivery should return a promise/receipt state such as queued_waiting_for_idle, delivered, expired, or fallback_to_inbox rather than forcing immediate delivery.",
+      "For cross-desktop delivery, evaluate a summon-to-current-desktop strategy as a safer alternative to switching the Operator's desktop; this should be explicit because moving/summoning a window is a visible workspace mutation.",
+      "Add tests or simulation fixtures for operator typing during OSM delivery, same-desktop delivery, cross-desktop delivery, expiry fallback, and focus restoration."
+    ],
+    "open_design_question": "When target is on another Windows desktop, should OSM summon the target surface to the current desktop for delivery instead of switching desktops? Initial hypothesis: safer for preserving Operator context, but must be visible, reversible, and policy-gated.",
+    "requested_disposition": "Treat as CAPA and design/implementation proposal for OSM delivery safety."
+  },
+  "status": "received"
+}
