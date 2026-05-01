@@ -1,5 +1,5 @@
 ---
-status: opened
+status: claimed
 ---
 
 # Route governed review result replies to requesting agents
