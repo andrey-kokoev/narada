@@ -1,0 +1,31 @@
+{
+  "envelope_id": "env_a44641fa-a8a7-4686-9bd3-cb48c630f8e9",
+  "received_at": "2026-05-01T02:45:26.141Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey.Kevin:task-62-accepted-review-deadend-capa"
+  },
+  "kind": "incident",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "recommendation": "Treat as CAPA for task lifecycle review/evidence admission state machine ergonomics and correctness.",
+    "title": "CAPA: Accepted re-review left task in uncloseable in_review state",
+    "proposal": [
+      "Define a sanctioned transition for accepted implementation review with evidence-repair-needed, such as needs_continuation or evidence_repair, instead of leaving task in in_review dead-end.",
+      "When task close reports remediation such as missing Execution Notes, provide the exact sanctioned command to return task to Builder or amend evidence.",
+      "task review accepted after a previous rejection should not leave latest evidence admission rejected without a continuation path.",
+      "Add tests for rejected -> fixed -> accepted_with_notes -> close and rejected -> fixed -> evidence repair needed flows."
+    ],
+    "summary": "Task 62 implementation re-review accepted commit 21dac9e, but task close failed because latest evidence admission remained rejected. task continue also refused because status was in_review. This created a lifecycle dead-end requiring another rejection solely to return the task to Builder for evidence repair.",
+    "evidence": [
+      "task review 62 --verdict accepted_with_notes returned review_verdict_status accepted but lifecycle_status and new_status stayed in_review.",
+      "task close 62 then failed: Latest Evidence Admission result is rejected.",
+      "task continue 62 failed because only claimed and needs_continuation tasks support continuation, not in_review.",
+      "Architect had to record a new rejected review to reopen the task for evidence repair, despite implementation review being accepted."
+    ]
+  },
+  "status": "received"
+}
