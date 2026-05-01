@@ -106,6 +106,7 @@ Likely authority loci:
 | YASB launch/focus button | Windows User Site |
 | AHK launch/focus script | Windows User Site or PC Site, depending on ownership of the script and machine policy |
 | Komorebi rule for machine/window behavior | PC Site when machine/session recovery authority owns it; otherwise Windows User Site if user-local |
+| MCP client config and `narada-mcp` process supervision | Windows User Site or PC Site that owns the local agent client/runtime |
 | Narada proper doctrine/config examples | Narada proper |
 
 The current WSL Narada proper clone may document and propose this adapter path. It must not assume authority to mutate Windows Terminal, Komorebi, YASB, or AHK configuration.
@@ -120,6 +121,7 @@ Current command posture:
 | `komorebi_focus_rule` | Windows PC Site | `narada command-exec request --site <pc-site> --intent komorebi.focus-rule --format json` | Residual intended CEIZ route until the intent/materializer exists. |
 | `yasb_focus_affordance` | Windows User Site | `narada command-exec request --site <user-site> --intent yasb.focus-affordance --format json` | Residual intended CEIZ route until the intent/materializer exists. |
 | `operator_surface_runtime_binding` | Windows User/runtime locus | `narada operator-surface bind-focused --as self` | Existing binding surface; may return a runtime-locus deferral that must be routed to the owner. |
+| `mcp_client_config` | Windows User/PC execution-machine Site | `narada-mcp --site-root <target-site-root> --site-id <target-site-id>` | The execution-machine Site launches/supervises the MCP process; the target Site owns the facade contract and admits consequences. |
 
 ## Visibility-Domain Reconciliation
 

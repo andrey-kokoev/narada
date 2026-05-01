@@ -305,7 +305,7 @@ narada operator-surface bindings list
 narada operator-surface bindings clean-stale
 ```
 
-In Narada proper these commands either refuse unknown identities, refuse missing target-handle evidence, or return `status: "deferred"` with the required runtime locus. The actual volatile-handle mutation belongs to the User/PC/runtime Site that can capture the target handle and admit the binding. Ambient foreground focus is not an authority source. Mutating binding must carry explicit captured target evidence such as `--handle hwnd:<id>` plus optional title/class/process evidence; `--as self` only resolves the durable identity from governed runtime context such as `NARADA_AGENT_ID` / `NARADA_PRINCIPAL_ID` or an unambiguous active roster assignment.
+In Narada proper these commands either refuse unknown identities, refuse missing target-handle evidence, or return `status: "deferred"` with the required runtime locus. The actual volatile-handle mutation belongs to the User/PC/runtime Site that can capture the target handle and admit the binding. Ambient foreground focus is not an authority source. Mutating binding must carry explicit captured target evidence such as `--handle hwnd:<id>` plus optional title/class/process evidence; `--as self` only resolves the durable identity from governed runtime context such as `NARADA_OPERATOR_SURFACE_IDENTITY`, `NARADA_AGENT_ID`, or `NARADA_PRINCIPAL_ID`. Active roster assignment is a work projection, not identity authority.
 
 The input front door is:
 

@@ -96,6 +96,8 @@ EE-MCP must route command requests through the [`Command Execution Intent Zone`]
 
 MCP process launch and supervision belongs to the execution-machine Site: commonly a User Site, PC Site, Project Site, or sandbox-owning Site. The target Site owns admission and consequence.
 
+The execution-machine Site is the Site that can actually launch, stop, observe, and health-check the MCP process or client profile. On a Windows workstation that is normally the Windows User Site or PC Site. Narada proper may define `narada-mcp` and the target Site may expose a facade contract, but neither fact makes every target Site responsible for running a persistent MCP daemon.
+
 Examples:
 
 | Question | Owning locus |
@@ -195,6 +197,28 @@ The local Narada proper MCP client config artifact is:
 ```text
 .ai/mcp/narada.mcp.json
 ```
+
+Example: a Windows User/PC execution-machine Site can launch a Narada proper inbox facade by placing equivalent client configuration in the execution-machine-owned MCP client config, while targeting Narada proper's Site root:
+
+```json
+{
+  "mcpServers": {
+    "narada-proper-inbox": {
+      "command": "narada-mcp",
+      "args": [
+        "--site-root",
+        "/home/andrey/src/narada",
+        "--site-id",
+        "narada",
+        "--site-kind",
+        "project"
+      ]
+    }
+  }
+}
+```
+
+In that example the User/PC Site owns process launch, restart, client registration, and health checks. Narada proper owns the facade contract and admits consequences under its task, inbox, evidence, and crossing law.
 
 The expected read-only proof after registration is:
 

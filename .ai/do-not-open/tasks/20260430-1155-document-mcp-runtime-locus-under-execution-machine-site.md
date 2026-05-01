@@ -1,5 +1,15 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T22:11:19.101Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777673432684_zpxbu2
+no_continuation_needed_rationale: Documentation-only MCP runtime-locus policy task; no follow-up needed for this bounded scope.
+closed_at: 2026-05-01T22:13:00.892Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Document MCP runtime locus under execution-machine Site
@@ -32,8 +42,8 @@ Operator asked whether MCP should be run by the executive/runtime locus such as 
 
 ## Acceptance Criteria
 
-- [ ] Docs state that the execution-machine Site owns MCP process launch and supervision.
-- [ ] Docs state that target Sites own authority admission and facade contract, not local runtime supervision by default.
-- [ ] Windows guidance names PC Site/User Site as the natural MCP runtime manager.
-- [ ] MCP docs avoid implying an unbounded always-on server per Site.
-- [ ] Example config shows narada-mcp for Narada proper launched from the local execution-machine context.
+- [x] Docs state that the execution-machine Site owns MCP process launch and supervision.
+- [x] Docs state that target Sites own authority admission and facade contract, not local runtime supervision by default.
+- [x] Windows guidance names PC Site/User Site as the natural MCP runtime manager.
+- [x] MCP docs avoid implying an unbounded always-on server per Site.
+- [x] Example config shows narada-mcp for Narada proper launched from the local execution-machine context.
