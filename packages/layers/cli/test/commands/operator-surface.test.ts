@@ -1297,13 +1297,16 @@ describe('operator-surface commands', () => {
       from: 'narada-proper.architect',
       text: 'continue current task',
       execute: true,
+      operatorActivityState: 'idle',
       format: 'json',
     }, createMockContext());
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    const payload = result.result as { event_artifact: string; send: { status: string; text_digest: string; text_length: number; rendered_text: string; sender_identity: string; resolved_sender_identity: string; sender_header_included: boolean } };
+    const payload = result.result as { event_artifact: string; delivery_result: { status: string }; send: { status: string; text_digest: string; text_length: number; rendered_text: string; sender_identity: string; resolved_sender_identity: string; sender_header_included: boolean; delivery_result: { status: string } } };
+    expect(payload.delivery_result.status).toBe('delivered');
     expect(payload.send).toMatchObject({
       status: 'event_recorded_for_runtime_locus',
+      delivery_result: { status: 'delivered' },
       sender_identity: 'narada-proper.architect',
       resolved_sender_identity: 'narada-proper.architect',
       sender_header_included: true,
@@ -1340,6 +1343,7 @@ describe('operator-surface commands', () => {
       text: '/copy',
       rawInput: true,
       execute: true,
+      operatorActivityState: 'idle',
       format: 'json',
     }, createMockContext());
 
@@ -1355,6 +1359,167 @@ describe('operator-surface commands', () => {
     expect(event.rendered_text).toBe('/copy');
     expect(event.sender_identity).toBe('operator');
     expect(event.sender_header_included).toBe(false);
+  });
+
+  it('queues operator-surface delivery instead of mutating focus while Operator is typing', async () => {
+    const cwd = await tempRepo();
+    await admitIdentity(cwd);
+    await writeBindings(cwd, [{
+      binding_id: 'bind-active',
+      identity_id: 'narada-proper-builder',
+      runtime_locus: 'pc-site',
+      handle: 'hwnd:123',
+      transport: 'operator_surface_input',
+      submit_strategy: 'operator_confirmed_submit',
+      input_capabilities: ['focus', 'type_text'],
+      status: 'active',
+    }]);
+
+    const result = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-proper-builder',
+      text: 'interrupting message',
+      execute: true,
+      operatorActivityState: 'active_typing',
+      operatorActivityObservedAt: '2026-05-01T04:00:00.000Z',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const payload = result.result as { mutation_performed: boolean; event_artifact: string | null; delivery_result: { status: string; reason: string; operator_activity: { state: string }; queue: { next_state: string } | null }; send: { status: string } };
+    expect(payload.mutation_performed).toBe(false);
+    expect(payload.event_artifact).toBeNull();
+    expect(payload.delivery_result).toMatchObject({
+      status: 'queued_waiting_for_idle',
+      reason: 'operator_recent_activity_detected',
+      operator_activity: { state: 'active_typing' },
+      queue: { next_state: 'wait_for_idle' },
+    });
+    expect(payload.send.status).toBe('queued_waiting_for_idle');
+  });
+
+  it('records urgent interruption authority when delivering during Operator activity', async () => {
+    const cwd = await tempRepo();
+    await admitIdentity(cwd);
+    await writeBindings(cwd, [{
+      binding_id: 'bind-urgent',
+      identity_id: 'narada-proper-builder',
+      runtime_locus: 'pc-site',
+      handle: 'hwnd:123',
+      transport: 'operator_surface_input',
+      submit_strategy: 'operator_confirmed_submit',
+      input_capabilities: ['focus', 'type_text'],
+      status: 'active',
+    }]);
+
+    const result = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-proper-builder',
+      text: 'urgent operator-approved interruption',
+      execute: true,
+      operatorActivityState: 'active_pointer',
+      urgentInterruptAuthority: 'operator:interrupt-approved:1175',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const payload = result.result as { mutation_performed: boolean; event_artifact: string | null; delivery_result: { status: string; urgent_interrupt: { authorized: boolean; authority_ref: string } } };
+    expect(payload.mutation_performed).toBe(true);
+    expect(payload.event_artifact).toContain('.ai/operator-surface-events/ose_');
+    expect(payload.delivery_result).toMatchObject({
+      status: 'delivered',
+      urgent_interrupt: {
+        authorized: true,
+        authority_ref: 'operator:interrupt-approved:1175',
+      },
+    });
+  });
+
+  it('expires queued delivery and falls back to inbox as explicit non-mutation outcomes', async () => {
+    const cwd = await tempRepo();
+    await admitIdentity(cwd);
+    await writeBindings(cwd, [{
+      binding_id: 'bind-expire',
+      identity_id: 'narada-proper-builder',
+      runtime_locus: 'pc-site',
+      handle: 'hwnd:123',
+      transport: 'operator_surface_input',
+      submit_strategy: 'operator_confirmed_submit',
+      input_capabilities: ['type_text'],
+      status: 'active',
+    }]);
+
+    const expired = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-proper-builder',
+      text: 'expire this',
+      execute: true,
+      operatorActivityState: 'active_typing',
+      deliveryTimeoutMs: 0,
+      format: 'json',
+    }, createMockContext());
+    const fallback = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-proper-builder',
+      text: 'fallback this',
+      execute: true,
+      operatorActivityState: 'active_typing',
+      activeDelivery: 'fallback_to_inbox',
+      format: 'json',
+    }, createMockContext());
+
+    expect((expired.result as { delivery_result: { status: string }; mutation_performed: boolean }).delivery_result.status).toBe('expired');
+    expect((expired.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
+    expect((fallback.result as { delivery_result: { status: string }; mutation_performed: boolean }).delivery_result.status).toBe('fallback_to_inbox');
+    expect((fallback.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
+  });
+
+  it('refuses cross-desktop summon unless explicit authority is supplied', async () => {
+    const cwd = await tempRepo();
+    await admitIdentity(cwd);
+    await writeBindings(cwd, [{
+      binding_id: 'bind-desktop',
+      identity_id: 'narada-proper-builder',
+      runtime_locus: 'pc-site',
+      handle: 'hwnd:123',
+      transport: 'operator_surface_input',
+      submit_strategy: 'operator_confirmed_submit',
+      input_capabilities: ['focus', 'type_text'],
+      desktop_id: 'desktop-target',
+      status: 'active',
+    }]);
+
+    const refused = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-proper-builder',
+      text: 'summon',
+      execute: true,
+      operatorActivityState: 'idle',
+      currentDesktop: 'desktop-current',
+      format: 'json',
+    }, createMockContext());
+    const admitted = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-proper-builder',
+      text: 'summon',
+      execute: true,
+      operatorActivityState: 'idle',
+      currentDesktop: 'desktop-current',
+      crossDesktopPolicy: 'allow_with_authority',
+      crossDesktopAuthority: 'operator:cross-desktop-approved:1175',
+      format: 'json',
+    }, createMockContext());
+
+    expect((refused.result as { delivery_result: { status: string; reason: string }; mutation_performed: boolean }).delivery_result).toMatchObject({
+      status: 'refused',
+      reason: 'cross_desktop_summon_refused',
+    });
+    expect((refused.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
+    expect((admitted.result as { delivery_result: { status: string; cross_desktop: { authority_ref: string } }; mutation_performed: boolean }).delivery_result).toMatchObject({
+      status: 'delivered',
+      cross_desktop: { authority_ref: 'operator:cross-desktop-approved:1175' },
+    });
+    expect((admitted.result as { mutation_performed: boolean }).mutation_performed).toBe(true);
   });
 
   it('reports missing operator-surface binding with an exact unblock command', async () => {

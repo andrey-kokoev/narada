@@ -75,6 +75,15 @@ export interface OperatorSurfaceSendOptions {
   dryRun?: boolean;
   execute?: boolean;
   rawInput?: boolean;
+  operatorActivityState?: string;
+  operatorActivityObservedAt?: string;
+  activeDelivery?: string;
+  deliveryTimeoutMs?: string | number;
+  urgentInterruptAuthority?: string;
+  currentDesktop?: string;
+  targetDesktop?: string;
+  crossDesktopPolicy?: string;
+  crossDesktopAuthority?: string;
   format?: CliFormat;
 }
 
@@ -112,7 +121,13 @@ interface OperatorSurfaceRuntimeBinding {
   input_capabilities?: OperatorSurfaceInputCapability[];
   status?: 'active' | 'stale' | 'revoked';
   stale_after?: string;
+  desktop_id?: string;
 }
+
+type OperatorActivityState = 'idle' | 'active_typing' | 'active_pointer' | 'unknown';
+type ActiveDeliveryPolicy = 'queue' | 'refuse' | 'fallback_to_inbox';
+type CrossDesktopPolicy = 'same_desktop_only' | 'allow_with_authority' | 'refuse';
+type DeliveryResultStatus = 'queued_waiting_for_idle' | 'delivered' | 'expired' | 'refused' | 'fallback_to_inbox';
 
 interface OperatorSurfaceVisibleLabelEvidence {
   identity_id?: string;
@@ -616,6 +631,149 @@ function isStaleBinding(binding: OperatorSurfaceRuntimeBinding, now = new Date()
   if (!binding.stale_after) return false;
   const timestamp = Date.parse(binding.stale_after);
   return Number.isFinite(timestamp) && timestamp <= now.getTime();
+}
+
+function parseOperatorActivityState(value: string | undefined): OperatorActivityState {
+  const normalized = value?.trim() || 'unknown';
+  const allowed: OperatorActivityState[] = ['idle', 'active_typing', 'active_pointer', 'unknown'];
+  if (!allowed.includes(normalized as OperatorActivityState)) {
+    throw new Error(`Unsupported operator activity state: ${value}`);
+  }
+  return normalized as OperatorActivityState;
+}
+
+function parseActiveDeliveryPolicy(value: string | undefined): ActiveDeliveryPolicy {
+  const normalized = value?.trim() || 'queue';
+  const allowed: ActiveDeliveryPolicy[] = ['queue', 'refuse', 'fallback_to_inbox'];
+  if (!allowed.includes(normalized as ActiveDeliveryPolicy)) {
+    throw new Error(`Unsupported active delivery policy: ${value}`);
+  }
+  return normalized as ActiveDeliveryPolicy;
+}
+
+function parseCrossDesktopPolicy(value: string | undefined): CrossDesktopPolicy {
+  const normalized = value?.trim() || 'same_desktop_only';
+  const allowed: CrossDesktopPolicy[] = ['same_desktop_only', 'allow_with_authority', 'refuse'];
+  if (!allowed.includes(normalized as CrossDesktopPolicy)) {
+    throw new Error(`Unsupported cross-desktop policy: ${value}`);
+  }
+  return normalized as CrossDesktopPolicy;
+}
+
+function parseDeliveryTimeoutMs(value: string | number | undefined): number {
+  if (value === undefined || value === null || value === '') return 300_000;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) throw new Error(`Unsupported delivery timeout ms: ${String(value)}`);
+  return parsed;
+}
+
+function decideOperatorSurfaceDelivery(args: {
+  activityState: OperatorActivityState;
+  activityObservedAt: string | null;
+  activeDeliveryPolicy: ActiveDeliveryPolicy;
+  deliveryTimeoutMs: number;
+  urgentInterruptAuthority: string | null;
+  currentDesktop: string | null;
+  targetDesktop: string | null;
+  crossDesktopPolicy: CrossDesktopPolicy;
+  crossDesktopAuthority: string | null;
+}): {
+  status: DeliveryResultStatus;
+  deliverable: boolean;
+  reason: string;
+  operator_activity: Record<string, unknown>;
+  urgent_interrupt: Record<string, unknown>;
+  cross_desktop: Record<string, unknown>;
+  queue: Record<string, unknown> | null;
+} {
+  const activityBlocks = args.activityState !== 'idle';
+  const urgentAuthorized = Boolean(args.urgentInterruptAuthority);
+  const crossDesktop = Boolean(args.currentDesktop && args.targetDesktop && args.currentDesktop !== args.targetDesktop);
+  const crossDesktopAuthorized = !crossDesktop
+    || (args.crossDesktopPolicy === 'allow_with_authority' && Boolean(args.crossDesktopAuthority));
+  if (crossDesktop && !crossDesktopAuthorized) {
+    return {
+      status: 'refused',
+      deliverable: false,
+      reason: args.crossDesktopPolicy === 'allow_with_authority'
+        ? 'cross_desktop_authority_required'
+        : 'cross_desktop_summon_refused',
+      operator_activity: {
+        state: args.activityState,
+        observed_at: args.activityObservedAt,
+      },
+      urgent_interrupt: {
+        authorized: urgentAuthorized,
+        authority_ref: args.urgentInterruptAuthority,
+      },
+      cross_desktop: {
+        required: true,
+        current_desktop: args.currentDesktop,
+        target_desktop: args.targetDesktop,
+        policy: args.crossDesktopPolicy,
+        authority_ref: args.crossDesktopAuthority,
+        reversible_or_rejected: true,
+      },
+      queue: null,
+    };
+  }
+  if (activityBlocks && !urgentAuthorized) {
+    const queuedStatus: DeliveryResultStatus = args.activeDeliveryPolicy === 'fallback_to_inbox'
+      ? 'fallback_to_inbox'
+      : args.activeDeliveryPolicy === 'refuse'
+        ? 'refused'
+        : args.deliveryTimeoutMs === 0
+          ? 'expired'
+          : 'queued_waiting_for_idle';
+    return {
+      status: queuedStatus,
+      deliverable: false,
+      reason: args.activityState === 'unknown'
+        ? 'operator_activity_unknown'
+        : 'operator_recent_activity_detected',
+      operator_activity: {
+        state: args.activityState,
+        observed_at: args.activityObservedAt,
+      },
+      urgent_interrupt: {
+        authorized: false,
+        authority_ref: null,
+      },
+      cross_desktop: {
+        required: crossDesktop,
+        current_desktop: args.currentDesktop,
+        target_desktop: args.targetDesktop,
+        policy: args.crossDesktopPolicy,
+        authority_ref: args.crossDesktopAuthority,
+        reversible_or_rejected: true,
+      },
+      queue: queuedStatus === 'queued_waiting_for_idle'
+        ? { timeout_ms: args.deliveryTimeoutMs, next_state: 'wait_for_idle' }
+        : null,
+    };
+  }
+  return {
+    status: 'delivered',
+    deliverable: true,
+    reason: activityBlocks ? 'urgent_interrupt_authorized' : 'operator_idle',
+    operator_activity: {
+      state: args.activityState,
+      observed_at: args.activityObservedAt,
+    },
+    urgent_interrupt: {
+      authorized: urgentAuthorized,
+      authority_ref: args.urgentInterruptAuthority,
+    },
+    cross_desktop: {
+      required: crossDesktop,
+      current_desktop: args.currentDesktop,
+      target_desktop: args.targetDesktop,
+      policy: args.crossDesktopPolicy,
+      authority_ref: args.crossDesktopAuthority,
+      reversible_or_rejected: !crossDesktop || Boolean(args.crossDesktopAuthority),
+    },
+    queue: null,
+  };
 }
 
 function looksSecretLike(text: string): boolean {
@@ -2151,6 +2309,26 @@ export async function operatorSurfaceSendCommand(
       };
     }
 
+    const activityState = options.operatorActivityState?.trim()
+      ? parseOperatorActivityState(options.operatorActivityState)
+      : options.execute ? 'unknown' : 'idle';
+    const activeDeliveryPolicy = parseActiveDeliveryPolicy(options.activeDelivery);
+    const deliveryTimeoutMs = parseDeliveryTimeoutMs(options.deliveryTimeoutMs);
+    const crossDesktopPolicy = parseCrossDesktopPolicy(options.crossDesktopPolicy);
+    const currentDesktop = options.currentDesktop?.trim() || null;
+    const targetDesktop = options.targetDesktop?.trim() || binding.desktop_id || null;
+    const delivery = decideOperatorSurfaceDelivery({
+      activityState,
+      activityObservedAt: options.operatorActivityObservedAt?.trim() || null,
+      activeDeliveryPolicy,
+      deliveryTimeoutMs,
+      urgentInterruptAuthority: options.urgentInterruptAuthority?.trim() || null,
+      currentDesktop,
+      targetDesktop,
+      crossDesktopPolicy,
+      crossDesktopAuthority: options.crossDesktopAuthority?.trim() || null,
+    });
+
     const renderedMessage = renderOperatorSurfaceMessage(sender, text, rawInput);
     const eventId = `ose_${Date.now()}_${textDigest(`${identity}:${renderedMessage.rendered_text}`).slice(0, 12)}`;
     const send = {
@@ -2184,19 +2362,23 @@ export async function operatorSurfaceSendCommand(
         runtime_locus: binding.runtime_locus ?? options.runtimeLocus ?? null,
         status: 'bound',
       },
-      dry_run: Boolean(options.dryRun || !options.execute),
-      status: options.execute ? 'event_recorded_for_runtime_locus' : 'validated_dry_run',
+      delivery_result: delivery,
+      dry_run: Boolean(options.dryRun || !options.execute || !delivery.deliverable),
+      status: delivery.deliverable
+        ? options.execute ? 'event_recorded_for_runtime_locus' : 'validated_dry_run'
+        : delivery.status,
     };
-    const eventArtifact = options.execute ? await writeOperatorSurfaceSendEvent(cwd, send) : null;
+    const eventArtifact = options.execute && delivery.deliverable ? await writeOperatorSurfaceSendEvent(cwd, send) : null;
     return {
       exitCode: ExitCode.SUCCESS,
       result: {
         status: 'success',
-        mutation_performed: Boolean(options.execute),
+        mutation_performed: Boolean(options.execute && delivery.deliverable),
         event_artifact: eventArtifact,
         identity_resolution: publicIdentityResolution(identityResolution),
         ...agentFields,
         ...routeFields({ ...baseRoute, bindingStatus: 'bound', resolvedRecipient: identity }),
+        delivery_result: delivery,
         send,
       },
     };

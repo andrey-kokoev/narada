@@ -326,7 +326,11 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
         format: resolveCommandFormat(opts.format, 'human'),
         store,
         overrideRationale: opts.overrideRationale as string | undefined,
-        noContinuationNeeded: (opts.noContinuationNeeded ?? opts.continuationNeeded) as string | undefined,
+        noContinuationNeeded: typeof opts.noContinuationNeeded === 'string'
+          ? opts.noContinuationNeeded
+          : typeof opts.continuationNeeded === 'string'
+            ? opts.continuationNeeded
+            : undefined,
       }),
     }));
 

@@ -40,6 +40,28 @@ These rules apply to CLI dashboards, GUI bars, web consoles, MCP tool menus, ter
 
 If restoration is not known, the control must say so and should be harder to reach.
 
+## Delivery Admission Gate
+
+Operator Surface message delivery is an input/focus mutation candidate, not a harmless notification. Before any execution path records or performs delivery into a focused surface, it must admit the delivery against current Operator activity and workspace posture.
+
+Required delivery states:
+
+| State | Meaning |
+| --- | --- |
+| `queued_waiting_for_idle` | Delivery is held because recent keyboard, pointer, or unknown activity makes interruption unsafe. |
+| `delivered` | Delivery is admitted because the Operator is idle, or because explicit urgent-interrupt authority was supplied. |
+| `expired` | The queued delivery timed out before idle admission. |
+| `refused` | Delivery is disallowed by policy, missing authority, or cross-desktop posture. |
+| `fallback_to_inbox` | Delivery is converted to inert inbox work instead of mutating the active surface. |
+
+Default posture:
+
+- `idle` activity may admit delivery.
+- `active_typing`, `active_pointer`, and `unknown` activity must not mutate focus/input by default.
+- Active delivery defaults to `queued_waiting_for_idle`, not forced focus.
+- Urgent interruption requires an explicit authority reference and must be visible in send evidence.
+- Cross-desktop summon or workspace switching is a separate visible mutation. It is refused unless policy and authority admit it, and evidence records the current desktop, target desktop, policy, and authority reference.
+
 ## Motivating Example: Display Tools
 
 `Exchange Monitor Contents` is a contextual projection of the canonical `monitor_content_transfer` capability. With exactly two monitors, the Operator-visible invariant is that the visible contents are exchanged between monitors.

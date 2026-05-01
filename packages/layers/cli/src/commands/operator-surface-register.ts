@@ -226,6 +226,15 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--dry-run', 'Validate binding and strategy without recording send evidence', false)
     .option('--execute', 'Record bounded send evidence for the owning runtime locus', false)
     .option('--raw-input', 'Treat text as raw input/keystrokes and suppress the typed-message sender header', false)
+    .option('--operator-activity-state <state>', 'Observed Operator activity: idle, active_typing, active_pointer, or unknown')
+    .option('--operator-activity-observed-at <iso>', 'Timestamp for the activity observation')
+    .option('--active-delivery <policy>', 'When Operator is active: queue, refuse, or fallback_to_inbox', 'queue')
+    .option('--delivery-timeout-ms <ms>', 'Queue timeout before expiring delivery intent')
+    .option('--urgent-interrupt-authority <ref>', 'Explicit authority reference permitting interruption during Operator activity')
+    .option('--current-desktop <id>', 'Observed current desktop/workspace before delivery')
+    .option('--target-desktop <id>', 'Target binding desktop/workspace')
+    .option('--cross-desktop-policy <policy>', 'Cross-desktop posture: same_desktop_only, allow_with_authority, or refuse', 'same_desktop_only')
+    .option('--cross-desktop-authority <ref>', 'Explicit authority reference permitting cross-desktop summon/switch')
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[Record<string, unknown>]>({
@@ -242,6 +251,15 @@ export function registerOperatorSurfaceCommands(program: Command): void {
         dryRun: opts.dryRun as boolean | undefined,
         execute: opts.execute as boolean | undefined,
         rawInput: opts.rawInput as boolean | undefined,
+        operatorActivityState: opts.operatorActivityState as string | undefined,
+        operatorActivityObservedAt: opts.operatorActivityObservedAt as string | undefined,
+        activeDelivery: opts.activeDelivery as string | undefined,
+        deliveryTimeoutMs: opts.deliveryTimeoutMs as string | undefined,
+        urgentInterruptAuthority: opts.urgentInterruptAuthority as string | undefined,
+        currentDesktop: opts.currentDesktop as string | undefined,
+        targetDesktop: opts.targetDesktop as string | undefined,
+        crossDesktopPolicy: opts.crossDesktopPolicy as string | undefined,
+        crossDesktopAuthority: opts.crossDesktopAuthority as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),

@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T03:47:38.503Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777607228315_wcschb
+closed_at: 2026-05-01T03:48:54.693Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Gate operator-surface delivery on operator activity state
@@ -36,9 +45,9 @@ Design and implement an OSM delivery admission gate with idle, active-typing, ex
 
 ## Acceptance Criteria
 
-- [ ] OSM delivery checks operator activity state before any focus/window/input mutation.
-- [ ] Default delivery queues, refuses, or falls back to inbox while recent operator typing/mouse activity is detected.
-- [ ] Urgent interruption requires explicit authority and is visible in send evidence.
-- [ ] Delivery result distinguishes queued_waiting_for_idle, delivered, expired, refused, and fallback_to_inbox.
-- [ ] Cross-desktop summon/switch behavior is policy-gated, visible, and reversible or explicitly rejected with rationale.
-- [ ] Tests or fixtures cover active typing during delivery, idle delivery, expiry fallback, and focus restoration.
+- [x] OSM delivery checks operator activity state before any focus/window/input mutation.
+- [x] Default delivery queues, refuses, or falls back to inbox while recent operator typing/mouse activity is detected.
+- [x] Urgent interruption requires explicit authority and is visible in send evidence.
+- [x] Delivery result distinguishes queued_waiting_for_idle, delivered, expired, refused, and fallback_to_inbox.
+- [x] Cross-desktop summon/switch behavior is policy-gated, visible, and reversible or explicitly rejected with rationale.
+- [x] Tests or fixtures cover active typing during delivery, idle delivery, expiry fallback, and focus restoration.
