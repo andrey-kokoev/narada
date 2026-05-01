@@ -3,7 +3,7 @@ import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 
-export type LawReceiptStatus = 'read' | 'acknowledged' | 'question' | 'blocked';
+export type LawReceiptStatus = 'read' | 'acknowledged' | 'absorbed' | 'question' | 'blocked';
 
 export interface LawChangeRecord {
   schema: 'https://narada.dev/schemas/law-change/v1';
@@ -15,7 +15,13 @@ export interface LawChangeRecord {
   files: string[];
   commit: string | null;
   required_roles: string[];
+  affected_agents: string[];
+  effective_scope: string;
+  supersedes: string[];
+  references: string[];
   law_sources: string[];
+  notice_envelope_id: string | null;
+  notice_status: 'none' | 'submitted';
 }
 
 export interface LawReceiptRecord {
@@ -38,6 +44,8 @@ export interface LawAdmissionBlocker {
   scope: string;
   required_roles: string[];
   files: string[];
+  notice_envelope_id: string | null;
+  affected_agents: string[];
 }
 
 export interface LawAdmissionResult {
@@ -74,7 +82,13 @@ export async function createLawChange(cwd: string, input: {
   files?: string[];
   commit?: string | null;
   requiredRoles?: string[];
+  affectedAgents?: string[];
+  effectiveScope?: string;
+  supersedes?: string[];
+  references?: string[];
   lawSources?: string[];
+  noticeEnvelopeId?: string | null;
+  noticeStatus?: 'none' | 'submitted';
   changeId?: string;
 }): Promise<LawChangeRecord> {
   const now = new Date().toISOString();
@@ -88,11 +102,29 @@ export async function createLawChange(cwd: string, input: {
     files: input.files ?? [],
     commit: input.commit?.trim() || null,
     required_roles: normalizeRoles(input.requiredRoles),
+    affected_agents: normalizeList(input.affectedAgents),
+    effective_scope: input.effectiveScope?.trim() || input.scope?.trim() || 'site',
+    supersedes: normalizeList(input.supersedes),
+    references: normalizeList(input.references),
     law_sources: input.lawSources?.length ? input.lawSources : defaultLawSources(),
+    notice_envelope_id: input.noticeEnvelopeId?.trim() || null,
+    notice_status: input.noticeStatus ?? 'none',
   };
   await mkdir(lawChangesDir(cwd), { recursive: true });
   await writeFile(lawChangePath(cwd, record.change_id), `${JSON.stringify(record, null, 2)}\n`, 'utf8');
   return record;
+}
+
+export async function updateLawChangeNotice(cwd: string, changeId: string, noticeEnvelopeId: string): Promise<LawChangeRecord> {
+  const path = lawChangePath(cwd, changeId);
+  const record = JSON.parse(await readFile(path, 'utf8')) as LawChangeRecord;
+  const updated: LawChangeRecord = {
+    ...record,
+    notice_envelope_id: noticeEnvelopeId,
+    notice_status: 'submitted',
+  };
+  await writeFile(path, `${JSON.stringify(updated, null, 2)}\n`, 'utf8');
+  return updated;
 }
 
 export async function listLawChanges(cwd: string): Promise<LawChangeRecord[]> {
@@ -135,7 +167,7 @@ export async function unreadLawChanges(cwd: string, agentId: string, role?: stri
   const [changes, receipts] = await Promise.all([listLawChanges(cwd), listLawReceipts(cwd)]);
   const receiptByChange = new Map(
     receipts
-      .filter((receipt) => receipt.agent_id === agentId && (receipt.status === 'read' || receipt.status === 'acknowledged'))
+      .filter((receipt) => receipt.agent_id === agentId && (receipt.status === 'read' || receipt.status === 'acknowledged' || receipt.status === 'absorbed'))
       .map((receipt) => [receipt.change_id, receipt]),
   );
   const roleValue = clean(role);
@@ -149,6 +181,8 @@ export async function unreadLawChanges(cwd: string, agentId: string, role?: stri
       scope: change.scope,
       required_roles: change.required_roles,
       files: change.files,
+      notice_envelope_id: change.notice_envelope_id,
+      affected_agents: change.affected_agents,
     }));
 }
 
@@ -156,7 +190,8 @@ export async function checkLawAdmission(cwd: string, agentId: string | undefined
   const agent = clean(agentId);
   if (!agent) return { status: 'clear', agent_id: '', role: clean(role), unread: [] };
   const resolvedRole = clean(role) ?? await inferAgentRole(cwd, agent);
-  const unread = await unreadLawChanges(cwd, agent, resolvedRole);
+  const unread = (await unreadLawChanges(cwd, agent, resolvedRole))
+    .filter((change) => change.affected_agents.length === 0 || change.affected_agents.includes(agent));
   return {
     status: unread.length > 0 ? 'blocked' : 'clear',
     agent_id: agent,
@@ -183,7 +218,12 @@ function appliesToRole(change: LawChangeRecord, role: string | null): boolean {
 }
 
 function normalizeRoles(roles: string[] | undefined): string[] {
-  return (roles ?? ['*']).map((role) => role.trim()).filter(Boolean);
+  const normalized = normalizeList(roles);
+  return normalized.length ? normalized : ['*'];
+}
+
+function normalizeList(values: string[] | undefined): string[] {
+  return (values ?? []).map((value) => value.trim()).filter(Boolean);
 }
 
 function defaultLawSources(): string[] {

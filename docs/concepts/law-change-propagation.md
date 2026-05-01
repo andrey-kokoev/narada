@@ -2,6 +2,8 @@
 
 Law Change Propagation is the governed path for changes to agent-facing law sources to become visible to active agents without relying on chat memory or fresh prompt luck.
 
+Operator law changes travel as durable law records and, when propagation must reach active agents or sibling embodiments, as Canonical Inbox notices. OSM, terminal text, chat, or voice notification may point to the notice, but they are not the authority medium.
+
 Law sources include:
 
 - `AGENTS.md`
@@ -21,6 +23,11 @@ A law change record lives at `.ai/law/changes/<change-id>.json` and contains:
 - `summary`
 - `scope`
 - `required_roles`
+- `affected_agents`
+- `effective_scope`
+- `supersedes`
+- `references`
+- `notice_envelope_id`
 - `issuer`
 - `issued_at`
 - affected `law_sources`
@@ -42,9 +49,11 @@ The receipt proves only that the agent acknowledged reading the law change. It d
 
 ```bash
 narada law change add --issuer operator --summary "..." --files AGENTS.md,SEMANTICS.md --required-roles architect,builder
+narada law change add --issuer operator --summary "..." --required-roles architect,builder --notice
 narada law list
 narada law unread --agent builder --role builder
-narada law ack <change-id> --agent builder --role builder --operator-surface-identity narada-proper-builder
+narada law ack <change-id> --agent builder --role builder --operator-surface-identity builder
+narada law ack <change-id> --agent builder --role builder --status absorbed
 narada law status --agent builder --role builder
 ```
 
@@ -63,3 +72,12 @@ narada law ack <change-id> --agent <agent-id> --role <role>
 ```
 
 Architect, Builder, and Observer use the same receipt mechanism. Operator may issue changes and may inspect receipt state, but Operator acknowledgement is not substituted for agent receipt.
+
+Receipt and absorption are separate:
+
+- `read`: the agent has seen the notice but has not accepted absorption.
+- `acknowledged`: the agent acknowledges receipt and may continue if no blocker exists.
+- `absorbed`: the agent records that the law has been incorporated into its current operating posture.
+- `question` or `blocked`: the agent records uncertainty or a blocker; this does not clear admission.
+
+Unread mandatory notices must appear in duty-loop surfaces before ordinary task recommendations. If a notice remains unacknowledged past the local timeout posture, the correct result is an explicit inbox observation/proposal for escalation, not silent drift.

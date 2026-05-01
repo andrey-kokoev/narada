@@ -16,6 +16,7 @@ import {
   lawUnreadCommand,
 } from '../../src/commands/law.js';
 import { taskClaimCommand } from '../../src/commands/task-claim.js';
+import { roleLoopNextCommand } from '../../src/commands/role-loop.js';
 import { saveRoster } from '../../src/lib/task-governance.js';
 
 const ROSTER = {
@@ -76,6 +77,58 @@ describe('law change propagation commands', () => {
     expect(listed.result).toMatchObject({ status: 'success', count: 1 });
   });
 
+  it('creates Canonical Inbox law notices with affected principals and notice evidence', async () => {
+    const added = await lawChangeAddCommand({
+      cwd: tempDir,
+      issuer: 'operator',
+      summary: 'Semantic duplication law',
+      files: 'AGENTS.md',
+      requiredRoles: 'builder',
+      affectedAgents: 'builder',
+      effectiveScope: 'narada',
+      references: 'env_9cdb8daa-917f-4050-be66-1ef237c49676',
+      notice: true,
+      sourceRef: 'pilot:env_9cdb8daa-917f-4050-be66-1ef237c49676',
+      changeId: 'law_semantic_duplication_pilot',
+      format: 'json',
+    });
+
+    expect(added.exitCode).toBe(ExitCode.SUCCESS);
+    const result = added.result as {
+      change: {
+        change_id: string;
+        affected_agents: string[];
+        effective_scope: string;
+        references: string[];
+        notice_envelope_id: string | null;
+        notice_status: string;
+      };
+      notice: { envelope_id: string; authority: string; osm_posture: string };
+    };
+    expect(result.change).toMatchObject({
+      change_id: 'law_semantic_duplication_pilot',
+      affected_agents: ['builder'],
+      effective_scope: 'narada',
+      references: ['env_9cdb8daa-917f-4050-be66-1ef237c49676'],
+      notice_status: 'submitted',
+    });
+    expect(result.change.notice_envelope_id).toMatch(/^env_/);
+    expect(result.notice).toMatchObject({
+      envelope_id: result.change.notice_envelope_id,
+      authority: 'canonical_inbox',
+      osm_posture: 'optional_pointer_only',
+    });
+    const unread = await lawUnreadCommand({ cwd: tempDir, agent: 'builder', role: 'builder', format: 'json' });
+    expect(unread.result).toMatchObject({
+      count: 1,
+      unread: [expect.objectContaining({
+        change_id: 'law_semantic_duplication_pilot',
+        notice_envelope_id: result.change.notice_envelope_id,
+        affected_agents: ['builder'],
+      })],
+    });
+  });
+
   it('records agent acknowledgements and clears unread status', async () => {
     const added = await lawChangeAddCommand({
       cwd: tempDir,
@@ -112,6 +165,52 @@ describe('law change propagation commands', () => {
 
     const status = await lawStatusCommand({ cwd: tempDir, agent: 'builder', role: 'builder', format: 'json' });
     expect(status.result).toMatchObject({ admission: 'clear', unread_count: 0, receipt_count: 1 });
+  });
+
+  it('separates blocked receipt from absorbed receipt and surfaces unread law in role loop', async () => {
+    const added = await lawChangeAddCommand({
+      cwd: tempDir,
+      issuer: 'operator',
+      summary: 'Builder absorption law',
+      requiredRoles: 'builder',
+      notice: true,
+      format: 'json',
+    });
+    const changeId = ((added.result as { change: { change_id: string } }).change.change_id);
+
+    const loopBefore = await roleLoopNextCommand({ cwd: tempDir, agent: 'builder', role: 'builder', format: 'json' });
+    expect(loopBefore.result).toMatchObject({
+      recommended_action: 'law_receipt_required',
+      pending_law_notices: [expect.objectContaining({
+        change_id: changeId,
+        ack_command: expect.stringContaining(`narada law ack ${changeId}`),
+        absorb_command: expect.stringContaining('--status absorbed'),
+        blocker_command: expect.stringContaining('--status blocked'),
+      })],
+    });
+
+    await lawAckCommand({
+      cwd: tempDir,
+      changeId,
+      agent: 'builder',
+      role: 'builder',
+      status: 'blocked',
+      questionsOrBlockers: 'needs operator clarification',
+      format: 'json',
+    });
+    const stillUnread = await lawStatusCommand({ cwd: tempDir, agent: 'builder', role: 'builder', format: 'json' });
+    expect(stillUnread.result).toMatchObject({
+      admission: 'blocked',
+      unread_count: 1,
+      escalation: expect.objectContaining({ status: 'pending_receipt' }),
+    });
+
+    await lawAckCommand({ cwd: tempDir, changeId, agent: 'builder', role: 'builder', status: 'absorbed', format: 'json' });
+    const clear = await lawStatusCommand({ cwd: tempDir, agent: 'builder', role: 'builder', format: 'json' });
+    expect(clear.result).toMatchObject({
+      admission: 'clear',
+      unread_count: 0,
+    });
   });
 
   it('blocks task claim when mandatory law is unread and passes after ack', async () => {

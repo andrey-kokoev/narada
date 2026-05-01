@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T03:00:58.463Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777604416446_fe88rt
+closed_at: 2026-05-01T03:01:26.917Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Implement law propagation notices and agent receipt acknowledgments
@@ -36,10 +45,10 @@ Define a first-class law-change notice path over Canonical Inbox; model affected
 
 ## Acceptance Criteria
 
-- [ ] Law notices are represented as durable inbox/crossing artifacts with source, authority, affected roles or agents, effective scope, and supersession/reference fields.
-- [ ] Agents can acknowledge receipt and separately record absorption or blocker evidence without mutating implementation work.
-- [ ] Duty-loop or work-next surfaces show pending law notices before ordinary task recommendations when the notice affects the current role.
-- [ ] OSM notifications, if used, contain only a pointer to the durable law notice and are not treated as authority.
-- [ ] Timeout or non-acknowledgment creates an explicit escalation/proposal path instead of silent drift.
-- [ ] The pilot notice env_9cdb8daa-917f-4050-be66-1ef237c49676 is exercised in tests or documented replay evidence.
-- [ ] Documentation states that Operator law changes travel through inbox/crossing evidence and require receipts from affected active agents.
+- [x] Law notices are represented as durable inbox/crossing artifacts with source, authority, affected roles or agents, effective scope, and supersession/reference fields.
+- [x] Agents can acknowledge receipt and separately record absorption or blocker evidence without mutating implementation work.
+- [x] Duty-loop or work-next surfaces show pending law notices before ordinary task recommendations when the notice affects the current role.
+- [x] OSM notifications, if used, contain only a pointer to the durable law notice and are not treated as authority.
+- [x] Timeout or non-acknowledgment creates an explicit escalation/proposal path instead of silent drift.
+- [x] The pilot notice env_9cdb8daa-917f-4050-be66-1ef237c49676 is exercised in tests or documented replay evidence.
+- [x] Documentation states that Operator law changes travel through inbox/crossing evidence and require receipts from affected active agents.

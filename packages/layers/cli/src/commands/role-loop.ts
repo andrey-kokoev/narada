@@ -4,6 +4,7 @@ import { ExitCode } from '../lib/exit-codes.js';
 import { type CliFormat } from '../lib/cli-output.js';
 import { workNextCommand } from './work-next.js';
 import { taskWorkboardCommand } from './task-workboard.js';
+import { checkLawAdmission } from '../lib/law-sync.js';
 
 export interface RoleLoopNextOptions {
   agent?: string;
@@ -98,9 +99,21 @@ export async function roleLoopNextCommand(options: RoleLoopNextOptions): Promise
 
   const next = await workNextCommand({ cwd, agent, peek: true, format: 'json' });
   const workboard = await taskWorkboardCommand({ cwd, view: 'compact', includeGuidance: true, format: 'json' });
+  const lawAdmission = await checkLawAdmission(cwd, agent, options.role);
   const compactNext = compactWorkNext(next.result);
   const compactBoard = compactWorkboard(workboard.result);
   const dirty = dirtyOwnership(cwd);
+  const pendingLawNotices = lawAdmission.unread.map((change) => ({
+    change_id: change.change_id,
+    summary: change.summary,
+    notice_envelope_id: change.notice_envelope_id,
+    required_roles: change.required_roles,
+    affected_agents: change.affected_agents,
+    ack_command: `narada law ack ${change.change_id} --agent ${agent}${lawAdmission.role ? ` --role ${lawAdmission.role}` : ''} --status acknowledged`,
+    absorb_command: `narada law ack ${change.change_id} --agent ${agent}${lawAdmission.role ? ` --role ${lawAdmission.role}` : ''} --status absorbed`,
+    blocker_command: `narada law ack ${change.change_id} --agent ${agent}${lawAdmission.role ? ` --role ${lawAdmission.role}` : ''} --status blocked --questions-or-blockers <reason>`,
+  }));
+  const lawBlocks = pendingLawNotices.length > 0;
 
   return {
     exitCode: next.exitCode === ExitCode.SUCCESS ? ExitCode.SUCCESS : next.exitCode,
@@ -114,8 +127,11 @@ export async function roleLoopNextCommand(options: RoleLoopNextOptions): Promise
       next: compactNext,
       workboard: compactBoard,
       dirty_ownership: dirty,
-      recommended_action: compactNext.action_kind ?? 'inspect',
-      recommended_command: compactNext.next_step ?? compactBoard.recommended_command ?? `narada work-next --agent ${agent} --peek --format json`,
+      pending_law_notices: pendingLawNotices,
+      recommended_action: lawBlocks ? 'law_receipt_required' : compactNext.action_kind ?? 'inspect',
+      recommended_command: lawBlocks
+        ? `narada law unread --agent ${agent}${lawAdmission.role ? ` --role ${lawAdmission.role}` : ''} --format json`
+        : compactNext.next_step ?? compactBoard.recommended_command ?? `narada work-next --agent ${agent} --peek --format json`,
       role_loop_contract: 'Operator nudge `next` means inspect current role duties, continue claimed work first, surface blockers/reviews/inbox next, and avoid full payload echo by default.',
     },
   };

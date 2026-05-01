@@ -9,9 +9,11 @@ import {
   listLawChanges,
   listLawReceipts,
   recordLawReceipt,
+  updateLawChangeNotice,
   unreadLawChanges,
   type LawReceiptStatus,
 } from '../lib/law-sync.js';
+import { inboxSubmitCommand } from './inbox.js';
 
 export interface LawChangeAddOptions {
   cwd?: string;
@@ -21,8 +23,14 @@ export interface LawChangeAddOptions {
   files?: string;
   commit?: string;
   requiredRoles?: string;
+  affectedAgents?: string;
+  effectiveScope?: string;
+  supersedes?: string;
+  references?: string;
   lawSources?: string;
   changeId?: string;
+  notice?: boolean;
+  sourceRef?: string;
   dryRun?: boolean;
   format?: CliFormat;
 }
@@ -58,6 +66,10 @@ export async function lawChangeAddCommand(options: LawChangeAddOptions): Promise
     files: splitCsv(options.files),
     commit: clean(options.commit),
     requiredRoles: splitCsv(options.requiredRoles),
+    affectedAgents: splitCsv(options.affectedAgents),
+    effectiveScope: clean(options.effectiveScope) ?? clean(options.scope) ?? 'site',
+    supersedes: splitCsv(options.supersedes),
+    references: splitCsv(options.references),
     lawSources: splitCsv(options.lawSources),
     changeId: clean(options.changeId) ?? undefined,
   };
@@ -75,15 +87,58 @@ export async function lawChangeAddCommand(options: LawChangeAddOptions): Promise
     return ok(preview, [`Law change preview: ${input.summary}`], options.format);
   }
   const change = await createLawChange(cwd, input);
+  let updatedChange = change;
+  let notice: unknown = null;
+  if (options.notice) {
+    const submitted = await inboxSubmitCommand({
+      cwd,
+      sourceKind: 'user_chat',
+      sourceRef: clean(options.sourceRef) ?? `law-change:${change.change_id}`,
+      kind: 'observation',
+      authorityLevel: 'operator_confirmed',
+      principal: input.issuer,
+      payload: JSON.stringify({
+        title: `Law change notice: ${change.summary}`,
+        law_notice: {
+          change_id: change.change_id,
+          issuer: change.issuer,
+          summary: change.summary,
+          scope: change.scope,
+          effective_scope: change.effective_scope,
+          required_roles: change.required_roles,
+          affected_agents: change.affected_agents,
+          supersedes: change.supersedes,
+          references: change.references,
+          law_sources: change.law_sources,
+          files: change.files,
+          commit: change.commit,
+          osm_posture: 'optional_pointer_only',
+        },
+      }),
+      output: 'full',
+      format: 'json',
+    });
+    if (submitted.exitCode !== ExitCode.SUCCESS) return submitted;
+    const envelopeId = (submitted.result as { envelope?: { envelope_id?: string } }).envelope?.envelope_id;
+    if (!envelopeId) return errorResult('Law notice inbox submission did not return envelope_id');
+    updatedChange = await updateLawChangeNotice(cwd, change.change_id, envelopeId);
+    notice = {
+      envelope_id: envelopeId,
+      authority: 'canonical_inbox',
+      osm_posture: 'optional_pointer_only',
+    };
+  }
   return ok({
     status: 'success',
     mutation_performed: true,
-    change,
-    path: lawChangePath(cwd, change.change_id),
+    change: updatedChange,
+    notice,
+    path: lawChangePath(cwd, updatedChange.change_id),
   }, [
-    `Law change recorded: ${change.change_id}`,
-    `Summary: ${change.summary}`,
-    `Required roles: ${change.required_roles.join(', ')}`,
+    `Law change recorded: ${updatedChange.change_id}`,
+    `Summary: ${updatedChange.summary}`,
+    `Required roles: ${updatedChange.required_roles.join(', ')}`,
+    `Notice: ${updatedChange.notice_envelope_id ?? 'none'}`,
   ], options.format);
 }
 
@@ -158,6 +213,10 @@ export async function lawStatusCommand(options: LawAgentOptions): Promise<{ exit
     change_count: changes.length,
     receipt_count: receipts.filter((receipt) => receipt.agent_id === clean(options.agent)).length,
     unread: admission.unread,
+    escalation: admission.unread.length > 0 ? {
+      status: 'pending_receipt',
+      proposal_path: `narada inbox submit-observation --source-ref law-timeout:${clean(options.agent)} --title "Law receipt overdue" --summary "Agent has unread mandatory law notices"`,
+    } : null,
   }, [
     `Law sync for ${clean(options.agent)}: ${admission.status}`,
     `Unread: ${admission.unread.length}`,

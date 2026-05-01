@@ -24,8 +24,14 @@ export function registerLawCommands(program: Command): void {
     .option('--files <csv>', 'Comma-separated law source files')
     .option('--commit <sha>', 'Commit containing the law change')
     .option('--required-roles <csv>', 'Roles that must read/ack this change; default *')
+    .option('--affected-agents <csv>', 'Specific agent ids affected by this change')
+    .option('--effective-scope <scope>', 'Effective law scope')
+    .option('--supersedes <csv>', 'Superseded law change ids')
+    .option('--references <csv>', 'Referenced envelope/change ids')
     .option('--law-sources <csv>', 'Configured law sources affected by this change')
     .option('--change-id <id>', 'Explicit change id')
+    .option('--notice', 'Submit a Canonical Inbox law notice for this change', false)
+    .option('--source-ref <ref>', 'Source reference for the inbox notice')
     .option('--dry-run', 'Preview without writing a record', false)
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
@@ -40,8 +46,14 @@ export function registerLawCommands(program: Command): void {
         files: opts.files as string | undefined,
         commit: opts.commit as string | undefined,
         requiredRoles: opts.requiredRoles as string | undefined,
+        affectedAgents: opts.affectedAgents as string | undefined,
+        effectiveScope: opts.effectiveScope as string | undefined,
+        supersedes: opts.supersedes as string | undefined,
+        references: opts.references as string | undefined,
         lawSources: opts.lawSources as string | undefined,
         changeId: opts.changeId as string | undefined,
+        notice: opts.notice as boolean | undefined,
+        sourceRef: opts.sourceRef as string | undefined,
         dryRun: opts.dryRun as boolean | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
@@ -89,7 +101,7 @@ export function registerLawCommands(program: Command): void {
     .option('--role <role>', 'Agent role')
     .option('--session <id>', 'Session id when available')
     .option('--operator-surface-identity <id>', 'Operator Surface identity when available')
-    .option('--status <status>', 'Receipt status: read, acknowledged, question, blocked', 'acknowledged')
+    .option('--status <status>', 'Receipt status: read, acknowledged, absorbed, question, blocked', 'acknowledged')
     .option('--questions-or-blockers <csv>', 'Optional comma-separated questions/blockers')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
@@ -103,7 +115,7 @@ export function registerLawCommands(program: Command): void {
         role: opts.role as string | undefined,
         session: opts.session as string | undefined,
         operatorSurfaceIdentity: opts.operatorSurfaceIdentity as string | undefined,
-        status: opts.status as 'read' | 'acknowledged' | 'question' | 'blocked' | undefined,
+        status: opts.status as 'read' | 'acknowledged' | 'absorbed' | 'question' | 'blocked' | undefined,
         questionsOrBlockers: opts.questionsOrBlockers as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
