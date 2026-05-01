@@ -1,0 +1,27 @@
+{
+  "envelope_id": "env_a8a280f7-5199-49ff-8fb1-5700e669fc8d",
+  "received_at": "2026-05-01T23:27:09.276Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey:architect-loop-workboard-view-snag"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "Stale compact workboard command shape causes avoidable CLI failure",
+    "summary": "During the architect loop in narada-andrey, Kevin attempted task workboard --view compact and the CLI rejected --view as an unknown option. The bounded workloop command provided the compact facts correctly, but the remembered workboard shape caused avoidable command failure and context churn.",
+    "evidence": [
+      "Command failed: node D:\\code\\narada\\packages\\layers\\cli\\dist\\main.js task workboard --cwd C:\\Users\\Andrey\\Narada --view compact --format json -> error: unknown option --view.",
+      "Sanctioned alternative worked: .\\narada-andrey.ps1 work-next -Agent narada-andrey.Kevin -PassThru returned bounded facts with pending_reviews, in_progress, local_followups, dirty_files, and capped human_summary."
+    ],
+    "proposal": [
+      "Either restore/alias a compact workboard option, or make task workboard help and error output point directly to the bounded workloop/role-loop command.",
+      "Add a regression/doctor check that common stale command shapes produce a repair command instead of only unknown option."
+    ],
+    "recommendation": "Route to CLI ergonomics/task-governance follow-up, likely adjacent to bounded workloop and task-report ergonomics."
+  },
+  "status": "received"
+}
