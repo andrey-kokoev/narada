@@ -59,6 +59,11 @@ function setupRepo(tempDir: string): void {
     join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-1000-evidence-repair-task.md'),
     '---\ntask_id: 1000\nstatus: opened\n---\n\n# Task 1000: Evidence Repair Task\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Execution Notes\nCompleted.\n',
   );
+
+  writeFileSync(
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-1001-capa-review-task.md'),
+    '---\ntask_id: 1001\nstatus: opened\n---\n\n# Task 1001: CAPA Review Task\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Execution Notes\nCompleted.\n\n## Verification\nFocused test passed.\n',
+  );
 }
 
 describe('task review command', () => {
@@ -194,6 +199,53 @@ describe('task review command', () => {
     store = openTaskLifecycleStore(tempDir);
     try {
       expect(store.getLifecycle('20260420-1000-evidence-repair-task')?.status).toBe('closed');
+    } finally {
+      store.db.close();
+    }
+  });
+
+  it('surfaces CAPA guidance for rejected reviews with blocking recurrence-risk findings', async () => {
+    await claimTaskService({ taskNumber: '1001', agent: 'worker', cwd: tempDir });
+    await releaseTaskService({ taskNumber: '1001', reason: 'completed', cwd: tempDir });
+
+    const result = await taskReviewCommand({
+      taskNumber: '1001',
+      agent: 'reviewer',
+      verdict: 'rejected',
+      findings: JSON.stringify([
+        {
+          severity: 'blocking',
+          description: 'Lifecycle authority boundary mismatch will recur across Sites unless CAPA guardrails are added.',
+          location: 'task review',
+        },
+      ]),
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      verdict: 'rejected',
+      new_status: 'opened',
+      capa_recommendation: {
+        recommended: true,
+      },
+    });
+    const review = result.result as {
+      capa_recommendation: { triggers: string[]; next_command: string };
+    };
+    expect(review.capa_recommendation.triggers).toEqual(expect.arrayContaining([
+      'blocking_rejected_review',
+      'lifecycle_or_roster_authority_mismatch',
+      'authority_boundary_bug',
+      'cross_site_recurrence_risk',
+    ]));
+    expect(review.capa_recommendation.next_command).toContain('CAPA for task 1001 review rejection');
+
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      expect(store.getLifecycle('20260420-1001-capa-review-task')?.status).toBe('opened');
     } finally {
       store.db.close();
     }

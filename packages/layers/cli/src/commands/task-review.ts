@@ -19,6 +19,7 @@ export interface TaskReviewOptions {
   verdict?: 'accepted' | 'accepted_with_notes' | 'rejected';
   findings?: string;
   report?: string;
+  noCapaReason?: string;
   cwd?: string;
   principalStateDir?: string;
   store?: TaskLifecycleStore;
@@ -37,6 +38,7 @@ export async function taskReviewCommand(
     verdict: options.verdict,
     findings: options.findings,
     report: options.report,
+    noCapaReason: options.noCapaReason,
     cwd,
     store: options.store,
   } as ReviewTaskServiceOptions);
@@ -91,10 +93,15 @@ export async function taskReviewCommand(
   } else if (result.status === 'success' && 'new_status' in result) {
     const target = (result as { verdict: string; new_status: string }).new_status;
     const evidenceBlocked = (result as { evidence_blocked?: boolean }).evidence_blocked;
+    const capa = (result as { capa_recommendation?: { recommended: boolean; triggers: string[]; next_command?: string } }).capa_recommendation;
     if (evidenceBlocked) {
       fmt.message(`Reviewed task ${String((result as { task_id?: string }).task_id)}: ${(result as { verdict: string }).verdict} → ${target} (evidence gate blocked)`, 'warning');
     } else {
       fmt.message(`Reviewed task ${String((result as { task_id?: string }).task_id)}: ${(result as { verdict: string }).verdict} → ${target}`, 'success');
+    }
+    if (capa?.recommended) {
+      fmt.message(`CAPA recommended: ${capa.triggers.join(', ')}`, 'warning');
+      if (capa.next_command) fmt.message(capa.next_command, 'info');
     }
   }
 

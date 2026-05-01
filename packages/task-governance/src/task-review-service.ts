@@ -25,6 +25,7 @@ export interface ReviewTaskServiceOptions {
   verdict?: 'accepted' | 'accepted_with_notes' | 'rejected';
   findings?: string;
   report?: string;
+  noCapaReason?: string;
   cwd?: string;
   store?: TaskLifecycleStore;
 }
@@ -44,7 +45,57 @@ export interface ReviewTaskServiceResponse {
     close_blockers?: string[];
     evidence_blocked?: boolean;
     evidence_reason?: string;
+    capa_recommendation?: {
+      recommended: boolean;
+      triggers: string[];
+      rationale: string;
+      next_command?: string;
+      no_capa_reason?: string;
+    };
     error?: string;
+  };
+}
+
+const CAPA_TRIGGER_PATTERNS: Array<{ trigger: string; pattern: RegExp }> = [
+  { trigger: 'authority_boundary_bug', pattern: /\bauthority\b|\bboundary\b|\billicit crossing\b|\bpermission\b/i },
+  { trigger: 'safety_or_secret_boundary_bug', pattern: /\bsecret\b|\bcredential\b|\bsafety\b|\bprivate\b|\btoken\b/i },
+  { trigger: 'lifecycle_or_roster_authority_mismatch', pattern: /\blifecycle\b|\broster\b|\bassignment\b|\bclaimed\b|\bclosed\b|\bevidence\b/i },
+  { trigger: 'workaround_identity', pattern: /\bworkaround identity\b|\bwrong identity\b|\bimpersonat/i },
+  { trigger: 'repeated_operator_correction', pattern: /\brepeated\b|\bagain\b|\boperator correction\b|\brecurr/i },
+  { trigger: 'cross_site_recurrence_risk', pattern: /\bcross-site\b|\bacross sites\b|\bfuture sites\b|\brecurrence risk\b/i },
+];
+
+function capaRecommendationForReview(args: {
+  verdict: 'accepted' | 'accepted_with_notes' | 'rejected';
+  findings: ReviewFinding[];
+  taskNumber: string;
+  noCapaReason?: string;
+}): ReviewTaskServiceResponse['result']['capa_recommendation'] | undefined {
+  const triggers = new Set<string>();
+  if (args.verdict === 'rejected' && args.findings.some((finding) => finding.severity === 'blocking')) {
+    triggers.add('blocking_rejected_review');
+  }
+  for (const finding of args.findings) {
+    const text = `${finding.severity} ${finding.description} ${finding.location ?? ''}`;
+    for (const item of CAPA_TRIGGER_PATTERNS) {
+      if (item.pattern.test(text)) triggers.add(item.trigger);
+    }
+  }
+  if (triggers.size === 0 && !args.noCapaReason) return undefined;
+  if (triggers.size === 0 && args.noCapaReason) {
+    return {
+      recommended: false,
+      triggers: [],
+      rationale: args.noCapaReason,
+      no_capa_reason: args.noCapaReason,
+    };
+  }
+  return {
+    recommended: true,
+    triggers: [...triggers].sort(),
+    rationale: 'Rejected review findings indicate recurrence risk; route containment/prevention/verification through CAPA if this is not a one-off local defect.',
+    next_command: `narada inbox submit --kind proposal --topic "CAPA for task ${args.taskNumber} review rejection" --payload-file <capa-proposal.json>`,
+    ...(args.noCapaReason ? { no_capa_reason: args.noCapaReason } : {}),
   };
 }
 
@@ -442,6 +493,15 @@ export async function reviewTaskService(
     if (evidenceReason) {
       result.evidence_reason = evidenceReason;
     }
+  }
+  const capaRecommendation = capaRecommendationForReview({
+    verdict,
+    findings,
+    taskNumber,
+    noCapaReason: options.noCapaReason,
+  });
+  if (capaRecommendation) {
+    result.capa_recommendation = capaRecommendation;
   }
 
   closeOwnStore();

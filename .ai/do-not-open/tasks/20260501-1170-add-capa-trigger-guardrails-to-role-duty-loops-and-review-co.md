@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T03:20:24.005Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777605598130_vihzay
+closed_at: 2026-05-01T03:20:58.443Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add CAPA trigger guardrails to role duty loops and review commands
@@ -36,8 +45,8 @@ Define CAPA-grade trigger vocabulary; add role-loop guidance requiring a CAPA ne
 
 ## Acceptance Criteria
 
-- [ ] CAPA-grade triggers include authority-boundary bugs, safety or secret boundary bugs, lifecycle or roster authority mismatches, workaround identities, repeated Operator correction, and defects likely to recur across Sites.
-- [ ] Role duty-loop docs require a CAPA needed yes/no decision with one-line rationale after rejected reviews or blocking findings.
-- [ ] task review rejected with blocking findings surfaces a CAPA recommendation or requires an explicit no-CAPA reason where feasible.
-- [ ] Self-CAPA guidance covers cases where the Operator identifies a missed CAPA after an incident.
-- [ ] Tests or fixtures cover review rejection producing CAPA guidance without mutating unrelated task state.
+- [x] CAPA-grade triggers include authority-boundary bugs, safety or secret boundary bugs, lifecycle or roster authority mismatches, workaround identities, repeated Operator correction, and defects likely to recur across Sites.
+- [x] Role duty-loop docs require a CAPA needed yes/no decision with one-line rationale after rejected reviews or blocking findings.
+- [x] task review rejected with blocking findings surfaces a CAPA recommendation or requires an explicit no-CAPA reason where feasible.
+- [x] Self-CAPA guidance covers cases where the Operator identifies a missed CAPA after an incident.
+- [x] Tests or fixtures cover review rejection producing CAPA guidance without mutating unrelated task state.

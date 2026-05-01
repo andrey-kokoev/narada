@@ -21,11 +21,16 @@ CAPA is warranted when an event is not merely a local defect but a recurrence-ri
 Common triggers:
 
 - repeated agent or tool behavior after prior correction;
+- authority-boundary bugs where an agent, command, task, Site, or runtime crosses or smears authority without an admitted crossing;
+- safety, private-data, secret, credential, token, or capability-boundary bugs;
+- lifecycle, roster, assignment, review, closure, or evidence-authority mismatches;
+- workaround identities, impersonation-shaped fixes, or use of the wrong principal to bypass a blocked path;
 - raw or oversized output crossing into chat, task evidence, or review where a bounded artifact reference was required;
 - failed Builder-to-Architect, Builder-to-Operator, or agent-to-agent handoff crossing;
 - lifecycle mutation without durable evidence;
 - doctrine/tooling mismatch that causes multiple Sites or agents to repeat the same wrong path;
 - operator correction showing that an existing rule is too weak, invisible, or not operationalized.
+- defects likely to recur across Sites, embodiments, roles, or future agents.
 
 CAPA should not be opened for every small bug. Ordinary bugs belong in tasks. CAPA begins when the prevention question is part of the work.
 
@@ -149,3 +154,16 @@ Is this only a task defect, or is there recurrence risk that requires containmen
 ```
 
 If recurrence risk is present, create or route to CAPA rather than apologizing, relying on memory, or silently adding another local workaround.
+
+## Review And Role-Loop Guardrail
+
+After a rejected review or blocking finding, the reviewer or duty-loop agent must record a CAPA-needed decision:
+
+```text
+CAPA needed: yes|no
+Rationale: <one line>
+```
+
+`yes` means the finding is recurrence-risk work and should be routed to CAPA through inbox, chapter, or task creation. `no` means the finding is a local one-off defect and the rationale must name why prevention/dissemination is not needed.
+
+If the Operator identifies a missed CAPA after an incident, treat that as a self-CAPA trigger. The corrective action is to handle the immediate defect; the preventive action is to install the missing guardrail into the role loop, review output, documentation, or command surface that allowed the miss.

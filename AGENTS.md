@@ -396,7 +396,8 @@ The CLI distinguishes four levels of completion. Agents and operators must not c
 
 **Key rules:**
 - `task roster done` marks only agent availability, not task completion. It blocks by default when the task is not complete by evidence. Use `--allow-incomplete` only when intentionally recording agent availability while preserving the task as incomplete.
-- `task review accepted` does **not** transition a task to `closed` if acceptance criteria are unchecked or execution evidence is missing. The task stays `in_review` until evidence is provided.
+- `task review accepted` does **not** override evidence admission. If acceptance criteria, execution evidence, or verification are missing, the task remains governed by the evidence-repair path instead of closing.
+- `task review rejected` with blocking findings must surface a CAPA-needed yes/no decision. Use CAPA for authority-boundary bugs, safety/secret boundary bugs, lifecycle or roster authority mismatches, workaround identities, repeated Operator correction, and defects likely to recur across Sites.
 - `narada task evidence <n>` is read-only and classifies a single task as `complete`, `attempt_complete`, `needs_review`, `needs_closure`, or `incomplete`.
 - `narada task evidence list` is read-only and lists all tasks that are not complete by evidence (default filter). Use `--verdict` to filter, `--status` to scope by front-matter status, and `--range` for number ranges.
 

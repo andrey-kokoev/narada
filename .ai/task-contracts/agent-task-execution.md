@@ -85,6 +85,15 @@ Builder-facing `narada work-next --agent <builder>` output must surface pending 
 
 Architect coordination is not automatically review authority. If the local task review gate requires `reviewer`, `operator`, or `admin`, Architect must route the closure through that sanctioned identity instead of running `task review --agent <architect-id>`. The compact duty loop should surface `narada task review <task> --agent operator --verdict accepted` or the local reviewer identity as the review command when Architect itself lacks review authority.
 
+After any rejected review or blocking finding, the role loop must make a CAPA-needed decision instead of relying on memory:
+
+```text
+CAPA needed: yes|no
+Rationale: <one line>
+```
+
+Use `yes` for authority-boundary bugs, safety or secret boundary bugs, lifecycle or roster authority mismatches, workaround identities, repeated Operator correction, or defects likely to recur across Sites. Use `no` only when the defect is local and recurrence prevention is not warranted.
+
 ## Completion Claim Reconciliation
 
 Chat, operator-surface, or spoken claims such as `done`, `completed`, or `ready` are observations, not lifecycle authority.

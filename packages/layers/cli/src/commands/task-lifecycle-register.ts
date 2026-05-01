@@ -281,6 +281,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .requiredOption('--verdict <verdict>', 'Review verdict: accepted, accepted_with_notes, rejected')
     .option('--findings <json>', 'JSON array of findings')
     .option('--report <id>', 'WorkResultReport ID to link to this review')
+    .option('--no-capa-reason <text>', 'One-line rationale when rejected findings do not warrant CAPA routing')
     .option('--principal-state-dir <path>', 'Directory containing PrincipalRuntime state file')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .action(resourceScopedDirectCommandAction<SqliteTaskLifecycleStore, [string, Record<string, unknown>]>({
@@ -294,6 +295,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
         verdict: opts.verdict as 'accepted' | 'accepted_with_notes' | 'rejected',
         findings: opts.findings as string | undefined,
         report: opts.report as string | undefined,
+        noCapaReason: opts.noCapaReason as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(),
         principalStateDir: opts.principalStateDir as string | undefined,
