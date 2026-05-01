@@ -1,0 +1,48 @@
+{
+  "envelope_id": "env_78ed9462-2da0-4f64-b3fc-67ef396c147e",
+  "received_at": "2026-05-01T16:31:37.915Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey:capa-ambient-foreground-binding"
+  },
+  "kind": "incident",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "CAPA: prohibit ambient foreground identity binding for operator surfaces",
+    "summary": "An operator-surface identity repair attempted to bind narada-andrey.Kevin by calling Set-FocusedWindowIdentityBinding.ps1 without an explicit HWND. Between diagnosis and mutation, foreground focus changed, so the command bound the identity to the wrong operator surface. This is a recurrence-prone authority/mutation defect: ambient active-window state is not a stable target for identity binding.",
+    "observed_at": "2026-05-01T11:31:21.9971474-05:00",
+    "source_site": "narada-andrey",
+    "severity": "major",
+    "incident": {
+      "intended_identity": "narada-andrey.Kevin",
+      "intended_target_basis": "previously observed current operator surface HWND",
+      "unsafe_mechanism": "Set-FocusedWindowIdentityBinding.ps1 called without -Hwnd, using GetForegroundWindow at mutation time",
+      "failure_mode": "foreground drift caused wrong-surface binding"
+    },
+    "containment": [
+      "Treat any binding created by ambient foreground after diagnosis as suspect unless independently confirmed.",
+      "Use explicit HWND binding only for repair until tool is hardened."
+    ],
+    "corrective_action": [
+      "Remove or disable ambient foreground binding as a mutating path.",
+      "Require explicit -Hwnd for identity binding mutation.",
+      "If UI picker is used, it must capture target HWND before opening and pass that explicit HWND through to mutation.",
+      "Persist requested HWND, observed HWND, title/class/process evidence, and asserted identity in mutation evidence."
+    ],
+    "preventive_action": [
+      "Rename commands so dangerous focus-based binding cannot be invoked casually.",
+      "Add tests proving binding without explicit HWND is refused.",
+      "Add preflight warning when multiple live Windows Terminal surfaces exist and no explicit HWND is supplied.",
+      "Make OSM/window-label repair workflows use captured-HWND discipline by construction."
+    ],
+    "verification": [
+      "Attempt Set-FocusedWindowIdentityBinding without -Hwnd and verify refusal.",
+      "Bind a fixture HWND explicitly and verify only that HWND changes identity binding.",
+      "Run a simulated focus-drift test where foreground changes between capture and mutation; mutation must still target captured HWND or fail."
+    ]
+  },
+  "status": "received"
+}
