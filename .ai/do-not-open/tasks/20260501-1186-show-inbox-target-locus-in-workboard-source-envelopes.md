@@ -1,5 +1,5 @@
 ---
-status: opened
+status: claimed
 ---
 
 # Show inbox target locus in workboard source envelopes
