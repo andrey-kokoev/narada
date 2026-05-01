@@ -1,0 +1,59 @@
+{
+  "envelope_id": "env_dac35992-728b-4f2e-abb3-27a1689ad975",
+  "received_at": "2026-05-01T16:39:37.529Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey:operator-surface-label-incident-followups"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "Operator-surface label incident follow-up observations",
+    "summary": "After the duplicate-label/crossbinding incident was contained, several adjacent design observations became clear. These are not all separate CAPAs, but they should inform Narada operator-surface hardening.",
+    "observed_at": "2026-05-01T11:39:22.5315158-05:00",
+    "source_site": "narada-andrey",
+    "related_incidents": [
+      "env_78ed9462-2da0-4f64-b3fc-67ef396c147e",
+      "env_280e20f8-d7f1-4781-8891-3fb18268d29d"
+    ],
+    "observations": [
+      {
+        "title": "Foreground-based mutation is actively misleading",
+        "detail": "The command name Set-FocusedWindowIdentityBinding invited use of ambient focus even though operator-surface identity repair requires explicit captured target authority. Naming should reflect the admitted authority source."
+      },
+      {
+        "title": "Runtime bindings need a doctor command",
+        "detail": "Operators/architects should not manually inspect JSON for duplicate HWNDs, duplicate identities, stale HWNDs, dead windows, or crossbinding. A compact health/doctor command should report and optionally repair with evidence."
+      },
+      {
+        "title": "OSM should preflight binding uniqueness",
+        "detail": "OSM sent next to Bob but resolved Bob to Kevin while runtime bindings were polluted. OSM must refuse ambiguous or incoherent binding posture before focus/sendkeys delivery."
+      },
+      {
+        "title": "Overlay should self-deduplicate",
+        "detail": "Even if the runtime binding file is bad, the overlay must not draw two labels on one HWND. It should render no label or one deterministic label plus diagnostics."
+      },
+      {
+        "title": "Repair operations need transaction evidence",
+        "detail": "Manual runtime state edits repaired the incident but did not create a durable PC Site repair evidence artifact. Binding repair should write before/after evidence and postcondition checks."
+      },
+      {
+        "title": "Window title is weak identity evidence",
+        "detail": "Windows Terminal titles mutate with spinner/context/session state. Binding confidence should rely on HWND, PID, class, process, and stronger WT/session/profile evidence rather than title text."
+      },
+      {
+        "title": "Label projection and runtime binding are distinct authority layers",
+        "detail": "Rebuilding label projection does not repair runtime HWND bindings. Current UX makes these look like one operation, hiding the split and encouraging incomplete repairs."
+      }
+    ],
+    "requested_direction": [
+      "Treat these as design inputs for operator-surface binding, OSM delivery, overlay rendering, and PC Site runtime evidence.",
+      "Consider adding an operator-surface health command that reports binding uniqueness, overlay label count, stale HWNDs, and OSM readiness.",
+      "Clarify command names and docs so explicit captured HWND is the only admitted mutation target for identity binding."
+    ]
+  },
+  "status": "received"
+}
