@@ -1,0 +1,46 @@
+{
+  "envelope_id": "env_08410800-08da-492f-9000-eebb90dd0b0f",
+  "received_at": "2026-05-01T14:38:16.577Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey:scoped-role-alias-resolution"
+  },
+  "kind": "proposal",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "Resolve scoped role aliases to unique active admitted identities",
+    "summary": "Narada should distinguish exact operator-surface identity addresses from scoped role aliases. A message or task addressed to narada-andrey.Kevin should resolve exactly to that identity. A message addressed to narada-andrey.architect should resolve to the unique active admitted identity in the narada-andrey Site with role architect; today that should find narada-andrey.Kevin because Kevin is the only architect. If zero or multiple identities match, resolution must fail explicitly rather than guessing.",
+    "observed_at": "2026-05-01T09:38:10.4784414-05:00",
+    "source_site": "narada-andrey",
+    "doctrine": [
+      "Role aliases are addressable loci, not identities.",
+      "Requested address and resolved identity must both be preserved in envelopes and lifecycle records.",
+      "Resolution must be deterministic and auditable: exact_identity, unique_role_alias, role_alias_unresolved, or role_alias_ambiguous.",
+      "Ambiguity should list candidate identities and require explicit operator/sender choice or an admitted routing policy."
+    ],
+    "applies_to": [
+      "canonical inbox routing",
+      "operator-surface messages",
+      "task assignment",
+      "review requests",
+      "next nudges",
+      "workboard addressed work discovery"
+    ],
+    "proposed_shape": {
+      "exact_identity": "narada-andrey.Kevin resolves only to identity narada-andrey.Kevin.",
+      "unique_role_alias": "narada-andrey.architect resolves to the unique active admitted architect identity in narada-andrey.",
+      "zero_matches": "Fail as role_alias_unresolved.",
+      "multiple_matches": "Fail as role_alias_ambiguous and list candidates.",
+      "envelope_fields": [
+        "requested_to",
+        "resolved_to",
+        "resolution",
+        "resolution_evidence"
+      ]
+    }
+  },
+  "status": "received"
+}
