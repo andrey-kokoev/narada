@@ -2215,6 +2215,15 @@ describe('operator-surface commands', () => {
       by: 'operator',
       format: 'json',
     }, createMockContext());
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-proper-resident',
+      role: 'resident',
+      agentKind: 'codex_cli',
+      site: 'narada-proper',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
     await writeBindings(cwd, [
       {
         binding_id: 'builder-binding',
@@ -2231,6 +2240,14 @@ describe('operator-surface commands', () => {
         handle: 'hwnd:architect',
         input_capabilities: ['type_text'],
         stale_after: '2000-01-01T00:00:00Z',
+        status: 'active',
+      },
+      {
+        binding_id: 'resident-binding',
+        identity_id: 'narada-proper-resident',
+        runtime_locus: 'pc-site',
+        handle: 'hwnd:resident',
+        input_capabilities: ['type_text'],
         status: 'active',
       },
     ]);
@@ -2270,7 +2287,7 @@ describe('operator-surface commands', () => {
     expect(result.result).toMatchObject({
       status: 'success',
       mutation_performed: false,
-      count: 3,
+      count: 4,
       agents: expect.arrayContaining([
         expect.objectContaining({
           identity_id: 'narada-proper-builder',
@@ -2280,6 +2297,12 @@ describe('operator-surface commands', () => {
           addressability_status: 'reachable',
           work_status: 'working',
           duty_loop_state: 'has_active_task',
+          activity_projection: expect.objectContaining({
+            state: 'executing',
+            visible: true,
+            authority: 'projection_only',
+            freshness: 'current',
+          }),
           current_task: 1122,
           next_command: 'narada task continue 1122 --agent builder',
         }),
@@ -2291,6 +2314,12 @@ describe('operator-surface commands', () => {
           addressability_status: 'stale',
           work_status: 'idle',
           duty_loop_state: 'unbound',
+          activity_projection: expect.objectContaining({
+            state: 'stale_evidence',
+            visible: true,
+            authority: 'projection_only',
+            freshness: 'stale',
+          }),
           current_task: null,
           last_activity_at: '2026-01-02T00:00:00Z',
           next_command: 'narada operator-surface bind-focused --identity narada-proper-architect --runtime-locus pc-site',
@@ -2303,12 +2332,37 @@ describe('operator-surface commands', () => {
           addressability_status: 'unbound',
           work_status: 'untracked',
           duty_loop_state: 'unbound',
+          activity_projection: expect.objectContaining({
+            state: 'unknown',
+            visible: true,
+            authority: 'projection_only',
+            freshness: 'unknown',
+          }),
           current_task: null,
           next_command: 'narada sites list --format json && narada operator-surface status --format json && narada operator-surface bind-focused --identity narada-proper-observer --runtime-locus <runtime-locus-from-status>',
         }),
+        expect.objectContaining({
+          identity_id: 'narada-proper-resident',
+          role: 'resident',
+          binding_status: 'bound',
+          addressability_status: 'reachable',
+          work_status: 'untracked',
+          duty_loop_state: 'idle',
+          activity_projection: expect.objectContaining({
+            state: 'idle',
+            visible: false,
+            rendering: 'hidden_default',
+            authority: 'projection_only',
+            freshness: 'current',
+          }),
+          current_task: null,
+        }),
       ]),
     });
-    expect((result.result as { human: string[] }).human.join('\n')).toContain('observer: untracked');
+    const human = (result.result as { human: string[] }).human.join('\n');
+    expect(human).toContain('observer: untracked');
+    expect(human).toContain('activity=executing');
+    expect(human).not.toContain('resident: untracked | identity=narada-proper-resident | addressability=reachable | activity=idle');
   });
 
   it('resolves bind-as-self from governed runtime context and defers volatile handle mutation', async () => {

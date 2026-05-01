@@ -133,6 +133,41 @@ trace substrate
 
 Opening or focusing a surface is not claiming work. Hydrating a runtime is not accepting evidence. Any task, inbox, publication, execution, or Site mutation must still cross its governed command surface.
 
+## Agent Activity Projection
+
+Operator Surface Agent activity is a projection for inhabited ergonomics. It is not task lifecycle authority, inbox authority, review authority, or Operator Surface message authority. It tells an Operator what an inhabited agent appears to be doing so labels, overlays, workboards, and launchers can avoid false idleness or noisy default labels.
+
+The canonical initial activity family is:
+
+| Activity | Meaning | Operator visibility |
+| --- | --- | --- |
+| `idle` | No current evidence of active task, review, inbox, message, or blocker work. | Hidden/default; do not create label noise. |
+| `executing` | Agent appears to be working an admitted task or command. | Visible. |
+| `awaiting_review` | Agent has reported or completed work and is waiting for review/admission/closure. | Visible. |
+| `reviewing` | Agent appears to be performing review work for another task or handoff. | Visible. |
+| `blocked` | Agent is blocked by dependency, capability, law receipt, lifecycle, or authority posture. | Visible. |
+| `processing_inbox` | Agent appears to be handling an inbox envelope or intake item. | Visible. |
+| `messaging` | Agent appears to be sending, receiving, or waiting on Operator Surface or directed-message work. | Visible. |
+| `unknown` | Evidence is absent, unbound, ambiguous, or insufficient. | Visible only when needed for repair or routing. |
+| `stale_evidence` | Evidence exists but freshness has expired or the binding is stale. | Visible as stale/repair posture. |
+
+Activity source evidence is a bounded projection bundle, usually including:
+
+| Source evidence | Used for | Authority posture |
+| --- | --- | --- |
+| Operator Surface binding state | Whether the role surface is addressable and fresh enough to route messages. | Addressability projection only. |
+| Roster projection | Current task pointer, work status, and last activity timestamp. | Compatibility projection; never lifecycle truth. |
+| SQLite task lifecycle | Whether the current task is claimed, in review, closed, or blocked. | Lifecycle authority for the task, but only an input to activity projection. |
+| Inbox envelope handling | Whether the role is processing intake. | Inbox authority for envelope status, not agent activity truth by itself. |
+| Operator Surface delivery queue | Whether the role is involved in directed messaging. | Message delivery evidence, not task status. |
+
+Freshness expectations:
+
+- Activity projections should expose `source_evidence` and freshness posture when machine-readable.
+- `idle` is the unit/default state and should be suppressed in overlays unless the Operator asked for full diagnostic detail.
+- `unknown` and `stale_evidence` should point to repair or rebind guidance, not pretend to know what the agent is doing.
+- No adapter may use activity projection to claim, release, close, review, or admit task evidence.
+
 ## Relationship To Role-Specific Bootstrap
 
 Architect and Builder thread bootstrap contracts describe the role grammar for a fresh AI thread. Operator Surfaces can make those roles spatially or operationally durable, for example a stable `narada-proper-architect` terminal profile or an MCP console scoped to a Project Site.

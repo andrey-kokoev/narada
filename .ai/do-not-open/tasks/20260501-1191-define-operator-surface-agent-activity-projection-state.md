@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T19:37:21.139Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777664197542_wnzblb
+closed_at: 2026-05-01T19:35:18.455Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Define Operator Surface Agent activity projection state
@@ -36,8 +45,8 @@ Define the canonical Operator Surface Agent activity projection model in doctrin
 
 ## Acceptance Criteria
 
-- [ ] Documentation defines activity projection as distinct from task lifecycle, inbox, review, and operator-surface message authority.
-- [ ] A canonical initial activity-state family covers idle, executing, awaiting_review, reviewing, blocked, processing_inbox, messaging, and unknown/stale evidence.
-- [ ] Operator-visible rendering guidance says idle is the unit/default posture and should not create label noise.
-- [ ] The model identifies source evidence and freshness expectations for each projected state.
-- [ ] Any existing workboard or operator-surface output touched by the task preserves authority provenance instead of presenting projection as truth.
+- [x] Documentation defines activity projection as distinct from task lifecycle, inbox, review, and operator-surface message authority.
+- [x] A canonical initial activity-state family covers idle, executing, awaiting_review, reviewing, blocked, processing_inbox, messaging, and unknown/stale evidence.
+- [x] Operator-visible rendering guidance says idle is the unit/default posture and should not create label noise.
+- [x] The model identifies source evidence and freshness expectations for each projected state.
+- [x] Any existing workboard or operator-surface output touched by the task preserves authority provenance instead of presenting projection as truth.

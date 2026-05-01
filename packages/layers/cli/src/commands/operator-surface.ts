@@ -165,6 +165,31 @@ type AgentWorkDutyLoopState =
   | 'done'
   | 'handoff_needed';
 
+type OperatorSurfaceAgentActivityState =
+  | 'idle'
+  | 'executing'
+  | 'awaiting_review'
+  | 'reviewing'
+  | 'blocked'
+  | 'processing_inbox'
+  | 'messaging'
+  | 'unknown'
+  | 'stale_evidence';
+
+interface OperatorSurfaceAgentActivityProjection {
+  state: OperatorSurfaceAgentActivityState;
+  visible: boolean;
+  rendering: 'hidden_default' | 'show_badge' | 'show_repair_badge';
+  authority: 'projection_only';
+  freshness: 'current' | 'stale' | 'unknown';
+  source_evidence: Array<{
+    source: 'operator_surface_binding' | 'roster_projection' | 'task_lifecycle';
+    status: string | null;
+    authority: string;
+    ref?: string | number | null;
+  }>;
+}
+
 const LEGACY_SITE_ID_ALIASES: Record<string, string> = {
   'narada-proper': 'narada',
 };
@@ -1839,6 +1864,63 @@ function deriveOperatorSurfaceDutyLoopState(args: {
   return 'idle';
 }
 
+function deriveOperatorSurfaceAgentActivityProjection(args: {
+  bindingStatus: string;
+  workStatus: string;
+  currentTask: number | null;
+  lifecycleStatus: string | null | undefined;
+  dutyLoopState: AgentWorkDutyLoopState;
+}): OperatorSurfaceAgentActivityProjection {
+  const stale = args.bindingStatus === 'stale';
+  const unaddressable = ['unbound', 'labeled_unbound', 'ambiguous', 'missing_transport'].includes(args.bindingStatus);
+  const workStatus = args.workStatus.toLowerCase();
+  let state: OperatorSurfaceAgentActivityState = 'idle';
+  if (stale) {
+    state = 'stale_evidence';
+  } else if (unaddressable || args.dutyLoopState === 'unbound') {
+    state = 'unknown';
+  } else if (workStatus.includes('blocked') || args.dutyLoopState === 'blocked') {
+    state = 'blocked';
+  } else if (workStatus.includes('inbox')) {
+    state = 'processing_inbox';
+  } else if (workStatus.includes('messag')) {
+    state = 'messaging';
+  } else if (workStatus.includes('reviewing')) {
+    state = 'reviewing';
+  } else if (args.lifecycleStatus === 'in_review' || args.dutyLoopState === 'in_review' || args.dutyLoopState === 'done' || args.dutyLoopState === 'handoff_needed') {
+    state = 'awaiting_review';
+  } else if (args.currentTask != null || args.dutyLoopState === 'has_active_task' || workStatus === 'working') {
+    state = 'executing';
+  }
+  const visible = state !== 'idle';
+  return {
+    state,
+    visible,
+    rendering: state === 'idle' ? 'hidden_default' : state === 'unknown' || state === 'stale_evidence' ? 'show_repair_badge' : 'show_badge',
+    authority: 'projection_only',
+    freshness: stale ? 'stale' : unaddressable ? 'unknown' : 'current',
+    source_evidence: [
+      {
+        source: 'operator_surface_binding',
+        status: args.bindingStatus,
+        authority: 'addressability_projection',
+      },
+      {
+        source: 'roster_projection',
+        status: args.workStatus,
+        authority: 'compatibility_projection',
+        ref: args.currentTask,
+      },
+      {
+        source: 'task_lifecycle',
+        status: args.lifecycleStatus ?? null,
+        authority: 'sqlite_lifecycle_input',
+        ref: args.currentTask,
+      },
+    ],
+  };
+}
+
 export async function operatorSurfaceStatusCommand(
   options: OperatorSurfaceStatusOptions,
   _context: CommandContext,
@@ -1885,6 +1967,13 @@ export async function operatorSurfaceStatusCommand(
       currentTask,
       lifecycleStatus: lifecycle.status,
     });
+    const activityProjection = deriveOperatorSurfaceAgentActivityProjection({
+      bindingStatus: posture.binding_status,
+      workStatus,
+      currentTask,
+      lifecycleStatus: lifecycle.status,
+      dutyLoopState,
+    });
     const nextCommand = posture.next_command
       ?? (currentTask != null
         ? `narada task continue ${currentTask} --agent ${rosterAgent?.agent_id ?? identity.role}`
@@ -1901,6 +1990,7 @@ export async function operatorSurfaceStatusCommand(
       reconciliation_command: posture.reconciliation_command,
       work_status: workStatus,
       duty_loop_state: dutyLoopState,
+      activity_projection: activityProjection,
       current_task: currentTask,
       lifecycle_status: lifecycle.status,
       lifecycle_status_source: lifecycle.source,
@@ -1921,6 +2011,7 @@ export async function operatorSurfaceStatusCommand(
         `${agent.role}: ${agent.work_status}`,
         `identity=${agent.identity_id}`,
         `addressability=${agent.addressability_status}`,
+        agent.activity_projection.visible ? `activity=${agent.activity_projection.state}` : null,
         agent.label_evidence_status === 'none' ? null : `label=${agent.label_evidence_status}`,
         agent.current_task == null ? 'task=none' : `task=${agent.current_task}(${agent.lifecycle_status ?? 'unknown'})`,
         `next=${agent.next_command}`,
