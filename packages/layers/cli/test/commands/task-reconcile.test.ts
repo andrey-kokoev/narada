@@ -8,7 +8,7 @@ import { mkdtempSync, mkdirSync, rmSync, readFileSync, writeFileSync } from 'nod
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { taskReconcileClaimCommand, taskReconcileInspectCommand, taskReconcileRecordCommand, taskReconcileRepairCommand } from '../../src/commands/task-reconcile.js';
+import { taskReconcileClaimCommand, taskReconcileGuideCommand, taskReconcileInspectCommand, taskReconcileRecordCommand, taskReconcileRepairCommand } from '../../src/commands/task-reconcile.js';
 import { taskCreateCommand } from '../../src/commands/task-create.js';
 import { taskClaimCommand } from '../../src/commands/task-claim.js';
 import { taskReportCommand } from '../../src/commands/task-report.js';
@@ -112,6 +112,90 @@ describe('task reconcile operator', () => {
     expect(repair.exitCode).toBe(ExitCode.SUCCESS);
     const content = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260425-655-drift.md'), 'utf8');
     expect(content).toContain('status: claimed');
+  });
+
+  it('guides terminal projection plus complete evidence drift toward SQLite lifecycle repair', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260425-658-terminal-projection.md'),
+      [
+        '---',
+        'status: closed',
+        'governed_by: task_close:a2',
+        'closed_by: a2',
+        'closed_at: 2026-04-25T00:00:00Z',
+        '---',
+        '',
+        '# Task 658',
+        '',
+        '## Acceptance Criteria',
+        '',
+        '- [x] x',
+        '',
+        '## Execution Notes',
+        '',
+        'Done.',
+        '',
+        '## Verification',
+        '',
+        'Verified.',
+        '',
+      ].join('\n'),
+    );
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.upsertLifecycle({
+        task_id: '20260425-658-terminal-projection',
+        task_number: 658,
+        status: 'claimed',
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: '2026-04-25T00:00:00Z',
+      });
+    } finally {
+      store.db.close();
+    }
+
+    const guide = await taskReconcileGuideCommand({ cwd: tempDir, taskNumber: '658', by: 'a2', format: 'json' });
+    expect(guide.exitCode).toBe(ExitCode.SUCCESS);
+    const guidedFinding = (guide.result as { findings: Array<{ finding_id: string; proposed_repair_json: string; guidance: { terminal_evidence_considered: boolean; next_sanctioned_commands: string[] } }> }).findings
+      .find((finding) => finding.proposed_repair_json.includes('project_terminal_frontmatter_to_sqlite'));
+    expect(guidedFinding?.guidance.terminal_evidence_considered).toBe(true);
+    expect(guidedFinding?.guidance.next_sanctioned_commands).toEqual([
+      `narada task reconcile record --range 658-658 --by a2`,
+      `narada task reconcile repair --finding ${guidedFinding!.finding_id} --by a2`,
+    ]);
+
+    const record = await taskReconcileRecordCommand({ cwd: tempDir, range: '658-658', by: 'a2', format: 'json' });
+    expect(record.exitCode).toBe(ExitCode.SUCCESS);
+    const finding = (record.result as { findings: Array<{ finding_id: string; proposed_repair_json: string }> }).findings
+      .find((f) => f.proposed_repair_json.includes('project_terminal_frontmatter_to_sqlite'));
+    expect(finding?.finding_id).toBe(guidedFinding?.finding_id);
+
+    const repair = await taskReconcileRepairCommand({ cwd: tempDir, finding: finding!.finding_id, by: 'a2', format: 'json' });
+    expect(repair.exitCode).toBe(ExitCode.SUCCESS);
+    const verify = openTaskLifecycleStore(tempDir);
+    try {
+      const lifecycle = verify.getLifecycle('20260425-658-terminal-projection');
+      expect(lifecycle?.status).toBe('closed');
+      expect(lifecycle?.closed_by).toBe('a2');
+      expect(lifecycle?.closure_mode).toBe('operator_direct');
+    } finally {
+      verify.db.close();
+    }
+  });
+
+  it('explains record-before-repair when repairing an unknown finding id', async () => {
+    const repair = await taskReconcileRepairCommand({ cwd: tempDir, finding: 'rf-stale', by: 'a2', format: 'json' });
+    expect(repair.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(repair.result).toMatchObject({
+      status: 'error',
+      next_sanctioned_command: 'narada task reconcile record --range <n-n> --by <id>',
+    });
+    expect((repair.result as { guidance: string }).guidance).toContain('record --range');
   });
 
   it('reconciles informal completion claims back to Builder when durable evidence is missing', async () => {

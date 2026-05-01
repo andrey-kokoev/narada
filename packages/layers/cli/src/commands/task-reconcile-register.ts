@@ -1,6 +1,7 @@
 import type { Command } from 'commander';
 import {
   taskReconcileClaimCommand,
+  taskReconcileGuideCommand,
   taskReconcileInspectCommand,
   taskReconcileRecordCommand,
   taskReconcileRepairCommand,
@@ -28,6 +29,27 @@ export function registerTaskReconcileCommands(taskCmd: Command): void {
         taskNumber: opts.task as string | undefined,
         agent: opts.agent as string | undefined,
         cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
+
+  reconcileCmd
+    .command('guide')
+    .description('Diagnose task lifecycle drift and print exact sanctioned next commands')
+    .option('--task <number>', 'Task number to guide')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--range <start-end>', 'Restrict guide to task number range')
+    .option('--by <id>', 'Operator or agent who would record and repair findings', 'operator')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'task reconcile guide',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => taskReconcileGuideCommand({
+        taskNumber: opts.task as string | undefined,
+        by: opts.by as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        range: opts.range as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }),
     }));

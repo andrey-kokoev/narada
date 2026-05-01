@@ -18,6 +18,7 @@ import { ExitCode } from '../lib/exit-codes.js';
 import {
   openTaskLifecycleStore,
   type TaskClosureMode,
+  type TaskStatus,
   type ReconciliationFindingRow,
   type ReconciliationRepairRow,
 } from '../lib/task-lifecycle-store.js';
@@ -45,6 +46,22 @@ export interface TaskReconcileClaimOptions {
   agent?: string;
   cwd?: string;
   format?: 'json' | 'human' | 'auto';
+}
+
+export interface TaskReconcileGuideOptions {
+  taskNumber?: string;
+  range?: string;
+  by?: string;
+  cwd?: string;
+  format?: 'json' | 'human' | 'auto';
+}
+
+interface GuidedFinding extends ReconciliationFindingRow {
+  guidance: {
+    summary: string;
+    terminal_evidence_considered: boolean;
+    next_sanctioned_commands: string[];
+  };
 }
 
 function nowIso(): string {
@@ -125,6 +142,40 @@ function parseRange(range: string | undefined): { start: number; end: number } {
   return { start, end };
 }
 
+function isTerminalStatus(status: string | null | undefined): status is 'closed' | 'confirmed' {
+  return status === 'closed' || status === 'confirmed';
+}
+
+function nextCommandsForFinding(finding: ReconciliationFindingRow, by: string): string[] {
+  const range = finding.task_number === null ? '' : ` --range ${finding.task_number}-${finding.task_number}`;
+  return [
+    `narada task reconcile record${range} --by ${by}`,
+    `narada task reconcile repair --finding ${finding.finding_id} --by ${by}`,
+  ];
+}
+
+function guidedSummaryForFinding(finding: ReconciliationFindingRow): string {
+  const proposed = safeJson(finding.proposed_repair_json) as { action?: string; terminal_evidence?: string } | null;
+  if (proposed?.action === 'project_terminal_frontmatter_to_sqlite') {
+    return 'Task projection is already terminal and evidence is complete; record the finding, then repair SQLite lifecycle to match terminal governed evidence.';
+  }
+  if (proposed?.action === 'project_sqlite_status_to_frontmatter') {
+    return 'SQLite lifecycle and task projection disagree; record the finding, then repair the task projection from SQLite lifecycle authority.';
+  }
+  if (proposed?.action === 'reopen_or_repair_evidence') {
+    return 'Terminal task lacks complete evidence; record the finding, then request continuation instead of accepting terminal posture.';
+  }
+  return 'Record the finding before repair so the repair has durable reconciliation evidence.';
+}
+
+function safeJson(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
 async function detectReconciliationFindings(
   cwd: string,
   range: { start: number; end: number },
@@ -135,17 +186,30 @@ async function detectReconciliationFindings(
     const tasks = await scanTasksByRange(cwd, range.start, range.end);
     for (const task of tasks) {
       if (task.taskNumber === null) continue;
+      const projectionEvidence = await inspectTaskEvidence(cwd, String(task.taskNumber));
       const lifecycle = store.getLifecycleByNumber(task.taskNumber);
       if (lifecycle && lifecycle.status !== task.status) {
+        const frontmatterTerminalWithCompleteEvidence = isTerminalStatus(task.status)
+          && !isTerminalStatus(lifecycle.status)
+          && projectionEvidence.verdict === 'complete';
         findings.push({
-          finding_id: findingId('lifecycle_frontmatter', task.taskNumber),
+          finding_id: findingId(
+            frontmatterTerminalWithCompleteEvidence ? 'terminal_projection_lifecycle' : 'lifecycle_frontmatter',
+            task.taskNumber,
+          ),
           task_id: task.taskId,
           task_number: task.taskNumber,
-          surfaces_json: JSON.stringify(['task_lifecycle.status', 'task_frontmatter.status']),
+          surfaces_json: JSON.stringify(['task_lifecycle.status', 'task_frontmatter.status', 'task_evidence']),
           expected_authority: 'task_lifecycle',
-          observed_mismatch_json: JSON.stringify({ sqlite_status: lifecycle.status, frontmatter_status: task.status ?? null }),
-          severity: 'warning',
-          proposed_repair_json: JSON.stringify({ action: 'project_sqlite_status_to_frontmatter' }),
+          observed_mismatch_json: JSON.stringify({
+            sqlite_status: lifecycle.status,
+            frontmatter_status: task.status ?? null,
+            evidence_verdict: projectionEvidence.verdict,
+          }),
+          severity: frontmatterTerminalWithCompleteEvidence ? 'error' : 'warning',
+          proposed_repair_json: JSON.stringify(frontmatterTerminalWithCompleteEvidence
+            ? { action: 'project_terminal_frontmatter_to_sqlite', terminal_evidence: projectionEvidence.verdict }
+            : { action: 'project_sqlite_status_to_frontmatter' }),
           status: 'open',
           detected_at: nowIso(),
         });
@@ -165,8 +229,10 @@ async function detectReconciliationFindings(
         });
       }
 
-      const evidence = await inspectTaskEvidence(cwd, String(task.taskNumber), store);
-      if ((task.status === 'closed' || task.status === 'confirmed') && evidence.verdict !== 'complete') {
+      const evidence = lifecycle && lifecycle.status !== task.status && isTerminalStatus(task.status)
+        ? projectionEvidence
+        : await inspectTaskEvidence(cwd, String(task.taskNumber), store);
+      if (isTerminalStatus(task.status) && evidence.verdict !== 'complete') {
         findings.push({
           finding_id: findingId('terminal_evidence', task.taskNumber),
           task_id: task.taskId,
@@ -388,6 +454,49 @@ export async function taskReconcileRecordCommand(
   };
 }
 
+export async function taskReconcileGuideCommand(
+  options: TaskReconcileGuideOptions,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
+  const by = options.by ?? 'operator';
+  const rangeText = options.taskNumber ? `${options.taskNumber}-${options.taskNumber}` : options.range;
+  let range: { start: number; end: number };
+  try {
+    range = parseRange(rangeText);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return { exitCode: ExitCode.GENERAL_ERROR, result: { status: 'error', error: msg } };
+  }
+
+  const findings = await detectReconciliationFindings(cwd, range);
+  const guidedFindings: GuidedFinding[] = findings.map((finding) => {
+    const proposed = safeJson(finding.proposed_repair_json) as { terminal_evidence?: string } | null;
+    return {
+      ...finding,
+      guidance: {
+        summary: guidedSummaryForFinding(finding),
+        terminal_evidence_considered: proposed?.terminal_evidence === 'complete',
+        next_sanctioned_commands: nextCommandsForFinding(finding, by),
+      },
+    };
+  });
+
+  return {
+    exitCode: ExitCode.SUCCESS,
+    result: {
+      status: 'success',
+      mutation_performed: false,
+      count: guidedFindings.length,
+      range,
+      findings: guidedFindings,
+      recommended_next_command: guidedFindings[0]?.guidance.next_sanctioned_commands[0] ?? null,
+      guidance: guidedFindings.length === 0
+        ? 'No lifecycle reconciliation findings were detected for this range.'
+        : 'Run the record command first, then repair by the recorded finding id. Do not edit task files or SQLite directly.',
+    },
+  };
+}
+
 export async function taskReconcileRepairCommand(
   options: TaskReconcileRepairOptions,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
@@ -402,7 +511,15 @@ export async function taskReconcileRepairCommand(
   try {
     const finding = store.getReconciliationFinding(findingIdValue);
     if (!finding) {
-      return { exitCode: ExitCode.GENERAL_ERROR, result: { status: 'error', error: `Finding not found: ${findingIdValue}` } };
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: {
+          status: 'error',
+          error: `Finding not found: ${findingIdValue}`,
+          guidance: 'Run narada task reconcile record --range <n-n> --by <id> before repair, then repair by one of the returned finding_ids.',
+          next_sanctioned_command: 'narada task reconcile record --range <n-n> --by <id>',
+        },
+      };
     }
     const proposed = JSON.parse(finding.proposed_repair_json) as { action?: string };
 
@@ -549,6 +666,59 @@ export async function taskReconcileRepairCommand(
         before_json: JSON.stringify(before),
         after_json: JSON.stringify(after),
         verification_json: JSON.stringify({ task_spec_backfilled: after.task_spec_row !== null }),
+        repaired_at: nowIso(),
+        repaired_by: repairedBy,
+      };
+      store.upsertReconciliationRepair(repair);
+      store.upsertReconciliationFinding({ ...finding, status: 'repaired' });
+      return { exitCode: ExitCode.SUCCESS, result: { status: 'success', repair } };
+    }
+
+    if (proposed.action === 'project_terminal_frontmatter_to_sqlite') {
+      const lifecycle = store.getLifecycle(finding.task_id);
+      const taskFile = await findTaskFile(cwd, String(finding.task_number));
+      if (!lifecycle || !taskFile) {
+        return { exitCode: ExitCode.GENERAL_ERROR, result: { status: 'error', error: 'Cannot repair missing lifecycle or task file' } };
+      }
+      const { frontMatter } = await readTaskFile(taskFile.path);
+      const terminalStatus = frontMatter.status as TaskStatus | undefined;
+      if (!isTerminalStatus(terminalStatus)) {
+        return { exitCode: ExitCode.GENERAL_ERROR, result: { status: 'error', error: 'Terminal projection repair requires terminal frontmatter status' } };
+      }
+      const evidence = await inspectTaskEvidence(cwd, String(finding.task_number));
+      if (evidence.verdict !== 'complete') {
+        return {
+          exitCode: ExitCode.GENERAL_ERROR,
+          result: {
+            status: 'error',
+            error: 'Terminal projection repair requires complete task evidence',
+            guidance: `Run narada task evidence inspect ${finding.task_number} and repair evidence before lifecycle repair.`,
+          },
+        };
+      }
+      const before = { lifecycle_status: lifecycle.status, frontmatter_status: terminalStatus, evidence_verdict: evidence.verdict };
+      store.updateStatus(finding.task_id, terminalStatus, repairedBy, {
+        governed_by: frontMatter.governed_by ?? `task_reconcile:${repairedBy}`,
+      });
+      const updated = store.getLifecycle(finding.task_id);
+      if (terminalStatus === 'closed' || terminalStatus === 'confirmed') {
+        store.upsertLifecycle({
+          ...updated!,
+          closed_at: String(frontMatter.closed_at ?? updated?.closed_at ?? nowIso()),
+          closed_by: String(frontMatter.closed_by ?? updated?.closed_by ?? repairedBy),
+          closure_mode: updated?.closure_mode ?? inferClosureMode(frontMatter.governed_by),
+          updated_at: nowIso(),
+        });
+      }
+      const after = { lifecycle_status: store.getLifecycle(finding.task_id)?.status ?? null, frontmatter_status: terminalStatus };
+      const repair: ReconciliationRepairRow = {
+        repair_id: repairId(finding.finding_id),
+        finding_id: finding.finding_id,
+        applied: 1,
+        changed_surfaces_json: JSON.stringify(['task_lifecycle.status']),
+        before_json: JSON.stringify(before),
+        after_json: JSON.stringify(after),
+        verification_json: JSON.stringify({ evidence_verdict: evidence.verdict, terminal_projection_preserved: true }),
         repaired_at: nowIso(),
         repaired_by: repairedBy,
       };

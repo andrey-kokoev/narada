@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T00:38:51.083Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777595881264_7cw6m4
+closed_at: 2026-05-01T00:39:06.866Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add guided lifecycle drift reconcile repair
@@ -32,8 +41,8 @@ Source inbox envelope env_b5db834e-12e4-48db-b24f-8f93381930db reports narada-an
 
 ## Acceptance Criteria
 
-- [ ] A common frontmatter closed versus SQLite claimed split-brain case has a single guided diagnosis path.
-- [ ] Output gives exact next sanctioned command rather than requiring the operator to infer record versus repair sequence.
-- [ ] Terminal evidence is considered in the suggested repair path.
-- [ ] Tests cover the reported lifecycle drift scenario.
-- [ ] Repair preserves SQLite/evidence authority and avoids direct editing instructions.
+- [x] A common frontmatter closed versus SQLite claimed split-brain case has a single guided diagnosis path.
+- [x] Output gives exact next sanctioned command rather than requiring the operator to infer record versus repair sequence.
+- [x] Terminal evidence is considered in the suggested repair path.
+- [x] Tests cover the reported lifecycle drift scenario.
+- [x] Repair preserves SQLite/evidence authority and avoids direct editing instructions.
