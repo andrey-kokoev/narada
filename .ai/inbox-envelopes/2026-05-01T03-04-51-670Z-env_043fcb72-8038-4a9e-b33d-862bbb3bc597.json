@@ -1,0 +1,39 @@
+{
+  "envelope_id": "env_043fcb72-8038-4a9e-b33d-862bbb3bc597",
+  "received_at": "2026-05-01T03:04:51.670Z",
+  "source": {
+    "kind": "cli",
+    "ref": "narada-andrey:forward-momentum-indoctrination-capa"
+  },
+  "kind": "incident",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "CAPA: agents must treat prototype/facade closure as transition, not endpoint",
+    "summary": "During review of narada-andrey task 62, Kevin closed a typed MCP facade/prototype and initially created implementation continuation only for Inbox MCP, missing the sibling EE-MCP surface until the Operator challenged the narrowing. This shows an indoctrination/process gap: agents can satisfy the immediate wording while failing to preserve the full capability shape and forward momentum.",
+    "incident": {
+      "source_site": "narada-andrey",
+      "source_task": "62",
+      "missed_continuation": "EE-MCP implementation task was not created alongside Inbox MCP continuation tasks 63 and 64 until Operator intervention.",
+      "repair": "Task 65 was created and Bob was nudged, but the process should have made this automatic at review/closure time."
+    },
+    "root_cause_hypothesis": "Agent operating posture over-optimized for local request satisfaction and scope closure, instead of inhabited forward motion over the whole typed capability shape.",
+    "proposed_capa": [
+      "Add agent-facing law/doctrine: prototype, facade, spike, or partial-capability closure is a transition point, not an endpoint.",
+      "Require reviewer/architect to classify closure as scope-complete, capability-complete, doctrine-complete, or transition-complete.",
+      "When a task creates multiple typed surfaces or branches, require each branch to have one of: implementation task, explicit deferral with rationale, or explicit rejection.",
+      "Task review/close should warn when prototype/facade language appears and no continuation, deferral, or rejection is linked.",
+      "Agent role-loop indoctrination should emphasize preserving the full shape of a capability, not only the fragment most recently named by the Operator.",
+      "Forward-momentum behavior should be sanctioned: create the next coherent task and nudge the right role unless blocked or explicitly out of scope."
+    ],
+    "acceptance_shape": [
+      "Narada docs/law contain the forward-momentum rule in agent-facing language.",
+      "Task lifecycle/review surfaces distinguish local scope completion from larger capability completion.",
+      "A future task like typed MCP facade closure would mechanically surface both Inbox MCP and EE-MCP continuations before closure is reported as done."
+    ],
+    "requested_disposition": "Treat as CAPA and doctrinal/process implementation proposal."
+  },
+  "status": "received"
+}
