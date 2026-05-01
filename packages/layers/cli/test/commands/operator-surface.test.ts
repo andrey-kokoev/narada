@@ -87,6 +87,7 @@ async function writeRoster(cwd: string, agents: unknown[]): Promise<void> {
 }
 
 afterEach(async () => {
+  delete process.env.NARADA_OPERATOR_SURFACE_IDENTITY;
   delete process.env.NARADA_AGENT_ID;
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
@@ -3006,8 +3007,11 @@ describe('operator-surface commands', () => {
       mutation_performed: false,
       runtime_binding_mutated: false,
       self_resolution: {
+        requested_identity: 'self',
         identity: 'narada-proper-builder',
+        resolved_identity: 'narada-proper-builder',
         source: 'environment',
+        trust_class: 'authoritative_assertion',
       },
       authority_split: {
         durable_identity_authority: expect.stringContaining('operator-surfaces/identities.json'),
@@ -3024,6 +3028,76 @@ describe('operator-surface commands', () => {
       },
       deferred_command: 'narada sites list --format json && narada operator-surface status --format json && narada operator-surface bind-focused --identity narada-proper-builder --runtime-locus <runtime-locus-from-status> --handle <captured-hwnd-or-stable-handle>',
     });
+  });
+
+  it('refuses bind-as-self when active roster work is the only identity evidence', async () => {
+    const cwd = await tempRepo();
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-proper-architect',
+      role: 'architect',
+      agentKind: 'codex_cli',
+      site: 'narada-proper',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-proper-builder',
+      role: 'builder',
+      agentKind: 'codex_cli',
+      site: 'narada-proper',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+    await saveRoster(cwd, {
+      version: 2,
+      updated_at: '2026-05-01T19:30:00.000Z',
+      agents: [{
+        agent_id: 'narada-proper-builder',
+        role: 'builder',
+        capabilities: ['execute'],
+        first_seen_at: '2026-05-01T19:30:00.000Z',
+        last_active_at: '2026-05-01T19:30:00.000Z',
+        status: 'working',
+        task: 1133,
+        last_done: null,
+        updated_at: '2026-05-01T19:30:00.000Z',
+      }],
+    });
+
+    const result = await operatorSurfaceBindFocusedCommand({
+      cwd,
+      as: 'self',
+      runtimeLocus: 'narada',
+      handle: 'hwnd:1001',
+      observedHandle: 'hwnd:1001',
+      windowTitle: 'narada.architect',
+      windowClass: 'CASCADIA_HOSTING_WINDOW_CLASS',
+      processName: 'WindowsTerminal.exe',
+      processId: '4242',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      reason: 'identity_unresolved',
+      self_resolution: {
+        requested_identity: 'self',
+        identity: null,
+        resolved_identity: null,
+        candidate_identity: 'narada-proper-builder',
+        source: 'active_roster_assignment',
+        trust_class: 'untrusted_projection',
+        blockers: expect.arrayContaining([
+          expect.stringContaining('roster work is not identity authority'),
+          expect.stringContaining('NARADA_OPERATOR_SURFACE_IDENTITY'),
+        ]),
+      },
+      repair_command: expect.stringContaining('roster assignment cannot identify --as self'),
+    });
+    expect((result.result as { runtime_binding_mutated?: unknown }).runtime_binding_mutated).toBeUndefined();
   });
 
   it('admits runtime binding when bind-focused receives a runtime locus and observed handle', async () => {

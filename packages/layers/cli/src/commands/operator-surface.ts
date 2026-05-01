@@ -2826,26 +2826,63 @@ export async function operatorSurfaceVoiceTranscriptionCheckCommand(
   }
 }
 
-async function resolveSelfIdentity(cwd: string): Promise<{ identity: string | null; source: string; blockers: string[] }> {
-  const envIdentity = process.env.NARADA_AGENT_ID || process.env.NARADA_PRINCIPAL_ID;
-  if (envIdentity) return { identity: envIdentity, source: 'environment', blockers: [] };
+interface SelfIdentityResolution {
+  requested_identity: 'self';
+  identity: string | null;
+  resolved_identity: string | null;
+  candidate_identity?: string | null;
+  source: string;
+  trust_class: 'authoritative_assertion' | 'untrusted_projection' | 'unresolved';
+  blockers: string[];
+}
+
+async function resolveSelfIdentity(cwd: string): Promise<SelfIdentityResolution> {
+  const envIdentity = process.env.NARADA_OPERATOR_SURFACE_IDENTITY || process.env.NARADA_AGENT_ID || process.env.NARADA_PRINCIPAL_ID;
+  if (envIdentity) {
+    return {
+      requested_identity: 'self',
+      identity: envIdentity,
+      resolved_identity: envIdentity,
+      source: process.env.NARADA_OPERATOR_SURFACE_IDENTITY ? 'operator_surface_environment' : 'environment',
+      trust_class: 'authoritative_assertion',
+      blockers: [],
+    };
+  }
   try {
     const roster = await loadRoster(cwd);
     const active = roster.agents.filter((agent) => agent.task != null);
     if (active.length === 1) {
-      return { identity: active[0]!.agent_id, source: 'active_roster_assignment', blockers: [] };
+      const candidate = active[0]!.agent_id;
+      return {
+        requested_identity: 'self',
+        identity: null,
+        resolved_identity: null,
+        candidate_identity: candidate,
+        source: 'active_roster_assignment',
+        trust_class: 'untrusted_projection',
+        blockers: [
+          `active roster assignment suggests ${candidate}, but roster work is not identity authority`,
+          'set NARADA_OPERATOR_SURFACE_IDENTITY or pass --identity explicitly',
+        ],
+      };
     }
     return {
+      requested_identity: 'self',
       identity: null,
+      resolved_identity: null,
       source: 'roster',
+      trust_class: 'unresolved',
       blockers: active.length === 0
-        ? ['no active roster assignment and no NARADA_AGENT_ID/NARADA_PRINCIPAL_ID']
+        ? ['no admitted self identity; set NARADA_OPERATOR_SURFACE_IDENTITY, NARADA_AGENT_ID, or NARADA_PRINCIPAL_ID']
         : ['multiple active roster assignments; self is ambiguous'],
     };
   } catch (error) {
     return {
+      requested_identity: 'self',
       identity: null,
+      resolved_identity: null,
       source: 'roster',
+      trust_class: 'unresolved',
       blockers: [`roster unavailable: ${error instanceof Error ? error.message : String(error)}`],
     };
   }
@@ -2868,8 +2905,9 @@ export async function operatorSurfaceBindFocusedCommand(
       result: {
         status: 'error',
         reason: 'identity_unresolved',
+        self_resolution: selfResolution,
         blockers: selfResolution?.blockers ?? ['--identity is required unless --as self resolves'],
-        repair_command: 'Set NARADA_AGENT_ID or admit exactly one active roster assignment before using --as self.',
+        repair_command: 'Set NARADA_OPERATOR_SURFACE_IDENTITY/NARADA_AGENT_ID or pass --identity explicitly; roster assignment cannot identify --as self.',
       },
     };
   }
