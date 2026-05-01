@@ -310,6 +310,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .requiredOption('--mode <mode>', 'Closure mode: operator_direct, peer_reviewed, agent_finish, emergency. Use peer_reviewed only for explicit review-driven closure; task review --verdict accepted normally handles that path.')
     .option('--format <fmt>', 'Output format: json or human', 'human')
     .option('--override-rationale <text>', 'Explicit durable override rationale for role-guarded lifecycle actions')
+    .option('--no-continuation-needed <text>', 'One-line rationale for closing facade/prototype/spike/design-only scope without follow-up task linkage')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .action(resourceScopedDirectCommandAction<SqliteTaskLifecycleStore, [string, Record<string, unknown>]>({
       command: 'task close',
@@ -325,6 +326,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
         format: resolveCommandFormat(opts.format, 'human'),
         store,
         overrideRationale: opts.overrideRationale as string | undefined,
+        noContinuationNeeded: opts.noContinuationNeeded as string | undefined,
       }),
     }));
 

@@ -5,7 +5,7 @@ vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskCloseCommand } from '../../src/commands/task-close.js';
-import { taskEvidenceProveCriteriaCommand } from '../../src/commands/task-evidence.js';
+import { taskEvidenceAdmitCommand, taskEvidenceProveCriteriaCommand } from '../../src/commands/task-evidence.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -277,6 +277,98 @@ describe('task close operator', () => {
     expect(r.gate_failures).toContain('Latest Evidence Admission result is rejected');
     expect(r.remediation).toContain('  -> Continue evidence repair: narada task continue 110 --agent worker --reason evidence_repair');
     expect(r.remediation).toContain('  -> After repair, run: narada task evidence admit 110 --by worker');
+  });
+
+  it('blocks facade/prototype closure without continuation evidence or rationale', async () => {
+    writeTask(
+      tempDir,
+      111,
+      'in_review',
+      '## Context\nThis task delivers an MCP facade prototype.\n\n## Execution Notes\nDid the work.\n\n## Verification\nTests pass.\n',
+    );
+    const admission = await taskEvidenceAdmitCommand({ taskNumber: '111', by: 'operator-1', cwd: tempDir, format: 'json' });
+    expect(admission.exitCode).toBe(ExitCode.SUCCESS);
+
+    const result = await taskCloseCommand({
+      taskNumber: '111',
+      by: 'operator-1',
+      mode: 'operator_direct',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      closure_claim: {
+        applies: true,
+        capability_complete: false,
+      },
+    });
+    const r = result.result as { gate_failures: string[]; remediation: string[] };
+    expect(r.gate_failures).toContain('Facade/prototype/spike/design-only task requires linked continuation task evidence or --no-continuation-needed rationale before closure');
+    expect(r.remediation.some((item) => item.includes('Continuation Task: task <number>'))).toBe(true);
+  });
+
+  it('allows facade/prototype closure with explicit no-continuation rationale', async () => {
+    writeTask(
+      tempDir,
+      112,
+      'in_review',
+      '## Context\nThis task delivers a design-only spike.\n\n## Execution Notes\nDid the work.\n\n## Verification\nTests pass.\n',
+    );
+    const admission = await taskEvidenceAdmitCommand({ taskNumber: '112', by: 'operator-1', cwd: tempDir, format: 'json' });
+    expect(admission.exitCode).toBe(ExitCode.SUCCESS);
+
+    const result = await taskCloseCommand({
+      taskNumber: '112',
+      by: 'operator-1',
+      mode: 'operator_direct',
+      noContinuationNeeded: 'Spike was intentionally scoped to discardable decision evidence.',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      closure_claim: {
+        applies: true,
+        capability_complete: true,
+        no_continuation_needed_rationale: 'Spike was intentionally scoped to discardable decision evidence.',
+      },
+    });
+    const content = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-112-test.md'), 'utf8');
+    expect(content).toContain('no_continuation_needed_rationale: Spike was intentionally scoped to discardable decision evidence.');
+  });
+
+  it('allows facade/prototype closure with linked continuation task evidence', async () => {
+    writeTask(
+      tempDir,
+      113,
+      'in_review',
+      '## Context\nThis task delivers an MCP facade prototype.\n\nContinuation Task: task 222 implements usable MCP messaging.\n\n## Execution Notes\nDid the work.\n\n## Verification\nTests pass.\n',
+    );
+    const admission = await taskEvidenceAdmitCommand({ taskNumber: '113', by: 'operator-1', cwd: tempDir, format: 'json' });
+    expect(admission.exitCode).toBe(ExitCode.SUCCESS);
+
+    const result = await taskCloseCommand({
+      taskNumber: '113',
+      by: 'operator-1',
+      mode: 'operator_direct',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      closure_claim: {
+        applies: true,
+        capability_complete: true,
+        has_continuation_relation: true,
+      },
+    });
   });
 
   it('fails without execution notes', async () => {

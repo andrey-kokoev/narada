@@ -19,6 +19,7 @@ import { admitTaskEvidence } from './evidence-admission.js';
 import { openTaskLifecycleStore, type TaskLifecycleStore, type TaskStatus } from './task-lifecycle-store.js';
 import { closeTaskService } from './task-close-service.js';
 import { ExitCode } from './exit-codes.js';
+import { analyzePrototypeClosure, type PrototypeClosurePosture } from './prototype-closure.js';
 
 export interface ReviewTaskServiceOptions {
   taskNumber?: string;
@@ -58,6 +59,7 @@ export interface ReviewTaskServiceResponse {
       commands: string[];
       no_workaround: string;
     };
+    closure_claim?: PrototypeClosurePosture;
     error?: string;
   };
 }
@@ -243,6 +245,7 @@ export async function reviewTaskService(
   }
 
   const { frontMatter, body } = await readTaskFile(taskFile.path);
+  const closureClaim = analyzePrototypeClosure(frontMatter, body);
   const ownStore = options.store ? null : openTaskLifecycleStore(cwd);
   const closeOwnStore = () => {
     if (ownStore) ownStore.db.close();
@@ -551,6 +554,12 @@ export async function reviewTaskService(
     result.evidence_blocked = true;
     if (evidenceReason) {
       result.evidence_reason = evidenceReason;
+    }
+  }
+  if (closureClaim.applies) {
+    result.closure_claim = closureClaim;
+    if (closureClaim.warning && !result.evidence_reason) {
+      result.evidence_reason = closureClaim.warning;
     }
   }
   const capaRecommendation = capaRecommendationForReview({

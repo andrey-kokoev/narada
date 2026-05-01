@@ -399,6 +399,7 @@ The CLI distinguishes four levels of completion. Agents and operators must not c
 - `task review accepted` does **not** override evidence admission. If acceptance criteria, execution evidence, or verification are missing, the task remains governed by the evidence-repair path instead of closing.
 - `task review rejected` with blocking findings must surface a CAPA-needed yes/no decision. Use CAPA for authority-boundary bugs, safety/secret boundary bugs, lifecycle or roster authority mismatches, workaround identities, repeated Operator correction, and defects likely to recur across Sites.
 - Review authority is not identical to role title. Operator has Operator authority, Builder executes, Architect coordinates and may review only when explicitly admitted, Reviewer/Admin may review, and Observer remains read-only. Use `narada task roster add <architect-id> --role architect --capability review` to declare architect-as-reviewer authority instead of substituting `operator`.
+- Facade/prototype/spike/design-only closure proves scope-complete work only. It may not imply capability-complete delivery unless it links concrete continuation work or records `--no-continuation-needed` rationale.
 - `narada task evidence <n>` is read-only and classifies a single task as `complete`, `attempt_complete`, `needs_review`, `needs_closure`, or `incomplete`.
 - `narada task evidence list` is read-only and lists all tasks that are not complete by evidence (default filter). Use `--verdict` to filter, `--status` to scope by front-matter status, and `--range` for number ranges.
 

@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T03:30:15.316Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777606185485_5vdoms
+closed_at: 2026-05-01T03:30:43.142Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Require continuation tasks for facade and prototype closures
@@ -36,8 +45,8 @@ Add lifecycle/review/close guardrails for facade, prototype, spike, and design-o
 
 ## Acceptance Criteria
 
-- [ ] Task close detects facade/prototype/spike/design-only scope language and surfaces continuation obligations before capability-complete wording.
-- [ ] Closure can proceed only with linked continuation task evidence or explicit no-continuation-needed rationale where applicable.
-- [ ] Evidence or review surfaces warn when prototype/facade language has no continuation relation.
-- [ ] Review output distinguishes scope-complete from capability-complete.
-- [ ] Tests cover facade task with continuation, facade task with no-continuation rationale, and facade task missing continuation.
+- [x] Task close detects facade/prototype/spike/design-only scope language and surfaces continuation obligations before capability-complete wording.
+- [x] Closure can proceed only with linked continuation task evidence or explicit no-continuation-needed rationale where applicable.
+- [x] Evidence or review surfaces warn when prototype/facade language has no continuation relation.
+- [x] Review output distinguishes scope-complete from capability-complete.
+- [x] Tests cover facade task with continuation, facade task with no-continuation rationale, and facade task missing continuation.

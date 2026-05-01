@@ -23,6 +23,7 @@ export interface TaskCloseOptions {
   store?: TaskLifecycleStore;
   mode?: TaskClosureMode;
   overrideRationale?: string;
+  noContinuationNeeded?: string;
 }
 
 export async function taskCloseCommand(
@@ -50,6 +51,7 @@ export async function taskCloseCommand(
     cwd,
     store: options.store,
     mode: options.mode ?? 'operator_direct',
+    noContinuationNeeded: options.noContinuationNeeded,
   });
   const result = roleGuard.override
     ? { ...serviceResult.result, role_guard_override: roleGuard.override }
@@ -82,6 +84,10 @@ export async function taskCloseCommand(
       if (result.roster_reconciled && result.reconciled_agent_id) {
         fmt.message(`Reconciled roster: cleared assignment for ${String(result.reconciled_agent_id)}`, 'success');
       }
+      const closureClaim = result.closure_claim as { applies?: boolean; capability_complete?: boolean } | undefined;
+      if (closureClaim?.applies && closureClaim.capability_complete === false) {
+        fmt.message('Closed scope-complete work without claiming capability-complete delivery.', 'warning');
+      }
     } else if (result.status === 'ok') {
       fmt.message(String(result.message ?? `Task ${String(result.task_id)} is valid by evidence`), 'success');
     } else {
@@ -104,6 +110,10 @@ export async function taskCloseCommand(
       const warnings = Array.isArray(result.warnings) ? result.warnings : [];
       for (const warning of warnings) {
         fmt.message(`  ! ${String(warning)}`, 'warning');
+      }
+      const closureClaim = result.closure_claim as { warning?: string } | undefined;
+      if (closureClaim?.warning) {
+        fmt.message(`  ! ${closureClaim.warning}`, 'warning');
       }
       fmt.message('Close modes: operator_direct, peer_reviewed, agent_finish, emergency.', 'info');
       fmt.message('If a peer review accepted the report, `narada task review <n> --verdict accepted` may already have closed the task.', 'info');

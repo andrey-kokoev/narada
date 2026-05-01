@@ -82,6 +82,11 @@ function setupRepo(tempDir: string): void {
     join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-1003-unauthorized-review-task.md'),
     '---\ntask_id: 1003\nstatus: opened\n---\n\n# Task 1003: Unauthorized Review Task\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Execution Notes\nCompleted.\n\n## Verification\nFocused test passed.\n',
   );
+
+  writeFileSync(
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-1004-facade-review-task.md'),
+    '---\ntask_id: 1004\nstatus: opened\n---\n\n# Task 1004: Facade Review Task\n\n## Context\nThis is an MCP facade prototype.\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Execution Notes\nCompleted.\n\n## Verification\nFocused test passed.\n',
+  );
 }
 
 describe('task review command', () => {
@@ -348,5 +353,30 @@ describe('task review command', () => {
     } finally {
       store.db.close();
     }
+  });
+
+  it('distinguishes scope-complete from capability-complete for facade review output', async () => {
+    await claimTaskService({ taskNumber: '1004', agent: 'worker', cwd: tempDir });
+    await releaseTaskService({ taskNumber: '1004', reason: 'completed', cwd: tempDir });
+
+    const result = await taskReviewCommand({
+      taskNumber: '1004',
+      agent: 'reviewer',
+      verdict: 'accepted',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      verdict: 'accepted',
+      close_action: 'blocked',
+      closure_claim: {
+        applies: true,
+        scope_complete: true,
+        capability_complete: false,
+      },
+    });
   });
 });

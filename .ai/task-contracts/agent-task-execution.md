@@ -636,6 +636,17 @@ narada task continue <task-number> --agent <id> --reason evidence_repair
 
 After adding the missing evidence, run `narada task evidence admit <task-number> --by <id>` and then close through the normal governed closure path.
 
+### Scope-Complete vs Capability-Complete
+
+Facade, prototype, spike, design-only, proof-of-concept, and similar tasks may be complete within their stated scope without proving an end-to-end capability. Closure must not imply capability-complete delivery unless the task links continuation work or records why no continuation is needed.
+
+Before closing these tasks, provide one of:
+
+- A concrete continuation relation in the task body, such as `Continuation Task: task <number>`.
+- A closure rationale with `narada task close <task-number> --by <id> --mode <mode> --no-continuation-needed "<one-line rationale>"`.
+
+Review and close output must distinguish `scope_complete` from `capability_complete` so a typed facade/prototype closure is not mistaken for a usable runtime capability.
+
 A task that is terminal-by-front-matter (`closed` or `confirmed`) but invalid-by-evidence is an **invariant violation**, not a documentation nuisance. The violation code is `terminal_with_unchecked_criteria` and is reported by `narada task evidence`, `narada task evidence list`, `narada task lint`, and `narada chapter close --finish`.
 
 ### Terminal-State Ownership

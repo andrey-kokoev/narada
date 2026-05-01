@@ -13,6 +13,7 @@ import {
   saveAssignment,
 } from './task-governance.js';
 import { ExitCode } from './exit-codes.js';
+import { analyzePrototypeClosure } from './prototype-closure.js';
 import {
   openTaskLifecycleStore,
   type TaskClosureMode,
@@ -26,6 +27,7 @@ export interface CloseTaskServiceOptions {
   cwd?: string;
   store?: TaskLifecycleStore;
   mode: TaskClosureMode;
+  noContinuationNeeded?: string;
 }
 
 export async function closeTaskService(
@@ -69,6 +71,10 @@ export async function closeTaskService(
   }
 
   const { frontMatter, body } = await readTaskFile(taskFile.path);
+  if (options.noContinuationNeeded?.trim()) {
+    frontMatter.no_continuation_needed_rationale = options.noContinuationNeeded.trim();
+  }
+  const closureClaim = analyzePrototypeClosure(frontMatter, body);
   const ownStore = options.store ? null : openTaskLifecycleStore(cwd);
   const closeOwnStore = () => {
     if (ownStore) ownStore.db.close();
@@ -149,6 +155,9 @@ export async function closeTaskService(
   if (num !== null && await hasDerivativeFiles(cwd, num) && !gateFailures.includes('Derivative task-status files exist')) {
     gateFailures.push('Derivative task-status files exist');
   }
+  if (closureClaim.applies && !closureClaim.capability_complete) {
+    gateFailures.push('Facade/prototype/spike/design-only task requires linked continuation task evidence or --no-continuation-needed rationale before closure');
+  }
 
   if (gateFailures.length > 0) {
     const remediation: string[] = [];
@@ -168,6 +177,10 @@ export async function closeTaskService(
       remediation.push(`  -> Continue evidence repair: narada task continue ${taskNumber} --agent ${closedBy} --reason evidence_repair`);
       remediation.push(`  -> After repair, run: narada task evidence admit ${taskNumber} --by ${closedBy}`);
     }
+    if (closureClaim.applies && !closureClaim.capability_complete) {
+      remediation.push(`  -> Link concrete continuation work in the task body, e.g. "Continuation Task: task <number>"`);
+      remediation.push(`  -> Or close as scope-complete only: narada task close ${taskNumber} --by ${closedBy} --mode ${closureMode} --no-continuation-needed "<one-line rationale>"`);
+    }
 
     closeOwnStore();
     return {
@@ -183,6 +196,7 @@ export async function closeTaskService(
         repair_command: admission?.verdict === 'rejected'
           ? `narada task continue ${taskNumber} --agent ${closedBy} --reason evidence_repair`
           : undefined,
+        closure_claim: closureClaim,
         violations: evidence.violations,
       },
     };
@@ -203,6 +217,9 @@ export async function closeTaskService(
   frontMatter.closed_by = closedBy;
   frontMatter.governed_by = `task_close:${closedBy}`;
   frontMatter.closure_mode = closureMode;
+  if (options.noContinuationNeeded?.trim()) {
+    frontMatter.no_continuation_needed_rationale = options.noContinuationNeeded.trim();
+  }
   await writeTaskProjection(taskFile.path, frontMatter, body);
 
   let assignmentReleased = false;
@@ -251,6 +268,7 @@ export async function closeTaskService(
       closure_mode: closureMode,
       closed_at: frontMatter.closed_at,
       admission_id: admission?.admission_id,
+      closure_claim: closureClaim,
       assignment_released: assignmentReleased,
       roster_reconciled: rosterReconciled,
       ...(reconciledAgentId ? { reconciled_agent_id: reconciledAgentId } : {}),
