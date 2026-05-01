@@ -1,0 +1,42 @@
+{
+  "envelope_id": "env_36f69b06-55a7-4f28-9640-f2d3daabc8f3",
+  "received_at": "2026-05-01T16:10:41.670Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey:site-config-doctrine-imports-qmsr"
+  },
+  "kind": "proposal",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "Add Site config support for governed doctrine imports and external constraint regimes",
+    "summary": "Narada Site config should be able to declare external doctrine/regulatory regimes recognized by the Site, such as FDA QMSR / 21 CFR Part 820, without embedding the doctrine itself in config. The config should declare admission, scope, binding posture, and inheritance rules; doctrine/KG/KB should hold interpretation and mappings; Operation and task machinery should project those imports into concrete evidence, review, approval, and traceability gates.",
+    "observed_at": "2026-05-01T11:10:26.7195635-05:00",
+    "source_site": "narada-andrey",
+    "motivating_example": {
+      "regime_id": "fda-qmsr",
+      "kind": "external_regulatory_regime",
+      "authority": "FDA",
+      "citation": "21 CFR Part 820",
+      "current_title": "Quality Management System Regulation (QMSR)",
+      "effective_date": "2026-02-02",
+      "incorporated_standard": "ISO 13485:2016"
+    },
+    "proposed_factorization": [
+      "Site config declares which external regimes the Site recognizes, their binding scope, and when they apply.",
+      "Doctrine/KG/KB stores the actual interpretation, mappings, obligations, and process implications.",
+      "Operation configs opt into or inherit applicable doctrine imports such as QMSR, ISO 13485, CAPA, complaints, design-development, supplier controls, records, and validation.",
+      "Task lifecycle projects active doctrine imports into evidence requirements, review/approval roles, traceability, and closure gates.",
+      "Config should preserve source citation, authority, version/effective date, and binding posture, but not attempt to encode the whole external doctrine as prose."
+    ],
+    "requested_execution": [
+      "Add a Site config schema concept/key such as doctrine_imports or governing_regimes.",
+      "Define fields for id, kind, authority, citation/source, effective date/version, binding scope, applicability predicates, and inheritance behavior.",
+      "Document the distinction between importing a regime and interpreting it.",
+      "Add a small example showing FDA QMSR admitted at Site level and inherited by a CAPA Operation."
+    ]
+  },
+  "status": "received"
+}
