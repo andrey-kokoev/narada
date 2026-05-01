@@ -1,0 +1,35 @@
+{
+  "event_id": "ose_1777594261323_6a0fafeaa3b9",
+  "identity": "builder",
+  "runtime_locus": "narada-proper",
+  "resolved_runtime_handle": "codex-thread:019dd634-700c-7490-b108-44e1cffb6390",
+  "transport": "codex_cli_thread",
+  "submit_strategy": "known_surface_submit",
+  "text_digest": "0fe7a38e8c731df5631496a37288c6f312272fb11bab4403f2234aa856cfe360",
+  "text_length": 237,
+  "requested_address": "builder",
+  "current_site": "narada-proper",
+  "target_site": "narada-proper",
+  "message_route": {
+    "sender": "architect",
+    "requested_recipient": "builder",
+    "resolved_recipient": "builder",
+    "current_site": "narada-proper",
+    "target_site": "narada-proper",
+    "binding_status": "bound",
+    "identity_flag_mode": "explicit_to"
+  },
+  "sender": "architect",
+  "recipient": "builder",
+  "site_plane": {
+    "current_site": "narada-proper",
+    "target_site": "narada-proper"
+  },
+  "binding_proof": {
+    "binding_id": "bind_83b941f607aaf709",
+    "runtime_locus": "narada-proper",
+    "status": "bound"
+  },
+  "dry_run": false,
+  "status": "event_recorded_for_runtime_locus"
+}
