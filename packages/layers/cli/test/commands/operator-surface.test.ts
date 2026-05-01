@@ -1709,7 +1709,7 @@ describe('operator-surface commands', () => {
     }
   });
 
-  it('refuses cross-desktop summon unless explicit authority is supplied', async () => {
+  it('refuses hidden cross-desktop delivery and offers operator-confirmed switch-send-restore', async () => {
     const cwd = await tempRepo();
     await admitIdentity(cwd);
     await writeBindings(cwd, [{
@@ -1733,6 +1733,27 @@ describe('operator-surface commands', () => {
       currentDesktop: 'desktop-current',
       format: 'json',
     }, createMockContext());
+    const confirmationRequired = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-proper-builder',
+      text: 'summon',
+      execute: true,
+      operatorActivityState: 'idle',
+      currentDesktop: 'desktop-current',
+      crossDesktopPolicy: 'operator_confirmed_switch_send_restore',
+      format: 'json',
+    }, createMockContext());
+    const confirmed = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-proper-builder',
+      text: 'summon',
+      execute: true,
+      operatorActivityState: 'idle',
+      currentDesktop: 'desktop-current',
+      crossDesktopPolicy: 'operator_confirmed_switch_send_restore',
+      crossDesktopAuthority: 'operator:cross-desktop-approved:1193',
+      format: 'json',
+    }, createMockContext());
     const admitted = await operatorSurfaceSendCommand({
       cwd,
       identity: 'narada-proper-builder',
@@ -1745,13 +1766,48 @@ describe('operator-surface commands', () => {
       format: 'json',
     }, createMockContext());
 
-    expect((refused.result as { delivery_result: { status: string; state_path: string[]; reason: string }; mutation_performed: boolean; event_artifact: string | null }).delivery_result).toMatchObject({
+    expect((refused.result as { delivery_result: { status: string; state_path: string[]; reason: string; delivery_case: string; safe_next_action: string; cross_desktop: Record<string, unknown> }; mutation_performed: boolean; event_artifact: string | null }).delivery_result).toMatchObject({
       status: 'refused',
       state_path: ['requested', 'refused'],
-      reason: 'cross_desktop_summon_refused',
+      reason: 'cross_desktop_delivery_refused_by_policy',
+      delivery_case: 'cross_desktop_hidden_input_refused',
+      safe_next_action: expect.stringContaining('operator_confirmed_switch_send_restore'),
+      cross_desktop: {
+        current_desktop: 'desktop-current',
+        target_desktop: 'desktop-target',
+        policy: 'same_desktop_only',
+        delivery_case: 'cross_desktop_hidden_input_refused',
+        exact_safe_next_action: expect.stringContaining('manually switch'),
+      },
     });
     expect((refused.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
     expect((refused.result as { event_artifact: string | null }).event_artifact).toContain('.ai/operator-surface-events/ose_');
+    expect((confirmationRequired.result as { delivery_result: { status: string; state_path: string[]; reason: string; delivery_case: string; safe_next_action: string; cross_desktop: Record<string, unknown> }; mutation_performed: boolean }).delivery_result).toMatchObject({
+      status: 'operator_confirmation_required',
+      state_path: ['requested', 'operator_confirmation_required'],
+      reason: 'cross_desktop_operator_confirmation_required',
+      delivery_case: 'operator_confirmed_switch_send_restore',
+      safe_next_action: expect.stringContaining('--cross-desktop-authority'),
+      cross_desktop: {
+        current_desktop: 'desktop-current',
+        target_desktop: 'desktop-target',
+        policy: 'operator_confirmed_switch_send_restore',
+        operator_confirmed: false,
+        restoration_evidence_required: true,
+      },
+    });
+    expect((confirmationRequired.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
+    expect((confirmed.result as { delivery_result: { status: string; state_path: string[]; delivery_case: string; cross_desktop: Record<string, unknown> }; mutation_performed: boolean }).delivery_result).toMatchObject({
+      status: 'delivered',
+      state_path: ['requested', 'operator_confirmed', 'delivered'],
+      delivery_case: 'operator_confirmed_switch_send_restore',
+      cross_desktop: {
+        authority_ref: 'operator:cross-desktop-approved:1193',
+        operator_confirmed: true,
+        restoration_evidence_required: true,
+      },
+    });
+    expect((confirmed.result as { mutation_performed: boolean }).mutation_performed).toBe(true);
     expect((admitted.result as { delivery_result: { status: string; cross_desktop: { authority_ref: string } }; mutation_performed: boolean }).delivery_result).toMatchObject({
       status: 'delivered',
       cross_desktop: { authority_ref: 'operator:cross-desktop-approved:1175' },

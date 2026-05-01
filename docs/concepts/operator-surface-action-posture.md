@@ -65,6 +65,7 @@ Default posture:
 - Active delivery defaults to `queued_waiting_for_idle`, not forced focus.
 - Urgent interruption requires an explicit authority reference and must be visible in send evidence.
 - Cross-desktop summon or workspace switching is a separate visible mutation. It is refused unless policy and authority admit it, and evidence records the current desktop, target desktop, policy, and authority reference.
+- Hidden cross-desktop input remains refused by default. The safe admitted alternative is `operator_confirmed_switch_send_restore`: first return `operator_confirmation_required` with the exact next command, then require an explicit Operator confirmation reference before the runtime may visibly switch to the target desktop, send, restore the prior desktop, and record restoration evidence.
 
 ## Motivating Example: Display Tools
 

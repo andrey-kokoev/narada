@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T19:59:17.965Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777665543043_tbnrjn
+closed_at: 2026-05-01T20:00:16.230Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Define governed cross-desktop operator-surface delivery mode
@@ -36,8 +45,8 @@ Define and implement or specify a cross-desktop delivery posture for operator-su
 
 ## Acceptance Criteria
 
-- [ ] Cross-desktop hidden input delivery remains refused by default unless an admitted policy explicitly permits it.
-- [ ] At least one safe cross-desktop alternative is specified or implemented with visible operator control.
-- [ ] Failure output names current desktop, target desktop, policy, delivery case, and exact safe next action.
-- [ ] Delivery evidence distinguishes refused, queued, delivered, and operator-confirmed outcomes.
-- [ ] Regression or fixture coverage proves cross_desktop_delivery_refused_by_policy returns bounded actionable output instead of only a hard stall.
+- [x] Cross-desktop hidden input delivery remains refused by default unless an admitted policy explicitly permits it.
+- [x] At least one safe cross-desktop alternative is specified or implemented with visible operator control.
+- [x] Failure output names current desktop, target desktop, policy, delivery case, and exact safe next action.
+- [x] Delivery evidence distinguishes refused, queued, delivered, and operator-confirmed outcomes.
+- [x] Regression or fixture coverage proves cross_desktop_delivery_refused_by_policy returns bounded actionable output instead of only a hard stall.

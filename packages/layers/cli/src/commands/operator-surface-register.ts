@@ -256,7 +256,7 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--urgent-interrupt-authority <ref>', 'Explicit authority reference permitting interruption during Operator activity')
     .option('--current-desktop <id>', 'Observed current desktop/workspace before delivery')
     .option('--target-desktop <id>', 'Target binding desktop/workspace')
-    .option('--cross-desktop-policy <policy>', 'Cross-desktop posture: same_desktop_only, allow_with_authority, or refuse', 'same_desktop_only')
+    .option('--cross-desktop-policy <policy>', 'Cross-desktop posture: same_desktop_only, allow_with_authority, operator_confirmed_switch_send_restore, or refuse', 'same_desktop_only')
     .option('--cross-desktop-authority <ref>', 'Explicit authority reference permitting cross-desktop summon/switch')
     .option('--activation-result <result>', 'Observed focus/activation attempt result: success or failed', 'success')
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')

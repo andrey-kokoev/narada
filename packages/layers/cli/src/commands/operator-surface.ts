@@ -141,9 +141,9 @@ interface OperatorSurfaceRuntimeBinding {
 
 type OperatorActivityState = 'idle' | 'active_typing' | 'active_pointer' | 'unknown';
 type ActiveDeliveryPolicy = 'queue' | 'refuse' | 'fallback_to_inbox';
-type CrossDesktopPolicy = 'same_desktop_only' | 'allow_with_authority' | 'refuse';
-type DeliveryResultStatus = 'queued_waiting_for_idle' | 'delivered' | 'expired' | 'refused' | 'fallback_to_inbox' | 'deferred' | 'failed_with_fallback';
-type OperatorSurfaceDeliveryState = 'requested' | DeliveryResultStatus | 'explicit_interrupt';
+type CrossDesktopPolicy = 'same_desktop_only' | 'allow_with_authority' | 'operator_confirmed_switch_send_restore' | 'refuse';
+type DeliveryResultStatus = 'queued_waiting_for_idle' | 'delivered' | 'expired' | 'refused' | 'fallback_to_inbox' | 'deferred' | 'failed_with_fallback' | 'operator_confirmation_required';
+type OperatorSurfaceDeliveryState = 'requested' | DeliveryResultStatus | 'explicit_interrupt' | 'operator_confirmed';
 
 const OPERATOR_SURFACE_DELIVERY_STATES: readonly OperatorSurfaceDeliveryState[] = [
   'requested',
@@ -154,7 +154,9 @@ const OPERATOR_SURFACE_DELIVERY_STATES: readonly OperatorSurfaceDeliveryState[] 
   'fallback_to_inbox',
   'deferred',
   'failed_with_fallback',
+  'operator_confirmation_required',
   'explicit_interrupt',
+  'operator_confirmed',
 ] as const;
 
 interface OperatorSurfaceVisibleLabelEvidence {
@@ -742,7 +744,7 @@ function parseActiveDeliveryPolicy(value: string | undefined): ActiveDeliveryPol
 
 function parseCrossDesktopPolicy(value: string | undefined): CrossDesktopPolicy {
   const normalized = value?.trim() || 'same_desktop_only';
-  const allowed: CrossDesktopPolicy[] = ['same_desktop_only', 'allow_with_authority', 'refuse'];
+  const allowed: CrossDesktopPolicy[] = ['same_desktop_only', 'allow_with_authority', 'operator_confirmed_switch_send_restore', 'refuse'];
   if (!allowed.includes(normalized as CrossDesktopPolicy)) {
     throw new Error(`Unsupported cross-desktop policy: ${value}`);
   }
@@ -802,20 +804,23 @@ function decideOperatorSurfaceDelivery(args: {
   urgent_interrupt: Record<string, unknown>;
   cross_desktop: Record<string, unknown>;
   queue: Record<string, unknown> | null;
+  delivery_case: string;
+  safe_next_action: string;
 } {
   const activityBlocks = args.activityState !== 'idle';
   const urgentAuthorized = Boolean(args.urgentInterruptAuthority);
   const crossDesktop = Boolean(args.currentDesktop && args.targetDesktop && args.currentDesktop !== args.targetDesktop);
+  const operatorConfirmedSwitch = crossDesktop && args.crossDesktopPolicy === 'operator_confirmed_switch_send_restore';
   const crossDesktopAuthorized = !crossDesktop
-    || (args.crossDesktopPolicy === 'allow_with_authority' && Boolean(args.crossDesktopAuthority));
-  if (crossDesktop && !crossDesktopAuthorized) {
+    || (args.crossDesktopPolicy === 'allow_with_authority' && Boolean(args.crossDesktopAuthority))
+    || (operatorConfirmedSwitch && Boolean(args.crossDesktopAuthority));
+  if (operatorConfirmedSwitch && !args.crossDesktopAuthority) {
+    const safeNextAction = 'Ask the Operator to confirm visible switch-send-restore, then rerun with --cross-desktop-authority <operator-confirmed-ref>.';
     return {
-      status: 'refused',
-      state_path: ['requested', 'refused'],
+      status: 'operator_confirmation_required',
+      state_path: ['requested', 'operator_confirmation_required'],
       deliverable: false,
-      reason: args.crossDesktopPolicy === 'allow_with_authority'
-        ? 'cross_desktop_authority_required'
-        : 'cross_desktop_summon_refused',
+      reason: 'cross_desktop_operator_confirmation_required',
       operator_activity: {
         state: args.activityState,
         observed_at: args.activityObservedAt,
@@ -829,10 +834,51 @@ function decideOperatorSurfaceDelivery(args: {
         current_desktop: args.currentDesktop,
         target_desktop: args.targetDesktop,
         policy: args.crossDesktopPolicy,
-        authority_ref: args.crossDesktopAuthority,
+        delivery_case: 'operator_confirmed_switch_send_restore',
+        authority_ref: null,
+        operator_confirmed: false,
+        restoration_evidence_required: true,
+        exact_safe_next_action: safeNextAction,
         reversible_or_rejected: true,
       },
       queue: null,
+      delivery_case: 'operator_confirmed_switch_send_restore',
+      safe_next_action: safeNextAction,
+    };
+  }
+  if (crossDesktop && !crossDesktopAuthorized) {
+    const safeNextAction = 'Hidden cross-desktop input is refused; use --cross-desktop-policy operator_confirmed_switch_send_restore with --cross-desktop-authority <operator-confirmed-ref>, or manually switch to the target desktop and retry same-desktop delivery.';
+    const deliveryCase = 'cross_desktop_hidden_input_refused';
+    return {
+      status: 'refused',
+      state_path: ['requested', 'refused'],
+      deliverable: false,
+      reason: args.crossDesktopPolicy === 'allow_with_authority'
+        ? 'cross_desktop_authority_required'
+        : 'cross_desktop_delivery_refused_by_policy',
+      operator_activity: {
+        state: args.activityState,
+        observed_at: args.activityObservedAt,
+      },
+      urgent_interrupt: {
+        authorized: urgentAuthorized,
+        authority_ref: args.urgentInterruptAuthority,
+      },
+      cross_desktop: {
+        required: true,
+        current_desktop: args.currentDesktop,
+        target_desktop: args.targetDesktop,
+        policy: args.crossDesktopPolicy,
+        delivery_case: deliveryCase,
+        authority_ref: args.crossDesktopAuthority,
+        operator_confirmed: false,
+        restoration_evidence_required: false,
+        exact_safe_next_action: safeNextAction,
+        reversible_or_rejected: true,
+      },
+      queue: null,
+      delivery_case: deliveryCase,
+      safe_next_action: safeNextAction,
     };
   }
   if (activityBlocks && !urgentAuthorized) {
@@ -863,17 +909,40 @@ function decideOperatorSurfaceDelivery(args: {
         current_desktop: args.currentDesktop,
         target_desktop: args.targetDesktop,
         policy: args.crossDesktopPolicy,
+        delivery_case: operatorConfirmedSwitch ? 'operator_confirmed_switch_send_restore' : crossDesktop ? 'cross_desktop_authorized_delivery' : 'same_desktop_delivery',
         authority_ref: args.crossDesktopAuthority,
+        operator_confirmed: operatorConfirmedSwitch,
+        restoration_evidence_required: operatorConfirmedSwitch,
+        exact_safe_next_action: queuedStatus === 'queued_waiting_for_idle'
+          ? 'Wait for Operator idle state, then retry governed delivery without stealing focus.'
+          : 'No focus/input mutation was performed; inspect fallback or retry when Operator is idle.',
         reversible_or_rejected: true,
       },
       queue: queuedStatus === 'queued_waiting_for_idle'
         ? { timeout_ms: args.deliveryTimeoutMs, next_state: 'wait_for_idle' }
         : null,
+      delivery_case: queuedStatus === 'queued_waiting_for_idle' ? 'queued_until_operator_idle' : queuedStatus,
+      safe_next_action: queuedStatus === 'queued_waiting_for_idle'
+        ? 'Wait for Operator idle state, then retry governed delivery without stealing focus.'
+        : 'No focus/input mutation was performed; inspect fallback or retry when Operator is idle.',
     };
   }
+  const deliveryCase = operatorConfirmedSwitch
+    ? 'operator_confirmed_switch_send_restore'
+    : crossDesktop
+      ? 'cross_desktop_authorized_delivery'
+      : 'same_desktop_delivery';
+  const safeNextAction = operatorConfirmedSwitch
+    ? 'Runtime may perform visible switch-send-restore; record restoration evidence after delivery.'
+    : 'Delivery admitted by current policy.';
   return {
     status: 'delivered',
-    state_path: ['requested', ...(urgentAuthorized ? ['explicit_interrupt' as const] : []), 'delivered'],
+    state_path: [
+      'requested',
+      ...(urgentAuthorized ? ['explicit_interrupt' as const] : []),
+      ...(operatorConfirmedSwitch ? ['operator_confirmed' as const] : []),
+      'delivered',
+    ],
     deliverable: true,
     reason: activityBlocks ? 'urgent_interrupt_authorized' : 'operator_idle',
     operator_activity: {
@@ -889,10 +958,16 @@ function decideOperatorSurfaceDelivery(args: {
       current_desktop: args.currentDesktop,
       target_desktop: args.targetDesktop,
       policy: args.crossDesktopPolicy,
+      delivery_case: deliveryCase,
       authority_ref: args.crossDesktopAuthority,
+      operator_confirmed: operatorConfirmedSwitch,
+      restoration_evidence_required: operatorConfirmedSwitch,
+      exact_safe_next_action: safeNextAction,
       reversible_or_rejected: !crossDesktop || Boolean(args.crossDesktopAuthority),
     },
     queue: null,
+    delivery_case: deliveryCase,
+    safe_next_action: safeNextAction,
   };
 }
 
