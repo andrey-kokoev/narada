@@ -1255,10 +1255,20 @@ describe('Canonical Inbox CLI commands', () => {
     expect(workNext.exitCode).toBe(ExitCode.SUCCESS);
     const result = workNext.result as {
       primary: { envelope_id: string };
+      primary_summary: { envelope_id: string; payload_digest: string };
       admissible_actions: Array<{ action: string; target_mutation: boolean; pending_kind?: string }>;
       alternatives_count: number;
+      side_effects: unknown[];
+      output_policy: { default_body_included: boolean; full_payload_command: string };
+      timing: { duration_ms: number; wait_posture: string };
     };
     expect(result.primary.envelope_id).toBe(envelope.envelope_id);
+    expect(result.primary_summary.envelope_id).toBe(envelope.envelope_id);
+    expect(result.primary_summary.payload_digest).toHaveLength(64);
+    expect(result.side_effects).toEqual([]);
+    expect(result.output_policy.default_body_included).toBe(false);
+    expect(result.output_policy.full_payload_command).toBe(`narada inbox show ${envelope.envelope_id}`);
+    expect(result.timing.duration_ms).toBeGreaterThanOrEqual(0);
     expect(result.admissible_actions.map((action) => action.action)).toEqual(['task', 'archive', 'pending']);
     const pending = result.admissible_actions.find((action) => action.action === 'pending');
     expect(pending?.pending_kind).toBe('recorded_pending_crossing');
@@ -1365,10 +1375,27 @@ describe('Canonical Inbox CLI commands', () => {
 
     const workNext = await inboxWorkNextCommand({ cwd: tempDir, format: 'json', claim: true, by: 'architect' });
     expect(workNext.exitCode).toBe(ExitCode.SUCCESS);
-    const result = workNext.result as { primary: { envelope_id: string; status: string; handling: { handled_by: string } } };
+    const result = workNext.result as {
+      primary: { envelope_id: string; status: string; handling: { handled_by: string } };
+      side_effects: Array<{ surface: string; mutation: string; envelope_id: string; status_before: string; status_after: string; handled_by: string; mutation_evidence_path: string }>;
+      dirty_state: { owned_routing_artifacts: string[]; unrelated_changes: string[] };
+    };
     expect(result.primary.envelope_id).toBe(firstEnvelope.envelope_id);
     expect(result.primary.status).toBe('handling');
     expect(result.primary.handling.handled_by).toBe('architect');
+    expect(result.side_effects).toEqual([
+      expect.objectContaining({
+        surface: 'inbox',
+        mutation: 'claim',
+        envelope_id: firstEnvelope.envelope_id,
+        status_before: 'received',
+        status_after: 'handling',
+        handled_by: 'architect',
+      }),
+    ]);
+    expect(result.side_effects[0]!.mutation_evidence_path.startsWith('.ai/mutation-evidence/inbox/')).toBe(true);
+    expect(result.dirty_state.owned_routing_artifacts).toContain(result.side_effects[0]!.mutation_evidence_path);
+    expect(result.dirty_state.unrelated_changes).toEqual([]);
 
     const released = await inboxReleaseCommand({
       cwd: tempDir,

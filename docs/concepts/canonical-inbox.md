@@ -387,6 +387,12 @@ narada inbox work-next --kind task_candidate --format json
 narada inbox work-next --claim --by operator --format json
 ```
 
+Work-next output must remain bounded by default. It should expose `primary_summary`, payload digest, admissible actions, timing, output policy, and side effects rather than forcing full envelope payloads into the attention surface. Full payload inspection belongs behind `narada inbox show <envelope-id>`.
+
+When `--claim` is used, the result must name the mutation as a side effect (`surface: inbox`, `mutation: claim`), include read-back status before/after, and classify any mutation-evidence file it wrote as an owned routing artifact. Pre-existing dirty files are not claimed by inbox routing unless the command created or mutated them.
+
+The first-class law notice gap is closed by Task 1168 (`narada law change ... --notice` and receipt/absorption surfaces). Operator-surface binding ambiguity is closed by Task 1167 (canonical `narada` Site binding repair). Inbox routing should link to those existing surfaces rather than reintroducing ad hoc notices or binding workarounds.
+
 The normal loop is:
 
 ```bash

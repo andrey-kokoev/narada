@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T03:35:32.784Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777606507257_wpio9z
+closed_at: 2026-05-01T03:35:59.766Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Improve inbox routing ergonomics and side-effect visibility
@@ -36,9 +45,9 @@ Audit inbox work-next, inbox pending, task create, and related routing surfaces;
 
 ## Acceptance Criteria
 
-- [ ] inbox work-next default output is bounded and avoids full envelope body dumps unless explicitly requested.
-- [ ] Routing commands report side effects such as lifecycle projection updates before or immediately after mutation.
-- [ ] Multi-second inbox/task routing commands expose progress, timing, or a clear wait posture.
-- [ ] Dirty-state output distinguishes newly created routing artifacts from pre-existing unrelated modifications where feasible.
-- [ ] The first-class law notice gap and operator-surface binding ambiguity are either addressed or linked to existing tasks.
-- [ ] Focused tests or CLI fixtures cover bounded work-next output and side-effect reporting.
+- [x] inbox work-next default output is bounded and avoids full envelope body dumps unless explicitly requested.
+- [x] Routing commands report side effects such as lifecycle projection updates before or immediately after mutation.
+- [x] Multi-second inbox/task routing commands expose progress, timing, or a clear wait posture.
+- [x] Dirty-state output distinguishes newly created routing artifacts from pre-existing unrelated modifications where feasible.
+- [x] The first-class law notice gap and operator-surface binding ambiguity are either addressed or linked to existing tasks.
+- [x] Focused tests or CLI fixtures cover bounded work-next output and side-effect reporting.

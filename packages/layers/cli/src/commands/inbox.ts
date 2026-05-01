@@ -819,6 +819,7 @@ export async function inboxNextCommand(options: InboxNextOptions): Promise<{ exi
 }
 
 export async function inboxWorkNextCommand(options: InboxWorkNextOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const startedAt = Date.now();
   const status = options.status ? parseStatus(options.status) : 'received';
   const kind = options.kind ? parseEnvelopeKind(options.kind) : undefined;
   if (options.status && !status) return errorResult(`Invalid status: ${options.status}`);
@@ -832,6 +833,8 @@ export async function inboxWorkNextCommand(options: InboxWorkNextOptions): Promi
     const envelopes = selectEnvelopes(store, { status, kind, limit });
     const [selected, ...alternatives] = envelopes;
     let primary = selected ?? null;
+    const sideEffects: Array<Record<string, unknown>> = [];
+    const ownedRoutingArtifacts: string[] = [];
     if (primary && options.claim) {
       try {
         const before = inboxEnvelopeToEvidenceState(primary);
@@ -839,7 +842,7 @@ export async function inboxWorkNextCommand(options: InboxWorkNextOptions): Promi
           handled_by: options.by!,
           claimed_at: new Date().toISOString(),
         });
-        await writeInboxMutationEvidence({
+        const evidence = await writeInboxMutationEvidence({
           cwd: options.cwd ?? process.cwd(),
           command: 'inbox work-next claim',
           principal: options.by,
@@ -848,6 +851,16 @@ export async function inboxWorkNextCommand(options: InboxWorkNextOptions): Promi
           after: inboxEnvelopeToEvidenceState(store.get(primary.envelope_id)),
           result: { status: 'success', envelope: primary },
         });
+        if (evidence?.path) ownedRoutingArtifacts.push(relative(options.cwd ?? process.cwd(), evidence.path));
+        sideEffects.push({
+          surface: 'inbox',
+          mutation: 'claim',
+          envelope_id: primary.envelope_id,
+          status_before: before?.status ?? null,
+          status_after: primary.status,
+          handled_by: options.by,
+          mutation_evidence_path: evidence?.path ? relative(options.cwd ?? process.cwd(), evidence.path) : null,
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return errorResult(message);
@@ -855,31 +868,62 @@ export async function inboxWorkNextCommand(options: InboxWorkNextOptions): Promi
     }
     const admissibleActions = primary ? admissibleActionsForEnvelope(primary) : [];
     const embodimentFileDrops = await inspectEmbodimentFileDrops(options.cwd ?? process.cwd(), existingFileDropRefs(store));
+    const durationMs = Date.now() - startedAt;
     return okResult(
       {
         status: 'success',
         primary: primary ?? null,
+        primary_summary: primary ? summarizeInboxEnvelope(primary) : null,
         admissible_actions: admissibleActions,
         alternatives,
+        alternative_summaries: alternatives.map(summarizeInboxEnvelope),
         alternatives_count: alternatives.length,
         embodiment_file_drops: embodimentFileDrops,
         warnings: embodimentFileDropWarnings(embodimentFileDrops),
+        side_effects: sideEffects,
+        dirty_state: {
+          owned_routing_artifacts: ownedRoutingArtifacts,
+          unrelated_changes: [],
+          note: 'Only artifacts written by this command are classified here; pre-existing dirty files are intentionally not claimed.',
+        },
+        timing: {
+          duration_ms: durationMs,
+          wait_posture: durationMs >= 1000 ? 'multi_second_command_completed' : 'completed',
+        },
+        output_policy: {
+          default_body_included: false,
+          full_payload_command: primary ? `narada inbox show ${primary.envelope_id}` : null,
+        },
       },
       primary
         ? [
           `Next inbox work: ${primary.envelope_id}`,
           `Kind: ${primary.kind}`,
           `Admissible actions: ${admissibleActions.map((action) => action.action).join(', ') || 'none'}`,
+          `Side effects: ${sideEffects.length === 0 ? 'none' : sideEffects.map((effect) => `${String(effect.surface)}:${String(effect.mutation)}`).join(', ')}`,
+          `Timing: ${durationMs}ms`,
           `Alternatives: ${alternatives.length}`,
           ...embodimentFileDropWarnings(embodimentFileDrops),
         ]
         : [
           'No matching inbox work.',
+          `Timing: ${durationMs}ms`,
           ...embodimentFileDropWarnings(embodimentFileDrops),
         ],
       options.format,
     );
   });
+}
+
+function summarizeInboxEnvelope(envelope: InboxEnvelope): Record<string, unknown> {
+  return {
+    envelope_id: envelope.envelope_id,
+    status: envelope.status,
+    kind: envelope.kind,
+    source: `${envelope.source.kind}:${envelope.source.ref}`,
+    authority_level: envelope.authority.level,
+    payload_digest: createHash('sha256').update(JSON.stringify(envelope.payload ?? null)).digest('hex'),
+  };
 }
 
 async function inspectEmbodimentFileDrops(cwd: string, existingRefs: Set<string>): Promise<EmbodimentFileDropCandidate[]> {
