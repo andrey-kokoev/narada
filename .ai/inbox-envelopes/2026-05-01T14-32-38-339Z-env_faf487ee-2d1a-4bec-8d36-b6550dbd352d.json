@@ -1,0 +1,30 @@
+{
+  "envelope_id": "env_faf487ee-2d1a-4bec-8d36-b6550dbd352d",
+  "received_at": "2026-05-01T14:32:38.339Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey:workboard-target-locus-gap"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "Workboard should surface inbox envelope target_locus when present",
+    "summary": "After OSM delivery to Bob failed, Kevin submitted a local inbox observation with --target-locus narada-andrey.Bob. The submit response recorded routing.target_locus, but task workboard compact source_envelopes displayed target: null. This weakens handoff observability for directed agent messages.",
+    "observed_at": "2026-05-01T09:32:29.5858836-05:00",
+    "source_site": "narada-andrey",
+    "evidence": [
+      "Envelope env_1e6d265d-77bb-4c0f-a557-1e7fe0690644 was submitted with --target-locus narada-andrey.Bob.",
+      "Submit response routing.target_locus = narada-andrey.Bob.",
+      "narada task workboard --view compact --format json source_envelopes entry displayed target: null."
+    ],
+    "proposed_direction": [
+      "Persist target_locus into the portable envelope or a canonical routing field consumed by workboard.",
+      "Make compact workboard show directed message target without requiring debug output.",
+      "Add regression coverage for target_locus visibility in source_envelopes."
+    ]
+  },
+  "status": "received"
+}
