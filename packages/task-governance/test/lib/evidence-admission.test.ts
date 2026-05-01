@@ -79,7 +79,13 @@ describe('evidence admission', () => {
   });
 
   afterEach(() => {
-    rmSync(tempDir, { recursive: true, force: true });
+    try {
+      rmSync(tempDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'EBUSY') {
+        throw error;
+      }
+    }
   });
 
   it('admits report plus TIZ verification without requiring review', async () => {

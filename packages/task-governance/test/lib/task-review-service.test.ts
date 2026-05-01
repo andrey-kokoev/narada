@@ -34,6 +34,23 @@ function setupRepo(tempDir: string): void {
 
   const store = openTaskLifecycleStore(tempDir);
   try {
+    for (const [agent_id, role, capabilities] of [
+      ['worker', 'implementer', ['claim']],
+      ['reviewer', 'reviewer', ['review']],
+      ['admin', 'admin', ['review']],
+    ] as const) {
+      store.upsertRosterEntry({
+        agent_id,
+        role,
+        capabilities_json: JSON.stringify(capabilities),
+        first_seen_at: '2026-01-01T00:00:00Z',
+        last_active_at: '2026-01-01T00:00:00Z',
+        status: 'idle',
+        task_number: null,
+        last_done: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+    }
     store.upsertLifecycle({
       task_id: '20260420-999-test-task',
       task_number: 999,
@@ -65,7 +82,13 @@ describe('task review service', () => {
   });
 
   afterEach(() => {
-    rmSync(tempDir, { recursive: true, force: true });
+    try {
+      rmSync(tempDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'EBUSY') {
+        throw error;
+      }
+    }
   });
 
   it('accepts an in-review task and closes it through lifecycle authority', async () => {
@@ -110,6 +133,56 @@ describe('task review service', () => {
     expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8')).toContain('status: opened');
   });
 
+  it('lets a later accepted review supersede an earlier rejected review for closure', async () => {
+    await moveToReview(tempDir);
+
+    const rejected = await reviewTaskService({
+      taskNumber: '999',
+      agent: 'reviewer',
+      verdict: 'rejected',
+      findings: JSON.stringify([{ severity: 'blocking', description: 'needs repair' }]),
+      cwd: tempDir,
+    });
+    expect(rejected.exitCode).toBe(ExitCode.SUCCESS);
+    expect(rejected.result.new_status).toBe('opened');
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await moveToReview(tempDir);
+
+    const accepted = await reviewTaskService({
+      taskNumber: '999',
+      agent: 'reviewer',
+      verdict: 'accepted',
+      cwd: tempDir,
+    });
+
+    expect(accepted.exitCode).toBe(ExitCode.SUCCESS);
+    expect(accepted.result).toMatchObject({
+      status: 'success',
+      verdict: 'accepted',
+      new_status: 'closed',
+      close_action: 'closed',
+    });
+
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      expect(store.getLifecycle('20260420-999-test-task')?.status).toBe('closed');
+      const reviews = store.listReviews('20260420-999-test-task');
+      expect(reviews[0]?.verdict).toBe('accepted');
+      expect(reviews.some((review) => review.verdict === 'rejected')).toBe(true);
+      const latestAdmission = store.getLatestEvidenceAdmissionResult('20260420-999-test-task');
+      expect(latestAdmission?.verdict).toBe('admitted');
+      const confirmation = JSON.parse(latestAdmission!.confirmation_json) as {
+        latest_review_verdict: string;
+        historical_rejected_review_ids: string[];
+      };
+      expect(confirmation.latest_review_verdict).toBe('accepted');
+      expect(confirmation.historical_rejected_review_ids.length).toBeGreaterThan(0);
+    } finally {
+      store.db.close();
+    }
+  });
+
   it('requires reviewer or admin authority', async () => {
     await moveToReview(tempDir);
 
@@ -121,7 +194,8 @@ describe('task review service', () => {
     });
 
     expect(denied.exitCode).toBe(ExitCode.GENERAL_ERROR);
-    expect(denied.result.error).toContain("only 'reviewer' or 'admin'");
+    expect(denied.result.error).toContain('without admitted review authority');
+    expect(denied.result.review_authority_repair?.commands[0]).toContain('narada task roster add worker');
 
     const accepted = await reviewTaskService({
       taskNumber: '999',
@@ -183,7 +257,7 @@ describe('task review service', () => {
     }
   });
 
-  it('keeps accepted reviews in_review when evidence is incomplete', async () => {
+  it('keeps accepted reviews repairable when evidence is incomplete', async () => {
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-998-no-verification.md'),
       '---\ntask_id: 998\nstatus: opened\n---\n\n# Task 998\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Execution Notes\nDone.\n',
@@ -200,9 +274,11 @@ describe('task review service', () => {
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
-      new_status: 'in_review',
+      new_status: 'needs_continuation',
       evidence_blocked: true,
     });
     expect(result.result.evidence_reason).toContain('verification');
+    expect(result.result.blocked_rationale).toContain('verification');
+    expect(result.result.next_command).toContain('narada task continue 998');
   });
 });

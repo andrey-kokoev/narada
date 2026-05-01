@@ -75,6 +75,8 @@ export interface ReviewTaskServiceResponse {
     close_blockers?: string[];
     evidence_blocked?: boolean;
     evidence_reason?: string;
+    blocked_rationale?: string;
+    next_command?: string;
     capa_recommendation?: {
       recommended: boolean;
       triggers: string[];
@@ -681,7 +683,11 @@ export async function reviewTaskService(
     result.evidence_blocked = true;
     if (evidenceReason) {
       result.evidence_reason = evidenceReason;
+      result.blocked_rationale = evidenceReason;
     }
+    result.next_command = admission.result.verdict === 'rejected'
+      ? `narada task continue ${taskNumber} --agent ${agentId} --reason evidence_repair`
+      : `narada task evidence inspect ${taskNumber} --cwd "${cwd}"`;
     result.closure_posture = admission.result.verdict === 'rejected'
       ? {
           closure_posture: 'repair_required',

@@ -84,8 +84,14 @@ export async function admitTaskEvidence(options: {
     const reports = store.listReportRecords(taskId);
     const verificationRuns = store.listVerificationRunsForTask(taskId);
     const reviews = store.listReviews(taskId);
-    const acceptedReview = reviews.some((review) => review.verdict === 'accepted');
-    const rejectedReview = reviews.some((review) => review.verdict === 'needs_changes' || review.verdict === 'rejected');
+    const latestReview = reviews[0] ?? null;
+    const latestReviewVerdict = latestReview?.verdict ?? null;
+    const acceptedReview = latestReviewVerdict === 'accepted';
+    const rejectedReview = latestReviewVerdict === 'needs_changes' || latestReviewVerdict === 'rejected';
+    const historicalRejectedReviewIds = reviews
+      .slice(1)
+      .filter((review) => review.verdict === 'needs_changes' || review.verdict === 'rejected')
+      .map((review) => review.review_id);
 
     const changedFiles = reports.flatMap((report) => {
       try {
@@ -140,7 +146,7 @@ export async function admitTaskEvidence(options: {
       blockers.push('Review-gated admission requires accepted review');
     }
     if (rejectedReview && options.methods.includes('review')) {
-      blockers.push('Review method rejected admission');
+      blockers.push('Latest review rejected admission');
     }
 
     const result: EvidenceAdmissionResultRow = {
@@ -159,6 +165,9 @@ export async function admitTaskEvidence(options: {
         has_review: evidence.has_review,
         has_verification_notes: evidence.has_verification,
         verification_run_ids: parseJsonArray<string>(bundle.verification_run_ids_json),
+        latest_review_id: latestReview?.review_id ?? null,
+        latest_review_verdict: latestReviewVerdict,
+        historical_rejected_review_ids: historicalRejectedReviewIds,
         observation_output_counted: false,
       }),
     };
