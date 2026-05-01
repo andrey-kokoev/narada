@@ -183,6 +183,8 @@ describe('law change propagation commands', () => {
       recommended_action: 'law_receipt_required',
       pending_law_notices: [expect.objectContaining({
         change_id: changeId,
+        receipt_state: 'issued',
+        escalation_required: false,
         ack_command: expect.stringContaining(`narada law ack ${changeId}`),
         absorb_command: expect.stringContaining('--status absorbed'),
         blocker_command: expect.stringContaining('--status blocked'),
@@ -202,7 +204,8 @@ describe('law change propagation commands', () => {
     expect(stillUnread.result).toMatchObject({
       admission: 'blocked',
       unread_count: 1,
-      escalation: expect.objectContaining({ status: 'pending_receipt' }),
+      unread: [expect.objectContaining({ receipt_state: 'blocked', escalation_required: true })],
+      escalation: expect.objectContaining({ status: 'blocked_receipt', receipt_states: ['blocked'] }),
     });
 
     await lawAckCommand({ cwd: tempDir, changeId, agent: 'builder', role: 'builder', status: 'absorbed', format: 'json' });
@@ -211,6 +214,47 @@ describe('law change propagation commands', () => {
       admission: 'clear',
       unread_count: 0,
     });
+  });
+
+  it('records seen receipts and escalates expired missing receipts', async () => {
+    const added = await lawChangeAddCommand({
+      cwd: tempDir,
+      issuer: 'operator',
+      summary: 'Builder expiry law',
+      requiredRoles: 'builder',
+      changeId: 'law_expiry_fixture',
+      format: 'json',
+    });
+    const changeId = ((added.result as { change: { change_id: string } }).change.change_id);
+    const changePath = join(tempDir, '.ai', 'law', 'changes', `${changeId}.json`);
+    const change = JSON.parse(readFileSync(changePath, 'utf8')) as Record<string, unknown>;
+    change.issued_at = '2026-01-01T00:00:00.000Z';
+    writeFileSync(changePath, `${JSON.stringify(change, null, 2)}\n`);
+
+    const expired = await lawStatusCommand({ cwd: tempDir, agent: 'builder', role: 'builder', format: 'json' });
+    expect(expired.result).toMatchObject({
+      admission: 'blocked',
+      unread: [expect.objectContaining({ receipt_state: 'expired', escalation_required: true })],
+      escalation: expect.objectContaining({ status: 'expired_receipt', receipt_states: ['expired'] }),
+    });
+
+    const seen = await lawAckCommand({
+      cwd: tempDir,
+      changeId,
+      agent: 'builder',
+      role: 'builder',
+      status: 'seen',
+      format: 'json',
+    });
+    expect(seen.result).toMatchObject({
+      receipt: {
+        status: 'seen',
+        acknowledged_at: null,
+      },
+    });
+
+    const clear = await lawStatusCommand({ cwd: tempDir, agent: 'builder', role: 'builder', format: 'json' });
+    expect(clear.result).toMatchObject({ admission: 'clear', unread_count: 0 });
   });
 
   it('blocks task claim when mandatory law is unread and passes after ack', async () => {

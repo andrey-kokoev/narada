@@ -109,6 +109,8 @@ export async function roleLoopNextCommand(options: RoleLoopNextOptions): Promise
     notice_envelope_id: change.notice_envelope_id,
     required_roles: change.required_roles,
     affected_agents: change.affected_agents,
+    receipt_state: change.receipt_state,
+    escalation_required: change.escalation_required,
     ack_command: `narada law ack ${change.change_id} --agent ${agent}${lawAdmission.role ? ` --role ${lawAdmission.role}` : ''} --status acknowledged`,
     absorb_command: `narada law ack ${change.change_id} --agent ${agent}${lawAdmission.role ? ` --role ${lawAdmission.role}` : ''} --status absorbed`,
     blocker_command: `narada law ack ${change.change_id} --agent ${agent}${lawAdmission.role ? ` --role ${lawAdmission.role}` : ''} --status blocked --questions-or-blockers <reason>`,

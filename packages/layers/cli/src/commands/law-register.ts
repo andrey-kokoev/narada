@@ -101,7 +101,7 @@ export function registerLawCommands(program: Command): void {
     .option('--role <role>', 'Agent role')
     .option('--session <id>', 'Session id when available')
     .option('--operator-surface-identity <id>', 'Operator Surface identity when available')
-    .option('--status <status>', 'Receipt status: read, acknowledged, absorbed, question, blocked', 'acknowledged')
+    .option('--status <status>', 'Receipt status: seen, acknowledged, absorbed, blocked, expired, escalated (read/question aliases accepted)', 'acknowledged')
     .option('--questions-or-blockers <csv>', 'Optional comma-separated questions/blockers')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
@@ -115,7 +115,7 @@ export function registerLawCommands(program: Command): void {
         role: opts.role as string | undefined,
         session: opts.session as string | undefined,
         operatorSurfaceIdentity: opts.operatorSurfaceIdentity as string | undefined,
-        status: opts.status as 'read' | 'acknowledged' | 'absorbed' | 'question' | 'blocked' | undefined,
+        status: opts.status as 'read' | 'seen' | 'acknowledged' | 'absorbed' | 'question' | 'blocked' | 'expired' | 'escalated' | undefined,
         questionsOrBlockers: opts.questionsOrBlockers as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),

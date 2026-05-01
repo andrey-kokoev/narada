@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T04:06:51.885Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777608374093_6otsnj
+closed_at: 2026-05-01T04:07:16.720Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Formalize LawPropagationReceipt state machine
@@ -36,8 +45,8 @@ Define LawPropagationReceipt states and transitions; integrate issued, seen, ack
 
 ## Acceptance Criteria
 
-- [ ] Law notices identify affected roles or agents and initial issued state.
-- [ ] Agents can record seen, acknowledged, absorbed, or blocked with evidence.
-- [ ] Expired or missing receipts escalate through a governed path.
-- [ ] Duty-loop surfaces show pending law receipts before ordinary work where applicable.
-- [ ] OSM, if used, only points to the durable law notice and receipt state.
+- [x] Law notices identify affected roles or agents and initial issued state.
+- [x] Agents can record seen, acknowledged, absorbed, or blocked with evidence.
+- [x] Expired or missing receipts escalate through a governed path.
+- [x] Duty-loop surfaces show pending law receipts before ordinary work where applicable.
+- [x] OSM, if used, only points to the durable law notice and receipt state.

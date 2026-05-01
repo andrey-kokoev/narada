@@ -45,6 +45,22 @@ An agent law receipt lives at `.ai/law/receipts/<agent>__<change-id>.json` and c
 
 The receipt proves only that the agent acknowledged reading the law change. It does not grant authority, admit evidence, bind a runtime handle, bypass role/locus/capability rules, or prove that the agent understood correctly.
 
+## Receipt State Machine
+
+Law propagation uses one explicit receipt state machine:
+
+| State | Meaning |
+| --- | --- |
+| `issued` | A law change exists and applies to the role or agent, but no receipt exists yet. |
+| `seen` | The agent has seen the notice but has not acknowledged or absorbed it. Legacy `read` is normalized to `seen`. |
+| `acknowledged` | The agent acknowledges receipt and may continue if no blocker exists. |
+| `absorbed` | The agent records that the law has been incorporated into current operating posture. |
+| `blocked` | The agent records a question or blocker. Legacy `question` is normalized to `blocked`. |
+| `expired` | A mandatory applicable notice has no clearing receipt past the local timeout posture. |
+| `escalated` | The timeout/blocker has been routed through a governed escalation path. |
+
+`issued`, `blocked`, `expired`, and `escalated` block ordinary agent work admission. `seen`, `acknowledged`, and `absorbed` clear the unread gate. Expired or blocked notices surface an escalation proposal command; they do not silently disappear.
+
 ## Commands
 
 ```bash
@@ -52,7 +68,7 @@ narada law change add --issuer operator --summary "..." --files AGENTS.md,SEMANT
 narada law change add --issuer operator --summary "..." --required-roles architect,builder --notice
 narada law list
 narada law unread --agent builder --role builder
-narada law ack <change-id> --agent builder --role builder --operator-surface-identity builder
+narada law ack <change-id> --agent builder --role builder --status seen --operator-surface-identity builder
 narada law ack <change-id> --agent builder --role builder --status absorbed
 narada law status --agent builder --role builder
 ```
@@ -75,9 +91,9 @@ Architect, Builder, and Observer use the same receipt mechanism. Operator may is
 
 Receipt and absorption are separate:
 
-- `read`: the agent has seen the notice but has not accepted absorption.
+- `seen`: the agent has seen the notice but has not accepted absorption.
 - `acknowledged`: the agent acknowledges receipt and may continue if no blocker exists.
 - `absorbed`: the agent records that the law has been incorporated into its current operating posture.
-- `question` or `blocked`: the agent records uncertainty or a blocker; this does not clear admission.
+- `blocked`: the agent records uncertainty or a blocker; this does not clear admission.
 
 Unread mandatory notices must appear in duty-loop surfaces before ordinary task recommendations. If a notice remains unacknowledged past the local timeout posture, the correct result is an explicit inbox observation/proposal for escalation, not silent drift.

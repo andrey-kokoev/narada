@@ -3,7 +3,10 @@ import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 
-export type LawReceiptStatus = 'read' | 'acknowledged' | 'absorbed' | 'question' | 'blocked';
+export type LawReceiptStatus = 'read' | 'seen' | 'acknowledged' | 'absorbed' | 'question' | 'blocked' | 'expired' | 'escalated';
+export type LawPropagationReceiptState = 'issued' | 'seen' | 'acknowledged' | 'absorbed' | 'blocked' | 'expired' | 'escalated';
+
+const LAW_RECEIPT_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 
 export interface LawChangeRecord {
   schema: 'https://narada.dev/schemas/law-change/v1';
@@ -46,6 +49,9 @@ export interface LawAdmissionBlocker {
   files: string[];
   notice_envelope_id: string | null;
   affected_agents: string[];
+  receipt_state: LawPropagationReceiptState;
+  receipt_status: LawReceiptStatus | null;
+  escalation_required: boolean;
 }
 
 export interface LawAdmissionResult {
@@ -145,6 +151,7 @@ export async function recordLawReceipt(cwd: string, input: {
   questionsOrBlockers?: string[];
 }): Promise<LawReceiptRecord> {
   const now = new Date().toISOString();
+  const status = normalizeReceiptStatus(input.status ?? 'acknowledged');
   const record: LawReceiptRecord = {
     schema: 'https://narada.dev/schemas/law-receipt/v1',
     receipt_id: `law_receipt_${now.replace(/[:.]/g, '-')}_${randomUUID()}`,
@@ -153,9 +160,9 @@ export async function recordLawReceipt(cwd: string, input: {
     role: clean(input.role),
     session_id: clean(input.sessionId),
     operator_surface_identity: clean(input.operatorSurfaceIdentity),
-    status: input.status ?? 'acknowledged',
+    status,
     read_at: now,
-    acknowledged_at: input.status === 'read' ? null : now,
+    acknowledged_at: status === 'read' || status === 'seen' ? null : now,
     questions_or_blockers: input.questionsOrBlockers ?? [],
   };
   await mkdir(lawReceiptsDir(cwd), { recursive: true });
@@ -167,23 +174,33 @@ export async function unreadLawChanges(cwd: string, agentId: string, role?: stri
   const [changes, receipts] = await Promise.all([listLawChanges(cwd), listLawReceipts(cwd)]);
   const receiptByChange = new Map(
     receipts
-      .filter((receipt) => receipt.agent_id === agentId && (receipt.status === 'read' || receipt.status === 'acknowledged' || receipt.status === 'absorbed'))
+      .filter((receipt) => receipt.agent_id === agentId)
       .map((receipt) => [receipt.change_id, receipt]),
   );
   const roleValue = clean(role);
   return changes
     .filter((change) => appliesToRole(change, roleValue))
-    .filter((change) => !receiptByChange.has(change.change_id))
-    .sort((a, b) => a.issued_at.localeCompare(b.issued_at))
-    .map((change) => ({
-      change_id: change.change_id,
-      summary: change.summary,
-      scope: change.scope,
-      required_roles: change.required_roles,
-      files: change.files,
-      notice_envelope_id: change.notice_envelope_id,
-      affected_agents: change.affected_agents,
-    }));
+    .map((change) => ({ change, receipt: receiptByChange.get(change.change_id) ?? null }))
+    .filter(({ change, receipt }) => {
+      const state = deriveLawReceiptState(change, receipt);
+      return state !== 'seen' && state !== 'acknowledged' && state !== 'absorbed';
+    })
+    .sort((a, b) => a.change.issued_at.localeCompare(b.change.issued_at))
+    .map(({ change, receipt }) => {
+      const receiptState = deriveLawReceiptState(change, receipt);
+      return {
+        change_id: change.change_id,
+        summary: change.summary,
+        scope: change.scope,
+        required_roles: change.required_roles,
+        files: change.files,
+        notice_envelope_id: change.notice_envelope_id,
+        affected_agents: change.affected_agents,
+        receipt_state: receiptState,
+        receipt_status: receipt?.status ?? null,
+        escalation_required: receiptState === 'blocked' || receiptState === 'expired' || receiptState === 'escalated',
+      };
+    });
 }
 
 export async function checkLawAdmission(cwd: string, agentId: string | undefined, role?: string | null): Promise<LawAdmissionResult> {
@@ -215,6 +232,26 @@ function appliesToRole(change: LawChangeRecord, role: string | null): boolean {
   if (change.required_roles.length === 0 || change.required_roles.includes('*')) return true;
   if (!role) return true;
   return change.required_roles.includes(role);
+}
+
+function normalizeReceiptStatus(status: LawReceiptStatus): LawReceiptStatus {
+  if (status === 'read') return 'seen';
+  if (status === 'question') return 'blocked';
+  return status;
+}
+
+function deriveLawReceiptState(change: LawChangeRecord, receipt: LawReceiptRecord | null, now = new Date()): LawPropagationReceiptState {
+  if (receipt) {
+    if (receipt.status === 'read' || receipt.status === 'seen') return 'seen';
+    if (receipt.status === 'acknowledged') return 'acknowledged';
+    if (receipt.status === 'absorbed') return 'absorbed';
+    if (receipt.status === 'expired') return 'expired';
+    if (receipt.status === 'escalated') return 'escalated';
+    return 'blocked';
+  }
+  const issued = Date.parse(change.issued_at);
+  if (Number.isFinite(issued) && now.getTime() - issued > LAW_RECEIPT_TIMEOUT_MS) return 'expired';
+  return 'issued';
 }
 
 function normalizeRoles(roles: string[] | undefined): string[] {

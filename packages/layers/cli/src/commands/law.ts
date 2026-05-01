@@ -214,7 +214,12 @@ export async function lawStatusCommand(options: LawAgentOptions): Promise<{ exit
     receipt_count: receipts.filter((receipt) => receipt.agent_id === clean(options.agent)).length,
     unread: admission.unread,
     escalation: admission.unread.length > 0 ? {
-      status: 'pending_receipt',
+      status: admission.unread.some((change) => change.receipt_state === 'expired')
+        ? 'expired_receipt'
+        : admission.unread.some((change) => change.receipt_state === 'blocked' || change.receipt_state === 'escalated')
+          ? 'blocked_receipt'
+          : 'pending_receipt',
+      receipt_states: [...new Set(admission.unread.map((change) => change.receipt_state))],
       proposal_path: `narada inbox submit-observation --source-ref law-timeout:${clean(options.agent)} --title "Law receipt overdue" --summary "Agent has unread mandatory law notices"`,
     } : null,
   }, [
