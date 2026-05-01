@@ -22,6 +22,10 @@ import { findTaskFile, loadRoster, readTaskFile, saveRoster, resolveTaskStatus, 
 import { sitesAgentBootstrapCommand } from './sites.js';
 import { grantEffectiveStatus, readCapabilityRegistry, validateCredentialRef } from '../lib/capability-consent-registry.js';
 import { agentAddressResolutionPublic, type AgentAddressResolution } from '../lib/agent-address.js';
+import {
+  admitOperatorSurfaceIdentityToTaskAuthority,
+  parseTaskAuthorityCapabilities,
+} from '../lib/operator-surface-task-authority.js';
 
 export interface OperatorSurfaceIdentityAddOptions {
   cwd?: string;
@@ -45,6 +49,15 @@ export interface OperatorSurfaceIdentityRenameOptions {
   by?: string;
   label?: string;
   allowActiveAssignment?: boolean;
+  format?: CliFormat;
+}
+
+export interface OperatorSurfaceIdentityAdmitTaskAuthorityOptions {
+  cwd?: string;
+  identityName?: string;
+  by?: string;
+  role?: string;
+  capabilities?: string;
   format?: CliFormat;
 }
 
@@ -1716,6 +1729,34 @@ export async function operatorSurfaceIdentityRenameCommand(
         },
         immutable_history_preserved: true,
         current_addressability_aliases: operatorSurfaceAliases(oldIdentity),
+      },
+    };
+  } catch (error) {
+    return errorResult(error);
+  }
+}
+
+export async function operatorSurfaceIdentityAdmitTaskAuthorityCommand(
+  options: OperatorSurfaceIdentityAdmitTaskAuthorityOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  try {
+    const cwd = options.cwd ?? '.';
+    const identityId = requireText(options.identityName, '<identity-name>');
+    const by = requireText(options.by, '--by');
+    const result = await admitOperatorSurfaceIdentityToTaskAuthority({
+      cwd,
+      identityId,
+      by,
+      role: options.role,
+      capabilities: parseTaskAuthorityCapabilities(options.capabilities),
+    });
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: {
+        ...result,
+        mutation_performed: true,
+        review_repair_command: `narada task review <task-number> --agent ${result.identity_id} --verdict <accepted|accepted_with_notes|rejected>`,
       },
     };
   } catch (error) {

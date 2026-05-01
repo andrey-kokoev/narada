@@ -15,6 +15,7 @@ import {
   operatorSurfaceAgentForkCommand,
   operatorSurfaceBindingDeferredCommand,
   operatorSurfaceBindFocusedCommand,
+  operatorSurfaceIdentityAdmitTaskAuthorityCommand,
   operatorSurfaceIdentityAddCommand,
   operatorSurfaceIdentityRenameCommand,
   operatorSurfaceInspectCompactCommand,
@@ -681,6 +682,49 @@ describe('operator-surface commands', () => {
         current_task: 1139,
       })],
     });
+  });
+
+  it('admits a renamed operator-surface identity into task authority without collapsing role aliases', async () => {
+    const cwd = await tempRepo();
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-andrey.architect',
+      role: 'architect',
+      agentKind: 'codex_cli',
+      site: 'narada-andrey',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+    await operatorSurfaceIdentityRenameCommand({
+      cwd,
+      fromIdentity: 'narada-andrey.architect',
+      toIdentity: 'narada-andrey.Kevin',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    const result = await operatorSurfaceIdentityAdmitTaskAuthorityCommand({
+      cwd,
+      identityName: 'narada-andrey.Kevin',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      identity_id: 'narada-andrey.Kevin',
+      role: 'architect',
+      capabilities: expect.arrayContaining(['review', 'architect_as_reviewer']),
+      exact_identity_preserved: true,
+      role_aliases_not_collapsed: true,
+    });
+    const roster = await loadRoster(cwd);
+    expect(roster.agents.find((agent) => agent.agent_id === 'narada-andrey.Kevin')).toMatchObject({
+      role: 'architect',
+      capabilities: expect.arrayContaining(['review']),
+    });
+    expect(roster.agents.find((agent) => agent.agent_id === 'narada-andrey.architect')).toBeUndefined();
   });
 
   it('returns runtime-locus deferral when focused binding is requested', async () => {

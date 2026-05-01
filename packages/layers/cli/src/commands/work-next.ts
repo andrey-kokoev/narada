@@ -28,6 +28,7 @@ import { taskDispatchCommand } from './task-dispatch.js';
 import { taskPeekNextCommand, taskWorkNextCommand } from './task-next.js';
 import { agentAddressResolutionPublic, resolveAgentAddress } from '../lib/agent-address.js';
 import { classifyTaskHandoffActionability } from '../lib/task-actionability.js';
+import { operatorSurfaceTaskAuthorityRepair } from '../lib/operator-surface-task-authority.js';
 import { parseTaskSpecFromMarkdown } from '../lib/task-spec.js';
 import { checkLawAdmission } from '../lib/law-sync.js';
 import { evaluateSiteQualification, qualificationBlocksGovernedWork } from '../lib/site-qualification.js';
@@ -440,6 +441,7 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
   const roster = await loadRoster(cwd);
   const agentResolution = resolveAgentAddress(roster, options.agent);
   if (!agentResolution.resolved_agent) {
+    const taskAuthorityRepair = await operatorSurfaceTaskAuthorityRepair(cwd, options.agent);
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: {
@@ -450,7 +452,8 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
         resolved_agent: null,
         agent_address_resolution: agentAddressResolutionPublic(agentResolution),
         error: 'error' in agentResolution ? agentResolution.error : `Agent ${options.agent} not found in roster`,
-        repair_command: 'repair_command' in agentResolution ? agentResolution.repair_command : `narada task roster add ${options.agent}`,
+        repair_command: taskAuthorityRepair?.repair_command ?? ('repair_command' in agentResolution ? agentResolution.repair_command : `narada task roster add ${options.agent}`),
+        operator_surface_task_authority: taskAuthorityRepair,
         primary: null,
       },
     };

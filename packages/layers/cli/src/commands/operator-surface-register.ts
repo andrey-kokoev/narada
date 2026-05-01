@@ -6,6 +6,7 @@ import {
   operatorSurfaceAgentForkCommand,
   operatorSurfaceBindingDeferredCommand,
   operatorSurfaceBindFocusedCommand,
+  operatorSurfaceIdentityAdmitTaskAuthorityCommand,
   operatorSurfaceIdentityAddCommand,
   operatorSurfaceIdentityRenameCommand,
   operatorSurfaceInspectCompactCommand,
@@ -150,6 +151,28 @@ export function registerOperatorSurfaceCommands(program: Command): void {
         by: opts.by as string | undefined,
         label: opts.label as string | undefined,
         allowActiveAssignment: opts.allowActiveAssignment as boolean | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  identityCmd
+    .command('admit-task-authority <identity-name>')
+    .description('Admit an Operator Surface identity into task roster/review authority without collapsing aliases')
+    .requiredOption('--by <principal>', 'Principal admitting task authority')
+    .option('--role <role>', 'Task authority role override; defaults to Operator Surface role')
+    .option('--capabilities <csv>', 'Task authority capabilities; defaults from role')
+    .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[string, Record<string, unknown>]>({
+      command: 'operator-surface identity admit-task-authority',
+      emit: emitCommandResult,
+      format: (_identityName: string, opts: Record<string, unknown>) => opts.format,
+      invocation: (identityName, opts) => operatorSurfaceIdentityAdmitTaskAuthorityCommand({
+        identityName,
+        by: opts.by as string | undefined,
+        role: opts.role as string | undefined,
+        capabilities: opts.capabilities as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),

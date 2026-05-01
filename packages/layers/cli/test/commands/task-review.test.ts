@@ -12,10 +12,30 @@ import { claimTaskService, continueTaskService, releaseTaskService } from '@nara
 import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { taskCloseCommand } from '../../src/commands/task-close.js';
 import { taskEvidenceAdmitCommand } from '../../src/commands/task-evidence.js';
+import {
+  operatorSurfaceIdentityAddCommand,
+  operatorSurfaceIdentityAdmitTaskAuthorityCommand,
+} from '../../src/commands/operator-surface.js';
 import { taskReviewCommand } from '../../src/commands/task-review.js';
+import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
 process.env.NARADA_TASK_LIFECYCLE_FAST_SQLITE = '1';
+
+function createMockContext(): CommandContext {
+  const logger = {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    trace: vi.fn(),
+  };
+  return {
+    configPath: '/test/config.json',
+    logger: logger as unknown as CommandContext['logger'],
+    verbose: false,
+  };
+}
 
 function setupRepo(tempDir: string): void {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
@@ -609,6 +629,80 @@ describe('task review command', () => {
         recommended: true,
         triggers: ['authority_boundary_bug', 'reviewer_identity_mismatch'],
       },
+    });
+  });
+
+  it('identifies missing task authority for an admitted operator-surface reviewer identity', async () => {
+    await operatorSurfaceIdentityAddCommand({
+      cwd: tempDir,
+      identityName: 'narada-andrey.Kevin',
+      role: 'architect',
+      agentKind: 'codex_cli',
+      site: 'narada-andrey',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+
+    const result = await taskReviewCommand({
+      taskNumber: '999',
+      agent: 'narada-andrey.Kevin',
+      verdict: 'accepted',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      review_authority_repair: {
+        reason: 'missing_reviewer_identity',
+        commands: [
+          'narada operator-surface identity admit-task-authority narada-andrey.Kevin --by <principal>',
+          'narada task review 999 --agent narada-andrey.Kevin --verdict <accepted|accepted_with_notes|rejected>',
+        ],
+      },
+      operator_surface_task_authority: {
+        status: 'missing_from_task_authority',
+        identity_id: 'narada-andrey.Kevin',
+        role: 'architect',
+        repair_command: 'narada operator-surface identity admit-task-authority narada-andrey.Kevin --by <principal>',
+      },
+    });
+  });
+
+  it('allows an admitted renamed operator-surface architect identity to review without roster surgery', async () => {
+    await operatorSurfaceIdentityAddCommand({
+      cwd: tempDir,
+      identityName: 'narada-andrey.Kevin',
+      role: 'architect',
+      agentKind: 'codex_cli',
+      site: 'narada-andrey',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+    const admitted = await operatorSurfaceIdentityAdmitTaskAuthorityCommand({
+      cwd: tempDir,
+      identityName: 'narada-andrey.Kevin',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+    expect(admitted.exitCode).toBe(ExitCode.SUCCESS);
+    await claimTaskService({ taskNumber: '1002', agent: 'worker', cwd: tempDir });
+    await releaseTaskService({ taskNumber: '1002', reason: 'completed', cwd: tempDir });
+
+    const result = await taskReviewCommand({
+      taskNumber: '1002',
+      agent: 'narada-andrey.Kevin',
+      verdict: 'accepted',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      verdict: 'accepted',
+      new_status: 'closed',
     });
   });
 

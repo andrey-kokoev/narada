@@ -16,6 +16,7 @@ import {
   type ReviewReplyFinding,
   type ReviewReplyObligationResult,
 } from '../lib/task-review-reply-obligation.js';
+import { operatorSurfaceTaskAuthorityRepair } from '../lib/operator-surface-task-authority.js';
 
 export interface TaskReviewOptions {
   taskNumber?: string;
@@ -49,6 +50,24 @@ export async function taskReviewCommand(
   } as ReviewTaskServiceOptions);
 
   const result = serviceResult.result;
+  if (result.status === 'error') {
+    const taskAuthorityRepair = await operatorSurfaceTaskAuthorityRepair(cwd, options.agent);
+    if (taskAuthorityRepair) {
+      const mutable = result as ReviewTaskServiceResponse['result'] & {
+        operator_surface_task_authority?: typeof taskAuthorityRepair;
+      };
+      mutable.operator_surface_task_authority = taskAuthorityRepair;
+      if (mutable.review_authority_repair) {
+        mutable.review_authority_repair = {
+          ...mutable.review_authority_repair,
+          commands: [
+            taskAuthorityRepair.repair_command,
+            `narada task review ${options.taskNumber ?? '<task-number>'} --agent ${taskAuthorityRepair.identity_id} --verdict <accepted|accepted_with_notes|rejected>`,
+          ],
+        };
+      }
+    }
+  }
   if (result.status === 'success') {
     const reviewReply = await routeReviewReplyObligation({
       cwd,
@@ -154,6 +173,10 @@ export async function taskReviewCommand(
     if (repair) {
       fmt.message(repair.no_workaround, 'warning');
       for (const command of repair.commands) fmt.message(command, 'info');
+    }
+    const taskAuthority = (result as { operator_surface_task_authority?: { repair_command: string } }).operator_surface_task_authority;
+    if (taskAuthority) {
+      fmt.message(`Task authority repair: ${taskAuthority.repair_command}`, 'info');
     }
     if (capa?.recommended) {
       fmt.message(`CAPA recommended: ${capa.triggers.join(', ')}`, 'warning');

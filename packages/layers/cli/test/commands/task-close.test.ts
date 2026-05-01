@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Database } from '@narada2/control-plane';
 import { openTaskLifecycleStore, SqliteTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
-import { loadAssignment } from '../../src/lib/task-governance.js';
+import { loadAssignment, saveRoster } from '../../src/lib/task-governance.js';
 
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
@@ -22,6 +22,28 @@ function writeTask(tempDir: string, num: number, status: string, bodyExtra = '')
   writeFileSync(
     join(tempDir, '.ai', 'do-not-open', 'tasks', `20260420-${num}-test.md`),
     `---\ntask_id: ${num}\nstatus: ${status}\n---\n\n# Task ${num}: Test\n\n## Acceptance Criteria\n- [x] Criterion A\n- [x] Criterion B\n\n${bodyExtra}`,
+  );
+}
+
+function writeOperatorSurfaceIdentity(tempDir: string, identityId: string, role = 'architect') {
+  mkdirSync(join(tempDir, 'operator-surfaces'), { recursive: true });
+  writeFileSync(
+    join(tempDir, 'operator-surfaces', 'identities.json'),
+    JSON.stringify({
+      schema: 'https://narada.dev/schemas/operator-surface-identities/v1',
+      updated_at: '2026-01-01T00:00:00Z',
+      identities: [{
+        identity_id: identityId,
+        site_id: 'narada',
+        role,
+        agent_kind: 'codex_cli',
+        label: identityId,
+        admitted_by: 'operator',
+        admitted_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        authority_limits: [],
+      }],
+    }, null, 2),
   );
 }
 
@@ -841,6 +863,81 @@ describe('task close operator', () => {
     const r = result.result as { roster_reconciled: boolean; reconciled_agent_id?: string };
     expect(r.roster_reconciled).toBe(false);
     expect(r.reconciled_agent_id).toBeUndefined();
+  });
+
+  it('identifies missing task authority for an admitted operator-surface close actor', async () => {
+    writeTask(
+      tempDir,
+      303,
+      'in_review',
+      '## Execution Notes\nDone.\n\n## Verification\nOK.\n',
+    );
+    writeOperatorSurfaceIdentity(tempDir, 'narada-andrey.Kevin', 'architect');
+
+    const result = await taskCloseCommand({
+      taskNumber: '303',
+      by: 'narada-andrey.Kevin',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      reason: 'operator_surface_identity_missing_task_authority',
+      repair_command: 'narada operator-surface identity admit-task-authority narada-andrey.Kevin --by <principal>',
+      operator_surface_task_authority: {
+        status: 'missing_from_task_authority',
+        identity_id: 'narada-andrey.Kevin',
+        role: 'architect',
+      },
+    });
+  });
+
+  it('allows an operator-surface identity to close after task-authority admission', async () => {
+    writeTask(
+      tempDir,
+      304,
+      'in_review',
+      '## Execution Notes\nDone.\n\n## Verification\nOK.\n',
+    );
+    writeOperatorSurfaceIdentity(tempDir, 'narada-andrey.Kevin', 'architect');
+    await saveRoster(tempDir, {
+      version: 2,
+      updated_at: '2026-01-01T00:00:00Z',
+      agents: [{
+        agent_id: 'narada-andrey.Kevin',
+        role: 'architect',
+        capabilities: ['review', 'architect_as_reviewer'],
+        first_seen_at: '2026-01-01T00:00:00Z',
+        last_active_at: '2026-01-01T00:00:00Z',
+        status: 'idle',
+        task: null,
+        last_done: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      }],
+    });
+    const admission = await taskEvidenceAdmitCommand({
+      taskNumber: '304',
+      by: 'narada-andrey.Kevin',
+      cwd: tempDir,
+      format: 'json',
+    });
+    expect(admission.exitCode).toBe(ExitCode.SUCCESS);
+
+    const result = await taskCloseCommand({
+      taskNumber: '304',
+      by: 'narada-andrey.Kevin',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      new_status: 'closed',
+      closed_by: 'narada-andrey.Kevin',
+    });
   });
 
   it('releases active assignment on close', async () => {

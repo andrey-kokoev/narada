@@ -694,6 +694,42 @@ describe('work-next unified next action', () => {
     });
   });
 
+  it('returns operator-surface task-authority repair for admitted identity missing from roster', async () => {
+    mkdirSync(join(tempDir, 'operator-surfaces'), { recursive: true });
+    writeFileSync(
+      join(tempDir, 'operator-surfaces', 'identities.json'),
+      JSON.stringify({
+        schema: 'https://narada.dev/schemas/operator-surface-identities/v1',
+        updated_at: '2026-01-01T00:00:00Z',
+        identities: [{
+          identity_id: 'narada-andrey.Kevin',
+          site_id: 'narada-andrey',
+          role: 'architect',
+          agent_kind: 'codex_cli',
+          label: 'Kevin',
+          admitted_by: 'operator',
+          admitted_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+          authority_limits: [],
+        }],
+      }, null, 2),
+    );
+
+    const result = await workNextCommand({ agent: 'narada-andrey.Kevin', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      reason: 'agent_not_in_roster',
+      repair_command: 'narada operator-surface identity admit-task-authority narada-andrey.Kevin --by <principal>',
+      operator_surface_task_authority: {
+        status: 'missing_from_task_authority',
+        identity_id: 'narada-andrey.Kevin',
+        role: 'architect',
+      },
+    });
+  });
+
   it('resolves site-qualified role address to the exact-one active roster agent before claiming work', async () => {
     seedRosterEntry(tempDir, 'narada-andrey.Bob', 'builder', 'idle', null);
     writeFileSync(
