@@ -115,6 +115,22 @@ This surface is read-only by default. It composes current/next work, review duty
 
 Fast regression carrier: small role-loop or Architect review-identity changes should verify with `packages/layers/cli/test/commands/role-loop.test.ts` first. Do not run the full `work-next.test.ts` file for those changes unless the change modifies work-next integration behavior itself.
 
+## Bulky Artifact Inspection
+
+Generated snapshots and mutation evidence are source evidence, but they are not the default chat-visible inspection surface. Before using `rg`, `cat`, or broad JSON dumps over `.ai/task-lifecycle-snapshot.json`, `.ai/mutation-evidence/**`, or `.ai/inbox-envelopes/**`, use a compact helper that reports counts, paths, findings, and sanctioned next commands:
+
+```bash
+narada task lifecycle inspect-snapshot --format json
+```
+
+Raw inspection remains available only by explicit opt-in:
+
+```bash
+narada task lifecycle inspect-snapshot --raw --format json
+```
+
+Do not paste raw bulky artifacts into chat unless the Operator explicitly asks for raw evidence content.
+
 ## Safety
 
 - Do not interpret, narrow, relax, or silently carve exceptions into operator-set constraints.

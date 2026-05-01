@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   taskLifecycleExportCommand,
+  taskLifecycleInspectSnapshotCommand,
   taskLifecycleImportCommand,
 } from '../../src/commands/task-lifecycle-snapshot.js';
 import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
@@ -208,5 +209,77 @@ describe('task lifecycle snapshot commands', () => {
     expect(target.getVerificationRun('verify-100')?.status).toBe('passed');
     expect(target.getCommandRun('command-100')?.status).toBe('succeeded');
     target.db.close();
+  });
+
+  it('compactly inspects bulky snapshots for stale roster facts without raw output', async () => {
+    const source = openTaskLifecycleStore(sourceDir);
+    source.upsertLifecycle({
+      task_id: 'task-101',
+      task_number: 101,
+      status: 'opened',
+      governed_by: null,
+      closed_at: null,
+      closed_by: null,
+      closure_mode: null,
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: '2026-04-27T00:00:00.000Z',
+    });
+    source.upsertRosterEntry({
+      agent_id: 'builder',
+      role: 'builder',
+      capabilities_json: '[]',
+      first_seen_at: '2026-04-27T00:00:00.000Z',
+      last_active_at: '2026-04-27T00:02:00.000Z',
+      status: 'working',
+      task_number: 101,
+      last_done: null,
+      updated_at: '2026-04-27T00:02:00.000Z',
+    });
+    source.db.close();
+
+    const snapshotPath = join(sourceDir, '.ai', 'snapshot.json');
+    const exported = await taskLifecycleExportCommand({
+      cwd: sourceDir,
+      output: snapshotPath,
+      format: 'json',
+    });
+    expect(exported.exitCode).toBe(ExitCode.SUCCESS);
+
+    const inspected = await taskLifecycleInspectSnapshotCommand({
+      cwd: sourceDir,
+      input: snapshotPath,
+      format: 'json',
+    });
+    expect(inspected.exitCode).toBe(ExitCode.SUCCESS);
+    const result = inspected.result as {
+      raw_snapshot?: unknown;
+      row_count: number;
+      tables: Array<{ name: string; row_count: number }>;
+      architect_loop_guidance: string;
+      findings: Array<{ finding_id: string; facts: Record<string, unknown>; suggested_repair: string }>;
+    };
+    expect(result.raw_snapshot).toBeUndefined();
+    expect(result.row_count).toBeGreaterThan(0);
+    expect(result.tables).toContainEqual(expect.objectContaining({ name: 'agent_roster', row_count: 1 }));
+    expect(result.architect_loop_guidance).toContain('compact helper');
+    expect(result.findings).toContainEqual(expect.objectContaining({
+      finding_id: 'snapshot_stale_roster_builder_101',
+      facts: expect.objectContaining({
+        agent_id: 'builder',
+        lifecycle_status: 'opened',
+        roster_task_number: 101,
+      }),
+      suggested_repair: 'narada task reconcile guide --task 101 --by <id>',
+    }));
+
+    const raw = await taskLifecycleInspectSnapshotCommand({
+      cwd: sourceDir,
+      input: snapshotPath,
+      raw: true,
+      format: 'json',
+    });
+    expect((raw.result as { raw_snapshot?: unknown }).raw_snapshot).toBeDefined();
   });
 });

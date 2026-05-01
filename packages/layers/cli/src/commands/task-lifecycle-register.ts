@@ -12,6 +12,7 @@ import { taskReopenCommand } from './task-reopen.js';
 import { taskConfirmCommand } from './task-confirm.js';
 import {
   taskLifecycleExportCommand,
+  taskLifecycleInspectSnapshotCommand,
   taskLifecycleImportCommand,
 } from './task-lifecycle-snapshot.js';
 import { taskLifecycleStatusCommand } from './task-lifecycle-status.js';
@@ -62,6 +63,25 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
       format: (opts: Record<string, unknown>) => opts.format,
       invocation: (opts) => taskLifecycleExportCommand({
         output: opts.output as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
+
+  lifecycleCmd
+    .command('inspect-snapshot')
+    .description('Compactly inspect a lifecycle snapshot without dumping raw artifact content')
+    .option('--input <path>', 'Snapshot input path', '.ai/task-lifecycle-snapshot.json')
+    .option('--raw', 'Include raw snapshot payload explicitly', false)
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'task lifecycle inspect-snapshot',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => taskLifecycleInspectSnapshotCommand({
+        input: opts.input as string | undefined,
+        raw: opts.raw as boolean | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }),

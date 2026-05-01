@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T00:43:05.347Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777596153994_amd36w
+closed_at: 2026-05-01T00:43:21.598Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add compact snapshot inspection helpers
@@ -32,8 +41,8 @@ Source inbox envelope env_e455e0d3-e17a-45b2-a3aa-3acc2dca4f10 reports that a na
 
 ## Acceptance Criteria
 
-- [ ] A compact helper can inspect task lifecycle snapshot or equivalent bulky artifact without dumping raw large content.
-- [ ] Output includes bounded facts, counts, paths, and suggested repair where applicable.
-- [ ] Architect-loop guidance discourages direct raw search over known bulky generated artifacts.
-- [ ] Raw inspection remains opt-in.
-- [ ] Tests or fixtures cover bounded output for a bulky snapshot query.
+- [x] A compact helper can inspect task lifecycle snapshot or equivalent bulky artifact without dumping raw large content.
+- [x] Output includes bounded facts, counts, paths, and suggested repair where applicable.
+- [x] Architect-loop guidance discourages direct raw search over known bulky generated artifacts.
+- [x] Raw inspection remains opt-in.
+- [x] Tests or fixtures cover bounded output for a bulky snapshot query.
