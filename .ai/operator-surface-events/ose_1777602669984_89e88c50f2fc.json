@@ -1,0 +1,44 @@
+{
+  "event_id": "ose_1777602669984_89e88c50f2fc",
+  "identity": "builder",
+  "runtime_locus": "narada-proper",
+  "resolved_runtime_handle": "codex-thread:019dd634-700c-7490-b108-44e1cffb6390",
+  "transport": "codex_cli_thread",
+  "submit_strategy": "known_surface_submit",
+  "text_digest": "e426049883da696c8b540cd3af502b3a591136ec5a8c9e750a172ce8827f106b",
+  "text_length": 306,
+  "original_text_digest": "6bab5f7e60e639cd75b513963637ac476595f88fc3324edee998617a0db25bb5",
+  "original_text_length": 289,
+  "rendered_text": "From: architect\n\nI am narada.architect. New task 1166 is ready: Define typed MCP surfaces starting with Inbox MCP and EE-MCP. Please run your normal Builder loop: inspect work-next, claim/continue the task if assigned, execute, verify, report/close, commit, and push. Reply via operator-surface if blocked.",
+  "rendered_text_digest": "e426049883da696c8b540cd3af502b3a591136ec5a8c9e750a172ce8827f106b",
+  "rendered_text_length": 306,
+  "sender_header_included": true,
+  "input_posture": "typed_message",
+  "requested_address": "builder",
+  "current_site": "narada-proper",
+  "target_site": "narada-proper",
+  "message_route": {
+    "sender": "architect",
+    "requested_recipient": "builder",
+    "resolved_recipient": "builder",
+    "current_site": "narada-proper",
+    "target_site": "narada-proper",
+    "binding_status": "bound",
+    "identity_flag_mode": "explicit_to"
+  },
+  "sender": "architect",
+  "sender_identity": "architect",
+  "resolved_sender_identity": "architect",
+  "recipient": "builder",
+  "site_plane": {
+    "current_site": "narada-proper",
+    "target_site": "narada-proper"
+  },
+  "binding_proof": {
+    "binding_id": "bind_83b941f607aaf709",
+    "runtime_locus": "narada-proper",
+    "status": "bound"
+  },
+  "dry_run": false,
+  "status": "event_recorded_for_runtime_locus"
+}
