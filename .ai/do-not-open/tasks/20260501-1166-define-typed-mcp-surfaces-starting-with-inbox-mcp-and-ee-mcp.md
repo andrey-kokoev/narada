@@ -1,5 +1,5 @@
 ---
-status: opened
+status: claimed
 ---
 
 # Define typed MCP surfaces starting with Inbox MCP and EE-MCP
