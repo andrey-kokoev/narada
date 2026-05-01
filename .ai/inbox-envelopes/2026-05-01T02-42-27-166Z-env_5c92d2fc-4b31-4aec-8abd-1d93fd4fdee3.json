@@ -1,0 +1,31 @@
+{
+  "envelope_id": "env_5c92d2fc-4b31-4aec-8abd-1d93fd4fdee3",
+  "received_at": "2026-05-01T02:42:27.166Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey.Kevin:task-62-review-authority-capa"
+  },
+  "kind": "incident",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "recommendation": "Treat as CAPA for review authority coherence and execution-boundary review handling. Create follow-up tasks for reviewer roster semantics and CAPA trigger guidance.",
+    "evidence": [
+      "Blocking defect: EE-MCP cwd allowlist accepted /home/andrey2 because implementation used raw StartsWith against /home/andrey.",
+      "Task review command refused --agent narada-andrey.Kevin with Agent not found in roster.",
+      "Task review command then refused narada-andrey.architect because architect role is not reviewer/admin.",
+      "Review was finally recorded as operator, even though the intended reviewing identity was Kevin acting as architect/reviewer."
+    ],
+    "title": "CAPA: Task 62 review found authority-boundary defect and reviewer roster incoherence",
+    "proposal": [
+      "Define CAPA trigger criteria for review findings that reveal authority-boundary defects in execution surfaces, especially MCP/EE-MCP, secret handling, routing, and cross-embodiment execution.",
+      "Require reviewer identity/role mismatch during governed review to create a CAPA or at least an incident envelope before continuing through workaround identities.",
+      "Add lifecycle support for declared reviewer identities or explicit architect-as-reviewer authority when a Site uses named architect identities such as narada-andrey.Kevin.",
+      "Add review command guidance: if requested reviewer cannot be used due to roster/role mismatch, report exact repair path and suggest CAPA classification."
+    ],
+    "summary": "During doctrine-alignment review of narada-andrey task 62, Kevin found a blocking EE-MCP cwd boundary defect and a lifecycle-role incoherence: narada-andrey.Kevin was requested as reviewer but task review refused Kevin because the lifecycle roster did not admit him as reviewer/admin. The review was recorded as operator, which preserved task state but exposed an authority/identity mismatch."
+  },
+  "status": "received"
+}

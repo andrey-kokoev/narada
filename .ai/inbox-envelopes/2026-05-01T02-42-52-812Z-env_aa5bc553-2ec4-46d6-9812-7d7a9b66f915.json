@@ -1,0 +1,31 @@
+{
+  "envelope_id": "env_aa5bc553-2ec4-46d6-9812-7d7a9b66f915",
+  "received_at": "2026-05-01T02:42:52.812Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey.Kevin:missed-capa-after-task-62-review"
+  },
+  "kind": "incident",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "summary": "After task 62 review, Kevin reported findings and nudged Bob but did not immediately submit a CAPA, despite observing a blocking authority-boundary defect and reviewer identity/roster mismatch. Operator had to identify the missing CAPA step. Narada needs a guardrail so CAPA-grade incidents automatically prompt or require CAPA submission.",
+    "title": "CAPA: Architect failed to submit CAPA after CAPA-grade review incident",
+    "evidence": [
+      "Task 62 review found an execution-boundary bug in EE-MCP path admission.",
+      "The review flow also exposed reviewer identity mismatch for narada-andrey.Kevin.",
+      "Kevin recorded review rejection and nudged Bob but did not submit CAPA until prompted by Operator.",
+      "This repeats a class of failures where agents handle the immediate task but fail to route systemic process defects into Narada learning machinery."
+    ],
+    "recommendation": "Treat as CAPA for CAPA detection/admission ergonomics and agent role-loop discipline.",
+    "proposal": [
+      "Define CAPA-grade trigger vocabulary for agents: authority-boundary bug, safety/secret boundary bug, lifecycle/roster authority mismatch, tooling workaround that changes reviewer/principal, repeated operator correction, or defect likely to recur across Sites.",
+      "Add role-loop checklist item: after any rejected review or blocking finding, decide CAPA needed yes/no with one-line rationale; if yes, submit before final response.",
+      "Add mechanical support where possible: task review rejected with blocking findings should produce a CAPA recommendation or require --capa-none-reason.",
+      "Add self-CAPA expectation: if Operator points out missing CAPA after an incident, submit both the original CAPA and a meta-CAPA for the missed escalation."
+    ]
+  },
+  "status": "received"
+}
