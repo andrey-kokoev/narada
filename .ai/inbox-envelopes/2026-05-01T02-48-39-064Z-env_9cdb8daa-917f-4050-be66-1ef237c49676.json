@@ -1,0 +1,25 @@
+{
+  "envelope_id": "env_9cdb8daa-917f-4050-be66-1ef237c49676",
+  "received_at": "2026-05-01T02:48:39.064Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "operator:law-notice-avoid-semantic-duplication-20260501"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "operator"
+  },
+  "payload": {
+    "title": "Law notice: avoid semantic duplication and sandwiching",
+    "summary": "Operator law notice for Narada agents: try to avoid semantic duplication and sandwiching of your messages.",
+    "evidence": [
+      "Operator explicitly instructed: try to avoid semantic dplication and sandwiching of your messages."
+    ],
+    "proposal": [
+      "Affected agents should acknowledge receipt and absorb this as communication law for future replies."
+    ],
+    "recommendation": "Use this as the first pilot for durable law-change propagation with agent receipt and absorption evidence; OSM may notify but must not be the authority medium."
+  },
+  "status": "received"
+}
