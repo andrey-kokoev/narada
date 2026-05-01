@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T04:02:13.293Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777608107743_iyff9t
+closed_at: 2026-05-01T04:02:41.675Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Formalize OperatorSurfaceDelivery state machine
@@ -36,8 +45,8 @@ Define OperatorSurfaceDelivery states and transitions; integrate requested, queu
 
 ## Acceptance Criteria
 
-- [ ] Delivery state is persisted or emitted as durable evidence for every send attempt.
-- [ ] Active Operator input gates delivery before focus/window/input mutation.
-- [ ] Queued, refused, expired, and fallback_to_inbox are distinct results.
-- [ ] Urgent explicit interruption is authority-gated and visible in evidence.
-- [ ] Tests cover idle, active typing, expiry, fallback, and cross-desktop posture.
+- [x] Delivery state is persisted or emitted as durable evidence for every send attempt.
+- [x] Active Operator input gates delivery before focus/window/input mutation.
+- [x] Queued, refused, expired, and fallback_to_inbox are distinct results.
+- [x] Urgent explicit interruption is authority-gated and visible in evidence.
+- [x] Tests cover idle, active typing, expiry, fallback, and cross-desktop posture.

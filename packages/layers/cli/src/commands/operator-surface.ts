@@ -128,6 +128,17 @@ type OperatorActivityState = 'idle' | 'active_typing' | 'active_pointer' | 'unkn
 type ActiveDeliveryPolicy = 'queue' | 'refuse' | 'fallback_to_inbox';
 type CrossDesktopPolicy = 'same_desktop_only' | 'allow_with_authority' | 'refuse';
 type DeliveryResultStatus = 'queued_waiting_for_idle' | 'delivered' | 'expired' | 'refused' | 'fallback_to_inbox';
+type OperatorSurfaceDeliveryState = 'requested' | DeliveryResultStatus | 'explicit_interrupt';
+
+const OPERATOR_SURFACE_DELIVERY_STATES: readonly OperatorSurfaceDeliveryState[] = [
+  'requested',
+  'queued_waiting_for_idle',
+  'delivered',
+  'expired',
+  'refused',
+  'fallback_to_inbox',
+  'explicit_interrupt',
+] as const;
 
 interface OperatorSurfaceVisibleLabelEvidence {
   identity_id?: string;
@@ -667,6 +678,27 @@ function parseDeliveryTimeoutMs(value: string | number | undefined): number {
   return parsed;
 }
 
+function validateOperatorSurfaceDeliveryStatePath(statePath: OperatorSurfaceDeliveryState[]): {
+  valid: boolean;
+  invalid_transition_reason: string | null;
+} {
+  if (statePath[0] !== 'requested') {
+    return { valid: false, invalid_transition_reason: 'delivery state path must start with requested' };
+  }
+  const invalid = statePath.find((state) => !OPERATOR_SURFACE_DELIVERY_STATES.includes(state));
+  if (invalid) {
+    return { valid: false, invalid_transition_reason: `unknown delivery state: ${String(invalid)}` };
+  }
+  const terminal = statePath[statePath.length - 1];
+  if (!terminal || terminal === 'requested' || terminal === 'explicit_interrupt') {
+    return { valid: false, invalid_transition_reason: 'delivery state path must end in a delivery result' };
+  }
+  if (statePath.includes('explicit_interrupt') && terminal !== 'delivered') {
+    return { valid: false, invalid_transition_reason: 'explicit interruption can only transition to delivered' };
+  }
+  return { valid: true, invalid_transition_reason: null };
+}
+
 function decideOperatorSurfaceDelivery(args: {
   activityState: OperatorActivityState;
   activityObservedAt: string | null;
@@ -679,6 +711,7 @@ function decideOperatorSurfaceDelivery(args: {
   crossDesktopAuthority: string | null;
 }): {
   status: DeliveryResultStatus;
+  state_path: OperatorSurfaceDeliveryState[];
   deliverable: boolean;
   reason: string;
   operator_activity: Record<string, unknown>;
@@ -694,6 +727,7 @@ function decideOperatorSurfaceDelivery(args: {
   if (crossDesktop && !crossDesktopAuthorized) {
     return {
       status: 'refused',
+      state_path: ['requested', 'refused'],
       deliverable: false,
       reason: args.crossDesktopPolicy === 'allow_with_authority'
         ? 'cross_desktop_authority_required'
@@ -727,6 +761,7 @@ function decideOperatorSurfaceDelivery(args: {
           : 'queued_waiting_for_idle';
     return {
       status: queuedStatus,
+      state_path: ['requested', queuedStatus],
       deliverable: false,
       reason: args.activityState === 'unknown'
         ? 'operator_activity_unknown'
@@ -754,6 +789,7 @@ function decideOperatorSurfaceDelivery(args: {
   }
   return {
     status: 'delivered',
+    state_path: ['requested', ...(urgentAuthorized ? ['explicit_interrupt' as const] : []), 'delivered'],
     deliverable: true,
     reason: activityBlocks ? 'urgent_interrupt_authorized' : 'operator_idle',
     operator_activity: {
@@ -2328,6 +2364,19 @@ export async function operatorSurfaceSendCommand(
       crossDesktopPolicy,
       crossDesktopAuthority: options.crossDesktopAuthority?.trim() || null,
     });
+    const deliveryStateValidation = validateOperatorSurfaceDeliveryStatePath(delivery.state_path);
+    if (!deliveryStateValidation.valid) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          reason: 'invalid_operator_surface_delivery_state_transition',
+          mutation_performed: false,
+          validation: deliveryStateValidation,
+          delivery_result: delivery,
+        },
+      };
+    }
 
     const renderedMessage = renderOperatorSurfaceMessage(sender, text, rawInput);
     const eventId = `ose_${Date.now()}_${textDigest(`${identity}:${renderedMessage.rendered_text}`).slice(0, 12)}`;
@@ -2368,7 +2417,7 @@ export async function operatorSurfaceSendCommand(
         ? options.execute ? 'event_recorded_for_runtime_locus' : 'validated_dry_run'
         : delivery.status,
     };
-    const eventArtifact = options.execute && delivery.deliverable ? await writeOperatorSurfaceSendEvent(cwd, send) : null;
+    const eventArtifact = options.execute ? await writeOperatorSurfaceSendEvent(cwd, send) : null;
     return {
       exitCode: ExitCode.SUCCESS,
       result: {

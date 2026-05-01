@@ -48,11 +48,15 @@ Required delivery states:
 
 | State | Meaning |
 | --- | --- |
+| `requested` | A send attempt entered delivery admission; this is never terminal by itself. |
 | `queued_waiting_for_idle` | Delivery is held because recent keyboard, pointer, or unknown activity makes interruption unsafe. |
 | `delivered` | Delivery is admitted because the Operator is idle, or because explicit urgent-interrupt authority was supplied. |
 | `expired` | The queued delivery timed out before idle admission. |
 | `refused` | Delivery is disallowed by policy, missing authority, or cross-desktop posture. |
 | `fallback_to_inbox` | Delivery is converted to inert inbox work instead of mutating the active surface. |
+| `explicit_interrupt` | An admitted interruption authority was consumed before delivery. |
+
+Every executable send attempt must emit durable evidence of the state path, even when no focus/input mutation occurs. Examples: `requested -> queued_waiting_for_idle`, `requested -> refused`, `requested -> expired`, `requested -> fallback_to_inbox`, and `requested -> explicit_interrupt -> delivered`.
 
 Default posture:
 

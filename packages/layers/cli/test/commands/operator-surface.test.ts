@@ -1386,11 +1386,12 @@ describe('operator-surface commands', () => {
     }, createMockContext());
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    const payload = result.result as { mutation_performed: boolean; event_artifact: string | null; delivery_result: { status: string; reason: string; operator_activity: { state: string }; queue: { next_state: string } | null }; send: { status: string } };
+    const payload = result.result as { mutation_performed: boolean; event_artifact: string | null; delivery_result: { status: string; state_path: string[]; reason: string; operator_activity: { state: string }; queue: { next_state: string } | null }; send: { status: string } };
     expect(payload.mutation_performed).toBe(false);
-    expect(payload.event_artifact).toBeNull();
+    expect(payload.event_artifact).toContain('.ai/operator-surface-events/ose_');
     expect(payload.delivery_result).toMatchObject({
       status: 'queued_waiting_for_idle',
+      state_path: ['requested', 'queued_waiting_for_idle'],
       reason: 'operator_recent_activity_detected',
       operator_activity: { state: 'active_typing' },
       queue: { next_state: 'wait_for_idle' },
@@ -1423,11 +1424,12 @@ describe('operator-surface commands', () => {
     }, createMockContext());
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    const payload = result.result as { mutation_performed: boolean; event_artifact: string | null; delivery_result: { status: string; urgent_interrupt: { authorized: boolean; authority_ref: string } } };
+    const payload = result.result as { mutation_performed: boolean; event_artifact: string | null; delivery_result: { status: string; state_path: string[]; urgent_interrupt: { authorized: boolean; authority_ref: string } } };
     expect(payload.mutation_performed).toBe(true);
     expect(payload.event_artifact).toContain('.ai/operator-surface-events/ose_');
     expect(payload.delivery_result).toMatchObject({
       status: 'delivered',
+      state_path: ['requested', 'explicit_interrupt', 'delivered'],
       urgent_interrupt: {
         authorized: true,
         authority_ref: 'operator:interrupt-approved:1175',
@@ -1468,10 +1470,18 @@ describe('operator-surface commands', () => {
       format: 'json',
     }, createMockContext());
 
-    expect((expired.result as { delivery_result: { status: string }; mutation_performed: boolean }).delivery_result.status).toBe('expired');
+    expect((expired.result as { delivery_result: { status: string; state_path: string[] }; mutation_performed: boolean; event_artifact: string | null }).delivery_result).toMatchObject({
+      status: 'expired',
+      state_path: ['requested', 'expired'],
+    });
     expect((expired.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
-    expect((fallback.result as { delivery_result: { status: string }; mutation_performed: boolean }).delivery_result.status).toBe('fallback_to_inbox');
+    expect((expired.result as { event_artifact: string | null }).event_artifact).toContain('.ai/operator-surface-events/ose_');
+    expect((fallback.result as { delivery_result: { status: string; state_path: string[] }; mutation_performed: boolean; event_artifact: string | null }).delivery_result).toMatchObject({
+      status: 'fallback_to_inbox',
+      state_path: ['requested', 'fallback_to_inbox'],
+    });
     expect((fallback.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
+    expect((fallback.result as { event_artifact: string | null }).event_artifact).toContain('.ai/operator-surface-events/ose_');
   });
 
   it('refuses cross-desktop summon unless explicit authority is supplied', async () => {
@@ -1510,11 +1520,13 @@ describe('operator-surface commands', () => {
       format: 'json',
     }, createMockContext());
 
-    expect((refused.result as { delivery_result: { status: string; reason: string }; mutation_performed: boolean }).delivery_result).toMatchObject({
+    expect((refused.result as { delivery_result: { status: string; state_path: string[]; reason: string }; mutation_performed: boolean; event_artifact: string | null }).delivery_result).toMatchObject({
       status: 'refused',
+      state_path: ['requested', 'refused'],
       reason: 'cross_desktop_summon_refused',
     });
     expect((refused.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
+    expect((refused.result as { event_artifact: string | null }).event_artifact).toContain('.ai/operator-surface-events/ose_');
     expect((admitted.result as { delivery_result: { status: string; cross_desktop: { authority_ref: string } }; mutation_performed: boolean }).delivery_result).toMatchObject({
       status: 'delivered',
       cross_desktop: { authority_ref: 'operator:cross-desktop-approved:1175' },
