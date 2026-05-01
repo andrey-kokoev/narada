@@ -1,6 +1,6 @@
 {
   "schema": "https://narada.dev/schemas/operator-surface-identities/v1",
-  "updated_at": "2026-04-29T22:28:10.573Z",
+  "updated_at": "2026-05-01T02:43:49.981Z",
   "identities": [
     {
       "identity_id": "architect",
@@ -19,13 +19,13 @@
     },
     {
       "identity_id": "builder",
-      "site_id": "narada-proper",
+      "site_id": "narada",
       "role": "builder",
       "agent_kind": "codex_cli",
       "label": "builder",
       "admitted_by": "operator",
       "admitted_at": "2026-04-29T21:27:05.360Z",
-      "updated_at": "2026-04-29T21:27:05.360Z",
+      "updated_at": "2026-05-01T02:43:49.981Z",
       "authority_limits": [
         "identity_record_is_site_authority",
         "runtime_handle_binding_is_not_admitted_here",

@@ -2044,6 +2044,64 @@ describe('operator-surface commands', () => {
     ]);
   });
 
+  it('normalizes legacy narada-proper identity site when binding to canonical narada locus', async () => {
+    const cwd = await tempRepo();
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'builder',
+      role: 'builder',
+      agentKind: 'codex_cli',
+      site: 'narada-proper',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+    await writeBindings(cwd, [
+      {
+        binding_id: 'old-binding',
+        identity_id: 'builder',
+        runtime_locus: 'narada-proper',
+        handle: 'codex-thread:old',
+        transport: 'codex_cli_thread',
+        input_capabilities: ['type_text', 'submit'],
+        status: 'active',
+      },
+    ]);
+
+    const result = await operatorSurfaceBindFocusedCommand({
+      cwd,
+      identity: 'builder',
+      runtimeLocus: 'narada',
+      handle: 'codex-thread:new',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      site_normalization: {
+        before_site_id: 'narada-proper',
+        after_site_id: 'narada',
+      },
+      binding: {
+        identity_id: 'builder',
+        runtime_locus: 'narada',
+        handle: 'codex-thread:new',
+      },
+    });
+    const identities = JSON.parse(await readFile(join(cwd, 'operator-surfaces', 'identities.json'), 'utf8')) as { identities: Array<Record<string, unknown>> };
+    expect(identities.identities.find((entry) => entry.identity_id === 'builder')).toMatchObject({
+      site_id: 'narada',
+    });
+    const bindings = JSON.parse(await readFile(join(cwd, 'operator-surfaces', 'runtime-bindings.json'), 'utf8')) as { bindings: Array<Record<string, unknown>> };
+    expect(bindings.bindings).toEqual([
+      expect.objectContaining({
+        identity_id: 'builder',
+        runtime_locus: 'narada',
+        handle: 'codex-thread:new',
+      }),
+    ]);
+  });
+
   it('refuses unknown identities for binding and reports authority split', async () => {
     const cwd = await tempRepo();
     const result = await operatorSurfaceBindFocusedCommand({

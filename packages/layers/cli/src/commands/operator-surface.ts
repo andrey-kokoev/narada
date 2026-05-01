@@ -125,6 +125,46 @@ interface OperatorSurfaceVisibleLabelEvidence {
   status?: 'visible' | 'stale' | 'revoked';
 }
 
+const LEGACY_SITE_ID_ALIASES: Record<string, string> = {
+  'narada-proper': 'narada',
+};
+
+function canonicalSiteId(siteId: string | null | undefined): string | null {
+  if (!siteId) return null;
+  return LEGACY_SITE_ID_ALIASES[siteId] ?? siteId;
+}
+
+function isCanonicalSiteLocus(value: string): boolean {
+  return Object.prototype.hasOwnProperty.call(LEGACY_SITE_ID_ALIASES, value)
+    || Object.values(LEGACY_SITE_ID_ALIASES).includes(value);
+}
+
+async function normalizeIdentitySiteForRuntimeLocus(
+  cwd: string,
+  registry: OperatorSurfaceIdentityRegistry,
+  identity: string,
+  runtimeLocus: string,
+): Promise<{ registry: OperatorSurfaceIdentityRegistry; normalized: boolean; before_site_id: string | null; after_site_id: string | null }> {
+  const entry = registry.identities.find((candidate) => candidate.identity_id === identity);
+  if (!entry) {
+    return { registry, normalized: false, before_site_id: null, after_site_id: null };
+  }
+  const canonicalIdentitySite = canonicalSiteId(entry.site_id);
+  const canonicalRuntimeLocus = canonicalSiteId(runtimeLocus);
+  if (!canonicalIdentitySite || canonicalIdentitySite !== canonicalRuntimeLocus || entry.site_id === canonicalIdentitySite) {
+    return { registry, normalized: false, before_site_id: entry.site_id, after_site_id: entry.site_id };
+  }
+  const updatedRegistry = {
+    ...registry,
+    updated_at: new Date().toISOString(),
+    identities: registry.identities.map((candidate) => candidate.identity_id === identity
+      ? { ...candidate, site_id: canonicalIdentitySite, updated_at: new Date().toISOString() }
+      : candidate),
+  };
+  await writeOperatorSurfaceIdentities(cwd, updatedRegistry);
+  return { registry: updatedRegistry, normalized: true, before_site_id: entry.site_id, after_site_id: canonicalIdentitySite };
+}
+
 export interface OperatorSurfaceAgentInstantiateOptions {
   cwd?: string;
   site?: string;
@@ -1811,16 +1851,43 @@ export async function operatorSurfaceBindFocusedCommand(
       },
     };
   }
-  const registry = await readOperatorSurfaceIdentities(cwd);
+  let registry = await readOperatorSurfaceIdentities(cwd);
   const known = registry.identities.some((entry) => entry.identity_id === identity);
-  if (known && options.runtimeLocus?.trim()) {
+  const requestedRuntimeLocus = options.runtimeLocus?.trim();
+  const siteNormalization = requestedRuntimeLocus
+    ? await normalizeIdentitySiteForRuntimeLocus(cwd, registry, identity, requestedRuntimeLocus)
+    : { registry, normalized: false, before_site_id: null, after_site_id: null };
+  registry = siteNormalization.registry;
+  const admittedIdentity = registry.identities.find((entry) => entry.identity_id === identity) ?? null;
+  if (
+    known
+    && requestedRuntimeLocus
+    && isCanonicalSiteLocus(requestedRuntimeLocus)
+    && admittedIdentity?.site_id !== canonicalSiteId(requestedRuntimeLocus)
+  ) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        status: 'error',
+        reason: 'runtime_locus_site_mismatch',
+        identity,
+        identity_site_id: admittedIdentity?.site_id ?? null,
+        requested_runtime_locus: requestedRuntimeLocus,
+        canonical_runtime_locus: canonicalSiteId(requestedRuntimeLocus),
+        mutation_performed: false,
+        runtime_binding_mutated: false,
+        repair_command: `Use runtime locus ${admittedIdentity?.site_id ?? '<identity-site-id>'}, or admit/rename the identity under the canonical Site before binding.`,
+      },
+    };
+  }
+  if (known && requestedRuntimeLocus) {
     const observed = observedCurrentRuntimeHandle(options);
     const bindings = await readRuntimeBindings(cwd);
     const now = new Date().toISOString();
     const binding: OperatorSurfaceRuntimeBinding = {
-      binding_id: `bind_${createHash('sha256').update(`${identity}:${options.runtimeLocus}:${observed.handle}`).digest('hex').slice(0, 16)}`,
+      binding_id: `bind_${createHash('sha256').update(`${identity}:${canonicalSiteId(requestedRuntimeLocus)}:${observed.handle}`).digest('hex').slice(0, 16)}`,
       identity_id: identity,
-      runtime_locus: options.runtimeLocus.trim(),
+      runtime_locus: canonicalSiteId(requestedRuntimeLocus) ?? requestedRuntimeLocus,
       handle: observed.handle,
       transport: observed.transport,
       submit_strategy: 'known_surface_submit',
@@ -1829,7 +1896,7 @@ export async function operatorSurfaceBindFocusedCommand(
       stale_after: options.staleAfter?.trim() || undefined,
     };
     const nextBindings = [
-      ...bindings.filter((entry) => !(entry.identity_id === identity && entry.runtime_locus === options.runtimeLocus?.trim())),
+      ...bindings.filter((entry) => entry.identity_id !== identity),
       binding,
     ];
     const bindingPath = await writeRuntimeBindings(cwd, nextBindings);
@@ -1844,11 +1911,15 @@ export async function operatorSurfaceBindFocusedCommand(
         runtime_binding_mutated: true,
         binding,
         binding_path: bindingPath,
+        site_normalization: siteNormalization.normalized ? {
+          before_site_id: siteNormalization.before_site_id,
+          after_site_id: siteNormalization.after_site_id,
+        } : null,
         observed_handle_source: observed.source,
         admitted_at: now,
         authority_split: {
           durable_identity_authority: operatorSurfaceIdentityPath(cwd),
-          volatile_handle_authority: options.runtimeLocus.trim(),
+          volatile_handle_authority: binding.runtime_locus,
         },
       },
     };
