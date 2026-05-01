@@ -1,0 +1,44 @@
+{
+  "envelope_id": "env_fdf9b9b7-39e8-4b5e-b535-7ee24f59d6e4",
+  "received_at": "2026-05-01T18:22:52.085Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey:directed-obligations-first-class"
+  },
+  "target_locus": "local_site",
+  "kind": "proposal",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "Make directed obligations first-class in Narada work selection",
+    "summary": "A review wait was projected on Bob's operator-surface label as `awaiting review #76`, while Bob's builder queue was idle. Kevin failed to process the review because the wait was represented as Bob's visual state instead of as a first-class obligation edge addressed to Kevin. This should be elevated into Narada doctrine and machinery.",
+    "problem": {
+      "incident": "Task 76 was in review and Bob's OSL showed the review wait, but Kevin initially treated Bob as idle and did not perform the review until operator correction.",
+      "root_cause": "Review waits, handoffs, and recipient expectations are not yet consistently modeled as directed obligations with source, target, kind, lifecycle, and consumption semantics.",
+      "incorrect_model": "`awaiting review` as a visual annotation or as Bob's state.",
+      "correct_model": "task #76 creates an obligation edge: source=Bob/task report, target=Kevin or unique architect role, kind=review_request, status=open, consumed_by=task review/defer/reject path."
+    },
+    "proposed_law": [
+      "Directed obligations are first-class Narada facts.",
+      "If an action creates an expectation that another agent should act, the action must create an addressable obligation edge with source, target, kind, status, evidence, and consumption rule.",
+      "No agent may be treated as available for generic next work while an unprocessed obligation addressed to that agent exists, unless the obligation is explicitly deferred or delegated."
+    ],
+    "proposed_doctrine": [
+      "Agent availability is computed relative to obligations addressed to that agent, not only relative to runnable task queues.",
+      "`No builder-executable work` and `waiting for architect review` are different facts and must not collapse into idle.",
+      "Visual projections such as operator-surface labels may show obligations, but must not be the authority for them. They must project admitted obligation facts."
+    ],
+    "proposed_machinery": [
+      "Have task report/review-request, OSM review requests, inbox handoffs, and similar commands emit or update durable obligation records.",
+      "Resolve obligation target to exact identity when possible; resolve role aliases only when unique; fail with repair guidance when ambiguous.",
+      "Add a bounded next-obligation/work-selection command for architects and other roles that returns the highest-priority obligation addressed to the current identity before generic queue discovery.",
+      "Make task review, defer, delegation, or rejection consume or transition the obligation edge.",
+      "Make OSL activity projections read from obligation records; Bob may show `waiting on Kevin: review #76`, while Kevin's work loop shows `owes review #76`."
+    ],
+    "dogfood_target": "narada-andrey should prototype/enforce this for Kevin and Bob so `next` cannot report Bob idle while Kevin has an unprocessed review obligation from Bob.",
+    "requested_handling": "Treat as doctrine plus execution proposal for Narada, with a small implementation path that starts with task review obligations."
+  },
+  "status": "received"
+}
