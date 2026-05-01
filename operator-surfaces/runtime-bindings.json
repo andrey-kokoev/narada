@@ -12,6 +12,39 @@
         "submit"
       ],
       "status": "active"
+    },
+    {
+      "binding_id": "bind_e35c4bd077c63fce",
+      "identity_id": "architect",
+      "runtime_locus": "narada",
+      "handle": "codex-thread:019d861e-8125-7670-90b8-809b38e9026b",
+      "transport": "explicit_runtime_handle",
+      "submit_strategy": "known_surface_submit",
+      "input_capabilities": [
+        "type_text",
+        "submit"
+      ],
+      "status": "active",
+      "target_evidence": {
+        "requested_handle": "codex-thread:019d861e-8125-7670-90b8-809b38e9026b",
+        "observed_handle": "codex-thread:019d861e-8125-7670-90b8-809b38e9026b",
+        "handle_source": "--handle",
+        "window_title": null,
+        "window_class": null,
+        "process_name": "codex",
+        "process_id": null,
+        "ambient_foreground_used": false,
+        "asserted_identity": "architect",
+        "runtime_locus": "narada",
+        "captured_at": "2026-05-01T22:22:09.112Z"
+      },
+      "postcondition_evidence": {
+        "asserted_identity": "architect",
+        "bound_handle": "codex-thread:019d861e-8125-7670-90b8-809b38e9026b",
+        "binding_id": "bind_e35c4bd077c63fce",
+        "verified_at": "2026-05-01T22:22:09.112Z",
+        "ambient_foreground_used": false
+      }
     }
   ]
 }
