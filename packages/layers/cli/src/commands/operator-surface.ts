@@ -115,6 +115,14 @@ export interface OperatorSurfaceStatusOptions {
   format?: CliFormat;
 }
 
+export interface OperatorSurfaceDoctorOptions {
+  cwd?: string;
+  site?: string;
+  runtimeLocus?: string;
+  limit?: number;
+  format?: CliFormat;
+}
+
 export interface OperatorSurfaceInspectCompactOptions {
   cwd?: string;
   site?: string;
@@ -2113,6 +2121,259 @@ function bindingPosture(
   };
 }
 
+function runtimeLocusArg(runtimeLocus: string | null | undefined): string {
+  return runtimeLocus ? runtimeLocus : '<runtime-locus>';
+}
+
+function uniqueStrings(values: Array<string | null | undefined>): string[] {
+  return [...new Set(values.filter((value): value is string => Boolean(value)))];
+}
+
+function runtimeBindingEvidenceSummary(binding: OperatorSurfaceRuntimeBinding): Record<string, unknown> {
+  return {
+    binding_id: binding.binding_id ?? null,
+    identity_id: binding.identity_id,
+    runtime_locus: binding.runtime_locus ?? null,
+    handle: binding.handle ?? null,
+    status: binding.status ?? null,
+    stale_after: binding.stale_after ?? null,
+  };
+}
+
+function bindingEvidencePosture(binding: OperatorSurfaceRuntimeBinding): Record<string, unknown> {
+  const evidence = {
+    ...(binding.target_evidence ?? {}),
+    ...(binding.postcondition_evidence ?? {}),
+  };
+  const handle = binding.handle ?? null;
+  const processId = typeof evidence.process_id === 'string' && evidence.process_id.trim() ? evidence.process_id : null;
+  const windowClass = typeof evidence.window_class === 'string' && evidence.window_class.trim() ? evidence.window_class : null;
+  const processName = typeof evidence.process_name === 'string' && evidence.process_name.trim() ? evidence.process_name : null;
+  const windowTitle = typeof evidence.window_title === 'string' && evidence.window_title.trim() ? evidence.window_title : null;
+  const strongEvidence = uniqueStrings([handle, processId, windowClass, processName]);
+  return {
+    binding_id: binding.binding_id ?? null,
+    identity_id: binding.identity_id,
+    runtime_locus: binding.runtime_locus ?? null,
+    handle,
+    strong_evidence_fields: {
+      handle,
+      process_id: processId,
+      window_class: windowClass,
+      process_name: processName,
+    },
+    weak_evidence_fields: {
+      window_title: windowTitle,
+    },
+    posture: strongEvidence.length > 0
+      ? 'strong_evidence_available'
+      : windowTitle
+        ? 'weak_title_only_not_authority'
+        : 'insufficient_binding_evidence',
+    title_authority: windowTitle
+      ? 'weak_supporting_evidence_not_binding_authority'
+      : 'absent',
+  };
+}
+
+function visibleLabelCounts(labels: OperatorSurfaceVisibleLabelEvidence[]): Array<Record<string, unknown>> {
+  const byHandle = new Map<string, OperatorSurfaceVisibleLabelEvidence[]>();
+  for (const label of labels) {
+    if (label.status === 'stale' || label.status === 'revoked') continue;
+    const handle = label.hwnd ?? label.handle ?? null;
+    if (!handle) continue;
+    const key = `${label.runtime_locus ?? ''}:${handle}`;
+    byHandle.set(key, [...(byHandle.get(key) ?? []), label]);
+  }
+  return [...byHandle.values()].map((group) => ({
+    runtime_locus: group[0]?.runtime_locus ?? null,
+    handle: group[0]?.hwnd ?? group[0]?.handle ?? null,
+    visible_count: group.length,
+    status: group.length > 1 ? 'duplicate_labels_present_projection_only' : 'ok',
+    identity_ids: uniqueStrings(group.map((label) => label.identity_id)),
+  }));
+}
+
+function repairCommandsForOperatorSurfaceHealth(args: {
+  identities: OperatorSurfaceIdentity[];
+  bindings: OperatorSurfaceRuntimeBinding[];
+  staleBindings: OperatorSurfaceRuntimeBinding[];
+  diagnostics: RuntimeBindingDiagnostic[];
+  labels: OperatorSurfaceVisibleLabelEvidence[];
+}): string[] {
+  const commands: Array<string | null> = [];
+  for (const binding of args.staleBindings) {
+    commands.push(`narada operator-surface bindings clean-stale --runtime-locus ${runtimeLocusArg(binding.runtime_locus)}`);
+  }
+  for (const diagnostic of args.diagnostics) {
+    commands.push(diagnostic.repair_command);
+  }
+  const labelProjection = normalizeVisibleLabelEvidence(args.labels);
+  for (const identity of args.identities) {
+    const posture = bindingPosture(identity, args.bindings, visibleLabelForIdentity(identity, labelProjection.labels));
+    if (posture.binding_status === 'unbound' || posture.binding_status === 'labeled_unbound' || posture.binding_status === 'stale') {
+      commands.push(posture.next_command);
+    }
+  }
+  return uniqueStrings(commands);
+}
+
+function osmDeliveryReadiness(args: {
+  identities: OperatorSurfaceIdentity[];
+  bindings: OperatorSurfaceRuntimeBinding[];
+  labels: OperatorSurfaceVisibleLabelEvidence[];
+  diagnostics: RuntimeBindingDiagnostic[];
+}): Array<Record<string, unknown>> {
+  const normalizedLabels = normalizeVisibleLabelEvidence(args.labels);
+  return args.identities.map((identity) => {
+    const identityBindings = args.bindings.filter((binding) => binding.identity_id === identity.identity_id);
+    const active = identityBindings.filter((binding) => !isStaleBinding(binding));
+    const posture = bindingPosture(identity, args.bindings, visibleLabelForIdentity(identity, normalizedLabels.labels));
+    const selected = active.length === 1 ? active[0]! : null;
+    const selectedDiagnostics = selected ? diagnosticsForBinding(args.diagnostics, selected) : [];
+    const capabilities = selected ? selected.input_capabilities ?? identity.input_capabilities ?? [] : identity.input_capabilities ?? [];
+    const blockers = uniqueStrings([
+      posture.binding_status === 'bound' ? null : posture.binding_status,
+      selectedDiagnostics.length > 0 ? 'binding_ambiguous' : null,
+      selected && !capabilities.includes('type_text') && !capabilities.includes('submit') ? 'missing_transport' : null,
+    ]);
+    return {
+      identity_id: identity.identity_id,
+      site_id: identity.site_id,
+      role: identity.role,
+      status: blockers.length === 0 ? 'ready' : 'blocked',
+      binding_status: selectedDiagnostics.length > 0 ? 'ambiguous' : posture.binding_status,
+      runtime_locus: selected?.runtime_locus ?? posture.runtime_locus,
+      binding_id: selected?.binding_id ?? null,
+      blockers,
+      dry_run_command: blockers.length === 0
+        ? `narada operator-surface send --to ${identity.identity_id} --runtime-locus ${runtimeLocusArg(selected?.runtime_locus)} --text <text> --dry-run`
+        : null,
+      repair_command: blockers.length === 0
+        ? null
+        : posture.next_command ?? selectedDiagnostics[0]?.repair_command ?? `narada operator-surface bindings clean-stale --runtime-locus ${runtimeLocusArg(selected?.runtime_locus ?? posture.runtime_locus)}`,
+    };
+  });
+}
+
+export async function operatorSurfaceDoctorCommand(
+  options: OperatorSurfaceDoctorOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const cwd = options.cwd ?? '.';
+  const runtimeLocus = options.runtimeLocus?.trim() || null;
+  const registry = await readOperatorSurfaceIdentities(cwd);
+  const bindings = await readRuntimeBindings(cwd);
+  const labelEvidence = await readVisibleLabelEvidenceStrict(cwd);
+  if (labelEvidence.status === 'error') {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        status: 'error',
+        mutation_performed: false,
+        reason: labelEvidence.reason,
+        inspected_path: labelEvidence.path,
+        repair_guidance: labelEvidence.repair_guidance,
+      },
+    };
+  }
+  const identities = registry.identities
+    .filter((identity) => !options.site || identity.site_id === options.site)
+    .slice(0, options.limit ?? 50);
+  const identityIds = new Set(identities.map((identity) => identity.identity_id));
+  const scopedBindings = bindings
+    .filter((binding) => identityIds.has(binding.identity_id))
+    .filter((binding) => !runtimeLocus || binding.runtime_locus === runtimeLocus);
+  const activeBindings = liveRuntimeBindings(scopedBindings);
+  const staleBindings = scopedBindings.filter((binding) => isStaleBinding(binding));
+  const bindingDiagnostics = runtimeBindingDiagnostics(scopedBindings, runtimeLocus);
+  const labelProjection = normalizeVisibleLabelEvidence(labelEvidence.labels);
+  const labelCounts = visibleLabelCounts(labelEvidence.labels);
+  const deliveryReadiness = osmDeliveryReadiness({
+    identities,
+    bindings: scopedBindings,
+    labels: labelEvidence.labels,
+    diagnostics: bindingDiagnostics,
+  });
+  const blockingReadiness = deliveryReadiness.filter((entry) => entry.status !== 'ready');
+  const healthStatus = bindingDiagnostics.length === 0
+    && staleBindings.length === 0
+    && labelProjection.diagnostics.length === 0
+    && blockingReadiness.length === 0
+    ? 'pass'
+    : 'attention_required';
+  const repairCommands = repairCommandsForOperatorSurfaceHealth({
+    identities,
+    bindings: scopedBindings,
+    staleBindings,
+    diagnostics: bindingDiagnostics,
+    labels: labelEvidence.labels,
+  });
+  return {
+    exitCode: healthStatus === 'pass' ? ExitCode.SUCCESS : ExitCode.INVALID_CONFIG,
+    result: {
+      status: healthStatus === 'pass' ? 'success' : 'diagnostic',
+      mutation_performed: false,
+      inspected_paths: {
+        identities: operatorSurfaceIdentityPath(cwd),
+        runtime_bindings: runtimeBindingPath(cwd),
+        visible_labels: visibleLabelEvidencePath(cwd),
+      },
+      projection_boundary: {
+        durable_identity_authority: operatorSurfaceIdentityPath(cwd),
+        runtime_binding_authority: 'owning runtime locus',
+        visible_labels_are_projection_only: true,
+        rebuilding_labels_repairs_runtime_bindings: false,
+      },
+      health: {
+        status: healthStatus,
+        binding_uniqueness: bindingDiagnostics.length === 0 ? 'pass' : 'fail',
+        stale_bindings: staleBindings.length,
+        duplicate_identity_bindings: bindingDiagnostics.filter((diagnostic) => diagnostic.code === 'duplicate_live_singleton_identity_binding').length,
+        duplicate_hwnd_bindings: bindingDiagnostics.filter((diagnostic) => diagnostic.code === 'duplicate_live_handle_binding').length,
+        overlay_idempotence: labelProjection.diagnostics.length === 0 ? 'pass' : 'diagnostic',
+        osm_delivery_ready: blockingReadiness.length === 0,
+      },
+      runtime_locus: runtimeLocus,
+      counts: {
+        identities: identities.length,
+        runtime_bindings: scopedBindings.length,
+        active_bindings: activeBindings.length,
+        stale_bindings: staleBindings.length,
+        visible_label_handles: labelCounts.length,
+      },
+      binding_diagnostics: bindingDiagnostics,
+      stale_bindings: staleBindings.map((binding) => ({
+        binding_id: binding.binding_id ?? null,
+        identity_id: binding.identity_id,
+        runtime_locus: binding.runtime_locus ?? null,
+        handle: binding.handle ?? null,
+        status: binding.status ?? null,
+        stale_after: binding.stale_after ?? null,
+        repair_command: `narada operator-surface bindings clean-stale --runtime-locus ${runtimeLocusArg(binding.runtime_locus)}`,
+      })),
+      overlay_labels: {
+        max_visible_labels_per_hwnd: 1,
+        counts: labelCounts,
+        diagnostics: labelProjection.diagnostics,
+      },
+      binding_evidence_posture: scopedBindings.map(bindingEvidencePosture),
+      osm_delivery_readiness: deliveryReadiness,
+      repair_commands: repairCommands,
+      blockers: repairCommands.length === 0 && healthStatus !== 'pass'
+        ? ['No automatic repair command is safe; inspect diagnostics and repair through the owning runtime locus.']
+        : [],
+      human: [
+        `operator-surface health=${healthStatus}`,
+        `bindings=${activeBindings.length} active/${staleBindings.length} stale`,
+        `binding_diagnostics=${bindingDiagnostics.length}`,
+        `overlay_diagnostics=${labelProjection.diagnostics.length}`,
+        `osm_ready=${blockingReadiness.length === 0}`,
+      ],
+    },
+  };
+}
+
 function deriveOperatorSurfaceDutyLoopState(args: {
   bindingStatus: string;
   workStatus: string;
@@ -3137,13 +3398,23 @@ export async function operatorSurfaceBindingDeferredCommand(
             before_count: scoped.length,
             stale_count: stale.length,
             active_count: active.length,
+            before: scoped.map(runtimeBindingEvidenceSummary),
+            after: scoped.map(runtimeBindingEvidenceSummary),
             normalized: false,
+            postcondition_checks: {
+              stale_bindings_removed: false,
+              binding_uniqueness_rechecked: true,
+              diagnostics_after: diagnostics,
+              mutation_refused_reason: 'live binding ambiguity must be resolved by the owning runtime locus before stale cleanup',
+            },
           },
         },
       };
     }
     const nextBindings = bindings.filter((binding) => binding.runtime_locus !== runtimeLocus || !isStaleBinding(binding));
     const path = stale.length > 0 ? await writeRuntimeBindings(cwd, nextBindings) : runtimeBindingPath(cwd);
+    const nextScoped = nextBindings.filter((binding) => binding.runtime_locus === runtimeLocus);
+    const diagnosticsAfter = runtimeBindingDiagnostics(nextScoped, runtimeLocus);
     return {
       exitCode: ExitCode.SUCCESS,
       result: {
@@ -3161,7 +3432,14 @@ export async function operatorSurfaceBindingDeferredCommand(
           stale_count: stale.length,
           active_count: active.length,
           after_count: active.length,
+          before: scoped.map(runtimeBindingEvidenceSummary),
+          after: nextScoped.map(runtimeBindingEvidenceSummary),
           normalized: true,
+          postcondition_checks: {
+            stale_bindings_removed: nextScoped.every((binding) => !isStaleBinding(binding)),
+            binding_uniqueness_rechecked: true,
+            diagnostics_after: diagnosticsAfter,
+          },
         },
       },
     };

@@ -15,6 +15,7 @@ import {
   operatorSurfaceAgentForkCommand,
   operatorSurfaceBindingDeferredCommand,
   operatorSurfaceBindFocusedCommand,
+  operatorSurfaceDoctorCommand,
   operatorSurfaceIdentityAdmitTaskAuthorityCommand,
   operatorSurfaceIdentityAddCommand,
   operatorSurfaceIdentityRenameCommand,
@@ -2293,7 +2294,20 @@ describe('operator-surface commands', () => {
       runtime_binding_mutated: false,
       repair_evidence: {
         before_count: 3,
+        before: expect.arrayContaining([
+          expect.objectContaining({ binding_id: 'bind-1', handle: 'hwnd:1' }),
+        ]),
+        after: expect.arrayContaining([
+          expect.objectContaining({ binding_id: 'bind-1', handle: 'hwnd:1' }),
+        ]),
         normalized: false,
+        postcondition_checks: {
+          stale_bindings_removed: false,
+          binding_uniqueness_rechecked: true,
+          diagnostics_after: expect.arrayContaining([
+            expect.objectContaining({ code: 'duplicate_live_handle_binding' }),
+          ]),
+        },
       },
     });
   });
@@ -2322,7 +2336,19 @@ describe('operator-surface commands', () => {
         before_count: 2,
         stale_count: 1,
         after_count: 1,
+        before: expect.arrayContaining([
+          expect.objectContaining({ binding_id: 'bind-stale', handle: 'hwnd:old' }),
+          expect.objectContaining({ binding_id: 'bind-live', handle: 'hwnd:live' }),
+        ]),
+        after: [
+          expect.objectContaining({ binding_id: 'bind-live', handle: 'hwnd:live' }),
+        ],
         normalized: true,
+        postcondition_checks: {
+          stale_bindings_removed: true,
+          binding_uniqueness_rechecked: true,
+          diagnostics_after: [],
+        },
       },
     });
     const bindings = JSON.parse(await readFile(join(cwd, 'operator-surfaces', 'runtime-bindings.json'), 'utf8')) as { bindings: Array<Record<string, unknown>> };
@@ -2365,6 +2391,126 @@ describe('operator-surface commands', () => {
         status: 'diagnostic',
         max_visible_labels_per_hwnd: 1,
       },
+    });
+  });
+
+  it('reports operator-surface doctor diagnostics without collapsing labels into bindings', async () => {
+    const cwd = await tempRepo();
+    await admitIdentity(cwd);
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-proper-architect',
+      role: 'architect',
+      agentKind: 'codex_cli',
+      site: 'narada-proper',
+      by: 'operator',
+      inputCapabilities: 'type_text,submit',
+      submitStrategy: 'known_surface_submit',
+      format: 'json',
+    }, createMockContext());
+    await writeBindings(cwd, [
+      {
+        binding_id: 'bind-builder',
+        identity_id: 'narada-proper-builder',
+        runtime_locus: 'pc-site',
+        handle: 'hwnd:1',
+        input_capabilities: ['type_text'],
+        status: 'active',
+        target_evidence: {
+          window_title: 'mutable title',
+          window_class: 'WindowsTerminal',
+          process_name: 'WindowsTerminal.exe',
+          process_id: '1234',
+        },
+      },
+      {
+        binding_id: 'bind-architect',
+        identity_id: 'narada-proper-architect',
+        runtime_locus: 'pc-site',
+        handle: 'hwnd:1',
+        input_capabilities: ['type_text'],
+        status: 'active',
+        target_evidence: {
+          window_title: 'same mutable title',
+        },
+      },
+      {
+        binding_id: 'bind-stale',
+        identity_id: 'narada-proper-builder',
+        runtime_locus: 'pc-site',
+        handle: 'hwnd:old',
+        status: 'stale',
+      },
+    ]);
+    await writeVisibleLabels(cwd, [
+      { identity_id: 'narada-proper-builder', runtime_locus: 'pc-site', hwnd: 'hwnd:1', label: 'builder', status: 'visible' },
+      { identity_id: 'narada-proper-builder', runtime_locus: 'pc-site', hwnd: 'hwnd:1', label: 'builder duplicate', status: 'visible' },
+    ]);
+
+    const doctor = await operatorSurfaceDoctorCommand({
+      cwd,
+      site: 'narada-proper',
+      runtimeLocus: 'pc-site',
+      format: 'json',
+    }, createMockContext());
+
+    expect(doctor.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(doctor.result).toMatchObject({
+      status: 'diagnostic',
+      mutation_performed: false,
+      projection_boundary: {
+        runtime_binding_authority: 'owning runtime locus',
+        visible_labels_are_projection_only: true,
+        rebuilding_labels_repairs_runtime_bindings: false,
+      },
+      health: {
+        status: 'attention_required',
+        binding_uniqueness: 'fail',
+        stale_bindings: 1,
+        duplicate_hwnd_bindings: 1,
+        overlay_idempotence: 'diagnostic',
+        osm_delivery_ready: false,
+      },
+      binding_diagnostics: [
+        expect.objectContaining({ code: 'duplicate_live_handle_binding', handle: 'hwnd:1' }),
+      ],
+      stale_bindings: [
+        expect.objectContaining({
+          binding_id: 'bind-stale',
+          repair_command: 'narada operator-surface bindings clean-stale --runtime-locus pc-site',
+        }),
+      ],
+      overlay_labels: {
+        max_visible_labels_per_hwnd: 1,
+        counts: [
+          expect.objectContaining({ handle: 'hwnd:1', visible_count: 2 }),
+        ],
+        diagnostics: [
+          expect.objectContaining({ code: 'duplicate_visible_label_suppressed' }),
+        ],
+      },
+      binding_evidence_posture: expect.arrayContaining([
+        expect.objectContaining({
+          binding_id: 'bind-builder',
+          posture: 'strong_evidence_available',
+          title_authority: 'weak_supporting_evidence_not_binding_authority',
+        }),
+        expect.objectContaining({
+          binding_id: 'bind-architect',
+          posture: 'strong_evidence_available',
+          title_authority: 'weak_supporting_evidence_not_binding_authority',
+        }),
+      ]),
+      osm_delivery_readiness: expect.arrayContaining([
+        expect.objectContaining({
+          identity_id: 'narada-proper-builder',
+          status: 'blocked',
+          blockers: expect.arrayContaining(['binding_ambiguous']),
+        }),
+      ]),
+      repair_commands: expect.arrayContaining([
+        'narada operator-surface bindings clean-stale --runtime-locus pc-site',
+      ]),
     });
   });
 

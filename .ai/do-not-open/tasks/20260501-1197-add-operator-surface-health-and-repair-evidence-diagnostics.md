@@ -1,5 +1,9 @@
 ---
-status: claimed
+status: closed
+closed_at: 2026-05-01T20:31:50.455Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add operator-surface health and repair-evidence diagnostics
@@ -28,16 +32,24 @@ Design and implement or specify an operator-surface health command that reports 
 
 ## Execution Notes
 
-<!-- Record what was done, decisions made, and files changed during execution. -->
+1. Added `narada operator-surface doctor` as the compact health surface for identity/binding/label posture.
+2. Doctor output now reports binding uniqueness diagnostics, stale bindings, duplicate identity/HWND binding counts, overlay label counts by HWND, and per-identity OSM delivery readiness.
+3. Doctor output explicitly separates durable identity authority, runtime binding authority, and visible-label projection state; it states that rebuilding labels does not repair runtime bindings.
+4. Added binding evidence posture rows that treat `window_title` as weak supporting evidence while preferring handle, process id, window class, and process name.
+5. Strengthened `operator-surface bindings clean-stale` repair evidence with before/after binding summaries and postcondition checks.
+6. Added regression coverage for doctor diagnostics and repair-evidence postconditions in `operator-surface.test.ts`.
 
 ## Verification
 
-<!-- Record commands run, results observed, and how correctness was checked. -->
+- Focused regression: `pnpm --filter @narada2/cli exec vitest run test/commands/operator-surface.test.ts -t "operator-surface doctor|cleans dead runtime bindings|runtime binding reconciliation" --pool=forks --no-file-parallelism --maxWorkers=1 --minWorkers=1 --testTimeout=120000 --hookTimeout=120000` passed.
+- Typecheck: `pnpm --filter @narada2/cli typecheck` passed.
+- Build: `pnpm --filter @narada2/cli build` passed.
+- TIZ verification: `run_1777667358307_thq0aa` passed with exit code 0.
 
 ## Acceptance Criteria
 
-- [ ] A compact health/doctor surface reports binding uniqueness, stale HWNDs, duplicate identities, duplicate HWNDs, overlay label counts, and OSM readiness.
-- [ ] Repair operations record before/after evidence and postcondition checks.
-- [ ] Diagnostics distinguish label projection state from runtime binding authority.
-- [ ] Window title is treated as weak evidence and not the sole binding authority when stronger evidence is available.
-- [ ] The health surface provides bounded exact repair commands or explicit blockers instead of requiring manual JSON edits.
+- [x] A compact health/doctor surface reports binding uniqueness, stale HWNDs, duplicate identities, duplicate HWNDs, overlay label counts, and OSM readiness.
+- [x] Repair operations record before/after evidence and postcondition checks.
+- [x] Diagnostics distinguish label projection state from runtime binding authority.
+- [x] Window title is treated as weak evidence and not the sole binding authority when stronger evidence is available.
+- [x] The health surface provides bounded exact repair commands or explicit blockers instead of requiring manual JSON edits.

@@ -6,6 +6,7 @@ import {
   operatorSurfaceAgentForkCommand,
   operatorSurfaceBindingDeferredCommand,
   operatorSurfaceBindFocusedCommand,
+  operatorSurfaceDoctorCommand,
   operatorSurfaceIdentityAdmitTaskAuthorityCommand,
   operatorSurfaceIdentityAddCommand,
   operatorSurfaceIdentityRenameCommand,
@@ -231,6 +232,27 @@ export function registerOperatorSurfaceCommands(program: Command): void {
       format: (opts: Record<string, unknown>) => opts.format,
       invocation: (opts) => operatorSurfaceStatusCommand({
         site: opts.site as string | undefined,
+        limit: opts.limit ? Number(opts.limit) : undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  surfaceCmd
+    .command('doctor')
+    .description('Check Operator Surface binding uniqueness, overlay idempotence, and OSM readiness')
+    .option('--site <site-id>', 'Filter by Site')
+    .option('--runtime-locus <locus>', 'Filter by owning User/PC/runtime locus')
+    .option('--limit <n>', 'Maximum identities', '50')
+    .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'operator-surface doctor',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => operatorSurfaceDoctorCommand({
+        site: opts.site as string | undefined,
+        runtimeLocus: opts.runtimeLocus as string | undefined,
         limit: opts.limit ? Number(opts.limit) : undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
