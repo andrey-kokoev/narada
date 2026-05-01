@@ -1,5 +1,5 @@
 ---
-status: opened
+status: claimed
 ---
 
 # Add operator-surface health and repair-evidence diagnostics
