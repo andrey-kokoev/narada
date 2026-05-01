@@ -678,6 +678,15 @@ Forward momentum is sanctioned when the next step is local, low-risk, and within
 
 Motivating fixture: the typed MCP facade closure that created Inbox MCP continuation but initially missed the sibling EE-MCP branch. The correct shape is not "one branch continued"; it is "every typed branch continued, deferred, or rejected."
 
+Recent remediation mapping:
+
+| Task | Closure posture interpretation |
+| --- | --- |
+| `1169` accepted-review evidence failure | `repair_required`: accepted review does not bypass Evidence Admission; continue via evidence repair. |
+| `1172` facade/prototype closure guard | `scope_complete_with_continuation` or `scope_complete_with_deferral`: local scope done only when residual capability crossing is linked or explicitly deferred. |
+| `1174` forward momentum law | `scope_complete_with_continuation`: every branch opened by a facade/prototype transition must be continued, deferred, or rejected. |
+| `1176` posture unification | `capability_complete` for the model itself; sibling formal state-machine tasks are residual crossings, not contradictory one-off mechanisms. |
+
 A task that is terminal-by-front-matter (`closed` or `confirmed`) but invalid-by-evidence is an **invariant violation**, not a documentation nuisance. The violation code is `terminal_with_unchecked_criteria` and is reported by `narada task evidence`, `narada task evidence list`, `narada task lint`, and `narada chapter close --finish`.
 
 ### Terminal-State Ownership

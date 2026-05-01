@@ -10,6 +10,7 @@ import { join, resolve, dirname } from 'node:path';
 import type { TaskLifecycleStore, AgentRosterRow } from './task-lifecycle-store.js';
 import { openTaskLifecycleStore } from './task-lifecycle-store.js';
 import { hasMaterialSection, parseTaskSpecFromMarkdown } from './task-spec.js';
+import { analyzePrototypeClosure, type PrototypeClosurePosture } from './prototype-closure.js';
 
 export interface AgentRosterEntry {
   agent_id: string;
@@ -412,6 +413,7 @@ export interface TaskCompletionEvidence {
   has_review: boolean;
   has_closure: boolean;
   has_governed_provenance: boolean;
+  closure_posture?: PrototypeClosurePosture;
   verdict: 'complete' | 'attempt_complete' | 'needs_review' | 'needs_closure' | 'incomplete' | 'unknown';
   warnings: string[];
   violations: string[];
@@ -740,6 +742,7 @@ export async function inspectTaskEvidence(
   }
 
   const { frontMatter, body } = await readTaskFile(taskFile.path);
+  const closurePosture = analyzePrototypeClosure(frontMatter, body);
   // Prefer SQLite status when available
   let status: string | undefined;
   const num = Number.isFinite(Number(taskNumber)) ? Number(taskNumber) : null;
@@ -933,6 +936,7 @@ export async function inspectTaskEvidence(
     has_review: hasReview,
     has_closure: hasClosure,
     has_governed_provenance: governedProvenance,
+    closure_posture: closurePosture,
     verdict,
     warnings,
     violations,

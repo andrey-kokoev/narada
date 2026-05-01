@@ -182,6 +182,24 @@ describe('task evidence operator', () => {
     }
   });
 
+  it('projects typed closure posture through evidence inspection', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-117-test.md'),
+      `---\ntask_id: 117\nstatus: in_review\n---\n\n# Task 117: MCP facade prototype\n\nContinuation Task: task 118 implements usable delivery.\n\n## Acceptance Criteria\n- [x] Do thing A\n\n## Execution Notes\nDone.\n\n## Verification\nTests passed.\n`,
+    );
+    ensureLifecycle(tempDir, '20260420-117-test');
+
+    const result = await taskEvidenceCommand({ taskNumber: '117', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const parsed = result.result as { evidence: { closure_posture: { closure_posture: string; residual_crossing: string; capability_complete: boolean } } };
+    expect(parsed.evidence.closure_posture).toMatchObject({
+      closure_posture: 'scope_complete_with_continuation',
+      residual_crossing: 'continuation_task',
+      capability_complete: true,
+    });
+  });
+
   it('admits complete evidence explicitly for lifecycle close consumption', async () => {
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-113-test.md'),

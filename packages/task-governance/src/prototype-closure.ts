@@ -22,6 +22,42 @@ export type ClosurePostureKind =
   | 'repair_required'
   | 'blocked';
 
+export const TASK_CLOSURE_POSTURE_STATES: readonly ClosurePostureKind[] = [
+  'capability_complete',
+  'scope_complete_with_continuation',
+  'scope_complete_with_deferral',
+  'repair_required',
+  'blocked',
+] as const;
+
+export function isTerminalClosurePosture(posture: ClosurePostureKind): boolean {
+  return posture === 'capability_complete'
+    || posture === 'scope_complete_with_continuation'
+    || posture === 'scope_complete_with_deferral';
+}
+
+export function validateTaskClosurePosture(posture: PrototypeClosurePosture): {
+  valid: boolean;
+  invalid_transition_reason: string | null;
+} {
+  if (!TASK_CLOSURE_POSTURE_STATES.includes(posture.closure_posture)) {
+    return { valid: false, invalid_transition_reason: `unknown closure posture: ${String(posture.closure_posture)}` };
+  }
+  if (posture.closure_posture === 'capability_complete' && !posture.capability_complete) {
+    return { valid: false, invalid_transition_reason: 'capability_complete posture requires capability_complete=true' };
+  }
+  if (posture.closure_posture === 'scope_complete_with_continuation' && posture.applies && !posture.has_continuation_relation && posture.capability_complete) {
+    return { valid: false, invalid_transition_reason: 'scope_complete_with_continuation capability completion requires a continuation relation' };
+  }
+  if (posture.closure_posture === 'scope_complete_with_deferral' && !posture.no_continuation_needed_rationale) {
+    return { valid: false, invalid_transition_reason: 'scope_complete_with_deferral requires a no-continuation-needed rationale' };
+  }
+  if ((posture.closure_posture === 'repair_required' || posture.closure_posture === 'blocked') && posture.transition_complete) {
+    return { valid: false, invalid_transition_reason: `${posture.closure_posture} cannot be transition_complete` };
+  }
+  return { valid: true, invalid_transition_reason: null };
+}
+
 const PROTOTYPE_TERMS = [
   'facade',
   'prototype',

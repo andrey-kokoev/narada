@@ -39,6 +39,7 @@ import {
   type TaskContinuationAffinity,
 } from './task-governance.js';
 import { hasMaterialSection } from './task-spec.js';
+import { analyzePrototypeClosure } from './prototype-closure.js';
 
 export function getTaskLifecycleDbPath(cwd: string): string {
   return join(resolve(cwd), '.ai', 'task-lifecycle.db');
@@ -127,6 +128,7 @@ export async function inspectTaskEvidenceWithProjection(
 
   // Read authored specification from markdown (always required)
   const { frontMatter, body } = await readTaskFile(taskFile.path);
+  const closurePosture = analyzePrototypeClosure(frontMatter, body);
   const criteria = countUncheckedCriteria(body);
   const latestCriteriaProof = lifecycleStore.getLatestCriteriaProof(taskFile.taskId);
   if (latestCriteriaProof) {
@@ -316,6 +318,7 @@ export async function inspectTaskEvidenceWithProjection(
     has_review: hasReview,
     has_closure: hasClosure,
     has_governed_provenance: governedProvenance,
+    closure_posture: closurePosture,
     verdict,
     warnings,
     violations,

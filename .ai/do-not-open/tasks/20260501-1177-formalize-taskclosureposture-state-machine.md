@@ -1,5 +1,15 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T03:58:41.781Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777607885160_2y71i1
+no_continuation_needed_rationale: TaskClosurePosture state-machine formalization is complete in code, evidence projection, docs, and tests; sibling state-machine tasks handle adjacent models separately.
+closed_at: 2026-05-01T03:59:14.344Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Formalize TaskClosurePosture state machine
@@ -36,8 +46,8 @@ Define TaskClosurePosture states and transitions; integrate posture into task ev
 
 ## Acceptance Criteria
 
-- [ ] States include capability_complete, scope_complete_with_continuation, scope_complete_with_deferral, repair_required, and blocked, or documented equivalents.
-- [ ] Review and close commands require or infer closure posture before done wording.
-- [ ] Residual crossings are explicit before a task can be treated as capability complete.
-- [ ] Existing tasks 1169, 1172, 1174, 1176 are mapped to this model.
-- [ ] Tests cover each closure posture and invalid transitions.
+- [x] States include capability_complete, scope_complete_with_continuation, scope_complete_with_deferral, repair_required, and blocked, or documented equivalents.
+- [x] Review and close commands require or infer closure posture before done wording.
+- [x] Residual crossings are explicit before a task can be treated as capability complete.
+- [x] Existing tasks 1169, 1172, 1174, 1176 are mapped to this model.
+- [x] Tests cover each closure posture and invalid transitions.
