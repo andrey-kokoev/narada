@@ -1,5 +1,5 @@
 ---
-status: opened
+status: claimed
 ---
 
 # Require continuation tasks for facade and prototype closures
