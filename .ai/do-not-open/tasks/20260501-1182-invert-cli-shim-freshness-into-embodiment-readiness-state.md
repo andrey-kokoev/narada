@@ -1,5 +1,5 @@
 ---
-status: opened
+status: claimed
 ---
 
 # Invert CLI shim freshness into embodiment readiness state

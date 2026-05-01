@@ -1,0 +1,73 @@
+{
+  "event_id": "ose_1777610451399_2c02c72d150d",
+  "identity": "builder",
+  "runtime_locus": "narada",
+  "resolved_runtime_handle": "codex-thread:019dd634-700c-7490-b108-44e1cffb6390",
+  "transport": "codex_cli_thread",
+  "submit_strategy": "known_surface_submit",
+  "text_digest": "44ee2e14f3ea9245fd11a3efecb9a2932cd8e39f54789ca799a69fb9cb0de308",
+  "text_length": 288,
+  "original_text_digest": "5ba313afd91ddf35c11e5dc83748e79ad5dbe6d2b278332a95e09d696b982c61",
+  "original_text_length": 264,
+  "rendered_text": "From: narada.architect\n\nCommissioned Site qualification arc: 1183 define SiteQualificationPolicy, 1184 duty-loop qualification gates, 1185 qualification records/effectiveness checks. You currently pulled 1182 first; finish 1182, then continue into 1183 unless work-next chooses otherwise.",
+  "rendered_text_digest": "44ee2e14f3ea9245fd11a3efecb9a2932cd8e39f54789ca799a69fb9cb0de308",
+  "rendered_text_length": 288,
+  "sender_header_included": true,
+  "input_posture": "typed_message",
+  "requested_address": "builder",
+  "current_site": "narada",
+  "target_site": "narada",
+  "message_route": {
+    "sender": "narada.architect",
+    "requested_recipient": "builder",
+    "resolved_recipient": "builder",
+    "current_site": "narada",
+    "target_site": "narada",
+    "binding_status": "bound",
+    "identity_flag_mode": "explicit_to"
+  },
+  "sender": "narada.architect",
+  "sender_identity": "narada.architect",
+  "resolved_sender_identity": "narada.architect",
+  "recipient": "builder",
+  "site_plane": {
+    "current_site": "narada",
+    "target_site": "narada"
+  },
+  "binding_proof": {
+    "binding_id": "bind_f2c39a193e928d5b",
+    "runtime_locus": "narada",
+    "status": "bound"
+  },
+  "delivery_result": {
+    "status": "queued_waiting_for_idle",
+    "state_path": [
+      "requested",
+      "queued_waiting_for_idle"
+    ],
+    "deliverable": false,
+    "reason": "operator_activity_unknown",
+    "operator_activity": {
+      "state": "unknown",
+      "observed_at": null
+    },
+    "urgent_interrupt": {
+      "authorized": false,
+      "authority_ref": null
+    },
+    "cross_desktop": {
+      "required": false,
+      "current_desktop": null,
+      "target_desktop": null,
+      "policy": "same_desktop_only",
+      "authority_ref": null,
+      "reversible_or_rejected": true
+    },
+    "queue": {
+      "timeout_ms": 300000,
+      "next_state": "wait_for_idle"
+    }
+  },
+  "dry_run": true,
+  "status": "queued_waiting_for_idle"
+}
