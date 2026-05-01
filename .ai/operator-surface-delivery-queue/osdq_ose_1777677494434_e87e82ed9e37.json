@@ -1,0 +1,12 @@
+{
+  "promise_id": "osdq_ose_1777677494434_e87e82ed9e37",
+  "event_id": "ose_1777677494434_e87e82ed9e37",
+  "target_identity": "builder",
+  "sender_identity": "architect",
+  "runtime_locus": "narada",
+  "text_digest": "1489b935de71ffa1019c438dd90eb73b4023d129e3d8f75083b6bbb31a472977",
+  "policy": "queue",
+  "status": "promised",
+  "created_at": "2026-05-01T23:18:14.434Z",
+  "timeout_ms": 300000
+}
