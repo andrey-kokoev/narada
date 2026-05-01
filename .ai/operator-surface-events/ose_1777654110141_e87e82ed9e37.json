@@ -1,0 +1,73 @@
+{
+  "event_id": "ose_1777654110141_e87e82ed9e37",
+  "identity": "builder",
+  "runtime_locus": "narada",
+  "resolved_runtime_handle": "codex-thread:019dd634-700c-7490-b108-44e1cffb6390",
+  "transport": "codex_cli_thread",
+  "submit_strategy": "known_surface_submit",
+  "text_digest": "1489b935de71ffa1019c438dd90eb73b4023d129e3d8f75083b6bbb31a472977",
+  "text_length": 21,
+  "original_text_digest": "c6c1c9a9c8543f1e4cd980064cf1625eeb61a90703b2464fff039f21682508b3",
+  "original_text_length": 4,
+  "rendered_text": "From: architect\n\nnext",
+  "rendered_text_digest": "1489b935de71ffa1019c438dd90eb73b4023d129e3d8f75083b6bbb31a472977",
+  "rendered_text_length": 21,
+  "sender_header_included": true,
+  "input_posture": "typed_message",
+  "requested_address": "builder",
+  "current_site": "narada",
+  "target_site": "narada",
+  "message_route": {
+    "sender": "architect",
+    "requested_recipient": "builder",
+    "resolved_recipient": "builder",
+    "current_site": "narada",
+    "target_site": "narada",
+    "binding_status": "bound",
+    "identity_flag_mode": "explicit_to"
+  },
+  "sender": "architect",
+  "sender_identity": "architect",
+  "resolved_sender_identity": "architect",
+  "recipient": "builder",
+  "site_plane": {
+    "current_site": "narada",
+    "target_site": "narada"
+  },
+  "binding_proof": {
+    "binding_id": "bind_f2c39a193e928d5b",
+    "runtime_locus": "narada",
+    "status": "bound"
+  },
+  "delivery_result": {
+    "status": "queued_waiting_for_idle",
+    "state_path": [
+      "requested",
+      "queued_waiting_for_idle"
+    ],
+    "deliverable": false,
+    "reason": "operator_activity_unknown",
+    "operator_activity": {
+      "state": "unknown",
+      "observed_at": null
+    },
+    "urgent_interrupt": {
+      "authorized": false,
+      "authority_ref": null
+    },
+    "cross_desktop": {
+      "required": false,
+      "current_desktop": null,
+      "target_desktop": null,
+      "policy": "same_desktop_only",
+      "authority_ref": null,
+      "reversible_or_rejected": true
+    },
+    "queue": {
+      "timeout_ms": 300000,
+      "next_state": "wait_for_idle"
+    }
+  },
+  "dry_run": true,
+  "status": "queued_waiting_for_idle"
+}
