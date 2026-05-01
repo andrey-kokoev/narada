@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T20:04:44.420Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777665865710_632321
+closed_at: 2026-05-01T20:05:36.529Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Preserve operator-surface label style through identity migration
@@ -36,8 +45,8 @@ Define and implement label styling inheritance for operator-surface identity rec
 
 ## Acceptance Criteria
 
-- [ ] New-schema identities with a known role inherit the configured role affinity color when explicit label_projection.style is absent.
-- [ ] The label projection path emits a bounded diagnostic when a visible role projection falls back to default styling.
-- [ ] A migration fixture from role-named identity to named-agent identity preserves role color.
-- [ ] The narada-andrey.Kevin architect-style case is covered by a regression or fixture-level check.
-- [ ] The implementation does not make label projection authoritative for identity or role admission.
+- [x] New-schema identities with a known role inherit the configured role affinity color when explicit label_projection.style is absent.
+- [x] The label projection path emits a bounded diagnostic when a visible role projection falls back to default styling.
+- [x] A migration fixture from role-named identity to named-agent identity preserves role color.
+- [x] The narada-andrey.Kevin architect-style case is covered by a regression or fixture-level check.
+- [x] The implementation does not make label projection authoritative for identity or role admission.

@@ -9,6 +9,7 @@ import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import {
   makeOperatorSurfaceLabel,
   operatorSurfaceCarrierProjectionIssues,
+  operatorSurfaceLabelDiagnostics,
   operatorSurfaceIdentityPath,
   operatorSurfaceDir,
   readOperatorSurfaceIdentities,
@@ -1868,6 +1869,7 @@ export async function operatorSurfaceLabelsBuildCommand(
   const identities = registry.identities
     .filter((entry) => !options.site || entry.site_id === options.site)
     .slice(0, limit);
+  const labels = identities.map((identity) => makeOperatorSurfaceLabel(identity, registry));
   return {
     exitCode: ExitCode.SUCCESS,
     result: {
@@ -1885,7 +1887,8 @@ export async function operatorSurfaceLabelsBuildCommand(
         status: 'pass',
         carrier: 'windows_focused_window_binding',
       },
-      labels: identities.map((identity) => makeOperatorSurfaceLabel(identity, registry)),
+      diagnostics: operatorSurfaceLabelDiagnostics(labels),
+      labels,
     },
   };
 }

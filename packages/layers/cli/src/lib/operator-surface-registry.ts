@@ -15,6 +15,13 @@ export interface OperatorSurfaceIdentity {
   updated_at: string;
   authority_limits: string[];
   migration_history?: OperatorSurfaceIdentityMigration[];
+  label_projection?: {
+    style?: {
+      affinity_color?: string;
+      color?: string;
+      foreground_color?: string;
+    };
+  };
 }
 
 export interface OperatorSurfaceIdentityMigration {
@@ -39,7 +46,7 @@ export type OperatorSurfaceSubmitStrategy =
 
 export interface OperatorSurfaceAffinityColor {
   value: string;
-  source: 'site_metadata' | 'role_metadata' | 'projection_override';
+  source: 'site_metadata' | 'role_metadata' | 'projection_override' | 'declared_default';
   authority: 'ergonomic_projection_hint';
 }
 
@@ -49,6 +56,19 @@ export interface OperatorSurfaceSiteMetadata {
 
 export interface OperatorSurfaceRoleMetadata {
   affinity_color?: string;
+}
+
+export interface OperatorSurfaceLabelStyle {
+  affinity_color: OperatorSurfaceAffinityColor;
+  diagnostic: OperatorSurfaceLabelStyleDiagnostic | null;
+}
+
+export interface OperatorSurfaceLabelStyleDiagnostic {
+  code: 'operator_surface_label_style_defaulted';
+  identity_id: string;
+  role: string;
+  reason: string;
+  repair_hint: string;
 }
 
 export interface OperatorSurfaceIdentityRegistry {
@@ -110,6 +130,7 @@ export function makeOperatorSurfaceLabel(
 ): Record<string, unknown> {
   const siteColor = registry?.sites?.[identity.site_id]?.affinity_color;
   const roleColor = registry?.roles?.[identity.role]?.affinity_color;
+  const labelStyle = resolveOperatorSurfaceLabelStyle(identity, registry);
   return {
     identity_id: identity.identity_id,
     identity_name: identity.identity_id,
@@ -148,6 +169,11 @@ export function makeOperatorSurfaceLabel(
         affinity_color: null,
       },
     },
+    label_projection: {
+      style: labelStyle.affinity_color,
+      diagnostic: labelStyle.diagnostic,
+      authority_boundary: 'label style is ergonomic projection metadata only; it does not admit identity, role, capability, or runtime binding authority',
+    },
     carrier_projection: {
       windows_focused_window_binding: {
         identity_name: identity.identity_id,
@@ -157,6 +183,69 @@ export function makeOperatorSurfaceLabel(
       authority_boundary: 'identity_id is Site authority; identity_name is a Windows carrier projection field',
     },
     authority_limits: identity.authority_limits,
+  };
+}
+
+export function operatorSurfaceLabelDiagnostics(labels: Array<Record<string, unknown>>): OperatorSurfaceLabelStyleDiagnostic[] {
+  return labels.flatMap((label) => {
+    const projection = label.label_projection as { diagnostic?: OperatorSurfaceLabelStyleDiagnostic | null } | undefined;
+    return projection?.diagnostic ? [projection.diagnostic] : [];
+  });
+}
+
+function resolveOperatorSurfaceLabelStyle(
+  identity: OperatorSurfaceIdentity,
+  registry?: OperatorSurfaceIdentityRegistry,
+): OperatorSurfaceLabelStyle {
+  const explicit = identity.label_projection?.style;
+  const explicitColor = explicit?.affinity_color?.trim()
+    || explicit?.color?.trim()
+    || explicit?.foreground_color?.trim();
+  if (explicitColor) {
+    return {
+      affinity_color: {
+        value: explicitColor,
+        source: 'projection_override',
+        authority: 'ergonomic_projection_hint',
+      },
+      diagnostic: null,
+    };
+  }
+  const roleColor = registry?.roles?.[identity.role]?.affinity_color?.trim();
+  if (roleColor) {
+    return {
+      affinity_color: {
+        value: roleColor,
+        source: 'role_metadata',
+        authority: 'ergonomic_projection_hint',
+      },
+      diagnostic: null,
+    };
+  }
+  const siteColor = registry?.sites?.[identity.site_id]?.affinity_color?.trim();
+  if (siteColor) {
+    return {
+      affinity_color: {
+        value: siteColor,
+        source: 'site_metadata',
+        authority: 'ergonomic_projection_hint',
+      },
+      diagnostic: null,
+    };
+  }
+  return {
+    affinity_color: {
+      value: '#6b7280',
+      source: 'declared_default',
+      authority: 'ergonomic_projection_hint',
+    },
+    diagnostic: {
+      code: 'operator_surface_label_style_defaulted',
+      identity_id: identity.identity_id,
+      role: identity.role,
+      reason: 'no explicit identity label_projection.style, role affinity_color, or Site affinity_color is configured',
+      repair_hint: `Set role affinity with narada operator-surface identity add <identity> --role ${identity.role} --role-affinity-color <color> --by <principal>, or add role metadata in the Operator Surface identity registry.`,
+    },
   };
 }
 

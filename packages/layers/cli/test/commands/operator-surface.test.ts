@@ -1029,6 +1029,164 @@ describe('operator-surface commands', () => {
             affinity_color: null,
           },
         },
+        label_projection: {
+          style: {
+            value: '#c45a14',
+            source: 'role_metadata',
+            authority: 'ergonomic_projection_hint',
+          },
+          diagnostic: null,
+          authority_boundary: expect.stringContaining('ergonomic projection metadata only'),
+        },
+      }],
+      diagnostics: [],
+    });
+  });
+
+  it('preserves architect role color across named-agent identity migration', async () => {
+    const cwd = await tempRepo();
+    mkdirSync(join(cwd, 'operator-surfaces'), { recursive: true });
+    await writeFile(join(cwd, 'operator-surfaces', 'identities.json'), JSON.stringify({
+      schema: 'https://narada.dev/schemas/operator-surface-identities/v1',
+      updated_at: '2026-05-01T00:00:00Z',
+      roles: {
+        architect: { affinity_color: '#ff3fb7' },
+      },
+      identities: [{
+        identity_id: 'narada-andrey.Kevin',
+        previous_identity_ids: ['narada-andrey.architect'],
+        site_id: 'narada-andrey',
+        role: 'architect',
+        agent_kind: 'codex_cli',
+        label: 'Kevin',
+        admitted_by: 'operator',
+        admitted_at: '2026-05-01T00:00:00Z',
+        updated_at: '2026-05-01T00:00:00Z',
+        authority_limits: [],
+      }],
+    }, null, 2));
+
+    const labels = await operatorSurfaceLabelsBuildCommand({
+      cwd,
+      site: 'narada-andrey',
+      format: 'json',
+    }, createMockContext());
+
+    expect(labels.exitCode).toBe(ExitCode.SUCCESS);
+    expect(labels.result).toMatchObject({
+      diagnostics: [],
+      labels: [{
+        identity_id: 'narada-andrey.Kevin',
+        role: 'architect',
+        projection_hints: {
+          role_line: {
+            affinity_color: {
+              value: '#ff3fb7',
+              source: 'role_metadata',
+            },
+          },
+        },
+        label_projection: {
+          style: {
+            value: '#ff3fb7',
+            source: 'role_metadata',
+            authority: 'ergonomic_projection_hint',
+          },
+          diagnostic: null,
+        },
+      }],
+    });
+  });
+
+  it('diagnoses default label style fallback without making projection authoritative', async () => {
+    const cwd = await tempRepo();
+    mkdirSync(join(cwd, 'operator-surfaces'), { recursive: true });
+    await writeFile(join(cwd, 'operator-surfaces', 'identities.json'), JSON.stringify({
+      schema: 'https://narada.dev/schemas/operator-surface-identities/v1',
+      updated_at: '2026-05-01T00:00:00Z',
+      identities: [{
+        identity_id: 'narada-proper-reviewer',
+        site_id: 'narada-proper',
+        role: 'reviewer',
+        agent_kind: 'codex_cli',
+        label: 'Reviewer',
+        admitted_by: 'operator',
+        admitted_at: '2026-05-01T00:00:00Z',
+        updated_at: '2026-05-01T00:00:00Z',
+        authority_limits: [],
+      }],
+    }, null, 2));
+
+    const labels = await operatorSurfaceLabelsBuildCommand({
+      cwd,
+      site: 'narada-proper',
+      format: 'json',
+    }, createMockContext());
+
+    expect(labels.exitCode).toBe(ExitCode.SUCCESS);
+    expect(labels.result).toMatchObject({
+      diagnostics: [{
+        code: 'operator_surface_label_style_defaulted',
+        identity_id: 'narada-proper-reviewer',
+        role: 'reviewer',
+        reason: expect.stringContaining('no explicit identity label_projection.style'),
+      }],
+      labels: [{
+        label_projection: {
+          style: {
+            value: '#6b7280',
+            source: 'declared_default',
+            authority: 'ergonomic_projection_hint',
+          },
+          diagnostic: {
+            code: 'operator_surface_label_style_defaulted',
+          },
+          authority_boundary: expect.stringContaining('does not admit identity, role, capability, or runtime binding authority'),
+        },
+      }],
+    });
+  });
+
+  it('prefers explicit identity label style over inherited role color', async () => {
+    const cwd = await tempRepo();
+    mkdirSync(join(cwd, 'operator-surfaces'), { recursive: true });
+    await writeFile(join(cwd, 'operator-surfaces', 'identities.json'), JSON.stringify({
+      schema: 'https://narada.dev/schemas/operator-surface-identities/v1',
+      updated_at: '2026-05-01T00:00:00Z',
+      roles: {
+        architect: { affinity_color: '#ff3fb7' },
+      },
+      identities: [{
+        identity_id: 'narada-andrey.Kevin',
+        site_id: 'narada-andrey',
+        role: 'architect',
+        agent_kind: 'codex_cli',
+        label: 'Kevin',
+        label_projection: { style: { affinity_color: '#00aaee' } },
+        admitted_by: 'operator',
+        admitted_at: '2026-05-01T00:00:00Z',
+        updated_at: '2026-05-01T00:00:00Z',
+        authority_limits: [],
+      }],
+    }, null, 2));
+
+    const labels = await operatorSurfaceLabelsBuildCommand({
+      cwd,
+      site: 'narada-andrey',
+      format: 'json',
+    }, createMockContext());
+
+    expect(labels.exitCode).toBe(ExitCode.SUCCESS);
+    expect(labels.result).toMatchObject({
+      diagnostics: [],
+      labels: [{
+        label_projection: {
+          style: {
+            value: '#00aaee',
+            source: 'projection_override',
+          },
+          diagnostic: null,
+        },
       }],
     });
   });
