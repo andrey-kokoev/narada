@@ -1,0 +1,32 @@
+{
+  "envelope_id": "env_5186e253-3839-4c42-976d-96ce5d8d169f",
+  "received_at": "2026-05-01T02:59:46.621Z",
+  "source": {
+    "kind": "cli",
+    "ref": "narada-andrey:task-62-review-followup"
+  },
+  "kind": "incident",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "CAPA: facade-stage tasks must spawn implementation follow-up tasks",
+    "summary": "Task 62 closed as a typed MCP facade/prototype, but the useful operator question immediately became whether messages can now be sent via MCP. This exposed a process gap: a task may satisfy a prototype/facade scope while leaving the actual implementation path uncreated unless the operator notices and asks.",
+    "problem": "Narada task completion can leave a capability at facade/prototype stage with no immediate continuation task, causing capability drift and false operator expectation that the capability is usable end-to-end.",
+    "impact": [
+      "Operator receives an ambiguous done signal while capability is not available through the intended substrate.",
+      "Prototype artifacts become stale because the next implementation obligation is not mechanically created.",
+      "Reviewers must remember to commission continuation manually, increasing operator burden and context burn."
+    ],
+    "proposed_capa": [
+      "When a task intentionally stops at facade, prototype, spike, or design-only stage, closure must require either an explicit no-implementation-continuation-needed rationale or creation of concrete follow-on implementation tasks.",
+      "Evidence inspect/review should warn when task language contains prototype/facade/spike and no continuation task relation exists.",
+      "Task close should surface continuation obligations before reporting capability-complete wording.",
+      "Review template should distinguish scope-complete from capability-complete."
+    ],
+    "source_task": "narada-andrey task 62",
+    "requested_disposition": "Treat as CAPA and implementation proposal for Narada task lifecycle/review ergonomics."
+  },
+  "status": "received"
+}
