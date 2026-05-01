@@ -50,7 +50,7 @@ interface CommandEnvelope {
 type WorkNextCheckedStatus = 'selected' | 'empty' | 'blocked';
 
 interface WorkNextCheckedZone {
-  zone: 'task_work' | 'review_work' | 'inbox_work';
+  zone: 'task_work' | 'directed_obligation' | 'review_work' | 'inbox_work';
   status: WorkNextCheckedStatus;
   reason?: string;
   selected_ref?: string;
@@ -102,6 +102,10 @@ function inboxSelectedRef(primary: unknown): string | undefined {
   return typeof record.envelope_id === 'string' ? `inbox:${record.envelope_id}` : undefined;
 }
 
+function obligationSelectedRef(primary: Record<string, unknown>): string | undefined {
+  return typeof primary.obligation_id === 'string' ? `obligation:${primary.obligation_id}` : undefined;
+}
+
 function emptyReason(result: unknown, fallback: string): string {
   const record = asRecord(result);
   return typeof record.reason === 'string' ? record.reason : fallback;
@@ -124,6 +128,10 @@ function formatHuman(result: Record<string, unknown>): string {
     const primary = asRecord(result.primary);
     lines.push(`Task: ${String(primary.task_number ?? 'unknown')}`);
     if (primary.report_id) lines.push(`Report: ${String(primary.report_id)}`);
+  } else if (result.action_kind === 'directed_obligation') {
+    const primary = asRecord(result.primary);
+    lines.push(`Obligation: ${String(primary.obligation_id ?? 'unknown')}`);
+    if (primary.kind) lines.push(`Kind: ${String(primary.kind)}`);
   } else if (result.reason) {
     lines.push(`Reason: ${String(result.reason)}`);
   }
@@ -420,6 +428,54 @@ async function findCurrentTaskWork(cwd: string, agentId: string): Promise<Record
   };
 }
 
+function findDirectedObligationWork(cwd: string, agentId: string, role?: string | null): Record<string, unknown> | null {
+  const store = openTaskLifecycleStore(cwd);
+  try {
+    const obligation = store.listDirectedObligationsForTarget(agentId, role ?? null, 'open')[0] ?? null;
+    if (!obligation) return null;
+    let evidence: Record<string, unknown> = {};
+    let consumptionRule: Record<string, unknown> = {};
+    try {
+      evidence = JSON.parse(obligation.evidence_json) as Record<string, unknown>;
+    } catch {
+      evidence = {};
+    }
+    try {
+      consumptionRule = JSON.parse(obligation.consumption_rule_json) as Record<string, unknown>;
+    } catch {
+      consumptionRule = {};
+    }
+    const reviewCommand = typeof consumptionRule.review_command === 'string'
+      ? consumptionRule.review_command
+      : obligation.kind === 'review_request' && obligation.task_number !== null
+        ? `narada task review ${obligation.task_number} --agent ${agentId} --verdict accepted`
+        : null;
+    return {
+      obligation_id: obligation.obligation_id,
+      kind: obligation.kind,
+      status: obligation.status,
+      task_id: obligation.task_id,
+      task_number: obligation.task_number,
+      source_kind: obligation.source_kind,
+      source_ref: obligation.source_ref,
+      source_agent_id: obligation.source_agent_id,
+      target_agent_id: obligation.target_agent_id,
+      target_role: obligation.target_role,
+      target_ref: obligation.target_ref,
+      evidence,
+      consumption_rule: consumptionRule,
+      command: reviewCommand,
+      command_args: obligation.kind === 'review_request' && obligation.task_number !== null
+        ? ['task', 'review', String(obligation.task_number), '--agent', agentId, '--verdict', 'accepted']
+        : null,
+      selection_reason: 'open_directed_obligation_addressed_to_agent',
+      outranks: 'generic_task_queue',
+    };
+  } finally {
+    store.db.close();
+  }
+}
+
 export async function workNextCommand(options: WorkNextOptions): Promise<CommandEnvelope> {
   if (!options.agent) {
     return {
@@ -553,6 +609,30 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
       result: formattedResult(result, formatHuman(result), format),
     };
   }
+
+  const obligationWork = findDirectedObligationWork(cwd, resolvedAgent, resolvedRosterEntry?.role ?? null);
+  if (obligationWork) {
+    checked.push({ zone: 'directed_obligation', status: 'selected', selected_ref: obligationSelectedRef(obligationWork) });
+    const result = {
+      status: 'success',
+      action_kind: 'directed_obligation',
+      agent_id: resolvedAgent,
+      requested_agent: requestedAgent,
+      resolved_agent: resolvedAgent,
+      agent_address_resolution: agentAddressResolution,
+      primary: obligationWork,
+      checked,
+      doctrine_guard: doctrineGuard,
+      next_step: obligationWork.command
+        ? `Handle the directed obligation: ${String(obligationWork.command)}`
+        : 'Handle the directed obligation through its consumption rule before generic task discovery.',
+    };
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: formattedResult(result, formatHuman(result), format),
+    };
+  }
+  checked.push({ zone: 'directed_obligation', status: 'empty', reason: 'no_open_addressed_obligation' });
 
   const taskResult = options.peek ? await taskPeekNextCommand({
     agent: resolvedAgent,

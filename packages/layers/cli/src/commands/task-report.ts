@@ -22,6 +22,7 @@ export interface TaskReportOptions {
   taskNumber?: string;
   format?: 'json' | 'human' | 'auto';
   agent?: string;
+  reviewer?: string;
   summary?: string;
   changedFiles?: string;
   verification?: string;
@@ -57,6 +58,7 @@ export async function taskReportCommand(
   const serviceResult = await reportTaskService({
     taskNumber: options.taskNumber,
     agent: serviceAgent,
+    reviewer: options.reviewer,
     summary: options.summary,
     changedFiles: options.changedFiles,
     verification: options.verification,

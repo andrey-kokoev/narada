@@ -27,6 +27,7 @@ import {
   admitOperatorSurfaceIdentityToTaskAuthority,
   parseTaskAuthorityCapabilities,
 } from '../lib/operator-surface-task-authority.js';
+import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 
 export interface OperatorSurfaceIdentityAddOptions {
   cwd?: string;
@@ -217,8 +218,8 @@ interface OperatorSurfaceAgentActivityProjection {
   rendering: 'hidden_default' | 'show_badge' | 'show_repair_badge';
   authority: 'projection_only';
   freshness: 'current' | 'stale' | 'unknown';
-  source_evidence: Array<{
-    source: 'operator_surface_binding' | 'roster_projection' | 'task_lifecycle';
+    source_evidence: Array<{
+    source: 'operator_surface_binding' | 'roster_projection' | 'task_lifecycle' | 'directed_obligation';
     status: string | null;
     authority: string;
     ref?: string | number | null;
@@ -2447,6 +2448,42 @@ function deriveOperatorSurfaceAgentActivityProjection(args: {
   };
 }
 
+function directedObligationProjection(cwd: string, identity: OperatorSurfaceIdentity): {
+  authority: 'sqlite_directed_obligations';
+  status: 'none' | 'open';
+  count: number;
+  obligations: Array<Record<string, unknown>>;
+} {
+  try {
+    const store = openTaskLifecycleStore(cwd);
+    try {
+      const obligations = store.listDirectedObligationsForTarget(identity.identity_id, identity.role, 'open');
+      return {
+        authority: 'sqlite_directed_obligations',
+        status: obligations.length > 0 ? 'open' : 'none',
+        count: obligations.length,
+        obligations: obligations.map((obligation) => ({
+          obligation_id: obligation.obligation_id,
+          kind: obligation.kind,
+          task_number: obligation.task_number,
+          source_kind: obligation.source_kind,
+          source_ref: obligation.source_ref,
+          target_ref: obligation.target_ref,
+        })),
+      };
+    } finally {
+      store.db.close();
+    }
+  } catch {
+    return {
+      authority: 'sqlite_directed_obligations',
+      status: 'none',
+      count: 0,
+      obligations: [],
+    };
+  }
+}
+
 export async function operatorSurfaceStatusCommand(
   options: OperatorSurfaceStatusOptions,
   _context: CommandContext,
@@ -2501,6 +2538,24 @@ export async function operatorSurfaceStatusCommand(
       lifecycleStatus: lifecycle.status,
       dutyLoopState,
     });
+    const obligationProjection = directedObligationProjection(cwd, identity);
+    const effectiveActivityProjection = obligationProjection.count > 0
+      ? {
+          ...activityProjection,
+          state: activityProjection.state === 'idle' ? 'awaiting_review' : activityProjection.state,
+          visible: true,
+          rendering: 'show_badge' as const,
+          source_evidence: [
+            ...activityProjection.source_evidence,
+            {
+              source: 'directed_obligation' as const,
+              status: 'open',
+              authority: 'sqlite_directed_obligations',
+              ref: obligationProjection.obligations.map((obligation) => obligation.obligation_id).join(','),
+            },
+          ],
+        }
+      : activityProjection;
     const nextCommand = posture.next_command
       ?? (currentTask != null
         ? `narada task continue ${currentTask} --agent ${rosterAgent?.agent_id ?? identity.role}`
@@ -2517,7 +2572,8 @@ export async function operatorSurfaceStatusCommand(
       reconciliation_command: posture.reconciliation_command,
       work_status: workStatus,
       duty_loop_state: dutyLoopState,
-      activity_projection: activityProjection,
+      activity_projection: effectiveActivityProjection,
+      obligation_projection: obligationProjection,
       current_task: currentTask,
       lifecycle_status: lifecycle.status,
       lifecycle_status_source: lifecycle.source,

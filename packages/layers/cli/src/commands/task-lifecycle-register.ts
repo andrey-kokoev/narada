@@ -193,6 +193,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .description('Lifecycle handoff: submit a WorkResultReport and move a claimed task to in_review')
     .requiredOption('--agent <id>', 'Reporting agent ID from roster')
     .requiredOption('--summary <text>', 'Human-readable result summary')
+    .option('--reviewer <agent-or-role>', 'Create a directed review_request obligation for an exact agent id or unique role alias')
     .option('--changed-files <csv>', 'Comma-separated list of changed file paths')
     .option('--verification <json>', 'JSON array of {command, result} objects, e.g. \'[{"command":"pnpm verify","result":"passed"}]\'')
     .option('--residuals <json>', 'JSON array of known residual strings')
@@ -206,6 +207,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
       invocation: (taskNumber, opts) => taskReportCommand({
         taskNumber,
         agent: opts.agent as string,
+        reviewer: opts.reviewer as string | undefined,
         summary: opts.summary as string | undefined,
         changedFiles: opts.changedFiles as string | undefined,
         verification: opts.verification as string | undefined,

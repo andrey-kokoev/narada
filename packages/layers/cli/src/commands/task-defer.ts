@@ -165,6 +165,12 @@ export async function taskDeferCommand(
     store.updateStatus(taskFile.taskId, 'deferred', agentId, {
       continuation_packet_json: JSON.stringify(deferredPacket),
     });
+    const agentRole = store.getRosterEntry(agentId)?.role ?? null;
+    const deferredObligations = store.listDirectedObligationsForTask(taskFile.taskId, 'open')
+      .filter((obligation) => obligation.target_agent_id === agentId || (agentRole !== null && obligation.target_role === agentRole));
+    for (const obligation of deferredObligations) {
+      store.transitionDirectedObligation(obligation.obligation_id, 'deferred', agentId, `task-defer:${taskFile.taskId}`);
+    }
 
     const assignmentId = activeSqliteAssignment?.assignment_id
       ?? (activeAssignment ? `assign-${taskFile.taskId}-${activeAssignment.agent_id}-${activeAssignment.claimed_at}` : null)
@@ -208,6 +214,10 @@ export async function taskDeferCommand(
       report_id: report.report_id,
       unblock_condition: unblock,
       residuals,
+      directed_obligations: {
+        deferred: deferredObligations.map((obligation) => obligation.obligation_id),
+        consumption_kind: 'defer',
+      },
     };
     await writeTaskLifecycleMutationEvidence({
       cwd,

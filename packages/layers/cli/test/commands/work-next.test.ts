@@ -352,6 +352,7 @@ describe('work-next unified next action', () => {
       agent_id: 'architect',
       checked: [
         { zone: 'task_work', status: 'empty', reason: 'no_admissible_task' },
+        { zone: 'directed_obligation', status: 'empty', reason: 'no_open_addressed_obligation' },
         { zone: 'review_work', status: 'empty', reason: 'no_reviewable_task' },
         { zone: 'inbox_work', status: 'selected' },
       ],
@@ -432,6 +433,7 @@ describe('work-next unified next action', () => {
       agent_id: 'operator',
       checked: [
         { zone: 'task_work', status: 'empty', reason: 'no_admissible_task' },
+        { zone: 'directed_obligation', status: 'empty', reason: 'no_open_addressed_obligation' },
         { zone: 'review_work', status: 'selected', selected_ref: 'task:101' },
       ],
       primary: {
@@ -440,6 +442,75 @@ describe('work-next unified next action', () => {
         command_args: ['task', 'review', '101', '--agent', 'operator', '--verdict', 'accepted'],
       },
     });
+  });
+
+  it('returns addressed directed obligations before generic task discovery', async () => {
+    seedRosterEntry(tempDir, 'kevin', 'architect', 'idle', null);
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-generic.md'),
+      '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100 Generic\n\n## Goal\nGeneric task.\n\n## Acceptance Criteria\n- [ ] Do task work.\n',
+    );
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.upsertLifecycle({
+        task_id: '20260427-76-review',
+        task_number: 76,
+        status: 'in_review',
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        closure_mode: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+      store.upsertDirectedObligation({
+        obligation_id: 'obl_review_76_kevin',
+        source_kind: 'task_report',
+        source_ref: 'wrr_76',
+        source_agent_id: 'bob',
+        target_agent_id: 'kevin',
+        target_role: 'architect',
+        target_ref: 'kevin',
+        kind: 'review_request',
+        status: 'open',
+        task_id: '20260427-76-review',
+        task_number: 76,
+        evidence_json: JSON.stringify({ report_id: 'wrr_76' }),
+        consumption_rule_json: JSON.stringify({ review_command: 'narada task review 76 --agent kevin --verdict accepted --report wrr_76' }),
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        consumed_at: null,
+        consumed_by: null,
+        consumption_ref: null,
+      });
+    } finally {
+      store.db.close();
+    }
+
+    const result = await workNextCommand({ agent: 'kevin', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      action_kind: 'directed_obligation',
+      agent_id: 'kevin',
+      checked: [
+        { zone: 'directed_obligation', status: 'selected', selected_ref: 'obligation:obl_review_76_kevin' },
+      ],
+      primary: {
+        obligation_id: 'obl_review_76_kevin',
+        kind: 'review_request',
+        task_number: 76,
+        source_agent_id: 'bob',
+        target_agent_id: 'kevin',
+        selection_reason: 'open_directed_obligation_addressed_to_agent',
+        outranks: 'generic_task_queue',
+        command: 'narada task review 76 --agent kevin --verdict accepted --report wrr_76',
+      },
+    });
+    expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-generic.md'), 'utf8')).toContain('status: opened');
   });
 
   it('returns idle when no task or inbox work exists', async () => {
@@ -454,6 +525,7 @@ describe('work-next unified next action', () => {
       reason: 'no_task_or_inbox_work',
       checked: [
         { zone: 'task_work', status: 'empty', reason: 'no_admissible_task' },
+        { zone: 'directed_obligation', status: 'empty', reason: 'no_open_addressed_obligation' },
         { zone: 'review_work', status: 'empty', reason: 'no_reviewable_task' },
         { zone: 'inbox_work', status: 'empty' },
       ],

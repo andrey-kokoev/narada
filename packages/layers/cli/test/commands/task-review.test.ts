@@ -206,6 +206,31 @@ describe('task review command', () => {
   it('delegates accepted reviews and writes mutation evidence', async () => {
     await claimTaskService({ taskNumber: '999', agent: 'worker', cwd: tempDir });
     await releaseTaskService({ taskNumber: '999', reason: 'completed', cwd: tempDir });
+    const obligationStore = openTaskLifecycleStore(tempDir);
+    try {
+      obligationStore.upsertDirectedObligation({
+        obligation_id: 'obl_review_999_reviewer',
+        source_kind: 'task_report',
+        source_ref: 'wrr_999',
+        source_agent_id: 'worker',
+        target_agent_id: 'reviewer',
+        target_role: 'reviewer',
+        target_ref: 'reviewer',
+        kind: 'review_request',
+        status: 'open',
+        task_id: '20260420-999-test-task',
+        task_number: 999,
+        evidence_json: JSON.stringify({ report_id: 'wrr_999' }),
+        consumption_rule_json: JSON.stringify({ consume_on: ['task_review'] }),
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        consumed_at: null,
+        consumed_by: null,
+        consumption_ref: null,
+      });
+    } finally {
+      obligationStore.db.close();
+    }
 
     const result = await taskReviewCommand({
       taskNumber: '999',
@@ -227,6 +252,11 @@ describe('task review command', () => {
     try {
       expect(store.getLifecycle('20260420-999-test-task')?.status).toBe('closed');
       expect(store.listReviews('20260420-999-test-task')).toHaveLength(1);
+      expect(store.listDirectedObligationsForTask('20260420-999-test-task')[0]).toMatchObject({
+        obligation_id: 'obl_review_999_reviewer',
+        status: 'completed',
+        consumed_by: 'reviewer',
+      });
     } finally {
       store.db.close();
     }

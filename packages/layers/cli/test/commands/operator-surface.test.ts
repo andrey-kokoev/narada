@@ -27,6 +27,7 @@ import {
 } from '../../src/commands/operator-surface.js';
 import { capabilityGrantCommand } from '../../src/commands/capability.js';
 import { loadRoster, saveRoster } from '../../src/lib/task-governance.js';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { resolveAgentAddress } from '../../src/lib/agent-address.js';
 import { SqliteInboxStore } from '@narada2/control-plane';
 
@@ -2512,6 +2513,62 @@ describe('operator-surface commands', () => {
         'narada operator-surface bindings clean-stale --runtime-locus pc-site',
       ]),
     });
+  });
+
+  it('projects directed obligations as activity evidence without treating labels as authority', async () => {
+    const cwd = await tempRepo();
+    await admitIdentity(cwd);
+    mkdirSync(join(cwd, '.ai'), { recursive: true });
+    const store = openTaskLifecycleStore(cwd);
+    try {
+      store.upsertDirectedObligation({
+        obligation_id: 'obl_review_builder',
+        source_kind: 'task_report',
+        source_ref: 'wrr_builder',
+        source_agent_id: 'bob',
+        target_agent_id: 'narada-proper-builder',
+        target_role: 'builder',
+        target_ref: 'narada-proper-builder',
+        kind: 'review_request',
+        status: 'open',
+        task_id: null,
+        task_number: 1,
+        evidence_json: JSON.stringify({ report_id: 'wrr_builder' }),
+        consumption_rule_json: JSON.stringify({ review_command: 'narada task review 1 --agent narada-proper-builder --verdict accepted' }),
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        consumed_at: null,
+        consumed_by: null,
+        consumption_ref: null,
+      });
+    } finally {
+      store.db.close();
+    }
+
+    const status = await operatorSurfaceStatusCommand({
+      cwd,
+      site: 'narada-proper',
+      format: 'json',
+    }, createMockContext());
+
+    expect(status.exitCode).toBe(ExitCode.SUCCESS);
+    const agent = (status.result as { agents: Array<Record<string, unknown>> }).agents[0]!;
+    expect(agent).toMatchObject({
+      identity_id: 'narada-proper-builder',
+      obligation_projection: {
+        authority: 'sqlite_directed_obligations',
+        status: 'open',
+        count: 1,
+      },
+    });
+    expect((agent.activity_projection as { visible: boolean }).visible).toBe(true);
+    expect((agent.activity_projection as { source_evidence: unknown[] }).source_evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        source: 'directed_obligation',
+        authority: 'sqlite_directed_obligations',
+        status: 'open',
+      }),
+    ]));
   });
 
   it('reports missing transport and refuses secret-like operator-surface text', async () => {

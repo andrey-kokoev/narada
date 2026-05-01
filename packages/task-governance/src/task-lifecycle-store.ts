@@ -293,6 +293,30 @@ export interface TaskSpecRow {
   updated_at: string;
 }
 
+export type DirectedObligationKind = "review_request" | "handoff" | "expectation";
+export type DirectedObligationStatus = "open" | "consumed" | "deferred" | "delegated" | "rejected" | "completed";
+
+export interface DirectedObligationRow {
+  obligation_id: string;
+  source_kind: string;
+  source_ref: string;
+  source_agent_id: string | null;
+  target_agent_id: string | null;
+  target_role: string | null;
+  target_ref: string;
+  kind: DirectedObligationKind;
+  status: DirectedObligationStatus;
+  task_id: string | null;
+  task_number: number | null;
+  evidence_json: string;
+  consumption_rule_json: string;
+  created_at: string;
+  updated_at: string;
+  consumed_at: string | null;
+  consumed_by: string | null;
+  consumption_ref: string | null;
+}
+
 export interface TaskLifecycleStore {
   readonly db: Db;
   initSchema(): void;
@@ -371,6 +395,16 @@ export interface TaskLifecycleStore {
   getRoster(): AgentRosterRow[];
   getRosterEntry(agentId: string): AgentRosterRow | undefined;
   upsertRosterEntry(entry: AgentRosterRow): void;
+  upsertDirectedObligation(entry: DirectedObligationRow): void;
+  getDirectedObligation(obligationId: string): DirectedObligationRow | undefined;
+  listDirectedObligationsForTarget(targetAgentId: string, targetRole?: string | null, status?: DirectedObligationStatus | null): DirectedObligationRow[];
+  listDirectedObligationsForTask(taskId: string, status?: DirectedObligationStatus | null): DirectedObligationRow[];
+  transitionDirectedObligation(
+    obligationId: string,
+    status: DirectedObligationStatus,
+    actor: string,
+    consumptionRef?: string | null,
+  ): void;
   listTaskNumberReservations(): TaskNumberReservationRow[];
   upsertTaskNumberReservation(entry: TaskNumberReservationRow): void;
   upsertTaskSpec(row: TaskSpecRow): void;
@@ -637,6 +671,31 @@ function rowToTaskSpec(row: Record<string, unknown>): TaskSpecRow {
     acceptance_criteria_json: String(row.acceptance_criteria_json),
     dependencies_json: String(row.dependencies_json),
     updated_at: String(row.updated_at),
+  };
+}
+
+function rowToDirectedObligation(row: Record<string, unknown>): DirectedObligationRow {
+  return {
+    obligation_id: String(row.obligation_id),
+    source_kind: String(row.source_kind),
+    source_ref: String(row.source_ref),
+    source_agent_id: row.source_agent_id ? String(row.source_agent_id) : null,
+    target_agent_id: row.target_agent_id ? String(row.target_agent_id) : null,
+    target_role: row.target_role ? String(row.target_role) : null,
+    target_ref: String(row.target_ref),
+    kind: String(row.kind) as DirectedObligationKind,
+    status: String(row.status) as DirectedObligationStatus,
+    task_id: row.task_id ? String(row.task_id) : null,
+    task_number: row.task_number === null || row.task_number === undefined
+      ? null
+      : Number(row.task_number),
+    evidence_json: String(row.evidence_json),
+    consumption_rule_json: String(row.consumption_rule_json),
+    created_at: String(row.created_at),
+    updated_at: String(row.updated_at),
+    consumed_at: row.consumed_at ? String(row.consumed_at) : null,
+    consumed_by: row.consumed_by ? String(row.consumed_by) : null,
+    consumption_ref: row.consumption_ref ? String(row.consumption_ref) : null,
   };
 }
 
@@ -1096,6 +1155,34 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
 
       create index if not exists idx_agent_roster_status
         on agent_roster(status);
+
+      create table if not exists directed_obligations (
+        obligation_id text primary key,
+        source_kind text not null,
+        source_ref text not null,
+        source_agent_id text,
+        target_agent_id text,
+        target_role text,
+        target_ref text not null,
+        kind text not null,
+        status text not null,
+        task_id text,
+        task_number integer,
+        evidence_json text not null,
+        consumption_rule_json text not null,
+        created_at text not null,
+        updated_at text not null,
+        consumed_at text,
+        consumed_by text,
+        consumption_ref text,
+        foreign key (task_id) references task_lifecycle(task_id)
+      );
+
+      create index if not exists idx_directed_obligations_target
+        on directed_obligations(target_agent_id, target_role, status, created_at);
+
+      create index if not exists idx_directed_obligations_task
+        on directed_obligations(task_id, status);
 
       create table if not exists task_number_reservations (
         range_start integer not null,
@@ -2271,6 +2358,121 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
       entry.task_number,
       entry.last_done,
       entry.updated_at,
+    );
+  }
+
+  upsertDirectedObligation(entry: DirectedObligationRow): void {
+    const stmt = this.db.prepare(`
+      insert into directed_obligations (
+        obligation_id, source_kind, source_ref, source_agent_id,
+        target_agent_id, target_role, target_ref, kind, status, task_id,
+        task_number, evidence_json, consumption_rule_json, created_at,
+        updated_at, consumed_at, consumed_by, consumption_ref
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      on conflict(obligation_id) do update set
+        source_kind = excluded.source_kind,
+        source_ref = excluded.source_ref,
+        source_agent_id = excluded.source_agent_id,
+        target_agent_id = excluded.target_agent_id,
+        target_role = excluded.target_role,
+        target_ref = excluded.target_ref,
+        kind = excluded.kind,
+        status = excluded.status,
+        task_id = excluded.task_id,
+        task_number = excluded.task_number,
+        evidence_json = excluded.evidence_json,
+        consumption_rule_json = excluded.consumption_rule_json,
+        updated_at = excluded.updated_at,
+        consumed_at = excluded.consumed_at,
+        consumed_by = excluded.consumed_by,
+        consumption_ref = excluded.consumption_ref
+    `);
+    stmt.run(
+      entry.obligation_id,
+      entry.source_kind,
+      entry.source_ref,
+      entry.source_agent_id,
+      entry.target_agent_id,
+      entry.target_role,
+      entry.target_ref,
+      entry.kind,
+      entry.status,
+      entry.task_id,
+      entry.task_number,
+      entry.evidence_json,
+      entry.consumption_rule_json,
+      entry.created_at,
+      entry.updated_at,
+      entry.consumed_at,
+      entry.consumed_by,
+      entry.consumption_ref,
+    );
+  }
+
+  getDirectedObligation(obligationId: string): DirectedObligationRow | undefined {
+    const row = this.db
+      .prepare("select * from directed_obligations where obligation_id = ?")
+      .get(obligationId) as Record<string, unknown> | undefined;
+    return row ? rowToDirectedObligation(row) : undefined;
+  }
+
+  listDirectedObligationsForTarget(
+    targetAgentId: string,
+    targetRole?: string | null,
+    status?: DirectedObligationStatus | null,
+  ): DirectedObligationRow[] {
+    const rows = this.db
+      .prepare(`
+        select * from directed_obligations
+        where (? is null or status = ?)
+          and (
+            target_agent_id = ?
+            or (target_agent_id is null and target_role is not null and target_role = ?)
+          )
+        order by created_at asc, obligation_id asc
+      `)
+      .all(status ?? null, status ?? null, targetAgentId, targetRole ?? '') as Record<string, unknown>[];
+    return rows.map(rowToDirectedObligation);
+  }
+
+  listDirectedObligationsForTask(taskId: string, status?: DirectedObligationStatus | null): DirectedObligationRow[] {
+    const rows = this.db
+      .prepare(`
+        select * from directed_obligations
+        where task_id = ?
+          and (? is null or status = ?)
+        order by created_at asc, obligation_id asc
+      `)
+      .all(taskId, status ?? null, status ?? null) as Record<string, unknown>[];
+    return rows.map(rowToDirectedObligation);
+  }
+
+  transitionDirectedObligation(
+    obligationId: string,
+    status: DirectedObligationStatus,
+    actor: string,
+    consumptionRef?: string | null,
+  ): void {
+    const existing = this.getDirectedObligation(obligationId);
+    if (!existing) throw new Error(`Directed obligation ${obligationId} not found`);
+    const terminal = status !== "open";
+    const now = nowIso();
+    const stmt = this.db.prepare(`
+      update directed_obligations
+      set status = ?,
+          updated_at = ?,
+          consumed_at = ?,
+          consumed_by = ?,
+          consumption_ref = ?
+      where obligation_id = ?
+    `);
+    stmt.run(
+      status,
+      now,
+      terminal ? now : null,
+      terminal ? actor : null,
+      terminal ? consumptionRef ?? null : null,
+      obligationId,
     );
   }
 

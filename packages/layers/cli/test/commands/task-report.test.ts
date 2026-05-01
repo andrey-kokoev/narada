@@ -31,9 +31,34 @@ function setupRepo(tempDir: string) {
         { agent_id: 'other-agent', role: 'implementer', capabilities: ['claim'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
         { agent_id: 'builder', role: 'builder', capabilities: ['claim', 'execute'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
         { agent_id: 'architect', role: 'architect', capabilities: ['propose', 'review'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
+        { agent_id: 'reviewer-1', role: 'reviewer', capabilities: ['review'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
       ],
     }, null, 2),
   );
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    for (const agent of [
+      { agent_id: 'test-agent', role: 'implementer', capabilities: ['claim'] },
+      { agent_id: 'other-agent', role: 'implementer', capabilities: ['claim'] },
+      { agent_id: 'builder', role: 'builder', capabilities: ['claim', 'execute'] },
+      { agent_id: 'architect', role: 'architect', capabilities: ['propose', 'review'] },
+      { agent_id: 'reviewer-1', role: 'reviewer', capabilities: ['review'] },
+    ]) {
+      store.upsertRosterEntry({
+        agent_id: agent.agent_id,
+        role: agent.role,
+        capabilities_json: JSON.stringify(agent.capabilities),
+        first_seen_at: '2026-01-01T00:00:00Z',
+        last_active_at: '2026-01-01T00:00:00Z',
+        status: 'idle',
+        task_number: null,
+        last_done: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+    }
+  } finally {
+    store.db.close();
+  }
 
   writeFileSync(
     join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
@@ -58,6 +83,15 @@ function listReportRecords(tempDir: string): ReportRecordRow[] {
   const store = openTaskLifecycleStore(tempDir);
   try {
     return store.listReportRecords('20260420-999-test-task');
+  } finally {
+    store.db.close();
+  }
+}
+
+function listDirectedObligations(tempDir: string, targetAgent: string, targetRole?: string) {
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    return store.listDirectedObligationsForTarget(targetAgent, targetRole ?? null, 'open');
   } finally {
     store.db.close();
   }
@@ -152,6 +186,75 @@ describe('task report operator', () => {
     expect(agent.status).toBe('done');
     expect(agent.task).toBeNull();
     expect(agent.last_done).toBe(999);
+  });
+
+  it('creates a directed review obligation for an exact reviewer identity', async () => {
+    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
+
+    const result = await taskReportCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      reviewer: 'architect',
+      summary: 'Ready for architecture review',
+      verification: JSON.stringify([{ command: 'pnpm test', result: 'passed' }]),
+      residuals: JSON.stringify([]),
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      review_target: {
+        requested: 'architect',
+        target_agent_id: 'architect',
+        target_role: 'architect',
+        resolution: 'agent_id',
+      },
+    });
+    expect((result.result as { obligation_id?: string }).obligation_id).toMatch(/^obl_review_/);
+
+    const obligations = listDirectedObligations(tempDir, 'architect', 'architect');
+    expect(obligations).toHaveLength(1);
+    expect(obligations[0]).toMatchObject({
+      source_kind: 'task_report',
+      source_agent_id: 'test-agent',
+      target_agent_id: 'architect',
+      target_role: 'architect',
+      kind: 'review_request',
+      status: 'open',
+      task_number: 999,
+    });
+    expect(JSON.parse(obligations[0]!.consumption_rule_json)).toMatchObject({
+      consume_on: expect.arrayContaining(['task_review', 'task_defer', 'delegation', 'rejection', 'completion']),
+    });
+  });
+
+  it('creates a directed review obligation for a unique reviewer role alias', async () => {
+    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
+
+    const result = await taskReportCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      reviewer: 'reviewer',
+      summary: 'Ready for role-addressed review',
+      verification: JSON.stringify([{ command: 'pnpm test', result: 'passed' }]),
+      residuals: JSON.stringify([]),
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      review_target: {
+        requested: 'reviewer',
+        target_agent_id: 'reviewer-1',
+        target_role: 'reviewer',
+        resolution: 'unique_role_alias',
+      },
+    });
+    expect(listDirectedObligations(tempDir, 'reviewer-1', 'reviewer')).toHaveLength(1);
   });
 
   it('blocks Architect report on Builder-owned task unless durable override rationale is supplied', async () => {

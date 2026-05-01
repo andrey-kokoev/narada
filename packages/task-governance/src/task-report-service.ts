@@ -23,6 +23,7 @@ import { ExitCode } from './exit-codes.js';
 export interface ReportTaskServiceOptions {
   taskNumber?: string;
   agent?: string;
+  reviewer?: string;
   summary?: string;
   changedFiles?: string;
   verification?: string;
@@ -40,6 +41,13 @@ export interface ReportTaskServiceResult {
   note?: string;
   task_number?: number;
   assignment_id?: string;
+  obligation_id?: string;
+  review_target?: {
+    requested: string;
+    target_agent_id: string;
+    target_role: string | null;
+    resolution: 'agent_id' | 'unique_role_alias';
+  };
   error?: string;
   guidance?: never;
 }
@@ -182,6 +190,55 @@ function parseVerification(value: string | undefined): ReportTaskServiceResponse
   }
 }
 
+function safeIdPart(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'unknown';
+}
+
+function resolveReviewTargetFromRoster(
+  roster: Awaited<ReturnType<typeof loadRoster>>,
+  requested: string | undefined,
+): null | {
+  ok: true;
+  requested: string;
+  target_agent_id: string;
+  target_role: string | null;
+  resolution: 'agent_id' | 'unique_role_alias';
+} | { ok: false; error: string } {
+  const trimmed = requested?.trim();
+  if (!trimmed) return null;
+  const exact = roster.agents.find((agent) => agent.agent_id === trimmed);
+  if (exact) {
+    return {
+      ok: true,
+      requested: trimmed,
+      target_agent_id: exact.agent_id,
+      target_role: exact.role ?? null,
+      resolution: 'agent_id',
+    };
+  }
+  const roleMatches = roster.agents.filter((agent) => agent.role === trimmed);
+  if (roleMatches.length === 1) {
+    const target = roleMatches[0]!;
+    return {
+      ok: true,
+      requested: trimmed,
+      target_agent_id: target.agent_id,
+      target_role: target.role ?? null,
+      resolution: 'unique_role_alias',
+    };
+  }
+  if (roleMatches.length > 1) {
+    return {
+      ok: false,
+      error: `Review target '${trimmed}' matches multiple agents: ${roleMatches.map((agent) => agent.agent_id).join(', ')}`,
+    };
+  }
+  return {
+    ok: false,
+    error: `Review target '${trimmed}' is not an admitted agent id or unique role alias`,
+  };
+}
+
 export async function reportTaskService(
   options: ReportTaskServiceOptions,
 ): Promise<ReportTaskServiceResponse> {
@@ -227,6 +284,13 @@ export async function reportTaskService(
     return {
       exitCode: ExitCode.INVALID_CONFIG,
       result: { status: 'error', error: `Agent not found in roster: ${agentId}` },
+    };
+  }
+  const reviewTarget = resolveReviewTargetFromRoster(roster, options.reviewer);
+  if (reviewTarget && !reviewTarget.ok) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: { status: 'error', error: reviewTarget.error },
     };
   }
 
@@ -364,6 +428,9 @@ export async function reportTaskService(
 
   const now = new Date().toISOString();
   const reportId = createReportId(taskFile.taskId, agentId, assignmentId);
+  const obligationId = reviewTarget?.ok
+    ? `obl_review_${safeIdPart(taskFile.taskId)}_${safeIdPart(reportId)}_${safeIdPart(reviewTarget.target_agent_id)}`
+    : undefined;
   const report: WorkResultReport = {
     report_id: reportId,
     task_number: taskNumber,
@@ -415,6 +482,37 @@ export async function reportTaskService(
 
     try {
       store.updateStatus(taskFile.taskId, 'in_review', agentId);
+      if (reviewTarget?.ok && obligationId) {
+        store.upsertDirectedObligation({
+          obligation_id: obligationId,
+          source_kind: 'task_report',
+          source_ref: reportId,
+          source_agent_id: agentId,
+          target_agent_id: reviewTarget.target_agent_id,
+          target_role: reviewTarget.target_role,
+          target_ref: reviewTarget.requested,
+          kind: 'review_request',
+          status: 'open',
+          task_id: taskFile.taskId,
+          task_number: Number(taskNumber),
+          evidence_json: JSON.stringify({
+            report_id: reportId,
+            assignment_id: assignmentId,
+            task_number: Number(taskNumber),
+            requested_target: reviewTarget.requested,
+            target_resolution: reviewTarget.resolution,
+          }),
+          consumption_rule_json: JSON.stringify({
+            consume_on: ['task_review', 'task_defer', 'delegation', 'rejection', 'completion'],
+            review_command: `narada task review ${taskNumber} --agent ${reviewTarget.target_agent_id} --verdict accepted --report ${reportId}`,
+          }),
+          created_at: now,
+          updated_at: now,
+          consumed_at: null,
+          consumed_by: null,
+          consumption_ref: null,
+        });
+      }
       closeOwnStore();
     } catch {
       closeOwnStore();
@@ -436,6 +534,15 @@ export async function reportTaskService(
       agent_id: agentId,
       new_status: 'in_review',
       assignment_id: assignmentId,
+      obligation_id: obligationId,
+      review_target: reviewTarget?.ok
+        ? {
+            requested: reviewTarget.requested,
+            target_agent_id: reviewTarget.target_agent_id,
+            target_role: reviewTarget.target_role,
+            resolution: reviewTarget.resolution,
+          }
+        : undefined,
     },
   };
 }

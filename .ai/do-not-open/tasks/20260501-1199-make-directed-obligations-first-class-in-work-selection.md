@@ -1,5 +1,9 @@
 ---
-status: opened
+status: closed
+closed_at: 2026-05-01T20:58:50.260Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Make directed obligations first-class in work selection
@@ -28,16 +32,25 @@ Define directed obligations as first-class Narada facts with source, target, kin
 
 ## Execution Notes
 
-<!-- Record what was done, decisions made, and files changed during execution. -->
+1. Added SQLite-backed `directed_obligations` records with source, target, kind, status, task linkage, evidence JSON, consumption rule JSON, and consumption metadata.
+2. Added `--reviewer <agent-or-role>` to `narada task report`; it creates an open `review_request` obligation for an exact agent id or a uniquely resolved role alias.
+3. Updated `work-next` to check addressed open directed obligations before generic task queue discovery and report why the obligation outranks generic work.
+4. Updated `task review` to transition matching open review obligations to `completed` or `rejected` with the review id as consumption evidence.
+5. Updated `task defer` to transition matching open obligations to `deferred`.
+6. Updated Operator Surface status/activity projection to read open obligation records from SQLite and expose them as projection evidence, not label authority.
+7. Added focused regressions for task report obligation creation, work-next precedence, review consumption, and Operator Surface obligation projection.
 
 ## Verification
 
-<!-- Record commands run, results observed, and how correctness was checked. -->
+- Focused tests: `pnpm --filter @narada2/cli exec vitest run test/commands/task-report.test.ts test/commands/work-next.test.ts test/commands/task-review.test.ts test/commands/operator-surface.test.ts -t "directed review obligation|directed obligations|delegates accepted reviews|addressed directed obligations|projects directed obligations" --pool=forks --no-file-parallelism --maxWorkers=1 --minWorkers=1 --testTimeout=120000 --hookTimeout=120000` passed.
+- Typecheck: `pnpm --filter @narada2/task-governance typecheck` and `pnpm --filter @narada2/cli typecheck` passed.
+- Build: `pnpm --filter @narada2/task-governance build` and `pnpm --filter @narada2/cli build` passed.
+- TIZ verification: `run_1777669007612_d326bu` passed with exit code 0.
 
 ## Acceptance Criteria
 
-- [ ] Directed obligation records include source, target, kind, status, evidence, and consumption rule.
-- [ ] Task review requests can create an addressable review_request obligation targeted to an exact identity or uniquely resolved role alias.
-- [ ] Agent work selection checks open addressed obligations before generic task queues and reports why an obligation outranks generic work.
-- [ ] Review, defer, delegation, rejection, or completion consumes or transitions the corresponding obligation edge.
-- [ ] Operator-surface label/activity projections read from obligation records and do not become the authority for obligation state.
+- [x] Directed obligation records include source, target, kind, status, evidence, and consumption rule.
+- [x] Task review requests can create an addressable review_request obligation targeted to an exact identity or uniquely resolved role alias.
+- [x] Agent work selection checks open addressed obligations before generic task queues and reports why an obligation outranks generic work.
+- [x] Review, defer, delegation, rejection, or completion consumes or transitions the corresponding obligation edge.
+- [x] Operator-surface label/activity projections read from obligation records and do not become the authority for obligation state.

@@ -713,6 +713,27 @@ export async function reviewTaskService(
   if (capaRecommendation) {
     result.capa_recommendation = capaRecommendation;
   }
+  const consumedObligations: string[] = [];
+  if (store) {
+    const obligations = store.listDirectedObligationsForTask(taskFile.taskId, 'open')
+      .filter((obligation) => obligation.kind === 'review_request')
+      .filter((obligation) => (
+        obligation.target_agent_id === agentId
+        || (!obligation.target_agent_id && obligation.target_role === agent.role)
+      ));
+    const obligationStatus = verdict === 'rejected' ? 'rejected' : 'completed';
+    for (const obligation of obligations) {
+      store.transitionDirectedObligation(obligation.obligation_id, obligationStatus, agentId, reviewId);
+      consumedObligations.push(obligation.obligation_id);
+    }
+  }
+  if (consumedObligations.length > 0) {
+    (result as Record<string, unknown>).directed_obligations = {
+      consumed: consumedObligations,
+      consumption_ref: reviewId,
+      consumption_kind: verdict === 'rejected' ? 'rejection' : 'review_completion',
+    };
+  }
 
   closeOwnStore();
   return {
