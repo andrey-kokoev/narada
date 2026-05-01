@@ -1377,11 +1377,13 @@ describe('Canonical Inbox CLI commands', () => {
     expect(workNext.exitCode).toBe(ExitCode.SUCCESS);
     const result = workNext.result as {
       primary: { envelope_id: string; status: string; handling: { handled_by: string } };
-      side_effects: Array<{ surface: string; mutation: string; envelope_id: string; status_before: string; status_after: string; handled_by: string; mutation_evidence_path: string }>;
+      routing_state: string;
+      side_effects: Array<{ surface: string; mutation: string; envelope_id: string; status_before: string; status_after: string; handled_by: string; mutation_evidence_path: string; routing_transition: { source_state: string; target_state: string; actor: string; allowed: boolean; evidence_artifact: string } }>;
       dirty_state: { owned_routing_artifacts: string[]; unrelated_changes: string[] };
     };
     expect(result.primary.envelope_id).toBe(firstEnvelope.envelope_id);
     expect(result.primary.status).toBe('handling');
+    expect(result.routing_state).toBe('handling');
     expect(result.primary.handling.handled_by).toBe('architect');
     expect(result.side_effects).toEqual([
       expect.objectContaining({
@@ -1391,6 +1393,12 @@ describe('Canonical Inbox CLI commands', () => {
         status_before: 'received',
         status_after: 'handling',
         handled_by: 'architect',
+        routing_transition: expect.objectContaining({
+          source_state: 'received',
+          target_state: 'handling',
+          actor: 'architect',
+          allowed: true,
+        }),
       }),
     ]);
     expect(result.side_effects[0]!.mutation_evidence_path.startsWith('.ai/mutation-evidence/inbox/')).toBe(true);
@@ -1428,7 +1436,14 @@ describe('Canonical Inbox CLI commands', () => {
     });
 
     expect(archived.exitCode).toBe(ExitCode.SUCCESS);
-    expect((archived.result as { target_mutation: boolean }).target_mutation).toBe(false);
+    const archivedResult = archived.result as { target_mutation: boolean; side_effects: Array<{ routing_transition: { source_state: string; target_state: string; allowed: boolean } }>; dirty_state: { owned_routing_artifacts: string[] } };
+    expect(archivedResult.target_mutation).toBe(false);
+    expect(archivedResult.side_effects[0]?.routing_transition).toMatchObject({
+      source_state: 'received',
+      target_state: 'archived',
+      allowed: true,
+    });
+    expect(archivedResult.dirty_state.owned_routing_artifacts[0]).toContain('.ai/mutation-evidence/inbox/');
     const archivedEnvelope = (archived.result as { envelope: { status: string; promotion: { target_kind: string } } }).envelope;
     expect(archivedEnvelope.status).toBe('archived');
     expect(archivedEnvelope.promotion.target_kind).toBe('archive');
@@ -1460,6 +1475,14 @@ describe('Canonical Inbox CLI commands', () => {
       enactment_status: 'pending',
       pending_kind: 'recorded_pending_crossing',
       target_mutation: false,
+      routing_state: 'pending_crossing',
+      side_effects: [expect.objectContaining({
+        routing_transition: expect.objectContaining({
+          source_state: 'received',
+          target_state: 'pending_crossing',
+          allowed: true,
+        }),
+      })],
     });
   });
 

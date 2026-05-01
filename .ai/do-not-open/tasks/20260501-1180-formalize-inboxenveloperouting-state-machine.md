@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T04:12:11.160Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777608693348_fo3zu5
+closed_at: 2026-05-01T04:12:41.338Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Formalize InboxEnvelopeRouting state machine
@@ -36,8 +45,8 @@ Define InboxEnvelopeRouting states and legal transitions; align received, classi
 
 ## Acceptance Criteria
 
-- [ ] Every inbox transition has a named source state, target state, actor, evidence artifact, and allowed command.
-- [ ] work-next reports admissible transitions without dumping full payloads by default.
-- [ ] pending/promote/triage commands report side effects and dirty-state ownership.
-- [ ] Rejected and superseded envelopes remain visible as durable admission decisions.
-- [ ] Tests cover legal and illegal routing transitions.
+- [x] Every inbox transition has a named source state, target state, actor, evidence artifact, and allowed command.
+- [x] work-next reports admissible transitions without dumping full payloads by default.
+- [x] pending/promote/triage commands report side effects and dirty-state ownership.
+- [x] Rejected and superseded envelopes remain visible as durable admission decisions.
+- [x] Tests cover legal and illegal routing transitions.

@@ -37,6 +37,37 @@ const INBOX_PUBLISH_EXECUTE_COMMAND = 'narada inbox publish --execute';
 const INBOX_PUBLISH_EXECUTE_PUSH_COMMAND = 'narada inbox publish --execute --push';
 const INBOX_PUBLICATION_RPIZ_NOTE = 'Inbox publication is a Repository Publication Intent Zone crossing; commit/push are substrate operations, not raw authority.';
 
+type InboxEnvelopeRoutingState =
+  | InboxEnvelopeStatus
+  | 'pending_crossing'
+  | 'failed';
+
+interface InboxRoutingTransition {
+  source_state: InboxEnvelopeRoutingState;
+  target_state: InboxEnvelopeRoutingState;
+  actor: string | null;
+  command: string;
+  evidence_artifact: string | null;
+  allowed: boolean;
+}
+
+const INBOX_ROUTING_ALLOWED_TRANSITIONS = new Set([
+  'received->handling',
+  'handling->received',
+  'received->promoted',
+  'handling->promoted',
+  'received->archived',
+  'handling->archived',
+  'received->pending_crossing',
+  'handling->pending_crossing',
+  'received->rejected',
+  'handling->rejected',
+  'received->superseded',
+  'handling->superseded',
+  'received->failed',
+  'handling->failed',
+]);
+
 export interface InboxCommandOptions {
   cwd?: string;
   format?: CliFormat;
@@ -156,6 +187,32 @@ interface InboxRuntimeDiagnostics {
   canonical_inbox_commands_detail: string;
   delegated_cli_embodiment: DelegatedCliHealth;
   preflight_recommendation: string;
+}
+
+function routingStateForEnvelope(envelope: InboxEnvelope): InboxEnvelopeRoutingState {
+  if (envelope.status === 'promoted' && envelope.promotion?.enactment_status === 'pending') {
+    return 'pending_crossing';
+  }
+  return envelope.status;
+}
+
+function inboxRoutingTransition(args: {
+  before: InboxEnvelope | null;
+  after: InboxEnvelope;
+  actor?: string | null;
+  command: string;
+  evidenceArtifact?: string | null;
+}): InboxRoutingTransition {
+  const source = args.before ? routingStateForEnvelope(args.before) : 'received';
+  const target = routingStateForEnvelope(args.after);
+  return {
+    source_state: source,
+    target_state: target,
+    actor: args.actor ?? null,
+    command: args.command,
+    evidence_artifact: args.evidenceArtifact ?? null,
+    allowed: INBOX_ROUTING_ALLOWED_TRANSITIONS.has(`${source}->${target}`),
+  };
 }
 
 export interface InboxExportOptions extends InboxCommandOptions {
@@ -837,6 +894,7 @@ export async function inboxWorkNextCommand(options: InboxWorkNextOptions): Promi
     const ownedRoutingArtifacts: string[] = [];
     if (primary && options.claim) {
       try {
+        const beforeEnvelope = primary;
         const before = inboxEnvelopeToEvidenceState(primary);
         primary = store.claim(primary.envelope_id, {
           handled_by: options.by!,
@@ -858,6 +916,13 @@ export async function inboxWorkNextCommand(options: InboxWorkNextOptions): Promi
           envelope_id: primary.envelope_id,
           status_before: before?.status ?? null,
           status_after: primary.status,
+          routing_transition: inboxRoutingTransition({
+            before: beforeEnvelope,
+            after: primary,
+            actor: options.by,
+            command: 'inbox work-next claim',
+            evidenceArtifact: evidence?.path ? relative(options.cwd ?? process.cwd(), evidence.path) : null,
+          }),
           handled_by: options.by,
           mutation_evidence_path: evidence?.path ? relative(options.cwd ?? process.cwd(), evidence.path) : null,
         });
@@ -874,6 +939,7 @@ export async function inboxWorkNextCommand(options: InboxWorkNextOptions): Promi
         status: 'success',
         primary: primary ?? null,
         primary_summary: primary ? summarizeInboxEnvelope(primary) : null,
+        routing_state: primary ? routingStateForEnvelope(primary) : null,
         admissible_actions: admissibleActions,
         alternatives,
         alternative_summaries: alternatives.map(summarizeInboxEnvelope),
@@ -1113,7 +1179,7 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
           enactment_status: 'recorded',
           note: 'Envelope archived; no target-zone mutation was performed.',
         });
-        await writeInboxMutationEvidence({
+        const evidence = await writeInboxMutationEvidence({
           cwd,
           command: 'inbox promote archive',
           principal: options.by,
@@ -1122,11 +1188,20 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
           after: inboxEnvelopeToEvidenceState(store.get(envelope.envelope_id)),
           result: { status: 'success', enactment_status: 'recorded', target_mutation: false, envelope },
         });
+        const routingTransition = inboxRoutingTransition({
+          before: existing,
+          after: envelope,
+          actor: options.by,
+          command: 'inbox promote archive',
+          evidenceArtifact: evidence?.path ? relative(cwd, evidence.path) : null,
+        });
         return okResult(
           {
             status: 'success',
             enactment_status: 'recorded',
             target_mutation: false,
+            side_effects: [{ surface: 'inbox', mutation: 'archive', envelope_id: envelope.envelope_id, routing_transition: routingTransition }],
+            dirty_state: { owned_routing_artifacts: routingTransition.evidence_artifact ? [routingTransition.evidence_artifact] : [], unrelated_changes: [] },
             envelope,
           },
           [
@@ -1282,7 +1357,7 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
         enactment_status: 'pending',
         note: `recorded_pending_crossing: executable promotion for target kind '${targetKind}' is not implemented yet.`,
       });
-      await writeInboxMutationEvidence({
+      const evidence = await writeInboxMutationEvidence({
         cwd,
         command: 'inbox promote pending',
         principal: options.by,
@@ -1291,12 +1366,22 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
         after: inboxEnvelopeToEvidenceState(store.get(envelope.envelope_id)),
         result: { status: 'success', enactment_status: 'pending', pending_kind: 'recorded_pending_crossing', target_mutation: false, envelope },
       });
+      const routingTransition = inboxRoutingTransition({
+        before: existing,
+        after: envelope,
+        actor: options.by,
+        command: 'inbox promote pending',
+        evidenceArtifact: evidence?.path ? relative(cwd, evidence.path) : null,
+      });
       return okResult(
         {
           status: 'success',
           enactment_status: 'pending',
           pending_kind: 'recorded_pending_crossing',
           target_mutation: false,
+          routing_state: routingStateForEnvelope(envelope),
+          side_effects: [{ surface: 'inbox', mutation: 'pending_crossing', envelope_id: envelope.envelope_id, routing_transition: routingTransition }],
+          dirty_state: { owned_routing_artifacts: routingTransition.evidence_artifact ? [routingTransition.evidence_artifact] : [], unrelated_changes: [] },
           envelope,
         },
         [

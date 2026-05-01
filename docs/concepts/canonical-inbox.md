@@ -356,6 +356,26 @@ Promotion is the governed crossing out of the Inbox. It must not imply more than
 
 An unsupported or not-yet-executable target may be recorded as a pending crossing, but it must not be reported as enacted.
 
+## Routing State Machine
+
+Inbox routing is explicit transition evidence, not only a row status change.
+
+| Routing State | Meaning |
+| --- | --- |
+| `received` | Envelope is inert and available for work-next, inspection, claim, archive, or promotion. |
+| `handling` | A principal claimed the envelope for handling. |
+| `classified` | Envelope has been classified but not yet resolved. |
+| `pending_crossing` | Envelope was promoted to a target zone whose executable crossing is not implemented or not yet admitted; persisted as `status: promoted` plus `promotion.enactment_status: pending`. |
+| `promoted` | Envelope was admitted across a target-zone crossing. |
+| `archived` | Envelope was resolved as non-executable or informational without target-zone mutation. |
+| `rejected` | Envelope was rejected as an admission decision and remains inspectable. |
+| `superseded` | Envelope was replaced by a later envelope or decision and remains inspectable. |
+| `failed` | Routing attempted and failed before a stable target state; the failure must be represented in output or mutation evidence. |
+
+Every routing mutation should expose `source_state`, `target_state`, `actor`, `command`, `evidence_artifact`, and `allowed`.
+
+`work-next` must keep payloads bounded by default and show admissible transitions, summaries, side effects, dirty-state ownership, and the full-payload command instead.
+
 For task promotion, CLI overrides take precedence over payload fields:
 
 ```bash
