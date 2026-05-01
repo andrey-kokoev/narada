@@ -143,6 +143,7 @@ interface OperatorSurfaceRuntimeBinding {
   status?: 'active' | 'stale' | 'revoked';
   stale_after?: string;
   desktop_id?: string;
+  multi_surface_policy?: 'singleton' | 'allowed';
   target_evidence?: Record<string, unknown>;
   postcondition_evidence?: Record<string, unknown>;
 }
@@ -173,6 +174,9 @@ interface OperatorSurfaceVisibleLabelEvidence {
   role?: string;
   label?: string;
   runtime_locus?: string;
+  hwnd?: string;
+  handle?: string;
+  owner_process_id?: string;
   source?: string;
   observed_at?: string;
   status?: 'visible' | 'stale' | 'revoked';
@@ -648,6 +652,103 @@ async function writeVisibleLabelEvidence(cwd: string, labels: OperatorSurfaceVis
   await mkdir(operatorSurfaceDir(cwd), { recursive: true });
   await writeFile(path, `${JSON.stringify({ labels }, null, 2)}\n`, 'utf8');
   return path;
+}
+
+interface RuntimeBindingDiagnostic {
+  code: 'duplicate_live_handle_binding' | 'duplicate_live_singleton_identity_binding';
+  severity: 'error';
+  runtime_locus: string | null;
+  handle?: string | null;
+  identity_id?: string;
+  binding_ids: Array<string | null>;
+  repair_command: string;
+}
+
+function liveRuntimeBindings(bindings: OperatorSurfaceRuntimeBinding[]): OperatorSurfaceRuntimeBinding[] {
+  return bindings.filter((binding) => !isStaleBinding(binding));
+}
+
+function runtimeBindingDiagnostics(bindings: OperatorSurfaceRuntimeBinding[], runtimeLocus?: string | null): RuntimeBindingDiagnostic[] {
+  const scoped = liveRuntimeBindings(bindings)
+    .filter((binding) => !runtimeLocus || binding.runtime_locus === runtimeLocus);
+  const diagnostics: RuntimeBindingDiagnostic[] = [];
+  const byHandle = new Map<string, OperatorSurfaceRuntimeBinding[]>();
+  for (const binding of scoped) {
+    const key = binding.handle ? `${binding.runtime_locus ?? ''}:${binding.handle}` : null;
+    if (!key) continue;
+    byHandle.set(key, [...(byHandle.get(key) ?? []), binding]);
+  }
+  for (const group of byHandle.values()) {
+    const identities = new Set(group.map((binding) => binding.identity_id));
+    if (group.length > 1 && identities.size > 1) {
+      diagnostics.push({
+        code: 'duplicate_live_handle_binding',
+        severity: 'error',
+        runtime_locus: group[0]?.runtime_locus ?? null,
+        handle: group[0]?.handle ?? null,
+        binding_ids: group.map((binding) => binding.binding_id ?? null),
+        repair_command: `narada operator-surface bindings clean-stale --runtime-locus ${group[0]?.runtime_locus ?? '<runtime-locus>'}`,
+      });
+    }
+  }
+  const byIdentity = new Map<string, OperatorSurfaceRuntimeBinding[]>();
+  for (const binding of scoped) {
+    byIdentity.set(binding.identity_id, [...(byIdentity.get(binding.identity_id) ?? []), binding]);
+  }
+  for (const [identityId, group] of byIdentity.entries()) {
+    const singletonBindings = group.filter((binding) => binding.multi_surface_policy !== 'allowed');
+    const handles = new Set(singletonBindings.map((binding) => binding.handle ?? ''));
+    if (singletonBindings.length > 1 && handles.size > 1) {
+      diagnostics.push({
+        code: 'duplicate_live_singleton_identity_binding',
+        severity: 'error',
+        runtime_locus: singletonBindings[0]?.runtime_locus ?? null,
+        identity_id: identityId,
+        binding_ids: singletonBindings.map((binding) => binding.binding_id ?? null),
+        repair_command: `narada operator-surface bindings clean-stale --runtime-locus ${singletonBindings[0]?.runtime_locus ?? '<runtime-locus>'}`,
+      });
+    }
+  }
+  return diagnostics;
+}
+
+function diagnosticsForBinding(
+  diagnostics: RuntimeBindingDiagnostic[],
+  binding: OperatorSurfaceRuntimeBinding,
+): RuntimeBindingDiagnostic[] {
+  return diagnostics.filter((diagnostic) => (
+    diagnostic.binding_ids.includes(binding.binding_id ?? null)
+    || (diagnostic.handle && diagnostic.handle === binding.handle && diagnostic.runtime_locus === (binding.runtime_locus ?? null))
+    || (diagnostic.identity_id && diagnostic.identity_id === binding.identity_id)
+  ));
+}
+
+function normalizeVisibleLabelEvidence(labels: OperatorSurfaceVisibleLabelEvidence[]): {
+  labels: OperatorSurfaceVisibleLabelEvidence[];
+  diagnostics: Array<Record<string, unknown>>;
+} {
+  const seen = new Set<string>();
+  const diagnostics: Array<Record<string, unknown>> = [];
+  const normalized: OperatorSurfaceVisibleLabelEvidence[] = [];
+  for (const label of labels) {
+    const live = label.status !== 'stale' && label.status !== 'revoked';
+    const handle = label.hwnd ?? label.handle ?? null;
+    const key = live && handle ? `${label.runtime_locus ?? ''}:${handle}` : null;
+    if (key && seen.has(key)) {
+      diagnostics.push({
+        code: 'duplicate_visible_label_suppressed',
+        severity: 'warning',
+        runtime_locus: label.runtime_locus ?? null,
+        handle,
+        identity_id: label.identity_id ?? null,
+        reason: 'overlay projection must render at most one visible label per live HWND',
+      });
+      continue;
+    }
+    if (key) seen.add(key);
+    normalized.push(label);
+  }
+  return { labels: normalized, diagnostics };
 }
 
 function visibleLabelForIdentity(
@@ -2092,7 +2193,8 @@ export async function operatorSurfaceStatusCommand(
   const cwd = options.cwd ?? '.';
   const registry = await readOperatorSurfaceIdentities(cwd);
   const bindings = await readRuntimeBindings(cwd);
-  const labelEvidence = await readVisibleLabelEvidence(cwd);
+  const rawLabelEvidence = await readVisibleLabelEvidence(cwd);
+  const labelProjection = normalizeVisibleLabelEvidence(rawLabelEvidence);
   const roster = await loadRoster(cwd).then(async (loaded) => {
     if (loaded.agents.length > 0) return loaded;
     try {
@@ -2123,7 +2225,7 @@ export async function operatorSurfaceStatusCommand(
     ));
     const currentTask = rosterAgent?.task ?? null;
     const lifecycle = currentTask == null ? { status: null, source: null } : await resolveTaskStatus(cwd, currentTask);
-    const posture = bindingPosture(identity, bindings, visibleLabelForIdentity(identity, labelEvidence));
+    const posture = bindingPosture(identity, bindings, visibleLabelForIdentity(identity, labelProjection.labels));
     const workStatus = rosterAgent?.status ?? 'untracked';
     const dutyLoopState = deriveOperatorSurfaceDutyLoopState({
       bindingStatus: posture.binding_status,
@@ -2170,6 +2272,11 @@ export async function operatorSurfaceStatusCommand(
       mutation_performed: false,
       registry_path: operatorSurfaceIdentityPath(cwd),
       count: agents.length,
+      overlay_idempotence: {
+        status: labelProjection.diagnostics.length === 0 ? 'pass' : 'diagnostic',
+        max_visible_labels_per_hwnd: 1,
+        diagnostics: labelProjection.diagnostics,
+      },
       agents,
       human: agents.map((agent) => [
         `${agent.role}: ${agent.work_status}`,
@@ -2231,10 +2338,11 @@ export async function operatorSurfaceInspectCompactCommand(
   const identities = registry.identities
     .filter((identity) => !options.site || identity.site_id === options.site)
     .slice(0, options.limit ?? 50);
+  const labelProjection = normalizeVisibleLabelEvidence(labelEvidence.labels);
   const labels = identities.map((identity) => makeOperatorSurfaceLabel(identity, registry));
   const rows = identities.map((identity) => {
     const label = labels.find((entry) => entry.identity_id === identity.identity_id) ?? null;
-    const visible = visibleLabelForIdentity(identity, labelEvidence.labels);
+    const visible = visibleLabelForIdentity(identity, labelProjection.labels);
     const posture = bindingPosture(identity, bindings, visible);
     return {
       identity_id: identity.identity_id,
@@ -2267,6 +2375,11 @@ export async function operatorSurfaceInspectCompactCommand(
         visible_labels_are_carrier_evidence: true,
       },
       count: rows.length,
+      overlay_idempotence: {
+        status: labelProjection.diagnostics.length === 0 ? 'pass' : 'diagnostic',
+        max_visible_labels_per_hwnd: 1,
+        diagnostics: labelProjection.diagnostics,
+      },
       labels,
       rows,
       architect_loop_guidance: 'Use this compact schema instead of ad hoc Select-Object projections against carrier-specific overlay JSON.',
@@ -2717,7 +2830,9 @@ export async function operatorSurfaceSendCommand(
       };
     }
 
-    const bindings = (await readRuntimeBindings(cwd))
+    const allRuntimeBindings = await readRuntimeBindings(cwd);
+    const bindingDiagnostics = runtimeBindingDiagnostics(allRuntimeBindings, options.runtimeLocus?.trim() || null);
+    const bindings = allRuntimeBindings
       .filter((binding) => binding.identity_id === identity)
       .filter((binding) => !options.runtimeLocus || binding.runtime_locus === options.runtimeLocus);
     const activeBindings = bindings.filter((binding) => !isStaleBinding(binding));
@@ -2783,6 +2898,31 @@ export async function operatorSurfaceSendCommand(
     }
 
     const binding = activeBindings[0]!;
+    const selectedBindingDiagnostics = diagnosticsForBinding(bindingDiagnostics, binding);
+    if (selectedBindingDiagnostics.length > 0) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          reason: 'binding_ambiguous',
+          identity,
+          identity_resolution: publicIdentityResolution(identityResolution),
+          ...agentFields,
+          ...routeFields({ ...baseRoute, bindingStatus: 'ambiguous' }),
+          mutation_performed: false,
+          diagnostics: selectedBindingDiagnostics,
+          matching_bindings: allRuntimeBindings
+            .filter((candidate) => selectedBindingDiagnostics.some((diagnostic) => diagnostic.binding_ids.includes(candidate.binding_id ?? null)))
+            .map((candidate) => ({
+              binding_id: candidate.binding_id ?? null,
+              identity_id: candidate.identity_id,
+              runtime_locus: candidate.runtime_locus ?? null,
+              handle: candidate.handle ?? null,
+            })),
+          unblock_command: `Run narada operator-surface bindings clean-stale --runtime-locus ${binding.runtime_locus ?? options.runtimeLocus ?? '<runtime-locus-from-status>'} and repair duplicate live binding evidence before delivery.`,
+        },
+      };
+    }
     const capabilities = binding.input_capabilities ?? admittedIdentity.input_capabilities ?? [];
     const submitStrategy = binding.submit_strategy ?? admittedIdentity.submit_strategy ?? 'type_only';
     if (!capabilities.includes('type_text') && !capabilities.includes('submit')) {
@@ -2959,6 +3099,73 @@ export async function operatorSurfaceBindingDeferredCommand(
   options: OperatorSurfaceBindingOptions,
   _context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const cwd = options.cwd ?? '.';
+  const runtimeLocus = options.runtimeLocus?.trim();
+  if ((action === 'list' || action === 'clean-stale') && runtimeLocus) {
+    const bindings = await readRuntimeBindings(cwd);
+    const scoped = bindings.filter((binding) => binding.runtime_locus === runtimeLocus);
+    const active = liveRuntimeBindings(scoped);
+    const stale = scoped.filter((binding) => isStaleBinding(binding));
+    const diagnostics = runtimeBindingDiagnostics(scoped, runtimeLocus);
+    if (action === 'list') {
+      return {
+        exitCode: diagnostics.length === 0 ? ExitCode.SUCCESS : ExitCode.INVALID_CONFIG,
+        result: {
+          status: diagnostics.length === 0 ? 'success' : 'error',
+          action,
+          reason: diagnostics.length === 0 ? null : 'binding_ambiguous',
+          mutation_performed: false,
+          runtime_binding_mutated: false,
+          runtime_locus: runtimeLocus,
+          bindings: scoped,
+          diagnostics,
+        },
+      };
+    }
+    if (diagnostics.length > 0) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'error',
+          action,
+          reason: 'binding_ambiguous',
+          mutation_performed: false,
+          runtime_binding_mutated: false,
+          runtime_locus: runtimeLocus,
+          diagnostics,
+          repair_evidence: {
+            before_count: scoped.length,
+            stale_count: stale.length,
+            active_count: active.length,
+            normalized: false,
+          },
+        },
+      };
+    }
+    const nextBindings = bindings.filter((binding) => binding.runtime_locus !== runtimeLocus || !isStaleBinding(binding));
+    const path = stale.length > 0 ? await writeRuntimeBindings(cwd, nextBindings) : runtimeBindingPath(cwd);
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: {
+        status: 'success',
+        action,
+        mutation_performed: stale.length > 0,
+        runtime_binding_mutated: stale.length > 0,
+        runtime_locus: runtimeLocus,
+        binding_path: path,
+        removed_stale_count: stale.length,
+        remaining_count: active.length,
+        diagnostics: [],
+        repair_evidence: {
+          before_count: scoped.length,
+          stale_count: stale.length,
+          active_count: active.length,
+          after_count: active.length,
+          normalized: true,
+        },
+      },
+    };
+  }
   return {
     exitCode: ExitCode.SUCCESS,
     result: {
@@ -2968,7 +3175,7 @@ export async function operatorSurfaceBindingDeferredCommand(
       runtime_binding_mutated: false,
       reason: 'runtime_locus_required',
       authority_split: {
-        durable_identity_authority: operatorSurfaceIdentityPath(options.cwd ?? '.'),
+        durable_identity_authority: operatorSurfaceIdentityPath(cwd),
         volatile_handle_authority: options.runtimeLocus ?? 'owning_runtime_locus_required',
       },
       next_step: `Run this operation through the User/PC Site that owns the runtime handle; Narada proper does not mutate volatile handles by convenience.`,

@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T20:21:12.172Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777666853433_dgak57
+closed_at: 2026-05-01T20:22:09.377Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Enforce operator-surface binding uniqueness and overlay idempotence
@@ -36,8 +45,8 @@ Add or specify a binding reconciliation path that atomically normalizes runtime 
 
 ## Acceptance Criteria
 
-- [ ] Duplicate live bindings for one HWND are refused or normalized with recorded evidence.
-- [ ] One singleton identity bound to multiple live HWNDs is refused unless an explicit multi-surface policy exists.
-- [ ] Starting or reloading overlay twice produces one label per bound live HWND.
-- [ ] OSM delivery refuses ambiguous binding posture with a machine-readable error such as binding_ambiguous.
-- [ ] Regression coverage covers duplicate identity, duplicate HWND, dead HWND cleanup, overlay restart idempotence, and OSM ambiguity refusal.
+- [x] Duplicate live bindings for one HWND are refused or normalized with recorded evidence.
+- [x] One singleton identity bound to multiple live HWNDs is refused unless an explicit multi-surface policy exists.
+- [x] Starting or reloading overlay twice produces one label per bound live HWND.
+- [x] OSM delivery refuses ambiguous binding posture with a machine-readable error such as binding_ambiguous.
+- [x] Regression coverage covers duplicate identity, duplicate HWND, dead HWND cleanup, overlay restart idempotence, and OSM ambiguity refusal.

@@ -67,6 +67,7 @@ async function admitIdentity(cwd: string, options: { capabilities?: string; subm
 }
 
 async function writeBindings(cwd: string, bindings: unknown[]): Promise<void> {
+  mkdirSync(join(cwd, 'operator-surfaces'), { recursive: true });
   await writeFile(join(cwd, 'operator-surfaces', 'runtime-bindings.json'), `${JSON.stringify({ bindings }, null, 2)}\n`, 'utf8');
 }
 
@@ -2212,6 +2213,158 @@ describe('operator-surface commands', () => {
         { binding_id: 'bind-2', runtime_locus: 'pc-b' },
       ],
       unblock_command: expect.stringContaining('Pass --runtime-locus'),
+    });
+  });
+
+  it('refuses OSM delivery when another identity shares the selected live HWND', async () => {
+    const cwd = await tempRepo();
+    await admitIdentity(cwd);
+    await operatorSurfaceIdentityAddCommand({
+      cwd,
+      identityName: 'narada-proper-architect',
+      role: 'architect',
+      agentKind: 'codex_cli',
+      site: 'narada-proper',
+      by: 'operator',
+      format: 'json',
+    }, createMockContext());
+    await writeBindings(cwd, [
+      { binding_id: 'bind-builder', identity_id: 'narada-proper-builder', runtime_locus: 'pc-site', handle: 'hwnd:1', input_capabilities: ['type_text'], status: 'active' },
+      { binding_id: 'bind-architect', identity_id: 'narada-proper-architect', runtime_locus: 'pc-site', handle: 'hwnd:1', input_capabilities: ['type_text'], status: 'active' },
+    ]);
+
+    const result = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-proper-builder',
+      runtimeLocus: 'pc-site',
+      text: 'next',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      reason: 'binding_ambiguous',
+      diagnostics: [{
+        code: 'duplicate_live_handle_binding',
+        handle: 'hwnd:1',
+        binding_ids: ['bind-builder', 'bind-architect'],
+      }],
+      matching_bindings: expect.arrayContaining([
+        expect.objectContaining({ binding_id: 'bind-builder', identity_id: 'narada-proper-builder', handle: 'hwnd:1' }),
+        expect.objectContaining({ binding_id: 'bind-architect', identity_id: 'narada-proper-architect', handle: 'hwnd:1' }),
+      ]),
+    });
+  });
+
+  it('lists and refuses duplicate live singleton bindings during runtime binding reconciliation', async () => {
+    const cwd = await tempRepo();
+    await writeBindings(cwd, [
+      { binding_id: 'bind-1', identity_id: 'narada-proper-builder', runtime_locus: 'pc-site', handle: 'hwnd:1', status: 'active' },
+      { binding_id: 'bind-2', identity_id: 'narada-proper-builder', runtime_locus: 'pc-site', handle: 'hwnd:2', status: 'active' },
+      { binding_id: 'bind-3', identity_id: 'narada-proper-architect', runtime_locus: 'pc-site', handle: 'hwnd:1', status: 'active' },
+    ]);
+
+    const listed = await operatorSurfaceBindingDeferredCommand('list', {
+      cwd,
+      runtimeLocus: 'pc-site',
+      format: 'json',
+    }, createMockContext());
+    const cleaned = await operatorSurfaceBindingDeferredCommand('clean-stale', {
+      cwd,
+      runtimeLocus: 'pc-site',
+      format: 'json',
+    }, createMockContext());
+
+    expect(listed.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(listed.result).toMatchObject({
+      status: 'error',
+      reason: 'binding_ambiguous',
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({ code: 'duplicate_live_handle_binding', handle: 'hwnd:1' }),
+        expect.objectContaining({ code: 'duplicate_live_singleton_identity_binding', identity_id: 'narada-proper-builder' }),
+      ]),
+    });
+    expect(cleaned.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(cleaned.result).toMatchObject({
+      status: 'error',
+      reason: 'binding_ambiguous',
+      mutation_performed: false,
+      runtime_binding_mutated: false,
+      repair_evidence: {
+        before_count: 3,
+        normalized: false,
+      },
+    });
+  });
+
+  it('cleans dead runtime bindings and records repair evidence', async () => {
+    const cwd = await tempRepo();
+    await writeBindings(cwd, [
+      { binding_id: 'bind-stale', identity_id: 'narada-proper-builder', runtime_locus: 'pc-site', handle: 'hwnd:old', status: 'stale' },
+      { binding_id: 'bind-live', identity_id: 'narada-proper-builder', runtime_locus: 'pc-site', handle: 'hwnd:live', status: 'active' },
+    ]);
+
+    const cleaned = await operatorSurfaceBindingDeferredCommand('clean-stale', {
+      cwd,
+      runtimeLocus: 'pc-site',
+      format: 'json',
+    }, createMockContext());
+
+    expect(cleaned.exitCode).toBe(ExitCode.SUCCESS);
+    expect(cleaned.result).toMatchObject({
+      status: 'success',
+      mutation_performed: true,
+      runtime_binding_mutated: true,
+      removed_stale_count: 1,
+      remaining_count: 1,
+      repair_evidence: {
+        before_count: 2,
+        stale_count: 1,
+        after_count: 1,
+        normalized: true,
+      },
+    });
+    const bindings = JSON.parse(await readFile(join(cwd, 'operator-surfaces', 'runtime-bindings.json'), 'utf8')) as { bindings: Array<Record<string, unknown>> };
+    expect(bindings.bindings).toEqual([expect.objectContaining({ binding_id: 'bind-live' })]);
+  });
+
+  it('suppresses duplicate visible overlay labels for one live HWND', async () => {
+    const cwd = await tempRepo();
+    await admitIdentity(cwd);
+    await writeVisibleLabels(cwd, [
+      { identity_id: 'narada-proper-builder', runtime_locus: 'pc-site', hwnd: 'hwnd:1', label: 'builder', status: 'visible' },
+      { identity_id: 'narada-proper-builder', runtime_locus: 'pc-site', hwnd: 'hwnd:1', label: 'builder duplicate', status: 'visible' },
+    ]);
+
+    const status = await operatorSurfaceStatusCommand({
+      cwd,
+      site: 'narada-proper',
+      format: 'json',
+    }, createMockContext());
+    const compact = await operatorSurfaceInspectCompactCommand({
+      cwd,
+      site: 'narada-proper',
+      format: 'json',
+    }, createMockContext());
+
+    expect(status.exitCode).toBe(ExitCode.SUCCESS);
+    expect(status.result).toMatchObject({
+      overlay_idempotence: {
+        status: 'diagnostic',
+        max_visible_labels_per_hwnd: 1,
+        diagnostics: [{
+          code: 'duplicate_visible_label_suppressed',
+          handle: 'hwnd:1',
+        }],
+      },
+    });
+    expect(compact.exitCode).toBe(ExitCode.SUCCESS);
+    expect(compact.result).toMatchObject({
+      overlay_idempotence: {
+        status: 'diagnostic',
+        max_visible_labels_per_hwnd: 1,
+      },
     });
   });
 
