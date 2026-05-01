@@ -145,7 +145,7 @@ function commandForPrimary(actionKind: unknown, primary: Record<string, unknown>
 }
 
 function reasonForAction(result: Record<string, unknown>, primary: Record<string, unknown>): string | null {
-  return boundedText(primary.selection_reason ?? result.reason ?? result.next_step ?? 'selected_by_role_loop');
+  return boundedText(primary.recommendation_reason ?? primary.selection_reason ?? result.reason ?? result.next_step ?? 'selected_by_role_loop');
 }
 
 function compactChecks(result: Record<string, unknown>): Array<Record<string, unknown>> {

@@ -72,6 +72,13 @@ interface PendingReviewWork {
   reported_by: string | null;
   suggested_owner: string;
   suggested_command: string | null;
+  command?: string | null;
+  command_args?: string[] | null;
+  recommendation_reason?: 'active_collaborator_blocked' | 'direct_review_request' | 'ordinary_pending_review' | 'local_followup';
+  selection_reason?: string;
+  projection_admission?: Record<string, unknown> | null;
+  source_facts?: Record<string, unknown>;
+  skip_policy?: Record<string, unknown> | null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -350,6 +357,7 @@ function gitLines(cwd: string, args: string[]): string[] {
 async function findReviewWork(cwd: string, agentId: string, role?: string): Promise<Record<string, unknown> | null> {
   if (!canOwnReviewWork(role, agentId)) return null;
   const tasks = await scanTasksByRange(cwd, 1, 999999);
+  const roster = await loadRoster(cwd).catch(() => null);
   let store;
   try {
     store = openTaskLifecycleStore(cwd);
@@ -357,6 +365,7 @@ async function findReviewWork(cwd: string, agentId: string, role?: string): Prom
     // Markdown scan remains a fallback for test repos without initialized SQLite.
   }
   try {
+    const candidates: PendingReviewWork[] = [];
     const ordered = tasks
       .filter((task) => task.taskNumber !== null)
       .sort((a, b) => (a.taskNumber ?? 0) - (b.taskNumber ?? 0));
@@ -373,20 +382,105 @@ async function findReviewWork(cwd: string, agentId: string, role?: string): Prom
       const reviews = await listReviewsForTask(cwd, task.taskId).catch(() => []);
       if (reviews.some((review) => review.reviewer_agent_id === agentId)) continue;
 
-      return {
+      const projection = projectionAdmissionForReviewCandidate({
+        roster,
+        taskNumber: task.taskNumber,
+        taskId: task.taskId,
+        lifecycleStatus: status,
+        reviewerAgentId: agentId,
+      });
+      const recommendationReason = projection?.admitted === true
+        ? 'active_collaborator_blocked'
+        : 'ordinary_pending_review';
+      candidates.push({
         task_id: task.taskId,
         task_number: task.taskNumber,
+        title: store && task.taskNumber !== null ? taskTitleFromStore(store, task.taskNumber) : null,
         status,
         report_id: report?.report_id ?? null,
         reported_by: report?.agent_id ?? null,
+        suggested_owner: agentId,
+        suggested_command: `narada task review ${task.taskNumber} --agent ${agentId} --verdict accepted`,
         command: `narada task review ${task.taskNumber} --agent ${agentId} --verdict accepted`,
         command_args: ['task', 'review', String(task.taskNumber), '--agent', agentId, '--verdict', 'accepted'],
-      };
+        recommendation_reason: recommendationReason,
+        selection_reason: recommendationReason,
+        projection_admission: projection,
+        source_facts: {
+          lifecycle: {
+            authority: 'sqlite_task_lifecycle',
+            task_id: task.taskId,
+            task_number: task.taskNumber,
+            status,
+          },
+          report: {
+            authority: 'task_report_records',
+            report_id: report?.report_id ?? null,
+            reported_by: report?.agent_id ?? null,
+          },
+          reviews: {
+            authority: 'task_review_records',
+            existing_review_count: reviews.length,
+          },
+        },
+        skip_policy: projection?.admitted === true
+          ? {
+              required: true,
+              reason_required: 'active_collaborator_blocked',
+              instruction: 'Skipping this review blocker requires an explicit recorded reason.',
+            }
+          : null,
+      });
     }
-    return null;
+    const selected = candidates.sort(reviewCandidateSort)[0] ?? null;
+    return selected ? { ...selected } : null;
   } finally {
     if (store) store.db.close();
   }
+}
+
+function reviewCandidateSort(a: PendingReviewWork, b: PendingReviewWork): number {
+  const priority = (item: PendingReviewWork): number => item.recommendation_reason === 'active_collaborator_blocked'
+    ? 0
+    : item.recommendation_reason === 'direct_review_request'
+      ? 1
+      : 10;
+  return priority(a) - priority(b) || (a.task_number ?? 0) - (b.task_number ?? 0);
+}
+
+function projectionAdmissionForReviewCandidate(args: {
+  roster: Awaited<ReturnType<typeof loadRoster>> | null;
+  taskNumber: number | null;
+  taskId: string;
+  lifecycleStatus: string;
+  reviewerAgentId: string;
+}): Record<string, unknown> | null {
+  if (args.taskNumber === null || args.lifecycleStatus !== 'in_review') return null;
+  const matching = (args.roster?.agents ?? [])
+    .filter((agent) => agent.agent_id !== args.reviewerAgentId)
+    .filter((agent) => agent.task === args.taskNumber);
+  const ambiguity = matching.length === 1 ? 'non_ambiguous' : matching.length === 0 ? 'no_projection' : 'ambiguous';
+  const agent = matching[0] ?? null;
+  const freshness = agent?.updated_at || agent?.last_active_at ? 'current' : 'unknown';
+  const admitted = Boolean(agent && ambiguity === 'non_ambiguous' && freshness === 'current');
+  return {
+    admitted,
+    reason: admitted ? 'active_collaborator_blocked' : 'projection_not_admitted',
+    authority: 'projection_only_joined_to_authoritative_facts',
+    projection_source: 'operator_surface_activity_projection',
+    projection_state: admitted ? 'awaiting_review' : null,
+    freshness,
+    ambiguity,
+    collaborator_agent_id: agent?.agent_id ?? null,
+    collaborator_status: agent?.status ?? null,
+    current_task: args.taskNumber,
+    authoritative_fallback: {
+      lifecycle_authority: 'sqlite_task_lifecycle',
+      task_id: args.taskId,
+      task_number: args.taskNumber,
+      lifecycle_status: args.lifecycleStatus,
+    },
+  };
 }
 
 async function findCurrentTaskWork(cwd: string, agentId: string): Promise<Record<string, unknown> | null> {
@@ -468,6 +562,7 @@ function findDirectedObligationWork(cwd: string, agentId: string, role?: string 
       command_args: obligation.kind === 'review_request' && obligation.task_number !== null
         ? ['task', 'review', String(obligation.task_number), '--agent', agentId, '--verdict', 'accepted']
         : null,
+      recommendation_reason: obligation.kind === 'review_request' ? 'direct_review_request' : 'directed_obligation',
       selection_reason: 'open_directed_obligation_addressed_to_agent',
       outranks: 'generic_task_queue',
     };

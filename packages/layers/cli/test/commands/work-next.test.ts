@@ -85,7 +85,10 @@ describe('work-next unified next action', () => {
       action_kind: 'task_work',
       agent_id: 'architect',
       primary: { task_number: 100 },
-      checked: [{ zone: 'task_work', status: 'selected', selected_ref: 'task:100' }],
+      checked: [
+        { zone: 'directed_obligation', status: 'empty', reason: 'no_open_addressed_obligation' },
+        { zone: 'task_work', status: 'selected', selected_ref: 'task:100' },
+      ],
     });
     expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-test.md'), 'utf8')).toContain('status: claimed');
   });
@@ -351,8 +354,8 @@ describe('work-next unified next action', () => {
       action_kind: 'inbox_work',
       agent_id: 'architect',
       checked: [
-        { zone: 'task_work', status: 'empty', reason: 'no_admissible_task' },
         { zone: 'directed_obligation', status: 'empty', reason: 'no_open_addressed_obligation' },
+        { zone: 'task_work', status: 'empty', reason: 'no_admissible_task' },
         { zone: 'review_work', status: 'empty', reason: 'no_reviewable_task' },
         { zone: 'inbox_work', status: 'selected' },
       ],
@@ -432,14 +435,91 @@ describe('work-next unified next action', () => {
       action_kind: 'review_work',
       agent_id: 'operator',
       checked: [
-        { zone: 'task_work', status: 'empty', reason: 'no_admissible_task' },
         { zone: 'directed_obligation', status: 'empty', reason: 'no_open_addressed_obligation' },
+        { zone: 'task_work', status: 'empty', reason: 'no_admissible_task' },
         { zone: 'review_work', status: 'selected', selected_ref: 'task:101' },
       ],
       primary: {
         task_number: 101,
         status: 'in_review',
         command_args: ['task', 'review', '101', '--agent', 'operator', '--verdict', 'accepted'],
+      },
+    });
+  });
+
+  it('lets a fresh active collaborator review blocker outrank ordinary pending review ordering', async () => {
+    seedRosterEntry(tempDir, 'operator', 'operator', 'idle', null);
+    seedRosterEntry(tempDir, 'bob', 'builder', 'done', 202);
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-101-generic-review.md'),
+      '---\ntask_id: 101\nstatus: in_review\n---\n\n# Task 101 Generic Review\n\n## Goal\nReview generic work.\n',
+    );
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-202-bob-awaiting-review.md'),
+      '---\ntask_id: 202\nstatus: in_review\n---\n\n# Task 202 Bob Awaiting Review\n\n## Goal\nReview Bob work.\n',
+    );
+
+    const result = await workNextCommand({ agent: 'operator', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      action_kind: 'review_work',
+      primary: {
+        task_number: 202,
+        recommendation_reason: 'active_collaborator_blocked',
+        selection_reason: 'active_collaborator_blocked',
+        projection_admission: {
+          admitted: true,
+          authority: 'projection_only_joined_to_authoritative_facts',
+          projection_source: 'operator_surface_activity_projection',
+          projection_state: 'awaiting_review',
+          freshness: 'current',
+          ambiguity: 'non_ambiguous',
+          collaborator_agent_id: 'bob',
+          authoritative_fallback: {
+            lifecycle_authority: 'sqlite_task_lifecycle',
+            task_number: 202,
+            lifecycle_status: 'in_review',
+          },
+        },
+        source_facts: {
+          lifecycle: {
+            authority: 'sqlite_task_lifecycle',
+            task_number: 202,
+            status: 'in_review',
+          },
+        },
+        skip_policy: {
+          required: true,
+          reason_required: 'active_collaborator_blocked',
+        },
+      },
+    });
+  });
+
+  it('keeps authority ahead of projection when active collaborator facts disagree', async () => {
+    seedRosterEntry(tempDir, 'operator', 'operator', 'idle', null);
+    seedRosterEntry(tempDir, 'bob', 'builder', 'done', 202);
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-101-generic-review.md'),
+      '---\ntask_id: 101\nstatus: in_review\n---\n\n# Task 101 Generic Review\n\n## Goal\nReview generic work.\n',
+    );
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-202-bob-closed.md'),
+      '---\ntask_id: 202\nstatus: closed\n---\n\n# Task 202 Bob Closed\n\n## Goal\nAlready closed.\n',
+    );
+
+    const result = await workNextCommand({ agent: 'operator', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      action_kind: 'review_work',
+      primary: {
+        task_number: 101,
+        recommendation_reason: 'ordinary_pending_review',
+        selection_reason: 'ordinary_pending_review',
       },
     });
   });
@@ -524,8 +604,8 @@ describe('work-next unified next action', () => {
       primary: null,
       reason: 'no_task_or_inbox_work',
       checked: [
-        { zone: 'task_work', status: 'empty', reason: 'no_admissible_task' },
         { zone: 'directed_obligation', status: 'empty', reason: 'no_open_addressed_obligation' },
+        { zone: 'task_work', status: 'empty', reason: 'no_admissible_task' },
         { zone: 'review_work', status: 'empty', reason: 'no_reviewable_task' },
         { zone: 'inbox_work', status: 'empty' },
       ],
