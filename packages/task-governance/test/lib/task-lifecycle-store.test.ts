@@ -51,7 +51,11 @@ describe('SqliteTaskLifecycleStore', () => {
       expect(tables).toContain('task_reports');
       expect(tables).toContain('task_reviews');
       expect(tables).toContain('task_number_sequence');
+      expect(tables).toContain('verification_runs');
+      expect(tables).toContain('command_runs');
       expect(tables).toContain('repo_publications');
+      expect(tables).toContain('agent_roster');
+      expect(tables).toContain('directed_obligations');
     });
 
     it('initializes task_number_sequence with singleton row', () => {
@@ -96,6 +100,78 @@ describe('SqliteTaskLifecycleStore', () => {
         expect(String(journalMode).toLowerCase()).toBe('wal');
         expect(synchronous).toBe(1);
         expect(TASK_LIFECYCLE_SYNCHRONOUS_MODE).toBe('normal');
+      } finally {
+        opened.db.close();
+      }
+    });
+
+    it('upgrades an existing file-backed store when newer tables are missing', async () => {
+      tempDir = await mkdtemp(join(tmpdir(), 'narada-lifecycle-store-upgrade-'));
+      await mkdir(join(tempDir, '.ai'), { recursive: true });
+      const dbPath = join(tempDir, '.ai', 'task-lifecycle.db');
+      const oldDb = new Database(dbPath);
+      try {
+        oldDb.exec(`
+          create table task_lifecycle (
+            task_id text primary key,
+            task_number integer not null unique,
+            status text not null,
+            governed_by text,
+            closed_at text,
+            closed_by text,
+            closure_mode text,
+            reopened_at text,
+            reopened_by text,
+            continuation_packet_json text,
+            updated_at text not null
+          );
+          create table task_specs (
+            task_id text primary key,
+            task_number integer not null unique,
+            title text not null,
+            chapter_markdown text,
+            goal_markdown text,
+            context_markdown text,
+            required_work_markdown text,
+            non_goals_markdown text,
+            acceptance_criteria_json text not null,
+            dependencies_json text not null,
+            updated_at text not null
+          );
+          create table criteria_proofs (
+            proof_id text primary key,
+            task_id text not null,
+            criterion_index integer not null,
+            status text not null,
+            evidence_json text not null,
+            updated_at text not null
+          );
+          create table repo_publications (
+            publication_id text primary key,
+            repo_root text not null,
+            branch text not null,
+            remote text not null,
+            commit_hash text not null,
+            bundle_path text not null,
+            requester_id text not null,
+            requested_at text not null,
+            status text not null,
+            updated_at text not null
+          );
+        `);
+      } finally {
+        oldDb.close();
+      }
+
+      const opened = openTaskLifecycleStore(tempDir);
+      try {
+        const tables = opened.db
+          .prepare("select name from sqlite_master where type = 'table'")
+          .pluck()
+          .all() as string[];
+        expect(tables).toContain('directed_obligations');
+        expect(tables).toContain('agent_roster');
+        expect(tables).toContain('command_runs');
       } finally {
         opened.db.close();
       }

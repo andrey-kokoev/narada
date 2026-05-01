@@ -721,17 +721,38 @@ export const TASK_LIFECYCLE_FAST_SQLITE_ENV = 'NARADA_TASK_LIFECYCLE_FAST_SQLITE
 
 const initializedLifecycleDbPaths = new Set<string>();
 
+const REQUIRED_LIFECYCLE_TABLES = [
+  'task_lifecycle',
+  'task_assignments',
+  'task_assignment_records',
+  'assignment_intents',
+  'evidence_bundles',
+  'evidence_admission_results',
+  'criteria_proofs',
+  'observation_artifacts',
+  'reconciliation_findings',
+  'reconciliation_repairs',
+  'task_reports',
+  'task_report_records',
+  'task_promotion_records',
+  'task_reviews',
+  'task_number_sequence',
+  'dispatch_packets',
+  'verification_runs',
+  'command_runs',
+  'repo_publications',
+  'agent_roster',
+  'directed_obligations',
+  'task_number_reservations',
+  'task_specs',
+];
+
 function hasCurrentLifecycleSchema(db: Db): boolean {
   const tables = db
     .prepare("select name from sqlite_master where type = 'table'")
     .all() as Array<{ name?: string }>;
   const tableNames = new Set(tables.map((table) => table.name));
-  if (
-    !tableNames.has('task_lifecycle')
-    || !tableNames.has('task_specs')
-    || !tableNames.has('criteria_proofs')
-    || !tableNames.has('repo_publications')
-  ) return false;
+  if (REQUIRED_LIFECYCLE_TABLES.some((table) => !tableNames.has(table))) return false;
   const lifecycleColumns = db
     .prepare('pragma table_info(task_lifecycle)')
     .all() as Array<{ name?: string }>;
