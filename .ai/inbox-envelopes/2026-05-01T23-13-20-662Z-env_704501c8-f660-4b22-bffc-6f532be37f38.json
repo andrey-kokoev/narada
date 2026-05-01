@@ -23,5 +23,38 @@
     ],
     "recommendation": "Treat as task-governance CAPA: tighten review/finish semantics, stale evidence admission repair, and machine output so architects can trust closure state without manual readback."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "1205",
+    "promoted_at": "2026-05-01T23:16:18.902Z",
+    "promoted_by": "architect",
+    "enactment_status": "enacted",
+    "target_command": "inbox architect-process",
+    "target_result": {
+      "task": {
+        "status": "success",
+        "task_id": "20260501-1205-capa-repair-review-closure-must-not-reuse-stale-rejected-rev",
+        "task_number": 1205,
+        "file_name": "20260501-1205-capa-repair-review-closure-must-not-reuse-stale-rejected-rev.md",
+        "file_path": "/home/andrey/src/narada/.ai/do-not-open/tasks/20260501-1205-capa-repair-review-closure-must-not-reuse-stale-rejected-rev.md",
+        "title": "CAPA: repair-review closure must not reuse stale rejected review identity",
+        "handoff_actionability": {
+          "status": "actionable",
+          "reason": null,
+          "repair_command": null,
+          "required_work_excerpt": "0. Source summary: Task lifecycle repair reviews after prior rejection exposed two confusing states in narada-andrey: task review accepted_with_notes did not close because stale rejected Evidence Admission still blocked closure, and task finish --close succeeded but reported review_action=reused with an older rejected review_id. This makes accepted repair reviews look semantically tied to the rejected review and can mislead architects while clearing backlog.\n1. Read source inbox envelope env_704501c8-f660-4b22-bffc-6f532be37f38 and preserve its authority context.\n2. Identify the owning Narada authority boundary before mutating any target state."
+        }
+      },
+      "assignment": {
+        "status": "success",
+        "task_id": "20260501-1205-capa-repair-review-closure-must-not-reuse-stale-rejected-rev",
+        "agent_id": "builder",
+        "claimed_at": "2026-05-01T23:16:17.312Z",
+        "assignment_intent_id": "air_claim_1205_builder_1777677377012_1pchf1"
+      },
+      "builder": "builder",
+      "execution_performed": false
+    }
+  }
 }
