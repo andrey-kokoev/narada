@@ -2164,6 +2164,7 @@ function siteGovernanceCoordinates(args: {
     ],
     effect_authority_policy: 'metadata_only',
     capability_grants: [],
+    doctrine_imports: [],
     lineage_source: {
       kind: 'operator_declaration',
       path: join(args.siteRoot, 'config.json'),

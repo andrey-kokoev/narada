@@ -85,6 +85,7 @@ describe('sitesBootstrapClientCommand', () => {
         governing_law_source: { source_site_id: string };
         authority_locus: { locus_kind: string; mutation_policy: string };
         effect_authority_policy: string;
+        doctrine_imports: unknown[];
         site_participant_roles: Array<{ role_id: string; role_class: string; runtime_kind?: string; authority_posture: string }>;
         agent_identity_contract: { default_agent_name: string; operator_label: string };
         agent_role_contracts: Record<string, unknown> & { admitted_roles: string[]; architect: { role_id: string }; builder: { role_id: string } };
@@ -96,6 +97,7 @@ describe('sitesBootstrapClientCommand', () => {
     expect(config.governance.authority_locus.locus_kind).toBe('client_service');
     expect(config.governance.authority_locus.mutation_policy).toBe('direct_only_at_locus');
     expect(config.governance.effect_authority_policy).toBe('metadata_only');
+    expect(config.governance.doctrine_imports).toEqual([]);
     expect(config.governance.site_participant_roles.map((role) => role.role_id)).toEqual(['resident', 'architect', 'builder']);
     expect(config.governance.site_participant_roles.find((role) => role.role_id === 'resident')).toMatchObject({
       role_class: 'resident',
@@ -104,7 +106,7 @@ describe('sitesBootstrapClientCommand', () => {
     });
     expect(config.governance.agent_identity_contract.default_agent_name).toBe('architect');
     expect(config.governance.agent_identity_contract.operator_label).toBe('Operator');
-    expect(config.governance.agent_role_contracts.admitted_roles).toEqual(['architect', 'builder']);
+    expect(config.governance.agent_role_contracts.admitted_roles).toEqual(['architect', 'builder', 'observer']);
     expect(config.governance.agent_role_contracts.architect.role_id).toBe('architect');
     expect(config.governance.agent_role_contracts.builder.role_id).toBe('builder');
     expect(config.governance.agent_role_contracts).not.toHaveProperty('inspector');
@@ -135,7 +137,7 @@ describe('sitesBootstrapClientCommand', () => {
     expect(agents).toContain('This Site is governed by Narada law.');
     expect(agents).toContain(`workspace_root: ${workspace}`);
     expect(agents).toContain(`site_root: ${join(workspace, '.narada')}`);
-    expect(agents).toContain('Treat this file as the Site-local execution contract for fresh Architect and Builder threads.');
+    expect(agents).toContain('Treat this file as the Site-local execution contract for fresh Architect, Builder, and Observer threads.');
     expect(agents).toContain('Client/business artifacts outside `site_root` are not Narada knowledge, evidence, or authority unless explicitly admitted');
     expect(agents).not.toContain('## Inspector Thread Bootstrap');
     expect(agents).not.toContain('## Superintendent Thread Bootstrap');

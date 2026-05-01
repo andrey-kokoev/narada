@@ -140,6 +140,58 @@ describe("SiteManifest validation", () => {
     }
   });
 
+  it("accepts doctrine imports as binding declarations without embedding interpretation", () => {
+    const result = SiteGovernanceCoordinatesSchema.safeParse({
+      ...validGovernance,
+      doctrine_imports: [
+        {
+          import_id: "fda-qmsr-21-cfr-820",
+          kind: "regulation",
+          authority: {
+            authority_kind: "regulator",
+            issuer: "FDA",
+            jurisdiction: "US",
+            authority_ref: "21 CFR Part 820",
+          },
+          citation: {
+            title: "Quality Management System Regulation",
+            source_uri: "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-H/part-820",
+            effective_date: "2026-02-02",
+          },
+          binding_scope: {
+            site_wide: true,
+            operation_kinds: ["capa"],
+            task_gate_kinds: ["review", "closure"],
+            capability_kinds: ["quality_record"],
+          },
+          applicability: {
+            default: "candidate",
+            predicates: ["site.handles_medical_device_quality_records == true"],
+          },
+          inheritance: {
+            mode: "inherit_to_operations",
+            override_policy: "operator_confirmed",
+          },
+          binding_posture: "binding_gate",
+          interpretation_locus: {
+            kind: "knowledge_base",
+            ref: "kb://quality/fda-qmsr",
+          },
+          admission: {
+            admitted_by: "operator",
+            evidence_ref: "env_fda_qmsr_admission",
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.doctrine_imports[0]?.interpretation_locus.kind).toBe("knowledge_base");
+      expect(result.data.doctrine_imports[0]?.binding_posture).toBe("binding_gate");
+    }
+  });
+
   it("rejects arbitrary governance coordinate values", () => {
     const result = SiteGovernanceCoordinatesSchema.safeParse({
       ...validGovernance,

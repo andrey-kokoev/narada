@@ -148,6 +148,48 @@ export const SiteCapabilityGrantSchema = z.object({
   grants_effect_authority: z.boolean().default(false),
 });
 
+export const SiteDoctrineImportSchema = z.object({
+  import_id: z.string().min(1, "Doctrine import id is required"),
+  kind: z.enum(["narada_doctrine", "regulation", "standard", "contract", "policy", "external_regime"]),
+  authority: z.object({
+    authority_kind: z.enum(["site", "regulator", "standards_body", "contracting_party", "operator", "external"]),
+    issuer: z.string().min(1),
+    jurisdiction: z.string().min(1).optional(),
+    authority_ref: z.string().min(1).optional(),
+  }),
+  citation: z.object({
+    title: z.string().min(1),
+    source_uri: z.string().min(1).optional(),
+    document_ref: z.string().min(1).optional(),
+    version: z.string().min(1).optional(),
+    effective_date: z.string().min(1).optional(),
+  }),
+  binding_scope: z.object({
+    site_wide: z.boolean().default(false),
+    operation_kinds: z.array(z.string().min(1)).default([]),
+    task_gate_kinds: z.array(z.string().min(1)).default([]),
+    capability_kinds: z.array(z.string().min(1)).default([]),
+  }),
+  applicability: z.object({
+    default: z.enum(["not_applicable", "candidate", "applicable"]).default("candidate"),
+    predicates: z.array(z.string().min(1)).default([]),
+  }),
+  inheritance: z.object({
+    mode: z.enum(["not_inherited", "inherit_to_child_sites", "inherit_to_operations", "inherit_to_tasks"]),
+    override_policy: z.enum(["not_allowed", "operator_confirmed", "site_local_overlay_required"]),
+  }),
+  binding_posture: z.enum(["reference_only", "advisory", "binding_gate", "operator_confirmed_binding"]),
+  interpretation_locus: z.object({
+    kind: z.enum(["doctrine", "knowledge_graph", "knowledge_base", "external_advisor"]),
+    ref: z.string().min(1),
+  }),
+  admission: z.object({
+    admitted_by: z.string().min(1),
+    admitted_at: z.string().min(1).optional(),
+    evidence_ref: z.string().min(1).optional(),
+  }),
+});
+
 export const SiteMessageRouteRuleSchema = z.object({
   target_locus: z.string().min(1).optional(),
   target_loci: z.array(z.string().min(1)).optional(),
@@ -179,6 +221,7 @@ export const SiteGovernanceCoordinatesSchema = z.object({
   message_routing_authority: SiteMessageRoutingAuthoritySchema.optional(),
   effect_authority_policy: z.enum(["metadata_only", "operator_confirmed", "capability_grant_required", "no_effects"]),
   capability_grants: z.array(SiteCapabilityGrantSchema).default([]),
+  doctrine_imports: z.array(SiteDoctrineImportSchema).default([]),
   lineage_source: z.object({
     kind: z.enum(["site_lineage", "git_history", "operator_declaration", "external_registry"]),
     path: PathRefSchema.optional(),
@@ -208,6 +251,7 @@ export type SiteGoverningLawSource = z.infer<typeof SiteGoverningLawSourceSchema
 export type SiteAuthorityLocus = z.infer<typeof SiteAuthorityLocusSchema>;
 export type SiteEmbodiment = z.infer<typeof SiteEmbodimentSchema>;
 export type SiteParticipantRole = z.infer<typeof SiteParticipantRoleSchema>;
+export type SiteDoctrineImport = z.infer<typeof SiteDoctrineImportSchema>;
 export type SiteMessageRoutingAuthority = z.infer<typeof SiteMessageRoutingAuthoritySchema>;
 export type SiteGovernanceCoordinates = z.infer<typeof SiteGovernanceCoordinatesSchema>;
 

@@ -97,6 +97,7 @@ describe('sitesBootstrapProjectCommand', () => {
         authority_locus: { locus_kind: string; mutation_policy: string };
         mutation_evidence_locus: { kind: string; path: string };
         federation_policy: { posture: string; admission: string };
+        doctrine_imports: unknown[];
         site_participant_roles: Array<{ role_id: string; role_class: string; runtime_kind?: string; authority_posture: string }>;
         agent_role_contracts: Record<string, unknown> & { admitted_roles: string[]; architect: { role_id: string }; builder: { role_id: string } };
         operator_surfaces: unknown[];
@@ -109,6 +110,7 @@ describe('sitesBootstrapProjectCommand', () => {
     expect(config.governance.authority_locus.mutation_policy).toBe('direct_only_at_locus');
     expect(config.governance.mutation_evidence_locus.kind).toBe('git');
     expect(config.governance.mutation_evidence_locus.path).toBe(join(workspace, '.narada'));
+    expect(config.governance.doctrine_imports).toEqual([]);
     expect(config.governance.federation_policy.posture).toBe('receive_only');
     expect(config.governance.federation_policy.admission).toBe('local_admission_required');
     expect(config.governance.site_participant_roles.map((role) => role.role_id)).toEqual(['resident', 'architect', 'builder']);

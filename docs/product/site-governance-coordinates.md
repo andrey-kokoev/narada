@@ -24,6 +24,7 @@ When durable governance coordinates, runtime truth, and operator/session knowled
 | `message_routing_authority` | Principal-to-locus message routing matrix for inbox, handoff, and MCP submissions. | Routing permission is not effect authority and does not bypass local admission. |
 | `effect_authority_policy` | Whether metadata can ever imply executable effect authority. | Default posture should be `metadata_only` or capability-gated. |
 | `capability_grants` | References to capability sources and scopes. | Capability references do not expose raw secrets. |
+| `doctrine_imports` | Site-admitted external doctrine, regulation, standard, contract, or policy regimes. | Import declares binding posture; interpretation belongs in doctrine, KG, KB, or an external advisor record. |
 | `lineage_source` | Evidence source for Site origin and relationship changes. | Lineage is evidence, not decorative graph. |
 | `readiness_phase` | Bootstrap, inhabited onboarding, steady state, or archived. | Readiness must be declared; do not infer from folder existence. |
 | `operator_identity` | Principal label for human authority. | Chat labels should resolve to a declared principal. |
@@ -231,6 +232,46 @@ When durable governance coordinates, runtime truth, and operator/session knowled
     },
     "effect_authority_policy": "metadata_only",
     "capability_grants": [],
+    "doctrine_imports": [
+      {
+        "import_id": "fda-qmsr-21-cfr-820",
+        "kind": "regulation",
+        "authority": {
+          "authority_kind": "regulator",
+          "issuer": "FDA",
+          "jurisdiction": "US",
+          "authority_ref": "21 CFR Part 820"
+        },
+        "citation": {
+          "title": "Quality Management System Regulation",
+          "source_uri": "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-H/part-820",
+          "effective_date": "2026-02-02"
+        },
+        "binding_scope": {
+          "site_wide": true,
+          "operation_kinds": ["capa"],
+          "task_gate_kinds": ["review", "closure"],
+          "capability_kinds": ["quality_record"]
+        },
+        "applicability": {
+          "default": "candidate",
+          "predicates": ["site.handles_medical_device_quality_records == true"]
+        },
+        "inheritance": {
+          "mode": "inherit_to_operations",
+          "override_policy": "operator_confirmed"
+        },
+        "binding_posture": "binding_gate",
+        "interpretation_locus": {
+          "kind": "knowledge_base",
+          "ref": "kb://quality/fda-qmsr"
+        },
+        "admission": {
+          "admitted_by": "operator",
+          "evidence_ref": "env_fda_qmsr_admission"
+        }
+      }
+    ],
     "lineage_source": {
       "kind": "operator_declaration",
       "path": "/repo/.narada/config.json"
@@ -351,6 +392,84 @@ effect_authority_policy = metadata_only
 ```
 
 This means the Site follows Narada law and may carry Site-local overlays such as `.narada/AGENTS.md`, but mutations still belong to the declared project Site locus. Narada proper is law source, not automatic runtime authority for the project Site.
+
+## Doctrine Imports
+
+`doctrine_imports` declares that a Site has admitted an external doctrine, regulation, standard, contract, or policy regime as a governing regime for some scope. It is a binding-coordinate declaration, not an interpretation substrate.
+
+The coordinate answers:
+
+- which regime was admitted;
+- which authority issued it;
+- which citation, source URI, version, or effective date anchors it;
+- which Site, Operation, task gate, or capability scope may inherit it;
+- which applicability predicates decide whether it binds a concrete case;
+- how child Operations or tasks inherit or override it;
+- whether the posture is reference-only, advisory, binding gate, or operator-confirmed binding;
+- where interpretation lives.
+
+The coordinate does not encode the regulation as config prose. Detailed interpretation, obligation mapping, traceability matrices, test protocols, and procedure-specific controls belong in doctrine docs, a knowledge graph, a knowledge base, or a governed external advisor record referenced by `interpretation_locus`.
+
+Example CAPA inheritance:
+
+```json
+{
+  "governance": {
+    "doctrine_imports": [
+      {
+        "import_id": "fda-qmsr-21-cfr-820",
+        "kind": "regulation",
+        "authority": {
+          "authority_kind": "regulator",
+          "issuer": "FDA",
+          "jurisdiction": "US",
+          "authority_ref": "21 CFR Part 820"
+        },
+        "citation": {
+          "title": "Quality Management System Regulation",
+          "source_uri": "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-H/part-820",
+          "effective_date": "2026-02-02"
+        },
+        "binding_scope": {
+          "site_wide": true,
+          "operation_kinds": ["capa"],
+          "task_gate_kinds": ["review", "approval", "traceability", "closure"],
+          "capability_kinds": ["quality_record"]
+        },
+        "applicability": {
+          "default": "candidate",
+          "predicates": [
+            "site.handles_medical_device_quality_records == true",
+            "operation.kind == 'capa'"
+          ]
+        },
+        "inheritance": {
+          "mode": "inherit_to_operations",
+          "override_policy": "operator_confirmed"
+        },
+        "binding_posture": "binding_gate",
+        "interpretation_locus": {
+          "kind": "knowledge_base",
+          "ref": "kb://quality/fda-qmsr"
+        },
+        "admission": {
+          "admitted_by": "operator",
+          "evidence_ref": "env_fda_qmsr_admission"
+        }
+      }
+    ]
+  }
+}
+```
+
+A CAPA Operation that matches the predicates inherits a gate posture from this import. The task or runtime surface should project applicable evidence, review, approval, traceability, and closure requirements, but the obligations themselves are resolved from `interpretation_locus`, not from the Site config text.
+
+This keeps the separation stable:
+
+- Site config declares regime admission and binding coordinates.
+- Doctrine/KG/KB interprets obligations and maps them to Narada structures.
+- Task/runtime surfaces project the applicable gates and record evidence.
+- Review and closure consume the projected gates plus evidence; they do not reinterpret the external regime ad hoc.
 
 ## Runtime Consequence
 
