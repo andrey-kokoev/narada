@@ -1223,14 +1223,14 @@ describe('operator-surface commands', () => {
       mutation_performed: false,
       event_artifact: null,
       requested_address: 'narada-proper-builder',
-      current_site: 'narada-proper',
-      target_site: 'narada-proper',
+      current_site: 'narada',
+      target_site: 'narada',
       message_route: {
         sender: 'operator',
         requested_recipient: 'narada-proper-builder',
         resolved_recipient: 'narada-proper-builder',
-        current_site: 'narada-proper',
-        target_site: 'narada-proper',
+        current_site: 'narada',
+        target_site: 'narada',
         binding_status: 'bound',
         identity_flag_mode: 'deprecated_recipient_alias',
       },
@@ -1239,19 +1239,19 @@ describe('operator-surface commands', () => {
         sender: 'operator',
         recipient: 'narada-proper-builder',
         requested_address: 'narada-proper-builder',
-        current_site: 'narada-proper',
-        target_site: 'narada-proper',
+        current_site: 'narada',
+        target_site: 'narada',
         message_route: {
           sender: 'operator',
           requested_recipient: 'narada-proper-builder',
           resolved_recipient: 'narada-proper-builder',
-          current_site: 'narada-proper',
-          target_site: 'narada-proper',
+          current_site: 'narada',
+          target_site: 'narada',
           binding_status: 'bound',
         },
         site_plane: {
-          current_site: 'narada-proper',
-          target_site: 'narada-proper',
+          current_site: 'narada',
+          target_site: 'narada',
         },
         binding_proof: {
           binding_id: 'bind-1',
@@ -1295,14 +1295,14 @@ describe('operator-surface commands', () => {
     expect(result.result).toMatchObject({
       status: 'success',
       requested_address: 'builder',
-      current_site: 'narada-proper',
-      target_site: 'narada-proper',
+      current_site: 'narada',
+      target_site: 'narada',
       message_route: {
         sender: 'Operator',
         requested_recipient: 'builder',
         resolved_recipient: 'narada-proper-builder',
-        current_site: 'narada-proper',
-        target_site: 'narada-proper',
+        current_site: 'narada',
+        target_site: 'narada',
         identity_flag_mode: 'explicit_to',
       },
       send: {
@@ -1311,8 +1311,73 @@ describe('operator-surface commands', () => {
         recipient: 'narada-proper-builder',
         requested_address: 'builder',
         site_plane: {
-          current_site: 'narada-proper',
-          target_site: 'narada-proper',
+          current_site: 'narada',
+          target_site: 'narada',
+        },
+      },
+    });
+  });
+
+  it('routes canonical narada current-site to legacy narada-proper identities without site mismatch', async () => {
+    const cwd = await tempRepo();
+    await admitIdentity(cwd);
+    await writeBindings(cwd, [{
+      binding_id: 'bind-1',
+      identity_id: 'narada-proper-builder',
+      runtime_locus: 'pc-site',
+      handle: 'hwnd:123',
+      transport: 'operator_surface_input',
+      submit_strategy: 'known_surface_submit',
+      input_capabilities: ['type_text', 'submit'],
+      status: 'active',
+    }]);
+
+    const bareRole = await operatorSurfaceSendCommand({
+      cwd,
+      from: 'Operator',
+      to: 'builder',
+      currentSite: 'narada',
+      text: 'next',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+    const scopedRole = await operatorSurfaceSendCommand({
+      cwd,
+      from: 'Operator',
+      to: 'narada.builder',
+      currentSite: 'narada',
+      text: 'next',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(bareRole.exitCode).toBe(ExitCode.SUCCESS);
+    expect(bareRole.result).toMatchObject({
+      status: 'success',
+      requested_address: 'builder',
+      current_site: 'narada',
+      target_site: 'narada',
+      send: {
+        identity: 'narada-proper-builder',
+        site_plane: {
+          current_site: 'narada',
+          target_site: 'narada',
+        },
+      },
+    });
+    expect(scopedRole.exitCode).toBe(ExitCode.SUCCESS);
+    expect(scopedRole.result).toMatchObject({
+      status: 'success',
+      requested_address: 'narada.builder',
+      current_site: 'narada',
+      target_site: 'narada',
+      identity_resolution: {
+        resolution: 'scoped_role_alias_exact_one',
+        resolution_evidence: {
+          site_id: 'narada',
+          requested_site_id: 'narada',
+          legacy_site_ids: ['narada-proper'],
+          candidates: ['narada-proper-builder'],
         },
       },
     });
@@ -1396,7 +1461,7 @@ describe('operator-surface commands', () => {
     expect(result.result).toMatchObject({
       status: 'success',
       requested_address: 'narada-andrey.builder',
-      current_site: 'narada-proper',
+      current_site: 'narada',
       target_site: 'narada-andrey',
       requested_to: 'narada-andrey.builder',
       resolved_to: 'narada-andrey.Bob',
@@ -1408,7 +1473,7 @@ describe('operator-surface commands', () => {
         requested_to: 'narada-andrey.builder',
         resolved_to: 'narada-andrey.Bob',
         resolution: 'scoped_role_alias_exact_one',
-        current_site: 'narada-proper',
+        current_site: 'narada',
         target_site: 'narada-andrey',
         binding_status: 'bound',
       },

@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T22:07:37.489Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777673185100_9wsy5k
+closed_at: 2026-05-01T22:08:08.375Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Rename Narada proper Site id to narada
@@ -32,8 +41,8 @@ Operator observed that operator-surface routing treats the current Site plane as
 
 ## Acceptance Criteria
 
-- [ ] Narada proper's canonical Site id is narada in operator-surface routing/status/help surfaces.
-- [ ] Existing narada-proper references remain accepted as legacy aliases or receive explicit migration guidance.
-- [ ] operator-surface send --to builder --current-site narada no longer fails with site_plane_mismatch when identity is otherwise valid.
-- [ ] Focused tests cover narada canonical id and narada-proper compatibility behavior.
-- [ ] Documentation or help output no longer teaches narada-proper as the preferred Site id.
+- [x] Narada proper's canonical Site id is narada in operator-surface routing/status/help surfaces.
+- [x] Existing narada-proper references remain accepted as legacy aliases or receive explicit migration guidance.
+- [x] operator-surface send --to builder --current-site narada no longer fails with site_plane_mismatch when identity is otherwise valid.
+- [x] Focused tests cover narada canonical id and narada-proper compatibility behavior.
+- [x] Documentation or help output no longer teaches narada-proper as the preferred Site id.

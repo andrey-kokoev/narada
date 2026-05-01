@@ -235,6 +235,16 @@ function canonicalSiteId(siteId: string | null | undefined): string | null {
   return LEGACY_SITE_ID_ALIASES[siteId] ?? siteId;
 }
 
+function legacySiteId(siteId: string | null | undefined): string | null {
+  const canonical = canonicalSiteId(siteId);
+  return siteId && canonical && siteId !== canonical ? siteId : null;
+}
+
+function siteIdMatches(candidate: string | null | undefined, requested: string | null | undefined): boolean {
+  if (!requested) return true;
+  return canonicalSiteId(candidate) === canonicalSiteId(requested);
+}
+
 function isCanonicalSiteLocus(value: string): boolean {
   return Object.prototype.hasOwnProperty.call(LEGACY_SITE_ID_ALIASES, value)
     || Object.values(LEGACY_SITE_ID_ALIASES).includes(value);
@@ -327,6 +337,7 @@ function normalizeAlias(value: string): string {
 }
 
 function operatorSurfaceAliases(identity: OperatorSurfaceIdentity): string[] {
+  const canonicalSite = canonicalSiteId(identity.site_id);
   const aliases = new Set([
     identity.identity_id,
     ...(identity.previous_identity_ids ?? []),
@@ -334,11 +345,12 @@ function operatorSurfaceAliases(identity: OperatorSurfaceIdentity): string[] {
     identity.role,
     `${identity.site_id}-${identity.role}`,
     `${identity.site_id}.${identity.role}`,
-    `narada-${identity.role}`,
     `${identity.site_id} ${identity.role}`,
-    `narada ${identity.role}`,
+    canonicalSite ? `${canonicalSite}-${identity.role}` : null,
+    canonicalSite ? `${canonicalSite}.${identity.role}` : null,
+    canonicalSite ? `${canonicalSite} ${identity.role}` : null,
   ]);
-  return [...aliases].filter(Boolean);
+  return [...aliases].filter((alias): alias is string => Boolean(alias));
 }
 
 function resolveSendIdentity(registry: OperatorSurfaceIdentityRegistry, requestedIdentity: string): {
@@ -381,10 +393,14 @@ function resolveScopedRoleAlias(registry: OperatorSurfaceIdentityRegistry, reque
   const role = dot > 0 ? requestedIdentity.slice(dot + 1) : null;
   if (!site || !role) return null;
   const candidates = registry.identities
-    .filter((identity) => identity.site_id === site && identity.role === role)
+    .filter((identity) => siteIdMatches(identity.site_id, site) && identity.role === role)
     .map((identity) => identity.identity_id)
     .sort();
   const knownAliases = registry.identities.flatMap(operatorSurfaceAliases);
+  const legacySiteIds = [...new Set(registry.identities
+    .filter((identity) => siteIdMatches(identity.site_id, site) && identity.site_id !== canonicalSiteId(identity.site_id))
+    .map((identity) => identity.site_id)
+    .filter(Boolean))];
   if (candidates.length === 1) {
     const admittedIdentity = registry.identities.find((identity) => identity.identity_id === candidates[0]) ?? null;
     return {
@@ -395,7 +411,9 @@ function resolveScopedRoleAlias(registry: OperatorSurfaceIdentityRegistry, reque
       matched_alias: requestedIdentity,
       known_aliases: knownAliases,
       resolution_evidence: {
-        site_id: site,
+        site_id: canonicalSiteId(site),
+        requested_site_id: site,
+        legacy_site_ids: legacySiteIds,
         role,
         candidates,
       },
@@ -409,7 +427,9 @@ function resolveScopedRoleAlias(registry: OperatorSurfaceIdentityRegistry, reque
     matched_alias: requestedIdentity,
     known_aliases: knownAliases,
     resolution_evidence: {
-      site_id: site,
+      site_id: canonicalSiteId(site),
+      requested_site_id: site,
+      legacy_site_ids: legacySiteIds,
       role,
       candidates,
     },
@@ -434,7 +454,7 @@ function looksSiteQualifiedAgentAddress(value: string): boolean {
 }
 
 function inferCurrentSite(registry: OperatorSurfaceIdentityRegistry): string | null {
-  const sites = [...new Set(registry.identities.map((identity) => identity.site_id).filter(Boolean))];
+  const sites = [...new Set(registry.identities.map((identity) => canonicalSiteId(identity.site_id)).filter(Boolean))];
   return sites.length === 1 ? sites[0]! : null;
 }
 
@@ -2149,7 +2169,7 @@ export async function operatorSurfaceLabelsBuildCommand(
   }
   const limit = options.limit ?? 50;
   const identities = registry.identities
-    .filter((entry) => !options.site || entry.site_id === options.site)
+    .filter((entry) => siteIdMatches(entry.site_id, options.site))
     .slice(0, limit);
   const labels = identities.map((identity) => makeOperatorSurfaceLabel(identity, registry));
   return {
@@ -2367,7 +2387,8 @@ function osmDeliveryReadiness(args: {
     ]);
     return {
       identity_id: identity.identity_id,
-      site_id: identity.site_id,
+      site_id: canonicalSiteId(identity.site_id) ?? identity.site_id,
+      legacy_site_id: legacySiteId(identity.site_id),
       role: identity.role,
       status: blockers.length === 0 ? 'ready' : 'blocked',
       binding_status: selectedDiagnostics.length > 0 ? 'ambiguous' : posture.binding_status,
@@ -2406,7 +2427,7 @@ export async function operatorSurfaceDoctorCommand(
     };
   }
   const identities = registry.identities
-    .filter((identity) => !options.site || identity.site_id === options.site)
+    .filter((identity) => siteIdMatches(identity.site_id, options.site))
     .slice(0, options.limit ?? 50);
   const identityIds = new Set(identities.map((identity) => identity.identity_id));
   const scopedBindings = bindings
@@ -2639,7 +2660,7 @@ export async function operatorSurfaceStatusCommand(
     }
   });
   const identities = registry.identities
-    .filter((identity) => !options.site || identity.site_id === options.site)
+    .filter((identity) => siteIdMatches(identity.site_id, options.site))
     .slice(0, options.limit ?? 50);
 
   const agents = await Promise.all(identities.map(async (identity) => {
@@ -2690,7 +2711,8 @@ export async function operatorSurfaceStatusCommand(
     return {
       identity_id: identity.identity_id,
       role: identity.role,
-      site_id: identity.site_id,
+      site_id: canonicalSiteId(identity.site_id) ?? identity.site_id,
+      legacy_site_id: legacySiteId(identity.site_id),
       runtime_locus: posture.runtime_locus,
       binding_status: posture.binding_status,
       addressability_status: posture.addressability_status,
@@ -2780,7 +2802,7 @@ export async function operatorSurfaceInspectCompactCommand(
   }
 
   const identities = registry.identities
-    .filter((identity) => !options.site || identity.site_id === options.site)
+    .filter((identity) => siteIdMatches(identity.site_id, options.site))
     .slice(0, options.limit ?? 50);
   const labelProjection = normalizeVisibleLabelEvidence(labelEvidence.labels);
   const labels = identities.map((identity) => makeOperatorSurfaceLabel(identity, registry));
@@ -2791,7 +2813,8 @@ export async function operatorSurfaceInspectCompactCommand(
     return {
       identity_id: identity.identity_id,
       identity_name: label?.identity_name ?? identity.identity_id,
-      site_id: identity.site_id,
+      site_id: canonicalSiteId(identity.site_id) ?? identity.site_id,
+      legacy_site_id: legacySiteId(identity.site_id),
       role: identity.role,
       label: label?.label ?? identity.label ?? identity.identity_id,
       runtime_locus: posture.runtime_locus,
@@ -3185,7 +3208,8 @@ export async function operatorSurfaceSendCommand(
     const registry = await readOperatorSurfaceIdentities(cwd);
     const sender = options.from?.trim() || 'operator';
     const rawInput = Boolean(options.rawInput);
-    const currentSite = options.currentSite?.trim() || inferCurrentSite(registry);
+    const requestedCurrentSite = options.currentSite?.trim() || inferCurrentSite(registry);
+    const currentSite = canonicalSiteId(requestedCurrentSite) ?? requestedCurrentSite;
     if (isBareRoleAddress(requestedRecipient) && !currentSite) {
       return {
         exitCode: ExitCode.INVALID_CONFIG,
@@ -3210,10 +3234,11 @@ export async function operatorSurfaceSendCommand(
     const admittedIdentity = sendIdentity.admittedIdentity;
     const identity = sendIdentity.identity;
     const agentFields = agentResolutionFields(sendIdentity.agentResolution);
-    const targetSite = sendIdentity.agentResolution?.site_prefix
+    const rawTargetSite = sendIdentity.agentResolution?.site_prefix
       ?? admittedIdentity?.site_id
       ?? sitePrefixFromAddress(requestedRecipient)
       ?? (isBareRoleAddress(requestedRecipient) ? currentSite : null);
+    const targetSite = canonicalSiteId(rawTargetSite) ?? rawTargetSite;
     const baseRoute = {
       sender,
       requestedRecipient,
@@ -3223,7 +3248,13 @@ export async function operatorSurfaceSendCommand(
       resolution: publicIdentityResolution(identityResolution),
       legacyIdentityAlias,
     };
-    if (isBareRoleAddress(requestedRecipient) && admittedIdentity && currentSite && admittedIdentity.site_id !== currentSite) {
+    if (
+      isBareRoleAddress(requestedRecipient)
+      && admittedIdentity
+      && currentSite
+      && !siteIdMatches(admittedIdentity.site_id, currentSite)
+    ) {
+      const admittedSite = canonicalSiteId(admittedIdentity.site_id) ?? admittedIdentity.site_id;
       return {
         exitCode: ExitCode.INVALID_CONFIG,
         result: {
@@ -3234,7 +3265,7 @@ export async function operatorSurfaceSendCommand(
           ...agentFields,
           ...routeFields(baseRoute),
           mutation_performed: false,
-          unblock_command: `Use a Site-qualified recipient such as ${admittedIdentity.site_id}.${admittedIdentity.role}, or rerun with --current-site ${admittedIdentity.site_id} if that is the intended Site plane.`,
+          unblock_command: `Use a Site-qualified recipient such as ${admittedSite}.${admittedIdentity.role}, or rerun with --current-site ${admittedSite} if that is the intended Site plane.`,
         },
       };
     }
