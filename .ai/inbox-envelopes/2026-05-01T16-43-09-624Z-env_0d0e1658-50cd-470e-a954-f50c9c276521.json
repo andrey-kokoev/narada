@@ -1,0 +1,52 @@
+{
+  "envelope_id": "env_0d0e1658-50cd-470e-a954-f50c9c276521",
+  "received_at": "2026-05-01T16:43:09.624Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey:capa-identity-style-migration-loss"
+  },
+  "kind": "incident",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "CAPA: identity schema migration lost label styling for role projection",
+    "summary": "After the Kevin identity migration from narada-andrey.architect to narada-andrey.Kevin, the newer identity_id/site_id/role record lacked label_projection.style. Build-WindowLabelsFromIdentities.ps1 accepted the newer schema for identity and role extraction but silently fell back to default grey role_text_hex D1D5DB, causing the architect role line to render white/grey instead of fuchsia E879F9. This is a migration/projection defect: semantic role was preserved, but visual role-affinity projection was lost without diagnostic.",
+    "observed_at": "2026-05-01T11:42:54.9168541-05:00",
+    "source_site": "narada-andrey",
+    "severity": "minor",
+    "incident": {
+      "affected_identity": "narada-andrey.Kevin",
+      "previous_identity": "narada-andrey.architect",
+      "expected_role_color": "E879F9",
+      "observed_role_color": "D1D5DB",
+      "affected_file": "operator-surfaces/identities.json",
+      "projection_builder": "tools/operator-surface-carriers/Build-WindowLabelsFromIdentities.ps1"
+    },
+    "root_cause_hypothesis": [
+      "The newer identity_id/site_id/role schema path did not require or inherit label_projection.style.",
+      "The label builder supports both old and new identity schema shapes, but style fallback is generic and does not derive role/site affinity from registry-level role/site color declarations.",
+      "Projection fallback produced a plausible-looking label rather than a diagnostic, hiding migration loss."
+    ],
+    "containment": [
+      "Added explicit label_projection.style to narada-andrey.Kevin with role_text_hex E879F9.",
+      "Regenerated window-labels.json and restarted overlay."
+    ],
+    "corrective_action": [
+      "Define label styling inheritance for identity records: identity explicit style > role/site registry style > declared default with diagnostic.",
+      "Update label builder so new schema identities inherit role affinity color from registry roles when label_projection.style is absent.",
+      "Emit diagnostics when migrated identities lack explicit or inherited style for visible role projection."
+    ],
+    "preventive_action": [
+      "Add migration test from role-named identity to named-agent identity preserving role color.",
+      "Add projection test that narada-andrey.Kevin role architect renders E879F9 by inheritance or explicit style.",
+      "Add schema/preflight check for identity records that contain role but lack style and lack valid role color inheritance."
+    ],
+    "verification": [
+      "Build-WindowLabelsFromIdentities.ps1 produces role_text_hex E879F9 for narada-andrey.Kevin.",
+      "No silent grey fallback occurs for identities with known roles unless explicitly configured."
+    ]
+  },
+  "status": "received"
+}
