@@ -272,6 +272,11 @@ describe('task close operator', () => {
     expect(result.result).toMatchObject({
       status: 'error',
       repair_command: 'narada task continue 110 --agent worker --reason evidence_repair',
+      closure_posture: {
+        closure_posture: 'repair_required',
+        residual_crossing: 'evidence_repair_continuation',
+        next_command: 'narada task continue 110 --agent worker --reason evidence_repair',
+      },
     });
     const r = result.result as { remediation: string[]; gate_failures: string[] };
     expect(r.gate_failures).toContain('Latest Evidence Admission result is rejected');
@@ -302,7 +307,10 @@ describe('task close operator', () => {
       status: 'error',
       closure_claim: {
         applies: true,
+        closure_posture: 'scope_complete_with_continuation',
         capability_complete: false,
+        residual_crossing_required: true,
+        residual_crossing: 'continuation_task',
         transition_complete: false,
       },
     });
@@ -335,7 +343,9 @@ describe('task close operator', () => {
       status: 'success',
       closure_claim: {
         applies: true,
+        closure_posture: 'scope_complete_with_deferral',
         capability_complete: true,
+        residual_crossing: 'deferral_rationale',
         transition_complete: true,
         no_continuation_needed_rationale: 'Spike was intentionally scoped to discardable decision evidence.',
       },
@@ -367,8 +377,10 @@ describe('task close operator', () => {
       status: 'success',
       closure_claim: {
         applies: true,
+        closure_posture: 'scope_complete_with_continuation',
         capability_complete: true,
         has_continuation_relation: true,
+        residual_crossing: 'continuation_task',
         transition_complete: true,
       },
     });

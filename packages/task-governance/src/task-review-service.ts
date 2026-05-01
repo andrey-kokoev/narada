@@ -59,6 +59,7 @@ export interface ReviewTaskServiceResponse {
       commands: string[];
       no_workaround: string;
     };
+    closure_posture?: PrototypeClosurePosture | Record<string, unknown>;
     closure_claim?: PrototypeClosurePosture;
     error?: string;
   };
@@ -555,9 +556,24 @@ export async function reviewTaskService(
     if (evidenceReason) {
       result.evidence_reason = evidenceReason;
     }
+    result.closure_posture = admission.result.verdict === 'rejected'
+      ? {
+          closure_posture: 'repair_required',
+          repair_reason: 'accepted_review_failed_evidence_admission',
+          residual_crossing_required: true,
+          residual_crossing: 'evidence_repair_continuation',
+          next_command: `narada task continue ${taskNumber} --agent ${agentId} --reason evidence_repair`,
+        }
+      : {
+          closure_posture: 'blocked',
+          repair_reason: 'close_gate_failed',
+          residual_crossing_required: true,
+          residual_crossing: 'closure_gate_repair',
+        };
   }
   if (closureClaim.applies) {
     result.closure_claim = closureClaim;
+    if (!result.closure_posture) result.closure_posture = closureClaim;
     if (closureClaim.warning && !result.evidence_reason) {
       result.evidence_reason = closureClaim.warning;
     }

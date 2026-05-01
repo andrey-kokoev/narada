@@ -1,5 +1,15 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T03:53:41.450Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777607587615_40t3fk
+no_continuation_needed_rationale: Typed closure posture model is the implementation deliverable for this task; residual formal state-machine extraction is already represented by sibling tasks 1177-1181, not by an untracked continuation inside 1176.
+closed_at: 2026-05-01T03:54:36.821Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Unify partial completion handling under typed closure posture
@@ -36,10 +46,10 @@ Define typed closure postures for task review and close; map current CAPA tasks 
 
 ## Acceptance Criteria
 
-- [ ] Closure posture vocabulary includes capability_complete, scope_complete_with_continuation, scope_complete_with_deferral, repair_required, and blocked, or documented equivalents.
-- [ ] Review and close outputs distinguish capability completion from scope completion with residual crossings.
-- [ ] Evidence repair after accepted review is represented as repair_required rather than a lifecycle dead-end special case.
-- [ ] Facade/prototype/spike completion is represented as scope_complete_with_continuation or scope_complete_with_deferral rather than ad hoc warnings.
-- [ ] Forward-momentum requirements are expressed as residual crossing handling under closure posture.
-- [ ] Tasks 1169, 1172, 1174, and relevant 1173 work are explicitly referenced or reconciled so Builder does not implement contradictory one-off mechanisms.
-- [ ] Focused tests cover each closure posture and prevent done wording when residual crossing is unhandled.
+- [x] Closure posture vocabulary includes capability_complete, scope_complete_with_continuation, scope_complete_with_deferral, repair_required, and blocked, or documented equivalents.
+- [x] Review and close outputs distinguish capability completion from scope completion with residual crossings.
+- [x] Evidence repair after accepted review is represented as repair_required rather than a lifecycle dead-end special case.
+- [x] Facade/prototype/spike completion is represented as scope_complete_with_continuation or scope_complete_with_deferral rather than ad hoc warnings.
+- [x] Forward-momentum requirements are expressed as residual crossing handling under closure posture.
+- [x] Tasks 1169, 1172, 1174, and relevant 1173 work are explicitly referenced or reconciled so Builder does not implement contradictory one-off mechanisms.
+- [x] Focused tests cover each closure posture and prevent done wording when residual crossing is unhandled.

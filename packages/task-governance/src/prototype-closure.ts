@@ -3,14 +3,24 @@ import type { TaskFrontMatter } from './task-governance.js';
 export interface PrototypeClosurePosture {
   applies: boolean;
   terms: string[];
+  closure_posture: ClosurePostureKind;
   has_continuation_relation: boolean;
   no_continuation_needed_rationale: string | null;
+  residual_crossing_required: boolean;
+  residual_crossing: 'continuation_task' | 'deferral_rationale' | 'none';
   scope_complete: boolean;
   capability_complete: boolean;
   doctrine_complete: boolean;
   transition_complete: boolean;
   warning?: string;
 }
+
+export type ClosurePostureKind =
+  | 'capability_complete'
+  | 'scope_complete_with_continuation'
+  | 'scope_complete_with_deferral'
+  | 'repair_required'
+  | 'blocked';
 
 const PROTOTYPE_TERMS = [
   'facade',
@@ -46,11 +56,27 @@ export function analyzePrototypeClosure(frontMatter: TaskFrontMatter, body: stri
   const capabilityComplete = applies ? continuation || noContinuation.length > 0 : true;
   const doctrineRelevant = /\b(doctrine|law|semantic|contract)\b/i.test(text);
   const transitionComplete = !applies || capabilityComplete;
+  const closurePosture: ClosurePostureKind = !applies
+    ? 'capability_complete'
+    : continuation
+      ? 'scope_complete_with_continuation'
+      : noContinuation.length > 0
+        ? 'scope_complete_with_deferral'
+        : 'scope_complete_with_continuation';
   return {
     applies,
     terms,
+    closure_posture: closurePosture,
     has_continuation_relation: continuation,
     no_continuation_needed_rationale: noContinuation || null,
+    residual_crossing_required: applies,
+    residual_crossing: continuation
+      ? 'continuation_task'
+      : noContinuation.length > 0
+        ? 'deferral_rationale'
+        : applies
+          ? 'continuation_task'
+          : 'none',
     scope_complete: true,
     capability_complete: capabilityComplete,
     doctrine_complete: doctrineRelevant ? transitionComplete : false,

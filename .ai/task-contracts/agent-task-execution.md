@@ -647,9 +647,21 @@ Before closing these tasks, provide one of:
 
 Review and close output must distinguish `scope_complete` from `capability_complete` so a typed facade/prototype closure is not mistaken for a usable runtime capability.
 
-Completion classes are separate:
+Review and close output must also expose a typed `closure_posture`. The posture is the admission-facing summary of whether "done" means usable capability, scoped completion with a residual crossing, repair work, or blocker.
 
-| Class | Meaning |
+Closure postures:
+
+| Posture | Meaning |
+| --- | --- |
+| `capability_complete` | The intended usable capability is implemented or deliberately declared unnecessary. |
+| `scope_complete_with_continuation` | The local scope is complete and a residual implementation/capability crossing must be or has been linked. |
+| `scope_complete_with_deferral` | The local scope is complete and the residual crossing is explicitly deferred with rationale. |
+| `repair_required` | Review or closure found evidence/lifecycle repair work before terminal status is admissible. |
+| `blocked` | Closure cannot proceed until a named gate is repaired. |
+
+Completion facets remain separate from the posture:
+
+| Facet | Meaning |
 | --- | --- |
 | `scope_complete` | The task's stated local scope is done. |
 | `capability_complete` | The intended usable capability is implemented or deliberately declared unnecessary. |

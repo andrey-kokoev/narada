@@ -196,6 +196,15 @@ export async function closeTaskService(
         repair_command: admission?.verdict === 'rejected'
           ? `narada task continue ${taskNumber} --agent ${closedBy} --reason evidence_repair`
           : undefined,
+        closure_posture: admission?.verdict === 'rejected'
+          ? {
+              closure_posture: 'repair_required',
+              repair_reason: 'latest_evidence_admission_rejected',
+              residual_crossing_required: true,
+              residual_crossing: 'evidence_repair_continuation',
+              next_command: `narada task continue ${taskNumber} --agent ${closedBy} --reason evidence_repair`,
+            }
+          : closureClaim,
         closure_claim: closureClaim,
         violations: evidence.violations,
       },
@@ -268,6 +277,7 @@ export async function closeTaskService(
       closure_mode: closureMode,
       closed_at: frontMatter.closed_at,
       admission_id: admission?.admission_id,
+      closure_posture: closureClaim,
       closure_claim: closureClaim,
       assignment_released: assignmentReleased,
       roster_reconciled: rosterReconciled,

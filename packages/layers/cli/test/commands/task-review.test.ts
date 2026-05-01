@@ -169,6 +169,11 @@ describe('task review command', () => {
       new_status: 'needs_continuation',
       close_action: 'skipped',
       evidence_blocked: true,
+      closure_posture: {
+        closure_posture: 'repair_required',
+        residual_crossing: 'evidence_repair_continuation',
+        next_command: 'narada task continue 1000 --agent reviewer --reason evidence_repair',
+      },
     });
 
     let store = openTaskLifecycleStore(tempDir);
@@ -374,8 +379,10 @@ describe('task review command', () => {
       close_action: 'blocked',
       closure_claim: {
         applies: true,
+        closure_posture: 'scope_complete_with_continuation',
         scope_complete: true,
         capability_complete: false,
+        residual_crossing: 'continuation_task',
         transition_complete: false,
       },
     });
