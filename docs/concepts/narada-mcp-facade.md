@@ -8,6 +8,19 @@ In the [`Operator Surface`](operator-surface.md) topology, an MCP facade is usua
 
 This facade participates in the scale-recursive topology described by the external concept note [`Scale-Relative Operation Topology`](../../../thoughts/content/concepts/scale-relative-operation-topology.md): MCP fabric is a governed traversal medium, while each addressed Site remains the local authority locus.
 
+A Site may expose zero, one, or many MCP surfaces. A surface is not identified by the mere presence of an MCP server. It must be typed by:
+
+- **purpose**: inbox intake, command execution, task inspection, Site doctor, fabric traversal, or another declared function;
+- **authority boundary**: which Site admits consequence and which crossing regime governs mutation;
+- **runtime embodiment**: the process, host, shell, container, stdio channel, HTTP adapter, or client profile that presents the surface.
+
+The compact rule:
+
+```text
+MCP surface presence does not imply authority.
+Typed capability announcement plus target Site admission decides what can happen.
+```
+
 ## Boundary
 
 | Layer | Role |
@@ -18,6 +31,81 @@ This facade participates in the scale-recursive topology described by the extern
 | Stores/evidence | Authority-bearing state and replayable mutation evidence. |
 
 MCP may improve ergonomics. It may not bypass approval, lifecycle, evidence, or crossing regimes.
+
+## Typed Surfaces
+
+Narada MCP surfaces are typed protocol surfaces. A single process may serve multiple typed surfaces, or a runtime may launch separate MCP servers for different purposes. The type declaration is the authority-relevant fact, not the process count.
+
+Initial typed surfaces:
+
+| Surface type | Purpose | Authority posture |
+|--------------|---------|-------------------|
+| `inbox_mcp` | Submit, inspect, and route Canonical Inbox envelopes. | Admits inert messages or proposals into the target Site inbox authority only. |
+| `ee_mcp` | Request bounded execution through a declared runtime embodiment. | Requests embodied execution through CEIZ or equivalent command-execution law; does not execute by transport alone. |
+| `site_context_mcp` | Inspect Site identity, readiness, doctor posture, routing, and fabric context. | Read-only unless a specific typed mutation capability is declared separately. |
+
+The anti-collapse rule:
+
+```text
+Inbox MCP admits messages.
+EE-MCP requests embodied execution.
+Target Site authority admits consequence.
+```
+
+Inbox MCP and EE-MCP may be useful together, but they are not the same surface. Inbox MCP is governance intake. EE-MCP is a command-execution request channel. Neither bypasses target Site admission.
+
+## Inbox MCP
+
+Inbox MCP is the smallest governance-oriented MCP surface.
+
+Its initial capability set should be limited to:
+
+| Capability | Posture |
+|------------|---------|
+| `site_context` | Read-only Site identity and authority posture. |
+| `inbox_doctor` | Read-only readiness and schema inspection. |
+| `inbox_list` | Bounded read-only envelope listing. |
+| `inbox_show` | Bounded read-only envelope inspection. |
+| `inbox_work_next` | Read-only by default; claim/pending/archive only when explicitly exposed and routed through canonical inbox commands. |
+| `inbox_submit_observation` | Mutating inert envelope submission with read-back confirmation and mutation evidence. |
+| `inbox_schema` | Read-only schema/capability inspection for clients. |
+
+Inbox MCP does not create tasks, approve effects, run commands, or decide inbox promotion by implication. It submits or inspects envelopes under the target Site's [`Canonical Inbox`](canonical-inbox.md) and message-routing law.
+
+## Embodiment Execution MCP
+
+Embodiment Execution MCP, abbreviated **EE-MCP**, is a bounded execution surface for a declared runtime embodiment such as `windows-pwsh`, `wsl-bash`, `linux-systemd`, `container-shell`, or a hosted sandbox.
+
+An EE-MCP surface must declare:
+
+| Field | Requirement |
+|-------|-------------|
+| `embodiment_id` | Stable local runtime embodiment name. |
+| `runtime_locus` | User Site, PC Site, Project Site, or other Site that owns process launch and supervision. |
+| `command_classes` | Allowed classes such as read-only inspection, test execution, build, formatter, or explicitly approved mutation. |
+| `cwd_policy` | Allowed working directories and target Site/locus mapping. |
+| `environment_policy` | Inherited, redacted, pinned, or capability-mediated environment. |
+| `timeout_policy` | Default and maximum timeout. |
+| `output_admission` | Digest, bounded excerpt, artifact path, or raw opt-in policy. |
+| `authority_posture` | CEIZ, TIZ, publication, or other governed command-execution law. |
+| `evidence_logging` | Durable command-run, verification-run, or command-execution-intent trace. |
+
+EE-MCP must route command requests through the [`Command Execution Intent Zone`](command-execution-intent-zone.md) or a stricter equivalent. A tool call such as `ee_run` is only a request into the execution law. It is not permission to run arbitrary shell text.
+
+## Runtime Locus Policy
+
+MCP process launch and supervision belongs to the execution-machine Site: commonly a User Site, PC Site, Project Site, or sandbox-owning Site. The target Site owns admission and consequence.
+
+Examples:
+
+| Question | Owning locus |
+|----------|--------------|
+| Which process launches `narada-mcp`? | Execution-machine User/PC/runtime Site. |
+| Which Site receives an inbox envelope? | Target Site inbox authority. |
+| Which policy admits a command consequence? | Target Site command-execution law, possibly mediated by the execution-machine Site. |
+| Which trace proves what happened? | Target Site evidence plus execution-machine command trace when execution crossed loci. |
+
+This preserves [`Site Governance Coordinates`](../product/site-governance-coordinates.md): current shell, MCP process, client config, and convenience path are embodiments. They do not become authority loci by being live.
 
 ## Initial Surface
 
@@ -56,14 +144,14 @@ Initial tools:
 
 An agent only sees Narada MCP tools when its MCP client configuration launches `narada-mcp`. Tool discovery does not happen merely because the repository contains the binary.
 
-Minimum client configuration shape:
+Minimum client configuration shape for an Inbox MCP surface:
 
 ```json
 {
   "mcpServers": {
-    "narada-proper": {
+    "narada-inbox": {
       "command": "narada-mcp",
-      "args": ["--site-root", "/home/andrey/src/narada"]
+      "args": ["--site-root", "/home/andrey/src/narada", "--surface", "inbox"]
     }
   }
 }
@@ -87,9 +175,9 @@ If the client cannot resolve `narada-mcp`, use the repo-local binary path or ins
 ```json
 {
   "mcpServers": {
-    "narada-proper": {
+    "narada-inbox": {
       "command": "/home/andrey/src/narada/node_modules/.bin/narada-mcp",
-      "args": ["--site-root", "/home/andrey/src/narada"]
+      "args": ["--site-root", "/home/andrey/src/narada", "--surface", "inbox"]
     }
   }
 }
@@ -105,7 +193,7 @@ narada-mcp
 The local Narada proper MCP client config artifact is:
 
 ```text
-.ai/mcp/narada-proper.mcp.json
+.ai/mcp/narada.mcp.json
 ```
 
 The expected read-only proof after registration is:
@@ -113,6 +201,7 @@ The expected read-only proof after registration is:
 1. Client lists MCP tools.
 2. Tool list includes `narada_inbox_submit_observation`, `narada_inbox_work_next`, `narada_task_work_next`, and `narada_inbox_doctor`.
 3. `narada_site_context` returns the intended `site_id`, `site_root`, and `authority_posture: "facade_only"`.
+4. Capability inspection announces the surface type before clients assume a typed surface exists.
 
 This is configuration of a `ControlChannel`, not authority movement. The MCP facade still delegates to canonical services and mutating inbox tools still create inert envelopes with read-back confirmation and mutation evidence.
 
@@ -124,6 +213,8 @@ Every Narada Site may expose its own MCP facade, but that facade is not a new au
 
 There may be many possible Site-scoped MCP facades. The long-term model is not an unbounded swarm of sovereign servers; it is a governed access fabric that resolves each request to a declared Site before consequence.
 
+There may also be many MCP surfaces for the same Site. That is coherent when the surfaces are typed and capability-announced. It is incoherent when clients infer "this Site has MCP" and then assume inbox, execution, task mutation, and publication capabilities all exist on the same authority footing.
+
 Site-scoped MCP means:
 
 1. The server is launched with a Site root, or resolves one from cwd.
@@ -133,6 +224,57 @@ Site-scoped MCP means:
 5. Mutating tools still delegate to the canonical command/service implementation and produce the same evidence as the CLI path.
 
 This allows a User Site, PC Site, Project Site, Client Service Site, or future Site kind to publish an agent-facing protocol surface while preserving the Site's existing authority grammar.
+
+## Capability Announcement
+
+Typed MCP surfaces must be capability-announced and inspectable. A client must not assume a surface exists from a server name, process name, repo path, or installed binary.
+
+Minimum announcement fields:
+
+| Field | Meaning |
+|-------|---------|
+| `surface_type` | `inbox_mcp`, `ee_mcp`, `site_context_mcp`, or another declared type. |
+| `site_id` | Target Site whose policy admits consequence. |
+| `site_root` | Local root used by the facade. |
+| `runtime_locus` | Runtime embodiment owner when different from target Site. |
+| `capabilities` | Declared tools and mutation posture. |
+| `authority_posture` | Facade-only, read-only, CEIZ-mediated, inbox-admitted, or other explicit posture. |
+| `evidence_policy` | Mutation evidence, command run, verification run, or read-only trace posture. |
+
+This is an application of [`capability-announcement`](capability-announcement.md): capability presence is a governed fact that clients inspect before use.
+
+## Operator Example
+
+A User or PC Site may launch two separate surfaces for Narada:
+
+```json
+{
+  "mcpServers": {
+    "narada-inbox": {
+      "command": "narada-mcp",
+      "args": ["--site-root", "/home/andrey/src/narada", "--surface", "inbox"]
+    },
+    "narada-ee-wsl": {
+      "command": "narada-mcp",
+      "args": [
+        "--site-root", "/home/andrey/src/narada",
+        "--surface", "ee",
+        "--embodiment", "wsl-bash",
+        "--runtime-locus", "narada"
+      ]
+    }
+  }
+}
+```
+
+In that example:
+
+- `narada-inbox` can submit or inspect inert envelopes for the Narada Site.
+- `narada-ee-wsl` can request bounded WSL command execution only through the declared command-execution law.
+- The User/PC/runtime Site owns process launch and supervision.
+- The Narada Site owns inbox admission, command consequence, and evidence requirements.
+
+If implementation is missing for a declared surface type, record a follow-up task. Do not let documentation imply the surface is live by naming it.
 
 ## Fabric v1
 

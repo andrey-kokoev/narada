@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T02:54:14.240Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777604019241_2th07s
+closed_at: 2026-05-01T02:54:33.366Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Define typed MCP surfaces starting with Inbox MCP and EE-MCP
@@ -32,9 +41,9 @@ Source inbox envelope env_ed940ea1-6351-4422-ab36-b76141e99b78 in commit 03e52a3
 
 ## Acceptance Criteria
 
-- [ ] MCP facade docs define typed MCP surfaces and explicitly reject monolithic MCP-by-presence assumptions.
-- [ ] Inbox MCP is defined with scope, authority posture, and allowed initial capabilities.
-- [ ] EE-MCP is defined with embodiment, command-execution, timeout, output-admission, and evidence boundaries.
-- [ ] Docs preserve execution-machine runtime locus policy and target Site admission authority.
-- [ ] Capability announcement and inspection are required before clients assume a typed MCP surface exists.
-- [ ] Related doctrine links are updated or clearly referenced.
+- [x] MCP facade docs define typed MCP surfaces and explicitly reject monolithic MCP-by-presence assumptions.
+- [x] Inbox MCP is defined with scope, authority posture, and allowed initial capabilities.
+- [x] EE-MCP is defined with embodiment, command-execution, timeout, output-admission, and evidence boundaries.
+- [x] Docs preserve execution-machine runtime locus policy and target Site admission authority.
+- [x] Capability announcement and inspection are required before clients assume a typed MCP surface exists.
+- [x] Related doctrine links are updated or clearly referenced.
