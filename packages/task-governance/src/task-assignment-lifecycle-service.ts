@@ -282,7 +282,10 @@ export async function continueTaskService(
   const currentStatus = admission.currentStatus;
   const existing = await loadAssignment(cwd, taskFile.taskId);
   const active = existing?.assignments.find((a) => a.released_at === null && a.agent_id === admission.previousAgentId);
-  if (!active) {
+  const canStartWithoutActive =
+    currentStatus === 'needs_continuation' ||
+    (currentStatus === 'in_review' && reason === 'evidence_repair');
+  if (!active && !canStartWithoutActive) {
     recordAssignmentIntentFailed(cwd, admission.intent.request_id, 'Active assignment disappeared after admission');
     return {
       exitCode: ExitCode.GENERAL_ERROR,
@@ -310,8 +313,10 @@ export async function continueTaskService(
 
   try {
     if (supersedes) {
-      active.released_at = now;
-      active.release_reason = 'continued';
+      if (active) {
+        active.released_at = now;
+        active.release_reason = 'continued';
+      }
 
       const newAssignment: TaskAssignment = {
         agent_id: agentId,
@@ -320,7 +325,19 @@ export async function continueTaskService(
         released_at: null,
         release_reason: null,
         continuation_reason: reason,
-        previous_agent_id: active.agent_id,
+        previous_agent_id: active?.agent_id ?? null,
+        intent: continuationReasonToIntent(reason),
+      };
+      record.assignments.push(newAssignment);
+    } else if (!active) {
+      const newAssignment: TaskAssignment = {
+        agent_id: agentId,
+        claimed_at: now,
+        claim_context: null,
+        released_at: null,
+        release_reason: null,
+        continuation_reason: reason,
+        previous_agent_id: null,
         intent: continuationReasonToIntent(reason),
       };
       record.assignments.push(newAssignment);
@@ -334,7 +351,7 @@ export async function continueTaskService(
       record.continuations.push(continuation);
     }
 
-    if (currentStatus === 'needs_continuation') {
+    if (currentStatus === 'needs_continuation' || (currentStatus === 'in_review' && reason === 'evidence_repair')) {
       frontMatter.status = 'claimed';
       await writeTaskFile(taskFile.path, frontMatter, body);
     }
@@ -342,7 +359,7 @@ export async function continueTaskService(
     const store = openTaskLifecycleStore(cwd);
     try {
       ensureLifecycleForAssignment(store, taskFile.taskId, parsedTaskNumber, frontMatter);
-      if (currentStatus === 'needs_continuation') {
+      if (currentStatus === 'needs_continuation' || (currentStatus === 'in_review' && reason === 'evidence_repair')) {
         store.updateStatus(taskFile.taskId, 'claimed', agentId);
       }
     } finally {
@@ -353,7 +370,7 @@ export async function continueTaskService(
 
     const assignmentStore = openTaskLifecycleStore(cwd);
     try {
-      if (supersedes) {
+      if (supersedes || !active) {
         const activeRow = assignmentStore.getActiveAssignment(taskFile.taskId);
         if (activeRow) {
           assignmentStore.releaseAssignment(activeRow.assignment_id, 'continued');
@@ -377,7 +394,7 @@ export async function continueTaskService(
       task: parsedTaskNumber || null,
     });
 
-    if (supersedes && active.agent_id !== agentId) {
+    if (supersedes && active && active.agent_id !== agentId) {
       const roster = await loadRoster(cwd);
       const previousAgent = roster.agents.find((entry) => entry.agent_id === active.agent_id);
       if (previousAgent?.task === parsedTaskNumber) {
@@ -397,7 +414,7 @@ export async function continueTaskService(
         task_id: taskFile.taskId,
         task_number: parsedTaskNumber,
         supersedes,
-        previous_agent_id: active.agent_id,
+        previous_agent_id: active?.agent_id ?? null,
         previous_roster_reconciled: previousRosterReconciled,
         lifecycle_status: frontMatter.status,
         roster_status: 'working',
@@ -420,7 +437,7 @@ export async function continueTaskService(
       agent_id: agentId,
       reason,
       supersedes,
-      previous_agent_id: active.agent_id,
+      previous_agent_id: active?.agent_id,
       previous_roster_reconciled: previousRosterReconciled,
       task_status: frontMatter.status as string | undefined,
       continued_at: now,

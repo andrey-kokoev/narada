@@ -607,6 +607,18 @@ Acceptance criteria are not decorative. They are closure gates.
 - **Direct path**: operator may close a task with `narada task close <task-number> --by <operator-id>` if all gates are satisfied.
 - **Governed path**: `narada chapter close <range> --finish` transitions `closed` → `confirmed` only after validating every terminal task in the range satisfies the closure invariant.
 
+### Evidence Repair After Accepted Review
+
+An accepted implementation review does not override Evidence Admission. If `narada task review <task-number> --agent <id> --verdict accepted` or `accepted_with_notes` records a rejected Evidence Admission result, the task enters `needs_continuation`, not `closed` and not a review dead-end.
+
+The sanctioned repair command is:
+
+```bash
+narada task continue <task-number> --agent <id> --reason evidence_repair
+```
+
+After adding the missing evidence, run `narada task evidence admit <task-number> --by <id>` and then close through the normal governed closure path.
+
 A task that is terminal-by-front-matter (`closed` or `confirmed`) but invalid-by-evidence is an **invariant violation**, not a documentation nuisance. The violation code is `terminal_with_unchecked_criteria` and is reported by `narada task evidence`, `narada task evidence list`, `narada task lint`, and `narada chapter close --finish`.
 
 ### Terminal-State Ownership

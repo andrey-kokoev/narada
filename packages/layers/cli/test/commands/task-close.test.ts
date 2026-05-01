@@ -201,6 +201,84 @@ describe('task close operator', () => {
     expect((result.result as { new_status: string }).new_status).toBe('closed');
   });
 
+  it('returns an evidence repair continuation command when latest admission rejects closure', async () => {
+    writeTask(
+      tempDir,
+      110,
+      'in_review',
+      '## Execution Notes\nDid the work.\n\n## Verification\nInitial verification was incomplete.\n',
+    );
+
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.upsertLifecycle({
+        task_id: '20260420-110-test',
+        task_number: 110,
+        status: 'in_review',
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: '2026-04-25T00:00:00Z',
+      });
+      store.insertReview({
+        review_id: 'review-110',
+        task_id: '20260420-110-test',
+        reviewer_agent_id: 'reviewer-1',
+        verdict: 'accepted',
+        findings_json: null,
+        reviewed_at: '2026-04-25T00:00:01Z',
+      });
+      store.upsertEvidenceBundle({
+        bundle_id: 'evb-110-rejected',
+        task_id: '20260420-110-test',
+        task_number: 110,
+        report_ids_json: '[]',
+        verification_run_ids_json: '[]',
+        acceptance_criteria_json: JSON.stringify({ all_checked: true, unchecked_count: 0 }),
+        review_ids_json: JSON.stringify(['review-110']),
+        changed_files_json: '[]',
+        residuals_json: '[]',
+        assembled_at: '2026-04-25T00:00:02Z',
+        assembled_by: 'reviewer-1',
+      });
+      store.upsertEvidenceAdmissionResult({
+        admission_id: 'ear-110-rejected',
+        bundle_id: 'evb-110-rejected',
+        task_id: '20260420-110-test',
+        task_number: 110,
+        verdict: 'rejected',
+        methods_json: JSON.stringify(['review']),
+        blockers_json: JSON.stringify(['Task lacks durable verification run']),
+        lifecycle_eligible_status: null,
+        admitted_at: '2026-04-25T00:00:03Z',
+        admitted_by: 'reviewer-1',
+        confirmation_json: '{}',
+      });
+    } finally {
+      store.db.close();
+    }
+
+    const result = await taskCloseCommand({
+      taskNumber: '110',
+      by: 'worker',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      repair_command: 'narada task continue 110 --agent worker --reason evidence_repair',
+    });
+    const r = result.result as { remediation: string[]; gate_failures: string[] };
+    expect(r.gate_failures).toContain('Latest Evidence Admission result is rejected');
+    expect(r.remediation).toContain('  -> Continue evidence repair: narada task continue 110 --agent worker --reason evidence_repair');
+    expect(r.remediation).toContain('  -> After repair, run: narada task evidence admit 110 --by worker');
+  });
+
   it('fails without execution notes', async () => {
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-102-test.md'),

@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T03:13:43.360Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777605189590_sq1i0d
+closed_at: 2026-05-01T03:14:35.788Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Fix accepted review lifecycle dead-end after evidence repair
@@ -36,9 +45,9 @@ Define and implement the sanctioned lifecycle path for rejected evidence followe
 
 ## Acceptance Criteria
 
-- [ ] Accepted implementation review cannot leave a task in an in_review dead-end when evidence admission still requires repair.
-- [ ] task close reports an exact sanctioned continuation or repair command when latest evidence admission blocks closure.
-- [ ] task continue or an equivalent sanctioned command supports the evidence-repair-needed state without requiring artificial rejection.
-- [ ] Tests cover rejected evidence followed by fixed implementation and accepted_with_notes review.
-- [ ] Tests cover evidence repair required after implementation acceptance and successful eventual closure.
-- [ ] Documentation or command help names the lifecycle state and allowed transitions.
+- [x] Accepted implementation review cannot leave a task in an in_review dead-end when evidence admission still requires repair.
+- [x] task close reports an exact sanctioned continuation or repair command when latest evidence admission blocks closure.
+- [x] task continue or an equivalent sanctioned command supports the evidence-repair-needed state without requiring artificial rejection.
+- [x] Tests cover rejected evidence followed by fixed implementation and accepted_with_notes review.
+- [x] Tests cover evidence repair required after implementation acceptance and successful eventual closure.
+- [x] Documentation or command help names the lifecycle state and allowed transitions.

@@ -348,7 +348,7 @@ export async function reviewTaskService(
   if (verdict !== 'rejected' && admission.result.verdict === 'rejected') {
     evidenceBlocked = true;
     evidenceReason = admission.blockers.join('; ');
-    newStatus = 'in_review';
+    newStatus = 'needs_continuation';
   }
 
   if (store && newStatus === 'opened') {
@@ -415,6 +415,9 @@ export async function reviewTaskService(
   } else {
     const nextFrontMatter = { ...frontMatter, status: newStatus } as typeof frontMatter;
     await writeTaskProjection(taskFile.path, nextFrontMatter, body);
+    if (store) {
+      store.updateStatus(taskFile.taskId, newStatus as Parameters<typeof store.updateStatus>[1], agentId);
+    }
   }
 
   await updateAgentRosterEntry(cwd, agentId, {});

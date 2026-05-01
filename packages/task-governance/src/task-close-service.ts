@@ -164,6 +164,10 @@ export async function closeTaskService(
     if (num !== null && await hasDerivativeFiles(cwd, num)) {
       remediation.push('  -> Remove derivative task-status files (`-EXECUTED.md`, `-DONE.md`, etc.)');
     }
+    if (admission?.verdict === 'rejected') {
+      remediation.push(`  -> Continue evidence repair: narada task continue ${taskNumber} --agent ${closedBy} --reason evidence_repair`);
+      remediation.push(`  -> After repair, run: narada task evidence admit ${taskNumber} --by ${closedBy}`);
+    }
 
     closeOwnStore();
     return {
@@ -176,6 +180,9 @@ export async function closeTaskService(
         gate_failures: gateFailures,
         admission_result: admission ?? null,
         remediation,
+        repair_command: admission?.verdict === 'rejected'
+          ? `narada task continue ${taskNumber} --agent ${closedBy} --reason evidence_repair`
+          : undefined,
         violations: evidence.violations,
       },
     };

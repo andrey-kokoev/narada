@@ -1475,7 +1475,7 @@ const ALLOWED_TRANSITIONS: Record<string, TaskStatus[]> = {
   opened: ['claimed', 'closed', 'deferred'],
   claimed: ['in_review', 'opened', 'needs_continuation', 'deferred'],
   needs_continuation: ['claimed', 'opened', 'deferred'],
-  in_review: ['closed', 'opened', 'deferred'],
+  in_review: ['closed', 'opened', 'needs_continuation', 'deferred'],
   deferred: ['opened'],
   closed: ['confirmed', 'opened', 'in_review'],
   confirmed: ['opened', 'in_review'],

@@ -205,8 +205,14 @@ export async function admitAssignmentIntent(
   let lifecycleStatus: string | undefined;
   let blockedBy: string[] = [];
   let dependencyDetails: Array<{ taskId: string; reason: string }> = [];
+  let latestAdmissionVerdict: string | undefined;
+  let hasAcceptedReview = false;
   try {
     lifecycleStatus = readLifecycleStatus(store, taskFile.taskId);
+    if (request.kind === 'continue') {
+      latestAdmissionVerdict = store.getLatestEvidenceAdmissionResult(taskFile.taskId)?.verdict;
+      hasAcceptedReview = store.listReviews(taskFile.taskId).some((review) => review.verdict === 'accepted');
+    }
     if (request.kind !== 'continue') {
       const dependencyCheck = await checkDependencies(cwd, frontMatter.depends_on as number[] | undefined, store);
       blockedBy = dependencyCheck.blockedBy;
@@ -227,34 +233,40 @@ export async function admitAssignmentIntent(
   let assignmentId: string | null = null;
 
   if (request.kind === 'continue') {
+    const evidenceRepairInReview =
+      currentStatus === 'in_review' &&
+      request.reason === 'evidence_repair' &&
+      latestAdmissionVerdict === 'rejected' &&
+      hasAcceptedReview;
+    const evidenceRepairContinuation = currentStatus === 'needs_continuation' || evidenceRepairInReview;
     if (currentStatus === 'opened') {
       return reject(cwd, request, `Task ${taskFile.taskId} is opened, not claimed. Use 'narada task claim' or 'narada task roster assign' instead of 'task continue'.`, {
         task_id: taskFile.taskId,
         lifecycle_status_before: currentStatus ?? null,
       });
     }
-    if (currentStatus !== 'claimed' && currentStatus !== 'needs_continuation') {
-      return reject(cwd, request, `Task ${taskFile.taskId} cannot be continued (status: ${currentStatus ?? 'missing'}). Only 'claimed' and 'needs_continuation' tasks support continuation.`, {
+    if (currentStatus !== 'claimed' && currentStatus !== 'needs_continuation' && !evidenceRepairInReview) {
+      return reject(cwd, request, `Task ${taskFile.taskId} cannot be continued (status: ${currentStatus ?? 'missing'}). Only 'claimed', 'needs_continuation', or evidence-repair-needed in_review tasks support continuation.`, {
         task_id: taskFile.taskId,
         lifecycle_status_before: currentStatus ?? null,
       });
     }
-    if (!active) {
+    if (!active && !evidenceRepairContinuation) {
       return reject(cwd, request, `Task ${taskFile.taskId} has no active assignment to continue from.`, {
         task_id: taskFile.taskId,
         lifecycle_status_before: currentStatus ?? null,
       });
     }
-    if (active.agent_id === request.agentId) {
+    if (active?.agent_id === request.agentId) {
       return reject(cwd, request, `Agent ${request.agentId} is already the active assignee for task ${taskFile.taskId}.`, {
         task_id: taskFile.taskId,
         lifecycle_status_before: currentStatus ?? null,
         previous_agent_id: active.agent_id,
       });
     }
-    previousAgentId = active.agent_id;
-    supersedes = ['handoff', 'blocked_agent', 'operator_override'].includes(request.reason ?? '');
-    assignmentId = supersedes ? generateAssignmentId(taskFile.taskId, request.agentId) : null;
+    previousAgentId = active?.agent_id ?? null;
+    supersedes = active ? ['handoff', 'blocked_agent', 'operator_override'].includes(request.reason ?? '') : false;
+    assignmentId = supersedes || !active ? generateAssignmentId(taskFile.taskId, request.agentId) : null;
   } else if (request.noClaim) {
     warnings.push('Claim skipped due to --no-claim flag');
   } else if (currentStatus === 'claimed' && request.kind === 'roster_assign') {
