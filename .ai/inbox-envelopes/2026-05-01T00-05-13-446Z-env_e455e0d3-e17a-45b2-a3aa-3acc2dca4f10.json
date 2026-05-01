@@ -1,0 +1,27 @@
+{
+  "envelope_id": "env_e455e0d3-e17a-45b2-a3aa-3acc2dca4f10",
+  "received_at": "2026-05-01T00:05:13.446Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey.Kevin:task-59-handoff-context-burn"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "Snapshot inspection still burns operator context",
+    "summary": "While repairing Bob work visibility, a narrow rg over task-lifecycle-snapshot.json and related artifacts still produced a very large transcript dump. This repeated the same class of context-burn failure that local evidence pipeline work was meant to prevent.",
+    "evidence": [
+      "Command output from rg over .ai/task-lifecycle-snapshot.json expanded into hundreds of lines despite a bounded diagnostic intent.",
+      "The useful facts were small: stale andrey-user.Kevin existed in agent_roster, task 59 was assigned to Bob, and the snapshot needed regeneration."
+    ],
+    "proposal": [
+      "Add compact snapshot-inspection helpers or default guards so task lifecycle snapshots and large exported evidence files are summarized by finding/count/path unless explicitly opened raw.",
+      "Teach architect-loop tooling to avoid direct rg/cat over known bulky generated artifacts and route such reads through local evidence/extraction helpers."
+    ],
+    "recommendation": "Treat as ergonomics/CAPA follow-up for evidence-pipeline adoption and command-output boundedness."
+  },
+  "status": "received"
+}
