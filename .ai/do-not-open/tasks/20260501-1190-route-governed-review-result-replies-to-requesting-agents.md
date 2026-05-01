@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T19:28:17.956Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777663654230_3273oh
+closed_at: 2026-05-01T19:29:09.815Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Route governed review result replies to requesting agents
@@ -36,8 +45,8 @@ Extend task review or review-request handling so a review decision records and r
 
 ## Acceptance Criteria
 
-- [ ] A review request from an agent or operator-surface identity creates a durable reply obligation when the review is completed.
-- [ ] Review result replies include task number, verdict, review/evidence id, blocking findings, residual notes, and next expected action.
-- [ ] Reply routing uses admitted channels only and records OSM, inbox, queued, deferred, or failed delivery evidence.
-- [ ] Review CLI output reports the reply obligation status without requiring reviewers to remember a manual follow-up.
-- [ ] Regression coverage proves a review-request envelope can be closed and produces a governed reply artifact or explicit deferral.
+- [x] A review request from an agent or operator-surface identity creates a durable reply obligation when the review is completed.
+- [x] Review result replies include task number, verdict, review/evidence id, blocking findings, residual notes, and next expected action.
+- [x] Reply routing uses admitted channels only and records OSM, inbox, queued, deferred, or failed delivery evidence.
+- [x] Review CLI output reports the reply obligation status without requiring reviewers to remember a manual follow-up.
+- [x] Regression coverage proves a review-request envelope can be closed and produces a governed reply artifact or explicit deferral.

@@ -4,9 +4,10 @@ vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { SqliteInboxStore } from '@narada2/control-plane';
 import { claimTaskService, continueTaskService, releaseTaskService } from '@narada2/task-governance/task-assignment-lifecycle-service';
 import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { taskCloseCommand } from '../../src/commands/task-close.js';
@@ -96,6 +97,77 @@ function setupRepo(tempDir: string): void {
   writeFileSync(
     join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-1006-accepted-authority-defect-task.md'),
     '---\ntask_id: 1006\nstatus: opened\n---\n\n# Task 1006: Accepted Authority Defect Task\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Execution Notes\nCompleted.\n\n## Verification\nFocused test passed.\n',
+  );
+}
+
+function insertReviewRequestEnvelope(tempDir: string, taskNumber: number, requester = 'worker'): string {
+  const store = new SqliteInboxStore(join(tempDir, '.ai', 'inbox.db'));
+  try {
+    const envelope = store.insert({
+      envelope_id: `env_review_request_${taskNumber}`,
+      received_at: '2026-01-01T00:00:00Z',
+      source: { kind: 'agent_report', ref: `${requester}:review-request` },
+      target_locus: 'reviewer',
+      kind: 'observation',
+      authority: { level: 'agent_reported', principal: requester },
+      payload: {
+        message_kind: 'review_request',
+        requester_identity: requester,
+        task_number: taskNumber,
+      },
+    });
+    store.promote(envelope.envelope_id, {
+      target_kind: 'task',
+      target_ref: `task:${taskNumber}`,
+      promoted_at: '2026-01-01T00:00:01Z',
+      promoted_by: 'architect',
+      enactment_status: 'recorded',
+    });
+    return envelope.envelope_id;
+  } finally {
+    store.close();
+  }
+}
+
+function admitBoundOperatorSurface(tempDir: string, identity = 'worker'): void {
+  mkdirSync(join(tempDir, 'operator-surfaces'), { recursive: true });
+  writeFileSync(
+    join(tempDir, 'operator-surfaces', 'identities.json'),
+    JSON.stringify({
+      schema: 'https://narada.dev/schemas/operator-surface-identities/v1',
+      updated_at: '2026-01-01T00:00:00Z',
+      identities: [
+        {
+          identity_id: identity,
+          site_id: 'narada',
+          role: 'builder',
+          agent_kind: 'codex_cli',
+          label: identity,
+          input_capabilities: ['type_text'],
+          submit_strategy: 'type_only',
+          admitted_by: 'operator',
+          admitted_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+          authority_limits: [],
+        },
+      ],
+    }, null, 2),
+  );
+  writeFileSync(
+    join(tempDir, 'operator-surfaces', 'runtime-bindings.json'),
+    JSON.stringify({
+      bindings: [
+        {
+          binding_id: `binding-${identity}`,
+          identity_id: identity,
+          runtime_locus: 'narada',
+          handle: 'process:test',
+          transport: 'process_session',
+          status: 'active',
+          stale_after: '2099-01-01T00:00:00Z',
+        },
+      ],
+    }, null, 2),
   );
 }
 
@@ -340,6 +412,7 @@ describe('task review command', () => {
   it('prints bounded human diagnostics for accepted legacy roster projection noise', async () => {
     await claimTaskService({ taskNumber: '1005', agent: 'worker', cwd: tempDir });
     await releaseTaskService({ taskNumber: '1005', reason: 'completed', cwd: tempDir });
+    insertReviewRequestEnvelope(tempDir, 1005, 'worker');
 
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {
@@ -362,6 +435,7 @@ describe('task review command', () => {
       const output = consoleSpy.mock.calls.map((call) => call.join(' ')).join('\n');
       expect(output).toContain('Review diagnostics: #1 projection_only compatibility_projection_noise');
       expect(output).toContain('non-blocking/compatibility-only/projection-only');
+      expect(output).toContain('Review reply: inbox to worker');
       expect(output).not.toContain('CAPA recommended');
       expect(output).not.toContain('review rejection');
     } finally {
@@ -419,6 +493,97 @@ describe('task review command', () => {
       'authority_boundary_bug',
       'lifecycle_or_roster_authority_mismatch',
     ]));
+  });
+
+  it('routes review result replies to canonical inbox when requester has no reachable operator surface', async () => {
+    await claimTaskService({ taskNumber: '1005', agent: 'worker', cwd: tempDir });
+    await releaseTaskService({ taskNumber: '1005', reason: 'completed', cwd: tempDir });
+    const sourceEnvelopeId = insertReviewRequestEnvelope(tempDir, 1005, 'worker');
+
+    const result = await taskReviewCommand({
+      taskNumber: '1005',
+      agent: 'reviewer',
+      verdict: 'accepted',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      review_reply_obligation: {
+        status: 'inbox',
+        requester_identity: 'worker',
+        source_envelope_id: sourceEnvelopeId,
+        delivery_channel: 'canonical_inbox',
+        delivery_status: 'inbox',
+        reason: 'operator_surface_not_reachable',
+        next_expected_action: 'no further action required for this task',
+      },
+    });
+    const reply = (result.result as {
+      review_reply_obligation: { inbox_envelope_id: string; mutation_evidence_path: string };
+    }).review_reply_obligation;
+    const store = new SqliteInboxStore(join(tempDir, '.ai', 'inbox.db'));
+    try {
+      const envelope = store.get(reply.inbox_envelope_id);
+      expect(envelope).toMatchObject({
+        target_locus: 'worker',
+        kind: 'observation',
+        payload: {
+          message_type: 'review_result',
+          source_envelope_id: sourceEnvelopeId,
+          task_number: 1005,
+          verdict: 'accepted',
+          next_expected_action: 'no further action required for this task',
+        },
+      });
+    } finally {
+      store.close();
+    }
+    expect(existsSync(join(tempDir, reply.mutation_evidence_path))).toBe(true);
+  });
+
+  it('queues review result replies to a reachable admitted operator surface', async () => {
+    await claimTaskService({ taskNumber: '1005', agent: 'worker', cwd: tempDir });
+    await releaseTaskService({ taskNumber: '1005', reason: 'completed', cwd: tempDir });
+    const sourceEnvelopeId = insertReviewRequestEnvelope(tempDir, 1005, 'worker');
+    admitBoundOperatorSurface(tempDir, 'worker');
+
+    const result = await taskReviewCommand({
+      taskNumber: '1005',
+      agent: 'reviewer',
+      verdict: 'accepted',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      review_reply_obligation: {
+        status: 'queued',
+        requester_identity: 'worker',
+        source_envelope_id: sourceEnvelopeId,
+        delivery_channel: 'operator_surface',
+        delivery_status: 'queued',
+      },
+    });
+    const reply = (result.result as {
+      review_reply_obligation: { queue_artifact: string };
+    }).review_reply_obligation;
+    const queued = JSON.parse(readFileSync(join(tempDir, reply.queue_artifact), 'utf8')) as {
+      status: string;
+      payload: { message_type: string; task_number: number; source_envelope_id: string };
+    };
+    expect(queued).toMatchObject({
+      status: 'promised',
+      payload: {
+        message_type: 'review_result',
+        task_number: 1005,
+        source_envelope_id: sourceEnvelopeId,
+      },
+    });
   });
 
   it('reports repair guidance and CAPA classification for missing reviewer identity', async () => {

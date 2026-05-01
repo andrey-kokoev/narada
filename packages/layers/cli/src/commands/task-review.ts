@@ -11,6 +11,11 @@ import {
   captureTaskLifecycleEvidenceState,
   writeTaskLifecycleMutationEvidence,
 } from '../lib/mutation-evidence-writer.js';
+import {
+  routeReviewReplyObligation,
+  type ReviewReplyFinding,
+  type ReviewReplyObligationResult,
+} from '../lib/task-review-reply-obligation.js';
 
 export interface TaskReviewOptions {
   taskNumber?: string;
@@ -44,6 +49,26 @@ export async function taskReviewCommand(
   } as ReviewTaskServiceOptions);
 
   const result = serviceResult.result;
+  if (result.status === 'success') {
+    const reviewReply = await routeReviewReplyObligation({
+      cwd,
+      taskNumber: options.taskNumber,
+      taskId: result.task_id,
+      reviewer: options.agent,
+      verdict: result.verdict,
+      reviewId: result.review_id,
+      admissionId: result.admission_id,
+      newStatus: result.new_status,
+      closeAction: result.close_action,
+      evidenceBlocked: result.evidence_blocked,
+      evidenceReason: result.evidence_reason,
+      closeBlockers: result.close_blockers,
+      findings: parseReviewReplyFindings(options.findings),
+    });
+    if (reviewReply.status !== 'not_applicable') {
+      (result as ReviewTaskServiceResponse['result'] & { review_reply_obligation?: ReviewReplyObligationResult }).review_reply_obligation = reviewReply;
+    }
+  }
   const after = result.status === 'success'
     ? await captureTaskLifecycleEvidenceState(cwd, options.taskNumber, options.store)
     : null;
@@ -114,6 +139,13 @@ export async function taskReviewCommand(
       .join('; ');
     fmt.message(`Review diagnostics: ${summary}`, 'info');
   };
+  const emitReviewReplyObligation = () => {
+    const reply = (result as { review_reply_obligation?: ReviewReplyObligationResult }).review_reply_obligation;
+    if (!reply) return;
+    const target = reply.requester_identity ? ` to ${reply.requester_identity}` : '';
+    const evidence = reply.queue_artifact ?? reply.inbox_envelope_id ?? reply.reason ?? 'no evidence';
+    fmt.message(`Review reply: ${reply.status}${target} (${evidence})`, reply.status === 'failed' ? 'warning' : 'info');
+  };
 
   if (serviceResult.exitCode !== ExitCode.SUCCESS) {
     fmt.message((result as { error?: string }).error ?? 'Review failed', 'error');
@@ -137,6 +169,7 @@ export async function taskReviewCommand(
       fmt.message(`Reviewed task ${String((result as { task_id?: string }).task_id)}: ${(result as { verdict: string }).verdict} → ${target}`, 'success');
     }
     emitReviewDiagnostics();
+    emitReviewReplyObligation();
     if (capa?.recommended) {
       fmt.message(`CAPA recommended: ${capa.triggers.join(', ')}`, 'warning');
       if (capa.next_command) fmt.message(capa.next_command, 'info');
@@ -147,4 +180,24 @@ export async function taskReviewCommand(
     exitCode: serviceResult.exitCode,
     result,
   };
+}
+
+function parseReviewReplyFindings(raw: string | undefined): ReviewReplyFinding[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((item) => {
+      if (!item || typeof item !== 'object') return [];
+      const record = item as Record<string, unknown>;
+      if (typeof record.severity !== 'string' || typeof record.description !== 'string') return [];
+      return [{
+        severity: record.severity,
+        description: record.description,
+        location: typeof record.location === 'string' ? record.location : null,
+      }];
+    });
+  } catch {
+    return [];
+  }
 }
