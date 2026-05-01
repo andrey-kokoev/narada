@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T00:31:38.915Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777595446508_u6npeh
+closed_at: 2026-05-01T00:31:55.321Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Reject or normalize misplaced cwd options on task commands
@@ -32,8 +41,8 @@ Source inbox envelope env_47d8a086-defb-4a41-8c4f-d282cd889433 reports task evid
 
 ## Acceptance Criteria
 
-- [ ] Misplaced --cwd cannot silently inspect Narada proper when another Site was intended.
-- [ ] Task evidence inspect handles --cwd position safely or rejects with repair guidance.
-- [ ] Relevant task outputs include enough locus identity to detect cross-Site confusion.
-- [ ] Tests cover the reported wrong-Site scenario.
-- [ ] Repair guidance gives exact sanctioned command syntax.
+- [x] Misplaced --cwd cannot silently inspect Narada proper when another Site was intended.
+- [x] Task evidence inspect handles --cwd position safely or rejects with repair guidance.
+- [x] Relevant task outputs include enough locus identity to detect cross-Site confusion.
+- [x] Tests cover the reported wrong-Site scenario.
+- [x] Repair guidance gives exact sanctioned command syntax.

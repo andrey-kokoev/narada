@@ -112,6 +112,9 @@ export async function taskEvidenceCommand(
       exitCode: ExitCode.SUCCESS,
       result: {
         status: 'ok',
+        authority_locus: {
+          cwd,
+        },
         evidence,
         handoff_actionability: handoffActionability,
         role_guard_overrides: roleGuardOverrides,

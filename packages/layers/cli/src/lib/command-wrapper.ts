@@ -141,7 +141,8 @@ export async function runDirectCommand(options: DirectCommandRunnerOptions): Pro
 export function directCommandAction<TArgs extends unknown[]>(
   options: DirectCommandActionOptions<TArgs>,
 ): (...args: TArgs) => Promise<void> {
-  return async (...args: TArgs): Promise<void> => {
+  return async (...rawArgs: TArgs): Promise<void> => {
+    const args = normalizeCommanderActionArgs(rawArgs);
     const format = typeof options.format === 'function' ? options.format(...args) : options.format;
     await runDirectCommand({
       command: options.command,
@@ -154,6 +155,50 @@ export function directCommandAction<TArgs extends unknown[]>(
       exit: options.exit,
     });
   };
+}
+
+function normalizeCommanderActionArgs<TArgs extends unknown[]>(args: TArgs): TArgs {
+  const last = args[args.length - 1] as unknown;
+  if (
+    last &&
+    typeof last === 'object' &&
+    typeof (last as { opts?: unknown }).opts === 'function'
+  ) {
+    const command = last as { opts: () => Record<string, unknown> };
+    const parsedOptions = withProcessArgvCwd(command.opts());
+    const maybeOptions = args[args.length - 2];
+    if (
+      maybeOptions &&
+      typeof maybeOptions === 'object' &&
+      !Array.isArray(maybeOptions) &&
+      typeof (maybeOptions as { opts?: unknown }).opts !== 'function'
+    ) {
+      return [
+        ...args.slice(0, -2),
+        parsedOptions,
+      ] as TArgs;
+    }
+    return [
+      ...args.slice(0, -1),
+      parsedOptions,
+    ] as TArgs;
+  }
+  return args;
+}
+
+function withProcessArgvCwd(options: Record<string, unknown>): Record<string, unknown> {
+  if (typeof options.cwd === 'string' && options.cwd !== '.') return options;
+  const cwd = cwdFromArgv(process.argv);
+  return cwd ? { ...options, cwd } : options;
+}
+
+function cwdFromArgv(argv: string[]): string | null {
+  for (let i = argv.length - 1; i >= 0; i -= 1) {
+    const arg = argv[i];
+    if (arg === '--cwd') return argv[i + 1] ?? null;
+    if (arg?.startsWith('--cwd=')) return arg.slice('--cwd='.length);
+  }
+  return null;
 }
 
 export async function runDirectCommandWithResource<TResource>(
@@ -188,7 +233,8 @@ export async function runDirectCommandWithResource<TResource>(
 export function resourceScopedDirectCommandAction<TResource, TArgs extends unknown[]>(
   options: ResourceScopedDirectCommandActionOptions<TResource, TArgs>,
 ): (...args: TArgs) => Promise<void> {
-  return async (...args: TArgs): Promise<void> => {
+  return async (...rawArgs: TArgs): Promise<void> => {
+    const args = normalizeCommanderActionArgs(rawArgs);
     const format = typeof options.format === 'function' ? options.format(...args) : options.format;
     await runDirectCommandWithResource({
       command: options.command,
