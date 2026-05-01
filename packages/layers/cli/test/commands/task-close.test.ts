@@ -303,6 +303,7 @@ describe('task close operator', () => {
       closure_claim: {
         applies: true,
         capability_complete: false,
+        transition_complete: false,
       },
     });
     const r = result.result as { gate_failures: string[]; remediation: string[] };
@@ -335,6 +336,7 @@ describe('task close operator', () => {
       closure_claim: {
         applies: true,
         capability_complete: true,
+        transition_complete: true,
         no_continuation_needed_rationale: 'Spike was intentionally scoped to discardable decision evidence.',
       },
     });
@@ -367,6 +369,7 @@ describe('task close operator', () => {
         applies: true,
         capability_complete: true,
         has_continuation_relation: true,
+        transition_complete: true,
       },
     });
   });

@@ -376,6 +376,7 @@ describe('task review command', () => {
         applies: true,
         scope_complete: true,
         capability_complete: false,
+        transition_complete: false,
       },
     });
   });

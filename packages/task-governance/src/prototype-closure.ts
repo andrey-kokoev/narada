@@ -7,6 +7,8 @@ export interface PrototypeClosurePosture {
   no_continuation_needed_rationale: string | null;
   scope_complete: boolean;
   capability_complete: boolean;
+  doctrine_complete: boolean;
+  transition_complete: boolean;
   warning?: string;
 }
 
@@ -42,6 +44,8 @@ export function analyzePrototypeClosure(frontMatter: TaskFrontMatter, body: stri
   const applies = terms.length > 0;
   const continuation = hasContinuationRelation(frontMatter, body);
   const capabilityComplete = applies ? continuation || noContinuation.length > 0 : true;
+  const doctrineRelevant = /\b(doctrine|law|semantic|contract)\b/i.test(text);
+  const transitionComplete = !applies || capabilityComplete;
   return {
     applies,
     terms,
@@ -49,6 +53,8 @@ export function analyzePrototypeClosure(frontMatter: TaskFrontMatter, body: stri
     no_continuation_needed_rationale: noContinuation || null,
     scope_complete: true,
     capability_complete: capabilityComplete,
+    doctrine_complete: doctrineRelevant ? transitionComplete : false,
+    transition_complete: transitionComplete,
     ...(applies && !capabilityComplete
       ? { warning: 'Scope may be complete, but facade/prototype/spike/design-only language requires continuation evidence or a no-continuation-needed rationale before capability-complete closure.' }
       : {}),

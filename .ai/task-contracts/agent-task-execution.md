@@ -647,6 +647,25 @@ Before closing these tasks, provide one of:
 
 Review and close output must distinguish `scope_complete` from `capability_complete` so a typed facade/prototype closure is not mistaken for a usable runtime capability.
 
+Completion classes are separate:
+
+| Class | Meaning |
+| --- | --- |
+| `scope_complete` | The task's stated local scope is done. |
+| `capability_complete` | The intended usable capability is implemented or deliberately declared unnecessary. |
+| `doctrine_complete` | The governing law/contract/semantic update is complete and disseminated. |
+| `transition_complete` | Every resulting branch has implementation work, explicit deferral with rationale, or rejection evidence. |
+
+Prototype, facade, spike, and partial-capability closure is a transition point, not an endpoint. If a task creates multiple typed surfaces or branches, each branch must receive one of:
+
+- an implementation task or continuation relation;
+- explicit deferral with rationale and owner;
+- explicit rejection with rationale.
+
+Forward momentum is sanctioned when the next step is local, low-risk, and within the acting role's authority: create the next coherent task, route or nudge the correct role, and preserve the whole capability shape instead of only the most recently named fragment. If blocked or out of scope, record the blocker as residual evidence rather than stopping silently.
+
+Motivating fixture: the typed MCP facade closure that created Inbox MCP continuation but initially missed the sibling EE-MCP branch. The correct shape is not "one branch continued"; it is "every typed branch continued, deferred, or rejected."
+
 A task that is terminal-by-front-matter (`closed` or `confirmed`) but invalid-by-evidence is an **invariant violation**, not a documentation nuisance. The violation code is `terminal_with_unchecked_criteria` and is reported by `narada task evidence`, `narada task evidence list`, `narada task lint`, and `narada chapter close --finish`.
 
 ### Terminal-State Ownership
