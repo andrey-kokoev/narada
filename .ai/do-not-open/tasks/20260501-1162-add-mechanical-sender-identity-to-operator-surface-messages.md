@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T00:21:21.966Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777594842020_48yv0p
+closed_at: 2026-05-01T00:21:38.234Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add mechanical sender identity to operator-surface messages
@@ -32,8 +41,8 @@ Source inbox envelope env_c9e356a6-b7cb-4d12-b039-7c4fc2315b92 reports operator-
 
 ## Acceptance Criteria
 
-- [ ] Typed operator-surface messages visibly include sender identity in delivered text.
-- [ ] Event artifacts record the same resolved sender identity.
-- [ ] Raw input mode can omit sender header only by explicit raw/keystroke posture.
-- [ ] Sender resolution from current or previous foreground binding is documented or implemented with bounded fallback.
-- [ ] Tests cover message versus raw input behavior.
+- [x] Typed operator-surface messages visibly include sender identity in delivered text.
+- [x] Event artifacts record the same resolved sender identity.
+- [x] Raw input mode can omit sender header only by explicit raw/keystroke posture.
+- [x] Sender resolution from current or previous foreground binding is documented or implemented with bounded fallback.
+- [x] Tests cover message versus raw input behavior.

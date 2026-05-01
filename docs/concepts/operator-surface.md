@@ -281,6 +281,22 @@ narada operator-surface send --identity <id> --text <text> --execute
 
 `send` validates an admitted durable identity and a Site/runtime-locus binding before accepting input. Dry-run returns the resolved runtime locus, handle, submit strategy, and text digest without mutation. Execute records bounded send evidence for the owning runtime locus; it does not hardcode Windows paths or treat Narada proper as the owner of volatile handles. Secret-like text is refused and must route through capability consent and secret-reference paths.
 
+Typed operator-surface messages mechanically carry sender identity in delivered text. By default, `send` renders:
+
+```text
+From: <resolved-sender-identity>
+
+<message text>
+```
+
+The event artifact records the same `sender_identity`, `resolved_sender_identity`, `rendered_text_digest`, and `input_posture`. Raw input/keystroke delivery may omit the visible sender header only through explicit raw posture:
+
+```bash
+narada operator-surface send --to <id> --from <sender> --text <raw-input> --raw-input --execute
+```
+
+Raw input is for carrier control text or keystroke-like input. It must not be used for typed messages, review requests, completion claims, CAPAs, handoffs, or questions where recipient attribution matters. Sender resolution from a live foreground binding remains runtime-locus work; Narada proper uses the explicit `--from` value or the bounded `operator` fallback until a User/PC adapter supplies foreground-binding evidence.
+
 ## Governed Message Queue Posture
 
 Operator-surface messages are governed records before they are visible text. A message is not task lifecycle truth, review truth, closure truth, or command execution truth.

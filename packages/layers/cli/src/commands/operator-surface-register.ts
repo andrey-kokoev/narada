@@ -225,6 +225,7 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--runtime-locus <locus>', 'Owning User/PC runtime locus')
     .option('--dry-run', 'Validate binding and strategy without recording send evidence', false)
     .option('--execute', 'Record bounded send evidence for the owning runtime locus', false)
+    .option('--raw-input', 'Treat text as raw input/keystrokes and suppress the typed-message sender header', false)
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[Record<string, unknown>]>({
@@ -240,6 +241,7 @@ export function registerOperatorSurfaceCommands(program: Command): void {
         runtimeLocus: opts.runtimeLocus as string | undefined,
         dryRun: opts.dryRun as boolean | undefined,
         execute: opts.execute as boolean | undefined,
+        rawInput: opts.rawInput as boolean | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),

@@ -74,6 +74,7 @@ export interface OperatorSurfaceSendOptions {
   text?: string;
   dryRun?: boolean;
   execute?: boolean;
+  rawInput?: boolean;
   format?: CliFormat;
 }
 
@@ -367,6 +368,23 @@ function routeFields(args: {
     ...(args.legacyIdentityAlias
       ? { warning: '--identity is deprecated for message recipient routing; use --to <recipient> and --from <sender>.' }
       : {}),
+  };
+}
+
+function renderOperatorSurfaceMessage(sender: string, text: string, rawInput: boolean): {
+  rendered_text: string;
+  rendered_text_digest: string;
+  rendered_text_length: number;
+  sender_header_included: boolean;
+  input_posture: 'typed_message' | 'raw_input';
+} {
+  const renderedText = rawInput ? text : `From: ${sender}\n\n${text}`;
+  return {
+    rendered_text: renderedText,
+    rendered_text_digest: textDigest(renderedText),
+    rendered_text_length: renderedText.length,
+    sender_header_included: !rawInput,
+    input_posture: rawInput ? 'raw_input' : 'typed_message',
   };
 }
 
@@ -1868,6 +1886,7 @@ export async function operatorSurfaceSendCommand(
     const text = requireText(options.text, '--text');
     const registry = await readOperatorSurfaceIdentities(cwd);
     const sender = options.from?.trim() || 'operator';
+    const rawInput = Boolean(options.rawInput);
     const currentSite = options.currentSite?.trim() || inferCurrentSite(registry);
     if (isBareRoleAddress(requestedRecipient) && !currentSite) {
       return {
@@ -2061,7 +2080,8 @@ export async function operatorSurfaceSendCommand(
       };
     }
 
-    const eventId = `ose_${Date.now()}_${textDigest(`${identity}:${text}`).slice(0, 12)}`;
+    const renderedMessage = renderOperatorSurfaceMessage(sender, text, rawInput);
+    const eventId = `ose_${Date.now()}_${textDigest(`${identity}:${renderedMessage.rendered_text}`).slice(0, 12)}`;
     const send = {
       event_id: eventId,
       identity,
@@ -2069,11 +2089,20 @@ export async function operatorSurfaceSendCommand(
       resolved_runtime_handle: binding.handle ?? null,
       transport: binding.transport ?? null,
       submit_strategy: submitStrategy,
-      text_digest: textDigest(text),
-      text_length: text.length,
+      text_digest: textDigest(renderedMessage.rendered_text),
+      text_length: renderedMessage.rendered_text_length,
+      original_text_digest: textDigest(text),
+      original_text_length: text.length,
+      rendered_text: renderedMessage.rendered_text,
+      rendered_text_digest: renderedMessage.rendered_text_digest,
+      rendered_text_length: renderedMessage.rendered_text_length,
+      sender_header_included: renderedMessage.sender_header_included,
+      input_posture: renderedMessage.input_posture,
       ...agentFields,
       ...routeFields({ ...baseRoute, bindingStatus: 'bound', resolvedRecipient: identity }),
       sender,
+      sender_identity: sender,
+      resolved_sender_identity: sender,
       recipient: identity,
       site_plane: {
         current_site: currentSite,

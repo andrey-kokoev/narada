@@ -1294,22 +1294,67 @@ describe('operator-surface commands', () => {
     const result = await operatorSurfaceSendCommand({
       cwd,
       identity: 'narada-proper-builder',
+      from: 'narada-proper.architect',
       text: 'continue current task',
       execute: true,
       format: 'json',
     }, createMockContext());
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    const payload = result.result as { event_artifact: string; send: { status: string; text_digest: string; text_length: number } };
+    const payload = result.result as { event_artifact: string; send: { status: string; text_digest: string; text_length: number; rendered_text: string; sender_identity: string; resolved_sender_identity: string; sender_header_included: boolean } };
     expect(payload.send).toMatchObject({
       status: 'event_recorded_for_runtime_locus',
-      text_length: 'continue current task'.length,
+      sender_identity: 'narada-proper.architect',
+      resolved_sender_identity: 'narada-proper.architect',
+      sender_header_included: true,
+      rendered_text: 'From: narada-proper.architect\n\ncontinue current task',
+      text_length: 'From: narada-proper.architect\n\ncontinue current task'.length,
     });
     expect(payload.send.text_digest).toHaveLength(64);
     expect(payload.event_artifact).toContain('.ai/operator-surface-events/ose_');
-    const event = JSON.parse(await readFile(payload.event_artifact, 'utf8')) as { identity: string; text_digest: string };
+    const event = JSON.parse(await readFile(payload.event_artifact, 'utf8')) as { identity: string; text_digest: string; sender_identity: string; rendered_text: string };
     expect(event.identity).toBe('narada-proper-builder');
+    expect(event.sender_identity).toBe('narada-proper.architect');
+    expect(event.rendered_text).toBe(payload.send.rendered_text);
     expect(event.text_digest).toBe(payload.send.text_digest);
+  });
+
+  it('suppresses typed-message sender header only in explicit raw input mode', async () => {
+    const cwd = await tempRepo();
+    await admitIdentity(cwd);
+    await writeBindings(cwd, [{
+      binding_id: 'bind-raw',
+      identity_id: 'narada-proper-builder',
+      runtime_locus: 'pc-site',
+      handle: 'hwnd:123',
+      transport: 'operator_surface_input',
+      submit_strategy: 'operator_confirmed_submit',
+      input_capabilities: ['type_text'],
+      status: 'active',
+    }]);
+
+    const result = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-proper-builder',
+      from: 'operator',
+      text: '/copy',
+      rawInput: true,
+      execute: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const payload = result.result as { event_artifact: string; send: { rendered_text: string; input_posture: string; sender_header_included: boolean; sender_identity: string } };
+    expect(payload.send).toMatchObject({
+      input_posture: 'raw_input',
+      sender_header_included: false,
+      sender_identity: 'operator',
+      rendered_text: '/copy',
+    });
+    const event = JSON.parse(await readFile(payload.event_artifact, 'utf8')) as { rendered_text: string; sender_identity: string; sender_header_included: boolean };
+    expect(event.rendered_text).toBe('/copy');
+    expect(event.sender_identity).toBe('operator');
+    expect(event.sender_header_included).toBe(false);
   });
 
   it('reports missing operator-surface binding with an exact unblock command', async () => {
