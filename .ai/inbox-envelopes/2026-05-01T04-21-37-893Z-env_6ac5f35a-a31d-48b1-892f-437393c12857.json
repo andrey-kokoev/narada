@@ -1,0 +1,32 @@
+{
+  "envelope_id": "env_6ac5f35a-a31d-48b1-892f-437393c12857",
+  "received_at": "2026-05-01T04:21:37.893Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada.architect:authority-inversion-misses-20260501"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada.architect"
+  },
+  "payload": {
+    "title": "Authority-Revealing Inversion misses in current Narada surfaces",
+    "summary": "Current Narada buildout still has artifact-first surfaces that should invert to authority/lifecycle/evidence/locus structures: raw test commands, task close/review commands, operator-surface send, law text edits, inbox work-next output, next chat ritual, CLI shim freshness, and roster status.",
+    "evidence": [
+      "Raw test command behavior still dominates verification truth instead of Verification Intent / Run / Evidence Admission.",
+      "Task close/review command behavior is being pulled back into ClosurePosture state machine via task 1177.",
+      "Operator-surface send is being pulled back into DeliveryAdmission state machine via tasks 1175 and 1178.",
+      "Law text / AGENTS.md edits are being pulled back into LawChange plus AffectedPrincipalReceipt via task 1179.",
+      "Inbox work-next output is being pulled back into EnvelopeRouting state machine and bounded projection via task 1180.",
+      "The 'next' chat ritual is being pulled back into AgentWorkDutyLoop state machine via task 1181.",
+      "CLI shim freshness currently appears as a command failure/stale dist warning; it should invert to delegated CLI embodiment readiness state.",
+      "Roster status still appears primary in places; it should remain projection over AgentWorkAttachment / AssignmentLifecycle."
+    ],
+    "proposal": [
+      "Route already-covered inversions to tasks 1177-1181 and create a missing task for CLI shim freshness as delegated CLI embodiment readiness."
+    ],
+    "recommendation": "Treat as authority-inversion CAPA inventory; avoid adding more artifact-first fixes where state-machine pullbacks already exist."
+  },
+  "status": "received"
+}
