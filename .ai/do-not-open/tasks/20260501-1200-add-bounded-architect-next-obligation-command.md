@@ -1,5 +1,9 @@
 ---
-status: opened
+status: closed
+closed_at: 2026-05-01T21:10:38.656Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add bounded architect next-obligation command
@@ -28,16 +32,39 @@ Add a bounded Architect-loop command or output mode that returns only the highes
 
 ## Execution Notes
 
-<!-- Record what was done, decisions made, and files changed during execution. -->
+1. Added `role-loop next-obligation` as the bounded Architect/role duty-loop probe.
+   The command returns one packet containing action kind, selected ref, short
+   reason, suggested command, bounded diagnostics, output-budget metadata, and
+   explicit exploration commands.
+2. Added `--recurrence-key` to mark repeated CAPA/ergonomics incidents as
+   recurrence inside the bounded packet instead of creating another first-time
+   observation shape.
+3. Changed `role-loop next` so the compact workboard payload is no longer
+   returned by default. It now returns `workboard_summary`; the fuller compact
+   workboard is admitted only with explicit `--include-workboard` or by running
+   `narada task workboard --view compact --format json`.
+4. Kept diagnostics machine-safe: doctrine guard output is summarized into
+   counts and one bounded next command; broad `blocked_or_hidden_work`,
+   `architect_duty_loop`, and guidance arrays are not included in
+   `next-obligation`.
+5. Added focused tests in
+   `packages/layers/cli/test/commands/role-loop.test.ts` for default workboard
+   austerity, explicit workboard opt-in, bounded next-obligation output, JSON
+   byte budget, and recurrence marker handling.
 
 ## Verification
 
-<!-- Record commands run, results observed, and how correctness was checked. -->
+| Command | Result |
+| --- | --- |
+| `pnpm --dir packages/layers/cli exec vitest run test/commands/role-loop.test.ts --pool=forks` | Passed, 3/3 tests |
+| `pnpm --filter @narada2/cli typecheck` | Passed |
+| `pnpm --filter @narada2/cli build` | Passed |
+| `narada test-run run --cmd-file /tmp/narada-1200-verification.cmd --task 1200 --timeout 120 --scope focused --requester builder --rationale "Verify bounded role-loop next-obligation command, explicit workboard exploration flag, typecheck, build, and CLI sample output."` | Passed, run `run_1777669739181_132i86`, command run `run_1777669739256_m7levh`, duration 34460 ms |
 
 ## Acceptance Criteria
 
-- [ ] There is a bounded next-obligation or architect-loop command whose default output fits a strict line/byte budget.
-- [ ] Broad workboard JSON remains available only through explicit exploratory flags or commands.
-- [ ] Diagnostics and warnings do not corrupt or bloat machine-readable result payloads.
-- [ ] Tests assert compact Architect-loop output remains under the configured output budget.
-- [ ] Recurring CAPA/ergonomics incidents can be marked as recurrence rather than appearing as first-time observations.
+- [x] There is a bounded next-obligation or architect-loop command whose default output fits a strict line/byte budget.
+- [x] Broad workboard JSON remains available only through explicit exploratory flags or commands.
+- [x] Diagnostics and warnings do not corrupt or bloat machine-readable result payloads.
+- [x] Tests assert compact Architect-loop output remains under the configured output budget.
+- [x] Recurring CAPA/ergonomics incidents can be marked as recurrence rather than appearing as first-time observations.
