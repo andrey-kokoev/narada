@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T00:16:36.227Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777594564367_zld1dl
+closed_at: 2026-05-01T00:16:52.811Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Split slow role-loop verification from work-next test file
@@ -32,8 +41,8 @@ Source inbox envelope env_fc25705d-68b1-4b9d-9290-5beada0d7e57 reports Task 1160
 
 ## Acceptance Criteria
 
-- [ ] A fast focused test covers Architect review identity path without running the full slow work-next file.
-- [ ] The slower work-next test remains only for integration coverage that needs it.
-- [ ] TIZ or verification output/guidance reduces false stall interpretation for known slow files.
-- [ ] Task 1160 behavior remains covered.
-- [ ] Verification records runtime or expected duration improvement.
+- [x] A fast focused test covers Architect review identity path without running the full slow work-next file.
+- [x] The slower work-next test remains only for integration coverage that needs it.
+- [x] TIZ or verification output/guidance reduces false stall interpretation for known slow files.
+- [x] Task 1160 behavior remains covered.
+- [x] Verification records runtime or expected duration improvement.

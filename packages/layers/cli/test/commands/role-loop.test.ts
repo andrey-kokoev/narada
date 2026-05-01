@@ -75,7 +75,7 @@ describe('role-loop next command', () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('returns compact role-loop state without claiming work or echoing full payloads', async () => {
+  it('covers Architect review identity path quickly without the full work-next fixture', async () => {
     const result = await roleLoopNextCommand({ cwd: tempDir, role: 'architect', format: 'json' });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
@@ -89,6 +89,7 @@ describe('role-loop next command', () => {
         action_kind: 'idle',
         pending_reviews_count: 1,
       },
+      recommended_command: 'Builder no-work is not system idle; Architect/reviewer must clear pending review or closure work.',
       dirty_ownership: {
         dirty: true,
         count: expect.any(Number),
@@ -99,5 +100,6 @@ describe('role-loop next command', () => {
       role_loop_contract: expect.stringContaining('Operator nudge `next`'),
     });
     expect(JSON.stringify(result.result)).not.toContain('Review it.');
+    expect(JSON.stringify(result.result)).not.toContain('--agent architect --verdict accepted');
   });
 });

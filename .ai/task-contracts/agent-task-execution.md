@@ -113,6 +113,8 @@ narada role-loop next --role architect --format json
 
 This surface is read-only by default. It composes current/next work, review duty, workboard counts, dirty ownership groups, and a recommended command without claiming tasks, echoing full inbox payloads, or relying on terminal table wrapping. Role-specific loops must prefer this compact surface before ad hoc parsing of `work-next`, `workboard`, task-create output, or operator-surface status.
 
+Fast regression carrier: small role-loop or Architect review-identity changes should verify with `packages/layers/cli/test/commands/role-loop.test.ts` first. Do not run the full `work-next.test.ts` file for those changes unless the change modifies work-next integration behavior itself.
+
 ## Safety
 
 - Do not interpret, narrow, relax, or silently carve exceptions into operator-set constraints.
@@ -176,6 +178,7 @@ Static grammar may define what a task, finding, roster entry, or chapter is. Ope
 - For live-effect tasks, prefer existing-evidence verification over rerunning the effect. A valid no-live-effect verification command is a read-only evidence/admission check, for example `narada task evidence <n>` or a focused fixture/static check recorded through TIZ.
 - Use focused verification first.
 - Do not run the full suite unless the task or user explicitly requests it.
+- If the focused command is expected to run longer than 30 seconds, state the expected duration in the Testing Intent Zone rationale and prefer a narrower fixture before accepting the slow path.
 - If verification cannot be run, record why in the original task file.
 - If verification exposes an unrelated blocker, record it clearly rather than hiding or broadening the task.
 
