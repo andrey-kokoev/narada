@@ -1,0 +1,31 @@
+{
+  "envelope_id": "env_ed940ea1-6351-4422-ab36-b76141e99b78",
+  "received_at": "2026-05-01T02:25:30.972Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey.Kevin:typed-mcp-surfaces-proposal"
+  },
+  "kind": "proposal",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "proposal": [
+      "Document that a Site may expose zero, one, or many MCP surfaces, each typed by purpose, authority boundary, and runtime embodiment.",
+      "Define Inbox MCP as the smallest governance-oriented MCP surface: submit typed envelopes into the target Site canonical inbox, plus schema/doctor/readiness inspection.",
+      "Define Embodiment Execution MCP (EE-MCP) as a bounded execution surface for a declared embodiment, such as windows-pwsh or wsl-bash, with command class restrictions, cwd/env/timeout/output limits, authority posture, and evidence logging.",
+      "State that MCP runtime process launch/supervision remains an execution-machine or PC/User Site concern, while target Site admission policy remains target Site authority.",
+      "Make typed MCP surfaces capability-announced rather than assumed from the presence of an MCP server."
+    ],
+    "title": "Define typed Narada MCP surfaces: Inbox MCP and Embodiment Execution MCP",
+    "evidence": [
+      "docs/concepts/narada-mcp-facade.md already says MCP is a facade/control channel and not a second authority surface.",
+      "Current Windows/User Site work shows two distinct pressures: submitting typed envelopes without brittle shell construction, and crossing Windows/WSL execution boundaries without path/quoting/context loss.",
+      "Conflating inbox admission and command execution in one generic MCP surface would blur authority posture and make capability review harder."
+    ],
+    "recommendation": "Create a Narada proper doctrine/docs task that updates MCP facade docs and related Site governance docs before local User/PC Sites build broader MCP machinery.",
+    "summary": "Narada MCP doctrine should distinguish typed MCP surface purposes rather than implying one monolithic Site MCP. The first two surface types should be Inbox MCP for canonical inbox envelope admission and Embodiment Execution MCP for bounded command execution inside a declared embodiment such as Windows PowerShell or WSL bash."
+  },
+  "status": "received"
+}
