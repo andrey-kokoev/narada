@@ -86,8 +86,8 @@ describe('role-loop next command', () => {
       agent: 'architect',
       mode: 'peek_compact',
       next: {
-        action_kind: 'review_work',
-        task_number: 20,
+        action_kind: 'idle',
+        pending_reviews_count: 1,
       },
       dirty_ownership: {
         dirty: true,

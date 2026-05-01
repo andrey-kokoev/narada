@@ -1,0 +1,40 @@
+{
+  "envelope_id": "env_fc25705d-68b1-4b9d-9290-5beada0d7e57",
+  "received_at": "2026-04-30T23:56:59.198Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "builder:task-1160-slow-role-loop-verification"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "builder"
+  },
+  "payload": {
+    "title": "Role-loop verification path is too slow for small duty-loop changes",
+    "summary": "While verifying Task 1160, the focused TIZ command passed but took about 49.6s because it had to run work-next.test.ts plus role-loop.test.ts. This creates false stoppage pressure and makes small role-loop guidance fixes feel blocked or suspicious.",
+    "problem": {
+      "task": 1160,
+      "verification_run": "run_1777593318419_b77xt9",
+      "duration_ms": 49625,
+      "symptom": "Operator interrupted during verification because the small task appeared to hang or stall.",
+      "root_suspect": "work-next.test.ts is slow and currently acts as the regression carrier for role-loop review-duty behavior. The relevant behavior needs a smaller unit fixture or faster command-level test."
+    },
+    "requests": [
+      {
+        "kind": "execution_request",
+        "text": "Split compact role-loop/review-duty tests so small role-loop guidance changes can verify without running the full slow work-next test file."
+      },
+      {
+        "kind": "execution_request",
+        "text": "Add a faster focused regression for Architect review identity path that exercises the command logic without full work-next fixture cost."
+      },
+      {
+        "kind": "ergonomics_request",
+        "text": "Make TIZ output show bounded progress or expected duration for known slow test files so Operator does not infer a stall."
+      }
+    ],
+    "authority_note": "This is an ergonomics and verification-posture ticket; it does not invalidate Task 1160's passing verification."
+  },
+  "status": "received"
+}

@@ -163,7 +163,7 @@ function formatHuman(result: Record<string, unknown>): string {
 
 function canOwnReviewWork(role: string | undefined, agentId: string): boolean {
   const normalized = `${role ?? ''} ${agentId}`.toLowerCase();
-  return /\b(architect|reviewer|operator)\b/.test(normalized);
+  return /\b(reviewer|operator|admin)\b/.test(normalized);
 }
 
 function taskTitleFromStore(store: ReturnType<typeof openTaskLifecycleStore>, taskNumber: number): string | null {
@@ -275,10 +275,10 @@ async function listPendingReviewWork(cwd: string, limit = 5): Promise<PendingRev
         status,
         report_id: report?.report_id ?? null,
         reported_by: report?.agent_id ?? null,
-        suggested_owner: 'architect',
+        suggested_owner: 'operator',
         suggested_command: task.taskNumber === null
           ? null
-          : `narada task review ${task.taskNumber} --agent architect --verdict accepted`,
+          : `narada task review ${task.taskNumber} --agent operator --verdict accepted`,
       });
       if (rows.length >= limit) break;
     }

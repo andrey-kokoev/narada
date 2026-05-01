@@ -370,6 +370,7 @@ describe('work-next unified next action', () => {
   });
 
   it('returns review work before inbox fallback', async () => {
+    seedRosterEntry(tempDir, 'operator', 'operator', 'idle', null);
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-101-review.md'),
       '---\ntask_id: 101\nstatus: in_review\n---\n\n# Task 101\n\n## Goal\nReview me.\n',
@@ -386,13 +387,13 @@ describe('work-next unified next action', () => {
     });
     expect(submitted.exitCode).toBe(ExitCode.SUCCESS);
 
-    const result = await workNextCommand({ agent: 'architect', cwd: tempDir, format: 'json' });
+    const result = await workNextCommand({ agent: 'operator', cwd: tempDir, format: 'json' });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
       status: 'success',
       action_kind: 'review_work',
-      agent_id: 'architect',
+      agent_id: 'operator',
       checked: [
         { zone: 'task_work', status: 'empty', reason: 'no_admissible_task' },
         { zone: 'review_work', status: 'selected', selected_ref: 'task:101' },
@@ -400,7 +401,7 @@ describe('work-next unified next action', () => {
       primary: {
         task_number: 101,
         status: 'in_review',
-        command_args: ['task', 'review', '101', '--agent', 'architect', '--verdict', 'accepted'],
+        command_args: ['task', 'review', '101', '--agent', 'operator', '--verdict', 'accepted'],
       },
     });
   });
@@ -583,8 +584,8 @@ describe('work-next unified next action', () => {
           title: 'Pending review',
           report_id: 'wrr_pending_review_builder',
           reported_by: 'builder',
-          suggested_owner: 'architect',
-          suggested_command: 'narada task review 77 --agent architect --verdict accepted',
+          suggested_owner: 'operator',
+          suggested_command: 'narada task review 77 --agent operator --verdict accepted',
         }],
       },
     });
