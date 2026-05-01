@@ -1,5 +1,9 @@
 ---
-status: opened
+status: closed
+closed_at: 2026-05-01T21:22:48.186Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Fail closed or evidence stale CLI governance mutations
@@ -28,16 +32,42 @@ Update the Narada shim/governance command posture so governance mutations fail c
 
 ## Execution Notes
 
-<!-- Record what was done, decisions made, and files changed during execution. -->
+1. Updated the installed `narada`/`narada-mcp` shim template to check CLI,
+   task-governance, and control-plane source freshness against their dist
+   markers before execution.
+2. Kept read-only governance inspection available under stale dist, including
+   `task workboard`, while emitting compact embodiment-readiness diagnostics.
+3. Made stale authority mutations fail closed unless
+   `NARADA_SHIM_ALLOW_STALE_AUTHORITY_MUTATION=1` is paired with
+   `--allow-stale-governance <reason>` or
+   `NARADA_SHIM_ALLOW_STALE_AUTHORITY_MUTATION_REASON`.
+4. Stripped the shim-only `--allow-stale-governance` flag before invoking the
+   CLI so Commander command parsers do not receive an unknown option.
+5. Propagated accepted stale-governance posture through environment variables
+   and recorded it in task-lifecycle and inbox mutation evidence under
+   `replay_payload.governance_freshness`.
+6. Added focused regression coverage for stale implementation blocking,
+   read-only stale admission, stale authority mutation reason requirement,
+   accepted stale mutation environment propagation, and mutation-evidence
+   freshness recording.
 
 ## Verification
 
-<!-- Record commands run, results observed, and how correctness was checked. -->
+| Command | Result |
+| --- | --- |
+| `bash -n scripts/install-narada-shim.sh` | Passed |
+| `node scripts/test-narada-shim-posture.mjs` | Passed |
+| `pnpm --dir packages/layers/cli exec vitest run test/commands/task-lifecycle-mutation-evidence.test.ts --pool=forks` | Passed, 5/5 tests |
+| `pnpm --filter @narada2/cli typecheck` | Passed |
+| `pnpm --filter @narada2/control-plane build` | Passed |
+| `pnpm --filter @narada2/task-governance build` | Passed |
+| `pnpm --filter @narada2/cli build` | Passed |
+| `narada test-run run --cmd-file /tmp/narada-1201-verification.cmd --task 1201 --timeout 180 --scope focused --requester builder --rationale "Verify stale governance mutation fail-closed posture, explicit stale continuation reason, mutation-evidence freshness posture, typecheck, and build chain."` | Passed, run `run_1777670456421_55ql8g`, command run `run_1777670456627_8tvlch`, duration 31152 ms |
 
 ## Acceptance Criteria
 
-- [ ] Governance mutations do not silently continue on stale CLI dist by default.
-- [ ] Any allowed stale governance mutation requires an explicit reason and records stale_dist evidence.
-- [ ] Mutation evidence records stale source paths, command identity, acceptance reason, and freshness posture.
-- [ ] Read-only commands expose stale substrate posture without blocking safe inspection.
-- [ ] Regression coverage proves stale CLI dist blocks or records accepted stale posture for review/close-style mutations.
+- [x] Governance mutations do not silently continue on stale CLI dist by default.
+- [x] Any allowed stale governance mutation requires an explicit reason and records stale_dist evidence.
+- [x] Mutation evidence records stale source paths, command identity, acceptance reason, and freshness posture.
+- [x] Read-only commands expose stale substrate posture without blocking safe inspection.
+- [x] Regression coverage proves stale CLI dist blocks or records accepted stale posture for review/close-style mutations.

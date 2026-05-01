@@ -6,6 +6,7 @@ import {
   type MutationEvidenceAuthorityClass,
 } from '@narada2/task-governance/mutation-evidence';
 import type { InboxEnvelope } from '@narada2/control-plane';
+import { governanceFreshnessEvidence } from './governance-freshness.js';
 
 export interface InboxMutationEvidenceState {
   envelope_id: string;
@@ -58,6 +59,7 @@ export async function writeInboxMutationEvidence(
   const occurredAt = options.occurredAt
     ?? extractTimestamp(options.result)
     ?? new Date().toISOString();
+  const freshness = governanceFreshnessEvidence(options.command);
   const record = buildMutationEvidenceRecord({
     family: 'inbox',
     authority_class: options.authorityClass,
@@ -87,6 +89,7 @@ export async function writeInboxMutationEvidence(
       promotion_target_ref: options.after?.promotion_target_ref ?? null,
       envelope: extractEnvelope(options.result),
       command_result: summarizeCommandResult(options.result),
+      ...(freshness ? { governance_freshness: freshness } : {}),
     },
   });
 

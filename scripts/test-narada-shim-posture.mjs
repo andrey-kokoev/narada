@@ -11,14 +11,24 @@ function makeFixture({ stale = false, dirty = false } = {}) {
   mkdirSync(join(root, 'scripts'), { recursive: true });
   mkdirSync(join(root, 'packages', 'layers', 'cli', 'src'), { recursive: true });
   mkdirSync(join(root, 'packages', 'layers', 'cli', 'dist'), { recursive: true });
+  mkdirSync(join(root, 'packages', 'layers', 'control-plane', 'src'), { recursive: true });
+  mkdirSync(join(root, 'packages', 'layers', 'control-plane', 'dist'), { recursive: true });
+  mkdirSync(join(root, 'packages', 'task-governance', 'src'), { recursive: true });
+  mkdirSync(join(root, 'packages', 'task-governance', 'dist'), { recursive: true });
   copyFileSync(installerSource, join(root, 'scripts', 'install-narada-shim.sh'));
   chmodSync(join(root, 'scripts', 'install-narada-shim.sh'), 0o755);
   writeFileSync(join(root, 'packages', 'layers', 'cli', 'src', 'main.ts'), 'export const marker = 1;\n');
-  writeFileSync(join(root, 'packages', 'layers', 'cli', 'dist', 'main.js'), '#!/usr/bin/env node\nconsole.log(JSON.stringify({ok:true,args:process.argv.slice(2)}));\n');
+  writeFileSync(join(root, 'packages', 'layers', 'control-plane', 'src', 'index.ts'), 'export const controlPlane = true;\n');
+  writeFileSync(join(root, 'packages', 'layers', 'control-plane', 'dist', 'index.js'), 'export const controlPlane = true;\n');
+  writeFileSync(join(root, 'packages', 'task-governance', 'src', 'index.ts'), 'export const taskGovernance = true;\n');
+  writeFileSync(join(root, 'packages', 'task-governance', 'dist', 'index.js'), 'export const taskGovernance = true;\n');
+  writeFileSync(join(root, 'packages', 'layers', 'cli', 'dist', 'main.js'), '#!/usr/bin/env node\nconsole.log(JSON.stringify({ok:true,args:process.argv.slice(2),stale:{accepted:process.env.NARADA_STALE_DIST_ACCEPTED||null,reason:process.env.NARADA_STALE_DIST_ACCEPTANCE_REASON||null,command:process.env.NARADA_STALE_DIST_COMMAND||null,sources:process.env.NARADA_STALE_DIST_SOURCE_PATHS||null,posture:process.env.NARADA_STALE_DIST_POSTURE||null}}));\n');
   writeFileSync(join(root, 'packages', 'layers', 'cli', 'dist', 'mcp-main.js'), '#!/usr/bin/env node\nconsole.log("mcp");\n');
   if (stale) {
     spawnSync('touch', ['-t', '202001010000', join(root, 'packages', 'layers', 'cli', 'dist', 'main.js')], { check: true });
     spawnSync('touch', ['-t', '202001010000', join(root, 'packages', 'layers', 'cli', 'dist', 'mcp-main.js')], { check: true });
+    spawnSync('touch', ['-t', '202001010000', join(root, 'packages', 'layers', 'control-plane', 'dist', 'index.js')], { check: true });
+    spawnSync('touch', ['-t', '202001010000', join(root, 'packages', 'task-governance', 'dist', 'index.js')], { check: true });
     spawnSync('touch', ['-t', '203001010000', join(root, 'packages', 'layers', 'cli', 'src', 'main.ts')], { check: true });
   }
   if (dirty) {
@@ -71,7 +81,7 @@ try {
     assert(result.status !== 0, 'stale implementation command should block');
     assert(result.stderr.includes('embodiment readiness: stale_dist_blocked'), 'blocked stale state missing');
     assert(result.stderr.includes('command_class: implementation'), 'implementation class missing');
-    assert(result.stderr.includes('repair_command: pnpm --filter @narada2/cli build'), 'repair command missing');
+    assert(result.stderr.includes('repair_command: pnpm --filter @narada2/control-plane build && pnpm --filter @narada2/task-governance build && pnpm --filter @narada2/cli build'), 'repair command missing');
   }
 
   {
@@ -82,6 +92,42 @@ try {
     assert(result.status === 0, 'stale read-only task inspection should proceed');
     assert(result.stderr.includes('embodiment readiness: stale_dist_read_only_admitted'), 'read-only admitted state missing');
     assert(result.stderr.includes('command_class: read_only'), 'read-only class missing');
+  }
+
+  {
+    const root = makeFixture({ stale: true });
+    roots.push(root);
+    const shim = install(root);
+    const result = run(shim, ['task', 'workboard', '--view', 'compact']);
+    assert(result.status === 0, 'stale read-only workboard should proceed');
+    assert(result.stderr.includes('embodiment readiness: stale_dist_read_only_admitted'), 'workboard read-only admitted state missing');
+    assert(result.stderr.includes('command_class: read_only'), 'workboard read-only class missing');
+  }
+
+  {
+    const root = makeFixture({ stale: true });
+    roots.push(root);
+    const shim = install(root);
+    const result = run(shim, ['task', 'close', '1200'], { NARADA_SHIM_ALLOW_STALE_AUTHORITY_MUTATION: '1' });
+    assert(result.status !== 0, 'stale authority mutation should require an explicit reason');
+    assert(result.stderr.includes('embodiment readiness: stale_dist_authority_mutation_reason_required'), 'reason-required state missing');
+  }
+
+  {
+    const root = makeFixture({ stale: true });
+    roots.push(root);
+    const shim = install(root);
+    const result = run(shim, ['task', 'close', '1200', '--allow-stale-governance', 'operator accepted stale governance for recovery'], {
+      NARADA_SHIM_ALLOW_STALE_AUTHORITY_MUTATION: '1',
+    });
+    assert(result.status === 0, 'stale authority mutation with reason should proceed');
+    assert(result.stderr.includes('embodiment readiness: stale_dist_authority_mutation_admitted_by_policy'), 'stale authority admission state missing');
+    const output = JSON.parse(result.stdout);
+    assert(!output.args.includes('--allow-stale-governance'), 'shim flag should not leak to CLI command parser');
+    assert(output.stale.accepted === '1', 'stale evidence acceptance env missing');
+    assert(output.stale.reason === 'operator accepted stale governance for recovery', 'stale acceptance reason env missing');
+    assert(output.stale.command === 'narada task close 1200', 'stale command identity env missing');
+    assert(output.stale.sources.includes('@narada2/cli:'), 'stale source path evidence missing');
   }
 
   {

@@ -14,6 +14,7 @@ import {
   type TaskLifecycleRow,
   type TaskLifecycleStore,
 } from './task-lifecycle-store.js';
+import { governanceFreshnessEvidence } from './governance-freshness.js';
 
 export interface TaskLifecycleEvidenceState {
   task_id: string;
@@ -88,6 +89,7 @@ export async function writeTaskLifecycleMutationEvidence(
   const taskId = options.after?.task_id ?? options.before?.task_id ?? `task:${taskNumber}`;
   const occurredAt = options.occurredAt ?? extractTimestamp(options.result) ?? options.after?.updated_at ?? new Date().toISOString();
   const resultSummary = summarizeCommandResult(options.result);
+  const freshness = governanceFreshnessEvidence(options.command);
   const record = buildMutationEvidenceRecord({
     family: 'task_lifecycle',
     authority_class: options.authorityClass,
@@ -115,6 +117,7 @@ export async function writeTaskLifecycleMutationEvidence(
       before_status: options.before?.status ?? null,
       after_status: options.after?.status ?? null,
       command_result: resultSummary,
+      ...(freshness ? { governance_freshness: freshness } : {}),
     },
   });
 

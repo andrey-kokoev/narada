@@ -14,6 +14,7 @@ import { taskFinishCommand } from '../../src/commands/task-finish.js';
 import { taskCloseCommand } from '../../src/commands/task-close.js';
 import { taskEvidenceAdmitCommand } from '../../src/commands/task-evidence.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 
 function setupRepo(tempDir: string): void {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
@@ -57,6 +58,25 @@ function setupRepo(tempDir: string): void {
     join(tempDir, 'docs', 'concepts', 'authority-inversion-inventory.json'),
     JSON.stringify({ findings: [] }),
   );
+
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    for (const [agentId, role] of [['impl-agent', 'implementer'], ['operator-1', 'operator']] as const) {
+      store.upsertRosterEntry({
+        agent_id: agentId,
+        role,
+        capabilities_json: JSON.stringify(role === 'operator' ? ['resolve'] : ['claim']),
+        first_seen_at: '2026-01-01T00:00:00Z',
+        last_active_at: '2026-01-01T00:00:00Z',
+        status: 'idle',
+        task_number: null,
+        last_done: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+    }
+  } finally {
+    store.db.close();
+  }
 }
 
 function readEvidence(tempDir: string): MutationEvidenceRecord[] {
@@ -74,6 +94,10 @@ function findEvidence(tempDir: string, command: string, taskNumber: number): Mut
   const record = readEvidence(tempDir).find((item) => item.command === command && item.subject.number === taskNumber);
   if (!record) throw new Error(`missing mutation evidence for ${command} ${taskNumber}`);
   return record;
+}
+
+function expectSuccess(result: { exitCode: ExitCode; result: unknown }): void {
+  expect(result.exitCode, JSON.stringify(result.result)).toBe(ExitCode.SUCCESS);
 }
 
 describe('task lifecycle mutation evidence', () => {
@@ -96,7 +120,7 @@ describe('task lifecycle mutation evidence', () => {
       format: 'json',
     });
 
-    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expectSuccess(result);
     const evidence = findEvidence(tempDir, 'task claim', 999);
     expect(evidence.family).toBe('task_lifecycle');
     expect(evidence.authority_class).toBe('claim');
@@ -104,6 +128,53 @@ describe('task lifecycle mutation evidence', () => {
     expect(evidence.before?.status).toBe('opened');
     expect(evidence.after?.status).toBe('claimed');
     expect(evidence.confirmation).toMatchObject({ kind: 'read_back', status: 'confirmed' });
+  });
+
+  it('records accepted stale governance freshness posture in mutation evidence', async () => {
+    const previous = {
+      accepted: process.env.NARADA_STALE_DIST_ACCEPTED,
+      sources: process.env.NARADA_STALE_DIST_SOURCE_PATHS,
+      command: process.env.NARADA_STALE_DIST_COMMAND,
+      commandClass: process.env.NARADA_STALE_DIST_COMMAND_CLASS,
+      reason: process.env.NARADA_STALE_DIST_ACCEPTANCE_REASON,
+      posture: process.env.NARADA_STALE_DIST_POSTURE,
+    };
+    process.env.NARADA_STALE_DIST_ACCEPTED = '1';
+    process.env.NARADA_STALE_DIST_SOURCE_PATHS = '@narada2/task-governance:/repo/packages/task-governance/src/task-close-service.ts\n@narada2/cli:/repo/packages/layers/cli/src/commands/task-close.ts';
+    process.env.NARADA_STALE_DIST_COMMAND = 'narada task claim 999';
+    process.env.NARADA_STALE_DIST_COMMAND_CLASS = 'authority_mutation';
+    process.env.NARADA_STALE_DIST_ACCEPTANCE_REASON = 'operator accepted stale governance for recovery';
+    process.env.NARADA_STALE_DIST_POSTURE = 'stale_dist_authority_mutation_admitted_by_policy';
+    try {
+      const result = await taskClaimCommand({
+        taskNumber: '999',
+        agent: 'impl-agent',
+        cwd: tempDir,
+        format: 'json',
+      });
+
+      expectSuccess(result);
+      const evidence = findEvidence(tempDir, 'task claim', 999);
+      expect(evidence.replay_payload.governance_freshness).toMatchObject({
+        stale_dist: true,
+        accepted: true,
+        command_identity: 'narada task claim 999',
+        command_class: 'authority_mutation',
+        acceptance_reason: 'operator accepted stale governance for recovery',
+        freshness_posture: 'stale_dist_authority_mutation_admitted_by_policy',
+        source_paths: [
+          '@narada2/task-governance:/repo/packages/task-governance/src/task-close-service.ts',
+          '@narada2/cli:/repo/packages/layers/cli/src/commands/task-close.ts',
+        ],
+      });
+    } finally {
+      restoreEnv('NARADA_STALE_DIST_ACCEPTED', previous.accepted);
+      restoreEnv('NARADA_STALE_DIST_SOURCE_PATHS', previous.sources);
+      restoreEnv('NARADA_STALE_DIST_COMMAND', previous.command);
+      restoreEnv('NARADA_STALE_DIST_COMMAND_CLASS', previous.commandClass);
+      restoreEnv('NARADA_STALE_DIST_ACCEPTANCE_REASON', previous.reason);
+      restoreEnv('NARADA_STALE_DIST_POSTURE', previous.posture);
+    }
   });
 
   it('emits report mutation evidence with report id in replay payload', async () => {
@@ -118,7 +189,7 @@ describe('task lifecycle mutation evidence', () => {
       format: 'json',
     });
 
-    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expectSuccess(result);
     const evidence = findEvidence(tempDir, 'task report', 999);
     expect(evidence.authority_class).toBe('resolve');
     expect(evidence.before?.status).toBe('claimed');
@@ -138,7 +209,7 @@ describe('task lifecycle mutation evidence', () => {
       format: 'json',
     });
 
-    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expectSuccess(result);
     const evidence = findEvidence(tempDir, 'task finish', 999);
     expect(evidence.authority_class).toBe('resolve');
     expect(evidence.before?.status).toBe('claimed');
@@ -153,7 +224,7 @@ describe('task lifecycle mutation evidence', () => {
       cwd: tempDir,
       format: 'json',
     });
-    expect(admission.exitCode).toBe(ExitCode.SUCCESS);
+    expectSuccess(admission);
 
     const result = await taskCloseCommand({
       taskNumber: '100',
@@ -162,7 +233,7 @@ describe('task lifecycle mutation evidence', () => {
       format: 'json',
     });
 
-    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expectSuccess(result);
     const evidence = findEvidence(tempDir, 'task close', 100);
     expect(evidence.authority_class).toBe('confirm');
     expect(evidence.before?.status).toBe('in_review');
@@ -170,3 +241,11 @@ describe('task lifecycle mutation evidence', () => {
     expect(evidence.after?.closed_by).toBe('operator-1');
   });
 });
+
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+  process.env[name] = value;
+}
