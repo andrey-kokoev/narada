@@ -1,0 +1,44 @@
+{
+  "event_id": "ose_1777607069914_ff2ee690ee31",
+  "identity": "builder",
+  "runtime_locus": "narada",
+  "resolved_runtime_handle": "codex-thread:019dd634-700c-7490-b108-44e1cffb6390",
+  "transport": "codex_cli_thread",
+  "submit_strategy": "known_surface_submit",
+  "text_digest": "077067ba837bc58d4b2e21ed69432a3b36358f6f04d8b009b838f221cd914eaf",
+  "text_length": 311,
+  "original_text_digest": "38926e33f1667b8335bd769578f2fba11a10de2ab32ea699896af0a870c6dceb",
+  "original_text_length": 287,
+  "rendered_text": "From: narada.architect\n\nNew pullback task 1176 unifies 1169/1172/1174/part of 1173 under typed closure posture. Please avoid one-off lifecycle patches where current work can align to closure postures: capability_complete, scope_complete_with_continuation, scope_complete_with_deferral, repair_required, blocked.",
+  "rendered_text_digest": "077067ba837bc58d4b2e21ed69432a3b36358f6f04d8b009b838f221cd914eaf",
+  "rendered_text_length": 311,
+  "sender_header_included": true,
+  "input_posture": "typed_message",
+  "requested_address": "builder",
+  "current_site": "narada",
+  "target_site": "narada",
+  "message_route": {
+    "sender": "narada.architect",
+    "requested_recipient": "builder",
+    "resolved_recipient": "builder",
+    "current_site": "narada",
+    "target_site": "narada",
+    "binding_status": "bound",
+    "identity_flag_mode": "explicit_to"
+  },
+  "sender": "narada.architect",
+  "sender_identity": "narada.architect",
+  "resolved_sender_identity": "narada.architect",
+  "recipient": "builder",
+  "site_plane": {
+    "current_site": "narada",
+    "target_site": "narada"
+  },
+  "binding_proof": {
+    "binding_id": "bind_f2c39a193e928d5b",
+    "runtime_locus": "narada",
+    "status": "bound"
+  },
+  "dry_run": false,
+  "status": "event_recorded_for_runtime_locus"
+}
