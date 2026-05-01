@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T18:06:16.413Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777658732669_hm6jxk
+closed_at: 2026-05-01T18:06:57.642Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Show inbox target locus in workboard source envelopes
@@ -36,7 +45,7 @@ Persist or project target_locus into the portable envelope or canonical routing 
 
 ## Acceptance Criteria
 
-- [ ] Inbox submit target_locus is available to downstream workboard/read-model consumers.
-- [ ] task workboard compact source_envelopes shows the target locus for directed inbox messages.
-- [ ] The fix avoids debug/full-payload dependence for directed-message observability.
-- [ ] Tests cover a submitted envelope with target_locus and workboard compact output preserving it.
+- [x] Inbox submit target_locus is available to downstream workboard/read-model consumers.
+- [x] task workboard compact source_envelopes shows the target locus for directed inbox messages.
+- [x] The fix avoids debug/full-payload dependence for directed-message observability.
+- [x] Tests cover a submitted envelope with target_locus and workboard compact output preserving it.

@@ -45,6 +45,7 @@ export interface TaskWorkboard {
     status: string;
     source_kind: string;
     source_ref: string;
+    target_locus: string | null;
     target: string | null;
   }>;
   upstream_publications: Array<{
@@ -188,6 +189,7 @@ function listSourceEnvelopes(cwd: string, limit: number): TaskWorkboard['source_
         status: envelope.status,
         source_kind: envelope.source.kind,
         source_ref: envelope.source.ref,
+        target_locus: envelope.target_locus ?? null,
         target: envelope.promotion ? formatPromotionTarget(envelope.promotion.target_kind, envelope.promotion.target_ref) : null,
       }));
   } finally {

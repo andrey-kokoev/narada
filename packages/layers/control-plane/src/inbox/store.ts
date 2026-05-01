@@ -26,6 +26,7 @@ interface InboxEnvelopeRow {
   envelope_id: string;
   received_at: string;
   source_json: string;
+  target_locus?: string | null;
   kind: string;
   authority_json: string;
   payload_json: string;
@@ -51,13 +52,14 @@ export class SqliteInboxStore implements InboxStore {
     const envelope = createInboxEnvelope(options);
     this.db.prepare(`
       insert into inbox_envelopes (
-        envelope_id, received_at, source_json, kind, authority_json,
+        envelope_id, received_at, source_json, target_locus, kind, authority_json,
         payload_json, status, promotion_json
-      ) values (?, ?, ?, ?, ?, ?, ?, null)
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, null)
     `).run(
       envelope.envelope_id,
       envelope.received_at,
       JSON.stringify(envelope.source),
+      envelope.target_locus ?? null,
       envelope.kind,
       JSON.stringify(envelope.authority),
       JSON.stringify(envelope.payload),
@@ -164,6 +166,7 @@ export class SqliteInboxStore implements InboxStore {
         envelope_id text primary key,
         received_at text not null,
         source_json text not null,
+        target_locus text,
         kind text not null,
         authority_json text not null,
         payload_json text not null,
@@ -180,6 +183,11 @@ export class SqliteInboxStore implements InboxStore {
     } catch {
       // Existing stores already have the column.
     }
+    try {
+      this.db.exec(`alter table inbox_envelopes add column target_locus text`);
+    } catch {
+      // Existing stores already have the column.
+    }
   }
 }
 
@@ -188,6 +196,7 @@ function rowToEnvelope(row: InboxEnvelopeRow): InboxEnvelope {
     envelope_id: row.envelope_id,
     received_at: row.received_at,
     source: JSON.parse(row.source_json) as InboxEnvelope['source'],
+    ...(row.target_locus ? { target_locus: row.target_locus } : {}),
     kind: row.kind as InboxEnvelope['kind'],
     authority: JSON.parse(row.authority_json) as InboxEnvelope['authority'],
     payload: JSON.parse(row.payload_json) as InboxEnvelope['payload'],

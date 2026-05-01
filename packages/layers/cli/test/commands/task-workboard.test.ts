@@ -114,6 +114,7 @@ describe('task workboard command', () => {
       envelope_id: 'env_workboard',
       received_at: new Date().toISOString(),
       source: { kind: 'user_chat', ref: 'operator:workboard' },
+      target_locus: 'narada-proper.builder',
       kind: 'observation',
       authority: { level: 'operator_confirmed', principal: 'operator' },
       payload: { title: 'payload should not be surfaced' },
@@ -133,7 +134,7 @@ describe('task workboard command', () => {
       in_progress: Array<{ task_number: number; assigned_agent: string; handoff_actionability: { status: string } }>;
       local_followups: Array<{ task_number: number }>;
       active_chapters: Array<{ chapter: string; pending_reviews: number; in_progress: number }>;
-      source_envelopes: Array<{ envelope_id: string; source_ref: string }>;
+      source_envelopes: Array<{ envelope_id: string; source_ref: string; target_locus: string | null }>;
       upstream_publications: Array<{ publication_id: string }>;
       review_handoff_requirements: string[];
       closure_semantics: string[];
@@ -150,7 +151,11 @@ describe('task workboard command', () => {
     }));
     expect(workboard.local_followups.map((task) => task.task_number)).toContain(403);
     expect(workboard.active_chapters[0]).toMatchObject({ chapter: 'Operator Surface', pending_reviews: 1, in_progress: 2 });
-    expect(workboard.source_envelopes).toEqual([expect.objectContaining({ envelope_id: 'env_workboard', source_ref: 'operator:workboard' })]);
+    expect(workboard.source_envelopes).toEqual([expect.objectContaining({
+      envelope_id: 'env_workboard',
+      source_ref: 'operator:workboard',
+      target_locus: 'narada-proper.builder',
+    })]);
     expect(JSON.stringify(workboard.source_envelopes)).not.toContain('payload should not be surfaced');
     expect(workboard.upstream_publications).toEqual([expect.objectContaining({ publication_id: 'rpi_test' })]);
     expect(workboard.review_handoff_requirements.join(' ')).toContain('changed files');
@@ -181,6 +186,7 @@ describe('task workboard command', () => {
       review_handoff_requirements?: string[];
       closure_semantics?: string[];
       concurrency_boundaries?: string[];
+      source_envelopes: Array<{ envelope_id: string; target_locus: string | null }>;
     };
 
     expect(compact.view).toBe('compact');
@@ -199,6 +205,10 @@ describe('task workboard command', () => {
       'prepared_publications:rpi_test',
     ]));
     expect(compact.recommended_command).toBe('narada task workboard --view compact --format json');
+    expect(compact.source_envelopes).toEqual([expect.objectContaining({
+      envelope_id: 'env_workboard',
+      target_locus: 'narada-proper.builder',
+    })]);
     expect(compact.review_handoff_requirements).toBeUndefined();
     expect(compact.closure_semantics).toBeUndefined();
     expect(compact.concurrency_boundaries).toBeUndefined();

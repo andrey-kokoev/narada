@@ -287,6 +287,7 @@ export async function inboxSubmitCommand(options: InboxSubmitOptions): Promise<{
       envelope_id: `env_${randomUUID()}`,
       received_at: new Date().toISOString(),
       source: { kind: sourceKind, ref: sourceRef },
+      target_locus: options.targetLocus,
       kind,
       authority: {
         level: authorityLevel,
@@ -987,6 +988,7 @@ function summarizeInboxEnvelope(envelope: InboxEnvelope): Record<string, unknown
     status: envelope.status,
     kind: envelope.kind,
     source: `${envelope.source.kind}:${envelope.source.ref}`,
+    target_locus: envelope.target_locus ?? null,
     authority_level: envelope.authority.level,
     payload_digest: createHash('sha256').update(JSON.stringify(envelope.payload ?? null)).digest('hex'),
   };

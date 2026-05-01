@@ -82,6 +82,7 @@ export interface InboxEnvelope<TPayload = unknown> {
   envelope_id: string;
   received_at: string;
   source: InboxSourceRef;
+  target_locus?: string;
   kind: InboxEnvelopeKind;
   authority: InboxAuthority;
   payload: TPayload;
@@ -94,6 +95,7 @@ export interface CreateInboxEnvelopeOptions<TPayload = unknown> {
   envelope_id: string;
   received_at: string;
   source: InboxSourceRef;
+  target_locus?: string;
   kind: InboxEnvelopeKind;
   authority?: InboxAuthority;
   payload: TPayload;
@@ -106,6 +108,7 @@ export function createInboxEnvelope<TPayload>(
     envelope_id: options.envelope_id,
     received_at: options.received_at,
     source: options.source,
+    ...(options.target_locus ? { target_locus: options.target_locus } : {}),
     kind: options.kind,
     authority: options.authority ?? { level: 'none' },
     payload: options.payload,
