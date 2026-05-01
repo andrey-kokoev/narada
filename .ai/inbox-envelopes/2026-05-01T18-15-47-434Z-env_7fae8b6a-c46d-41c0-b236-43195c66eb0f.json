@@ -1,0 +1,40 @@
+{
+  "envelope_id": "env_7fae8b6a-c46d-41c0-b236-43195c66eb0f",
+  "received_at": "2026-05-01T18:15:47.434Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey:recurring-compact-workboard-context-burn"
+  },
+  "target_locus": "local_site",
+  "kind": "incident",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "Recurring CAPA: compact workboard still burns context in architect loop",
+    "severity": "elevated_recurring",
+    "summary": "The architect loop again invoked `narada task workboard --view compact --format json` and received hundreds of lines of JSON plus stale-dist warning text. This is a recurrence of the previously identified compact-workboard/context-burn problem: the available compact view is still too verbose for routine obligation selection and does not provide a bounded next-action packet for architect review duties.",
+    "incident": {
+      "observed_command": "narada task workboard --cwd /mnt/c/Users/Andrey/Narada --view compact --format json",
+      "observed_failure": "Large output returned despite compact view; operator had to interrupt and call out token/context waste.",
+      "recurrence": true
+    },
+    "why_prior_control_failed": [
+      "The compact workboard remains a broad dashboard rather than a strict next-obligation packet.",
+      "The command still serializes large pending_reviews/source_envelopes structures.",
+      "The stale-governance warning is emitted into the same channel as machine-readable output, increasing noise.",
+      "There is no mechanical guard causing architect loop callers to use a bounded review/obligation command instead of broad workboard JSON."
+    ],
+    "requested_corrective_action": [
+      "Add a bounded architect-loop command that returns only the highest-priority next obligation and a short reason, with an explicit output cap.",
+      "Make broad workboard JSON opt-in for exploratory use, not the default architect-loop probe.",
+      "Separate diagnostics/warnings from JSON result channels or summarize them into bounded fields.",
+      "Add regression coverage asserting compact architect-loop output stays under a strict line/byte budget.",
+      "Add a recurrence marker to CAPA handling when a previously reported ergonomics issue reappears after mitigation."
+    ],
+    "operator_impact": "The operator loses situational continuity and context budget during routine review-loop work, especially when there are many pending reviews.",
+    "source_context": "User interrupted after a 566-line compact workboard response and asked why no CAPA was submitted despite prior CAPA work."
+  },
+  "status": "received"
+}
