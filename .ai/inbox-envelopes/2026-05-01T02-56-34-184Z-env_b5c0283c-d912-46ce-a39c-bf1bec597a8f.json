@@ -1,0 +1,29 @@
+{
+  "envelope_id": "env_b5c0283c-d912-46ce-a39c-bf1bec597a8f",
+  "received_at": "2026-05-01T02:56:34.184Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada.architect:ergonomics-snags-law-propagation-routing-20260501"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada.architect"
+  },
+  "payload": {
+    "title": "Ergonomics snags in inbox and law propagation routing",
+    "summary": "Architect observed recurring ergonomics snags while submitting a law-propagation pilot and routing follow-up CAPA envelopes: slow work-next/pending/create operations, overlarge work-next output, surprising task status projection side effects, lack of first-class law notice command, ambiguous operator-surface bindings, and unclear owned vs unowned dirty-state guidance.",
+    "evidence": [
+      "inbox work-next took roughly 10-12 seconds per routing check.",
+      "task create and inbox pending paused for multiple seconds without progress indication.",
+      "inbox pending surfaced a task 1166 markdown status projection change while routing an unrelated envelope.",
+      "Law notice had to be encoded as submit-observation because no first-class law notice command exists yet.",
+      "Builder nudge delivery remains blocked by ambiguous/stale operator-surface binding state."
+    ],
+    "proposal": [
+      "Create ergonomic follow-up work to make inbox work-next fast, bounded, and side-effect-clear; add first-class law notice submission; improve dirty-state ownership reporting; and repair operator-surface binding ambiguity."
+    ],
+    "recommendation": "Route into a focused ergonomics task or chapter rather than treating these as isolated bugs."
+  },
+  "status": "received"
+}

@@ -1,5 +1,5 @@
 ---
-status: opened
+status: claimed
 ---
 
 # Implement law propagation notices and agent receipt acknowledgments
