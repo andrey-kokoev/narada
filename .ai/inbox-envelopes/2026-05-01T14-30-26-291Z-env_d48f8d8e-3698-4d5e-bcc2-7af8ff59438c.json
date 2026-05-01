@@ -1,0 +1,31 @@
+{
+  "envelope_id": "env_d48f8d8e-3698-4d5e-bcc2-7af8ff59438c",
+  "received_at": "2026-05-01T14:30:26.291Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey:task-75-review"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "Accepted review should not create lifecycle/roster CAPA noise from legacy roster projection",
+    "summary": "While reviewing narada-andrey task 75, accepted_with_notes succeeded and closed the task, but review CAPA recommendation triggered from a non-blocking note about .ai/agents/roster.json last_done moving from 79 to 75. This exposes that legacy roster projection remains noisy in governed review closure and can confuse architect loops.",
+    "observed_at": "2026-05-01T09:30:13.7983398-05:00",
+    "source_site": "narada-andrey",
+    "source_task": 75,
+    "evidence": [
+      "Task 75 review closed successfully with verdict accepted_with_notes.",
+      "Review findings included a minor note: task commit mutated legacy .ai/agents/roster.json last_done from 79 to 75.",
+      "CLI returned capa_recommendation lifecycle_or_roster_authority_mismatch even though the review was accepted, not rejected."
+    ],
+    "proposed_direction": [
+      "Separate lifecycle review defects from projection-noise notes so accepted reviews do not emit misleading rejection-language CAPA recommendations.",
+      "Clarify whether .ai/agents/roster.json is still an admitted mutable projection; if legacy, stop task finish/review flows from committing it as if authoritative.",
+      "Make roster/projection updates monotonic or semantically explicit if lower-number older tasks can be completed after newer tasks."
+    ]
+  },
+  "status": "received"
+}

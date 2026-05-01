@@ -1,0 +1,30 @@
+{
+  "envelope_id": "env_e7112f00-64cd-4d5b-a476-005f472ec2e3",
+  "received_at": "2026-05-01T14:30:44.384Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey:osm-delivery-task-75-review"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "Operator-surface message delivery needs durable queue fallback when activation fails",
+    "summary": "After closing narada-andrey task 75, Kevin attempted to OSM Bob the review result. Delivery failed with activation_failed because SetForegroundWindow returned False and foreground HWND was 0. This confirms direct clipboard/sendkeys delivery is still too synchronous and desktop/visibility fragile.",
+    "observed_at": "2026-05-01T09:30:35.5879642-05:00",
+    "source_site": "narada-andrey",
+    "evidence": [
+      "Command: Send-Os.ps1 -To narada-andrey.Bob -Posture note -Submit -PassThru",
+      "Failure: activation_failed: SetForegroundWindow returned False and foreground HWND is 0",
+      "The review result was already committed and pushed, but direct OSM did not deliver to Bob."
+    ],
+    "proposed_direction": [
+      "OSM send should enqueue a delivery promise before attempting focus-sensitive delivery.",
+      "If target surface is not visible or activatable, the queue should retry after visibility/workspace changes or route to the target identity inbox with explicit failed-delivery evidence.",
+      "Caller should receive a small status object: accepted_for_delivery, delivered, deferred, or failed_with_fallback, without dumping huge evidence payloads."
+    ]
+  },
+  "status": "received"
+}
