@@ -1,0 +1,36 @@
+{
+  "envelope_id": "env_c5efbc89-6760-4f9c-89eb-5159d1452ac4",
+  "received_at": "2026-05-01T18:10:23.513Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey:stale-cli-governance-warning"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "Governance commands should not silently continue on stale CLI dist",
+    "summary": "While reviewing narada-andrey task 81, the Narada CLI emitted: \"narada CLI dist is stale relative to source ... continuing with installed dist for governance command\". A governance mutation then succeeded. Continuing may be pragmatic, but it is risky: lifecycle review/closure should either run through a freshness-approved embodiment or record an explicit operator/agent acceptance of stale-dist posture.",
+    "observed_at": "2026-05-01T13:10:12.8645521-05:00",
+    "source_site": "narada-andrey",
+    "evidence": [
+      "Command: narada task review 81 --agent narada-andrey.Kevin --verdict accepted_with_notes ...",
+      "Warning: narada CLI dist is stale relative to source: /home/andrey/src/narada/packages/layers/cli/src/commands/operator-surface.ts",
+      "Warning: continuing with installed dist for governance command; set NARADA_SHIM_ALLOW_STALE_GOVERNANCE=0 to block",
+      "The command closed task 81 successfully despite stale dist warning."
+    ],
+    "risk": [
+      "Governance mutation may execute with behavior different from current source/doctrine.",
+      "Architect may miss the warning in large command output.",
+      "Stale embodiment posture is not reflected in task review evidence unless manually noticed."
+    ],
+    "proposed_direction": [
+      "For governance mutations, stale CLI dist should fail closed by default or require an explicit --allow-stale-governance-with-reason flag.",
+      "If continuing is intentionally allowed, mutation evidence should record stale_dist=true, stale source path, and acceptance reason.",
+      "Workboard/preflight should expose stale governance substrate posture compactly before review/close commands."
+    ]
+  },
+  "status": "received"
+}
