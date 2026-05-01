@@ -13,6 +13,16 @@ export interface RoleLoopNextOptions {
   format?: CliFormat;
 }
 
+type AgentWorkDutyLoopState =
+  | 'unbound'
+  | 'idle'
+  | 'has_active_task'
+  | 'needs_status_report'
+  | 'in_review'
+  | 'blocked'
+  | 'done'
+  | 'handoff_needed';
+
 function gitLines(cwd: string, args: string[]): string[] {
   try {
     return execFileSync('git', args, {
@@ -83,6 +93,24 @@ function compactWorkboard(result: unknown): Record<string, unknown> {
   };
 }
 
+function deriveDutyLoopState(args: {
+  lawBlocked: boolean;
+  next: Record<string, unknown>;
+  workboard: Record<string, unknown>;
+  dirty: Record<string, unknown>;
+}): AgentWorkDutyLoopState {
+  if (args.lawBlocked) return 'blocked';
+  if (args.next.task_number != null) return 'has_active_task';
+  if (Number(args.next.pending_reviews_count ?? 0) > 0) return 'handoff_needed';
+  const counts = args.workboard.counts && typeof args.workboard.counts === 'object'
+    ? args.workboard.counts as Record<string, unknown>
+    : {};
+  if (Number(counts.in_review ?? 0) > 0) return 'in_review';
+  if (args.next.action_kind === 'idle' && args.dirty.dirty === true) return 'needs_status_report';
+  if (args.next.action_kind === 'idle') return 'idle';
+  return 'idle';
+}
+
 export async function roleLoopNextCommand(options: RoleLoopNextOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
   const cwd = resolve(options.cwd ?? process.cwd());
   const agent = options.agent ?? options.role;
@@ -116,6 +144,12 @@ export async function roleLoopNextCommand(options: RoleLoopNextOptions): Promise
     blocker_command: `narada law ack ${change.change_id} --agent ${agent}${lawAdmission.role ? ` --role ${lawAdmission.role}` : ''} --status blocked --questions-or-blockers <reason>`,
   }));
   const lawBlocks = pendingLawNotices.length > 0;
+  const dutyLoopState = deriveDutyLoopState({
+    lawBlocked: lawBlocks,
+    next: compactNext,
+    workboard: compactBoard,
+    dirty,
+  });
 
   return {
     exitCode: next.exitCode === ExitCode.SUCCESS ? ExitCode.SUCCESS : next.exitCode,
@@ -126,6 +160,13 @@ export async function roleLoopNextCommand(options: RoleLoopNextOptions): Promise
       agent,
       role: options.role ?? null,
       mode: 'peek_compact',
+      duty_loop_state: dutyLoopState,
+      duty_loop_transition_basis: {
+        law_blocked: lawBlocks,
+        active_task: compactNext.task_number,
+        pending_reviews_count: compactNext.pending_reviews_count,
+        dirty: dirty.dirty,
+      },
       next: compactNext,
       workboard: compactBoard,
       dirty_ownership: dirty,

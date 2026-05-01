@@ -143,6 +143,23 @@ Checklist:
 
 Resident must not mutate Site governance or execute effects by convenience.
 
+## Agent Work Duty Loop State
+
+`next` is interpreted through an explicit agent work state, not remembered chat convention:
+
+| State | Meaning |
+| --- | --- |
+| `unbound` | The role identity or Operator Surface binding is not addressable enough for directed work. |
+| `idle` | No active task, law receipt, review handoff, or blocker is pending. |
+| `has_active_task` | The agent has claimed/admitted work and should continue it before asking for new work. |
+| `needs_status_report` | Local dirty state or completed-looking work needs report/evidence before new assignment. |
+| `in_review` | Work is awaiting review/admission/closure rather than further Builder execution. |
+| `blocked` | Law receipt, capability, dependency, or authority posture blocks ordinary work. |
+| `done` | The agent has just completed work and should hand off/report before new assignment. |
+| `handoff_needed` | Another role must review, admit, route, or execute before progress continues. |
+
+Role-loop, work-next, roster, and Operator Surface status should report this state or a compatible projection so Operator nudges produce deterministic next action.
+
 ## Admitted Outcomes
 
 Allowed outcomes are:

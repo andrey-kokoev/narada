@@ -85,6 +85,11 @@ describe('role-loop next command', () => {
       schema: 'https://narada.dev/schemas/role-loop-next/v1',
       agent: 'architect',
       mode: 'peek_compact',
+      duty_loop_state: 'handoff_needed',
+      duty_loop_transition_basis: {
+        pending_reviews_count: 1,
+        dirty: true,
+      },
       next: {
         action_kind: 'idle',
         pending_reviews_count: 1,

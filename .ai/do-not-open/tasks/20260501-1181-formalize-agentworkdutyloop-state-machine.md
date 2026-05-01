@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T04:15:53.040Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777608920461_s2t0nl
+closed_at: 2026-05-01T04:16:27.003Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Formalize AgentWorkDutyLoop state machine
@@ -36,8 +45,8 @@ Define AgentWorkDutyLoop states and transitions; integrate unbound, idle, has_ac
 
 ## Acceptance Criteria
 
-- [ ] The state machine distinguishes unbound, idle, active task, needs status report, in review, blocked, done, and handoff-needed states.
-- [ ] next/duty-loop behavior is derived from state, not remembered convention only.
-- [ ] work-next and operator-surface status agree on active task and next command.
-- [ ] Observer, Architect, Builder, and Resident role boundaries are preserved in transitions.
-- [ ] Tests cover common nudges, claimed work, no work, blocked work, and unbound surface.
+- [x] The state machine distinguishes unbound, idle, active task, needs status report, in review, blocked, done, and handoff-needed states.
+- [x] next/duty-loop behavior is derived from state, not remembered convention only.
+- [x] work-next and operator-surface status agree on active task and next command.
+- [x] Observer, Architect, Builder, and Resident role boundaries are preserved in transitions.
+- [x] Tests cover common nudges, claimed work, no work, blocked work, and unbound surface.

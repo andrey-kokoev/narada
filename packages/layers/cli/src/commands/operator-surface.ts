@@ -151,6 +151,16 @@ interface OperatorSurfaceVisibleLabelEvidence {
   status?: 'visible' | 'stale' | 'revoked';
 }
 
+type AgentWorkDutyLoopState =
+  | 'unbound'
+  | 'idle'
+  | 'has_active_task'
+  | 'needs_status_report'
+  | 'in_review'
+  | 'blocked'
+  | 'done'
+  | 'handoff_needed';
+
 const LEGACY_SITE_ID_ALIASES: Record<string, string> = {
   'narada-proper': 'narada',
 };
@@ -1703,6 +1713,22 @@ function bindingPosture(
   };
 }
 
+function deriveOperatorSurfaceDutyLoopState(args: {
+  bindingStatus: string;
+  workStatus: string;
+  currentTask: number | null;
+  lifecycleStatus: string | null | undefined;
+}): AgentWorkDutyLoopState {
+  if (args.bindingStatus === 'unbound' || args.bindingStatus === 'labeled_unbound' || args.bindingStatus === 'stale' || args.bindingStatus === 'ambiguous' || args.bindingStatus === 'missing_transport') {
+    return 'unbound';
+  }
+  if (args.workStatus === 'blocked') return 'blocked';
+  if (args.workStatus === 'done') return 'done';
+  if (args.lifecycleStatus === 'in_review') return 'in_review';
+  if (args.currentTask != null) return 'has_active_task';
+  return 'idle';
+}
+
 export async function operatorSurfaceStatusCommand(
   options: OperatorSurfaceStatusOptions,
   _context: CommandContext,
@@ -1743,6 +1769,12 @@ export async function operatorSurfaceStatusCommand(
     const lifecycle = currentTask == null ? { status: null, source: null } : await resolveTaskStatus(cwd, currentTask);
     const posture = bindingPosture(identity, bindings, visibleLabelForIdentity(identity, labelEvidence));
     const workStatus = rosterAgent?.status ?? 'untracked';
+    const dutyLoopState = deriveOperatorSurfaceDutyLoopState({
+      bindingStatus: posture.binding_status,
+      workStatus,
+      currentTask,
+      lifecycleStatus: lifecycle.status,
+    });
     const nextCommand = posture.next_command
       ?? (currentTask != null
         ? `narada task continue ${currentTask} --agent ${rosterAgent?.agent_id ?? identity.role}`
@@ -1758,6 +1790,7 @@ export async function operatorSurfaceStatusCommand(
       visible_label: posture.visible_label,
       reconciliation_command: posture.reconciliation_command,
       work_status: workStatus,
+      duty_loop_state: dutyLoopState,
       current_task: currentTask,
       lifecycle_status: lifecycle.status,
       lifecycle_status_source: lifecycle.source,
