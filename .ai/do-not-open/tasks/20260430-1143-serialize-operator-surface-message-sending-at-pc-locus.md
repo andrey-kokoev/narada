@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T21:56:41.939Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777672551151_t67v32
+closed_at: 2026-05-01T21:57:02.584Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Serialize operator-surface message sending at PC locus
@@ -55,7 +64,7 @@ Proposal:
 
 ## Acceptance Criteria
 
-- [ ] Concurrent operator-surface send requests cannot execute focus/clipboard/type/submit phases simultaneously.
-- [ ] Overlapping sends are queued, deferred, or fail closed with repair guidance.
-- [ ] Evidence records requester, target identity, ordering, start/end time, and queued/deferred/rejected outcome.
-- [ ] Stale active sends can be recovered without leaving the bridge permanently blocked.
+- [x] Concurrent operator-surface send requests cannot execute focus/clipboard/type/submit phases simultaneously.
+- [x] Overlapping sends are queued, deferred, or fail closed with repair guidance.
+- [x] Evidence records requester, target identity, ordering, start/end time, and queued/deferred/rejected outcome.
+- [x] Stale active sends can be recovered without leaving the bridge permanently blocked.

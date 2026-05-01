@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { SqliteInboxStore } from '@narada2/control-plane';
@@ -1194,6 +1194,133 @@ async function writeOperatorSurfaceDeliveryPromise(cwd: string, promise: Record<
   const path = join(dir, `${String(promise.promise_id)}.json`);
   await writeFile(path, `${JSON.stringify(promise, null, 2)}\n`, 'utf8');
   return path;
+}
+
+function operatorSurfaceSendQueueDir(cwd: string): string {
+  return join(resolve(cwd), '.ai', 'operator-surface-send-queue');
+}
+
+function safeArtifactSegment(value: string | null | undefined): string {
+  return (value?.trim() || 'unknown').toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'unknown';
+}
+
+async function readJsonRecord(path: string): Promise<Record<string, unknown> | null> {
+  try {
+    const parsed = JSON.parse(await readFile(path, 'utf8'));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+function isSendLeaseStale(lease: Record<string, unknown>, nowMs: number): boolean {
+  const expiresAt = typeof lease.expires_at === 'string' ? Date.parse(lease.expires_at) : Number.NaN;
+  return Number.isFinite(expiresAt) && expiresAt <= nowMs;
+}
+
+async function admitOperatorSurfaceSendSerialization(cwd: string, args: {
+  eventId: string;
+  identity: string;
+  sender: string;
+  runtimeLocus: string | null;
+  bindingId: string | null;
+  textDigest: string;
+  deliveryTimeoutMs: number;
+}): Promise<Record<string, unknown>> {
+  const dir = operatorSurfaceSendQueueDir(cwd);
+  await mkdir(dir, { recursive: true });
+  const runtimeKey = safeArtifactSegment(args.runtimeLocus);
+  const activePath = join(dir, `${runtimeKey}.active.json`);
+  const nowMs = Date.now();
+  const now = new Date(nowMs).toISOString();
+  const leaseMs = Math.max(args.deliveryTimeoutMs || 0, 30_000);
+  const active = await readJsonRecord(activePath);
+  let staleRecovery: Record<string, unknown> | null = null;
+  if (active && !isSendLeaseStale(active, nowMs)) {
+    const queued = {
+      queue_id: `osq_${args.eventId}`,
+      event_id: args.eventId,
+      target_identity: args.identity,
+      sender_identity: args.sender,
+      runtime_locus: args.runtimeLocus,
+      text_digest: args.textDigest,
+      status: 'queued',
+      outcome: 'queued_behind_active_send',
+      queued_at: now,
+      active_event_id: active.event_id ?? null,
+      active_started_at: active.started_at ?? null,
+      active_expires_at: active.expires_at ?? null,
+      ordering: {
+        policy: 'single_active_send_per_runtime_locus',
+        active_lease_artifact: activePath,
+      },
+    };
+    const queueArtifact = join(dir, `${queued.queue_id}.json`);
+    await writeFile(queueArtifact, `${JSON.stringify(queued, null, 2)}\n`, 'utf8');
+    return {
+      admitted: false,
+      status: 'queued',
+      outcome: 'queued_behind_active_send',
+      runtime_locus: args.runtimeLocus,
+      critical_section: 'focus_clipboard_type_submit',
+      requested_at: now,
+      queue_artifact: queueArtifact,
+      active_lease_artifact: activePath,
+      active_send: active,
+      ordering: queued.ordering,
+    };
+  }
+  if (active) {
+    const recoveryId = `osr_${args.eventId}`;
+    const recoveryArtifact = join(dir, `${recoveryId}.json`);
+    staleRecovery = {
+      recovery_id: recoveryId,
+      recovered_at: now,
+      reason: 'stale_active_send_lease',
+      stale_active_lease_artifact: activePath,
+      stale_active_send: active,
+    };
+    await writeFile(recoveryArtifact, `${JSON.stringify(staleRecovery, null, 2)}\n`, 'utf8');
+    await rm(activePath, { force: true });
+    staleRecovery = { ...staleRecovery, recovery_artifact: recoveryArtifact };
+  }
+  const lease = {
+    event_id: args.eventId,
+    target_identity: args.identity,
+    sender_identity: args.sender,
+    runtime_locus: args.runtimeLocus,
+    binding_id: args.bindingId,
+    text_digest: args.textDigest,
+    status: 'active',
+    outcome: 'admitted',
+    critical_section: 'focus_clipboard_type_submit',
+    started_at: now,
+    expires_at: new Date(nowMs + leaseMs).toISOString(),
+    lease_ms: leaseMs,
+    ordering: {
+      policy: 'single_active_send_per_runtime_locus',
+      active_lease_artifact: activePath,
+    },
+  };
+  try {
+    await writeFile(activePath, `${JSON.stringify(lease, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    return admitOperatorSurfaceSendSerialization(cwd, args);
+  }
+  return {
+    admitted: true,
+    status: 'active',
+    outcome: 'admitted',
+    runtime_locus: args.runtimeLocus,
+    critical_section: 'focus_clipboard_type_submit',
+    started_at: now,
+    active_lease_artifact: activePath,
+    active_send: lease,
+    stale_recovery: staleRecovery,
+    ordering: lease.ordering,
+  };
 }
 
 function buildDeliveryPromise(args: {
@@ -3387,6 +3514,32 @@ export async function operatorSurfaceSendCommand(
         reason: delivery.reason,
       });
     }
+    let serialization: Record<string, unknown> | null = null;
+    if (options.execute && effectiveDelivery.deliverable) {
+      serialization = await admitOperatorSurfaceSendSerialization(cwd, {
+        eventId,
+        identity,
+        sender,
+        runtimeLocus: binding.runtime_locus ?? options.runtimeLocus ?? null,
+        bindingId: binding.binding_id ?? null,
+        textDigest: textDigest(renderedMessage.rendered_text),
+        deliveryTimeoutMs,
+      });
+      if (serialization.admitted !== true) {
+        effectiveDelivery = {
+          ...effectiveDelivery,
+          status: 'deferred',
+          state_path: ['requested', 'deferred'],
+          deliverable: false,
+          reason: 'active_operator_surface_send_in_progress',
+          queue: {
+            timeout_ms: deliveryTimeoutMs,
+            next_state: 'wait_for_send_lease_release',
+            serialization,
+          },
+        };
+      }
+    }
     const send = {
       event_id: eventId,
       identity,
@@ -3419,6 +3572,7 @@ export async function operatorSurfaceSendCommand(
         status: 'bound',
       },
       delivery_result: effectiveDelivery,
+      serialization,
       delivery_promise: deliveryPromise
         ? { promise_id: deliveryPromise.promise_id, artifact: deliveryPromiseArtifact, status: deliveryPromise.status }
         : null,
@@ -3441,6 +3595,7 @@ export async function operatorSurfaceSendCommand(
         ...agentFields,
         ...routeFields({ ...baseRoute, bindingStatus: 'bound', resolvedRecipient: identity }),
         delivery_result: effectiveDelivery,
+        serialization,
         send,
       },
     };

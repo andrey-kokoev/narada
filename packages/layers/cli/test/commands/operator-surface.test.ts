@@ -1608,6 +1608,132 @@ describe('operator-surface commands', () => {
     expect(event.text_digest).toBe(payload.send.text_digest);
   });
 
+  it('defers operator-surface send when the PC-locus critical section is active', async () => {
+    const cwd = await tempRepo();
+    await admitIdentity(cwd);
+    await writeBindings(cwd, [{
+      binding_id: 'bind-serialized',
+      identity_id: 'narada-proper-builder',
+      runtime_locus: 'pc-site',
+      handle: 'hwnd:123',
+      transport: 'operator_surface_input',
+      submit_strategy: 'operator_confirmed_submit',
+      input_capabilities: ['focus', 'type_text', 'submit'],
+      status: 'active',
+    }]);
+    mkdirSync(join(cwd, '.ai', 'operator-surface-send-queue'), { recursive: true });
+    await writeFile(join(cwd, '.ai', 'operator-surface-send-queue', 'pc-site.active.json'), `${JSON.stringify({
+      event_id: 'ose_active',
+      target_identity: 'narada-proper-builder',
+      sender_identity: 'architect',
+      runtime_locus: 'pc-site',
+      status: 'active',
+      critical_section: 'focus_clipboard_type_submit',
+      started_at: '2026-05-01T04:00:00.000Z',
+      expires_at: '2099-01-01T00:00:00.000Z',
+    }, null, 2)}\n`, 'utf8');
+
+    const result = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-proper-builder',
+      from: 'architect',
+      text: 'serialized message',
+      execute: true,
+      operatorActivityState: 'idle',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const payload = result.result as {
+      mutation_performed: boolean;
+      event_artifact: string;
+      delivery_result: { status: string; reason: string; queue: { next_state: string; serialization: { outcome: string; active_send: { event_id: string }; queue_artifact: string } } };
+      send: { status: string; serialization: { outcome: string; critical_section: string } };
+    };
+    expect(payload.mutation_performed).toBe(false);
+    expect(payload.delivery_result).toMatchObject({
+      status: 'deferred',
+      reason: 'active_operator_surface_send_in_progress',
+      queue: {
+        next_state: 'wait_for_send_lease_release',
+        serialization: {
+          outcome: 'queued_behind_active_send',
+          active_send: { event_id: 'ose_active' },
+          critical_section: 'focus_clipboard_type_submit',
+        },
+      },
+    });
+    expect(payload.send).toMatchObject({
+      status: 'deferred',
+      serialization: {
+        outcome: 'queued_behind_active_send',
+        critical_section: 'focus_clipboard_type_submit',
+      },
+    });
+    expect(payload.delivery_result.queue.serialization.queue_artifact).toContain('.ai/operator-surface-send-queue/osq_');
+    const event = JSON.parse(await readFile(payload.event_artifact, 'utf8')) as { serialization: { outcome: string }; delivery_result: { reason: string } };
+    expect(event.serialization.outcome).toBe('queued_behind_active_send');
+    expect(event.delivery_result.reason).toBe('active_operator_surface_send_in_progress');
+  });
+
+  it('recovers stale operator-surface send leases before admitting a new send', async () => {
+    const cwd = await tempRepo();
+    await admitIdentity(cwd);
+    await writeBindings(cwd, [{
+      binding_id: 'bind-stale-recovery',
+      identity_id: 'narada-proper-builder',
+      runtime_locus: 'pc-site',
+      handle: 'hwnd:123',
+      transport: 'operator_surface_input',
+      submit_strategy: 'operator_confirmed_submit',
+      input_capabilities: ['focus', 'type_text', 'submit'],
+      status: 'active',
+    }]);
+    mkdirSync(join(cwd, '.ai', 'operator-surface-send-queue'), { recursive: true });
+    await writeFile(join(cwd, '.ai', 'operator-surface-send-queue', 'pc-site.active.json'), `${JSON.stringify({
+      event_id: 'ose_stale',
+      target_identity: 'narada-proper-builder',
+      sender_identity: 'architect',
+      runtime_locus: 'pc-site',
+      status: 'active',
+      critical_section: 'focus_clipboard_type_submit',
+      started_at: '2026-05-01T04:00:00.000Z',
+      expires_at: '2026-05-01T04:00:01.000Z',
+    }, null, 2)}\n`, 'utf8');
+
+    const result = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-proper-builder',
+      from: 'architect',
+      text: 'after stale lease',
+      execute: true,
+      operatorActivityState: 'idle',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const payload = result.result as {
+      mutation_performed: boolean;
+      event_artifact: string;
+      delivery_result: { status: string };
+      serialization: { outcome: string; stale_recovery: { reason: string; recovery_artifact: string }; active_send: { event_id: string } };
+    };
+    expect(payload.mutation_performed).toBe(true);
+    expect(payload.delivery_result.status).toBe('delivered');
+    expect(payload.serialization).toMatchObject({
+      outcome: 'admitted',
+      stale_recovery: {
+        reason: 'stale_active_send_lease',
+      },
+    });
+    expect(payload.serialization.stale_recovery.recovery_artifact).toContain('.ai/operator-surface-send-queue/osr_');
+    const active = JSON.parse(await readFile(join(cwd, '.ai', 'operator-surface-send-queue', 'pc-site.active.json'), 'utf8')) as { event_id: string; status: string };
+    expect(active.event_id).toBe(payload.serialization.active_send.event_id);
+    expect(active.status).toBe('active');
+    const event = JSON.parse(await readFile(payload.event_artifact, 'utf8')) as { serialization: { outcome: string; stale_recovery: { reason: string } } };
+    expect(event.serialization.stale_recovery.reason).toBe('stale_active_send_lease');
+  });
+
   it('suppresses typed-message sender header only in explicit raw input mode', async () => {
     const cwd = await tempRepo();
     await admitIdentity(cwd);
