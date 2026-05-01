@@ -1,0 +1,55 @@
+{
+  "envelope_id": "env_edeb2408-6f8a-4b9b-ae76-23918ced45a8",
+  "received_at": "2026-05-01T18:08:12.997Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey:projection-admitted-work-selection"
+  },
+  "kind": "proposal",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "Define projection-admitted work selection for role loops",
+    "summary": "Role-loop and work-selection machinery should be able to use projections such as OSA activity as admitted read-model signals, without treating them as authority. This prevents failures where an architect mechanically follows generic workboard order while an active collaborator is visibly/blockingly awaiting review on a specific task.",
+    "observed_at": "2026-05-01T13:08:01.4752824-05:00",
+    "source_site": "narada-andrey",
+    "motivating_incident": {
+      "blocked_identity": "narada-andrey.Bob",
+      "projected_state": "awaiting_review #76",
+      "bypassed_task": 76,
+      "incorrectly_prioritized_task": 78,
+      "failure_mode": "architect loop followed compact workboard ordering without joining active collaborator blocker signal"
+    },
+    "doctrine": [
+      "A projection is not authority.",
+      "A projection may be an admitted work-selection input when it carries provenance, freshness, ambiguity posture, and fallback path to authoritative sources.",
+      "Work-selection gates should derive recommendations from authoritative lifecycle/report/inbox/assignment facts, optionally accelerated by admitted projections.",
+      "If projection and authority disagree, authority wins and the projection defect should be reported.",
+      "Skipping an active collaborator review blocker should require an explicit recorded reason."
+    ],
+    "requested_machinery": [
+      "Add role-loop work-selection contract for architect/reviewer agents.",
+      "Elevate direct review requests and active collaborator blocked-on-review tasks above ordinary pending review ordering.",
+      "Expose recommendation reasons such as active_collaborator_blocked, direct_review_request, ordinary_pending_review, local_followup.",
+      "Include source facts and projection provenance in compact output.",
+      "Add tests where Bob awaiting_review #76 outranks an older or higher-listed pending review #78."
+    ],
+    "suggested_output_shape": {
+      "action": "review_task",
+      "task_number": 76,
+      "reason": "active_collaborator_blocked",
+      "blocked_identity": "narada-andrey.Bob",
+      "projection_used": "osa_activity",
+      "projection_posture": "fresh_non_ambiguous",
+      "authority_sources": [
+        "task_lifecycle",
+        "task_reports",
+        "review_request_envelopes",
+        "assignments"
+      ]
+    }
+  },
+  "status": "received"
+}
