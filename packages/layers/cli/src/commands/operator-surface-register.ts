@@ -235,6 +235,7 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--target-desktop <id>', 'Target binding desktop/workspace')
     .option('--cross-desktop-policy <policy>', 'Cross-desktop posture: same_desktop_only, allow_with_authority, or refuse', 'same_desktop_only')
     .option('--cross-desktop-authority <ref>', 'Explicit authority reference permitting cross-desktop summon/switch')
+    .option('--activation-result <result>', 'Observed focus/activation attempt result: success or failed', 'success')
     .option('--cwd <path>', 'Site root / working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[Record<string, unknown>]>({
@@ -260,6 +261,7 @@ export function registerOperatorSurfaceCommands(program: Command): void {
         targetDesktop: opts.targetDesktop as string | undefined,
         crossDesktopPolicy: opts.crossDesktopPolicy as string | undefined,
         crossDesktopAuthority: opts.crossDesktopAuthority as string | undefined,
+        activationResult: opts.activationResult as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),

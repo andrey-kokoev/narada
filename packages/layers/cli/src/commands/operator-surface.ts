@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
+import { SqliteInboxStore } from '@narada2/control-plane';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
@@ -84,6 +85,7 @@ export interface OperatorSurfaceSendOptions {
   targetDesktop?: string;
   crossDesktopPolicy?: string;
   crossDesktopAuthority?: string;
+  activationResult?: string;
   format?: CliFormat;
 }
 
@@ -127,7 +129,7 @@ interface OperatorSurfaceRuntimeBinding {
 type OperatorActivityState = 'idle' | 'active_typing' | 'active_pointer' | 'unknown';
 type ActiveDeliveryPolicy = 'queue' | 'refuse' | 'fallback_to_inbox';
 type CrossDesktopPolicy = 'same_desktop_only' | 'allow_with_authority' | 'refuse';
-type DeliveryResultStatus = 'queued_waiting_for_idle' | 'delivered' | 'expired' | 'refused' | 'fallback_to_inbox';
+type DeliveryResultStatus = 'queued_waiting_for_idle' | 'delivered' | 'expired' | 'refused' | 'fallback_to_inbox' | 'deferred' | 'failed_with_fallback';
 type OperatorSurfaceDeliveryState = 'requested' | DeliveryResultStatus | 'explicit_interrupt';
 
 const OPERATOR_SURFACE_DELIVERY_STATES: readonly OperatorSurfaceDeliveryState[] = [
@@ -137,6 +139,8 @@ const OPERATOR_SURFACE_DELIVERY_STATES: readonly OperatorSurfaceDeliveryState[] 
   'expired',
   'refused',
   'fallback_to_inbox',
+  'deferred',
+  'failed_with_fallback',
   'explicit_interrupt',
 ] as const;
 
@@ -688,6 +692,12 @@ function parseDeliveryTimeoutMs(value: string | number | undefined): number {
   return parsed;
 }
 
+function parseActivationResult(value: string | undefined): 'success' | 'failed' {
+  if (!value) return 'success';
+  if (value === 'success' || value === 'failed') return value;
+  throw new Error(`Unsupported activation result: ${value}`);
+}
+
 function validateOperatorSurfaceDeliveryStatePath(statePath: OperatorSurfaceDeliveryState[]): {
   valid: boolean;
   invalid_transition_reason: string | null;
@@ -881,6 +891,80 @@ async function writeOperatorSurfaceSendEvent(cwd: string, event: Record<string, 
   const path = join(dir, `${String(event.event_id)}.json`);
   await writeFile(path, `${JSON.stringify(event, null, 2)}\n`, 'utf8');
   return path;
+}
+
+async function writeOperatorSurfaceDeliveryPromise(cwd: string, promise: Record<string, unknown>): Promise<string> {
+  const dir = join(resolve(cwd), '.ai', 'operator-surface-delivery-queue');
+  await mkdir(dir, { recursive: true });
+  const path = join(dir, `${String(promise.promise_id)}.json`);
+  await writeFile(path, `${JSON.stringify(promise, null, 2)}\n`, 'utf8');
+  return path;
+}
+
+function buildDeliveryPromise(args: {
+  eventId: string;
+  identity: string;
+  sender: string;
+  runtimeLocus: string | null;
+  textDigest: string;
+  activeDeliveryPolicy: ActiveDeliveryPolicy;
+  deliveryTimeoutMs: number;
+}): Record<string, unknown> {
+  return {
+    promise_id: `osdq_${args.eventId}`,
+    event_id: args.eventId,
+    target_identity: args.identity,
+    sender_identity: args.sender,
+    runtime_locus: args.runtimeLocus,
+    text_digest: args.textDigest,
+    policy: args.activeDeliveryPolicy,
+    status: 'promised',
+    created_at: new Date().toISOString(),
+    timeout_ms: args.deliveryTimeoutMs,
+  };
+}
+
+function boundedDeliveryEvidence(args: {
+  eventId: string;
+  identity: string;
+  sender: string;
+  textDigest: string;
+  reason: string;
+}): Record<string, unknown> {
+  return {
+    event_id: args.eventId,
+    target_identity: args.identity,
+    sender_identity: args.sender,
+    text_digest: args.textDigest,
+    failure_reason: args.reason,
+  };
+}
+
+function writeDeliveryFallbackInbox(cwd: string, args: {
+  eventId: string;
+  identity: string;
+  sender: string;
+  textDigest: string;
+  reason: string;
+}): { envelope_id: string; target_locus: string } {
+  const store = new SqliteInboxStore(join(resolve(cwd), '.ai', 'inbox.db'));
+  try {
+    const envelope = store.insert({
+      envelope_id: `env_osm_fallback_${args.eventId}`,
+      received_at: new Date().toISOString(),
+      source: { kind: 'system_observation', ref: `operator-surface:${args.eventId}` },
+      target_locus: args.identity,
+      kind: 'observation',
+      authority: { level: 'system_observed', principal: 'operator-surface' },
+      payload: {
+        title: 'Operator Surface delivery fallback',
+        delivery_evidence: boundedDeliveryEvidence(args),
+      },
+    });
+    return { envelope_id: envelope.envelope_id, target_locus: envelope.target_locus ?? args.identity };
+  } finally {
+    store.close();
+  }
 }
 
 function fallbackBootstrapText(role: OperatorSurfaceAgentRole): string {
@@ -2413,6 +2497,57 @@ export async function operatorSurfaceSendCommand(
 
     const renderedMessage = renderOperatorSurfaceMessage(sender, text, rawInput);
     const eventId = `ose_${Date.now()}_${textDigest(`${identity}:${renderedMessage.rendered_text}`).slice(0, 12)}`;
+    const activationResult = parseActivationResult(options.activationResult);
+    const deliveryPromise = options.execute && (activeDeliveryPolicy === 'queue' || activeDeliveryPolicy === 'fallback_to_inbox')
+      ? buildDeliveryPromise({
+        eventId,
+        identity,
+        sender,
+        runtimeLocus: binding.runtime_locus ?? options.runtimeLocus ?? null,
+        textDigest: textDigest(renderedMessage.rendered_text),
+        activeDeliveryPolicy,
+        deliveryTimeoutMs,
+      })
+      : null;
+    const deliveryPromiseArtifact = deliveryPromise ? await writeOperatorSurfaceDeliveryPromise(cwd, deliveryPromise) : null;
+    let effectiveDelivery = delivery;
+    let fallbackInbox: { envelope_id: string; target_locus: string } | null = null;
+    if (options.execute && delivery.deliverable && activationResult === 'failed') {
+      if (activeDeliveryPolicy === 'fallback_to_inbox') {
+        fallbackInbox = writeDeliveryFallbackInbox(cwd, {
+          eventId,
+          identity,
+          sender,
+          textDigest: textDigest(renderedMessage.rendered_text),
+          reason: 'activation_failed',
+        });
+        effectiveDelivery = {
+          ...delivery,
+          status: 'failed_with_fallback',
+          state_path: ['requested', 'failed_with_fallback'],
+          deliverable: false,
+          reason: 'activation_failed',
+          queue: null,
+        };
+      } else {
+        effectiveDelivery = {
+          ...delivery,
+          status: 'deferred',
+          state_path: ['requested', 'deferred'],
+          deliverable: false,
+          reason: 'activation_failed',
+          queue: { timeout_ms: deliveryTimeoutMs, next_state: 'retry_after_activation_failure' },
+        };
+      }
+    } else if (options.execute && delivery.status === 'fallback_to_inbox') {
+      fallbackInbox = writeDeliveryFallbackInbox(cwd, {
+        eventId,
+        identity,
+        sender,
+        textDigest: textDigest(renderedMessage.rendered_text),
+        reason: delivery.reason,
+      });
+    }
     const send = {
       event_id: eventId,
       identity,
@@ -2444,23 +2579,29 @@ export async function operatorSurfaceSendCommand(
         runtime_locus: binding.runtime_locus ?? options.runtimeLocus ?? null,
         status: 'bound',
       },
-      delivery_result: delivery,
-      dry_run: Boolean(options.dryRun || !options.execute || !delivery.deliverable),
-      status: delivery.deliverable
+      delivery_result: effectiveDelivery,
+      delivery_promise: deliveryPromise
+        ? { promise_id: deliveryPromise.promise_id, artifact: deliveryPromiseArtifact, status: deliveryPromise.status }
+        : null,
+      fallback_inbox: fallbackInbox,
+      dry_run: Boolean(options.dryRun || !options.execute || !effectiveDelivery.deliverable),
+      status: effectiveDelivery.deliverable
         ? options.execute ? 'event_recorded_for_runtime_locus' : 'validated_dry_run'
-        : delivery.status,
+        : effectiveDelivery.status,
     };
     const eventArtifact = options.execute ? await writeOperatorSurfaceSendEvent(cwd, send) : null;
     return {
       exitCode: ExitCode.SUCCESS,
       result: {
         status: 'success',
-        mutation_performed: Boolean(options.execute && delivery.deliverable),
+        mutation_performed: Boolean(options.execute && effectiveDelivery.deliverable),
         event_artifact: eventArtifact,
+        delivery_promise_artifact: deliveryPromiseArtifact,
+        fallback_inbox: fallbackInbox,
         identity_resolution: publicIdentityResolution(identityResolution),
         ...agentFields,
         ...routeFields({ ...baseRoute, bindingStatus: 'bound', resolvedRecipient: identity }),
-        delivery_result: delivery,
+        delivery_result: effectiveDelivery,
         send,
       },
     };

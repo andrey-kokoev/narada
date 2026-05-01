@@ -26,6 +26,7 @@ import {
 import { capabilityGrantCommand } from '../../src/commands/capability.js';
 import { loadRoster, saveRoster } from '../../src/lib/task-governance.js';
 import { resolveAgentAddress } from '../../src/lib/agent-address.js';
+import { SqliteInboxStore } from '@narada2/control-plane';
 
 function createMockContext(): CommandContext {
   const logger = {
@@ -1482,6 +1483,107 @@ describe('operator-surface commands', () => {
     });
     expect((fallback.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
     expect((fallback.result as { event_artifact: string | null }).event_artifact).toContain('.ai/operator-surface-events/ose_');
+  });
+
+  it('defers activation failures through a durable delivery promise', async () => {
+    const cwd = await tempRepo();
+    await admitIdentity(cwd);
+    await writeBindings(cwd, [{
+      binding_id: 'bind-activation-fail',
+      identity_id: 'narada-proper-builder',
+      runtime_locus: 'pc-site',
+      handle: 'hwnd:123',
+      transport: 'operator_surface_input',
+      submit_strategy: 'operator_confirmed_submit',
+      input_capabilities: ['focus', 'type_text'],
+      status: 'active',
+    }]);
+
+    const result = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-proper-builder',
+      text: 'survive activation failure',
+      execute: true,
+      operatorActivityState: 'idle',
+      activationResult: 'failed',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const payload = result.result as {
+      mutation_performed: boolean;
+      delivery_promise_artifact: string;
+      delivery_result: { status: string; state_path: string[]; reason: string; queue: { next_state: string } };
+      send: { status: string; delivery_promise: { promise_id: string; artifact: string } };
+    };
+    expect(payload.mutation_performed).toBe(false);
+    expect(payload.delivery_promise_artifact).toContain('.ai/operator-surface-delivery-queue/osdq_');
+    expect(payload.delivery_result).toMatchObject({
+      status: 'deferred',
+      state_path: ['requested', 'deferred'],
+      reason: 'activation_failed',
+      queue: { next_state: 'retry_after_activation_failure' },
+    });
+    expect(payload.send.status).toBe('deferred');
+    expect(payload.send.delivery_promise.artifact).toBe(payload.delivery_promise_artifact);
+  });
+
+  it('falls back activation failures to target identity inbox with bounded evidence', async () => {
+    const cwd = await tempRepo();
+    await admitIdentity(cwd);
+    await writeBindings(cwd, [{
+      binding_id: 'bind-activation-fallback',
+      identity_id: 'narada-proper-builder',
+      runtime_locus: 'pc-site',
+      handle: 'hwnd:123',
+      transport: 'operator_surface_input',
+      submit_strategy: 'operator_confirmed_submit',
+      input_capabilities: ['focus', 'type_text'],
+      status: 'active',
+    }]);
+
+    const result = await operatorSurfaceSendCommand({
+      cwd,
+      identity: 'narada-proper-builder',
+      from: 'narada-proper.architect',
+      text: 'fallback after activation failure',
+      execute: true,
+      operatorActivityState: 'idle',
+      activeDelivery: 'fallback_to_inbox',
+      activationResult: 'failed',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const payload = result.result as {
+      mutation_performed: boolean;
+      fallback_inbox: { envelope_id: string; target_locus: string };
+      delivery_result: { status: string; state_path: string[]; reason: string };
+    };
+    expect(payload.mutation_performed).toBe(false);
+    expect(payload.delivery_result).toMatchObject({
+      status: 'failed_with_fallback',
+      state_path: ['requested', 'failed_with_fallback'],
+      reason: 'activation_failed',
+    });
+    expect(payload.fallback_inbox).toMatchObject({ target_locus: 'narada-proper-builder' });
+    const inbox = new SqliteInboxStore(join(cwd, '.ai', 'inbox.db'));
+    try {
+      const envelope = inbox.get(payload.fallback_inbox.envelope_id);
+      expect(envelope).toMatchObject({
+        target_locus: 'narada-proper-builder',
+        payload: {
+          delivery_evidence: {
+            target_identity: 'narada-proper-builder',
+            sender_identity: 'narada-proper.architect',
+            failure_reason: 'activation_failed',
+          },
+        },
+      });
+      expect(JSON.stringify(envelope)).not.toContain('fallback after activation failure');
+    } finally {
+      inbox.close();
+    }
   });
 
   it('refuses cross-desktop summon unless explicit authority is supplied', async () => {

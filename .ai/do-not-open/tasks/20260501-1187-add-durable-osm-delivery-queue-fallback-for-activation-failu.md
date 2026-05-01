@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-01T18:13:39.493Z
+criteria_proof_verification:
+  state: bound
+  verification_run_id: run_1777659193700_tywpbq
+closed_at: 2026-05-01T18:14:52.405Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # Add durable OSM delivery queue fallback for activation failures
@@ -36,8 +45,8 @@ Add durable queued delivery promise/fallback handling for OSM activation failure
 
 ## Acceptance Criteria
 
-- [ ] OSM send records a durable delivery promise before focus-sensitive delivery attempts when policy admits queued delivery.
-- [ ] Activation failure transitions to deferred or failed_with_fallback instead of disappearing as a raw send failure.
-- [ ] Fallback to target identity inbox includes explicit failed-delivery evidence and target identity.
-- [ ] Caller output is bounded and reports delivery state without dumping large evidence payloads.
-- [ ] Tests cover SetForegroundWindow/activation failure, queued retry posture, and inbox fallback.
+- [x] OSM send records a durable delivery promise before focus-sensitive delivery attempts when policy admits queued delivery.
+- [x] Activation failure transitions to deferred or failed_with_fallback instead of disappearing as a raw send failure.
+- [x] Fallback to target identity inbox includes explicit failed-delivery evidence and target identity.
+- [x] Caller output is bounded and reports delivery state without dumping large evidence payloads.
+- [x] Tests cover SetForegroundWindow/activation failure, queued retry posture, and inbox fallback.
