@@ -34,6 +34,10 @@
       "types": "./dist/task-review-service.d.ts",
       "import": "./dist/task-review-service.js"
     },
+    "./task-review-authority": {
+      "types": "./dist/task-review-authority.d.ts",
+      "import": "./dist/task-review-authority.js"
+    },
     "./task-finish-service": {
       "types": "./dist/task-finish-service.d.ts",
       "import": "./dist/task-finish-service.js"

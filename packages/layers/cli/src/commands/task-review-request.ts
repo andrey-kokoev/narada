@@ -3,9 +3,9 @@ import {
   findTaskFile,
   listReportsForTask,
   loadRoster,
-  type AgentRoster,
   type WorkResultReport,
 } from '@narada2/task-governance/task-governance';
+import { resolveReviewTargetFromRoster } from '@narada2/task-governance/task-review-authority';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import {
@@ -29,51 +29,6 @@ export interface TaskReviewRequestOptions {
 
 function safeIdPart(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'unknown';
-}
-
-function resolveReviewTarget(
-  roster: AgentRoster,
-  requested: string | undefined,
-): null | {
-  ok: true;
-  requested: string;
-  target_agent_id: string;
-  target_role: string | null;
-  resolution: 'agent_id' | 'unique_role_alias';
-} | { ok: false; error: string } {
-  const trimmed = requested?.trim();
-  if (!trimmed) return null;
-  const exact = roster.agents.find((agent) => agent.agent_id === trimmed);
-  if (exact) {
-    return {
-      ok: true,
-      requested: trimmed,
-      target_agent_id: exact.agent_id,
-      target_role: exact.role ?? null,
-      resolution: 'agent_id',
-    };
-  }
-  const roleMatches = roster.agents.filter((agent) => agent.role === trimmed);
-  if (roleMatches.length === 1) {
-    const target = roleMatches[0]!;
-    return {
-      ok: true,
-      requested: trimmed,
-      target_agent_id: target.agent_id,
-      target_role: target.role ?? null,
-      resolution: 'unique_role_alias',
-    };
-  }
-  if (roleMatches.length > 1) {
-    return {
-      ok: false,
-      error: `Review target '${trimmed}' matches multiple agents: ${roleMatches.map((agent) => agent.agent_id).join(', ')}`,
-    };
-  }
-  return {
-    ok: false,
-    error: `Review target '${trimmed}' is not an admitted agent id or unique role alias`,
-  };
 }
 
 function selectReport(reports: WorkResultReport[], reportId?: string): WorkResultReport | null {
@@ -123,12 +78,19 @@ export async function taskReviewRequestCommand(
   }
 
   const roster = await loadRoster(cwd);
-  const target = resolveReviewTarget(roster, options.reviewer);
+  const target = resolveReviewTargetFromRoster(roster, options.reviewer, { taskNumber: options.taskNumber });
   if (!target) {
     return { exitCode: ExitCode.GENERAL_ERROR, result: { status: 'error', error: '--reviewer is required' } };
   }
   if (!target.ok) {
-    return { exitCode: ExitCode.INVALID_CONFIG, result: { status: 'error', error: target.error } };
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        status: 'error',
+        error: target.error,
+        review_authority_repair: target.review_authority_repair,
+      },
+    };
   }
 
   const store = options.store ?? openTaskLifecycleStore(cwd);

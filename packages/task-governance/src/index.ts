@@ -4,6 +4,7 @@ export * as taskGovernance from './task-governance.js';
 export * as taskCloseService from './task-close-service.js';
 export * as taskReportService from './task-report-service.js';
 export * as taskReviewService from './task-review-service.js';
+export * as taskReviewAuthority from './task-review-authority.js';
 export * as taskFinishService from './task-finish-service.js';
 export * as taskAllocateService from './task-allocate-service.js';
 export * as taskAssignmentLifecycleService from './task-assignment-lifecycle-service.js';

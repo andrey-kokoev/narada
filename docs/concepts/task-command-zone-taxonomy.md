@@ -63,6 +63,13 @@ Allowed mutations:
 - Record review-based evidence admission.
 - Transition lifecycle only when the review verdict and evidence admission regime allow it.
 
+Review authority is a typed composition. A direct reviewer or admin role carries
+`role_capability` authority; an architect may review only when composed with a
+review capability such as `review`, `task_review`, or `architect_as_reviewer`;
+an operator identity may review only through explicit delegated review
+capability. A `review_request` obligation is only a routing signal and must not
+be created for a target that `narada task review` would refuse.
+
 Not allowed:
 
 - Rewrite task specification.

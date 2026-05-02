@@ -1,6 +1,5 @@
 import { resolve } from 'node:path';
 import {
-  type AgentRosterEntry,
   findTaskFile,
   isValidTransition,
   loadAssignment,
@@ -20,6 +19,13 @@ import { openTaskLifecycleStore, type TaskLifecycleStore, type TaskStatus } from
 import { closeTaskService } from './task-close-service.js';
 import { ExitCode } from './exit-codes.js';
 import { analyzePrototypeClosure, type PrototypeClosurePosture } from './prototype-closure.js';
+import {
+  explainTaskReviewAuthority,
+  hasTaskReviewAuthority,
+  reviewerAuthorityRepair,
+  type ReviewAuthorityAdmission,
+  type ReviewAuthorityRepair,
+} from './task-review-authority.js';
 
 export interface ReviewTaskServiceOptions {
   taskNumber?: string;
@@ -86,12 +92,14 @@ export interface ReviewTaskServiceResponse {
     };
     review_diagnostics?: ReviewDiagnostics;
     review_authority_repair?: {
-      reason: 'missing_reviewer_identity' | 'review_authority_not_admitted';
+      reason: ReviewAuthorityRepair['reason'];
       commands: string[];
       no_workaround: string;
     };
+    review_authority?: ReviewAuthorityAdmission;
     closure_posture?: PrototypeClosurePosture | Record<string, unknown>;
     closure_claim?: PrototypeClosurePosture;
+    remediation?: string[];
     error?: string;
   };
 }
@@ -232,34 +240,6 @@ function capaRecommendationForReview(args: {
   };
 }
 
-function hasReviewAuthority(agent: AgentRosterEntry): boolean {
-  if (agent.role === 'reviewer' || agent.role === 'admin') return true;
-  return agent.role === 'architect' && (
-    agent.capabilities.includes('review') ||
-    agent.capabilities.includes('task_review') ||
-    agent.capabilities.includes('architect_as_reviewer')
-  );
-}
-
-function reviewerAuthorityRepair(args: {
-  taskNumber: string;
-  agentId: string;
-  reason: 'missing_reviewer_identity' | 'review_authority_not_admitted';
-  role?: string;
-}): NonNullable<ReviewTaskServiceResponse['result']['review_authority_repair']> {
-  const authorityCommand = args.role === 'architect'
-    ? `narada task roster add ${args.agentId} --role architect --capability review`
-    : `narada task roster add ${args.agentId} --role reviewer --capability review`;
-  return {
-    reason: args.reason,
-    commands: [
-      authorityCommand,
-      `narada task review ${args.taskNumber} --agent ${args.agentId} --verdict <accepted|accepted_with_notes|rejected>`,
-    ],
-    no_workaround: 'Do not record this review as operator or another principal unless that principal is the actual admitted reviewer.',
-  };
-}
-
 function reviewerIdentityCapaRecommendation(agentId: string): NonNullable<ReviewTaskServiceResponse['result']['capa_recommendation']> {
   return {
     recommended: true,
@@ -334,12 +314,14 @@ export async function reviewTaskService(
       },
     };
   }
-  if (!hasReviewAuthority(agent)) {
+  const reviewAuthority = explainTaskReviewAuthority(agent);
+  if (!hasTaskReviewAuthority(agent)) {
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: {
         status: 'error',
         error: `Agent ${agentId} has role '${agent.role}' without admitted review authority`,
+        review_authority: reviewAuthority,
         review_authority_repair: reviewerAuthorityRepair({
           taskNumber,
           agentId,
@@ -632,6 +614,8 @@ export async function reviewTaskService(
 
   let closeAction: 'closed' | 'blocked' | 'skipped' = 'skipped';
   let closeBlockers: string[] = [];
+  let resultNextCommandFromClose: string | undefined;
+  let resultRemediationFromClose: string[] | undefined;
 
   if (newStatus === 'closed') {
     const closeResult = await closeTaskService({
@@ -647,9 +631,21 @@ export async function reviewTaskService(
       closeAction = 'blocked';
       newStatus = 'in_review';
       evidenceBlocked = true;
-      const blockedResult = closeResult.result as { gate_failures?: string[]; error?: string };
+      const blockedResult = closeResult.result as { gate_failures?: string[]; error?: string; remediation?: string[]; repair_command?: string; next_command?: string; closure_posture?: { next_command?: string } };
       closeBlockers = blockedResult.gate_failures ?? [blockedResult.error ?? 'Lifecycle close failed'];
       evidenceReason = closeBlockers.join('; ');
+      const remediationTaskCommand = blockedResult.remediation
+        ?.map((line) => line.replace(/^  ->\s*/, ''))
+        .map((line) => {
+          const commandIndex = line.indexOf('narada task ');
+          return commandIndex >= 0 ? line.slice(commandIndex) : line;
+        })
+        .find((line) => line.startsWith('narada task '));
+      const blockedNextCommand = blockedResult.next_command ?? blockedResult.repair_command ?? blockedResult.closure_posture?.next_command ?? remediationTaskCommand;
+      if (blockedNextCommand) {
+        resultNextCommandFromClose = blockedNextCommand;
+      }
+      resultRemediationFromClose = blockedResult.remediation;
     }
   } else {
     const nextFrontMatter = { ...frontMatter, status: newStatus } as typeof frontMatter;
@@ -671,6 +667,7 @@ export async function reviewTaskService(
     new_status: newStatus,
     admission_id: admission.result.admission_id,
     close_action: closeAction,
+    review_authority: reviewAuthority,
   };
   if (reviewDiagnostics.findings.length > 0) {
     result.review_diagnostics = reviewDiagnostics;
@@ -685,9 +682,12 @@ export async function reviewTaskService(
       result.evidence_reason = evidenceReason;
       result.blocked_rationale = evidenceReason;
     }
-    result.next_command = admission.result.verdict === 'rejected'
+    result.next_command = resultNextCommandFromClose ?? (admission.result.verdict === 'rejected'
       ? `narada task continue ${taskNumber} --agent ${agentId} --reason evidence_repair`
-      : `narada task evidence inspect ${taskNumber} --cwd "${cwd}"`;
+      : `narada task evidence inspect ${taskNumber} --cwd "${cwd}"`);
+    if (resultRemediationFromClose?.length) {
+      result.remediation = resultRemediationFromClose;
+    }
     result.closure_posture = admission.result.verdict === 'rejected'
       ? {
           closure_posture: 'repair_required',
@@ -701,6 +701,7 @@ export async function reviewTaskService(
           repair_reason: 'close_gate_failed',
           residual_crossing_required: true,
           residual_crossing: 'closure_gate_repair',
+          next_command: result.next_command,
         };
   }
   if (closureClaim.applies) {

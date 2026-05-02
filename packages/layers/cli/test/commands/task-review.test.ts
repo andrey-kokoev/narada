@@ -808,6 +808,11 @@ describe('task review command', () => {
       status: 'success',
       verdict: 'accepted',
       close_action: 'blocked',
+      next_command: 'narada task close 1004 --by reviewer --mode peer_reviewed --no-continuation-needed "<one-line rationale>"',
+      blocked_rationale: 'Facade/prototype/spike/design-only task requires linked continuation task evidence or --no-continuation-needed rationale before closure',
+      review_authority: {
+        authority_kind: 'role_capability',
+      },
       closure_claim: {
         applies: true,
         closure_posture: 'scope_complete_with_continuation',

@@ -214,6 +214,9 @@ describe('task report operator', () => {
         target_agent_id: 'architect',
         target_role: 'architect',
         resolution: 'agent_id',
+        review_authority: {
+          authority_kind: 'typed_composition',
+        },
       },
     });
     expect((result.result as { obligation_id?: string }).obligation_id).toMatch(/^obl_review_/);
@@ -321,6 +324,62 @@ describe('task report operator', () => {
       },
     });
     expect(listDirectedObligations(tempDir, 'reviewer-1', 'reviewer')).toHaveLength(1);
+  });
+
+  it('does not create a report-time review obligation for a target task review would refuse', async () => {
+    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
+
+    const result = await taskReportCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      reviewer: 'other-agent',
+      summary: 'Ready for invalid review target',
+      verification: JSON.stringify([{ command: 'pnpm test', result: 'passed' }]),
+      residuals: JSON.stringify([]),
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      review_authority_repair: {
+        reason: 'review_authority_not_admitted',
+      },
+    });
+    expect((result.result as { error: string }).error).toContain('task review would refuse');
+    expect(listDirectedObligations(tempDir, 'other-agent', 'implementer')).toHaveLength(0);
+  });
+
+  it('does not create a post-hoc review request for a target task review would refuse', async () => {
+    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
+    await taskReportCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      summary: 'Ready for post-hoc invalid review request',
+      changedFiles: 'src/foo.ts',
+      verification: JSON.stringify([{ command: 'pnpm test', result: 'passed' }]),
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    const requested = await taskReviewRequestCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      reviewer: 'other-agent',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(requested.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(requested.result).toMatchObject({
+      status: 'error',
+      review_authority_repair: {
+        reason: 'review_authority_not_admitted',
+      },
+    });
+    expect((requested.result as { error: string }).error).toContain('task review would refuse');
+    expect(listDirectedObligations(tempDir, 'other-agent', 'implementer')).toHaveLength(0);
   });
 
   it('blocks Architect report on Builder-owned task unless durable override rationale is supplied', async () => {

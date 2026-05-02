@@ -19,6 +19,7 @@ import {
 } from './task-governance.js';
 import { openTaskLifecycleStore, type TaskLifecycleStore } from './task-lifecycle-store.js';
 import { ExitCode } from './exit-codes.js';
+import { resolveReviewTargetFromRoster } from './task-review-authority.js';
 
 export interface ReportTaskServiceOptions {
   taskNumber?: string;
@@ -47,6 +48,17 @@ export interface ReportTaskServiceResult {
     target_agent_id: string;
     target_role: string | null;
     resolution: 'agent_id' | 'unique_role_alias';
+    review_authority: {
+      admitted: true;
+      authority_kind?: string;
+      rationale: string;
+      accepted_capabilities?: string[];
+    };
+  };
+  review_authority_repair?: {
+    reason: 'missing_reviewer_identity' | 'review_authority_not_admitted';
+    commands: string[];
+    no_workaround: string;
   };
   error?: string;
   guidance?: never;
@@ -194,51 +206,6 @@ function safeIdPart(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'unknown';
 }
 
-function resolveReviewTargetFromRoster(
-  roster: Awaited<ReturnType<typeof loadRoster>>,
-  requested: string | undefined,
-): null | {
-  ok: true;
-  requested: string;
-  target_agent_id: string;
-  target_role: string | null;
-  resolution: 'agent_id' | 'unique_role_alias';
-} | { ok: false; error: string } {
-  const trimmed = requested?.trim();
-  if (!trimmed) return null;
-  const exact = roster.agents.find((agent) => agent.agent_id === trimmed);
-  if (exact) {
-    return {
-      ok: true,
-      requested: trimmed,
-      target_agent_id: exact.agent_id,
-      target_role: exact.role ?? null,
-      resolution: 'agent_id',
-    };
-  }
-  const roleMatches = roster.agents.filter((agent) => agent.role === trimmed);
-  if (roleMatches.length === 1) {
-    const target = roleMatches[0]!;
-    return {
-      ok: true,
-      requested: trimmed,
-      target_agent_id: target.agent_id,
-      target_role: target.role ?? null,
-      resolution: 'unique_role_alias',
-    };
-  }
-  if (roleMatches.length > 1) {
-    return {
-      ok: false,
-      error: `Review target '${trimmed}' matches multiple agents: ${roleMatches.map((agent) => agent.agent_id).join(', ')}`,
-    };
-  }
-  return {
-    ok: false,
-    error: `Review target '${trimmed}' is not an admitted agent id or unique role alias`,
-  };
-}
-
 export async function reportTaskService(
   options: ReportTaskServiceOptions,
 ): Promise<ReportTaskServiceResponse> {
@@ -286,11 +253,15 @@ export async function reportTaskService(
       result: { status: 'error', error: `Agent not found in roster: ${agentId}` },
     };
   }
-  const reviewTarget = resolveReviewTargetFromRoster(roster, options.reviewer);
+  const reviewTarget = resolveReviewTargetFromRoster(roster, options.reviewer, { taskNumber });
   if (reviewTarget && !reviewTarget.ok) {
     return {
       exitCode: ExitCode.INVALID_CONFIG,
-      result: { status: 'error', error: reviewTarget.error },
+      result: {
+        status: 'error',
+        error: reviewTarget.error,
+        review_authority_repair: reviewTarget.review_authority_repair,
+      },
     };
   }
 
@@ -541,6 +512,7 @@ export async function reportTaskService(
             target_agent_id: reviewTarget.target_agent_id,
             target_role: reviewTarget.target_role,
             resolution: reviewTarget.resolution,
+            review_authority: reviewTarget.review_authority,
           }
         : undefined,
     },

@@ -181,6 +181,13 @@ export async function closeTaskService(
       remediation.push(`  -> Link concrete continuation work in the task body, e.g. "Continuation Task: task <number>"`);
       remediation.push(`  -> Or close as scope-complete only: narada task close ${taskNumber} --by ${closedBy} --mode ${closureMode} --no-continuation-needed "<one-line rationale>"`);
     }
+    const nextCommand = admission?.verdict === 'rejected'
+      ? `narada task continue ${taskNumber} --agent ${closedBy} --reason evidence_repair`
+      : closureClaim.applies && !closureClaim.capability_complete
+        ? `narada task close ${taskNumber} --by ${closedBy} --mode ${closureMode} --no-continuation-needed "<one-line rationale>"`
+        : !admission
+          ? `narada task evidence admit ${taskNumber} --by ${closedBy}`
+          : `narada task evidence inspect ${taskNumber}`;
 
     closeOwnStore();
     return {
@@ -191,6 +198,8 @@ export async function closeTaskService(
         task_number: Number(taskNumber),
         current_status: currentStatus,
         gate_failures: gateFailures,
+        blocked_rationale: gateFailures.join('; '),
+        next_command: nextCommand,
         admission_result: admission ?? null,
         remediation,
         repair_command: admission?.verdict === 'rejected'
