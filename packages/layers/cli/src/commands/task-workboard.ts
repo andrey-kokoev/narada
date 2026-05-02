@@ -182,7 +182,11 @@ function summarizeChapters(tasks: WorkboardTask[]): TaskWorkboard['active_chapte
 function listSourceEnvelopes(cwd: string, limit: number): TaskWorkboard['source_envelopes'] {
   const store = new SqliteInboxStore(join(cwd, '.ai', 'inbox.db'));
   try {
-    return store.list({ limit })
+    return [
+      ...store.list({ status: 'handling', limit }),
+      ...store.list({ status: 'received', limit }),
+    ]
+      .slice(0, limit)
       .map((envelope) => ({
         envelope_id: envelope.envelope_id,
         kind: envelope.kind,

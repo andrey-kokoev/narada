@@ -342,6 +342,7 @@ export function registerInboxCommands(program: Command): void {
     .requiredOption('--by <principal>', 'Principal recording promotion')
     .option('--title <title>', 'Task title override for task promotion')
     .option('--goal <goal>', 'Task goal override for task promotion')
+    .option('--nudge <principal>', 'Prepare a non-mutating handoff nudge for this principal when creating a task')
     .option('--criteria <text>', 'Task acceptance criterion override (repeatable)', collectValues, [])
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
@@ -354,6 +355,7 @@ export function registerInboxCommands(program: Command): void {
         targetKind: opts.targetKind as string | undefined,
         targetRef: opts.targetRef as string | undefined,
         by: opts.by as string | undefined,
+        nudge: opts.nudge as string | undefined,
         title: opts.title as string | undefined,
         goal: opts.goal as string | undefined,
         criteria: opts.criteria as string[] | undefined,
@@ -369,6 +371,7 @@ export function registerInboxCommands(program: Command): void {
     .option('--title <title>', 'Task title override')
     .option('--goal <goal>', 'Task goal override')
     .option('--assign <principal>', 'Claim the created task for this principal')
+    .option('--nudge <principal>', 'Prepare a non-mutating handoff nudge for this principal')
     .option('--criteria <text>', 'Task acceptance criterion override (repeatable)', collectValues, [])
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
@@ -380,6 +383,7 @@ export function registerInboxCommands(program: Command): void {
         envelopeId,
         by: opts.by as string | undefined,
         assign: opts.assign as string | undefined,
+        nudge: opts.nudge as string | undefined,
         title: opts.title as string | undefined,
         goal: opts.goal as string | undefined,
         criteria: opts.criteria as string[] | undefined,

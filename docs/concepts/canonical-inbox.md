@@ -350,7 +350,7 @@ Promotion is the governed crossing out of the Inbox. It must not imply more than
 
 | Target kind | Behavior |
 |-------------|----------|
-| `task` | Executed for `task_candidate`, `upstream_task_candidate`, `proposal`, and `observation` envelopes by calling the sanctioned task creation command. Prefer `narada inbox task <envelope-id> --by <principal>`; `inbox promote --target-kind task` remains the canonical compatibility path. The envelope records `enactment_status: enacted` and `target_ref: task:<number>`. Repeating the promotion returns the existing promotion and does not create a duplicate task. |
+| `task` | Executed for `task_candidate`, `upstream_task_candidate`, `proposal`, `observation`, and `incident` envelopes by calling the sanctioned task creation command. Prefer `narada inbox task <envelope-id> --by <principal>`; `inbox promote --target-kind task` remains the canonical compatibility path. The envelope records `enactment_status: enacted`, `target_ref: task:<number>`, a source-envelope link, and recurrence inspection. Repeating the promotion returns the existing promotion and does not create a duplicate task. |
 | `archive` | Records the envelope as `archived` with no target-zone mutation. `--target-ref` is optional. |
 | `decision`, `operator_action`, `knowledge_entry`, `site_config_change` | Recorded as `enactment_status: pending` and `pending_kind: recorded_pending_crossing` until those target zones have explicit executable promotion operators. |
 
@@ -386,9 +386,14 @@ Use `--assign <principal>` when the created task should be claimed immediately:
 
 ```bash
 narada inbox task <envelope-id> --by architect --assign builder
+narada inbox task <envelope-id> --by architect --nudge narada-andrey.Bob
 ```
 
 Generated tasks preserve source envelope id, source ref, envelope kind, summary/body/evidence/proposal/recommendation context, detailed required work, and acceptance criteria when payload structure provides them. The command must not leave `TBD` placeholders when the envelope contains enough structure to derive the task specification.
+
+Incident promotion also performs a recurrence inspection. Explicit payload fields such as `recurrence_key` or `incident_family` become the recurrence key; otherwise the source kind/ref pattern is normalized. The promotion result and task context surface `none`, `medium`, or `high` recurrence severity with related envelope ids.
+
+`--assign <principal>` claims the created task for that principal. `--nudge <principal>` prepares a non-mutating claim command in the promotion result when the operator wants a visible handoff without changing task assignment yet. Payload fields such as `responsible_identity`, `responsible_agent`, `assigned_agent`, `assignee`, or `responsible_role` can also prepare that handoff.
 
 If an envelope should be routed to an existing task rather than creating a new one, use:
 

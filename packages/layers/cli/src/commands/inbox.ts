@@ -121,6 +121,7 @@ export interface InboxPromoteOptions extends InboxCommandOptions {
   targetRef?: string;
   by?: string;
   assign?: string;
+  nudge?: string;
   title?: string;
   goal?: string;
   criteria?: string[];
@@ -1219,14 +1220,19 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
         const existingTaskTarget = await resolveExistingTaskTarget(cwd, options.targetRef);
         if (existingTaskTarget instanceof Error) return errorResult(existingTaskTarget.message);
         if (existingTaskTarget) {
+          const recurrence = inspectInboxRecurrence(store, existing);
           const envelope = store.promote(options.envelopeId!, {
             target_kind: 'task',
-            target_ref: String(existingTaskTarget.task_number),
+            target_ref: `task:${existingTaskTarget.task_number}`,
             promoted_at: new Date().toISOString(),
             promoted_by: options.by!,
             enactment_status: 'enacted',
             target_command: 'task route',
-            target_result: existingTaskTarget,
+            target_result: {
+              ...existingTaskTarget,
+              source_envelope: sourceEnvelopeLink(existing),
+              recurrence,
+            },
           });
           await writeInboxMutationEvidence({
             cwd,
@@ -1235,7 +1241,15 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
             authorityClass: 'resolve',
             before,
             after: inboxEnvelopeToEvidenceState(store.get(envelope.envelope_id)),
-            result: { status: 'success', enactment_status: 'enacted', target_mutation: false, envelope, task_target: existingTaskTarget },
+            result: {
+              status: 'success',
+              enactment_status: 'enacted',
+              target_mutation: false,
+              envelope,
+              task_target: existingTaskTarget,
+              source_envelope: sourceEnvelopeLink(existing),
+              recurrence,
+            },
           });
           return okResult(
             {
@@ -1243,20 +1257,25 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
               enactment_status: 'enacted',
               target_mutation: false,
               target: existingTaskTarget,
+              source_envelope: sourceEnvelopeLink(existing),
+              recurrence,
               envelope,
             },
             [
               `Inbox envelope routed to task: ${envelope.envelope_id}`,
               `Task target: ${existingTaskTarget.task_number}`,
               `Task ID: ${existingTaskTarget.task_id}`,
+              ...(recurrence.severity !== 'none' ? [`Recurrence: ${recurrence.severity} (${recurrence.previous_count} prior)`] : []),
               `Promoted by: ${options.by}`,
             ],
             options.format,
           );
         }
-        const taskResult = await createTaskFromEnvelope(existing, options);
+        const recurrence = inspectInboxRecurrence(store, existing);
+        const taskResult = await createTaskFromEnvelope(existing, options, recurrence);
         if (taskResult.exitCode !== ExitCode.SUCCESS) return taskResult;
         const task = taskResult.result as { task_number: number; task_id: string };
+        const preparedNudge = preparedTaskNudge(existing, task, options);
         let assignment: unknown = null;
         if (options.assign) {
           const rosterAdd = await taskRosterAddCommand({
@@ -1278,12 +1297,18 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
         }
         const envelope = store.promote(options.envelopeId!, {
           target_kind: 'task',
-          target_ref: String(task.task_number),
+          target_ref: `task:${task.task_number}`,
           promoted_at: new Date().toISOString(),
           promoted_by: options.by!,
           enactment_status: 'enacted',
           target_command: 'task create',
-          target_result: { task: taskResult.result, assignment },
+          target_result: {
+            task: taskResult.result,
+            assignment,
+            prepared_nudge: preparedNudge,
+            source_envelope: sourceEnvelopeLink(existing),
+            recurrence,
+          },
         });
         await writeInboxMutationEvidence({
           cwd,
@@ -1292,7 +1317,15 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
           authorityClass: 'resolve',
           before,
           after: inboxEnvelopeToEvidenceState(store.get(envelope.envelope_id)),
-          result: { status: 'success', enactment_status: 'enacted', target_mutation: true, envelope, assignment },
+          result: {
+            status: 'success',
+            enactment_status: 'enacted',
+            target_mutation: true,
+            envelope,
+            assignment,
+            prepared_nudge: preparedNudge,
+            recurrence,
+          },
         });
         return okResult(
           {
@@ -1301,12 +1334,17 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
             target_mutation: true,
             target: taskResult.result,
             assignment,
+            prepared_nudge: preparedNudge,
+            source_envelope: sourceEnvelopeLink(existing),
+            recurrence,
             envelope,
           },
           [
             `Inbox envelope promoted: ${envelope.envelope_id}`,
             `Created task: ${task.task_number}`,
             ...(options.assign ? [`Assigned: ${options.assign}`] : []),
+            ...(preparedNudge ? [`Prepared nudge: ${preparedNudge.target}`] : []),
+            ...(recurrence.severity !== 'none' ? [`Recurrence: ${recurrence.severity} (${recurrence.previous_count} prior)`] : []),
             `Promoted by: ${options.by}`,
           ],
           options.format,
@@ -1540,7 +1578,7 @@ export async function inboxArchitectProcessCommand(options: InboxArchitectProces
 
     const envelope = store.promote(options.envelopeId!, {
       target_kind: 'task',
-      target_ref: String(task.task_number),
+      target_ref: `task:${task.task_number}`,
       promoted_at: new Date().toISOString(),
       promoted_by: options.by!,
       enactment_status: 'enacted',
@@ -1653,7 +1691,7 @@ function admissibleActionsForEnvelope(envelope: InboxEnvelope): Array<Record<str
       pending_kind: 'recorded_pending_crossing',
     },
   ];
-  if (envelope.kind === 'task_candidate' || envelope.kind === 'upstream_task_candidate') {
+  if (canCreateTaskFromEnvelope(envelope)) {
     actions.unshift({
       action: 'task',
       command: `narada inbox task ${envelope.envelope_id} --by <principal>`,
@@ -1917,9 +1955,97 @@ function normalizeRelativePath(value: string): string {
   return value.split('\\').join('/');
 }
 
+interface InboxRecurrenceInspection {
+  key: string;
+  severity: 'none' | 'medium' | 'high';
+  previous_count: number;
+  related_envelope_ids: string[];
+}
+
+interface PreparedTaskNudge {
+  target: string;
+  target_kind: 'identity' | 'role';
+  command: string;
+  command_args: string[];
+  reason: string;
+}
+
+function sourceEnvelopeLink(envelope: InboxEnvelope): Record<string, string> {
+  return {
+    envelope_id: envelope.envelope_id,
+    envelope_kind: envelope.kind,
+    source_kind: envelope.source.kind,
+    source_ref: envelope.source.ref,
+  };
+}
+
+function inspectInboxRecurrence(store: SqliteInboxStore, envelope: InboxEnvelope): InboxRecurrenceInspection {
+  const key = recurrenceKeyForEnvelope(envelope);
+  const related = store
+    .list({ limit: 200 })
+    .filter((candidate) => candidate.envelope_id !== envelope.envelope_id)
+    .filter((candidate) => recurrenceKeyForEnvelope(candidate) === key);
+  const previousCount = related.length;
+  return {
+    key,
+    severity: previousCount >= 2 ? 'high' : previousCount === 1 ? 'medium' : 'none',
+    previous_count: previousCount,
+    related_envelope_ids: related.map((candidate) => candidate.envelope_id),
+  };
+}
+
+function recurrenceKeyForEnvelope(envelope: InboxEnvelope): string {
+  const payload = asRecord(envelope.payload);
+  const explicit = stringField(payload, 'recurrence_key')
+    ?? stringField(payload, 'recurrenceKey')
+    ?? stringField(payload, 'incident_family')
+    ?? stringField(payload, 'incidentFamily')
+    ?? stringField(payload, 'family')
+    ?? stringField(payload, 'capa_key');
+  if (explicit) return `explicit:${normalizeRecurrenceToken(explicit)}`;
+  return `${envelope.kind}:${envelope.source.kind}:${normalizeSourcePattern(envelope.source.ref)}`;
+}
+
+function normalizeSourcePattern(value: string): string {
+  return normalizeRecurrenceToken(value)
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, '<uuid>')
+    .replace(/\b[0-9a-f]{24,}\b/g, '<hex>')
+    .replace(/\b20\d{6}(?:[t_-]?\d{6,})?\b/g, '<date>')
+    .replace(/\b\d{6,}\b/g, '<number>');
+}
+
+function normalizeRecurrenceToken(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function preparedTaskNudge(
+  envelope: InboxEnvelope,
+  task: { task_number: number; task_id: string },
+  options: InboxPromoteOptions,
+): PreparedTaskNudge | null {
+  if (options.assign) return null;
+  const payload = asRecord(envelope.payload);
+  const target = cleanString(options.nudge)
+    ?? stringField(payload, 'responsible_identity')
+    ?? stringField(payload, 'responsible_agent')
+    ?? stringField(payload, 'assigned_agent')
+    ?? stringField(payload, 'assignee')
+    ?? stringField(payload, 'responsible_role');
+  if (!target) return null;
+  const targetKind = target.includes('.') ? 'identity' : 'role';
+  return {
+    target,
+    target_kind: targetKind,
+    command: `narada task claim ${task.task_number} --agent ${target}`,
+    command_args: ['task', 'claim', String(task.task_number), '--agent', target],
+    reason: `Prepared handoff nudge from inbox envelope ${envelope.envelope_id}; no assignment mutation was requested.`,
+  };
+}
+
 async function createTaskFromEnvelope(
   envelope: InboxEnvelope,
   options: InboxPromoteOptions,
+  recurrence?: InboxRecurrenceInspection,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   if (!canCreateTaskFromEnvelope(envelope)) {
     return errorResult(`Envelope kind '${envelope.kind}' cannot be enacted as task`);
@@ -1945,7 +2071,7 @@ async function createTaskFromEnvelope(
   return taskCreateFromInboxSpec(options.cwd ?? process.cwd(), {
     title,
     goal,
-    context: contextFromEnvelope(envelope, payload),
+    context: contextFromEnvelope(envelope, payload, recurrence),
     requiredWork: detailedRequiredWorkFromPayload(envelope, payload),
     criteria,
     chapter: stringField(payload, 'chapter') ?? 'Canonical Inbox Promotions',
@@ -1962,9 +2088,9 @@ async function taskCreateFromInboxSpec(cwd: string, spec: {
   chapter: string;
   dependsOn?: string;
 }): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const tmpDir = join(resolve(cwd), '.ai', 'tmp');
-  await mkdir(tmpDir, { recursive: true });
-  const inputPath = join(tmpDir, `inbox-task-create-${randomUUID()}.json`);
+  const inputRelativePath = join('.ai', 'tmp', `inbox-task-create-${randomUUID()}.json`);
+  const inputPath = join(resolve(cwd), inputRelativePath);
+  await mkdir(dirname(inputPath), { recursive: true });
   await writeFile(inputPath, `${JSON.stringify({
     title: spec.title,
     goal: spec.goal,
@@ -1977,7 +2103,7 @@ async function taskCreateFromInboxSpec(cwd: string, spec: {
   try {
     return await taskCreateCommand({
       cwd,
-      inputJson: inputPath,
+      inputJson: inputRelativePath,
       format: 'json',
     });
   } finally {
@@ -1989,7 +2115,8 @@ function canCreateTaskFromEnvelope(envelope: InboxEnvelope): boolean {
   return envelope.kind === 'task_candidate'
     || envelope.kind === 'upstream_task_candidate'
     || envelope.kind === 'proposal'
-    || envelope.kind === 'observation';
+    || envelope.kind === 'observation'
+    || envelope.kind === 'incident';
 }
 
 async function resolveExistingTaskTarget(cwd: string, targetRef: string | undefined): Promise<{
@@ -2076,7 +2203,11 @@ function defaultArchitectProcessCriteria(envelope: InboxEnvelope): string[] {
   ];
 }
 
-function contextFromEnvelope(envelope: InboxEnvelope, payload: Record<string, unknown>): string {
+function contextFromEnvelope(
+  envelope: InboxEnvelope,
+  payload: Record<string, unknown>,
+  recurrence?: InboxRecurrenceInspection,
+): string {
   const parts = [
     `Source inbox envelope: ${envelope.envelope_id}`,
     `Source: ${envelope.source.kind}:${envelope.source.ref}`,
@@ -2092,6 +2223,13 @@ function contextFromEnvelope(envelope: InboxEnvelope, payload: Record<string, un
   if (evidence) parts.push(`Evidence:\n${evidence.map((item) => `- ${item}`).join('\n')}`);
   if (proposal) parts.push(`Proposal:\n${proposal.map((item) => `- ${item}`).join('\n')}`);
   if (recommendation) parts.push(`Recommendation: ${recommendation}`);
+  if (recurrence && recurrence.severity !== 'none') {
+    parts.push([
+      `Recurrence severity: ${recurrence.severity}`,
+      `Recurrence key: ${recurrence.key}`,
+      `Prior related envelopes: ${recurrence.related_envelope_ids.join(', ')}`,
+    ].join('\n'));
+  }
   return parts.join('\n\n');
 }
 

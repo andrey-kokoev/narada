@@ -32,6 +32,7 @@ import {
 } from '../../src/commands/inbox.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { taskReadCommand } from '../../src/commands/task-read.js';
+import { taskWorkboardCommand } from '../../src/commands/task-workboard.js';
 
 describe('Canonical Inbox CLI commands', () => {
   let tempDir: string;
@@ -1040,6 +1041,136 @@ describe('Canonical Inbox CLI commands', () => {
     expect(taskContent).toContain('Runtime drift was observed');
     expect(taskContent).toContain('Recommendation addressed or explicitly rejected');
     expect(taskContent).not.toContain('TBD');
+  });
+
+  it('promotes incident envelopes into assigned tasks with source consumption and recurrence severity', async () => {
+    setupRepo(tempDir);
+    const firstIncident = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'agent_report',
+      sourceRef: 'bob:stale-source-envelope-20260501-a',
+      kind: 'incident',
+      authorityLevel: 'agent_reported',
+      principal: 'narada-andrey.Bob',
+      payload: JSON.stringify({
+        title: 'First stale source envelope recurrence',
+        summary: 'A consumed inbox envelope resurfaced as primary work.',
+        recurrence_key: 'inbox-source-envelope-consumption',
+      }),
+    });
+    expect(firstIncident.exitCode).toBe(ExitCode.SUCCESS);
+    const firstEnvelopeId = (firstIncident.result as { envelope: { envelope_id: string } }).envelope.envelope_id;
+
+    const secondIncident = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'agent_report',
+      sourceRef: 'bob:stale-source-envelope-20260501-b',
+      kind: 'incident',
+      authorityLevel: 'agent_reported',
+      principal: 'narada-andrey.Bob',
+      payload: JSON.stringify({
+        title: 'Complete inbox-to-task source consumption',
+        summary: 'A repeated source envelope consumption issue should become Builder work.',
+        recurrence_key: 'inbox-source-envelope-consumption',
+        evidence: ['workboard kept surfacing consumed envelopes'],
+      }),
+    });
+    const envelopeId = (secondIncident.result as { envelope: { envelope_id: string } }).envelope.envelope_id;
+
+    const promoted = await inboxTaskCommand({
+      cwd: tempDir,
+      envelopeId,
+      by: 'architect',
+      assign: 'builder',
+      format: 'json',
+    });
+
+    expect(promoted.exitCode).toBe(ExitCode.SUCCESS);
+    const result = promoted.result as {
+      target: { task_number: number; file_path: string };
+      assignment: { agent_id: string };
+      source_envelope: { envelope_id: string };
+      recurrence: { severity: string; previous_count: number; related_envelope_ids: string[] };
+      envelope: { status: string; promotion: { target_kind: string; target_ref: string; target_result: { source_envelope: { envelope_id: string }; recurrence: { severity: string } } } };
+    };
+    expect(result.assignment.agent_id).toBe('builder');
+    expect(result.source_envelope.envelope_id).toBe(envelopeId);
+    expect(result.envelope.status).toBe('promoted');
+    expect(result.envelope.promotion).toMatchObject({
+      target_kind: 'task',
+      target_ref: `task:${result.target.task_number}`,
+      target_result: {
+        source_envelope: { envelope_id: envelopeId },
+        recurrence: { severity: 'medium' },
+      },
+    });
+    expect(result.recurrence).toMatchObject({
+      severity: 'medium',
+      previous_count: 1,
+      related_envelope_ids: [firstEnvelopeId],
+    });
+
+    const taskContent = readFileSync(result.target.file_path, 'utf8');
+    expect(taskContent).toContain(`Source inbox envelope: ${envelopeId}`);
+    expect(taskContent).toContain('Envelope kind: incident');
+    expect(taskContent).toContain('Recurrence severity: medium');
+
+    const shown = await inboxShowCommand({ cwd: tempDir, envelopeId, format: 'json' });
+    expect((shown.result as { envelope: { status: string } }).envelope.status).toBe('promoted');
+
+    const workboard = await taskWorkboardCommand({ cwd: tempDir, format: 'json', limit: 10 });
+    const board = workboard.result as {
+      in_progress: Array<{ task_number: number; assigned_agent: string | null }>;
+      source_envelopes: Array<{ envelope_id: string }>;
+    };
+    expect(board.in_progress).toContainEqual(expect.objectContaining({
+      task_number: result.target.task_number,
+      assigned_agent: 'builder',
+    }));
+    expect(board.source_envelopes.map((envelope) => envelope.envelope_id)).toContain(firstEnvelopeId);
+    expect(board.source_envelopes.map((envelope) => envelope.envelope_id)).not.toContain(envelopeId);
+  });
+
+  it('prepares a non-mutating task nudge when requested without assignment', async () => {
+    setupRepo(tempDir);
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'agent_report',
+      sourceRef: 'resident:handoff',
+      kind: 'observation',
+      authorityLevel: 'agent_reported',
+      payload: JSON.stringify({
+        title: 'Prepare responsible identity handoff',
+        summary: 'A responsible identity should receive a prepared handoff without claiming the task.',
+        responsible_identity: 'narada-andrey.Bob',
+      }),
+    });
+    const envelopeId = (submitted.result as { envelope: { envelope_id: string } }).envelope.envelope_id;
+
+    const promoted = await inboxTaskCommand({
+      cwd: tempDir,
+      envelopeId,
+      by: 'architect',
+      format: 'json',
+    });
+
+    expect(promoted.exitCode).toBe(ExitCode.SUCCESS);
+    const result = promoted.result as {
+      assignment: null;
+      target: { task_number: number };
+      prepared_nudge: { target: string; target_kind: string; command_args: string[] };
+      envelope: { promotion: { target_result: { prepared_nudge: { target: string } } } };
+    };
+    expect(result.assignment).toBeNull();
+    expect(result.prepared_nudge).toMatchObject({
+      target: 'narada-andrey.Bob',
+      target_kind: 'identity',
+      command_args: ['task', 'claim', String(result.target.task_number), '--agent', 'narada-andrey.Bob'],
+    });
+    expect(result.envelope.promotion.target_result.prepared_nudge.target).toBe('narada-andrey.Bob');
   });
 
   it('creates complete tasks directly from proposal envelopes', async () => {
