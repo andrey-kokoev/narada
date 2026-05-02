@@ -12,8 +12,10 @@ import {
   taskPeekNextCommand,
   taskWorkNextCommand,
 } from './commands/task-next.js';
+import { commandRunCommand } from './commands/command-run.js';
 import { grantEffectiveStatus, readCapabilityRegistry } from './lib/capability-consent-registry.js';
 import { ExitCode } from './lib/exit-codes.js';
+import type { CommandSideEffectClass } from './lib/command-execution-intent.js';
 import { readRoutingRegistry, resolveRoute, type RouteAddressRecord } from './lib/routing-addressing-registry.js';
 
 type JsonRpcId = string | number | null;
@@ -77,6 +79,8 @@ export interface McpSiteContext {
 }
 
 const PROTOCOL_VERSION = '2024-11-05';
+const WSL_WINDOWS_EE_MCP_ADAPTER_ID = 'ee-mcp.windows-powershell-from-wsl';
+const WSL_WINDOWS_COMMAND_ID_PATTERN = /^windows-pwsh\.readonly\.[a-z0-9][a-z0-9._-]{0,80}$/;
 
 export const NARADA_MCP_TOOLS: McpTool[] = [
   {
@@ -162,6 +166,26 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
       target: targetSchema(),
     }, ['source_ref', 'title']),
   },
+  {
+    name: 'narada_ee_mcp_doctor',
+    description: 'Inspect WSL-to-Windows EE-MCP adapter readiness without executing Windows commands.',
+    inputSchema: objectSchema({
+      cwd: stringSchema('Working directory; defaults to current process cwd.'),
+      adapter_id: stringSchema(`Adapter id; defaults to ${WSL_WINDOWS_EE_MCP_ADAPTER_ID}.`),
+      target: targetSchema(),
+    }),
+  },
+  {
+    name: 'narada_ee_run',
+    description: 'Request an admitted EE-MCP command id; refuses raw WSL-to-Windows shell shortcuts when no sanctioned adapter exists.',
+    inputSchema: objectSchema({
+      cwd: stringSchema('Working directory; defaults to current process cwd.'),
+      adapter_id: stringSchema(`Adapter id; defaults to ${WSL_WINDOWS_EE_MCP_ADAPTER_ID}.`),
+      command_id: { type: 'string', description: 'Typed command id, e.g. windows-pwsh.readonly.hostname.' },
+      requester: stringSchema('Requester principal; defaults to mcp-client.'),
+      target: targetSchema(),
+    }, ['command_id']),
+  },
 ];
 
 export async function handleMcpRequest(
@@ -236,7 +260,8 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
   if (!name) throw new Error('tools/call requires params.name');
   const mutationAttempted = name === 'narada_inbox_submit_observation'
     || (name === 'narada_inbox_work_next' && booleanField(args, 'claim') === true)
-    || (name === 'narada_task_work_next' && booleanField(args, 'claim') === true);
+    || (name === 'narada_task_work_next' && booleanField(args, 'claim') === true)
+    || name === 'narada_ee_run';
   const traversal = await resolveMcpTraversal({
     sourceSite: siteContext,
     tool: name,
@@ -327,9 +352,143 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
         recommendation: stringField(args, 'recommendation'),
         format: 'json',
       }), traversal);
+    case 'narada_ee_mcp_doctor':
+      return jsonToolResult(attachTraversal(inspectWslWindowsEeMcp({
+        cwd: scopedCwd,
+        adapterId: stringField(args, 'adapter_id'),
+      }), traversal));
+    case 'narada_ee_run': {
+      const result = await runWslWindowsEeMcpCommand({
+        cwd: scopedCwd,
+        adapterId: stringField(args, 'adapter_id'),
+        commandId: requiredString(args, 'command_id'),
+        requester: stringField(args, 'requester') ?? 'mcp-client',
+      });
+      return jsonToolResult(attachTraversal(result, traversal), result.status === 'error');
+    }
     default:
       throw new Error(`Unknown Narada MCP tool: ${name}`);
   }
+}
+
+interface WslWindowsEeMcpConfig {
+  adapter_id?: string;
+  status?: 'admitted' | 'planned_missing_capability';
+  runtime_locus?: string;
+  commands?: Record<string, {
+    argv?: string[];
+    side_effect_class?: CommandSideEffectClass;
+    timeout_seconds?: number;
+  }>;
+}
+
+function inspectWslWindowsEeMcp(args: { cwd: string; adapterId?: string }): Record<string, unknown> {
+  const adapterId = args.adapterId ?? WSL_WINDOWS_EE_MCP_ADAPTER_ID;
+  const configPath = resolve(args.cwd, '.ai', 'ee-mcp', 'windows-powershell-from-wsl.json');
+  const config = readJsonObject(configPath) as WslWindowsEeMcpConfig | undefined;
+  const configured = Boolean(config);
+  const status = configured && config?.status === 'admitted' && config.adapter_id === adapterId
+    ? 'ready'
+    : 'planned_missing_capability';
+
+  return {
+    status,
+    adapter_id: adapterId,
+    direction: 'wsl_to_windows',
+    embodiment_id: 'windows-pwsh',
+    runtime_locus: config?.runtime_locus ?? 'execution_machine_site',
+    config_path: configPath,
+    configured,
+    command_id_grammar: {
+      allowed_prefix: 'windows-pwsh.readonly.',
+      pattern: String(WSL_WINDOWS_COMMAND_ID_PATTERN),
+      side_effect_class: 'read_only',
+    },
+    refusal_posture: {
+      refusal_code: 'planned_missing_capability',
+      raw_windows_shell_forbidden: true,
+      forbidden_shortcuts: ['powershell.exe', 'pwsh.exe', 'cmd.exe'],
+      reason: 'WSL-to-Windows execution must enter through an admitted EE-MCP adapter config and CEIZ command run.',
+    },
+    doctor: {
+      readiness: status,
+      repair_command: `Create ${configPath} with adapter_id ${adapterId}, status admitted, and explicit read-only command ids.`,
+    },
+  };
+}
+
+async function runWslWindowsEeMcpCommand(args: {
+  cwd: string;
+  adapterId?: string;
+  commandId: string;
+  requester: string;
+}): Promise<Record<string, unknown>> {
+  const adapterId = args.adapterId ?? WSL_WINDOWS_EE_MCP_ADAPTER_ID;
+  if (!WSL_WINDOWS_COMMAND_ID_PATTERN.test(args.commandId)) {
+    return {
+      status: 'error',
+      error: 'invalid_command_id',
+      adapter_id: adapterId,
+      command_id: args.commandId,
+      expected_pattern: String(WSL_WINDOWS_COMMAND_ID_PATTERN),
+      execution_attempted: false,
+    };
+  }
+
+  const doctor = inspectWslWindowsEeMcp({ cwd: args.cwd, adapterId });
+  if (doctor.status !== 'ready') {
+    return {
+      status: 'error',
+      error: 'planned_missing_capability',
+      adapter_id: adapterId,
+      command_id: args.commandId,
+      execution_attempted: false,
+      doctor,
+    };
+  }
+
+  const config = readJsonObject(resolve(args.cwd, '.ai', 'ee-mcp', 'windows-powershell-from-wsl.json')) as WslWindowsEeMcpConfig | undefined;
+  const command = config?.commands?.[args.commandId];
+  if (!command?.argv || !Array.isArray(command.argv) || command.argv.some((item) => typeof item !== 'string')) {
+    return {
+      status: 'error',
+      error: 'command_id_not_configured',
+      adapter_id: adapterId,
+      command_id: args.commandId,
+      execution_attempted: false,
+      doctor,
+    };
+  }
+  if (command.side_effect_class && command.side_effect_class !== 'read_only') {
+    return {
+      status: 'error',
+      error: 'unsupported_command_class',
+      adapter_id: adapterId,
+      command_id: args.commandId,
+      side_effect_class: command.side_effect_class,
+      execution_attempted: false,
+      allowed_side_effect_class: 'read_only',
+    };
+  }
+
+  const run = await commandRunCommand({
+    cwd: args.cwd,
+    argv: JSON.stringify(command.argv),
+    requester: args.requester,
+    requesterKind: 'agent',
+    sideEffect: 'read_only',
+    timeout: command.timeout_seconds ?? 30,
+    outputProfile: 'bounded_excerpt',
+    rationale: `EE-MCP ${adapterId} command ${args.commandId}`,
+    format: 'json',
+  });
+  return {
+    status: run.exitCode === ExitCode.SUCCESS ? 'success' : 'error',
+    adapter_id: adapterId,
+    command_id: args.commandId,
+    execution_attempted: true,
+    command_run: run.result,
+  };
 }
 
 async function resolveMcpTraversal(args: {

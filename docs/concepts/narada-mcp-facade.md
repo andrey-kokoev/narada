@@ -94,6 +94,25 @@ An EE-MCP surface must declare:
 
 EE-MCP must route command requests through the [`Command Execution Intent Zone`](command-execution-intent-zone.md) or a stricter equivalent. A tool call such as `ee_run` is only a request into the execution law. It is not permission to run arbitrary shell text.
 
+### WSL-to-Windows EE-MCP
+
+The WSL-to-Windows adapter is named `ee-mcp.windows-powershell-from-wsl`.
+
+Its v0 command id grammar is intentionally narrow:
+
+```text
+windows-pwsh.readonly.<name>
+```
+
+Raw `powershell.exe`, `pwsh.exe`, or `cmd.exe` invocation from WSL is not a valid adapter call. The Narada MCP facade exposes:
+
+| Tool | Purpose |
+|------|---------|
+| `narada_ee_mcp_doctor` | Read-only readiness and refusal-posture inspection for the adapter. |
+| `narada_ee_run` | Request execution of an admitted command id; refuses by default when no sanctioned adapter config exists. |
+
+Without an admitted adapter config at `.ai/ee-mcp/windows-powershell-from-wsl.json`, the posture is `planned_missing_capability` and `narada_ee_run` must return `execution_attempted: false`. When configured, each command id must map to an explicit `argv` and `read_only` command class, and execution routes through CEIZ with bounded output admission.
+
 ## Runtime Locus Policy
 
 MCP process launch and supervision belongs to the execution-machine Site: commonly a User Site, PC Site, Project Site, or sandbox-owning Site. The target Site owns admission and consequence.

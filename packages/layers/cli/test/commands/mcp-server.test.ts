@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
 import { handleMcpRequest, resolveMcpSiteContext, runMcpServer } from '../../src/mcp-server.js';
 import { taskCreateCommand } from '../../src/commands/task-create.js';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 
 describe('Narada MCP facade', () => {
   let tempDir: string;
@@ -45,6 +46,8 @@ describe('Narada MCP facade', () => {
     expect(tools).toContain('narada_inbox_work_next');
     expect(tools).toContain('narada_task_work_next');
     expect(tools).toContain('narada_inbox_submit_observation');
+    expect(tools).toContain('narada_ee_mcp_doctor');
+    expect(tools).toContain('narada_ee_run');
   });
 
   it('resolves Site context from Site config', () => {
@@ -141,6 +144,22 @@ describe('Narada MCP facade', () => {
         updated_at: new Date().toISOString(),
       }],
     }, null, 2));
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.upsertRosterEntry({
+        agent_id: 'builder',
+        role: 'builder',
+        capabilities_json: JSON.stringify(['claim', 'execute']),
+        first_seen_at: '2026-01-01T00:00:00Z',
+        last_active_at: '2026-01-01T00:00:00Z',
+        status: 'idle',
+        task_number: null,
+        last_done: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+    } finally {
+      store.db.close();
+    }
     const created = await taskCreateCommand({
       cwd: tempDir,
       number: 501,
@@ -280,6 +299,97 @@ describe('Narada MCP facade', () => {
         mutation_attempted: false,
         capability_status: 'not_required',
       },
+    });
+  });
+
+  it('reports WSL-to-Windows EE-MCP as planned missing capability when no adapter config exists', async () => {
+    const response = await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 13,
+      method: 'tools/call',
+      params: {
+        name: 'narada_ee_mcp_doctor',
+        arguments: { cwd: tempDir },
+      },
+    });
+
+    const result = JSON.parse(((response?.result as { content: Array<{ text: string }> }).content[0].text));
+    expect(result).toMatchObject({
+      status: 'planned_missing_capability',
+      adapter_id: 'ee-mcp.windows-powershell-from-wsl',
+      direction: 'wsl_to_windows',
+      command_id_grammar: {
+        allowed_prefix: 'windows-pwsh.readonly.',
+        side_effect_class: 'read_only',
+      },
+      refusal_posture: {
+        raw_windows_shell_forbidden: true,
+        forbidden_shortcuts: ['powershell.exe', 'pwsh.exe', 'cmd.exe'],
+      },
+      traversal: {
+        cross_site: false,
+        mutation_attempted: false,
+      },
+    });
+  });
+
+  it('refuses WSL-to-Windows EE-MCP run requests before sanctioned adapter admission', async () => {
+    const response = await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 14,
+      method: 'tools/call',
+      params: {
+        name: 'narada_ee_run',
+        arguments: {
+          cwd: tempDir,
+          command_id: 'windows-pwsh.readonly.hostname',
+          requester: 'architect',
+        },
+      },
+    });
+
+    const result = response?.result as { content: Array<{ text: string }>; isError?: boolean };
+    const payload = JSON.parse(result.content[0].text);
+    expect(result.isError).toBe(true);
+    expect(payload).toMatchObject({
+      status: 'error',
+      error: 'planned_missing_capability',
+      adapter_id: 'ee-mcp.windows-powershell-from-wsl',
+      command_id: 'windows-pwsh.readonly.hostname',
+      execution_attempted: false,
+      doctor: {
+        refusal_posture: {
+          raw_windows_shell_forbidden: true,
+        },
+      },
+      traversal: {
+        mutation_attempted: true,
+        cross_site: false,
+      },
+    });
+  });
+
+  it('rejects raw or malformed WSL-to-Windows EE-MCP command ids before adapter lookup', async () => {
+    const response = await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 15,
+      method: 'tools/call',
+      params: {
+        name: 'narada_ee_run',
+        arguments: {
+          cwd: tempDir,
+          command_id: 'powershell.exe -NoProfile hostname',
+        },
+      },
+    });
+
+    const result = response?.result as { content: Array<{ text: string }>; isError?: boolean };
+    const payload = JSON.parse(result.content[0].text);
+    expect(result.isError).toBe(true);
+    expect(payload).toMatchObject({
+      status: 'error',
+      error: 'invalid_command_id',
+      execution_attempted: false,
     });
   });
 
