@@ -1598,7 +1598,7 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
       .prepare(
         `select * from evidence_admission_results
          where task_id = ?
-         order by admitted_at desc
+         order by admitted_at desc, rowid desc
          limit 1`,
       )
       .get(taskId) as Record<string, unknown> | undefined;
@@ -1948,7 +1948,7 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
       .prepare(
         `select * from task_reviews
          where task_id = ?
-         order by reviewed_at desc`,
+         order by reviewed_at desc, rowid desc`,
       )
       .all(taskId) as Record<string, unknown>[];
     return rows.map(rowToReview);
@@ -1958,7 +1958,7 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
     const rows = this.db
       .prepare(
         `select * from task_reviews
-         order by reviewed_at desc`,
+         order by reviewed_at desc, rowid desc`,
       )
       .all() as Record<string, unknown>[];
     return rows.map(rowToReview);

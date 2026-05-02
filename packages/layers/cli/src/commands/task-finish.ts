@@ -123,6 +123,14 @@ export async function taskFinishCommand(
       `  Roster: ${(result as { roster_transition?: string }).roster_transition}`,
       `  Close action: ${(result as { close_action?: string }).close_action}`,
     ];
+    const reviewReusePosture = (result as { review_reuse_posture?: string }).review_reuse_posture;
+    if (reviewReusePosture) {
+      summaryLines.push(`  Review reuse posture: ${reviewReusePosture}`);
+      const ignoredReviewIds = (result as { ignored_review_ids?: string[] }).ignored_review_ids ?? [];
+      if (ignoredReviewIds.length > 0) {
+        summaryLines.push(`  Ignored stale rejected review ids: ${ignoredReviewIds.join(', ')}`);
+      }
+    }
     if ((result as { warnings?: string[] }).warnings && (result as { warnings?: string[] }).warnings!.length > 0) {
       summaryLines.push('  Warnings:');
       for (const warning of ((result as { warnings?: string[] }).warnings ?? [])) {

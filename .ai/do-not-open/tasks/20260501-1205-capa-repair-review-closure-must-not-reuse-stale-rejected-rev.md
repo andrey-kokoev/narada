@@ -1,5 +1,14 @@
 ---
-status: claimed
+status: closed
+criteria_proved_by: builder
+criteria_proved_at: 2026-05-02T00:40:48.428Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-05-02T00:40:49.116Z
+closed_by: builder
+governed_by: task_close:builder
+closure_mode: agent_finish
 ---
 
 # CAPA: repair-review closure must not reuse stale rejected review identity
@@ -41,9 +50,9 @@ Repair task-governance review/finish semantics so accepted repair reviews and no
 
 ## Acceptance Criteria
 
-- [ ] Reproduce the stale rejected review identity / stale Evidence Admission closure failure with a focused regression.
-- [ ] Ensure an accepted repair review creates or reports the correct accepted review identity rather than reusing an older rejected review id.
-- [ ] Ensure task finish --close and task close report closure state from current Evidence Admission, not stale rejected admission rows.
-- [ ] Bound output so architect-facing machine and human output clearly distinguishes reused valid acceptance from stale rejected identity.
-- [ ] Verify with focused task-governance/task-review/task-finish tests and a bounded CLI readback.
-- [ ] Record CAPA evidence and close through governed task lifecycle.
+- [x] Reproduce the stale rejected review identity / stale Evidence Admission closure failure with a focused regression.
+- [x] Ensure an accepted repair review creates or reports the correct accepted review identity rather than reusing an older rejected review id.
+- [x] Ensure task finish --close and task close report closure state from current Evidence Admission, not stale rejected admission rows.
+- [x] Bound output so architect-facing machine and human output clearly distinguishes reused valid acceptance from stale rejected identity.
+- [x] Verify with focused task-governance/task-review/task-finish tests and a bounded CLI readback.
+- [x] Record CAPA evidence and close through governed task lifecycle.

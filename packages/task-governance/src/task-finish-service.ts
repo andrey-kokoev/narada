@@ -62,6 +62,8 @@ export interface FinishTaskServiceResponse {
     admission_id?: string;
     close_blockers?: string[];
     criteria_proof_blockers?: string[];
+    review_reuse_posture?: 'reused_valid_acceptance' | 'reused_rejection' | 'submitted_superseding_stale_rejection';
+    ignored_review_ids?: string[];
     warnings?: string[];
     allow_incomplete?: boolean;
     error?: string;
@@ -100,6 +102,28 @@ function parseJsonStringList(value: string | undefined): { exitCode: ExitCode; e
   } catch {
     return { exitCode: ExitCode.GENERAL_ERROR, error: 'Failed to parse JSON array' };
   }
+}
+
+function isAcceptedReview(review: ReviewRecord): boolean {
+  return review.verdict === 'accepted' || review.verdict === 'accepted_with_notes';
+}
+
+function isRejectedReview(review: ReviewRecord): boolean {
+  return review.verdict === 'rejected';
+}
+
+function newestFirst(a: { reviewed_at: string; review_id: string }, b: { reviewed_at: string; review_id: string }): number {
+  const time = b.reviewed_at.localeCompare(a.reviewed_at);
+  return time !== 0 ? time : b.review_id.localeCompare(a.review_id);
+}
+
+function reviewMatchesRequestedVerdict(
+  review: ReviewRecord,
+  verdict?: FinishTaskServiceOptions['verdict'],
+): boolean {
+  if (!verdict) return isAcceptedReview(review);
+  if (verdict === 'rejected') return isRejectedReview(review);
+  return isAcceptedReview(review);
 }
 
 async function proveCriteriaInService(params: {
@@ -315,25 +339,42 @@ export async function finishTaskService(
   }
 
   const { frontMatter } = await readTaskFile(taskFile.path);
-  const taskStatus = frontMatter.status as string | undefined;
+  const statusStore = options.store ?? openTaskLifecycleStore(cwd);
+  const ownsStatusStore = options.store ? null : statusStore;
+  let taskStatus = frontMatter.status as string | undefined;
+  try {
+    const lifecycle = statusStore.getLifecycle(taskFile.taskId) ?? statusStore.getLifecycleByNumber(Number(taskNumber));
+    taskStatus = lifecycle?.status ?? taskStatus;
+  } finally {
+    if (ownsStatusStore) ownsStatusStore.db.close();
+  }
 
   let reportAction: 'submitted' | 'reused' | 'skipped' = 'skipped';
   let reviewAction: 'submitted' | 'reused' | 'skipped' = 'skipped';
   let reportId: string | null = null;
   let reviewId: string | null = null;
+  let reviewReusePosture: FinishTaskServiceResponse['result']['review_reuse_posture'];
+  let ignoredReviewIds: string[] = [];
 
   const existingReviews = await listReviewsForTask(cwd, taskFile.taskId);
   const existingReports = await listReportsForTask(cwd, taskFile.taskId);
-  const myReview = existingReviews.find((review) => review.reviewer_agent_id === agentId);
+  const myReviews = existingReviews
+    .filter((review) => review.reviewer_agent_id === agentId)
+    .sort(newestFirst);
+  const reusableReview = myReviews.find((review) => reviewMatchesRequestedVerdict(review, options.verdict));
+  const staleRejectedReviews = myReviews.filter(isRejectedReview);
   const myReport = existingReports.find((report) => report.agent_id === agentId);
-  const completionMode = options.verdict !== undefined || Boolean(myReview) || (!myReport && taskStatus === 'in_review')
+  const completionMode = options.verdict !== undefined || Boolean(reusableReview) || (!myReport && taskStatus === 'in_review')
     ? 'review'
     : 'report';
 
   if (completionMode === 'review') {
-    if (myReview) {
+    if (reusableReview) {
       reviewAction = 'reused';
-      reviewId = myReview.review_id;
+      reviewId = reusableReview.review_id;
+      reviewReusePosture = isAcceptedReview(reusableReview)
+        ? 'reused_valid_acceptance'
+        : 'reused_rejection';
     } else {
       if (taskStatus !== 'in_review') {
         return {
@@ -407,6 +448,12 @@ export async function finishTaskService(
       }
       reviewAction = 'submitted';
       reviewId = (reviewResult.result as { review_id?: string }).review_id ?? null;
+      ignoredReviewIds = options.verdict && options.verdict !== 'rejected'
+        ? staleRejectedReviews.map((review) => review.review_id)
+        : [];
+      if (ignoredReviewIds.length > 0) {
+        reviewReusePosture = 'submitted_superseding_stale_rejection';
+      }
     }
     reportAction = myReport ? 'reused' : 'skipped';
     reportId = myReport?.report_id ?? null;
@@ -512,8 +559,13 @@ export async function finishTaskService(
         },
       };
     }
-    reviewAction = myReview ? 'reused' : 'skipped';
-    reviewId = myReview?.review_id ?? null;
+    reviewAction = reusableReview ? 'reused' : 'skipped';
+    reviewId = reusableReview?.review_id ?? null;
+    if (reusableReview) {
+      reviewReusePosture = isAcceptedReview(reusableReview)
+        ? 'reused_valid_acceptance'
+        : 'reused_rejection';
+    }
   }
 
   let evidence = await inspectTaskEvidence(cwd, taskNumber, options.store);
@@ -631,6 +683,12 @@ export async function finishTaskService(
     criteria_proof_action: criteriaProofAction,
   };
 
+  if (reviewReusePosture) {
+    output.review_reuse_posture = reviewReusePosture;
+  }
+  if (ignoredReviewIds.length > 0) {
+    output.ignored_review_ids = ignoredReviewIds;
+  }
   if (admissionId) {
     output.admission_id = admissionId;
   }

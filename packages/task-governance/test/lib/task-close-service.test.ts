@@ -111,4 +111,72 @@ describe('task close service', () => {
       'Task lacks an Evidence Admission result; run `narada task evidence admit <task-number> --by <id>` first',
     ]);
   });
+
+  it('uses the current inserted Evidence Admission when admission timestamps tie', async () => {
+    writeTask(7083);
+    const taskId = '20260425-7083-service-close';
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.upsertLifecycle({
+        task_id: taskId,
+        task_number: 7083,
+        status: 'in_review',
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        closure_mode: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: '2026-04-25T00:00:00Z',
+      });
+      for (const [suffix, verdict, eligible] of [
+        ['rejected', 'rejected', null],
+        ['admitted', 'admitted', 'closed'],
+      ] as const) {
+        store.upsertEvidenceBundle({
+          bundle_id: `evb-7083-${suffix}`,
+          task_id: taskId,
+          task_number: 7083,
+          report_ids_json: '[]',
+          verification_run_ids_json: '[]',
+          acceptance_criteria_json: JSON.stringify({ all_checked: true, unchecked_count: 0 }),
+          review_ids_json: '[]',
+          changed_files_json: '[]',
+          residuals_json: '[]',
+          assembled_at: '2026-04-25T00:00:01Z',
+          assembled_by: 'tester',
+        });
+        store.upsertEvidenceAdmissionResult({
+          admission_id: `ear-7083-${suffix}`,
+          bundle_id: `evb-7083-${suffix}`,
+          task_id: taskId,
+          task_number: 7083,
+          verdict,
+          methods_json: JSON.stringify(['admission']),
+          blockers_json: verdict === 'rejected' ? JSON.stringify(['stale failure']) : '[]',
+          lifecycle_eligible_status: eligible,
+          admitted_at: '2026-04-25T00:00:02Z',
+          admitted_by: 'tester',
+          confirmation_json: '{}',
+        });
+      }
+    } finally {
+      store.db.close();
+    }
+
+    const result = await closeTaskService({
+      taskNumber: '7083',
+      by: 'a2',
+      cwd: tempDir,
+      mode: 'operator_direct',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      admission_id: 'ear-7083-admitted',
+      new_status: 'closed',
+    });
+  });
 });

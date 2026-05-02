@@ -46,22 +46,40 @@ function setupRepo(tempDir: string, roster?: unknown) {
       ],
     }, null, 2),
   );
+  const rosterData = roster as { agents?: Array<{ agent_id: string; role: string; capabilities: string[]; first_seen_at: string; last_active_at: string; status?: string; task?: number | null; last_done?: number | null; updated_at?: string }> } | undefined;
+  const agents = rosterData?.agents ?? [
+    {
+      agent_id: 'impl-agent',
+      role: 'implementer',
+      capabilities: ['claim'],
+      first_seen_at: '2026-01-01T00:00:00Z',
+      last_active_at: '2026-01-01T00:00:00Z',
+    },
+    {
+      agent_id: 'reviewer-agent',
+      role: 'reviewer',
+      capabilities: ['derive', 'propose'],
+      first_seen_at: '2026-01-01T00:00:00Z',
+      last_active_at: '2026-01-01T00:00:00Z',
+      status: 'idle',
+      task: null,
+      last_done: null,
+      updated_at: '2026-01-01T00:00:00Z',
+    },
+  ];
   const store = openTaskLifecycleStore(tempDir);
   try {
-    for (const agent of (roster as { agents?: Array<{ agent_id: string; role?: string; capabilities?: string[] }> } | undefined)?.agents ?? [
-      { agent_id: 'impl-agent', role: 'implementer', capabilities: ['claim'] },
-      { agent_id: 'reviewer-agent', role: 'reviewer', capabilities: ['derive', 'propose'] },
-    ]) {
+    for (const agent of agents) {
       store.upsertRosterEntry({
         agent_id: agent.agent_id,
-        role: agent.role ?? 'implementer',
-        capabilities_json: JSON.stringify(agent.capabilities ?? []),
-        first_seen_at: '2026-01-01T00:00:00Z',
-        last_active_at: '2026-01-01T00:00:00Z',
-        status: 'idle',
-        task_number: null,
-        last_done: null,
-        updated_at: '2026-01-01T00:00:00Z',
+        role: agent.role,
+        capabilities_json: JSON.stringify(agent.capabilities),
+        first_seen_at: agent.first_seen_at,
+        last_active_at: agent.last_active_at,
+        status: agent.status ?? 'idle',
+        task_number: agent.task ?? null,
+        last_done: agent.last_done ?? null,
+        updated_at: agent.updated_at ?? agent.last_active_at,
       });
     }
   } finally {
@@ -384,6 +402,73 @@ describe('task finish operator', () => {
       expect(data.error).toContain('--verdict');
     });
 
+    it('submits an accepted repair review instead of reusing a stale rejected review id', async () => {
+      await taskClaimCommand({ taskNumber: '999', agent: 'impl-agent', cwd: tempDir, format: 'json' });
+
+      const { taskReportCommand } = await import('../../src/commands/task-report.js');
+      await taskReportCommand({
+        taskNumber: '999',
+        agent: 'impl-agent',
+        summary: 'Initial implementation',
+        changedFiles: 'src/x.ts',
+        verification: JSON.stringify([{ command: 'pnpm test', result: 'pass' }]),
+        cwd: tempDir,
+        format: 'json',
+      });
+
+      const rejected = await taskFinishCommand({
+        taskNumber: '999',
+        agent: 'reviewer-agent',
+        verdict: 'rejected',
+        findings: JSON.stringify([{ severity: 'blocking', description: 'needs repair' }]),
+        cwd: tempDir,
+        format: 'json',
+      });
+      expect(rejected.exitCode).toBe(ExitCode.SUCCESS);
+      const rejectedId = (rejected.result as Record<string, unknown>).review_id;
+      expect(rejectedId).toBeTruthy();
+
+      await taskClaimCommand({ taskNumber: '999', agent: 'impl-agent', cwd: tempDir, format: 'json' });
+      await taskReportCommand({
+        taskNumber: '999',
+        agent: 'impl-agent',
+        summary: 'Repair complete',
+        changedFiles: 'src/x.ts',
+        verification: JSON.stringify([{ command: 'pnpm test', result: 'pass after repair' }]),
+        cwd: tempDir,
+        format: 'json',
+      });
+
+      const repaired = await taskFinishCommand({
+        taskNumber: '999',
+        agent: 'reviewer-agent',
+        verdict: 'accepted',
+        cwd: tempDir,
+        format: 'json',
+        close: true,
+      });
+
+      expect(repaired.exitCode).toBe(ExitCode.SUCCESS);
+      const data = repaired.result as Record<string, unknown>;
+      expect(data.review_action).toBe('submitted');
+      expect(data.review_id).toBeTruthy();
+      expect(data.review_id).not.toBe(rejectedId);
+      expect(data.review_reuse_posture).toBe('submitted_superseding_stale_rejection');
+      expect(data.ignored_review_ids).toEqual([rejectedId]);
+      expect(data.close_action).toBe('closed');
+
+      const store = openTaskLifecycleStore(tempDir);
+      try {
+        const reviews = store.listReviews('20260420-999-test-task');
+        expect(reviews[0]?.review_id).toBe(data.review_id);
+        expect(reviews[0]?.verdict).toBe('accepted');
+        expect(reviews.some((review) => review.review_id === rejectedId && review.verdict === 'rejected')).toBe(true);
+        expect(store.getLatestEvidenceAdmissionResult('20260420-999-test-task')?.verdict).toBe('admitted');
+      } finally {
+        store.db.close();
+      }
+    });
+
     it('reuses existing review and clears roster', async () => {
       // Set up: claim, report, transition to in_review
       await taskClaimCommand({ taskNumber: '999', agent: 'impl-agent', cwd: tempDir, format: 'json' });
@@ -420,6 +505,7 @@ describe('task finish operator', () => {
       expect(result.exitCode).toBe(ExitCode.SUCCESS);
       const data = result.result as Record<string, unknown>;
       expect(data.review_action).toBe('reused');
+      expect(data.review_reuse_posture).toBe('reused_valid_acceptance');
 
       // Only one review file
       const store = openTaskLifecycleStore(tempDir);
