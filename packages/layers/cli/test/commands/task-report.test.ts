@@ -32,6 +32,7 @@ function setupRepo(tempDir: string) {
         { agent_id: 'other-agent', role: 'implementer', capabilities: ['claim'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
         { agent_id: 'builder', role: 'builder', capabilities: ['claim', 'execute'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
         { agent_id: 'architect', role: 'architect', capabilities: ['propose', 'review'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
+        { agent_id: 'implementer-reviewer', role: 'implementer', capabilities: ['claim', 'review'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
         { agent_id: 'reviewer-1', role: 'reviewer', capabilities: ['review'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
       ],
     }, null, 2),
@@ -43,6 +44,7 @@ function setupRepo(tempDir: string) {
       { agent_id: 'other-agent', role: 'implementer', capabilities: ['claim'] },
       { agent_id: 'builder', role: 'builder', capabilities: ['claim', 'execute'] },
       { agent_id: 'architect', role: 'architect', capabilities: ['propose', 'review'] },
+      { agent_id: 'implementer-reviewer', role: 'implementer', capabilities: ['claim', 'review'] },
       { agent_id: 'reviewer-1', role: 'reviewer', capabilities: ['review'] },
     ]) {
       store.upsertRosterEntry({
@@ -324,6 +326,36 @@ describe('task report operator', () => {
       },
     });
     expect(listDirectedObligations(tempDir, 'reviewer-1', 'reviewer')).toHaveLength(1);
+  });
+
+  it('creates a review obligation for a non-operator role composed with review capability', async () => {
+    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
+
+    const result = await taskReportCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      reviewer: 'implementer-reviewer',
+      summary: 'Ready for composed reviewer',
+      verification: JSON.stringify([{ command: 'pnpm test', result: 'passed' }]),
+      residuals: JSON.stringify([]),
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      review_target: {
+        requested: 'implementer-reviewer',
+        target_agent_id: 'implementer-reviewer',
+        target_role: 'implementer',
+        review_authority: {
+          authority_kind: 'typed_composition',
+          accepted_capabilities: ['review'],
+        },
+      },
+    });
+    expect(listDirectedObligations(tempDir, 'implementer-reviewer', 'implementer')).toHaveLength(1);
   });
 
   it('does not create a report-time review obligation for a target task review would refuse', async () => {

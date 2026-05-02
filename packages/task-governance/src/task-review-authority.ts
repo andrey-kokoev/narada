@@ -6,7 +6,7 @@ export const TASK_REVIEW_AUTHORITY_MODEL = {
   review_request: 'directed_obligation_routing_signal',
   operator_delegation: 'explicit_task_authority_admission',
   allowed_roles: ['reviewer', 'admin'],
-  architect_capabilities: ['review', 'task_review', 'architect_as_reviewer'],
+  typed_composition_capabilities: ['review', 'task_review', 'architect_as_reviewer'],
   operator_capabilities: ['review', 'task_review', 'operator_delegation'],
 } as const;
 
@@ -43,7 +43,7 @@ export type ReviewTargetResolution =
   | ResolvedReviewTarget
   | { ok: false; error: string; review_authority_repair?: ReviewAuthorityRepair };
 
-const ARCHITECT_REVIEW_CAPABILITIES = new Set<string>(TASK_REVIEW_AUTHORITY_MODEL.architect_capabilities);
+const TYPED_REVIEW_CAPABILITIES = new Set<string>(TASK_REVIEW_AUTHORITY_MODEL.typed_composition_capabilities);
 const OPERATOR_REVIEW_CAPABILITIES = new Set<string>(TASK_REVIEW_AUTHORITY_MODEL.operator_capabilities);
 
 export function explainTaskReviewAuthority(agent: AgentRosterEntry): ReviewAuthorityAdmission {
@@ -56,17 +56,6 @@ export function explainTaskReviewAuthority(agent: AgentRosterEntry): ReviewAutho
       accepted_capabilities: capabilities,
     };
   }
-  if (agent.role === 'architect') {
-    const admittedCapabilities = capabilities.filter((capability) => ARCHITECT_REVIEW_CAPABILITIES.has(capability));
-    if (admittedCapabilities.length > 0) {
-      return {
-        admitted: true,
-        authority_kind: 'typed_composition',
-        rationale: `architect role is composed with review capability '${admittedCapabilities[0]}'`,
-        accepted_capabilities: admittedCapabilities,
-      };
-    }
-  }
   if (agent.role === 'operator') {
     const admittedCapabilities = capabilities.filter((capability) => OPERATOR_REVIEW_CAPABILITIES.has(capability));
     if (admittedCapabilities.length > 0) {
@@ -77,6 +66,15 @@ export function explainTaskReviewAuthority(agent: AgentRosterEntry): ReviewAutho
         accepted_capabilities: admittedCapabilities,
       };
     }
+  }
+  const admittedCapabilities = capabilities.filter((capability) => TYPED_REVIEW_CAPABILITIES.has(capability));
+  if (admittedCapabilities.length > 0) {
+    return {
+      admitted: true,
+      authority_kind: 'typed_composition',
+      rationale: `role '${agent.role}' is composed with review capability '${admittedCapabilities[0]}'`,
+      accepted_capabilities: admittedCapabilities,
+    };
   }
   return {
     admitted: false,
@@ -95,11 +93,9 @@ export function reviewerAuthorityRepair(args: {
   reason: ReviewAuthorityRepairReason;
   role?: string;
 }): ReviewAuthorityRepair {
-  const authorityCommand = args.role === 'architect'
-    ? `narada task roster add ${args.agentId} --role architect --capability review`
-    : args.role === 'operator'
-      ? `narada task roster add ${args.agentId} --role operator --capability operator_delegation`
-      : `narada task roster add ${args.agentId} --role reviewer --capability review`;
+  const authorityCommand = args.role === 'operator'
+    ? `narada task roster add ${args.agentId} --role operator --capability operator_delegation`
+    : `narada task roster add ${args.agentId} --role ${args.role ?? 'reviewer'} --capability review`;
   return {
     reason: args.reason,
     commands: [

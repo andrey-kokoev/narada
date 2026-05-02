@@ -49,12 +49,13 @@ function setupRepo(tempDir: string): void {
       agents: [
         { agent_id: 'worker', role: 'implementer', capabilities: ['claim'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
         { agent_id: 'reviewer', role: 'reviewer', capabilities: ['review'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
+        { agent_id: 'implementer-reviewer', role: 'implementer', capabilities: ['claim', 'review'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
       ],
     }, null, 2),
   );
   const store = openTaskLifecycleStore(tempDir);
   try {
-    for (const agent of ['worker', 'reviewer', 'architect-reviewer', 'architect-unadmitted']) {
+    for (const agent of ['worker', 'reviewer', 'implementer-reviewer', 'architect-reviewer', 'architect-unadmitted']) {
       store.upsertRosterEntry({
         agent_id: agent,
         role: agent === 'reviewer'
@@ -63,7 +64,7 @@ function setupRepo(tempDir: string): void {
             ? 'architect'
             : 'implementer',
         capabilities_json: JSON.stringify(
-          agent === 'reviewer' || agent === 'architect-reviewer'
+          agent === 'reviewer' || agent === 'implementer-reviewer' || agent === 'architect-reviewer'
             ? ['review']
             : ['claim'],
         ),
@@ -786,6 +787,36 @@ describe('task review command', () => {
     const store = openTaskLifecycleStore(tempDir);
     try {
       expect(store.listReviews('20260420-1002-architect-review-task')[0]?.reviewer_agent_id).toBe('architect-reviewer');
+    } finally {
+      store.db.close();
+    }
+  });
+
+  it('admits a non-operator working role composed with review capability', async () => {
+    await claimTaskService({ taskNumber: '1002', agent: 'worker', cwd: tempDir });
+    await releaseTaskService({ taskNumber: '1002', reason: 'completed', cwd: tempDir });
+
+    const result = await taskReviewCommand({
+      taskNumber: '1002',
+      agent: 'implementer-reviewer',
+      verdict: 'accepted',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      verdict: 'accepted',
+      new_status: 'closed',
+      review_authority: {
+        authority_kind: 'typed_composition',
+        accepted_capabilities: ['review'],
+      },
+    });
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      expect(store.listReviews('20260420-1002-architect-review-task')[0]?.reviewer_agent_id).toBe('implementer-reviewer');
     } finally {
       store.db.close();
     }
