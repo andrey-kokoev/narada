@@ -49,9 +49,9 @@ describe('canonical outbox', () => {
     const compose = await outboxComposeCommand({
       cwd,
       targetKind: 'site_inbox',
-      targetRef: 'utz-client-service',
+      targetRef: 'client-site',
       transport: 'filesystem_drop',
-      payloadBody: 'hello utz',
+      payloadBody: 'hello client-site',
       authorityLevel: 'operator_confirmed',
       principal: 'andrey',
       routeId: 'route_123',
@@ -68,7 +68,7 @@ describe('canonical outbox', () => {
     expect(existsSync(join(cwd, '.ai', 'canonical-outbox.json'))).toBe(true);
 
     const preview = await outboxPreviewCommand({ cwd, outboxId: item.outbox_id, format: 'json' }, createMockContext());
-    expect((preview.result as { rendering: string }).rendering).toContain('hello utz');
+    expect((preview.result as { rendering: string }).rendering).toContain('hello client-site');
 
     const approve = await outboxApproveCommand({ cwd, outboxId: item.outbox_id, by: 'operator', format: 'json' }, createMockContext());
     expect((approve.result as { item: { status: string; approved_by: string } }).item.status).toBe('approved');
@@ -115,7 +115,7 @@ describe('canonical outbox', () => {
     const first = await outboxComposeCommand({
       cwd,
       targetKind: 'site_inbox',
-      targetRef: 'utz',
+      targetRef: 'client-site',
       transport: 'filesystem_drop',
       payloadBody: 'old',
       by: 'operator',
@@ -124,7 +124,7 @@ describe('canonical outbox', () => {
     const second = await outboxComposeCommand({
       cwd,
       targetKind: 'site_inbox',
-      targetRef: 'utz',
+      targetRef: 'client-site',
       transport: 'filesystem_drop',
       payloadBody: 'new',
       supersedes: (first.result as { item: { outbox_id: string } }).item.outbox_id,

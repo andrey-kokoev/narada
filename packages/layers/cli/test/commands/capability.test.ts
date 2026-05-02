@@ -64,14 +64,14 @@ describe('capability consent registry', () => {
     const cwd = await tempRepo();
     const grantResult = await capabilityGrantCommand({
       cwd,
-      site: 'utz',
+      site: 'client-site',
       principal: 'andrey',
       agent: 'architect',
       kind: 'filesystem.write',
       scope: '{"root":".narada","mode":"local"}',
       allow: 'write_file,create_directory',
       deny: 'delete_tree',
-      credentialRef: 'env:NARADA_UTZ_TOKEN',
+      credentialRef: 'env:NARADA_CLIENT_TOKEN',
       evidenceRef: 'inbox:env_123',
       expiresAt: '2099-01-01T00:00:00.000Z',
       by: 'andrey',
@@ -81,13 +81,13 @@ describe('capability consent registry', () => {
     expect(grantResult.exitCode).toBe(ExitCode.SUCCESS);
     const grantData = grantResult.result as { grant: { grant_id: string; credential_ref: string; allowed_actions: string[] }; secret_values_stored: boolean };
     expect(grantData.secret_values_stored).toBe(false);
-    expect(grantData.grant.credential_ref).toBe('env:NARADA_UTZ_TOKEN');
+    expect(grantData.grant.credential_ref).toBe('env:NARADA_CLIENT_TOKEN');
     expect(grantData.grant.allowed_actions).toEqual(['write_file', 'create_directory']);
     expect(existsSync(join(cwd, '.ai', 'capability-consent-registry.json'))).toBe(true);
 
     const listResult = await capabilityListCommand({
       cwd,
-      site: 'utz',
+      site: 'client-site',
       status: 'active',
       format: 'json',
     }, createMockContext());
@@ -128,7 +128,7 @@ describe('capability consent registry', () => {
     const cwd = await tempRepo();
     const result = await capabilityGrantCommand({
       cwd,
-      site: 'utz',
+      site: 'client-site',
       principal: 'andrey',
       kind: 'github.repo',
       allow: 'push',
@@ -226,7 +226,7 @@ describe('capability consent registry', () => {
     const cwd = await tempRepo();
     const grantResult = await capabilityGrantCommand({
       cwd,
-      site: 'utz',
+      site: 'client-site',
       principal: 'andrey',
       kind: 'site.delivery',
       allow: 'deliver_file',

@@ -45,10 +45,10 @@ describe('routing addressing registry', () => {
     const add = await routingAddCommand({
       cwd,
       targetKind: 'site',
-      targetRef: 'utz-client-service',
+      targetRef: 'client-site',
       authorityLocus: 'client_service',
       addressKind: 'file_drop',
-      addressRef: '/tmp/utz/.narada/.ai/inbox-drop',
+      addressRef: '/tmp/client-site/.narada/.ai/inbox-drop',
       transport: 'filesystem',
       capabilityKind: 'filesystem.write',
       priority: 10,
@@ -74,7 +74,7 @@ describe('routing addressing registry', () => {
     const resolved = await routingResolveCommand({
       cwd,
       targetKind: 'site',
-      targetRef: 'utz-client-service',
+      targetRef: 'client-site',
       format: 'json',
     }, createMockContext());
     expect(resolved.exitCode).toBe(ExitCode.SUCCESS);
@@ -93,7 +93,7 @@ describe('routing addressing registry', () => {
     await routingAddCommand({
       cwd,
       targetKind: 'site',
-      targetRef: 'utz',
+      targetRef: 'client-site',
       authorityLocus: 'client_service',
       addressKind: 'file_drop',
       addressRef: '/tmp/slow',
@@ -105,7 +105,7 @@ describe('routing addressing registry', () => {
     const fast = await routingAddCommand({
       cwd,
       targetKind: 'site',
-      targetRef: 'utz',
+      targetRef: 'client-site',
       authorityLocus: 'client_service',
       addressKind: 'file_drop',
       addressRef: '/tmp/fast',
@@ -119,7 +119,7 @@ describe('routing addressing registry', () => {
     const resolved = await routingResolveCommand({
       cwd,
       targetKind: 'site',
-      targetRef: 'utz',
+      targetRef: 'client-site',
       transport: 'filesystem',
       format: 'json',
     }, createMockContext());
@@ -133,7 +133,7 @@ describe('routing addressing registry', () => {
     await routingAddCommand({
       cwd,
       targetKind: 'site',
-      targetRef: 'utz',
+      targetRef: 'client-site',
       authorityLocus: 'client_service',
       addressKind: 'file_drop',
       addressRef: '/tmp/inactive',
@@ -146,7 +146,7 @@ describe('routing addressing registry', () => {
     const resolved = await routingResolveCommand({
       cwd,
       targetKind: 'site',
-      targetRef: 'utz',
+      targetRef: 'client-site',
       format: 'json',
     }, createMockContext());
     expect(resolved.exitCode).toBe(ExitCode.GENERAL_ERROR);

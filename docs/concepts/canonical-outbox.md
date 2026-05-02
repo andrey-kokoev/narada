@@ -32,7 +32,7 @@ Use the disposition terms precisely:
 ```bash
 narada outbox compose \
   --target-kind site_inbox \
-  --target-ref utz-client-service \
+  --target-ref client-site \
   --transport filesystem_drop \
   --payload-body "message" \
   --route-id route_... \

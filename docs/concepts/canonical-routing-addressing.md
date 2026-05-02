@@ -13,17 +13,17 @@ Routing is not Capability Consent. A route may name the capability kind required
 ```bash
 narada routing add \
   --target-kind site \
-  --target-ref utz-client-service \
+  --target-ref client-site \
   --authority-locus client_service \
   --address-kind file_drop \
-  --address-ref /path/to/Utz/.narada/.ai/inbox-drop \
+  --address-ref /path/to/client-site/.narada/.ai/inbox-drop \
   --transport filesystem \
   --capability-kind filesystem.write \
   --priority 10 \
   --by operator
 
 narada routing list --target-kind site
-narada routing resolve --target-kind site --target-ref utz-client-service
+narada routing resolve --target-kind site --target-ref client-site
 narada routing explain <route-id>
 ```
 

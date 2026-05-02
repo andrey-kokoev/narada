@@ -2,7 +2,7 @@
 
 The Canonical Capability Consent Registry is the Site-local authority record for granted capabilities. It answers: who granted what capability, to which principal/Site/agent, for what scope, with which allowed and denied actions, using which credential reference, until when, and under what revocation posture.
 
-The registry is not a secret store. It may store references such as `env:NARADA_UTZ_TOKEN`, `credential-manager:Narada/pc/github`, `keychain:narada/mailbox`, `pass:narada/site`, `vault:path`, or `config-ref:...`. It must not store raw secret values.
+The registry is not a secret store. It may store references such as `env:NARADA_CLIENT_TOKEN`, `credential-manager:Narada/pc/github`, `keychain:narada/mailbox`, `pass:narada/site`, `vault:path`, or `config-ref:...`. It must not store raw secret values.
 
 Inbox envelopes may carry capability metadata as inert crossing evidence or requests. Such metadata is not a local grant until admitted into this registry or an equivalent local capability authority. See [`canonical-inbox.md`](canonical-inbox.md#capability-metadata).
 

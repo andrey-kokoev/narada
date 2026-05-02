@@ -42,7 +42,7 @@ describe('sitesBootstrapClientCommand', () => {
     const workspace = await tempWorkspace('narada-client-dry-');
     const result = await sitesBootstrapClientCommand({
       workspace,
-      siteId: 'utz',
+      siteId: 'client-site',
       format: 'json',
     }, createMockContext());
 
@@ -58,11 +58,11 @@ describe('sitesBootstrapClientCommand', () => {
     };
     expect(data.status).toBe('dry_run');
     expect(data.mutation_performed).toBe(false);
-    expect(data.site_id).toBe('utz');
+    expect(data.site_id).toBe('client-site');
     expect(data.site_root).toBe(join(workspace, '.narada'));
     expect(data.sync_posture).toBe('local_non_git');
     expect(data.directories).toContain(join(workspace, '.narada', '.ai', 'inbox-drop'));
-    expect(data.validation_commands[0]).toContain('narada sites doctor utz --kind client');
+    expect(data.validation_commands[0]).toContain('narada sites doctor client-site --kind client');
     expect(existsSync(join(workspace, '.narada'))).toBe(false);
   });
 
@@ -70,7 +70,7 @@ describe('sitesBootstrapClientCommand', () => {
     const workspace = await tempWorkspace('narada-client-exec-');
     const result = await sitesBootstrapClientCommand({
       workspace,
-      siteId: 'utz',
+      siteId: 'client-site',
       sync: 'onedrive_non_git',
       execute: true,
       format: 'json',
@@ -114,7 +114,7 @@ describe('sitesBootstrapClientCommand', () => {
     expect(config.governance.operator_surfaces).toEqual([]);
     expect(config.governance.session_bindings).toEqual([]);
 
-    const doctor = await sitesDoctorCommand('utz', {
+    const doctor = await sitesDoctorCommand('client-site', {
       kind: 'client',
       root: workspace,
       format: 'json',
@@ -147,13 +147,13 @@ describe('sitesBootstrapClientCommand', () => {
     const workspace = await tempWorkspace('narada-client-bad-');
     await sitesBootstrapClientCommand({
       workspace,
-      siteId: 'utz',
+      siteId: 'client-site',
       execute: true,
       format: 'json',
     }, createMockContext());
     await rm(join(workspace, '.narada', '.ai', 'inbox-drop'), { recursive: true, force: true });
 
-    const doctor = await sitesDoctorCommand('utz', {
+    const doctor = await sitesDoctorCommand('client-site', {
       kind: 'client',
       root: workspace,
       format: 'json',
@@ -167,13 +167,13 @@ describe('sitesBootstrapClientCommand', () => {
     const workspace = await tempWorkspace('narada-client-root-artifacts-');
     await sitesBootstrapClientCommand({
       workspace,
-      siteId: 'utz',
+      siteId: 'client-site',
       execute: true,
       format: 'json',
     }, createMockContext());
     await writeFile(join(workspace, 'AGENTS.md'), 'misplaced root governance\n', 'utf8');
 
-    const doctor = await sitesDoctorCommand('utz', {
+    const doctor = await sitesDoctorCommand('client-site', {
       kind: 'client',
       root: workspace,
       format: 'json',
@@ -190,7 +190,7 @@ describe('sitesBootstrapClientCommand', () => {
     const workspace = await tempWorkspace('narada-client-broken-cli-');
     await sitesBootstrapClientCommand({
       workspace,
-      siteId: 'utz',
+      siteId: 'client-site',
       sync: 'onedrive_non_git',
       execute: true,
       format: 'json',
@@ -206,7 +206,7 @@ describe('sitesBootstrapClientCommand', () => {
       },
     }), 'utf8');
 
-    const doctor = await sitesDoctorCommand('utz', {
+    const doctor = await sitesDoctorCommand('client-site', {
       kind: 'client',
       root: workspace,
       format: 'json',
