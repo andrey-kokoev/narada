@@ -1,0 +1,27 @@
+{
+  "envelope_id": "env_ddf1c8a6-dee7-430f-a7f0-99f0eda3033f",
+  "received_at": "2026-05-02T01:00:13.499Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey-kevin:mutating-work-next-accidental-claim"
+  },
+  "target_locus": "narada-proper.architect",
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "CAPA: work-next check accidentally claimed an underspecified task",
+    "summary": "While checking what Bob would see next, I ran mutating work-next instead of a read-only inspection surface. It claimed task 89 for Bob before returning blocked on underspecified handoff. I released the claim, but the pathway shows that inspection and mutation remain too easy to confuse.",
+    "evidence": [
+      "Command returned primary task 89 with pulled=true and assignment to narada-andrey.Bob, then blocked because Required Work was placeholder text.",
+      "Corrective action released task 89 back to opened state and committed release evidence in narada-andrey commit 23035d2."
+    ],
+    "proposal": [
+      "Make architect-loop and availability checks default to read-only posture, name mutating commands more explicitly, and require confirmation or an explicit --mutate flag when a command can claim work as another agent."
+    ],
+    "recommendation": "Add a safe one-command read-only work availability surface and tests proving it cannot mutate assignments."
+  },
+  "status": "received"
+}

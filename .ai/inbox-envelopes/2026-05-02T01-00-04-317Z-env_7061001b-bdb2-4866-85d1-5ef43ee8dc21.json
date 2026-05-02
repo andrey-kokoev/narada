@@ -1,0 +1,27 @@
+{
+  "envelope_id": "env_7061001b-bdb2-4866-85d1-5ef43ee8dc21",
+  "received_at": "2026-05-02T01:00:04.317Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "narada-andrey-kevin:review-note-capa-noise"
+  },
+  "target_locus": "narada-proper.architect",
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "title": "CAPA trigger heuristics treat benign review notes as recurrence risk",
+    "summary": "During task 98 accepted_with_notes review, non-blocking notes that merely described authority/lifecycle verification were classified as lifecycle_authority_defect and produced a CAPA recommendation. This creates false-positive CAPA pressure and can desensitize operators to real CAPA triggers.",
+    "evidence": [
+      "Task 98 review closed successfully, but review_diagnostics marked note findings as lifecycle_authority_defect because text contained authority/lifecycle terms.",
+      "The review command recommended CAPA despite no blocking finding and no actual recurrence defect in the reviewed work."
+    ],
+    "proposal": [
+      "Review diagnostics should distinguish semantic mention of authority/lifecycle from an asserted defect. CAPA heuristics should require explicit defect posture, blocking severity, or structured trigger fields, not keyword presence inside benign review notes."
+    ],
+    "recommendation": "Add regression coverage for accepted review notes that mention authority/lifecycle without creating CAPA recommendation."
+  },
+  "status": "received"
+}
