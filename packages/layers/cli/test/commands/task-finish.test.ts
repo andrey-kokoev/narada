@@ -46,6 +46,27 @@ function setupRepo(tempDir: string, roster?: unknown) {
       ],
     }, null, 2),
   );
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    for (const agent of (roster as { agents?: Array<{ agent_id: string; role?: string; capabilities?: string[] }> } | undefined)?.agents ?? [
+      { agent_id: 'impl-agent', role: 'implementer', capabilities: ['claim'] },
+      { agent_id: 'reviewer-agent', role: 'reviewer', capabilities: ['derive', 'propose'] },
+    ]) {
+      store.upsertRosterEntry({
+        agent_id: agent.agent_id,
+        role: agent.role ?? 'implementer',
+        capabilities_json: JSON.stringify(agent.capabilities ?? []),
+        first_seen_at: '2026-01-01T00:00:00Z',
+        last_active_at: '2026-01-01T00:00:00Z',
+        status: 'idle',
+        task_number: null,
+        last_done: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+    }
+  } finally {
+    store.db.close();
+  }
 
   writeFileSync(
     join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
@@ -94,7 +115,7 @@ describe('task finish operator', () => {
   });
 
   afterEach(() => {
-    rmSync(tempDir, { recursive: true, force: true });
+    rmSync(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   describe('implementer finish', () => {
@@ -119,6 +140,40 @@ describe('task finish operator', () => {
       expect(data.report_id).toBeTruthy();
       expect(data.roster_transition).toBe('done');
       expect(data.evidence_verdict).toBe('needs_review');
+    });
+
+    it('submits report from a JSON report file and creates reviewer obligation', async () => {
+      await taskClaimCommand({ taskNumber: '999', agent: 'impl-agent', cwd: tempDir, format: 'json' });
+      const reportFile = join(tempDir, 'task-999-report.json');
+      writeFileSync(reportFile, JSON.stringify({
+        summary: 'Implemented via file-backed finish',
+        reviewer: 'reviewer-agent',
+        changed_files: ['src/finished.ts'],
+        verification: [{ command: 'pnpm test -- task-finish', result: 'passed' }],
+        residuals: [],
+      }));
+
+      const result = await taskFinishCommand({
+        taskNumber: '999',
+        agent: 'impl-agent',
+        reportFile,
+        cwd: tempDir,
+        format: 'json',
+      });
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      const data = result.result as Record<string, unknown>;
+      expect(data.report_action).toBe('submitted');
+      const store = openTaskLifecycleStore(tempDir);
+      try {
+        const reports = store.listReportRecords('20260420-999-test-task');
+        expect(JSON.parse(reports[0]!.report_json).changed_files).toEqual(['src/finished.ts']);
+        const obligations = store.listDirectedObligationsForTarget('reviewer-agent', 'reviewer', 'open');
+        expect(obligations).toHaveLength(1);
+        expect(obligations[0]!.source_ref).toBe(data.report_id);
+      } finally {
+        store.db.close();
+      }
     });
 
     it('surfaces bounded authority inversion warnings for artifact-first changed files', async () => {

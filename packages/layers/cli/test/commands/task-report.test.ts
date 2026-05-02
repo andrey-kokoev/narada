@@ -5,6 +5,7 @@ vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskReportCommand } from '../../src/commands/task-report.js';
+import { taskReviewRequestCommand } from '../../src/commands/task-review-request.js';
 import { taskClaimCommand } from '../../src/commands/task-claim.js';
 import { taskEvidenceCommand } from '../../src/commands/task-evidence.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
@@ -130,7 +131,7 @@ describe('task report operator', () => {
   });
 
   afterEach(() => {
-    rmSync(tempDir, { recursive: true, force: true });
+    rmSync(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   it('submits report for claimed task and transitions to in_review', async () => {
@@ -179,13 +180,16 @@ describe('task report operator', () => {
     expect(assignment.assignments[0].release_reason).toBe('completed');
     expect(assignment.assignments[0].released_at).not.toBeNull();
 
-    // Roster updated
-    const rosterRaw = readFileSync(join(tempDir, '.ai', 'agents', 'roster.json'), 'utf8');
-    const roster = JSON.parse(rosterRaw);
-    const agent = roster.agents.find((a: { agent_id: string }) => a.agent_id === 'test-agent');
-    expect(agent.status).toBe('done');
-    expect(agent.task).toBeNull();
-    expect(agent.last_done).toBe(999);
+    // Roster authority updated
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      const agent = store.getRosterEntry('test-agent');
+      expect(agent?.status).toBe('done');
+      expect(agent?.task_number).toBeNull();
+      expect(agent?.last_done).toBe(999);
+    } finally {
+      store.db.close();
+    }
   });
 
   it('creates a directed review obligation for an exact reviewer identity', async () => {
@@ -228,6 +232,68 @@ describe('task report operator', () => {
     expect(JSON.parse(obligations[0]!.consumption_rule_json)).toMatchObject({
       consume_on: expect.arrayContaining(['task_review', 'task_defer', 'delegation', 'rejection', 'completion']),
     });
+  });
+
+  it('submits a report from a JSON report file', async () => {
+    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
+    const reportFile = join(tempDir, 'task-999-report.json');
+    writeFileSync(reportFile, JSON.stringify({
+      summary: 'Implemented from report file',
+      changed_files: ['src/file-backed.ts'],
+      verification: [{ command: 'pnpm test -- task-report', result: 'passed' }],
+      residuals: ['none'],
+    }));
+
+    const result = await taskReportCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      reportFile,
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const report = JSON.parse(listReportRecords(tempDir)[0]!.report_json);
+    expect(report.summary).toBe('Implemented from report file');
+    expect(report.changed_files).toEqual(['src/file-backed.ts']);
+    expect(report.verification).toEqual([{ command: 'pnpm test -- task-report', result: 'passed' }]);
+    expect(report.known_residuals).toEqual(['none']);
+  });
+
+  it('creates a post-hoc review request from existing report evidence', async () => {
+    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
+    const reported = await taskReportCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      summary: 'Ready for post-hoc review request',
+      changedFiles: 'src/foo.ts',
+      verification: JSON.stringify([{ command: 'pnpm test', result: 'passed' }]),
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    const requested = await taskReviewRequestCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      reviewer: 'architect',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(requested.exitCode).toBe(ExitCode.SUCCESS);
+    expect(requested.result).toMatchObject({
+      status: 'success',
+      action: 'created',
+      report_id: (reported.result as { report_id: string }).report_id,
+      review_target: {
+        target_agent_id: 'architect',
+      },
+    });
+    const obligations = listDirectedObligations(tempDir, 'architect', 'architect');
+    expect(obligations).toHaveLength(1);
+    const evidence = JSON.parse(obligations[0]!.evidence_json);
+    expect(evidence.changed_files).toEqual(['src/foo.ts']);
+    expect(evidence.verification).toEqual([{ command: 'pnpm test', result: 'passed' }]);
   });
 
   it('creates a directed review obligation for a unique reviewer role alias', async () => {

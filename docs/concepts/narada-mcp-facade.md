@@ -72,6 +72,8 @@ Its initial capability set should be limited to:
 
 Inbox MCP does not create tasks, approve effects, run commands, or decide inbox promotion by implication. It submits or inspects envelopes under the target Site's [`Canonical Inbox`](canonical-inbox.md) and message-routing law.
 
+Tests for Inbox MCP should preserve the same boundary. Protocol tests exercise stdio framing, tool discovery, dry-run delegation, schema/refusal behavior, and read-back shape without mutating a live inbox. Dogfood tests are separate live sender flows; they must be named and invoked as mutating evidence because they create real envelopes in the target Site.
+
 ## Embodiment Execution MCP
 
 Embodiment Execution MCP, abbreviated **EE-MCP**, is a bounded execution surface for a declared runtime embodiment such as `windows-pwsh`, `wsl-bash`, `linux-systemd`, `container-shell`, or a hosted sandbox.

@@ -17,6 +17,7 @@ import {
   writeTaskLifecycleMutationEvidence,
 } from '../lib/mutation-evidence-writer.js';
 import { enforceBuilderOwnedLifecycleGuard } from '../lib/task-role-guard.js';
+import { mergeTaskReportFileFields, readTaskReportFile } from '../lib/task-report-file.js';
 
 export interface TaskReportOptions {
   taskNumber?: string;
@@ -27,6 +28,7 @@ export interface TaskReportOptions {
   changedFiles?: string;
   verification?: string;
   residuals?: string;
+  reportFile?: string;
   cwd?: string;
   principalStateDir?: string;
   verbose?: boolean;
@@ -39,12 +41,23 @@ export async function taskReportCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const fmt = createFormatter({ format: options.format || 'auto', verbose: false });
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
+  let effectiveOptions = options;
+  if (options.reportFile) {
+    try {
+      effectiveOptions = mergeTaskReportFileFields(options, await readTaskReportFile(options.reportFile, cwd));
+    } catch (error) {
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: { status: 'error', error: error instanceof Error ? error.message : String(error) },
+      };
+    }
+  }
   const roleGuard = await enforceBuilderOwnedLifecycleGuard({
     cwd,
-    taskNumber: options.taskNumber,
-    actor: options.agent,
+    taskNumber: effectiveOptions.taskNumber,
+    actor: effectiveOptions.agent,
     action: 'report',
-    overrideRationale: options.overrideRationale,
+    overrideRationale: effectiveOptions.overrideRationale,
   });
   if (!roleGuard.ok) {
     return {
@@ -52,33 +65,33 @@ export async function taskReportCommand(
       result: { status: 'error', error: roleGuard.error },
     };
   }
-  const before = await captureTaskLifecycleEvidenceState(cwd, options.taskNumber, options.store);
-  const serviceAgent = roleGuard.override?.owner_agent_id ?? options.agent;
+  const before = await captureTaskLifecycleEvidenceState(cwd, effectiveOptions.taskNumber, effectiveOptions.store);
+  const serviceAgent = roleGuard.override?.owner_agent_id ?? effectiveOptions.agent;
 
   const serviceResult = await reportTaskService({
-    taskNumber: options.taskNumber,
+    taskNumber: effectiveOptions.taskNumber,
     agent: serviceAgent,
-    reviewer: options.reviewer,
-    summary: options.summary,
-    changedFiles: options.changedFiles,
-    verification: options.verification,
-    residuals: options.residuals,
+    reviewer: effectiveOptions.reviewer,
+    summary: effectiveOptions.summary,
+    changedFiles: effectiveOptions.changedFiles,
+    verification: effectiveOptions.verification,
+    residuals: effectiveOptions.residuals,
     cwd,
-    store: options.store,
+    store: effectiveOptions.store,
   } as ReportTaskServiceOptions);
 
   const result = roleGuard.override
     ? { ...serviceResult.result, role_guard_override: roleGuard.override }
     : serviceResult.result;
   const after = result.status === 'success'
-    ? await captureTaskLifecycleEvidenceState(cwd, options.taskNumber, options.store)
+    ? await captureTaskLifecycleEvidenceState(cwd, effectiveOptions.taskNumber, effectiveOptions.store)
     : null;
   if (result.status === 'success') {
     await writeTaskLifecycleMutationEvidence({
       cwd,
-      taskNumber: options.taskNumber,
+      taskNumber: effectiveOptions.taskNumber,
       command: 'task report',
-      principal: options.agent,
+      principal: effectiveOptions.agent,
       authorityClass: 'resolve',
       before,
       after,
@@ -91,7 +104,7 @@ export async function taskReportCommand(
       warning?: string;
     } = {
       ...result,
-      ...(result.status === 'success' && options.verbose ? await (async () => {
+      ...(result.status === 'success' && effectiveOptions.verbose ? await (async () => {
         const guidanceResponse = await recallAcceptedLearning({
           cwd,
           scopes: ['report', 'task-governance'],
@@ -104,10 +117,10 @@ export async function taskReportCommand(
 
     if (result.status === 'success' && result.report_id) {
       try {
-        const stateDir = resolvePrincipalStateDir({ cwd, principalStateDir: options.principalStateDir });
+        const stateDir = resolvePrincipalStateDir({ cwd, principalStateDir: effectiveOptions.principalStateDir });
         const bridgeResult = await updatePrincipalRuntimeFromTaskEvent(stateDir, {
           type: 'task_reported',
-          agent_id: options.agent ?? '',
+          agent_id: effectiveOptions.agent ?? '',
           task_id: result.task_id ?? '',
           report_id: result.report_id,
         });
@@ -136,7 +149,7 @@ export async function taskReportCommand(
   if (result.new_status) {
     fmt.message(`Reported task ${result.task_id}: ${result.new_status}`, 'success');
   }
-  if (options.verbose && (result as { status: string }).status === 'success') {
+  if (effectiveOptions.verbose && (result as { status: string }).status === 'success') {
     const guidanceResponse = await recallAcceptedLearning({
       cwd,
       scopes: ['report', 'task-governance'],

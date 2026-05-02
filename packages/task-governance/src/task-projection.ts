@@ -111,11 +111,13 @@ export async function inspectTaskEvidenceWithProjection(
     return null;
   }
 
-  const lifecycleStore = store ?? (await openTaskLifecycleStore(cwd));
+  const openedStore = store ? null : await openTaskLifecycleStore(cwd);
+  const lifecycleStore = store ?? openedStore;
   if (!lifecycleStore) {
     return null;
   }
 
+  try {
   // Try to find the task in SQLite by task_number first, then by task_id
   let lifecycle = lifecycleStore.getLifecycleByNumber(Number(taskNumber));
   if (!lifecycle) {
@@ -326,6 +328,9 @@ export async function inspectTaskEvidenceWithProjection(
       ? (activeAssignment.intent as AssignmentIntent)
       : null,
   };
+  } finally {
+    if (openedStore) openedStore.db.close();
+  }
 }
 
 /**
@@ -347,11 +352,13 @@ export async function listRunnableTasksWithProjection(
     rangeFilter?: { start: number; end: number };
   },
 ): Promise<RunnableTask[] | null> {
-  const lifecycleStore = store ?? (await openTaskLifecycleStore(cwd));
+  const openedStore = store ? null : await openTaskLifecycleStore(cwd);
+  const lifecycleStore = store ?? openedStore;
   if (!lifecycleStore) {
     return null;
   }
 
+  try {
   const resolvedCwd = resolve(cwd);
   const tasksDir = join(resolvedCwd, '.ai', 'do-not-open', 'tasks');
 
@@ -525,4 +532,7 @@ export async function listRunnableTasksWithProjection(
   });
 
   return result;
+  } finally {
+    if (openedStore) openedStore.db.close();
+  }
 }

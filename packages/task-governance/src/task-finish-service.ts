@@ -22,6 +22,7 @@ import { reviewTaskService, type ReviewTaskServiceOptions } from './task-review-
 export interface FinishTaskServiceOptions {
   taskNumber?: string;
   agent?: string;
+  reviewer?: string;
   summary?: string;
   changedFiles?: string;
   verification?: string;
@@ -459,6 +460,7 @@ export async function finishTaskService(
       const reportResult = await reportTaskService({
         taskNumber,
         agent: agentId,
+        reviewer: options.reviewer,
         summary: options.summary,
         changedFiles: options.changedFiles,
         verification: JSON.stringify(parsedVerification.value),

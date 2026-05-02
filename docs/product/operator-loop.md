@@ -187,6 +187,39 @@ The "Suggested Next Actions" section recommends actions based on current state:
 
 ---
 
+## Builder/Reviewer Lifecycle Helpers
+
+Builder and reviewer role loops should use file-backed lifecycle helpers when the report or review handoff is more than a tiny one-line summary. This keeps evidence out of brittle shell quoting and makes the review boundary explicit.
+
+Use a prepared report file when Bob finishes implementation work:
+
+```bash
+narada task finish <task> --agent narada-andrey.Bob --report-file task-report.json
+```
+
+The report file may contain `summary`, `reviewer`, `changed_files`, `verification`, and `residuals`. Explicit CLI flags override file fields, so an operator can correct a single value without editing the file.
+
+If a task was already reported without a reviewer obligation, create the review handoff directly from the existing report:
+
+```bash
+narada task review-request <task> --agent narada-andrey.Bob --reviewer narada-andrey.Kevin
+```
+
+Kevin should treat this as the governed review pickup signal. It uses task metadata plus WorkResultReport evidence; Kevin still admits consequence through `narada task review`.
+
+Before committing a task with unrelated local dirt, stage only the declared task files:
+
+```bash
+narada task stage <task> --agent narada-andrey.Bob --from-report
+narada task stage <task> --agent narada-andrey.Bob --include <path>
+```
+
+The staging helper reports `excluded_dirty_files` so Bob and Kevin can see what was intentionally left out.
+
+Inbox MCP tests should stay split by posture: protocol tests prove JSON-RPC framing, tool listing, dry-run delegation, and refusal behavior without sending live envelopes; dogfood/live tests are explicit sender flows and may mutate the target inbox.
+
+---
+
 ## Normal Operating Rhythm
 
 ### Morning Check (5 minutes)

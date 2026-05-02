@@ -13,14 +13,17 @@ import {
   writeTaskLifecycleMutationEvidence,
 } from '../lib/mutation-evidence-writer.js';
 import { checkLawAdmission, lawUpdateRequiredResult } from '../lib/law-sync.js';
+import { mergeTaskReportFileFields, readTaskReportFile } from '../lib/task-report-file.js';
 
 export interface TaskFinishOptions {
   taskNumber?: string;
   agent?: string;
+  reviewer?: string;
   summary?: string;
   changedFiles?: string;
   verification?: string;
   residuals?: string;
+  reportFile?: string;
   verdict?: 'accepted' | 'accepted_with_notes' | 'rejected';
   findings?: string;
   report?: string;
@@ -38,34 +41,46 @@ export async function taskFinishCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const fmt = createFormatter({ format: options.format || 'auto', verbose: false });
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
-  const lawAdmission = await checkLawAdmission(cwd, options.agent);
+  let effectiveOptions = options;
+  if (options.reportFile) {
+    try {
+      effectiveOptions = mergeTaskReportFileFields(options, await readTaskReportFile(options.reportFile, cwd));
+    } catch (error) {
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: { status: 'error', error: error instanceof Error ? error.message : String(error) },
+      };
+    }
+  }
+  const lawAdmission = await checkLawAdmission(cwd, effectiveOptions.agent);
   if (lawAdmission.status === 'blocked') {
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: lawUpdateRequiredResult(lawAdmission),
     };
   }
-  const serviceStore = options.store;
-  const before = await captureTaskLifecycleEvidenceState(cwd, options.taskNumber, serviceStore);
+  const serviceStore = effectiveOptions.store;
+  const before = await captureTaskLifecycleEvidenceState(cwd, effectiveOptions.taskNumber, serviceStore);
 
   const serviceResult = await finishTaskService({
-    taskNumber: options.taskNumber,
-    agent: options.agent,
-    summary: options.summary,
-    changedFiles: options.changedFiles,
-    verification: options.verification,
-    residuals: options.residuals,
-    verdict: options.verdict,
-    findings: options.findings,
-    report: options.report,
-    allowIncomplete: options.allowIncomplete,
-    close: options.close,
-    proveCriteria: options.proveCriteria,
+    taskNumber: effectiveOptions.taskNumber,
+    agent: effectiveOptions.agent,
+    reviewer: effectiveOptions.reviewer,
+    summary: effectiveOptions.summary,
+    changedFiles: effectiveOptions.changedFiles,
+    verification: effectiveOptions.verification,
+    residuals: effectiveOptions.residuals,
+    verdict: effectiveOptions.verdict,
+    findings: effectiveOptions.findings,
+    report: effectiveOptions.report,
+    allowIncomplete: effectiveOptions.allowIncomplete,
+    close: effectiveOptions.close,
+    proveCriteria: effectiveOptions.proveCriteria,
     cwd,
     store: serviceStore,
   } as FinishTaskServiceOptions & { store?: TaskLifecycleStore });
 
-  const authorityInversionWarnings = await evaluateAuthorityInversionForChangedFiles(cwd, options.changedFiles);
+  const authorityInversionWarnings = await evaluateAuthorityInversionForChangedFiles(cwd, effectiveOptions.changedFiles);
   const result = authorityInversionWarnings.length > 0 && serviceResult.result && typeof serviceResult.result === 'object'
     ? {
       ...(serviceResult.result as Record<string, unknown>),
@@ -77,12 +92,12 @@ export async function taskFinishCommand(
     }
     : serviceResult.result;
   if (serviceResult.exitCode === ExitCode.SUCCESS && result && typeof result === 'object' && (result as { status?: string }).status === 'success') {
-    const after = await captureTaskLifecycleEvidenceState(cwd, options.taskNumber, serviceStore);
+    const after = await captureTaskLifecycleEvidenceState(cwd, effectiveOptions.taskNumber, serviceStore);
     await writeTaskLifecycleMutationEvidence({
       cwd,
-      taskNumber: options.taskNumber,
+      taskNumber: effectiveOptions.taskNumber,
       command: 'task finish',
-      principal: options.agent,
+      principal: effectiveOptions.agent,
       authorityClass: 'resolve',
       before,
       after,
@@ -114,7 +129,7 @@ export async function taskFinishCommand(
         summaryLines.push(`    ⚠ ${warning}`);
       }
     }
-    if (options.allowIncomplete) {
+    if (effectiveOptions.allowIncomplete) {
       summaryLines.push('  Incomplete evidence allowed; roster marks agent availability only.');
     }
     fmt.message(summaryLines.join('\n'), serviceResult.exitCode === ExitCode.SUCCESS ? 'success' : 'warning');

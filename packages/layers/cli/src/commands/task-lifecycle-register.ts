@@ -6,6 +6,8 @@ import { taskUnblockCommand } from './task-unblock.js';
 import { taskReviewCommand } from './task-review.js';
 import { taskReportCommand } from './task-report.js';
 import { taskFinishCommand } from './task-finish.js';
+import { taskReviewRequestCommand } from './task-review-request.js';
+import { taskStageCommand } from './task-stage.js';
 import { taskContinueCommand } from './task-continue.js';
 import { taskCloseCommand } from './task-close.js';
 import { taskReopenCommand } from './task-reopen.js';
@@ -29,6 +31,11 @@ import {
 
 function closeStore(store: SqliteTaskLifecycleStore): void {
   store.db.close();
+}
+
+function collectValues(value: string, previous: string[]): string[] {
+  previous.push(value);
+  return previous;
 }
 
 export function registerTaskLifecycleCommands(taskCmd: Command): void {
@@ -192,8 +199,9 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .command('report <task-number>')
     .description('Lifecycle handoff: submit a WorkResultReport and move a claimed task to in_review')
     .requiredOption('--agent <id>', 'Reporting agent ID from roster')
-    .requiredOption('--summary <text>', 'Human-readable result summary')
+    .option('--summary <text>', 'Human-readable result summary')
     .option('--reviewer <agent-or-role>', 'Create a directed review_request obligation for an exact agent id or unique role alias')
+    .option('--report-file <path>', 'Read summary, reviewer, changed_files, verification, and residuals from a JSON report file')
     .option('--changed-files <csv>', 'Comma-separated list of changed file paths')
     .option('--verification <json>', 'JSON array of {command, result} objects, e.g. \'[{"command":"pnpm verify","result":"passed"}]\'')
     .option('--residuals <json>', 'JSON array of known residual strings')
@@ -209,6 +217,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
         agent: opts.agent as string,
         reviewer: opts.reviewer as string | undefined,
         summary: opts.summary as string | undefined,
+        reportFile: opts.reportFile as string | undefined,
         changedFiles: opts.changedFiles as string | undefined,
         verification: opts.verification as string | undefined,
         residuals: opts.residuals as string | undefined,
@@ -217,6 +226,55 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
         principalStateDir: opts.principalStateDir as string | undefined,
         overrideRationale: opts.overrideRationale as string | undefined,
         verbose: opts.verbose as boolean | undefined,
+      }),
+    }));
+
+  taskCmd
+    .command('review-request <task-number>')
+    .description('Create a directed review_request obligation from an existing task report')
+    .requiredOption('--agent <id>', 'Reporting agent ID that owns the report')
+    .requiredOption('--reviewer <agent-or-role>', 'Exact reviewer agent id or unique role alias')
+    .option('--report <id>', 'Specific WorkResultReport ID; defaults to latest report for task')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .action(resourceScopedDirectCommandAction<SqliteTaskLifecycleStore, [string, Record<string, unknown>]>({
+      command: 'task review-request',
+      emit: emitCommandResult,
+      open: (_taskNumber, opts) => openTaskLifecycleStore((opts.cwd as string | undefined) || process.cwd()),
+      close: closeStore,
+      invocation: (store, taskNumber, opts) => taskReviewRequestCommand({
+        taskNumber,
+        agent: opts.agent as string,
+        reviewer: opts.reviewer as string,
+        report: opts.report as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(),
+        store,
+      }),
+    }));
+
+  taskCmd
+    .command('stage <task-number>')
+    .description('Stage declared task files while reporting unrelated dirty work')
+    .option('--agent <id>', 'Agent requesting task-scoped staging')
+    .option('--include <path>', 'Path to stage for the task (repeatable)', collectValues, [])
+    .option('--from-report', 'Stage changed_files from the latest task report', false)
+    .option('--report <id>', 'Stage changed_files from a specific WorkResultReport ID')
+    .option('--dry-run', 'Show what would be staged without mutating Git index', false)
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[string, Record<string, unknown>]>({
+      command: 'task stage',
+      emit: emitCommandResult,
+      format: (_taskNumber: string, opts: Record<string, unknown>) => opts.format,
+      invocation: (taskNumber, opts) => taskStageCommand({
+        taskNumber,
+        agent: opts.agent as string | undefined,
+        include: opts.include as string[] | undefined,
+        fromReport: opts.fromReport as boolean | undefined,
+        report: opts.report as string | undefined,
+        dryRun: opts.dryRun as boolean | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
       }),
     }));
 
@@ -243,6 +301,8 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .description('Canonical agent completion: report/review -> optional evidence admit/close -> roster done')
     .requiredOption('--agent <id>', 'Agent ID from roster')
     .option('--summary <text>', 'Implementer: Work result summary')
+    .option('--reviewer <agent-or-role>', 'Implementer: create a directed review_request obligation with the report')
+    .option('--report-file <path>', 'Implementer: read summary, reviewer, changed_files, verification, and residuals from a JSON report file')
     .option('--changed-files <csv>', 'Implementer: Comma-separated changed file paths')
     .option('--verification <json>', 'Implementer: JSON array of {command, result}')
     .option('--residuals <json>', 'Implementer: JSON array of known residual strings')
@@ -260,7 +320,9 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
       invocation: (taskNumber, opts) => taskFinishCommand({
         taskNumber,
         agent: opts.agent as string,
+        reviewer: opts.reviewer as string | undefined,
         summary: opts.summary as string | undefined,
+        reportFile: opts.reportFile as string | undefined,
         changedFiles: opts.changedFiles as string | undefined,
         verification: opts.verification as string | undefined,
         residuals: opts.residuals as string | undefined,
