@@ -25,7 +25,12 @@ import { governEvaluation, type GovernEvaluationResult } from "./governance.js";
 import { IntentHandoff } from "../intent/handoff.js";
 import type { CharterRunner } from "../charter/runner.js";
 import { buildInvocationEnvelope, buildEvaluationRecord, VerticalMaterializerRegistry } from "../charter/envelope.js";
-import type { PolicyContext, ContextFormationStrategy } from "./context.js";
+import type {
+  PolicyContext,
+  ContextFormationStrategy,
+  MailContextStitchCandidate,
+  MailContextStitchRequest,
+} from "./context.js";
 
 import type {
   WorkItem,
@@ -53,6 +58,46 @@ export interface ForemanFacadeOptions {
 
 function makeRevisionId(contextId: string, ordinal: number): string {
   return `${contextId}:rev:${ordinal}`;
+}
+
+function extractFactMailSignals(fact: Fact): Omit<MailContextStitchCandidate, "context_id"> | null {
+  try {
+    const payload = JSON.parse(fact.payload_json) as Record<string, unknown>;
+    const event = payload.event as Record<string, unknown> | undefined;
+    const normalizedPayload = event?.payload as Record<string, unknown> | undefined;
+    if (!event || typeof event !== "object") return null;
+    const body =
+      (event.body as Record<string, unknown> | undefined) ??
+      (normalizedPayload?.body as Record<string, unknown> | undefined);
+    const from =
+      (event.from as Record<string, unknown> | undefined) ??
+      (normalizedPayload?.from as Record<string, unknown> | undefined);
+    return {
+      conversation_id: typeof event.conversation_id === "string"
+        ? event.conversation_id
+        : typeof normalizedPayload?.conversation_id === "string"
+          ? normalizedPayload.conversation_id
+          : "",
+      sender_email: typeof from?.email === "string" ? from.email.toLowerCase() : null,
+      subject: typeof event.subject === "string"
+        ? event.subject
+        : typeof normalizedPayload?.subject === "string"
+          ? normalizedPayload.subject
+          : "",
+      body_text: typeof body?.text === "string"
+        ? body.text
+        : typeof body?.preview === "string"
+          ? body.preview
+          : "",
+      received_at: typeof event.received_at === "string"
+        ? event.received_at
+        : typeof normalizedPayload?.received_at === "string"
+          ? normalizedPayload.received_at
+          : null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export class DefaultForemanFacade implements ForemanFacade {
@@ -94,6 +139,7 @@ export class DefaultForemanFacade implements ForemanFacade {
 
     const contexts = this.contextFormationStrategy.formContexts(facts, scopeId, {
       getLatestRevisionOrdinal: (id) => this.deps.coordinatorStore.getLatestRevisionOrdinal(id),
+      findMailContextStitchCandidates: (request) => this.findMailContextStitchCandidates(request),
     });
 
     return this.onContextsAdmitted(contexts);
@@ -106,6 +152,7 @@ export class DefaultForemanFacade implements ForemanFacade {
 
     const contexts = this.contextFormationStrategy.formContexts(facts, scopeId, {
       getLatestRevisionOrdinal: (id) => this.deps.coordinatorStore.getLatestRevisionOrdinal(id),
+      findMailContextStitchCandidates: (request) => this.findMailContextStitchCandidates(request),
     });
 
     return this.onContextsAdmitted(contexts);
@@ -133,6 +180,7 @@ export class DefaultForemanFacade implements ForemanFacade {
 
     const contexts = this.contextFormationStrategy.formContexts(facts, scopeId, {
       getLatestRevisionOrdinal: (id) => this.deps.coordinatorStore.getLatestRevisionOrdinal(id),
+      findMailContextStitchCandidates: (request) => this.findMailContextStitchCandidates(request),
     });
 
     const results: PreviewDerivationResult[] = [];
@@ -245,6 +293,7 @@ export class DefaultForemanFacade implements ForemanFacade {
         record = this.buildContextRecord(contextId, scopeId);
         this.deps.coordinatorStore.upsertContextRecord(record);
       }
+      this.recordMailContextLinks(context);
 
       const latestOrdinal = this.deps.coordinatorStore.getLatestRevisionOrdinal(contextId) ?? 0;
       let ordinal = latestOrdinal;
@@ -293,6 +342,77 @@ export class DefaultForemanFacade implements ForemanFacade {
     }
 
     return result;
+  }
+
+  private findMailContextStitchCandidates(request: MailContextStitchRequest): MailContextStitchCandidate[] {
+    const since = new Date(Date.now() - request.lookback_days * 86_400_000).toISOString();
+    const rows = this.deps.db
+      .prepare(
+        `select context_id, context_json, created_at
+           from work_items
+          where scope_id = ?
+            and created_at >= ?
+            and context_id != ?
+          order by created_at desc
+          limit 50`,
+      )
+      .all(request.target_scope_id, since, `${request.target_scope_id}:${request.conversation_id}`) as Array<{
+        context_id: string;
+        context_json: string | null;
+        created_at: string;
+      }>;
+
+    const candidates: MailContextStitchCandidate[] = [];
+    const seen = new Set<string>();
+    for (const row of rows) {
+      if (seen.has(row.context_id) || !row.context_json) continue;
+      seen.add(row.context_id);
+      try {
+        const context = JSON.parse(row.context_json) as PolicyContext;
+        const first = context.facts
+          .map((fact) => extractFactMailSignals(fact))
+          .find((signals) => signals && signals.conversation_id) ?? null;
+        if (!first || first.conversation_id === request.conversation_id) continue;
+        candidates.push({
+          context_id: row.context_id,
+          conversation_id: first.conversation_id,
+          sender_email: first.sender_email,
+          subject: first.subject,
+          body_text: first.body_text,
+          received_at: first.received_at ?? row.created_at,
+        });
+      } catch {
+        continue;
+      }
+    }
+    return candidates;
+  }
+
+  private recordMailContextLinks(context: PolicyContext): void {
+    if (!context.mail_context_links || context.mail_context_links.length === 0) return;
+    const stmt = this.deps.db.prepare(
+      `insert into context_mail_thread_links (
+        link_id, context_id, source_conversation_id, target_context_id,
+        score, reason, signal_details_json, created_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?)
+      on conflict(context_id, source_conversation_id) do update set
+        target_context_id = excluded.target_context_id,
+        score = excluded.score,
+        reason = excluded.reason,
+        signal_details_json = excluded.signal_details_json`,
+    );
+    for (const link of context.mail_context_links) {
+      stmt.run(
+        `mail_link_${randomUUID()}`,
+        context.context_id,
+        link.source_conversation_id,
+        link.target_context_id,
+        link.score,
+        link.reason,
+        JSON.stringify(link.signal_details),
+        context.synced_at,
+      );
+    }
   }
 
   async resolveWorkItem(resolveReq: ResolveWorkItemRequest): Promise<ResolutionResult> {

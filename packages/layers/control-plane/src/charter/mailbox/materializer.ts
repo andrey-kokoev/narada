@@ -10,6 +10,7 @@
 
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import type Database from "better-sqlite3";
 import type { PolicyContext } from "../../foreman/context.js";
 import type { NormalizedMessage } from "../../types/normalized.js";
 import { FileMessageStore } from "../../persistence/messages.js";
@@ -76,14 +77,32 @@ export class MailboxContextMaterializer implements ContextMaterializer {
   constructor(
     private rootDir: string,
     private messageStore: FileMessageStore,
+    private db?: Database.Database,
   ) {}
 
   async materialize(context: PolicyContext): Promise<unknown> {
-    let messageIds = await getThreadMessageIds(this.rootDir, context.context_id);
-    if (messageIds.length === 0 && context.change_kinds.some((kind) => kind.startsWith("operation_intake"))) {
+    const conversationIds = new Set<string>([context.context_id]);
+    if (context.change_kinds.some((kind) => kind.startsWith("operation_intake"))) {
       const sourceConversationId = routedConversationId(context.context_id);
       if (sourceConversationId) {
-        messageIds = await getThreadMessageIds(this.rootDir, sourceConversationId);
+        conversationIds.add(sourceConversationId);
+      }
+    }
+    for (const link of context.mail_context_links ?? []) {
+      conversationIds.add(link.source_conversation_id);
+    }
+    for (const fact of context.facts ?? []) {
+      const conversationId = conversationIdFromFact(fact);
+      if (conversationId) conversationIds.add(conversationId);
+    }
+    for (const conversationId of this.linkedConversationIds(context.context_id)) {
+      conversationIds.add(conversationId);
+    }
+
+    const messageIds = new Set<string>();
+    for (const conversationId of conversationIds) {
+      for (const messageId of await getThreadMessageIds(this.rootDir, conversationId)) {
+        messageIds.add(messageId);
       }
     }
     const messages: NormalizedMessage[] = [];
@@ -103,6 +122,33 @@ export class MailboxContextMaterializer implements ContextMaterializer {
     const knowledgeSources = await loadKnowledgeSources(this.rootDir);
 
     return { messages, knowledge_sources: knowledgeSources };
+  }
+
+  private linkedConversationIds(contextId: string): string[] {
+    if (!this.db) return [];
+    try {
+      const rows = this.db
+        .prepare(`select source_conversation_id from context_mail_thread_links where context_id = ?`)
+        .all(contextId) as Array<{ source_conversation_id: string }>;
+      return rows.map((row) => row.source_conversation_id);
+    } catch {
+      return [];
+    }
+  }
+}
+
+function conversationIdFromFact(fact: { payload_json: string }): string | null {
+  try {
+    const payload = JSON.parse(fact.payload_json) as Record<string, unknown>;
+    const event = payload.event as Record<string, unknown> | undefined;
+    const normalizedPayload = event?.payload as Record<string, unknown> | undefined;
+    return typeof event?.conversation_id === "string"
+      ? event.conversation_id
+      : typeof normalizedPayload?.conversation_id === "string"
+        ? normalizedPayload.conversation_id
+        : null;
+  } catch {
+    return null;
   }
 }
 

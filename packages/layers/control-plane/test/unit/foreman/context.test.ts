@@ -664,6 +664,57 @@ describe("OperationIntakeContextFormation", () => {
     expect(contexts).toHaveLength(0);
   });
 
+  it("stitches related operation-intake mail when Graph conversation ids split", () => {
+    const strategy = new OperationIntakeContextFormation({
+      routes: [
+        {
+          route_id: "campaign-intake",
+          target_scope_id: "email-marketing",
+          match: { sender_domains: ["client.example"], body_keywords: ["campaign"] },
+        },
+      ],
+      mail_context_stitching: {
+        enabled: true,
+        lookback_days: 14,
+        auto_attach_threshold: 0.85,
+      },
+    });
+
+    const contexts = strategy.formContexts(
+      [
+        makeSharedMailboxFact(
+          "conv-b",
+          "willem@client.example",
+          "Re: test",
+          "For this campaign, use the standard template and send next week.",
+        ),
+      ],
+      "shared-mailbox",
+      {
+        getLatestRevisionOrdinal: (contextId) => contextId === "email-marketing:conv-a" ? 1 : null,
+        findMailContextStitchCandidates: () => [
+          {
+            context_id: "email-marketing:conv-a",
+            conversation_id: "conv-a",
+            sender_email: "willem@client.example",
+            subject: "test",
+            body_text: "I want to create an email campaign for C4X.",
+            received_at: new Date().toISOString(),
+          },
+        ],
+      },
+    );
+
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]!.context_id).toBe("email-marketing:conv-a");
+    expect(contexts[0]!.current_revision_ordinal).toBe(2);
+    expect(contexts[0]!.change_kinds).toContain("mail_context_stitched");
+    expect(contexts[0]!.mail_context_links?.[0]).toMatchObject({
+      source_conversation_id: "conv-b",
+      target_context_id: "email-marketing:conv-a",
+    });
+  });
+
   it("resolves operation_intake strategy from scope config", () => {
     const strategy = resolveContextStrategy("operation_intake", {
       operation_intake: {

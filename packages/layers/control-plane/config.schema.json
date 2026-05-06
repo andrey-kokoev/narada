@@ -866,6 +866,39 @@
                   "additionalProperties": false
                 },
                 "minItems": 1
+              },
+              "mail_context_stitching": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "lookback_days": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "auto_attach_threshold": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "review_threshold": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "signals": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                },
+                "required": [
+                  "enabled"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [

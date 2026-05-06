@@ -257,6 +257,23 @@ export class SqliteCoordinatorStore implements CoordinatorStore {
       create index if not exists idx_context_revisions_lookup
         on context_revisions(context_id, ordinal);
 
+      create table if not exists context_mail_thread_links (
+        link_id text primary key,
+        context_id text not null,
+        source_conversation_id text not null,
+        target_context_id text not null,
+        score real not null,
+        reason text not null,
+        signal_details_json text not null,
+        created_at text not null default (datetime('now')),
+        unique (context_id, source_conversation_id),
+        foreign key (context_id) references context_records(context_id)
+          on delete cascade
+      );
+
+      create index if not exists idx_context_mail_thread_links_context
+        on context_mail_thread_links(context_id, source_conversation_id);
+
       -- v2 work_items (terminal schedulable unit)
       create table if not exists work_items (
         work_item_id text primary key,

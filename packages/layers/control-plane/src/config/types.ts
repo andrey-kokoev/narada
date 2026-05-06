@@ -122,8 +122,17 @@ export interface OperationIntakeRouteConfig {
   match: OperationIntakeRouteMatchConfig;
 }
 
+export interface MailContextStitchingConfig {
+  enabled: boolean;
+  lookback_days?: number;
+  auto_attach_threshold?: number;
+  review_threshold?: number;
+  signals?: string[];
+}
+
 export interface OperationIntakeConfig {
   routes: OperationIntakeRouteConfig[];
+  mail_context_stitching?: MailContextStitchingConfig;
 }
 
 /** Source configuration for a scope (e.g. Graph API, timer, webhook) */

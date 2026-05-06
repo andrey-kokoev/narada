@@ -33,6 +33,37 @@ export interface PolicyContext {
   facts: Fact[];
   /** Admission timestamp (ISO 8601) */
   synced_at: string;
+  /** Mail-vertical context links preserved for materialization and audit. */
+  mail_context_links?: MailContextLink[];
+}
+
+export interface MailContextLink {
+  source_conversation_id: string;
+  target_context_id: string;
+  score: number;
+  reason: string;
+  signal_details: Record<string, unknown>;
+}
+
+export interface MailContextStitchCandidate {
+  context_id: string;
+  conversation_id: string;
+  sender_email: string | null;
+  subject: string;
+  body_text: string;
+  received_at: string | null;
+}
+
+export interface MailContextStitchRequest {
+  source_scope_id: string;
+  target_scope_id: string;
+  route_id: string;
+  conversation_id: string;
+  sender_email: string | null;
+  subject: string;
+  body_text: string;
+  received_at: string | null;
+  lookback_days: number;
 }
 
 export interface ContextFormationStrategy {
@@ -41,6 +72,7 @@ export interface ContextFormationStrategy {
     scopeId: string,
     options?: {
       getLatestRevisionOrdinal?: (contextId: string) => number | null;
+      findMailContextStitchCandidates?: (request: MailContextStitchRequest) => MailContextStitchCandidate[];
     },
   ): PolicyContext[];
 }
@@ -75,12 +107,13 @@ function extractMailTextSignals(fact: Fact): {
   sender_email: string | null;
   subject: string;
   body_text: string;
+  received_at: string | null;
 } {
   try {
     const payload = JSON.parse(fact.payload_json) as Record<string, unknown>;
     const event = payload.event as Record<string, unknown> | undefined;
     if (!event || typeof event !== "object") {
-      return { conversation_id: null, sender_email: null, subject: "", body_text: "" };
+      return { conversation_id: null, sender_email: null, subject: "", body_text: "", received_at: null };
     }
     const normalizedPayload = event.payload as Record<string, unknown> | undefined;
     const body =
@@ -107,9 +140,14 @@ function extractMailTextSignals(fact: Fact): {
           ? normalizedPayload.subject
           : "",
       body_text: bodyText,
+      received_at: typeof event.received_at === "string"
+        ? event.received_at
+        : typeof normalizedPayload?.received_at === "string"
+          ? normalizedPayload.received_at
+          : null,
     };
   } catch {
-    return { conversation_id: null, sender_email: null, subject: "", body_text: "" };
+    return { conversation_id: null, sender_email: null, subject: "", body_text: "", received_at: null };
   }
 }
 
@@ -595,6 +633,89 @@ function routeMatchesFact(route: OperationIntakeRouteConfig, fact: Fact): { conv
   return { conversation_id: signals.conversation_id, matched };
 }
 
+function normalizeSubject(subject: string): string {
+  return subject
+    .toLowerCase()
+    .replace(/^(\s*(re|fw|fwd)\s*:\s*)+/i, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenSet(value: string): Set<string> {
+  return new Set(
+    value
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, " ")
+      .split(/\s+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length >= 3),
+  );
+}
+
+function overlapRatio(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let overlap = 0;
+  for (const item of a) {
+    if (b.has(item)) overlap++;
+  }
+  return overlap / Math.max(a.size, b.size);
+}
+
+function scoreMailContextStitch(
+  request: MailContextStitchRequest,
+  candidate: MailContextStitchCandidate,
+): { score: number; reason: string; signal_details: Record<string, unknown> } {
+  if (candidate.conversation_id === request.conversation_id) {
+    return { score: 0, reason: "same_graph_conversation", signal_details: {} };
+  }
+
+  const sameSender = request.sender_email !== null
+    && candidate.sender_email !== null
+    && request.sender_email.toLowerCase() === candidate.sender_email.toLowerCase();
+  const normalizedSubject = normalizeSubject(request.subject);
+  const candidateSubject = normalizeSubject(candidate.subject);
+  const subjectExact = normalizedSubject.length > 0 && normalizedSubject === candidateSubject;
+  const subjectOverlap = overlapRatio(tokenSet(normalizedSubject), tokenSet(candidateSubject));
+  const bodyOverlap = overlapRatio(tokenSet(request.body_text), tokenSet(candidate.body_text));
+  const receivedAt = request.received_at ? Date.parse(request.received_at) : NaN;
+  const candidateAt = candidate.received_at ? Date.parse(candidate.received_at) : NaN;
+  const daysApart = Number.isFinite(receivedAt) && Number.isFinite(candidateAt)
+    ? Math.abs(receivedAt - candidateAt) / 86_400_000
+    : null;
+  const recent = daysApart === null || daysApart <= request.lookback_days;
+
+  let score = 0;
+  if (sameSender) score += 0.35;
+  if (subjectExact) score += 0.35;
+  else score += Math.min(0.2, subjectOverlap * 0.2);
+  score += Math.min(0.2, bodyOverlap * 0.2);
+  if (recent) score += 0.1;
+  if (sameSender && subjectExact && recent) score += 0.05;
+  if (!recent) score -= 0.2;
+  score = Math.max(0, Math.min(1, score));
+
+  const reasons = [
+    sameSender ? "same_sender" : null,
+    subjectExact ? "same_normalized_subject" : subjectOverlap > 0 ? "subject_overlap" : null,
+    bodyOverlap > 0 ? "body_overlap" : null,
+    recent ? "within_lookback" : "outside_lookback",
+  ].filter(Boolean);
+
+  return {
+    score,
+    reason: reasons.join("+") || "weak_similarity",
+    signal_details: {
+      same_sender: sameSender,
+      normalized_subject: normalizedSubject,
+      candidate_normalized_subject: candidateSubject,
+      subject_overlap: subjectOverlap,
+      body_overlap: bodyOverlap,
+      days_apart: daysApart,
+    },
+  };
+}
+
 /**
  * Shared mailbox operation-intake bridge.
  *
@@ -610,9 +731,15 @@ export class OperationIntakeContextFormation implements ContextFormationStrategy
     _scopeId: string,
     options?: {
       getLatestRevisionOrdinal?: (contextId: string) => number | null;
+      findMailContextStitchCandidates?: (request: MailContextStitchRequest) => MailContextStitchCandidate[];
     },
   ): PolicyContext[] {
     const groups = new Map<string, { route: OperationIntakeRouteConfig; facts: Fact[] }>();
+    const links = new Map<string, MailContextLink[]>();
+    const stitching = this.config.mail_context_stitching;
+    const stitchingEnabled = stitching?.enabled === true;
+    const lookbackDays = stitching?.lookback_days ?? 14;
+    const autoAttachThreshold = stitching?.auto_attach_threshold ?? 0.85;
 
     for (const fact of facts) {
       if (fact.fact_type !== "mail.message.discovered") continue;
@@ -620,7 +747,38 @@ export class OperationIntakeContextFormation implements ContextFormationStrategy
       for (const route of this.config.routes) {
         const result = routeMatchesFact(route, fact);
         if (!result.matched || !result.conversation_id) continue;
-        const contextId = `${route.target_scope_id}:${result.conversation_id}`;
+        const signals = extractMailTextSignals(fact);
+        let contextId = `${route.target_scope_id}:${result.conversation_id}`;
+
+        if (stitchingEnabled && options?.findMailContextStitchCandidates) {
+          const request: MailContextStitchRequest = {
+            source_scope_id: _scopeId,
+            target_scope_id: route.target_scope_id,
+            route_id: route.route_id,
+            conversation_id: result.conversation_id,
+            sender_email: signals.sender_email,
+            subject: signals.subject,
+            body_text: signals.body_text,
+            received_at: signals.received_at,
+            lookback_days: lookbackDays,
+          };
+          const best = options.findMailContextStitchCandidates(request)
+            .map((candidate) => ({ candidate, ...scoreMailContextStitch(request, candidate) }))
+            .filter((candidate) => candidate.score >= autoAttachThreshold)
+            .sort((a, b) => b.score - a.score)[0];
+          if (best) {
+            contextId = best.candidate.context_id;
+            const link: MailContextLink = {
+              source_conversation_id: result.conversation_id,
+              target_context_id: best.candidate.context_id,
+              score: best.score,
+              reason: best.reason,
+              signal_details: best.signal_details,
+            };
+            links.set(contextId, [...(links.get(contextId) ?? []), link]);
+          }
+        }
+
         const group = groups.get(contextId) ?? { route, facts: [] };
         group.facts.push(fact);
         groups.set(contextId, group);
@@ -639,9 +797,14 @@ export class OperationIntakeContextFormation implements ContextFormationStrategy
         revision_id: makeRevisionId(contextId, currentOrdinal),
         previous_revision_ordinal: previousOrdinal,
         current_revision_ordinal: currentOrdinal,
-        change_kinds: ["operation_intake", `operation_intake:${group.route.route_id}`],
+        change_kinds: [
+          "operation_intake",
+          `operation_intake:${group.route.route_id}`,
+          ...(links.has(contextId) ? ["mail_context_stitched"] : []),
+        ],
         facts: group.facts,
         synced_at: now,
+        ...(links.has(contextId) ? { mail_context_links: links.get(contextId) } : {}),
       });
     }
     return contexts;

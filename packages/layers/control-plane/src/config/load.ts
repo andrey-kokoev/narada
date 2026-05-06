@@ -231,8 +231,28 @@ function buildOperationIntakeConfig(value: unknown, path: string): OperationInta
   if (!Array.isArray(config.routes) || config.routes.length === 0) {
     throw new Error(`${path}.routes must contain at least one route`);
   }
+  const stitchingRaw = isObject(config.mail_context_stitching) ? config.mail_context_stitching : null;
   return {
     routes: config.routes.map((route, index) => buildOperationIntakeRoute(route, `${path}.routes[${index}]`)),
+    ...(stitchingRaw
+      ? {
+          mail_context_stitching: {
+            enabled: Boolean(stitchingRaw.enabled),
+            ...(stitchingRaw.lookback_days !== undefined
+              ? { lookback_days: expectNumber(stitchingRaw.lookback_days, `${path}.mail_context_stitching.lookback_days`) }
+              : {}),
+            ...(stitchingRaw.auto_attach_threshold !== undefined
+              ? { auto_attach_threshold: expectNumber(stitchingRaw.auto_attach_threshold, `${path}.mail_context_stitching.auto_attach_threshold`) }
+              : {}),
+            ...(stitchingRaw.review_threshold !== undefined
+              ? { review_threshold: expectNumber(stitchingRaw.review_threshold, `${path}.mail_context_stitching.review_threshold`) }
+              : {}),
+            ...(Array.isArray(stitchingRaw.signals)
+              ? { signals: expectStringArray(stitchingRaw.signals, `${path}.mail_context_stitching.signals`) }
+              : {}),
+          },
+        }
+      : {}),
   };
 }
 

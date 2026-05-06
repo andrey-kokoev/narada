@@ -190,8 +190,17 @@ const OperationIntakeRouteSchema = z.object({
   match: OperationIntakeRouteMatchSchema,
 });
 
+const MailContextStitchingSchema = z.object({
+  enabled: z.boolean(),
+  lookback_days: z.number().int().min(1).optional(),
+  auto_attach_threshold: z.number().min(0).max(1).optional(),
+  review_threshold: z.number().min(0).max(1).optional(),
+  signals: z.array(z.string().min(1)).optional(),
+});
+
 const OperationIntakeSchema = z.object({
   routes: z.array(OperationIntakeRouteSchema).min(1),
+  mail_context_stitching: MailContextStitchingSchema.optional(),
 });
 
 // Source configuration schema
