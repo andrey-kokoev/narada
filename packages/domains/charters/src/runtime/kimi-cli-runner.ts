@@ -250,6 +250,23 @@ export class KimiCliCharterRunner implements CharterRunner {
       contextBody = `Context materialization:\n${JSON.stringify(envelope.context_materialization, null, 2)}`;
     }
 
+    const typedContext = mat
+      ? Object.entries(mat)
+          .filter(([key]) => key !== "messages" && key !== "knowledge_sources")
+          .map(([key, value]) => `=== typed context: ${key} ===\n${JSON.stringify(value, null, 2)}\n=== end typed context: ${key} ===`)
+          .join("\n\n")
+      : "";
+
+    const knowledge = mat && Array.isArray(mat.knowledge_sources)
+      ? (mat.knowledge_sources as Array<Record<string, unknown>>)
+          .map((k) => {
+            const name = typeof k.name === "string" ? k.name : "knowledge";
+            const content = typeof k.content === "string" ? k.content : "";
+            return `=== ${name} ===\n${content}\n=== END ${name} ===`;
+          })
+          .join("\n\n")
+      : "";
+
     const priors =
       envelope.prior_evaluations.length > 0
         ? envelope.prior_evaluations
@@ -270,6 +287,9 @@ Coordinator flags: ${envelope.coordinator_flags.join(", ") || "(none)"}
 
 ${contextBody}
 
+${typedContext ? `${typedContext}\n\n` : ""}
+
+${knowledge ? `Knowledge sources:\n${knowledge}\n\n` : ""}
 Prior evaluations (up to ${envelope.max_prior_evaluations}):
 ${priors}
 `.trim();

@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { createHash } from "node:crypto";
 import type {
   NormalizedAttachment,
+  NormalizedAddress,
+  NormalizedBody,
   NormalizedPayload,
 } from "../types/normalized.js";
 import type { MessageStore } from "../projector/apply-event.js";
@@ -18,6 +20,107 @@ function bodyTextFromPayload(payload: NormalizedPayload): string | undefined {
 
 function bodyHtmlFromPayload(payload: NormalizedPayload): string | undefined {
   return payload.body?.html;
+}
+
+function hasText(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function hasAddresses(value: unknown): value is NormalizedAddress[] {
+  return Array.isArray(value) && value.length > 0;
+}
+
+function hasAddress(value: unknown): value is NormalizedAddress {
+  return Boolean(value && typeof value === "object" && (hasText((value as NormalizedAddress).email) || hasText((value as NormalizedAddress).display_name)));
+}
+
+function hasBodyContent(body: NormalizedBody | undefined): boolean {
+  return Boolean(body && (hasText(body.text) || hasText(body.html) || hasText(body.preview)));
+}
+
+function mergeBody(existing: NormalizedBody | undefined, incoming: NormalizedBody | undefined): NormalizedBody | undefined {
+  if (!existing) return incoming;
+  if (!incoming) return existing;
+  if (incoming.body_kind === "empty" && hasBodyContent(existing)) {
+    return {
+      ...incoming,
+      body_kind: existing.body_kind,
+      ...(existing.text !== undefined ? { text: existing.text } : {}),
+      ...(existing.html !== undefined ? { html: existing.html } : {}),
+      ...(incoming.preview ?? existing.preview ? { preview: incoming.preview ?? existing.preview } : {}),
+      ...(existing.content_hashes ? { content_hashes: existing.content_hashes } : {}),
+    };
+  }
+  return incoming;
+}
+
+function mergeGraphExtensions(existing: NormalizedPayload, incoming: NormalizedPayload): NormalizedPayload["source_extensions"] {
+  const existingNamespaces = existing.source_extensions?.namespaces ?? {};
+  const incomingNamespaces = incoming.source_extensions?.namespaces ?? {};
+  const existingGraph = existingNamespaces.graph ?? {};
+  const incomingGraph = incomingNamespaces.graph ?? {};
+  const graph = { ...existingGraph, ...incomingGraph };
+  const namespaces = { ...existingNamespaces, ...incomingNamespaces, ...(Object.keys(graph).length ? { graph } : {}) };
+  return Object.keys(namespaces).length ? { namespaces } : undefined;
+}
+
+function mergePartialPayload(existing: NormalizedPayload | null, incoming: NormalizedPayload): NormalizedPayload {
+  if (!existing || existing.message_id !== incoming.message_id) return incoming;
+  const existingWithTimes = existing as NormalizedPayload & {
+    sent_at?: string;
+    created_at?: string;
+    last_modified_at?: string;
+  };
+  const incomingWithTimes = incoming as NormalizedPayload & {
+    sent_at?: string;
+    created_at?: string;
+    last_modified_at?: string;
+  };
+
+  const attachments =
+    (incoming.attachments?.length ?? 0) > 0
+      ? incoming.attachments
+      : (existing.attachments?.length ?? 0) > 0
+        ? existing.attachments
+        : incoming.attachments;
+
+  const merged: NormalizedPayload = {
+    ...existing,
+    ...incoming,
+    conversation_id: hasText(incoming.conversation_id) ? incoming.conversation_id : existing.conversation_id,
+    internet_message_id: hasText(incoming.internet_message_id) ? incoming.internet_message_id : existing.internet_message_id,
+    subject: hasText(incoming.subject) ? incoming.subject : existing.subject,
+    from: hasAddress(incoming.from) ? incoming.from : existing.from,
+    sender: hasAddress(incoming.sender) ? incoming.sender : existing.sender,
+    reply_to: hasAddresses(incoming.reply_to) ? incoming.reply_to : existing.reply_to ?? incoming.reply_to,
+    to: hasAddresses(incoming.to) ? incoming.to : existing.to ?? incoming.to,
+    cc: hasAddresses(incoming.cc) ? incoming.cc : existing.cc ?? incoming.cc,
+    bcc: hasAddresses(incoming.bcc) ? incoming.bcc : existing.bcc ?? incoming.bcc,
+    received_at: hasText(incoming.received_at) ? incoming.received_at : existing.received_at,
+    body: mergeBody(existing.body, incoming.body),
+    attachments,
+    flags: {
+      is_read: incoming.flags?.is_read ?? existing.flags?.is_read ?? false,
+      is_draft: incoming.flags?.is_draft ?? existing.flags?.is_draft ?? false,
+      is_flagged: incoming.flags?.is_flagged ?? existing.flags?.is_flagged ?? false,
+      has_attachments: Boolean(incoming.flags?.has_attachments || existing.flags?.has_attachments || (attachments?.length ?? 0) > 0),
+    },
+    source_extensions: mergeGraphExtensions(existing, incoming),
+  };
+
+  Object.assign(merged, {
+    ...(hasText(incomingWithTimes.sent_at) || hasText(existingWithTimes.sent_at)
+      ? { sent_at: hasText(incomingWithTimes.sent_at) ? incomingWithTimes.sent_at : existingWithTimes.sent_at }
+      : {}),
+    ...(hasText(incomingWithTimes.created_at) || hasText(existingWithTimes.created_at)
+      ? { created_at: hasText(incomingWithTimes.created_at) ? incomingWithTimes.created_at : existingWithTimes.created_at }
+      : {}),
+    ...(hasText(incomingWithTimes.last_modified_at) || hasText(existingWithTimes.last_modified_at)
+      ? { last_modified_at: hasText(incomingWithTimes.last_modified_at) ? incomingWithTimes.last_modified_at : existingWithTimes.last_modified_at }
+      : {}),
+  });
+
+  return merged;
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -117,8 +220,11 @@ export class FileMessageStore implements MessageStore {
         recursive: true,
       });
 
-      const textBody = bodyTextFromPayload(payload);
-      const htmlBody = bodyHtmlFromPayload(payload);
+      const existing = await this.readRecord(payload.message_id) as NormalizedPayload | null;
+      const mergedPayload = mergePartialPayload(existing, payload);
+
+      const textBody = bodyTextFromPayload(mergedPayload);
+      const htmlBody = bodyHtmlFromPayload(mergedPayload);
 
       if (textBody !== undefined) {
         await writeText(join(stagingDir, "body", "body.txt"), textBody);
@@ -128,12 +234,12 @@ export class FileMessageStore implements MessageStore {
         await writeText(join(stagingDir, "body", "body.html"), htmlBody);
       }
 
-      const manifest = buildAttachmentManifest(payload.attachments ?? []);
+      const manifest = buildAttachmentManifest(mergedPayload.attachments ?? []);
       await writeJson(join(stagingDir, "attachments", "manifest.json"), manifest);
 
       // Calculate checksum of the record for integrity validation
       const record = {
-        ...payload,
+        ...mergedPayload,
         body_refs: {
           ...(textBody !== undefined ? { text: "body/body.txt" } : {}),
           ...(htmlBody !== undefined ? { html: "body/body.html" } : {}),

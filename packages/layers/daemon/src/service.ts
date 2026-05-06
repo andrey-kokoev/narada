@@ -455,12 +455,13 @@ async function createDispatchContext(
 ) {
   const rootDir = scope.root_dir;
   const messageStore = new FileMessageStore({ rootDir });
+  let materializerDb: InstanceType<typeof Database> | undefined;
 
   const materializerRegistry = new VerticalMaterializerRegistry()
     .register('timer', () => new TimerContextMaterializer())
     .register('webhook', () => new WebhookContextMaterializer())
     .register('filesystem', () => new FilesystemContextMaterializer())
-    .register('mail', () => new MailboxContextMaterializer(rootDir, messageStore));
+    .register('mail', () => new MailboxContextMaterializer(rootDir, messageStore, materializerDb));
 
   let dispatchDeps: {
     db: InstanceType<typeof Database>;
@@ -493,6 +494,7 @@ async function createDispatchContext(
     const db = new Database(dbPath);
     db.pragma('journal_mode = WAL');
     db.pragma('synchronous = NORMAL');
+    materializerDb = db;
     const coordinatorStore = new SqliteCoordinatorStore({ db });
     coordinatorStore.initSchema();
 

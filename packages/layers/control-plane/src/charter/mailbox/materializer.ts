@@ -45,6 +45,23 @@ async function loadKnowledgeSources(rootDir: string): Promise<KnowledgeSource[]>
   return sources;
 }
 
+async function loadCampaignIntakeProjection(rootDir: string, contextId: string): Promise<unknown | null> {
+  const candidates = [
+    join(rootDir, "state", "campaign-intake", `${safeSegment(contextId)}.json`),
+  ];
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(await readFile(candidate, "utf-8")) as unknown;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT") {
+        continue;
+      }
+    }
+  }
+  return null;
+}
+
 async function getThreadMessageIds(rootDir: string, conversationId: string): Promise<string[]> {
   const membersDir = join(rootDir, "views", "by-thread", safeSegment(conversationId), "members");
   try {
@@ -120,8 +137,13 @@ export class MailboxContextMaterializer implements ContextMaterializer {
     });
 
     const knowledgeSources = await loadKnowledgeSources(this.rootDir);
+    const campaignIntake = await loadCampaignIntakeProjection(this.rootDir, context.context_id);
 
-    return { messages, knowledge_sources: knowledgeSources };
+    return {
+      messages,
+      knowledge_sources: knowledgeSources,
+      ...(campaignIntake ? { campaign_intake: campaignIntake } : {}),
+    };
   }
 
   private linkedConversationIds(contextId: string): string[] {
@@ -163,7 +185,7 @@ export function normalizeMessageForEnvelope(msg: NormalizedMessage): NormalizedM
   const r = msg as unknown as Record<string, unknown>;
   const bodyText =
     typeof msg.body === "object" && msg.body && "text" in msg.body
-      ? (msg.body as { text?: string }).text?.slice(0, 200) ?? null
+      ? (msg.body as { text?: string }).text ?? null
       : null;
   const bodyPreview =
     typeof msg.body === "object" && msg.body && "preview" in msg.body

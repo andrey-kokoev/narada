@@ -4,7 +4,7 @@ import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig } from '@narada2/control-plane';
-import type { AllowedAction, RuntimePolicy } from '@narada2/control-plane';
+import type { AllowedAction, RuntimePolicy, ScopeConfig } from '@narada2/control-plane';
 
 export interface RecoverOptions {
   config?: string;
@@ -68,7 +68,6 @@ export async function recoverCommand(
       fmt,
       logger,
       targetMailbox.policy,
-      'mail',
     );
   }
 
@@ -88,13 +87,8 @@ export async function recoverCommand(
     fmt,
     logger,
     scope.policy,
-    scope.context_strategy,
-    scope.campaign_request_senders
-      ? {
-          campaign_request_senders: scope.campaign_request_senders,
-          campaign_request_lookback_days: scope.campaign_request_lookback_days,
-        }
-      : undefined,
+    scope,
+    config.scopes,
   );
 }
 
@@ -105,8 +99,8 @@ async function recoverForScope(
   fmt: ReturnType<typeof createFormatter>,
   logger: CommandContext['logger'],
   policy?: RuntimePolicy,
-  contextStrategy = 'mail',
-  contextStrategyConfig?: unknown,
+  scope?: ScopeConfig,
+  scopes?: ScopeConfig[],
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const dbDir = join(rootDir, '.narada');
   const coordinatorDbPath = join(dbDir, 'coordinator.db');
@@ -132,7 +126,16 @@ async function recoverForScope(
     const intentStore = new SqliteIntentStore({ db });
     const factStore = new SqliteFactStore({ db: factDb });
 
-    const getRuntimePolicy = () => {
+    const scopeById = new Map((scopes ?? (scope ? [scope] : [])).map((configuredScope) => [configuredScope.scope_id, configuredScope]));
+
+    const getRuntimePolicy = (requestedScopeId: string) => {
+      const policyScope = scopeById.get(requestedScopeId);
+      if (policyScope) {
+        if (policyScope.charter?.degraded_mode === "draft_only") {
+          return { ...policyScope.policy, require_human_approval: true };
+        }
+        return policyScope.policy;
+      }
       if (policy) {
         return policy;
       }
@@ -151,15 +154,30 @@ async function recoverForScope(
       };
     };
 
+    const strategyName = scope?.context_strategy ?? 'mail';
     let strategy: ReturnType<typeof resolveContextStrategy>;
     try {
-      strategy = resolveContextStrategy(contextStrategy, contextStrategyConfig);
+      strategy = resolveContextStrategy(
+        strategyName,
+        scope
+          ? {
+              admission: scope.admission,
+              ...(scope.campaign_request_senders
+                ? {
+                    campaign_request_senders: scope.campaign_request_senders,
+                    campaign_request_lookback_days: scope.campaign_request_lookback_days,
+                  }
+                : {}),
+              ...(scope.operation_intake ? { operation_intake: scope.operation_intake } : {}),
+            }
+          : undefined,
+      );
     } catch (err) {
       return {
         exitCode: ExitCode.INVALID_CONFIG,
         result: {
           status: 'error',
-          error: `Unsupported context strategy "${contextStrategy}" for scope ${scopeId}`,
+          error: `Unsupported context strategy "${strategyName}" for scope ${scopeId}`,
         },
       };
     }
