@@ -15,7 +15,7 @@ import type {
   ManagedDraft,
 } from "./types.js";
 import { isVersionEligible, isValidTransition } from "./types.js";
-import type { GraphDraftClient, CreateDraftPayload } from "./graph-draft-client.js";
+import type { GraphDraftClient, CreateDraftPayload, MessageQuoteReadResult } from "./graph-draft-client.js";
 import { ExchangeFSSyncError, ErrorCode } from "../errors.js";
 
 export interface SendReplyWorkerDeps {
@@ -29,10 +29,6 @@ function sha256(input: string): string {
   return createHash("sha256").update(input).digest("hex");
 }
 
-function computeBodyHash(version: OutboundVersion): string {
-  return sha256(`${version.body_text}\n${version.body_html}`);
-}
-
 function computeRecipientsHash(version: OutboundVersion): string {
   return sha256(JSON.stringify({ to: version.to, cc: version.cc, bcc: version.bcc }));
 }
@@ -41,16 +37,143 @@ function computeSubjectHash(version: OutboundVersion): string {
   return sha256(version.subject);
 }
 
+function escapeHtml(input: string): string {
+  return input
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function stripHtml(input: string): string {
+  return input
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .trim();
+}
+
+function formatRecipient(recipient?: { emailAddress?: { name?: string; address?: string } }): string | null {
+  const address = recipient?.emailAddress?.address?.trim();
+  if (!address) return null;
+  const name = recipient?.emailAddress?.name?.trim();
+  return name && name !== address ? `${name} <${address}>` : address;
+}
+
+function formatRecipients(recipients?: Array<{ emailAddress?: { name?: string; address?: string } }>): string | null {
+  const formatted = recipients?.map(formatRecipient).filter((v): v is string => Boolean(v)) ?? [];
+  return formatted.length ? formatted.join("; ") : null;
+}
+
+function appendLine(lines: string[], label: string, value: string | null | undefined): void {
+  if (value?.trim()) lines.push(`${label}: ${value.trim()}`);
+}
+
+function formatOriginalMessageText(original: MessageQuoteReadResult): string {
+  const headers: string[] = [];
+  appendLine(headers, "From", formatRecipient(original.from ?? original.sender));
+  appendLine(headers, "Sent", original.receivedDateTime);
+  appendLine(headers, "To", formatRecipients(original.toRecipients));
+  appendLine(headers, "Cc", formatRecipients(original.ccRecipients));
+  appendLine(headers, "Subject", original.subject);
+
+  const bodyContent = original.body?.content ?? "";
+  const bodyText = original.body?.contentType?.toLowerCase() === "html"
+    ? stripHtml(bodyContent)
+    : bodyContent.trim();
+
+  return [
+    "--- Original message ---",
+    ...headers,
+    "",
+    bodyText,
+  ].join("\n").trimEnd();
+}
+
+function formatOriginalMessageHtml(original: MessageQuoteReadResult): string {
+  const headerRows: string[] = [];
+  const add = (label: string, value: string | null | undefined) => {
+    if (value?.trim()) headerRows.push(`<div><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value.trim())}</div>`);
+  };
+
+  add("From", formatRecipient(original.from ?? original.sender));
+  add("Sent", original.receivedDateTime);
+  add("To", formatRecipients(original.toRecipients));
+  add("Cc", formatRecipients(original.ccRecipients));
+  add("Subject", original.subject);
+
+  const bodyContent = original.body?.content ?? "";
+  const originalBody = original.body?.contentType?.toLowerCase() === "html"
+    ? bodyContent
+    : `<pre style="white-space: pre-wrap; font-family: inherit;">${escapeHtml(bodyContent.trim())}</pre>`;
+
+  return [
+    '<hr>',
+    '<div class="narada-original-message">',
+    '<div><strong>Original message</strong></div>',
+    ...headerRows,
+    '<br>',
+    originalBody,
+    '</div>',
+  ].join("");
+}
+
+function appendOriginalMessage(content: string, contentType: "Text" | "HTML", original: MessageQuoteReadResult | null): string {
+  if (!original) return content;
+  if (contentType === "HTML") {
+    return `${content}${formatOriginalMessageHtml(original)}`;
+  }
+  return `${content.trimEnd()}\n\n${formatOriginalMessageText(original)}`;
+}
+
+async function resolveOriginalMessage(
+  draftClient: GraphDraftClient,
+  userId: string,
+  version: OutboundVersion,
+  logger?: Logger,
+): Promise<MessageQuoteReadResult | null> {
+  if (!version.reply_to_message_id || !draftClient.getMessageForQuote) return null;
+  try {
+    return await draftClient.getMessageForQuote(userId, version.reply_to_message_id);
+  } catch (error) {
+    logger?.warn("Failed to load original message for reply quote", {
+      outboundId: version.outbound_id,
+      replyToMessageId: version.reply_to_message_id,
+      error: (error as Error).message,
+    });
+    return null;
+  }
+}
+
+function materializeDraftBody(
+  version: OutboundVersion,
+  original: MessageQuoteReadResult | null,
+): { contentType: "Text" | "HTML"; content: string } {
+  const contentType = version.body_html ? "HTML" : "Text";
+  const authored = version.body_html || version.body_text;
+  return {
+    contentType,
+    content: appendOriginalMessage(authored, contentType, original),
+  };
+}
+
 function buildDraftPayload(
   outboundId: string,
   version: OutboundVersion,
+  body: { contentType: "Text" | "HTML"; content: string },
 ): CreateDraftPayload {
   return {
     subject: version.subject,
-    body: {
-      contentType: version.body_html ? "HTML" : "Text",
-      content: version.body_html || version.body_text,
-    },
+    body,
     toRecipients: version.to.map((email) => ({ emailAddress: { address: email } })),
     ccRecipients: version.cc.map((email) => ({ emailAddress: { address: email } })),
     bccRecipients: version.bcc.map((email) => ({ emailAddress: { address: email } })),
@@ -173,7 +296,9 @@ export class SendReplyWorker {
     const { store, logger } = this.deps;
     try {
       const userId = this.deps.resolveUserId(command.scope_id);
-      const payload = buildDraftPayload(command.outbound_id, version);
+      const original = await resolveOriginalMessage(this.deps.draftClient, userId, version, logger);
+      const body = materializeDraftBody(version, original);
+      const payload = buildDraftPayload(command.outbound_id, version, body);
       const created = await this.deps.draftClient.createDraft(userId, payload);
 
       // Exchange assigns internetMessageId immediately upon draft creation.
@@ -199,7 +324,7 @@ export class SendReplyWorker {
         etag: null,
         internet_message_id: internetMessageId,
         header_outbound_id_present: true,
-        body_hash: computeBodyHash(version),
+        body_hash: sha256(body.content),
         recipients_hash: computeRecipientsHash(version),
         subject_hash: computeSubjectHash(version),
         created_at: now,
@@ -388,7 +513,8 @@ export class SendReplyWorker {
       return false;
     }
 
-    const expectedBodyContent = version.body_html || version.body_text;
+    const original = await resolveOriginalMessage(draftClient, userId, version, logger);
+    const expectedBodyContent = materializeDraftBody(version, original).content;
     const expectedBodyHash = sha256(expectedBodyContent);
     const expectedRecipientsHash = computeRecipientsHash(version);
     const expectedSubjectHash = computeSubjectHash(version);

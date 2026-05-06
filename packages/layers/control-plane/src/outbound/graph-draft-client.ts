@@ -8,6 +8,7 @@ import type { GraphHttpClient } from "../adapter/graph/client.js";
 
 export interface GraphDraftRecipient {
   emailAddress: {
+    name?: string;
     address: string;
   };
 }
@@ -39,9 +40,24 @@ export interface DraftReadResult {
   internetMessageId?: string;
 }
 
+export interface MessageQuoteReadResult {
+  id: string;
+  subject?: string;
+  receivedDateTime?: string;
+  from?: GraphDraftRecipient;
+  sender?: GraphDraftRecipient;
+  toRecipients?: GraphDraftRecipient[];
+  ccRecipients?: GraphDraftRecipient[];
+  body?: {
+    contentType: string;
+    content: string;
+  };
+}
+
 export interface GraphDraftClient {
   createDraft(userId: string, payload: CreateDraftPayload): Promise<{ id: string }>;
   getDraft(userId: string, draftId: string): Promise<DraftReadResult>;
+  getMessageForQuote?(userId: string, messageId: string): Promise<MessageQuoteReadResult>;
   sendDraft(userId: string, draftId: string): Promise<void>;
 }
 
@@ -66,6 +82,12 @@ export class DefaultGraphDraftClient implements GraphDraftClient {
   async getDraft(userId: string, draftId: string): Promise<DraftReadResult> {
     return this.httpClient.getJson<DraftReadResult>(
       `/users/${encodeURIComponent(userId)}/messages/${encodeURIComponent(draftId)}?$select=id,subject,body,toRecipients,ccRecipients,bccRecipients,internetMessageHeaders,internetMessageId`,
+    );
+  }
+
+  async getMessageForQuote(userId: string, messageId: string): Promise<MessageQuoteReadResult> {
+    return this.httpClient.getJson<MessageQuoteReadResult>(
+      `/users/${encodeURIComponent(userId)}/messages/${encodeURIComponent(messageId)}?$select=id,subject,receivedDateTime,from,sender,toRecipients,ccRecipients,body`,
     );
   }
 

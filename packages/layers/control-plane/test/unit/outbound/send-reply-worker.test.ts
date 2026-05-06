@@ -9,6 +9,7 @@ import { SendReplyWorker } from "../../../src/outbound/send-reply-worker.js";
 import type {
   GraphDraftClient,
   DraftReadResult,
+  MessageQuoteReadResult,
 } from "../../../src/outbound/graph-draft-client.js";
 import { ExchangeFSSyncError, ErrorCode } from "../../../src/errors.js";
 
@@ -62,10 +63,12 @@ function createVersion(
 
 class MockGraphDraftClient implements GraphDraftClient {
   drafts = new Map<string, { id: string; payload: DraftReadResult }>();
+  originalMessages = new Map<string, MessageQuoteReadResult>();
   sent = new Set<string>();
 
   reset(): void {
     this.drafts.clear();
+    this.originalMessages.clear();
     this.sent.clear();
   }
 
@@ -101,6 +104,18 @@ class MockGraphDraftClient implements GraphDraftClient {
       });
     }
     return draft.payload;
+  }
+
+  async getMessageForQuote(_userId: string, messageId: string): Promise<MessageQuoteReadResult> {
+    const message = this.originalMessages.get(messageId);
+    if (!message) {
+      throw new ExchangeFSSyncError("Not found", {
+        code: ErrorCode.GRAPH_NOT_FOUND,
+        recoverable: false,
+        phase: "test",
+      });
+    }
+    return message;
   }
 
   async sendDraft(_userId: string, draftId: string): Promise<void> {
@@ -296,6 +311,37 @@ describe("SendReplyWorker", () => {
     const draft = store.getManagedDraft(cmd.outbound_id, ver.version);
     expect(draft).not.toBeUndefined();
     expect(draftClient.sent.has(draft!.draft_id)).toBe(false);
+  });
+
+  it("mechanically appends original message envelope and body to reply drafts", async () => {
+    const cmd = createCommand({ action_type: "draft_reply", status: "pending" });
+    const ver = createVersion(cmd.outbound_id, 1, {
+      body_html: "",
+      body_text: "Hi Willem,\n\nThanks.",
+      reply_to_message_id: "msg-source-1",
+    });
+    draftClient.originalMessages.set("msg-source-1", {
+      id: "msg-source-1",
+      subject: "test",
+      receivedDateTime: "2026-05-06T20:36:03.859Z",
+      from: { emailAddress: { name: "Willem Driessen", address: "willem@staccato2011.com" } },
+      toRecipients: [{ emailAddress: { address: "staccato.narada@global-maxima.com" } }],
+      body: { contentType: "Text", content: "Campaign details here." },
+    });
+    store.createCommand(cmd, ver);
+
+    const result = await worker.processNext();
+    expect(result.processed).toBe(true);
+
+    const draft = store.getManagedDraft(cmd.outbound_id, ver.version);
+    const remote = draftClient.drafts.get(draft!.draft_id)!.payload;
+    expect(remote.body?.content).toContain("Hi Willem");
+    expect(remote.body?.content).toContain("--- Original message ---");
+    expect(remote.body?.content).toContain("From: Willem Driessen <willem@staccato2011.com>");
+    expect(remote.body?.content).toContain("Sent: 2026-05-06T20:36:03.859Z");
+    expect(remote.body?.content).toContain("To: staccato.narada@global-maxima.com");
+    expect(remote.body?.content).toContain("Subject: test");
+    expect(remote.body?.content).toContain("Campaign details here.");
   });
 
   it("does not process commands in sending status", async () => {
