@@ -344,6 +344,52 @@ describe("SendReplyWorker", () => {
     expect(remote.body?.content).toContain("Campaign details here.");
   });
 
+  it("preserves readable line breaks when quoting HTML list replies", async () => {
+    const cmd = createCommand({ action_type: "draft_reply", status: "pending" });
+    const ver = createVersion(cmd.outbound_id, 1, {
+      body_html: "",
+      body_text: "Hi Willem,\n\nThanks.",
+      reply_to_message_id: "msg-source-html-list",
+    });
+    draftClient.originalMessages.set("msg-source-html-list", {
+      id: "msg-source-html-list",
+      subject: "test",
+      receivedDateTime: "2026-05-07T02:56:49Z",
+      from: { emailAddress: { name: "Willem Driessen", address: "willem@staccato2011.com" } },
+      toRecipients: [{ emailAddress: { name: "Staccato Narada", address: "staccato.narada@global-maxima.com" } }],
+      body: {
+        contentType: "HTML",
+        content: [
+          "<ol>",
+          "<li><div>Propose timing</div></li>",
+          "<li><div>Members</div></li>",
+          "<li><div>No</div></li>",
+          "<li><div>C4x shootability perfected</div></li>",
+          "<li><div>The brand architecture needs to guide tone and voice.</div></li>",
+          "</ol>",
+          "<div>Best regards,</div>",
+          "<div>Willem Driessen</div>",
+          "<div>CMO</div>",
+        ].join(""),
+      },
+    });
+    store.createCommand(cmd, ver);
+
+    const result = await worker.processNext();
+    expect(result.processed).toBe(true);
+
+    const draft = store.getManagedDraft(cmd.outbound_id, ver.version);
+    const remote = draftClient.drafts.get(draft!.draft_id)!.payload;
+    expect(remote.body?.content).toContain("Propose timing");
+    expect(remote.body?.content).toContain("Members");
+    expect(remote.body?.content).toContain("No");
+    expect(remote.body?.content).toContain("C4x shootability perfected");
+    expect(remote.body?.content).toContain("The brand architecture needs to guide tone and voice.");
+    expect(remote.body?.content).toContain("Best regards,\nWillem Driessen\nCMO");
+    expect(remote.body?.content).not.toContain("Propose timing 2. Members");
+    expect(remote.body?.content).not.toContain("Willem DriessenCMO");
+  });
+
   it("does not process commands in sending status", async () => {
     const cmd = createCommand({ status: "sending" });
     const ver = createVersion(cmd.outbound_id);

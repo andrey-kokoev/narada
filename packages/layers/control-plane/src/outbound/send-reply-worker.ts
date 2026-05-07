@@ -50,7 +50,9 @@ function stripHtml(input: string): string {
   return input
     .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<(li|tr|table|ol|ul|blockquote|h[1-6])\b[^>]*>/gi, "\n")
     .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(div|li|tr|table|ol|ul|blockquote|h[1-6])>/gi, "\n")
     .replace(/<\/p>/gi, "\n\n")
     .replace(/<[^>]+>/g, "")
     .replace(/&nbsp;/g, " ")
@@ -59,6 +61,9 @@ function stripHtml(input: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
