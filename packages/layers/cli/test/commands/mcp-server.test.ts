@@ -50,7 +50,7 @@ describe('Narada MCP facade', () => {
     expect(tools).toContain('narada_task_work_next');
     expect(tools).toContain('narada_inbox_submit_observation');
     expect(tools).toContain('narada_ee_mcp_doctor');
-    expect(tools).toContain('narada_ee_run');
+    expect(tools).not.toContain('narada_ee_run');
   });
 
   it('resolves Site context from Site config', () => {
@@ -464,7 +464,7 @@ describe('Narada MCP facade', () => {
     });
   });
 
-  it('reports WSL-to-Windows EE-MCP as planned missing capability when no adapter config exists', async () => {
+  it('reports WSL-to-Windows EE-MCP as superseded by Windows-native posture', async () => {
     const response = await handleMcpRequest({
       jsonrpc: '2.0',
       id: 13,
@@ -477,14 +477,17 @@ describe('Narada MCP facade', () => {
 
     const result = JSON.parse(((response?.result as { content: Array<{ text: string }> }).content[0].text));
     expect(result).toMatchObject({
-      status: 'planned_missing_capability',
+      status: 'superseded_by_windows_native',
       adapter_id: 'ee-mcp.windows-powershell-from-wsl',
       direction: 'wsl_to_windows',
+      current_posture: 'not_current_narada_proper_path',
+      superseded_by: 'windows_native_narada_proper_authority',
       command_id_grammar: {
         allowed_prefix: 'windows-pwsh.readonly.',
         side_effect_class: 'read_only',
       },
       refusal_posture: {
+        refusal_code: 'superseded_by_windows_native',
         raw_windows_shell_forbidden: true,
         forbidden_shortcuts: ['powershell.exe', 'pwsh.exe', 'cmd.exe'],
       },
@@ -495,7 +498,7 @@ describe('Narada MCP facade', () => {
     });
   });
 
-  it('refuses WSL-to-Windows EE-MCP run requests before sanctioned adapter admission', async () => {
+  it('refuses direct WSL-to-Windows EE-MCP run requests as superseded compatibility calls', async () => {
     const response = await handleMcpRequest({
       jsonrpc: '2.0',
       id: 14,
@@ -515,11 +518,12 @@ describe('Narada MCP facade', () => {
     expect(result.isError).toBe(true);
     expect(payload).toMatchObject({
       status: 'error',
-      error: 'planned_missing_capability',
+      error: 'superseded_by_windows_native',
       adapter_id: 'ee-mcp.windows-powershell-from-wsl',
       command_id: 'windows-pwsh.readonly.hostname',
       execution_attempted: false,
       doctor: {
+        status: 'superseded_by_windows_native',
         refusal_posture: {
           raw_windows_shell_forbidden: true,
         },

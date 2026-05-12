@@ -235,8 +235,14 @@ describe('sitesCreateCommand', () => {
       authority_transferred: false,
     });
     const configProjection = JSON.parse(readFileSync(join(siteRoot, 'config.json'), 'utf8')) as {
+      projection_posture: string;
+      authority_source: string;
+      authority_effect: string;
       origin: { lineage_event_ref: string };
     };
+    expect(configProjection.projection_posture).toBe('compatibility_projection');
+    expect(configProjection.authority_source).toBe('.narada/site.json');
+    expect(configProjection.authority_effect).toBe('derived_from_site_seed_not_authority_seed');
     expect(configProjection.origin.lineage_event_ref).toBe(siteSeed.origin.lineage_event_ref);
     expect(output.non_claims).toContain('DB init execution');
     expect(output.non_claims).toContain('MCP registration execution');

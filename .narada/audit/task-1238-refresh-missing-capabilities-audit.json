@@ -1,0 +1,38 @@
+{
+  "schema": "narada.audit.task.v1",
+  "task": {
+    "id": "20260512-1238-refresh-narada-proper-missing-capability-projection",
+    "number": 1238,
+    "title": "Refresh Narada proper missing capability projection"
+  },
+  "decision": "completed_capability_projection_refresh",
+  "changed_files": [
+    ".narada/capabilities/missing-capabilities.md",
+    ".ai/do-not-open/tasks/20260512-1238-refresh-narada-proper-missing-capability-projection.md",
+    ".narada/audit/task-1238-refresh-missing-capabilities-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "Get-Content .narada\\capabilities\\mcp-surfaces.json -Raw | ConvertFrom-Json",
+      "result": "json valid"
+    },
+    {
+      "command": "Get-Content .narada\\capabilities\\self-adopted-windows-native-site-package-set.json -Raw | ConvertFrom-Json",
+      "result": "json valid"
+    },
+    {
+      "command": "Select-String -Path .narada\\capabilities\\missing-capabilities.md -Pattern \"plan_init|admit_task|read_task|richer task lifecycle|source Site import\"",
+      "result": "expected admitted first-slice and residual terms present"
+    }
+  ],
+  "terminal_claim": "missing-capabilities.md now distinguishes admitted first slices from remaining missing capabilities.",
+  "not_claimed": [
+    "richer task lifecycle MCP",
+    "inbox MCP beyond local empty substrate descriptors",
+    "agent-context live hydration execution",
+    "checkpoint/resume history",
+    "native shell policy",
+    "source Site import or migration"
+  ]
+}

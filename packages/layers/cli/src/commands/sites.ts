@@ -1566,7 +1566,7 @@ function buildCreateSitePlannedFiles(
 ): Array<Record<string, unknown>> {
   const siteRoot = config.site?.site_root ?? '<site-root>';
   const files: Array<Record<string, unknown>> = [
-    { path: `${siteRoot}\\config.json`, purpose: 'Site governance coordinates', mutation: 'planned_only' },
+    { path: `${siteRoot}\\config.json`, purpose: 'Compatibility projection of Site governance coordinates; .narada/site.json is authority seed', mutation: 'planned_only_projection' },
     { path: `${siteRoot}\\AGENTS.md`, purpose: 'Site-local agent execution contract', mutation: 'planned_only' },
     { path: `${siteRoot}\\.narada\\site.json`, purpose: 'Site authority seed coordinates', mutation: 'planned_only' },
     { path: `${siteRoot}\\.narada\\lineage\\events\\site-created.json`, purpose: 'Append-only Site origin/build lineage event', mutation: 'planned_only' },
@@ -1798,6 +1798,9 @@ function minimalCreateSiteWrites(
   };
   const governanceConfig = {
     schema: 'narada.create_site.materialized_config.v0',
+    projection_posture: 'compatibility_projection',
+    authority_source: '.narada/site.json',
+    authority_effect: 'derived_from_site_seed_not_authority_seed',
     created_at: createdAt,
     site: {
       ...config.site,
@@ -1861,7 +1864,7 @@ function minimalCreateSiteWrites(
     {
       path: join(siteRoot, 'config.json'),
       dir: siteRoot,
-      purpose: 'Site governance coordinates',
+      purpose: 'Compatibility projection of Site governance coordinates',
       content: `${JSON.stringify(governanceConfig, null, 2)}\n`,
     },
     {

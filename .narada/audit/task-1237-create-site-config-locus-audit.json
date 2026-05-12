@@ -1,0 +1,34 @@
+{
+  "schema": "narada.audit.task.v1",
+  "task": {
+    "id": "20260512-1237-reconcile-create-site-governance-config-locus",
+    "number": 1237,
+    "title": "Reconcile create-site governance config locus"
+  },
+  "decision": "completed_projection_authority_reconciliation",
+  "changed_files": [
+    "packages/layers/cli/src/commands/sites.ts",
+    "packages/layers/cli/test/commands/sites-create.test.ts",
+    ".ai/do-not-open/tasks/20260512-1237-reconcile-create-site-governance-config-locus.md",
+    ".narada/audit/task-1237-create-site-config-locus-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/layers/cli exec vitest run test/commands/sites-create.test.ts",
+      "result": "passed; 22 tests"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli typecheck",
+      "result": "passed"
+    }
+  ],
+  "terminal_claim": "narada sites create now labels root config.json as a compatibility projection derived from .narada/site.json rather than the Site authority seed.",
+  "not_claimed": [
+    "live Site migration",
+    "source Site state import",
+    "DB initialization execution",
+    "MCP registration execution",
+    "capability or credential grants"
+  ]
+}

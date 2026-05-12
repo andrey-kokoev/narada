@@ -14,7 +14,6 @@ import {
   taskPeekNextCommand,
   taskWorkNextCommand,
 } from './commands/task-next.js';
-import { commandRunCommand } from './commands/command-run.js';
 import { grantEffectiveStatus, readCapabilityRegistry } from './lib/capability-consent-registry.js';
 import { ExitCode } from './lib/exit-codes.js';
 import type { CommandSideEffectClass } from './lib/command-execution-intent.js';
@@ -201,23 +200,12 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
   },
   {
     name: 'narada_ee_mcp_doctor',
-    description: 'Inspect WSL-to-Windows EE-MCP adapter readiness without executing Windows commands.',
+    description: 'Inspect superseded WSL-to-Windows EE-MCP posture without executing Windows commands.',
     inputSchema: objectSchema({
       cwd: stringSchema('Working directory; defaults to current process cwd.'),
       adapter_id: stringSchema(`Adapter id; defaults to ${WSL_WINDOWS_EE_MCP_ADAPTER_ID}.`),
       target: targetSchema(),
     }),
-  },
-  {
-    name: 'narada_ee_run',
-    description: 'Request an admitted EE-MCP command id; refuses raw WSL-to-Windows shell shortcuts when no sanctioned adapter exists.',
-    inputSchema: objectSchema({
-      cwd: stringSchema('Working directory; defaults to current process cwd.'),
-      adapter_id: stringSchema(`Adapter id; defaults to ${WSL_WINDOWS_EE_MCP_ADAPTER_ID}.`),
-      command_id: { type: 'string', description: 'Typed command id, e.g. windows-pwsh.readonly.hostname.' },
-      requester: stringSchema('Requester principal; defaults to mcp-client.'),
-      target: targetSchema(),
-    }, ['command_id']),
   },
 ];
 
@@ -436,7 +424,7 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
 
 interface WslWindowsEeMcpConfig {
   adapter_id?: string;
-  status?: 'admitted' | 'planned_missing_capability';
+  status?: 'admitted' | 'planned_missing_capability' | 'superseded_by_windows_native';
   runtime_locus?: string;
   commands?: Record<string, {
     argv?: string[];
@@ -450,14 +438,14 @@ function inspectWslWindowsEeMcp(args: { cwd: string; adapterId?: string }): Reco
   const configPath = resolve(args.cwd, '.ai', 'ee-mcp', 'windows-powershell-from-wsl.json');
   const config = readJsonObject(configPath) as WslWindowsEeMcpConfig | undefined;
   const configured = Boolean(config);
-  const status = configured && config?.status === 'admitted' && config.adapter_id === adapterId
-    ? 'ready'
-    : 'planned_missing_capability';
+  const status = 'superseded_by_windows_native';
 
   return {
     status,
     adapter_id: adapterId,
     direction: 'wsl_to_windows',
+    current_posture: 'not_current_narada_proper_path',
+    superseded_by: 'windows_native_narada_proper_authority',
     embodiment_id: 'windows-pwsh',
     runtime_locus: config?.runtime_locus ?? 'execution_machine_site',
     config_path: configPath,
@@ -468,14 +456,15 @@ function inspectWslWindowsEeMcp(args: { cwd: string; adapterId?: string }): Reco
       side_effect_class: 'read_only',
     },
     refusal_posture: {
-      refusal_code: 'planned_missing_capability',
+      refusal_code: 'superseded_by_windows_native',
       raw_windows_shell_forbidden: true,
       forbidden_shortcuts: ['powershell.exe', 'pwsh.exe', 'cmd.exe'],
-      reason: 'WSL-to-Windows execution must enter through an admitted EE-MCP adapter config and CEIZ command run.',
+      reason: 'Narada proper is now Windows-native; WSL-to-Windows EE-MCP is retained only as a superseded diagnostic posture.',
     },
     doctor: {
       readiness: status,
-      repair_command: `Create ${configPath} with adapter_id ${adapterId}, status admitted, and explicit read-only command ids.`,
+      repair_command: null,
+      next_admissible_step: 'Open a new WSL runtime-locus admission task before reintroducing WSL-to-Windows EE-MCP execution.',
     },
   };
 }
@@ -499,58 +488,13 @@ async function runWslWindowsEeMcpCommand(args: {
   }
 
   const doctor = inspectWslWindowsEeMcp({ cwd: args.cwd, adapterId });
-  if (doctor.status !== 'ready') {
-    return {
-      status: 'error',
-      error: 'planned_missing_capability',
-      adapter_id: adapterId,
-      command_id: args.commandId,
-      execution_attempted: false,
-      doctor,
-    };
-  }
-
-  const config = readJsonObject(resolve(args.cwd, '.ai', 'ee-mcp', 'windows-powershell-from-wsl.json')) as WslWindowsEeMcpConfig | undefined;
-  const command = config?.commands?.[args.commandId];
-  if (!command?.argv || !Array.isArray(command.argv) || command.argv.some((item) => typeof item !== 'string')) {
-    return {
-      status: 'error',
-      error: 'command_id_not_configured',
-      adapter_id: adapterId,
-      command_id: args.commandId,
-      execution_attempted: false,
-      doctor,
-    };
-  }
-  if (command.side_effect_class && command.side_effect_class !== 'read_only') {
-    return {
-      status: 'error',
-      error: 'unsupported_command_class',
-      adapter_id: adapterId,
-      command_id: args.commandId,
-      side_effect_class: command.side_effect_class,
-      execution_attempted: false,
-      allowed_side_effect_class: 'read_only',
-    };
-  }
-
-  const run = await commandRunCommand({
-    cwd: args.cwd,
-    argv: JSON.stringify(command.argv),
-    requester: args.requester,
-    requesterKind: 'agent',
-    sideEffect: 'read_only',
-    timeout: command.timeout_seconds ?? 30,
-    outputProfile: 'bounded_excerpt',
-    rationale: `EE-MCP ${adapterId} command ${args.commandId}`,
-    format: 'json',
-  });
   return {
-    status: run.exitCode === ExitCode.SUCCESS ? 'success' : 'error',
+    status: 'error',
+    error: 'superseded_by_windows_native',
     adapter_id: adapterId,
     command_id: args.commandId,
-    execution_attempted: true,
-    command_run: run.result,
+    execution_attempted: false,
+    doctor,
   };
 }
 

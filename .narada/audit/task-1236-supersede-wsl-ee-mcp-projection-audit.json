@@ -1,0 +1,34 @@
+{
+  "schema": "narada.audit.task.v1",
+  "task": {
+    "id": "20260512-1236-supersede-wsl-to-windows-ee-mcp-active-projection",
+    "number": 1236,
+    "title": "Supersede WSL-to-Windows EE-MCP active projection"
+  },
+  "decision": "completed_projection_supersession",
+  "changed_files": [
+    "packages/layers/cli/src/mcp-server.ts",
+    "packages/layers/cli/test/commands/mcp-server.test.ts",
+    ".ai/do-not-open/tasks/20260512-1236-supersede-wsl-to-windows-ee-mcp-active-projection.md",
+    ".narada/audit/task-1236-supersede-wsl-ee-mcp-projection-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/layers/cli exec vitest run test/commands/mcp-server.test.ts",
+      "result": "passed; 22 tests"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli typecheck",
+      "result": "passed"
+    }
+  ],
+  "terminal_claim": "WSL-to-Windows EE-MCP is no longer advertised as an active runnable MCP tool; the remaining doctor reports superseded-by-Windows-native posture.",
+  "not_claimed": [
+    "WSL-to-Windows execution carrier",
+    "raw powershell.exe, pwsh.exe, or cmd.exe fallback",
+    "native shell execution",
+    "PC-locus mutation",
+    "operator-surface runtime copying"
+  ]
+}
