@@ -1,5 +1,14 @@
 ---
-status: opened
+status: closed
+criteria_proved_by: narada.architect
+criteria_proved_at: 2026-05-12T23:44:15.366Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
+closed_at: 2026-05-12T23:44:15.815Z
+closed_by: narada.architect
+governed_by: task_close:narada.architect
+closure_mode: agent_finish
 ---
 
 # Prevent stale compact workboard command-shape failures
@@ -57,9 +66,9 @@ Recommendation: Route to CLI ergonomics/task-governance follow-up, likely adjace
 
 ## Acceptance Criteria
 
-- [ ] Reproduce the stale command shape failure for task workboard --view compact or the currently remembered equivalent with a focused CLI regression.
-- [ ] Choose the owning surface explicitly: either support the compact workboard alias intentionally or refuse it with a precise repair command to the bounded workloop surface.
-- [ ] Update help, docs, or command output so compact workboard guidance names the real current command shape.
-- [ ] Ensure bounded workloop remains the canonical compact agent/workboard read surface and is referenced in error/help text.
-- [ ] Verify with focused CLI tests and one bounded human/JSON command readback that does not dump large task transcripts.
-- [ ] Record residuals if any legacy command names remain accepted only as compatibility aliases.
+- [x] Reproduce the stale command shape failure for task workboard --view compact or the currently remembered equivalent with a focused CLI regression.
+- [x] Choose the owning surface explicitly: either support the compact workboard alias intentionally or refuse it with a precise repair command to the bounded workloop surface.
+- [x] Update help, docs, or command output so compact workboard guidance names the real current command shape.
+- [x] Ensure bounded workloop remains the canonical compact agent/workboard read surface and is referenced in error/help text.
+- [x] Verify with focused CLI tests and one bounded human/JSON command readback that does not dump large task transcripts.
+- [x] Record residuals if any legacy command names remain accepted only as compatibility aliases.

@@ -7,10 +7,12 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Command } from 'commander';
 import { Database, SqliteInboxStore } from '@narada2/control-plane';
 import { taskWorkboardCommand } from '../../src/commands/task-workboard.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { SqliteTaskLifecycleStore, type TaskStatus } from '../../src/lib/task-lifecycle-store.js';
+import { registerTaskOperationsCommands } from '../../src/commands/task-operations-register.js';
 
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai'), { recursive: true });
@@ -213,6 +215,47 @@ describe('task workboard command', () => {
     expect(compact.closure_semantics).toBeUndefined();
     expect(compact.concurrency_boundaries).toBeUndefined();
     expect(JSON.stringify(compact)).not.toContain('Reviewer must not infer completion');
+  });
+
+  it('accepts the remembered compact workboard CLI shape at the commander boundary', async () => {
+    const originalArgv = process.argv;
+    const output: string[] = [];
+    const log = vi.spyOn(console, 'log').mockImplementation((line: unknown) => {
+      output.push(String(line));
+    });
+    const program = new Command();
+    program.exitOverride();
+    const task = program.command('task');
+    registerTaskOperationsCommands(task);
+
+    const argv = [
+      'node',
+      'narada',
+      'task',
+      'workboard',
+      '--cwd',
+      tempDir,
+      '--view',
+      'compact',
+      '--format',
+      'json',
+    ];
+    try {
+      process.argv = argv;
+      await program.parseAsync(argv);
+    } finally {
+      process.argv = originalArgv;
+      log.mockRestore();
+    }
+
+    const compact = JSON.parse(output.join('\n')) as {
+      view: string;
+      recommended_command: string;
+      counts: Record<string, number>;
+    };
+    expect(compact.view).toBe('compact');
+    expect(compact.recommended_command).toBe('narada task workboard --view compact --format json');
+    expect(compact.counts.pending_reviews).toBe(1);
   });
 
   it('can include stable guidance in compact output explicitly', async () => {
