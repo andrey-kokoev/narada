@@ -1,0 +1,45 @@
+{
+  "schema": "narada.audit.task.v1",
+  "task": {
+    "id": "20260512-1229-add-narada-proper-crew-startup-shortcut-descriptors",
+    "number": 1229,
+    "title": "Add Narada proper crew startup shortcut descriptors"
+  },
+  "decision": "admitted_descriptor_only",
+  "changed_files": [
+    ".ai/do-not-open/tasks/20260512-1229-add-narada-proper-crew-startup-shortcut-descriptors.md",
+    ".narada/crew/README.md",
+    ".narada/crew/architect.startup-request.json",
+    ".narada/crew/templates/agent-startup-request.template.json",
+    ".narada/admission/decisions/task-1229-crew-startup-shortcut-descriptors-admission.md",
+    ".narada/audit/task-1229-crew-startup-shortcut-descriptors-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "Get-Content .narada\\crew\\architect.startup-request.json | ConvertFrom-Json | Out-Null",
+      "result": "json valid"
+    },
+    {
+      "command": "Get-Content .narada\\crew\\templates\\agent-startup-request.template.json | ConvertFrom-Json | Out-Null",
+      "result": "json valid"
+    }
+  ],
+  "terminal_claim": "Narada proper has repo-local .narada/crew launch intent descriptors/templates for governed crew startup coordination.",
+  "not_claimed": [
+    "direct substrate shortcut execution",
+    "native shell fallback",
+    "PC-locus mutation",
+    "operator-surface runtime copying",
+    "process launch side effects",
+    "Windows shortcut creation",
+    "source Site runtime state import",
+    "workboard state import from another Site",
+    "checkpoint history import from another Site",
+    "secrets or credentials",
+    "implicit capability grants"
+  ],
+  "rollback": {
+    "note": "Remove or supersede the .narada/crew descriptors and admission/audit records. No PC shortcuts, processes, or external runtime state were mutated."
+  }
+}

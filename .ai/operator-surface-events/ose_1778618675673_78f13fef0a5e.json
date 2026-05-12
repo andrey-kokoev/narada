@@ -1,0 +1,142 @@
+{
+  "event_id": "ose_1778618675673_78f13fef0a5e",
+  "identity": "architect",
+  "runtime_locus": "narada",
+  "resolved_runtime_handle": "codex-thread:019d861e-8125-7670-90b8-809b38e9026b",
+  "transport": "explicit_runtime_handle",
+  "submit_strategy": "known_surface_submit",
+  "text_digest": "693c96560546e9757c226a516715a17eecc4dc9f456c5af69fd876af784c2aad",
+  "text_length": 94,
+  "original_text_digest": "48cb225ac8fcfe9b7dcc4e6fdf28032e762a53f4622c36586a15bb67e7086eef",
+  "original_text_length": 67,
+  "rendered_text": "From: narada-andrey.Kevin\n\nCross-Site Operator Surface delivery admission smoke for task 1230.",
+  "rendered_text_digest": "693c96560546e9757c226a516715a17eecc4dc9f456c5af69fd876af784c2aad",
+  "rendered_text_length": 94,
+  "sender_header_included": true,
+  "input_posture": "typed_message",
+  "requested_address": "narada.architect",
+  "requested_to": "narada.architect",
+  "resolved_to": "architect",
+  "resolution": "scoped_role_alias_exact_one",
+  "resolution_evidence": {
+    "site_id": "narada",
+    "requested_site_id": "narada",
+    "legacy_site_ids": [
+      "narada-proper"
+    ],
+    "role": "architect",
+    "candidates": [
+      "architect"
+    ]
+  },
+  "current_site": "narada-andrey",
+  "target_site": "narada",
+  "message_route": {
+    "sender": "narada-andrey.Kevin",
+    "requested_recipient": "narada.architect",
+    "requested_to": "narada.architect",
+    "resolved_recipient": "architect",
+    "resolved_to": "architect",
+    "resolution": "scoped_role_alias_exact_one",
+    "resolution_evidence": {
+      "site_id": "narada",
+      "requested_site_id": "narada",
+      "legacy_site_ids": [
+        "narada-proper"
+      ],
+      "role": "architect",
+      "candidates": [
+        "architect"
+      ]
+    },
+    "current_site": "narada-andrey",
+    "target_site": "narada",
+    "binding_status": "bound",
+    "identity_flag_mode": "explicit_to"
+  },
+  "sender": "narada-andrey.Kevin",
+  "sender_identity": "narada-andrey.Kevin",
+  "resolved_sender_identity": "narada-andrey.Kevin",
+  "recipient": "architect",
+  "site_plane": {
+    "current_site": "narada-andrey",
+    "target_site": "narada"
+  },
+  "binding_proof": {
+    "binding_id": "bind_e35c4bd077c63fce",
+    "runtime_locus": "narada",
+    "status": "bound"
+  },
+  "delivery_result": {
+    "status": "delivered",
+    "state_path": [
+      "requested",
+      "delivered"
+    ],
+    "deliverable": true,
+    "reason": "operator_idle",
+    "operator_activity": {
+      "state": "idle",
+      "observed_at": null
+    },
+    "urgent_interrupt": {
+      "authorized": false,
+      "authority_ref": null
+    },
+    "cross_desktop": {
+      "required": false,
+      "current_desktop": null,
+      "target_desktop": null,
+      "policy": "same_desktop_only",
+      "delivery_case": "same_desktop_delivery",
+      "authority_ref": null,
+      "operator_confirmed": false,
+      "restoration_evidence_required": false,
+      "exact_safe_next_action": "Delivery admitted by current policy.",
+      "reversible_or_rejected": true
+    },
+    "queue": null,
+    "delivery_case": "same_desktop_delivery",
+    "safe_next_action": "Delivery admitted by current policy."
+  },
+  "serialization": {
+    "admitted": true,
+    "status": "active",
+    "outcome": "admitted",
+    "runtime_locus": "narada",
+    "critical_section": "focus_clipboard_type_submit",
+    "started_at": "2026-05-12T20:44:35.675Z",
+    "active_lease_artifact": "D:\\code\\narada\\.ai\\operator-surface-send-queue\\narada.active.json",
+    "active_send": {
+      "event_id": "ose_1778618675673_78f13fef0a5e",
+      "target_identity": "architect",
+      "sender_identity": "narada-andrey.Kevin",
+      "runtime_locus": "narada",
+      "binding_id": "bind_e35c4bd077c63fce",
+      "text_digest": "693c96560546e9757c226a516715a17eecc4dc9f456c5af69fd876af784c2aad",
+      "status": "active",
+      "outcome": "admitted",
+      "critical_section": "focus_clipboard_type_submit",
+      "started_at": "2026-05-12T20:44:35.675Z",
+      "expires_at": "2026-05-12T20:49:35.675Z",
+      "lease_ms": 300000,
+      "ordering": {
+        "policy": "single_active_send_per_runtime_locus",
+        "active_lease_artifact": "D:\\code\\narada\\.ai\\operator-surface-send-queue\\narada.active.json"
+      }
+    },
+    "stale_recovery": null,
+    "ordering": {
+      "policy": "single_active_send_per_runtime_locus",
+      "active_lease_artifact": "D:\\code\\narada\\.ai\\operator-surface-send-queue\\narada.active.json"
+    }
+  },
+  "delivery_promise": {
+    "promise_id": "osdq_ose_1778618675673_78f13fef0a5e",
+    "artifact": "D:\\code\\narada\\.ai\\operator-surface-delivery-queue\\osdq_ose_1778618675673_78f13fef0a5e.json",
+    "status": "promised"
+  },
+  "fallback_inbox": null,
+  "dry_run": false,
+  "status": "event_recorded_for_runtime_locus"
+}

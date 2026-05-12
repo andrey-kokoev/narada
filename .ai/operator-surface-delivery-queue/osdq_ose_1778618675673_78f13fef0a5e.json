@@ -1,0 +1,12 @@
+{
+  "promise_id": "osdq_ose_1778618675673_78f13fef0a5e",
+  "event_id": "ose_1778618675673_78f13fef0a5e",
+  "target_identity": "architect",
+  "sender_identity": "narada-andrey.Kevin",
+  "runtime_locus": "narada",
+  "text_digest": "693c96560546e9757c226a516715a17eecc4dc9f456c5af69fd876af784c2aad",
+  "policy": "queue",
+  "status": "promised",
+  "created_at": "2026-05-12T20:44:35.673Z",
+  "timeout_ms": 300000
+}

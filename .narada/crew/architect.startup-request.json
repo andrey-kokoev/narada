@@ -1,0 +1,39 @@
+{
+  "schema": "narada.crew_startup_shortcut.request.v0",
+  "requestId": "narada-proper.crew.architect.startup-request.v0",
+  "trigger": "operator_requested_startup",
+  "targetLocus": "narada_proper",
+  "targetSiteId": "narada",
+  "requestedBy": "operator",
+  "roleNames": [
+    "architect"
+  ],
+  "namedAgentIds": [
+    "narada.architect"
+  ],
+  "mcpOnly": true,
+  "directNativeShortcutRequested": false,
+  "sourceRefs": [
+    ".narada/capabilities/crew-startup-shortcut-capability-candidate.json",
+    ".narada/admission/decisions/task-1229-crew-startup-shortcut-descriptors-admission.md"
+  ],
+  "sourcePaths": [],
+  "requiredMcpSurfaces": [
+    {
+      "surfaceId": "site_task_lifecycle.local",
+      "tools": [
+        "site_task_lifecycle.read_task"
+      ],
+      "required": true
+    },
+    {
+      "surfaceId": "agent_context_memory.local",
+      "tools": [
+        "agent_context_memory.plan_hydration"
+      ],
+      "required": true
+    }
+  ],
+  "workboardEvidenceRefs": [],
+  "hydrationEvidenceRefs": []
+}

@@ -1,0 +1,38 @@
+{
+  "schema": "narada.crew_startup_shortcut.request.v0",
+  "requestId": "<site-id>.crew.<role-or-agent>.startup-request.v0",
+  "trigger": "operator_requested_startup",
+  "targetLocus": "narada_proper",
+  "targetSiteId": "<site-id>",
+  "requestedBy": "operator",
+  "roleNames": [
+    "<role-name>"
+  ],
+  "namedAgentIds": [
+    "<site-id>.<agent-name>"
+  ],
+  "mcpOnly": true,
+  "directNativeShortcutRequested": false,
+  "sourceRefs": [
+    "<local-admission-or-template-ref>"
+  ],
+  "sourcePaths": [],
+  "requiredMcpSurfaces": [
+    {
+      "surfaceId": "site_task_lifecycle.local",
+      "tools": [
+        "site_task_lifecycle.read_task"
+      ],
+      "required": true
+    },
+    {
+      "surfaceId": "agent_context_memory.local",
+      "tools": [
+        "agent_context_memory.plan_hydration"
+      ],
+      "required": true
+    }
+  ],
+  "workboardEvidenceRefs": [],
+  "hydrationEvidenceRefs": []
+}

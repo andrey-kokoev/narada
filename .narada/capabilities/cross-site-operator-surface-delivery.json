@@ -1,0 +1,79 @@
+{
+  "schema": "narada.capability.cross_site_operator_surface_delivery.v1",
+  "capability_id": "narada-proper.capability.cross-site-operator-surface-delivery.narada-andrey-to-architect.v0",
+  "capability_name": "Cross-Site Operator Surface delivery from narada-andrey to narada.architect",
+  "state": "admitted",
+  "exposure_class": "request_response",
+  "target_locus": {
+    "site_id": "narada",
+    "runtime_locus": "narada",
+    "authority_root": "D:\\code\\narada"
+  },
+  "route": {
+    "source_site": "narada-andrey",
+    "from_identity": "narada-andrey.Kevin",
+    "to_address": "narada.architect",
+    "resolved_identity": "architect",
+    "target_site": "narada",
+    "resolution": "scoped_role_alias_exact_one"
+  },
+  "admitted_commands": [
+    {
+      "program": "narada",
+      "args_shape": [
+        "operator-surface",
+        "send",
+        "--from",
+        "narada-andrey.Kevin",
+        "--to",
+        "narada.architect",
+        "--current-site",
+        "narada-andrey",
+        "--runtime-locus",
+        "narada",
+        "--text",
+        "<bounded-message>",
+        "--dry-run|--execute",
+        "--format",
+        "json"
+      ]
+    }
+  ],
+  "admission_evidence": {
+    "decision_path": ".narada/admission/decisions/task-1230-cross-site-operator-surface-delivery-admission.md",
+    "audit_path": ".narada/audit/task-1230-cross-site-operator-surface-delivery-audit.json",
+    "dry_run": {
+      "status": "success",
+      "mutation_performed": false,
+      "resolved_to": "architect",
+      "binding_status": "bound",
+      "send_status": "validated_dry_run"
+    },
+    "execute_smoke": {
+      "event_artifact": ".ai/operator-surface-events/ose_1778618675673_78f13fef0a5e.json",
+      "delivery_promise_artifact": ".ai/operator-surface-delivery-queue/osdq_ose_1778618675673_78f13fef0a5e.json",
+      "delivery_status": "delivered",
+      "serialization_admitted": true
+    }
+  },
+  "not_admitted": [
+    "source_site_runtime_import",
+    "source_runtime_db_import",
+    "source_task_history_import",
+    "source_inbox_history_import",
+    "source_roster_import",
+    "source_checkpoint_history_import",
+    "source_operator_surface_runtime_copying",
+    "source_pc_locus_state_import",
+    "source_history_import",
+    "secrets_or_credentials_import",
+    "sender_authority_over_narada_proper_state",
+    "arbitrary_cross_site_mutation",
+    "native_shell_fallback",
+    "direct_substrate_shortcut_execution",
+    "pc_locus_mutation_outside_existing_delivery_evidence_path",
+    "cross_desktop_delivery_without_separate_policy_admission",
+    "urgent_interrupt_without_separate_policy_admission"
+  ],
+  "created_at": "2026-05-12T20:54:00.000Z"
+}

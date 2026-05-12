@@ -1,0 +1,55 @@
+{
+  "schema": "narada.audit.task.v1",
+  "task": {
+    "id": "20260512-1230-admit-cross-site-operator-surface-delivery-from-narada-andre",
+    "number": 1230,
+    "title": "Admit cross-Site Operator Surface delivery from narada-andrey to narada.architect"
+  },
+  "decision": "admitted",
+  "blocker_resolved": "missing admitted cross-Site Operator Surface delivery capability from narada-andrey to narada.architect",
+  "changed_files": [
+    ".gitignore",
+    ".ai/do-not-open/tasks/20260512-1230-admit-cross-site-operator-surface-delivery-from-narada-andre.md",
+    ".narada/admission/decisions/task-1230-cross-site-operator-surface-delivery-admission.md",
+    ".narada/capabilities/cross-site-operator-surface-delivery.json",
+    ".narada/audit/task-1230-cross-site-operator-surface-delivery-audit.json",
+    ".narada/admission/admission-ledger.jsonl",
+    ".ai/operator-surface-events/ose_1778618675673_78f13fef0a5e.json",
+    ".ai/operator-surface-delivery-queue/osdq_ose_1778618675673_78f13fef0a5e.json"
+  ],
+  "verification": [
+    {
+      "command": "narada operator-surface send --from narada-andrey.Kevin --to narada.architect --current-site narada-andrey --runtime-locus narada --text \"OSM capability dry run\" --dry-run --format json",
+      "result": "success; mutation_performed=false; resolved_to=architect; target_site=narada; binding_status=bound; send.status=validated_dry_run"
+    },
+    {
+      "command": "narada operator-surface send --from narada-andrey.Kevin --to narada.architect --current-site narada-andrey --runtime-locus narada --text \"Cross-Site Operator Surface delivery admission smoke for task 1230.\" --execute --operator-activity-state idle --format json",
+      "result": "success; mutation_performed=true; delivery_result.status=delivered; serialization.admitted=true; event and promise artifacts recorded"
+    }
+  ],
+  "evidence": {
+    "event_artifact": ".ai/operator-surface-events/ose_1778618675673_78f13fef0a5e.json",
+    "delivery_promise_artifact": ".ai/operator-surface-delivery-queue/osdq_ose_1778618675673_78f13fef0a5e.json"
+  },
+  "refusals": [
+    "source Site runtime import",
+    "source DB/task/inbox/roster/checkpoint/operator-surface/PC/secrets/identity state import",
+    "arbitrary cross-Site mutation",
+    "native shell fallback",
+    "direct substrate shortcut execution",
+    "PC-locus mutation outside existing operator-surface send serialization/evidence",
+    "operator-surface runtime copying"
+  ],
+  "rollback": {
+    "portable_records": [
+      ".narada/admission/decisions/task-1230-cross-site-operator-surface-delivery-admission.md",
+      ".narada/capabilities/cross-site-operator-surface-delivery.json",
+      ".narada/audit/task-1230-cross-site-operator-surface-delivery-audit.json"
+    ],
+    "runtime_evidence": [
+      ".ai/operator-surface-events/ose_1778618675673_78f13fef0a5e.json",
+      ".ai/operator-surface-delivery-queue/osdq_ose_1778618675673_78f13fef0a5e.json"
+    ],
+    "note": "Rollback is by superseding/revoking the admission record; the smoke delivery evidence remains historical evidence."
+  }
+}
