@@ -16,6 +16,11 @@
     ".narada/audit/task-1232-doctrinal-corpus-config-audit.json",
     ".narada/admission/admission-ledger.jsonl"
   ],
+  "correction": {
+    "recorded_at": "2026-05-12T23:18:00.000Z",
+    "operator_instruction": "grounding should use D:\\code\\thoughts\\content\\concepts\\ for source of doctrines",
+    "result": "Updated .narada/agent-context/doctrinal-corpus.json so seven doctrine entries point to Windows-native thoughts corpus files. governed_crossing remains an explicit Narada repo-local fallback because D:\\code\\thoughts\\content\\concepts\\governed-crossing.md is absent."
+  },
   "verification": [
     {
       "command": "Get-Content .narada\\agent-context\\doctrinal-corpus.json | ConvertFrom-Json",
