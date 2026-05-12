@@ -1,0 +1,45 @@
+{
+  "schema": "narada.audit.task.v1",
+  "task": {
+    "id": "20260512-1232-admit-narada-proper-doctrinal-corpus-config",
+    "number": 1232,
+    "title": "Admit Narada proper doctrinal corpus config"
+  },
+  "source_evidence": {
+    "site": "narada-andrey",
+    "path": "C:\\Users\\Andrey\\Narada\\config.json",
+    "json_pointer": "/runtime_config/doctrinal_corpus"
+  },
+  "changed_files": [
+    ".ai/do-not-open/tasks/20260512-1232-admit-narada-proper-doctrinal-corpus-config.md",
+    ".narada/agent-context/doctrinal-corpus.json",
+    ".narada/audit/task-1232-doctrinal-corpus-config-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "Get-Content .narada\\agent-context\\doctrinal-corpus.json | ConvertFrom-Json",
+      "result": "json valid"
+    },
+    {
+      "command": "path existence check for local_path entries",
+      "result": "5 local paths present; 3 exact local doctrine files marked external_reference_unresolved"
+    },
+    {
+      "command": "agent_context_doc_31ad22b10e36({mode:\"list\"})",
+      "result": "doctrinal_corpus_not_configured before this task; MCP wiring remains separate"
+    }
+  ],
+  "terminal_claim": "Narada proper has a repo-local doctrinal corpus config artifact under .narada, derived from narada-andrey config only as external evidence.",
+  "not_claimed": [
+    "MCP regrounding fully wired",
+    "root config.json creation",
+    "WSL UNC paths admitted as local authority",
+    "narada-andrey runtime DB import",
+    "narada-andrey task/inbox/checkpoint/roster/operator-surface/PC/secrets state import",
+    "exact local doctrine files for cipda/cu/cis"
+  ],
+  "rollback": {
+    "note": "Remove or supersede .narada/agent-context/doctrinal-corpus.json and this audit/ledger record. No source Site runtime state was copied."
+  }
+}

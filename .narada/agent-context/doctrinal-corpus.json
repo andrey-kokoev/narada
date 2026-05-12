@@ -1,0 +1,93 @@
+{
+  "schema": "narada.agent_context.doctrinal_corpus.v0",
+  "site_id": "narada-proper",
+  "description": "Narada proper repo-local doctrine corpus config for agent regrounding.",
+  "authority_posture": {
+    "source_config_is_external_evidence": true,
+    "source_site": "narada-andrey",
+    "source_config_ref": "C:\\Users\\Andrey\\Narada\\config.json#/runtime_config/doctrinal_corpus",
+    "narada_proper_truth_source": "repo-local doctrine files under D:\\code\\narada",
+    "runtime_state_imported": false,
+    "wsl_unc_paths_admitted_as_local_authority": false
+  },
+  "sources": [
+    {
+      "doctrine_id": "ie",
+      "name": "Inhabited Evolution",
+      "status": "repo_local",
+      "local_path": "docs/concepts/inhabited-evolution.md",
+      "source_evidence_path": "\\\\wsl.localhost\\Ubuntu-24.04\\home\\andrey\\src\\thoughts\\content\\concepts\\inhabited-evolution.md"
+    },
+    {
+      "doctrine_id": "cipda",
+      "name": "Constructively Invariant Progressive De-arbitrarization",
+      "status": "external_reference_unresolved",
+      "local_path": null,
+      "source_evidence_path": "\\\\wsl.localhost\\Ubuntu-24.04\\home\\andrey\\src\\thoughts\\content\\concepts\\constructively-invariant-progressive-de-arbitrarization.md",
+      "resolution_required": "Admit or author a Narada proper repo-local doctrine artifact before MCP regrounding treats this as local doctrine."
+    },
+    {
+      "doctrine_id": "ccc",
+      "name": "Constructive Coherence Coordinates",
+      "status": "repo_local_partial_reference",
+      "local_path": "docs/concepts/inquiry-topology.md",
+      "local_anchor": "Constructive Coherence Coordinates / Teleological Counterweighting",
+      "source_evidence_path": "\\\\wsl.localhost\\Ubuntu-24.04\\home\\andrey\\src\\thoughts\\content\\concepts\\constructive-coherence-coordinates.md",
+      "resolution_required": "Exact doctrine file is not present in Narada proper; local path is a related reference only."
+    },
+    {
+      "doctrine_id": "ias",
+      "name": "Intelligence-Authority Separation",
+      "status": "repo_local",
+      "local_path": "SEMANTICS.md",
+      "local_anchor": "2.13 Intelligence-Authority Separation",
+      "source_evidence_path": "\\\\wsl.localhost\\Ubuntu-24.04\\home\\andrey\\src\\thoughts\\content\\concepts\\intelligence-authority-separation.md"
+    },
+    {
+      "doctrine_id": "pesa",
+      "name": "Plural Embodiment Singular Authority",
+      "status": "repo_local",
+      "local_path": "docs/concepts/plural-embodiment-singular-authority.md",
+      "source_evidence_path": "\\\\wsl.localhost\\Ubuntu-24.04\\home\\andrey\\src\\thoughts\\content\\concepts\\plural-embodiment-singular-authority.md"
+    },
+    {
+      "doctrine_id": "cu",
+      "name": "Constructive Universalization by Re-instantiation",
+      "status": "external_reference_unresolved",
+      "local_path": null,
+      "source_evidence_path": "\\\\wsl.localhost\\Ubuntu-24.04\\home\\andrey\\src\\thoughts\\content\\concepts\\constructive-universalization-by-re-instantiation.md",
+      "resolution_required": "Admit or author a Narada proper repo-local doctrine artifact before MCP regrounding treats this as local doctrine."
+    },
+    {
+      "doctrine_id": "cis",
+      "name": "On Constructively Invariant Systems",
+      "status": "external_reference_unresolved",
+      "local_path": null,
+      "source_evidence_path": "\\\\wsl.localhost\\Ubuntu-24.04\\home\\andrey\\src\\thoughts\\content\\concepts\\on-constructively-invariant-systems.md",
+      "resolution_required": "Admit or author a Narada proper repo-local doctrine artifact before MCP regrounding treats this as local doctrine."
+    },
+    {
+      "doctrine_id": "governed_crossing",
+      "name": "Governed Crossing",
+      "status": "repo_local",
+      "local_path": "docs/concepts/governed-crossing.md",
+      "source_evidence_path": "\\\\wsl.localhost\\Ubuntu-24.04\\home\\andrey\\src\\thoughts\\content\\concepts\\governed-crossing.md"
+    }
+  ],
+  "not_imported": [
+    "narada-andrey runtime DBs",
+    "narada-andrey task history",
+    "narada-andrey inbox history",
+    "narada-andrey checkpoint history",
+    "narada-andrey roster state",
+    "narada-andrey operator-surface runtime state",
+    "PC-locus state",
+    "secrets or credentials",
+    "root config.json"
+  ],
+  "mcp_wiring": {
+    "current_session_status": "not_fully_wired",
+    "observed_error": "doctrinal_corpus_not_configured",
+    "next_required_slice": "teach/admit the Narada proper agent-context MCP surface or carrier to read .narada/agent-context/doctrinal-corpus.json"
+  }
+}
