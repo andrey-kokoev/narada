@@ -4,7 +4,7 @@
  * Site discovery and registry management commands.
  */
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +28,13 @@ import {
 } from '../lib/site-relation-registry.js';
 import { inspectDelegatedCliHealth } from '../lib/delegated-cli-health.js';
 import { assessSiteReadiness } from '../lib/site-readiness.js';
+import {
+  CREATE_SITE_SUPPORTED_PRESETS,
+  expandCreateSitePackageDescriptorsFromPackages,
+  isCreateSiteSupportedPreset,
+  selectCreateSiteTemplate,
+  type CreateSitePackageDescriptor,
+} from '../lib/create-site-template-catalog.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -39,6 +46,91 @@ export interface SitesOptions {
 export interface SitesTaskLifecycleInitOptions extends SitesOptions {
   site?: string;
   dryRun?: boolean;
+}
+
+export interface SitesCreateOptions extends SitesOptions {
+  config?: string;
+  preset?: string;
+  siteId?: string;
+  root?: string;
+  siteKind?: string;
+  authorityLocus?: string;
+  dryRun?: boolean;
+  outputPlan?: string;
+  executeLive?: boolean;
+  liveAuthorityBasis?: string;
+}
+
+export interface SitesLiveCarrierOptions extends SitesOptions {
+  carrier?: string;
+  mode?: string;
+  targetSiteRoot?: string;
+  siteId?: string;
+  authorityBasis?: string;
+  sourceSiteRoot?: string;
+  runtimeTarget?: string;
+  mcpServerJson?: string;
+  profileArtifactPath?: string;
+  profileTarget?: string;
+  dbVerified?: boolean;
+  storageVerified?: boolean;
+  dbInitVerified?: boolean;
+  mcpRegistrationVerified?: boolean;
+  profileCanPrecedeMcpRegistration?: boolean;
+  mutationAuthorized?: boolean;
+  handoffAsCheckpointTruth?: boolean;
+  importSourceRuntimeState?: boolean;
+  includeSecrets?: boolean;
+  registerMcp?: boolean;
+}
+
+interface CreateSiteConfig {
+  schema?: string;
+  mode?: string;
+  preset?: string;
+  template_catalog?: {
+    template_id?: string;
+    template_components?: string[];
+  };
+  site?: {
+    site_id?: string;
+    site_kind?: string;
+    authority_locus?: string;
+    site_root?: string;
+    workspace_root?: string;
+    substrate?: string;
+    execution_surface?: string;
+    sync_posture?: string;
+  };
+  packages?: Array<Record<string, unknown>>;
+  identity?: {
+    named_agents?: Array<Record<string, unknown>>;
+    role_assignments?: Array<Record<string, unknown>>;
+    role_compatibility_identities?: Array<Record<string, unknown>>;
+    claimed_identity_evidence?: Array<Record<string, unknown>>;
+    mechanical_verification_basis?: Array<Record<string, unknown>>;
+  };
+  storage?: Record<string, unknown>;
+  mcp?: Record<string, unknown>;
+  capabilities?: Record<string, unknown>;
+  inbox?: Record<string, unknown>;
+  task_lifecycle?: Record<string, unknown>;
+  agent_context?: Record<string, unknown>;
+  operator_surface?: Record<string, unknown>;
+  windows_pwsh?: Record<string, unknown>;
+  evidence?: Record<string, unknown>;
+}
+
+interface CreateSiteRefusal {
+  code: string;
+  message: string;
+  path?: string;
+  evidence?: unknown;
+}
+
+interface CreateSiteWarning {
+  code: string;
+  message: string;
 }
 
 export interface SitesLifecycleKindsOptions extends SitesOptions {}
@@ -127,6 +219,19 @@ const SITE_SUBDIRECTORIES = [
   'logs',
   'traces',
 ] as const;
+
+const CREATE_SITE_SOURCE_STATE_PATTERNS: Array<{ pattern: RegExp; code: string; reason: string }> = [
+  { pattern: /(^|[\\/])\.ai[\\/]state[\\/]agent-context\.(sqlite|db)$/i, code: 'source_runtime_state_import_refused', reason: 'source agent-context database' },
+  { pattern: /(^|[\\/])\.narada[\\/]checkpoints([\\/]|$)/i, code: 'source_runtime_state_import_refused', reason: 'source checkpoint history' },
+  { pattern: /(^|[\\/])\.ai[\\/]checkpoints([\\/]|$)/i, code: 'source_runtime_state_import_refused', reason: 'source checkpoint history' },
+  { pattern: /(^|[\\/])\.ai[\\/]task-lifecycle\.db(-shm|-wal)?$/i, code: 'source_runtime_state_import_refused', reason: 'source task lifecycle database' },
+  { pattern: /(^|[\\/])\.ai[\\/]do-not-open[\\/]tasks([\\/]|$)/i, code: 'source_runtime_state_import_refused', reason: 'source task history' },
+  { pattern: /(^|[\\/])\.ai[\\/]inbox(\.db|[\\/]|$)/i, code: 'source_runtime_state_import_refused', reason: 'source inbox state' },
+  { pattern: /(^|[\\/])\.ai[\\/]agents[\\/]roster\.json$/i, code: 'source_runtime_state_import_refused', reason: 'source roster authority' },
+  { pattern: /(^|[\\/])operator-surfaces([\\/]|$)/i, code: 'source_runtime_state_import_refused', reason: 'operator-surface runtime state' },
+  { pattern: /^c:[\\/]programdata[\\/]narada[\\/]sites[\\/]pc[\\/]/i, code: 'source_runtime_state_import_refused', reason: 'PC-locus runtime state' },
+  { pattern: /(^|[\\/])(secrets?|tokens?|credentials?)([\\/]|\.|$)/i, code: 'raw_secret_in_config_refused', reason: 'secret or credential path' },
+];
 
 const SITE_LIFECYCLE_KINDS = [
   {
@@ -698,6 +803,1246 @@ export async function sitesDiscoverCommand(
   } finally {
     registry.close();
   }
+}
+
+export async function sitesCreateCommand(
+  options: SitesCreateOptions,
+  context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const shorthand = buildCreateSiteConfigFromShorthand(options);
+  if (!options.config && !shorthand) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        status: 'error',
+        error: 'missing_config_or_shorthand',
+        message: 'sites create requires --config <path> or --preset <preset> --site-id <id> --root <path>.',
+      },
+    };
+  }
+  let config: CreateSiteConfig;
+  let configPath: string;
+  try {
+    if (options.config) {
+      configPath = resolve(options.config);
+      config = JSON.parse(await readFile(configPath, 'utf8')) as CreateSiteConfig;
+    } else {
+      configPath = '<inline:create-site-options>';
+      config = shorthand!;
+    }
+  } catch (error) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        status: 'error',
+        error: 'config_parse_failed',
+        message: error instanceof Error ? error.message : String(error),
+      },
+    };
+  }
+
+  const plan = buildCreateSiteDryRunPlan(config, configPath);
+  if (options.dryRun && options.executeLive) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        ...plan,
+        status: 'refused',
+        refusals: [
+          ...plan.refusals,
+          {
+            code: 'execute_live_requires_create_execution',
+            message: 'Live carriers require create-site execution; remove --dry-run and provide --live-authority-basis.',
+          },
+        ],
+      },
+    };
+  }
+  if (!options.dryRun) {
+    const created = await executeMinimalCreateSite(config, plan, configPath);
+    if (!options.executeLive || created.exitCode !== ExitCode.SUCCESS) return created;
+    return executeCreateSiteLiveCarriers(config, created, options, context);
+  }
+
+  if (options.outputPlan) {
+    const outputPlanPath = resolve(options.outputPlan);
+    plan.evidence.output_plan_path = outputPlanPath;
+    plan.planned_files.push({
+      path: outputPlanPath,
+      purpose: 'explicit dry-run plan artifact',
+      mutation: 'output_plan_only',
+    });
+    await writeFile(outputPlanPath, `${JSON.stringify(plan, null, 2)}\n`, 'utf8');
+  }
+
+  return {
+    exitCode: plan.refusals.length === 0 ? ExitCode.SUCCESS : ExitCode.INVALID_CONFIG,
+    result: plan,
+  };
+}
+
+export async function sitesCreatePresetsCommand(
+  _options: SitesOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const presets = CREATE_SITE_SUPPORTED_PRESETS.map((preset) => {
+    const packages = packagesForCreateSitePreset(preset);
+    const descriptors = expandCreateSitePackageDescriptorsFromPackages(packages);
+    return {
+      preset,
+      template_id: `narada-proper.templates.site.${preset}.v0`,
+      exposure_class: preset === 'minimal' ? 'mutating_guarded' : 'descriptor_only',
+      package_components: packages.map((pkg) => String(pkg.name)),
+      descriptor_components: descriptors.map((descriptor) => ({
+        package_name: descriptor.package_name,
+        posture: descriptor.posture,
+        descriptors: descriptor.descriptors,
+        denied_live_effects: descriptor.denied_live_effects,
+      })),
+      operational_commands: {
+        dry_run: `narada sites create --preset ${preset} --site-id <id> --root <path> --dry-run --format json`,
+        skeleton: `narada sites create --preset ${preset} --site-id <id> --root <path> --format json`,
+        live: ['task-lifecycle', 'agent-memory', 'site-machinery'].includes(preset)
+          ? `narada sites create --preset ${preset} --site-id <id> --root <path> --execute-live --live-authority-basis <basis> --format json`
+          : null,
+      },
+      admission_boundary: {
+        package_selection_grants_live_capability: false,
+        source_state_imported: false,
+        live_execution_requires_explicit_authority: true,
+      },
+    };
+  });
+  return {
+    exitCode: ExitCode.SUCCESS,
+    result: {
+      schema: 'narada.create_site.presets.v0',
+      status: 'ok',
+      presets,
+      non_claims: [
+        'source Site import/migration/lift',
+        'implicit capability grants',
+        'private MCP client config mutation',
+        'real Windows profile mutation outside target Site artifacts',
+        'PC/operator-surface mutation',
+      ],
+    },
+  };
+}
+
+function buildCreateSiteConfigFromShorthand(options: SitesCreateOptions): CreateSiteConfig | null {
+  if (!options.preset && !options.siteId && !options.root) return null;
+  const preset = options.preset ?? 'minimal';
+  if (!options.siteId || !options.root) return {
+    schema: 'narada.create_site.options.v0',
+    mode: options.dryRun ? 'dry_run' : 'execute',
+    preset,
+    site: {
+      site_id: options.siteId,
+      site_kind: options.siteKind ?? 'project',
+      authority_locus: options.authorityLocus ?? 'project',
+      site_root: options.root,
+    },
+    packages: packagesForCreateSitePreset(preset),
+    identity: emptyCreateSiteIdentity(),
+    storage: { intent: 'none' },
+    mcp: { intent: 'none', surfaces: [] },
+    capabilities: { policy: 'none', required: [], denied: [] },
+    inbox: { enable: 'drop_only' },
+    task_lifecycle: { enable: false },
+    agent_context: { enable: false },
+    operator_surface: { intent: 'none' },
+    windows_pwsh: { profile: 'emit_example', path_style: 'windows' },
+  };
+  return createSiteConfigForPreset({
+    preset,
+    siteId: options.siteId,
+    root: options.root,
+    siteKind: options.siteKind ?? 'project',
+    authorityLocus: options.authorityLocus ?? 'project',
+    mode: options.dryRun ? 'dry_run' : 'execute',
+  });
+}
+
+function createSiteConfigForPreset(input: {
+  preset: string;
+  siteId: string;
+  root: string;
+  siteKind: string;
+  authorityLocus: string;
+  mode: string;
+}): CreateSiteConfig {
+  const packages = packagesForCreateSitePreset(input.preset);
+  const templateComponents = packages.map((pkg) => String(pkg.name));
+  const config: CreateSiteConfig = {
+    schema: 'narada.create_site.options.v0',
+    mode: input.mode,
+    preset: input.preset,
+    template_catalog: {
+      template_id: `narada-proper.templates.site.${input.preset}.v0`,
+      template_components: templateComponents,
+    },
+    site: {
+      site_id: input.siteId,
+      site_kind: input.siteKind,
+      authority_locus: input.authorityLocus,
+      site_root: input.root,
+      workspace_root: input.root,
+      substrate: 'windows-native',
+      execution_surface: 'windows_native',
+      sync_posture: 'hybrid_capable_plain_folder',
+    },
+    packages,
+    identity: emptyCreateSiteIdentity(),
+    storage: { intent: 'none' },
+    mcp: { intent: 'none', surfaces: [] },
+    capabilities: { policy: 'none', required: [], denied: [] },
+    inbox: { enable: 'drop_only' },
+    task_lifecycle: { enable: false },
+    agent_context: { enable: false },
+    operator_surface: { intent: 'none' },
+    windows_pwsh: { profile: 'emit_example', path_style: 'windows' },
+    evidence: {
+      template_refs: [`narada-proper.templates.site.${input.preset}.v0`, ...templateComponents.map((component) => `package:${component}`)],
+      refused_imports: [],
+    },
+  };
+  if (input.preset === 'task-lifecycle') {
+    config.storage = { intent: 'descriptor_only', driver_preference: 'sqlite3-cli', mutation_mode: 'none' };
+    config.mcp = { intent: 'descriptor_only', surfaces: ['site_task_lifecycle'] };
+    config.capabilities = { policy: 'declare_required', required: ['task_lifecycle'], denied: ['source_task_db_import'] };
+    config.inbox = { enable: 'canonical_envelope_intake' };
+    config.task_lifecycle = { enable: 'descriptor_only', package: '@narada2/site-task-lifecycle' };
+  } else if (input.preset === 'agent-memory') {
+    config.storage = { intent: 'descriptor_only', driver_preference: 'sqlite3-cli', mutation_mode: 'none' };
+    config.mcp = { intent: 'descriptor_only', surfaces: ['agent_context_memory'] };
+    config.capabilities = { policy: 'declare_required', required: ['agent_context_memory'], denied: ['source_checkpoint_import'] };
+    config.agent_context = { enable: 'descriptor_only', package: '@narada2/agent-context-memory' };
+  } else if (input.preset === 'site-machinery') {
+    config.capabilities = {
+      policy: 'declare_required',
+      required: ['canonical_inbox', 'site_config_awareness', 'site_lift_adoption'],
+      denied: ['source_site_runtime_import', 'cross_site_mutation'],
+    };
+    config.inbox = { enable: 'canonical_envelope_intake' };
+  }
+  return config;
+}
+
+function packagesForCreateSitePreset(preset: string): Array<Record<string, unknown>> {
+  if (preset === 'task-lifecycle') return [{ name: '@narada2/site-task-lifecycle' }];
+  if (preset === 'agent-memory') return [{ name: '@narada2/agent-context-memory' }];
+  if (preset === 'site-machinery') {
+    return [
+      { name: '@narada2/site-inbox' },
+      { name: '@narada2/site-config' },
+      { name: '@narada2/site-lift' },
+    ];
+  }
+  return [];
+}
+
+function emptyCreateSiteIdentity(): NonNullable<CreateSiteConfig['identity']> {
+  return {
+    named_agents: [],
+    role_assignments: [],
+    role_compatibility_identities: [],
+    claimed_identity_evidence: [],
+    mechanical_verification_basis: [],
+  };
+}
+
+async function executeCreateSiteLiveCarriers(
+  config: CreateSiteConfig,
+  created: { exitCode: ExitCode; result: unknown },
+  options: SitesCreateOptions,
+  context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  if (!options.liveAuthorityBasis) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        ...(created.result as Record<string, unknown>),
+        status: 'live_carrier_refused',
+        live_carriers: [],
+        refusals: [{
+          code: 'live_authority_basis_required',
+          message: 'Live carrier execution requires --live-authority-basis.',
+        }],
+      },
+    };
+  }
+
+  const siteRoot = resolve(String(config.site!.site_root));
+  const siteId = String(config.site!.site_id);
+  const liveCarriers: unknown[] = [];
+  const db = await sitesLiveCarrierCommand({
+    carrier: 'site_local_db_init',
+    mode: 'apply',
+    targetSiteRoot: siteRoot,
+    siteId,
+    authorityBasis: options.liveAuthorityBasis,
+    mutationAuthorized: true,
+  }, context);
+  liveCarriers.push(db.result);
+  if (db.exitCode !== ExitCode.SUCCESS) return createLiveCarrierFailure(created, liveCarriers, db.result);
+
+  const storage = await sitesLiveCarrierCommand({
+    carrier: 'site_local_storage_hydration',
+    mode: 'apply',
+    targetSiteRoot: siteRoot,
+    siteId,
+    authorityBasis: options.liveAuthorityBasis,
+    dbInitVerified: true,
+    mutationAuthorized: true,
+  }, context);
+  liveCarriers.push(storage.result);
+  if (storage.exitCode !== ExitCode.SUCCESS) return createLiveCarrierFailure(created, liveCarriers, storage.result);
+
+  if (config.agent_context?.enable === 'descriptor_only') {
+    const agentContext = await sitesLiveCarrierCommand({
+      carrier: 'agent_context_memory_local_storage',
+      mode: 'apply',
+      targetSiteRoot: siteRoot,
+      siteId,
+      authorityBasis: options.liveAuthorityBasis,
+      dbVerified: true,
+      storageVerified: true,
+      mutationAuthorized: true,
+    }, context);
+    liveCarriers.push(agentContext.result);
+    if (agentContext.exitCode !== ExitCode.SUCCESS) return createLiveCarrierFailure(created, liveCarriers, agentContext.result);
+  }
+  if (config.packages?.some((pkg) => String(pkg.name) === '@narada2/site-inbox')) {
+    const siteInbox = await sitesLiveCarrierCommand({
+      carrier: 'site_inbox_local_substrate',
+      mode: 'apply',
+      targetSiteRoot: siteRoot,
+      siteId,
+      authorityBasis: options.liveAuthorityBasis,
+      dbVerified: true,
+      storageVerified: true,
+      mutationAuthorized: true,
+    }, context);
+    liveCarriers.push(siteInbox.result);
+    if (siteInbox.exitCode !== ExitCode.SUCCESS) return createLiveCarrierFailure(created, liveCarriers, siteInbox.result);
+  }
+  if (config.packages?.some((pkg) => String(pkg.name) === '@narada2/site-config')) {
+    const siteConfig = await sitesLiveCarrierCommand({
+      carrier: 'site_config_local_registry',
+      mode: 'apply',
+      targetSiteRoot: siteRoot,
+      siteId,
+      authorityBasis: options.liveAuthorityBasis,
+      dbVerified: true,
+      storageVerified: true,
+      mutationAuthorized: true,
+    }, context);
+    liveCarriers.push(siteConfig.result);
+    if (siteConfig.exitCode !== ExitCode.SUCCESS) return createLiveCarrierFailure(created, liveCarriers, siteConfig.result);
+  }
+  if (config.packages?.some((pkg) => String(pkg.name) === '@narada2/site-lift')) {
+    const siteLift = await sitesLiveCarrierCommand({
+      carrier: 'site_lift_local_adoption',
+      mode: 'apply',
+      targetSiteRoot: siteRoot,
+      siteId,
+      authorityBasis: options.liveAuthorityBasis,
+      dbVerified: true,
+      storageVerified: true,
+      mutationAuthorized: true,
+    }, context);
+    liveCarriers.push(siteLift.result);
+    if (siteLift.exitCode !== ExitCode.SUCCESS) return createLiveCarrierFailure(created, liveCarriers, siteLift.result);
+  }
+
+  const mcpSurfaces = arrayField(config.mcp?.surfaces).map(String);
+  let mcpApplied = false;
+  if (mcpSurfaces.length > 0 || config.mcp?.intent === 'descriptor_only') {
+    const mcp = await sitesLiveCarrierCommand({
+      carrier: 'site_mcp_registration_transport',
+      mode: 'apply',
+      targetSiteRoot: siteRoot,
+      siteId,
+      authorityBasis: options.liveAuthorityBasis,
+      dbVerified: true,
+      storageVerified: true,
+      runtimeTarget: 'codex',
+      mcpServerJson: JSON.stringify(mcpSurfaces.map((surface) => ({
+        name: surface,
+        transport: 'stdio',
+        command: 'narada-mcp',
+        args: ['--site-root', siteRoot, '--surface', surface],
+      }))),
+      mutationAuthorized: true,
+    }, context);
+    liveCarriers.push(mcp.result);
+    if (mcp.exitCode !== ExitCode.SUCCESS) return createLiveCarrierFailure(created, liveCarriers, mcp.result);
+    mcpApplied = true;
+  }
+
+  if (config.windows_pwsh?.profile && config.windows_pwsh.profile !== 'none') {
+    const profile = await sitesLiveCarrierCommand({
+      carrier: 'windows_profile_site_binding',
+      mode: 'apply',
+      targetSiteRoot: siteRoot,
+      siteId,
+      authorityBasis: options.liveAuthorityBasis,
+      mcpRegistrationVerified: mcpApplied,
+      profileCanPrecedeMcpRegistration: !mcpApplied,
+      mutationAuthorized: true,
+    }, context);
+    liveCarriers.push(profile.result);
+    if (profile.exitCode !== ExitCode.SUCCESS) return createLiveCarrierFailure(created, liveCarriers, profile.result);
+  }
+
+  return {
+    exitCode: ExitCode.SUCCESS,
+    result: {
+      ...(created.result as Record<string, unknown>),
+      status: 'created_live_carriers_applied',
+      live_carriers: liveCarriers,
+      evidence: {
+        ...((created.result as { evidence?: Record<string, unknown> }).evidence ?? {}),
+        live_carrier_execution_completed: true,
+        source_state_imported: false,
+      },
+      non_claims: [
+        ...(((created.result as { non_claims?: string[] }).non_claims ?? [])
+          .filter((claim) => ![
+            'DB init execution',
+            'MCP registration execution',
+            'runtime hydration execution',
+          ].includes(claim))),
+        'private MCP client config mutation',
+        'real Windows profile mutation outside the target Site',
+      ],
+    },
+  };
+}
+
+function createLiveCarrierFailure(
+  created: { exitCode: ExitCode; result: unknown },
+  liveCarriers: unknown[],
+  failedCarrier: unknown,
+): { exitCode: ExitCode; result: unknown } {
+  return {
+    exitCode: ExitCode.INVALID_CONFIG,
+    result: {
+      ...(created.result as Record<string, unknown>),
+      status: 'live_carrier_refused',
+      live_carriers: liveCarriers,
+      failed_carrier: failedCarrier,
+      recovery_hint: 'Inspect live_carriers results and rerun the refused carrier after resolving its gate.',
+    },
+  };
+}
+
+export async function sitesLiveCarrierCommand(
+  options: SitesLiveCarrierOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const missing = [
+    ['carrier', options.carrier],
+    ['target_site_root', options.targetSiteRoot],
+    ['site_id', options.siteId],
+    ['authority_basis', options.authorityBasis],
+  ].filter(([, value]) => typeof value !== 'string' || value.length === 0);
+  if (missing.length > 0) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        schema: 'narada.site_live_carrier.result.v0',
+        status: 'refused',
+        refusals: missing.map(([key]) => `${key}_required`),
+      },
+    };
+  }
+
+  const args = buildLiveCarrierArgs(options);
+  try {
+    const { stdout } = await execFileAsync(process.execPath, [siteLiveCarrierToolPath(), ...args], {
+      maxBuffer: 1024 * 1024,
+    });
+    const result = JSON.parse(stdout) as { status?: string };
+    return {
+      exitCode: result.status === 'refused' ? ExitCode.INVALID_CONFIG : ExitCode.SUCCESS,
+      result,
+    };
+  } catch (error) {
+    const stdout = typeof (error as { stdout?: unknown }).stdout === 'string'
+      ? (error as { stdout: string }).stdout
+      : '';
+    const stderr = typeof (error as { stderr?: unknown }).stderr === 'string'
+      ? (error as { stderr: string }).stderr
+      : '';
+    const parsed = parseLiveCarrierOutput(stdout) ?? parseLiveCarrierOutput(stderr);
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: parsed ?? {
+        schema: 'narada.site_live_carrier.result.v0',
+        status: 'refused',
+        refusals: [error instanceof Error ? error.message : String(error)],
+      },
+    };
+  }
+}
+
+function siteLiveCarrierToolPath(): string {
+  return fileURLToPath(new URL('../../../../../tools/site-init/site-live-carriers.mjs', import.meta.url));
+}
+
+function buildLiveCarrierArgs(options: SitesLiveCarrierOptions): string[] {
+  const args = [
+    '--carrier', String(options.carrier),
+    '--mode', options.mode ?? 'plan',
+    '--target-site-root', String(options.targetSiteRoot),
+    '--site-id', String(options.siteId),
+    '--authority-basis', String(options.authorityBasis),
+  ];
+  appendOptionalArg(args, '--source-site-root', options.sourceSiteRoot);
+  appendOptionalArg(args, '--runtime-target', options.runtimeTarget);
+  appendOptionalArg(args, '--mcp-server-json', options.mcpServerJson);
+  appendOptionalArg(args, '--profile-artifact-path', options.profileArtifactPath);
+  appendOptionalArg(args, '--profile-target', options.profileTarget);
+  appendFlag(args, '--db-verified', options.dbVerified);
+  appendFlag(args, '--storage-verified', options.storageVerified);
+  appendFlag(args, '--db-init-verified', options.dbInitVerified);
+  appendFlag(args, '--mcp-registration-verified', options.mcpRegistrationVerified);
+  appendFlag(args, '--profile-can-precede-mcp-registration', options.profileCanPrecedeMcpRegistration);
+  appendFlag(args, '--mutation-authorized', options.mutationAuthorized);
+  appendFlag(args, '--handoff-as-checkpoint-truth', options.handoffAsCheckpointTruth);
+  appendFlag(args, '--import-source-runtime-state', options.importSourceRuntimeState);
+  appendFlag(args, '--include-secrets', options.includeSecrets);
+  appendFlag(args, '--register-mcp', options.registerMcp);
+  return args;
+}
+
+function appendOptionalArg(args: string[], flag: string, value: string | undefined): void {
+  if (value) args.push(flag, value);
+}
+
+function appendFlag(args: string[], flag: string, value: boolean | undefined): void {
+  if (value) args.push(flag);
+}
+
+function parseLiveCarrierOutput(output: string): unknown | null {
+  if (!output.trim()) return null;
+  try {
+    return JSON.parse(output);
+  } catch {
+    return null;
+  }
+}
+
+function buildCreateSiteDryRunPlan(config: CreateSiteConfig, configPath: string): Record<string, any> {
+  const refusals: CreateSiteRefusal[] = [];
+  const warnings: CreateSiteWarning[] = [];
+  const preset = config.preset ?? 'minimal';
+  const packageDescriptors = expandCreateSitePackageDescriptors(config);
+
+  if (config.schema !== 'narada.create_site.options.v0') {
+    refusals.push({
+      code: 'invalid_config_schema',
+      message: 'Expected schema narada.create_site.options.v0.',
+      evidence: config.schema,
+    });
+  }
+  if (!isCreateSiteSupportedPreset(preset)) {
+    refusals.push({
+      code: preset === 'full-operator-surface-aware-user-site'
+        ? 'preset_requires_unadmitted_operator_surface'
+        : 'unsupported_preset',
+      message: preset === 'full-operator-surface-aware-user-site'
+        ? 'The full operator-surface-aware preset is fixture-only in this first implementation slice.'
+        : `Unsupported descriptor-only preset: ${preset}`,
+      evidence: preset,
+    });
+  }
+  for (const required of ['site_id', 'site_kind', 'authority_locus', 'site_root']) {
+    if (!config.site?.[required as keyof NonNullable<CreateSiteConfig['site']>]) {
+      refusals.push({ code: 'missing_site_coordinate', message: `Missing site.${required}.` });
+    }
+  }
+
+  refusals.push(...findCreateSiteDeniedInputRefs(config));
+  refusals.push(...findCreateSiteLiveCapabilityRefusals(config));
+  refusals.push(...findCreateSiteIdentityRefusals(config));
+  for (const descriptor of packageDescriptors) {
+    if (descriptor.posture === 'unknown_package_refused') {
+      refusals.push({
+        code: 'unknown_package_refused',
+        message: 'Only Narada proper create-site template components can be expanded by this dry-run command.',
+        evidence: descriptor.package_name,
+      });
+    }
+  }
+
+  if ((config.operator_surface?.pc_locus_required as boolean | undefined) === true) {
+    refusals.push({
+      code: 'pc_locus_authority_missing',
+      message: 'create site does not assume PC-locus authority; PC setup requires separate admission.',
+    });
+  }
+  if (packageDescriptors.some((descriptor) => descriptor.package_name === '@narada2/site-task-lifecycle')
+    && config.task_lifecycle?.enable !== 'descriptor_only') {
+    warnings.push({
+      code: 'task_lifecycle_package_selected_without_descriptor_enablement',
+      message: 'The site-task-lifecycle package contributes descriptors only in this slice.',
+    });
+  }
+  if (packageDescriptors.some((descriptor) => descriptor.package_name === '@narada2/agent-context-memory')
+    && config.agent_context?.enable !== 'descriptor_only') {
+    warnings.push({
+      code: 'agent_context_package_selected_without_descriptor_enablement',
+      message: 'The agent-context-memory package contributes descriptors only in this slice.',
+    });
+  }
+
+  const selectedTemplate = selectCreateSiteTemplate(preset, config.template_catalog, packageDescriptors);
+  const requiredLocalAdmissions = buildCreateSiteRequiredAdmissions(config, packageDescriptors);
+  const plannedFiles = buildCreateSitePlannedFiles(config, packageDescriptors);
+
+  return {
+    schema: 'narada.create_site.dry_run_plan.v0',
+    status: refusals.length === 0 ? 'planned' : 'refused',
+    command: 'narada sites create',
+    mode: 'dry_run',
+    config_path: configPath,
+    selected_preset: preset,
+    selected_template: selectedTemplate,
+    site: config.site ?? {},
+    package_descriptors: packageDescriptors,
+    required_local_admissions: requiredLocalAdmissions,
+    planned_files: plannedFiles,
+    refusals: dedupeRefusals(refusals),
+    warnings,
+    evidence: {
+      template_refs: arrayField(config.evidence?.template_refs),
+      source_refs_rejected_as_normal_inputs: arrayField(config.evidence?.invalid_source_site_inputs),
+      dry_run_only: true,
+      package_selection_grants_live_capability: false,
+      source_state_imported: false,
+    },
+    non_claims: [
+      'filesystem Site creation',
+      'local adapter admission',
+      'DB init execution',
+      'MCP registration execution',
+      'runtime hydration execution',
+      'capability or secret grants',
+      'operator-surface or PC-locus runtime mutation',
+      'migration/lift/import from existing Sites',
+    ],
+  };
+}
+
+function expandCreateSitePackageDescriptors(config: CreateSiteConfig): CreateSitePackageDescriptor[] {
+  return expandCreateSitePackageDescriptorsFromPackages(config.packages);
+}
+
+function findCreateSiteDeniedInputRefs(value: unknown): CreateSiteRefusal[] {
+  const strings = collectStrings(value);
+  const refusals: CreateSiteRefusal[] = [];
+  for (const candidate of strings) {
+    const comparable = candidate.replaceAll('/', '\\');
+    const denied = CREATE_SITE_SOURCE_STATE_PATTERNS.find(({ pattern }) => pattern.test(comparable));
+    if (denied) {
+      refusals.push({
+        code: denied.code,
+        message: `${denied.reason} is not a valid create-site input; use a separate migration/lift/import path.`,
+        path: candidate,
+      });
+    }
+  }
+  return dedupeRefusals(refusals);
+}
+
+function findCreateSiteLiveCapabilityRefusals(config: CreateSiteConfig): CreateSiteRefusal[] {
+  const refusals: CreateSiteRefusal[] = [];
+  if (config.storage?.intent === 'local_adapter_admitted' || config.storage?.mutation_mode === 'execute_with_admitted_adapter') {
+    refusals.push({
+      code: 'live_adapter_admission_missing',
+      message: 'create-site dry-run cannot admit or execute a storage adapter.',
+    });
+  }
+  if (config.mcp?.intent === 'local_registration_admitted') {
+    refusals.push({
+      code: 'live_mcp_registration_admission_missing',
+      message: 'create-site dry-run cannot perform live MCP registration.',
+    });
+  }
+  if (config.agent_context?.enable === 'local_adapter_admitted' || config.agent_context?.checkpoint_policy === 'local_persistence_admitted') {
+    refusals.push({
+      code: 'runtime_hydration_admission_missing',
+      message: 'agent-context persistence or hydration requires separate local admission.',
+    });
+  }
+  if (config.capabilities?.policy === 'admit_local') {
+    refusals.push({
+      code: 'package_selection_does_not_grant_live_capability',
+      message: 'Capability grants require separate admission; package/template selection is descriptor-only.',
+    });
+  }
+  if (config.windows_pwsh?.profile === 'admit_profile_write') {
+    refusals.push({
+      code: 'live_profile_write_admission_missing',
+      message: 'Windows PowerShell profile writes require separate local admission and --execute posture.',
+    });
+  }
+  return refusals;
+}
+
+function findCreateSiteIdentityRefusals(config: CreateSiteConfig): CreateSiteRefusal[] {
+  const identity = config.identity;
+  if (!identity) return [];
+  const refusals: CreateSiteRefusal[] = [];
+  const mechanicalBasis = identity.mechanical_verification_basis ?? [];
+  if (((identity.named_agents ?? []).length > 0 || (identity.role_compatibility_identities ?? []).length > 0)
+    && mechanicalBasis.length === 0) {
+    refusals.push({
+      code: 'mechanical_verification_basis_missing',
+      message: 'Named agent or role compatibility options require explicit mechanical verification basis.',
+    });
+  }
+  for (const compatibility of identity.role_compatibility_identities ?? []) {
+    if (!compatibility.admission_ref) {
+      refusals.push({
+        code: 'role_compatibility_admission_missing',
+        message: 'Role-name compatibility identities require an explicit admission ref.',
+        evidence: compatibility,
+      });
+    }
+  }
+  for (const claim of identity.claimed_identity_evidence ?? []) {
+    if (claim.authority === true) {
+      refusals.push({
+        code: 'claimed_identity_not_authority',
+        message: 'Claimed identity is data, not authority.',
+        evidence: claim,
+      });
+    }
+  }
+  return refusals;
+}
+
+function buildCreateSiteRequiredAdmissions(
+  config: CreateSiteConfig,
+  packageDescriptors: CreateSitePackageDescriptor[],
+): Array<Record<string, unknown>> {
+  const admissions: Array<Record<string, unknown>> = [
+    { admission: 'filesystem_creation', status: 'not_admitted_in_dry_run' },
+  ];
+  if (config.storage?.intent && config.storage.intent !== 'none') {
+    admissions.push({ admission: 'local_storage_adapter', status: 'separate_admission_required' });
+  }
+  if (config.task_lifecycle?.enable) {
+    admissions.push({ admission: 'task_lifecycle_db_init_and_mutation', status: 'separate_admission_required' });
+  }
+  if (config.agent_context?.enable) {
+    admissions.push({ admission: 'agent_context_storage_and_hydration', status: 'separate_admission_required' });
+  }
+  if (config.mcp?.intent && config.mcp.intent !== 'none') {
+    admissions.push({ admission: 'live_mcp_registration', status: 'separate_admission_required' });
+  }
+  if (packageDescriptors.some((descriptor) => descriptor.package_name === '@narada2/site-inbox')) {
+    admissions.push({ admission: 'site_inbox_local_substrate_and_publication', status: 'separate_admission_required' });
+  }
+  if (packageDescriptors.some((descriptor) => descriptor.package_name === '@narada2/site-config')) {
+    admissions.push({ admission: 'site_config_registry_probe_execution', status: 'separate_admission_required' });
+  }
+  if (packageDescriptors.some((descriptor) => descriptor.package_name === '@narada2/site-lift')) {
+    admissions.push({ admission: 'site_lift_adoption_materialization', status: 'separate_admission_required' });
+  }
+  if (packageDescriptors.length > 0) {
+    admissions.push({ admission: 'package_descriptor_selection', status: 'included_in_dry_run' });
+  }
+  return admissions;
+}
+
+function buildCreateSitePlannedFiles(
+  config: CreateSiteConfig,
+  packageDescriptors: CreateSitePackageDescriptor[] = [],
+): Array<Record<string, unknown>> {
+  const siteRoot = config.site?.site_root ?? '<site-root>';
+  const files: Array<Record<string, unknown>> = [
+    { path: `${siteRoot}\\config.json`, purpose: 'Site governance coordinates', mutation: 'planned_only' },
+    { path: `${siteRoot}\\AGENTS.md`, purpose: 'Site-local agent execution contract', mutation: 'planned_only' },
+    { path: `${siteRoot}\\.narada\\site.json`, purpose: 'Site authority seed coordinates', mutation: 'planned_only' },
+    { path: `${siteRoot}\\.narada\\lineage\\events\\site-created.json`, purpose: 'Append-only Site origin/build lineage event', mutation: 'planned_only' },
+    { path: `${siteRoot}\\.narada\\README.md`, purpose: 'Site-local Narada substrate orientation', mutation: 'planned_only' },
+    { path: `${siteRoot}\\.narada\\admission\\admission-ledger.jsonl`, purpose: 'Site-local admission ledger', mutation: 'planned_only' },
+    { path: `${siteRoot}\\.narada\\inbox\\README.md`, purpose: 'Site-local intake placeholder', mutation: 'planned_only' },
+  ];
+  if (config.task_lifecycle?.enable) {
+    files.push({ path: `${siteRoot}\\.ai\\site-task-lifecycle-admission.json`, purpose: 'Task lifecycle local admission manifest', mutation: 'requires_separate_admission' });
+  }
+  if (config.agent_context?.enable) {
+    files.push({ path: `${siteRoot}\\.ai\\agent-context-memory-admission.json`, purpose: 'Agent context local admission manifest', mutation: 'requires_separate_admission' });
+  }
+  for (const descriptor of packageDescriptors.filter((entry) => entry.posture === 'descriptor_only')) {
+    const safeName = descriptor.package_name.replace('@narada2/', '').replace(/[^a-z0-9_.-]/gi, '-');
+    files.push({
+      path: `${siteRoot}\\.narada\\admission\\package-slices\\${safeName}.json`,
+      purpose: `${descriptor.package_name} descriptor package slice`,
+      mutation: 'descriptor_materialization_only',
+    });
+  }
+  return files;
+}
+
+async function executeMinimalCreateSite(
+  config: CreateSiteConfig,
+  dryRunPlan: Record<string, any>,
+  configPath: string,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const executionRefusals = [
+    ...dryRunPlan.refusals,
+    ...findCreateSiteExecutionRefusals(config, dryRunPlan.package_descriptors ?? []),
+  ];
+  if (executionRefusals.length > 0) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        ...dryRunPlan,
+        schema: 'narada.create_site.execution_result.v0',
+        status: 'refused',
+        mode: 'execute',
+        refusals: dedupeRefusals(executionRefusals),
+        evidence: {
+          ...dryRunPlan.evidence,
+          dry_run_only: false,
+          filesystem_creation_attempted: false,
+          source_state_imported: false,
+        },
+        non_claims: executionNonClaims(),
+      },
+    };
+  }
+
+  const siteRoot = resolve(String(config.site!.site_root));
+  const plannedWrites = minimalCreateSiteWrites(
+    config,
+    siteRoot,
+    configPath,
+    dryRunPlan.package_descriptors ?? [],
+  );
+  const collision = await findCreateSiteCollision(siteRoot, plannedWrites.map((write) => write.path));
+  if (collision) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        ...dryRunPlan,
+        schema: 'narada.create_site.execution_result.v0',
+        status: 'refused',
+        mode: 'execute',
+        refusals: [{
+          code: 'create_site_collision_refused',
+          message: 'Minimal create-site execution refuses to write into a non-empty Site root or overwrite existing files.',
+          path: collision,
+        }],
+        evidence: {
+          ...dryRunPlan.evidence,
+          dry_run_only: false,
+          filesystem_creation_attempted: false,
+          source_state_imported: false,
+        },
+        non_claims: executionNonClaims(),
+      },
+    };
+  }
+
+  for (const write of plannedWrites) {
+    await mkdir(write.dir, { recursive: true });
+    await writeFile(write.path, write.content, { encoding: 'utf8', flag: 'wx' });
+  }
+
+  return {
+    exitCode: ExitCode.SUCCESS,
+    result: {
+      schema: 'narada.create_site.execution_result.v0',
+      status: 'created',
+      command: 'narada sites create',
+      mode: 'execute',
+      config_path: configPath,
+      selected_preset: config.preset ?? 'minimal',
+      selected_template: dryRunPlan.selected_template,
+      site: {
+        ...config.site,
+        site_root: siteRoot,
+      },
+      created_files: plannedWrites.map((write) => ({
+        path: write.path,
+        purpose: write.purpose,
+      })),
+      refusals: [],
+      warnings: dryRunPlan.warnings,
+      evidence: {
+        template_refs: arrayField(config.evidence?.template_refs),
+        filesystem_creation_attempted: true,
+        filesystem_creation_completed: true,
+        lineage_event_refs: plannedWrites
+          .filter((write) => write.purpose === 'Append-only Site origin/build lineage event')
+          .map((write) => `path:${write.path}`),
+        package_selection_grants_live_capability: false,
+        source_state_imported: false,
+      },
+      non_claims: executionNonClaims(),
+    },
+  };
+}
+
+function findCreateSiteExecutionRefusals(
+  config: CreateSiteConfig,
+  packageDescriptors: CreateSitePackageDescriptor[],
+): CreateSiteRefusal[] {
+  const refusals: CreateSiteRefusal[] = [];
+  if (packageDescriptors.some((descriptor) => descriptor.posture === 'unknown_package_refused')) {
+    refusals.push({
+      code: 'unknown_package_refused',
+      message: 'Unknown packages cannot be materialized as create-site descriptor artifacts.',
+    });
+  }
+  if (config.storage?.intent && !['none', 'descriptor_only'].includes(String(config.storage.intent))) {
+    refusals.push({
+      code: 'storage_execution_not_admitted',
+      message: 'Storage adapter setup is not admitted in create-site descriptor materialization.',
+    });
+  }
+  if (config.mcp?.intent && !['none', 'descriptor_only'].includes(String(config.mcp.intent))) {
+    refusals.push({
+      code: 'mcp_execution_not_admitted',
+      message: 'Live MCP registration is not admitted in create-site descriptor materialization.',
+    });
+  }
+  if (config.task_lifecycle?.enable && ![false, 'descriptor_only'].includes(config.task_lifecycle.enable as false | string)) {
+    refusals.push({
+      code: 'task_lifecycle_execution_not_admitted',
+      message: 'Task lifecycle live setup is a separate admission after descriptor materialization.',
+    });
+  }
+  if (config.agent_context?.enable && ![false, 'descriptor_only'].includes(config.agent_context.enable as false | string)) {
+    refusals.push({
+      code: 'agent_context_execution_not_admitted',
+      message: 'Agent context memory live setup is a separate admission after descriptor materialization.',
+    });
+  }
+  if (config.capabilities?.policy && !['none', 'declare_required'].includes(String(config.capabilities.policy))) {
+    refusals.push({
+      code: 'capability_grant_execution_not_admitted',
+      message: 'Capability grants are not admitted in create-site descriptor materialization.',
+    });
+  }
+  if (config.operator_surface?.intent && !['none', 'declare_relation'].includes(String(config.operator_surface.intent))) {
+    refusals.push({
+      code: 'operator_surface_execution_not_admitted',
+      message: 'Operator-surface runtime setup is not admitted in create-site descriptor materialization.',
+    });
+  }
+  if (config.windows_pwsh?.profile && !['emit_example', 'none'].includes(String(config.windows_pwsh.profile))) {
+    refusals.push({
+      code: 'windows_profile_execution_not_admitted',
+      message: 'Windows PowerShell profile mutation is not admitted in minimal Site skeleton creation.',
+    });
+  }
+  return refusals;
+}
+
+async function findCreateSiteCollision(siteRoot: string, plannedFiles: string[]): Promise<string | null> {
+  if (existsSync(siteRoot)) {
+    const entries = await readdir(siteRoot);
+    if (entries.length > 0) {
+      return siteRoot;
+    }
+  }
+  return plannedFiles.find((path) => existsSync(path)) ?? null;
+}
+
+function minimalCreateSiteWrites(
+  config: CreateSiteConfig,
+  siteRoot: string,
+  configPath: string,
+  packageDescriptors: CreateSitePackageDescriptor[],
+): Array<{ path: string; dir: string; purpose: string; content: string }> {
+  const siteId = String(config.site!.site_id);
+  const siteKind = String(config.site!.site_kind);
+  const authorityLocus = String(config.site!.authority_locus);
+  const createdAt = new Date().toISOString();
+  const templateId = config.template_catalog?.template_id ?? 'narada-proper.templates.site.minimal.v0';
+  const lineageEventId = `site-created-${randomUUID()}`;
+  const lineageEventRelativePath = join('.narada', 'lineage', 'events', `${lineageEventId}.json`);
+  const lineageEventRef = `lineage:${lineageEventId}`;
+  const siteJson = {
+    schema: 'narada.site.seed.v0',
+    site_id: siteId,
+    site_name: siteId,
+    locus: authorityLocus,
+    site_kind: siteKind,
+    repo_root: siteRoot,
+    site_root: join(siteRoot, '.narada'),
+    seed_state: 'greenfield_minimal_site_created',
+    created_from: {
+      kind: 'narada_proper_template_catalog',
+      template_id: templateId,
+      config_path: configPath,
+    },
+    origin: {
+      lineage_event_ref: lineageEventRef,
+      lineage_event_path: lineageEventRelativePath,
+    },
+    admission_state: {
+      seed_decision: 'admit_minimal_greenfield_site_skeleton',
+      runtime_state_imported: false,
+      package_selection_grants_live_capability: false,
+    },
+  };
+  const governanceConfig = {
+    schema: 'narada.create_site.materialized_config.v0',
+    created_at: createdAt,
+    site: {
+      ...config.site,
+      site_root: siteRoot,
+    },
+    preset: config.preset ?? 'minimal',
+    template_catalog: config.template_catalog ?? {
+      template_id: templateId,
+      template_components: [],
+    },
+    origin: {
+      lineage_event_ref: lineageEventRef,
+      lineage_event_path: lineageEventRelativePath,
+    },
+    non_claims: executionNonClaims(),
+  };
+  const lineageEvent = {
+    schema: 'narada.site.lineage.event.v0',
+    event_id: lineageEventId,
+    event_type: 'site.created',
+    edge_type: 'origin',
+    source_site_ref: 'narada-proper:template-catalog',
+    target_site_ref: siteId,
+    builder_site_ref: 'narada-proper',
+    built_site_ref: siteId,
+    build_method: 'narada sites create',
+    authority_effect: 'establishes_site_authority',
+    authority_basis: 'admit_minimal_greenfield_site_skeleton',
+    operator_principal: null,
+    agent_principal: 'narada sites create',
+    builder_runtime: {
+      command: 'narada sites create',
+      execution_surface: config.site?.execution_surface ?? null,
+      substrate: config.site?.substrate ?? null,
+    },
+    source_material: {
+      kind: 'narada_proper_template_catalog',
+      template_id: templateId,
+      config_path: configPath,
+      package_descriptors: packageDescriptors.map((descriptor) => descriptor.package_name),
+    },
+    evidence_refs: arrayField(config.evidence?.template_refs),
+    residuals: [],
+    occurred_at: createdAt,
+    rollback_or_residual_posture: 'delete_greenfield_site_root_before_use_or_record_site.archived_after_use',
+    source_state_imported: false,
+    authority_transferred: false,
+  };
+  const ledgerEvent = {
+    schema: 'narada.admission.event.v0',
+    event: 'seed_created',
+    site_id: siteId,
+    decision: 'admit_minimal_greenfield_site_skeleton',
+    source: 'narada sites create',
+    template_ref: templateId,
+    lineage_event_ref: lineageEventRef,
+    source_state_imported: false,
+    recorded_at: createdAt,
+  };
+  const writes: Array<{ path: string; dir: string; purpose: string; content: string }> = [
+    {
+      path: join(siteRoot, 'config.json'),
+      dir: siteRoot,
+      purpose: 'Site governance coordinates',
+      content: `${JSON.stringify(governanceConfig, null, 2)}\n`,
+    },
+    {
+      path: join(siteRoot, 'AGENTS.md'),
+      dir: siteRoot,
+      purpose: 'Site-local agent execution contract',
+      content: renderMinimalSiteAgentsMd(siteId, siteKind, authorityLocus),
+    },
+    {
+      path: join(siteRoot, '.narada', 'site.json'),
+      dir: join(siteRoot, '.narada'),
+      purpose: 'Site authority seed coordinates',
+      content: `${JSON.stringify(siteJson, null, 2)}\n`,
+    },
+    {
+      path: join(siteRoot, '.narada', 'lineage', 'events', `${lineageEventId}.json`),
+      dir: join(siteRoot, '.narada', 'lineage', 'events'),
+      purpose: 'Append-only Site origin/build lineage event',
+      content: `${JSON.stringify(lineageEvent, null, 2)}\n`,
+    },
+    {
+      path: join(siteRoot, '.narada', 'README.md'),
+      dir: join(siteRoot, '.narada'),
+      purpose: 'Site-local Narada substrate orientation',
+      content: renderMinimalNaradaReadme(siteId),
+    },
+    {
+      path: join(siteRoot, '.narada', 'admission', 'admission-ledger.jsonl'),
+      dir: join(siteRoot, '.narada', 'admission'),
+      purpose: 'Site-local admission ledger',
+      content: `${JSON.stringify(ledgerEvent)}\n`,
+    },
+    {
+      path: join(siteRoot, '.narada', 'inbox', 'README.md'),
+      dir: join(siteRoot, '.narada', 'inbox'),
+      purpose: 'Site-local intake placeholder',
+      content: renderMinimalInboxReadme(siteId),
+    },
+  ];
+  for (const descriptor of packageDescriptors.filter((entry) => entry.posture === 'descriptor_only')) {
+    const safeName = descriptor.package_name.replace('@narada2/', '').replace(/[^a-z0-9_.-]/gi, '-');
+    writes.push({
+      path: join(siteRoot, '.narada', 'admission', 'package-slices', `${safeName}.json`),
+      dir: join(siteRoot, '.narada', 'admission', 'package-slices'),
+      purpose: `${descriptor.package_name} descriptor admission artifact`,
+      content: `${JSON.stringify({
+        schema: 'narada.create_site.package_slice_admission.v0',
+        site_id: siteId,
+        package_name: descriptor.package_name,
+        posture: descriptor.posture,
+        template_component: descriptor.template_component,
+        descriptors: descriptor.descriptors,
+        denied_live_effects: descriptor.denied_live_effects,
+        live_execution_admitted: false,
+        source_state_imported: false,
+        created_from: {
+          kind: 'narada_proper_template_catalog',
+          config_path: configPath,
+        },
+      }, null, 2)}\n`,
+    });
+  }
+  const mcpSurfaces = arrayField(config.mcp?.surfaces);
+  if (config.mcp?.intent === 'descriptor_only' && mcpSurfaces.length > 0) {
+    for (const surface of mcpSurfaces) {
+      const surfaceName = String(surface);
+      writes.push({
+        path: join(siteRoot, '.narada', 'mcp', 'descriptors', `${surfaceName}.json`),
+        dir: join(siteRoot, '.narada', 'mcp', 'descriptors'),
+        purpose: `${surfaceName} MCP descriptor`,
+        content: `${JSON.stringify({
+          schema: 'narada.create_site.mcp_descriptor.v0',
+          site_id: siteId,
+          surface: surfaceName,
+          intent: 'descriptor_only',
+          live_registration_admitted: false,
+          source_state_imported: false,
+        }, null, 2)}\n`,
+      });
+    }
+  }
+  if (config.capabilities?.policy === 'declare_required') {
+    writes.push({
+      path: join(siteRoot, '.narada', 'capabilities', 'capability-policy.json'),
+      dir: join(siteRoot, '.narada', 'capabilities'),
+      purpose: 'Descriptor-only capability policy declaration',
+      content: `${JSON.stringify({
+        schema: 'narada.create_site.capability_policy.v0',
+        site_id: siteId,
+        policy: 'declare_required',
+        required: arrayField(config.capabilities.required),
+        denied: arrayField(config.capabilities.denied),
+        live_grants_admitted: false,
+        source_state_imported: false,
+      }, null, 2)}\n`,
+    });
+  }
+  return writes;
+}
+
+function renderMinimalSiteAgentsMd(siteId: string, siteKind: string, authorityLocus: string): string {
+  return `# AGENTS.md - ${siteId}
+
+This is a greenfield Narada Site created from the Narada proper template catalog.
+
+Site coordinates:
+- site_id: ${siteId}
+- site_kind: ${siteKind}
+- authority_locus: ${authorityLocus}
+
+Local rules:
+- Treat this Site root as the mutation locus only after local authority admission.
+- Do not import runtime state, databases, task history, inbox history, checkpoint history, rosters, operator-surface runtime, PC state, secrets, or credentials from another Site.
+- Package selections provide contracts/descriptors only until local adapter, DB, MCP, hydration, and capability-grant executions are separately admitted.
+- Claimed identity is data, not authority; mechanical verification basis must be explicit before role compatibility is admitted.
+`;
+}
+
+function renderMinimalNaradaReadme(siteId: string): string {
+  return `# ${siteId} Narada Site
+
+This directory is the minimal Narada substrate for this greenfield Site.
+
+Created capabilities:
+- Site seed coordinates
+- Admission ledger
+- Manual inbox placeholder
+
+Not created:
+- local databases
+- MCP registrations
+- runtime hydration
+- capability grants
+- operator-surface or PC-locus bindings
+`;
+}
+
+function renderMinimalInboxReadme(siteId: string): string {
+  return `# ${siteId} Inbox
+
+This is a placeholder for future Site-local intake.
+
+Incoming material is pending evidence until this Site admits, defers, or rejects it locally. Do not treat copied packets or references from another Site as local truth.
+`;
+}
+
+function executionNonClaims(): string[] {
+  return [
+    'local adapter admission',
+    'DB init execution',
+    'DB mutation',
+    'MCP registration execution',
+    'runtime hydration execution',
+    'capability or credential grants',
+    'operator-surface or PC-locus runtime mutation',
+    'package slice live execution',
+    'migration/lift/import from existing Sites',
+  ];
+}
+
+function collectStrings(value: unknown): string[] {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap((entry) => collectStrings(entry));
+  if (value && typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>).flatMap((entry) => collectStrings(entry));
+  }
+  return [];
+}
+
+function arrayField(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function dedupeRefusals(refusals: CreateSiteRefusal[]): CreateSiteRefusal[] {
+  const seen = new Set<string>();
+  return refusals.filter((refusal) => {
+    const key = `${refusal.code}\n${refusal.path ?? ''}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export async function sitesTaskLifecycleInitCommand(
@@ -1590,6 +2935,24 @@ export async function sitesDoctorCommand(
         addCheck(checks, 'authority_locus', 'pass', `Authority locus is ${locus.authority_locus}`);
       } else {
         addCheck(checks, 'authority_locus', 'warn', 'Config does not declare a Windows authority locus', 'Add locus.authority_locus as user or pc');
+      }
+
+      const origin = config.origin as { lineage_event_ref?: string; lineage_event_path?: string } | undefined;
+      const lineagePath = origin?.lineage_event_path
+        ? win32.isAbsolute(origin.lineage_event_path)
+          ? origin.lineage_event_path
+          : win32.join(siteRoot, origin.lineage_event_path)
+        : null;
+      if (origin?.lineage_event_ref && lineagePath && existsSync(lineagePath)) {
+        addCheck(checks, 'origin_lineage_event', 'pass', `Origin lineage event exists: ${origin.lineage_event_ref}`);
+      } else {
+        addCheck(
+          checks,
+          'origin_lineage_event',
+          'warn',
+          'Site config does not reference a readable origin/build lineage event',
+          'Create Sites through narada sites create or record a site.created lineage event and project its ref into config.origin',
+        );
       }
 
       if (locus?.authority_locus === 'user') {

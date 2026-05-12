@@ -42,6 +42,12 @@ export interface WorkNextOptions {
   peek?: boolean;
 }
 
+export interface WorkAvailableOptions {
+  agent?: string;
+  cwd?: string;
+  format?: CliFormat;
+}
+
 interface CommandEnvelope {
   exitCode: ExitCode;
   result: unknown;
@@ -344,7 +350,7 @@ function currentChangedFiles(cwd: string): string[] {
 
 function gitLines(cwd: string, args: string[]): string[] {
   try {
-    return execFileSync('git', args, {
+    return execFileSync(process.env.NARADA_GIT_BINARY ?? (process.platform === 'win32' ? 'git' : '/usr/bin/git'), args, {
       cwd,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -900,5 +906,27 @@ export async function workNextCommand(options: WorkNextOptions): Promise<Command
   return {
     exitCode: ExitCode.SUCCESS,
     result: formattedResult(result, formatHuman(result), format),
+  };
+}
+
+export async function workAvailableCommand(options: WorkAvailableOptions): Promise<CommandEnvelope> {
+  const envelope = await workNextCommand({
+    agent: options.agent,
+    cwd: options.cwd,
+    format: options.format,
+    peek: true,
+  });
+  const record = asRecord(envelope.result);
+  if (Object.keys(record).length === 0) return envelope;
+  return {
+    ...envelope,
+    result: {
+      ...record,
+      surface: 'work_available',
+      mutates: false,
+      equivalent_command: options.agent
+        ? `narada work-next --agent ${options.agent} --peek --format ${options.format ?? 'auto'}`
+        : 'narada work-next --agent <agent> --peek --format <format>',
+    },
   };
 }

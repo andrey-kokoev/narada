@@ -1,0 +1,62 @@
+{
+  "schema": "narada.audit.task_closeout.v0",
+  "task_id": "narada-proper.task-0022",
+  "title": "Lift crew startup shortcut mechanics into Narada proper capability contract",
+  "status": "completed_candidate_admission",
+  "completed_at": "2026-05-11T11:03:00.000-05:00",
+  "source_refs": [
+    "env_f2c20035-bec3-4790-b223-3fccebc6de24",
+    "codex-chat:2026-05-11:operator-propose-narada-proper-lift-crew-startup-shortcuts"
+  ],
+  "changed_files": [
+    ".narada/tasks/task-0022-crew-startup-shortcut-capability-lift.md",
+    ".narada/admission/candidates/task-0022-crew-startup-shortcut-capability-candidate.md",
+    ".narada/capabilities/crew-startup-shortcut-capability-candidate.json",
+    ".narada/audit/task-0022-crew-startup-shortcut-capability-lift-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "decision": "admit_as_descriptor_only_capability_candidate",
+  "implemented": [
+    "Created Narada proper task-0022.",
+    "Created descriptor-only capability candidate for crew startup shortcuts.",
+    "Recorded portable contract topics and first-slice implementation plan.",
+    "Recorded refusals for direct substrate shortcuts, native shell fallback, User Site state import, PC-locus mutation, and implicit capability grants."
+  ],
+  "verification": [
+    {
+      "command": "Get-Content -Raw .narada/capabilities/crew-startup-shortcut-capability-candidate.json | ConvertFrom-Json",
+      "result": "passed",
+      "summary": "capability json ok"
+    },
+    {
+      "command": "Get-Content .narada/admission/admission-ledger.jsonl | ConvertFrom-Json per line",
+      "result": "passed",
+      "summary": "ledger jsonl ok (153 lines)"
+    },
+    {
+      "command": "Get-Content -Raw .narada/audit/task-0022-crew-startup-shortcut-capability-lift-audit.json | ConvertFrom-Json",
+      "result": "passed",
+      "summary": "audit json ok"
+    }
+  ],
+  "no_import_evidence": {
+    "user_site_shortcut_files_imported": false,
+    "user_site_runtime_state_imported": false,
+    "workboard_state_imported": false,
+    "checkpoint_history_imported": false,
+    "operator_surface_or_pc_runtime_imported": false,
+    "secrets_or_credentials_imported": false
+  },
+  "not_claimed": [
+    "CLI implementation",
+    "MCP implementation",
+    "Windows shortcut creation",
+    "launch/focus/bind execution",
+    "native shell fallback",
+    "PC-locus mutation"
+  ],
+  "next_smallest_slice": "Implement descriptor package/API with request/result schemas and neutral fixtures for MCP-only startup plan and native shortcut fallback refusal.",
+  "rollback": [
+    "Remove task-0022 task/candidate/capability/audit records and corresponding ledger entries if rejected before publication."
+  ]
+}

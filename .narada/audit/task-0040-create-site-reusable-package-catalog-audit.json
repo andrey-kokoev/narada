@@ -1,0 +1,69 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0040",
+  "title": "Create-site reusable package catalog integration",
+  "status": "completed",
+  "recorded_at": "2026-05-12T10:42:41.4983100-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "source_context": "duty-loop continuation after reusable Site machinery extraction map coverage",
+    "external_source_state_imported": false
+  },
+  "changed_files": [
+    "packages/layers/cli/src/lib/create-site-template-catalog.ts",
+    "packages/layers/cli/src/commands/sites.ts",
+    "packages/layers/cli/test/commands/sites-create.test.ts",
+    ".narada/tasks/task-0040-create-site-reusable-package-catalog.md",
+    ".narada/audit/task-0040-create-site-reusable-package-catalog-audit.json",
+    ".narada/capabilities/create-site-package-catalog.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "implementation": {
+    "catalog_packages_added": [
+      "@narada2/site-inbox",
+      "@narada2/site-config",
+      "@narada2/site-lift"
+    ],
+    "exposure_class": "descriptor_only",
+    "operational_command": "narada sites create --dry-run --config <path> --format json",
+    "live_capability_granted_by_package_selection": false
+  },
+  "verification": [
+    {
+      "command": "pnpm --dir packages/layers/cli test test/commands/sites-create.test.ts",
+      "result": "passed",
+      "evidence": "1 test file passed, 14 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli build",
+      "result": "passed"
+    }
+  ],
+  "refused_imports": [
+    "narada-andrey runtime DBs",
+    "source Site inbox/task/config history",
+    "checkpoint history",
+    "operator-surface runtime state",
+    "PC-locus state",
+    "secrets or credentials"
+  ],
+  "terminal_claim": "Greenfield create-site dry-run/catalog planning now recognizes @narada2/site-inbox, @narada2/site-config, and @narada2/site-lift as Narada proper descriptor-only template components.",
+  "not_claimed": [
+    "filesystem creation semantics for those packages beyond descriptor-slice artifacts",
+    "local inbox DB mutation",
+    "site-config probe execution",
+    "Site-lift materialization",
+    "DB init",
+    "MCP registration",
+    "runtime hydration",
+    "capability grants",
+    "PC/operator-surface mutation",
+    "source Site migration/import"
+  ],
+  "rollback": "Revert the create-site template catalog additions, planned-file/admission additions, the new sites-create test, and remove this task/audit/capability/ledger evidence."
+}

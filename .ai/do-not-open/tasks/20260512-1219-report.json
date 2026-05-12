@@ -1,0 +1,34 @@
+{
+  "summary": "Implemented operation-intake fresh-work boundary: outbound artifact folders are excluded from routed fresh work by default while explicit outbound admission remains available.",
+  "changed_files": [
+    "packages/layers/control-plane/src/foreman/context.ts",
+    "packages/layers/control-plane/test/unit/foreman/context.test.ts",
+    "packages/layers/control-plane/src/config/types.ts",
+    "packages/layers/control-plane/src/config/load.ts",
+    "packages/layers/control-plane/src/config/schema.ts",
+    "packages/layers/control-plane/config.schema.json",
+    "docs/deployment/email-marketing-operation-contract.md",
+    "packages/layers/control-plane/docs/09-troubleshooting.md"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/layers/control-plane test test/unit/foreman/context.test.ts",
+      "result": "passed: 27 tests"
+    },
+    {
+      "command": "pnpm --dir packages/layers/control-plane typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/control-plane build",
+      "result": "passed and regenerated config.schema.json"
+    },
+    {
+      "command": "pnpm --dir packages/layers/control-plane test test/unit/config/load.test.ts",
+      "result": "blocked by existing environment temp path failure before code execution: ENOENT /Users/Andrey/AppData/Local/Temp"
+    }
+  ],
+  "residuals": [
+    "Config load focused suite could not run in this shell because the test harness/memfs tries to mkdir /Users/Andrey/AppData/Local/Temp; context tests, typecheck, and build passed."
+  ]
+}

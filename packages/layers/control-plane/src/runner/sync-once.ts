@@ -8,7 +8,7 @@ import type {
   RunResult,
   SyncRunner,
 } from "../types/runtime.js";
-import type { Source } from "../types/source.js";
+import type { Source, SourceRecord } from "../types/source.js";
 import type { FactStore } from "../facts/types.js";
 import { sourceRecordToFact } from "../facts/record-to-fact.js";
 import type { ProgressCallback, SyncPhase } from "../types/progress.js";
@@ -42,6 +42,8 @@ export interface SyncOnceDeps {
   projector: Projector;
   /** Optional fact store for durable canonical boundary */
   factStore?: FactStore;
+  /** Optional pre-persistence materialization gate. Returning false prevents local message/fact materialization. */
+  shouldMaterializeRecord?: (record: SourceRecord) => boolean;
   cleanupTmp?: () => Promise<void>;
   acquireLock?: () => Promise<() => Promise<void>>;
   /** @deprecated Use rebuildProjections instead */
@@ -178,6 +180,7 @@ export class DefaultSyncRunner implements SyncRunner {
 
       let appliedCount = 0;
       let skippedCount = 0;
+      let filteredCount = 0;
       const dirtyAggregate = {
         by_thread: new Set<string>(),
         by_folder: new Set<string>(),
@@ -209,6 +212,20 @@ export class DefaultSyncRunner implements SyncRunner {
 
         if (alreadyApplied) {
           skippedCount += 1;
+          continue;
+        }
+
+        if (this.deps.shouldMaterializeRecord && !this.deps.shouldMaterializeRecord(record)) {
+          skippedCount += 1;
+          filteredCount += 1;
+          try {
+            await this.deps.applyLogStore.markApplied(recordId, record.payload);
+          } catch (markError) {
+            addError("persist", markError, {
+              eventId: recordId,
+              actionTaken: "logged_only",
+            });
+          }
           continue;
         }
 
@@ -300,6 +317,7 @@ export class DefaultSyncRunner implements SyncRunner {
         event_count: batch.records.length,
         applied_count: appliedCount,
         skipped_count: skippedCount,
+        filtered_count: filteredCount,
         duration_ms: nowMs() - startedAt,
         status: errors.length > 0 ? "success" : "success",
         errors,

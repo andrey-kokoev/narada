@@ -1,0 +1,84 @@
+{
+  "schema": "narada.task_implementation_audit.v0",
+  "task_id": "narada-proper.task-0005",
+  "increment": "mutating-task-lifecycle-mcp-first-slice",
+  "decision": "admitted_single_mutating_tool",
+  "root": "D:\\code\\narada",
+  "source_evidence": [
+    "OSM:osm_20260510_142839_058_af43c473",
+    ".narada/admission/decisions/task-0005-mutating-mcp-admission.md"
+  ],
+  "mutating_tools": [
+    "site_task_lifecycle.admit_task"
+  ],
+  "changed_files": [
+    ".narada/tasks/task-0005-mutating-task-lifecycle-mcp-admission.md",
+    ".narada/admission/decisions/task-0005-mutating-mcp-admission.md",
+    ".narada/audit/task-0005-mutating-mcp-audit.json",
+    ".narada/admission/admission-ledger.jsonl",
+    ".narada/capabilities/mcp-surfaces.json",
+    ".ai/mcp/site-task-lifecycle-mcp.json",
+    "packages/layers/cli/src/mcp-server.ts",
+    "packages/layers/cli/test/commands/mcp-server.test.ts",
+    "packages/layers/cli/dist/mcp-server.js",
+    "packages/layers/cli/dist/mcp-server.d.ts",
+    "packages/layers/cli/dist/mcp-server.js.map",
+    ".ai/task-lifecycle.db",
+    ".ai/mutation-evidence/task_lifecycle/mcp_582af2d48056b375.json"
+  ],
+  "mcp_evidence": "tools/list exposes site_task_lifecycle.admit_task; tools/call site_task_lifecycle.admit_task admitted narada-proper.task-0005-smoke; refusal smoke rejected C:\\Users\\Andrey\\Narada\\.ai\\task-lifecycle.db before mutation.",
+  "db_evidence": "SQLite readback shows task_records contains narada-proper.task-0005-smoke only; task_evidence_refs contains OSM:osm_20260510_142839_058_af43c473 and .narada/tasks/task-0005-mutating-task-lifecycle-mcp-admission.md; task_admission_events contains mcp_task_admitted.",
+  "terminal_mutating_mcp_slice_claimable": true,
+  "no_import_evidence": "The mutating tool refused denied source-state refs before mutation. Live smoke result returned sourceStateImported=false and packageExecutedSqliteMutation=false. The bad pre-fix refusal-smoke residue was removed before final verification.",
+  "verification": [
+    {
+      "command": "pnpm --dir packages\\layers\\cli exec vitest run test/commands/mcp-server.test.ts",
+      "status": "passed",
+      "summary": "1 test file passed; 19 tests passed, including admit_task success and denied-source refusal."
+    },
+    {
+      "command": "pnpm --dir packages\\layers\\cli typecheck",
+      "status": "passed",
+      "summary": "tsc --noEmit completed successfully."
+    },
+    {
+      "command": "pnpm --dir packages\\layers\\cli build",
+      "status": "passed",
+      "summary": "Built CLI dist so node_modules/.bin/narada-mcp uses site_task_lifecycle.admit_task."
+    },
+    {
+      "command": "pnpm --dir packages\\site-task-lifecycle typecheck && pnpm --dir packages\\site-task-lifecycle exec vitest run",
+      "status": "passed",
+      "summary": "site-task-lifecycle typecheck passed; 11 test files and 39 tests passed."
+    },
+    {
+      "command": "node_modules\\.bin\\narada-mcp.cmd --site-root D:\\code\\narada --site-id narada-proper tools/list smoke",
+      "status": "passed",
+      "summary": "tools/list includes site_task_lifecycle.admit_task."
+    },
+    {
+      "command": "node_modules\\.bin\\narada-mcp.cmd tools/call site_task_lifecycle.admit_task",
+      "status": "passed",
+      "summary": "Admitted narada-proper.task-0005-smoke with mutationExecuted=true, sourceStateImported=false, and packageExecutedSqliteMutation=false."
+    },
+    {
+      "command": "node_modules\\.bin\\narada-mcp.cmd tools/call site_task_lifecycle.admit_task with denied source ref",
+      "status": "passed",
+      "summary": "Returned denied_source_import_ref with mutationExecuted=false."
+    },
+    {
+      "command": "sqlite3.exe readback for task_records, task_evidence_refs, and task_admission_events",
+      "status": "passed",
+      "summary": "DB readback confirmed the smoke task row, two evidence refs, and one mcp_task_admitted event."
+    }
+  ],
+  "rollback_notes": "Delete the smoke task row/evidence refs/admission event for narada-proper.task-0005-smoke and the matching mutation-evidence artifact if this slice is rolled back before dependent use.",
+  "refused_actions": [
+    "cross-Site task lifecycle mutation",
+    "arbitrary SQL over MCP",
+    "narada-andrey runtime/source state import",
+    "package-owned SQLite dependency or mutation"
+  ],
+  "recorded_by": "codex",
+  "recorded_at": "2026-05-10"
+}

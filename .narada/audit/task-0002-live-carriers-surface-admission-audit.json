@@ -1,0 +1,65 @@
+{
+  "schema": "narada.task_implementation_audit.v0",
+  "task_id": "narada-proper.task-0002",
+  "increment": "live-carriers-and-mcp-surface-admission",
+  "decision": "admitted_descriptor_only",
+  "root": "D:\\code\\narada",
+  "source_evidence": [
+    "OSM:osm_20260510_141155_707_3ce3f401",
+    ".narada/audit/task-0001-live-execution-missing-carriers-20260510.json",
+    ".narada/admission/candidates/task-0001-live-execution-admission-packet.md"
+  ],
+  "admitted_carriers": [
+    "narada-proper.carrier.task-0001.initializer-execution.v0",
+    "narada-proper.carrier.task-0001.concrete-adapter.v0",
+    "narada-proper.carrier.task-0001.db-mutation.v0"
+  ],
+  "admitted_surfaces": [
+    "narada-proper.surface.task-0001.live-task-lifecycle-mcp-registration.v0"
+  ],
+  "changed_files": [
+    ".narada/tasks/task-0002-admit-task-lifecycle-live-surfaces.md",
+    ".narada/surfaces/task-0001-initializer-execution-carrier.md",
+    ".narada/surfaces/task-0001-concrete-adapter-carrier.md",
+    ".narada/surfaces/task-0001-db-mutation-carrier.md",
+    ".narada/surfaces/task-0001-live-task-lifecycle-mcp-registration-surface.md",
+    ".narada/admission/decisions/task-0002-live-carriers-surface-admission.md",
+    ".narada/capabilities/mcp-surfaces.json",
+    ".narada/audit/task-0002-live-carriers-surface-admission-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "live_execution_performed": false,
+  "terminal_live_site_setup_claimable": false,
+  "no_import_evidence": "This increment creates Narada proper descriptor/admission records and capability visibility only. It imports no narada-andrey runtime DB, task, inbox, roster, checkpoint, operator-surface, PC-locus, secret, identity-specific, or source-history state. No SQLite mutation, initializer execution, adapter activation, or live MCP registration was performed.",
+  "verification": [
+    {
+      "command": "Get-Content .narada\\capabilities\\mcp-surfaces.json | ConvertFrom-Json; Get-Content .narada\\audit\\task-0002-live-carriers-surface-admission-audit.json | ConvertFrom-Json; Get-Content .narada\\admission\\admission-ledger.jsonl | ForEach-Object { $_ | ConvertFrom-Json }",
+      "status": "passed",
+      "summary": "Capability declaration, audit JSON, and admission ledger JSONL parsed successfully."
+    },
+    {
+      "command": "capability check for narada-proper.surface.task-0001.live-task-lifecycle-mcp-registration.v0 and missing_capabilities exclusion",
+      "status": "passed",
+      "summary": "Capability declaration lists the task lifecycle MCP descriptor surface and no longer reports site-local task lifecycle MCP as missing."
+    },
+    {
+      "command": "pnpm --dir packages\\site-task-lifecycle typecheck",
+      "status": "passed",
+      "summary": "tsc --noEmit completed successfully."
+    },
+    {
+      "command": "pnpm --dir packages\\site-task-lifecycle exec vitest run",
+      "status": "passed",
+      "summary": "11 test files passed; 39 tests passed."
+    }
+  ],
+  "rollback_notes": "Remove the task-0002 descriptor files and revert the mcp-surfaces.json entry if this admission is superseded. Preserve ledger/audit entries as superseded evidence. No package files, DBs, runtime registrations, or source Site state were changed.",
+  "remaining_blockers": [
+    "separate live execution task for receiving Site root initialization",
+    "concrete adapter implementation/activation outside @narada2/site-task-lifecycle",
+    "DB mutation execution through admitted adapter",
+    "live MCP registration transport/tool execution and smoke test"
+  ],
+  "recorded_by": "codex",
+  "recorded_at": "2026-05-10"
+}

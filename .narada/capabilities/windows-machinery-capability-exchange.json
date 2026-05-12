@@ -1,0 +1,88 @@
+{
+  "schema": "narada.capability.candidate.v0",
+  "site_id": "narada-proper",
+  "capability_id": "narada-proper.capability.windows-machinery-capability-exchange.v0",
+  "capability_name": "Windows Machinery Capability Exchange",
+  "state": "descriptor_package_set_conformance_verified",
+  "exposure_class": "descriptor_only",
+  "task_id": "narada-proper.task-0027",
+  "source_refs": [
+    "env_62d32705-0386-4820-8013-47a70cfbc8dd",
+    "C:\\Users\\Andrey\\Narada\\kb\\proposals\\narada-proper-windows-machinery-capability-exchange-offer.md",
+    "narada-andrey task #611",
+    "commit:bc5ecc42"
+  ],
+  "adopted_packages": [
+    "@narada2/windows-machinery-capability-exchange",
+    "@narada2/mcp-shell-windows",
+    "@narada2/mcp-test-windows",
+    "@narada2/windows-operator-surface",
+    "@narada2/windows-osl",
+    "@narada2/windows-pc-site-template",
+    "@narada2/windows-komorebi-yasb-kit"
+  ],
+  "audit_path": ".narada/audit/task-0027-windows-machinery-package-set-adoption-audit.json",
+  "increments": [
+    {
+      "task_id": "narada-proper.task-0028",
+      "package": "@narada2/windows-operator-surface",
+      "state": "fixture_safe_binding_diagnosis_service_implemented",
+      "audit_path": ".narada/audit/task-0028-windows-operator-surface-service-slice-audit.json"
+    },
+    {
+      "task_id": "narada-proper.task-0029",
+      "package": "@narada2/windows-osl",
+      "state": "read_only_osl_panel_payload_contract_implemented",
+      "audit_path": ".narada/audit/task-0029-windows-osl-panel-payload-slice-audit.json"
+    },
+    {
+      "task_id": "narada-proper.task-0030",
+      "package": "@narada2/mcp-shell-windows",
+      "state": "descriptor_only_shell_mcp_boundary_decisions_implemented",
+      "audit_path": ".narada/audit/task-0030-mcp-shell-windows-boundary-slice-audit.json"
+    },
+    {
+      "task_id": "narada-proper.task-0031",
+      "package": "@narada2/mcp-test-windows",
+      "state": "descriptor_only_test_run_contracts_implemented",
+      "audit_path": ".narada/audit/task-0031-mcp-test-windows-run-contract-slice-audit.json"
+    },
+    {
+      "task_id": "narada-proper.task-0032",
+      "package": "@narada2/windows-pc-site-template",
+      "state": "descriptor_only_greenfield_pc_site_template_plan_implemented",
+      "audit_path": ".narada/audit/task-0032-windows-pc-site-template-plan-slice-audit.json"
+    },
+    {
+      "task_id": "narada-proper.task-0033",
+      "package": "@narada2/windows-komorebi-yasb-kit",
+      "state": "descriptor_only_komorebi_yasb_materialization_policy_implemented",
+      "audit_path": ".narada/audit/task-0033-windows-komorebi-yasb-policy-slice-audit.json"
+    },
+    {
+      "task_id": "narada-proper.task-0034",
+      "package": "@narada2/windows-machinery-capability-exchange",
+      "state": "descriptor_only_package_set_conformance_reporting_implemented",
+      "audit_path": ".narada/audit/task-0034-windows-machinery-conformance-slice-audit.json"
+    },
+    {
+      "task_id": "narada-proper.task-0035",
+      "package": "windows-machinery-package-set",
+      "state": "aggregate_tests_typecheck_build_passed",
+      "audit_path": ".narada/audit/task-0035-windows-machinery-aggregate-verification-audit.json"
+    }
+  ],
+  "not_admitted": [
+    "PC runtime SQLite databases",
+    "live HWND bindings",
+    "generated runtime projections",
+    "logs and PIDs",
+    "live Komorebi or YASB state",
+    "narada-andrey identity authority",
+    "secrets or credentials",
+    "live shell authority",
+    "PC-locus mutation authority",
+    "private MCP client mutation",
+    "external publication authority"
+  ]
+}

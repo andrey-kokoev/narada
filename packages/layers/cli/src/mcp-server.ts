@@ -1,4 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { cwd as processCwd, stdin as defaultStdin, stdout as defaultStdout } from 'node:process';
 import {
@@ -96,6 +98,37 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
     inputSchema: objectSchema({
       target: targetSchema(),
     }),
+  },
+  {
+    name: 'site_task_lifecycle.plan_init',
+    description: 'Plan local Site task-lifecycle paths without mutating files or databases.',
+    inputSchema: objectSchema({
+      site_root: stringSchema('Site root to plan for; defaults to the MCP target Site root.'),
+      target: targetSchema(),
+    }),
+  },
+  {
+    name: 'site_task_lifecycle.admit_task',
+    description: 'Admit one local task candidate into the Site task-lifecycle DB through the MCP adapter boundary.',
+    inputSchema: objectSchema({
+      task_id: { type: 'string', description: 'Local task id to admit.' },
+      title: { type: 'string', description: 'Task title.' },
+      source_ref: { type: 'string', description: 'Admitted evidence reference for the task.' },
+      summary: stringSchema('Task summary.'),
+      source_site: stringSchema('Source Site label; defaults to the target Site id.'),
+      received_at: stringSchema('ISO timestamp; defaults to now.'),
+      admitted_by: stringSchema('Principal admitting the task; defaults to mcp-client.'),
+      evidence_refs: arrayStringSchema('Additional evidence refs.'),
+      target: targetSchema(),
+    }, ['task_id', 'title', 'source_ref']),
+  },
+  {
+    name: 'site_task_lifecycle.read_task',
+    description: 'Read one local task lifecycle row with evidence refs and admission events without mutating.',
+    inputSchema: objectSchema({
+      task_id: { type: 'string', description: 'Local task id to read.' },
+      target: targetSchema(),
+    }, ['task_id']),
   },
   {
     name: 'narada_inbox_doctor',
@@ -261,6 +294,7 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
   const mutationAttempted = name === 'narada_inbox_submit_observation'
     || (name === 'narada_inbox_work_next' && booleanField(args, 'claim') === true)
     || (name === 'narada_task_work_next' && booleanField(args, 'claim') === true)
+    || name === 'site_task_lifecycle.admit_task'
     || name === 'narada_ee_run';
   const traversal = await resolveMcpTraversal({
     sourceSite: siteContext,
@@ -295,6 +329,35 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
         rule: 'MCP fabric may route typed requests; target Site authority admits consequence.',
         traversal,
       });
+    case 'site_task_lifecycle.plan_init':
+      return jsonToolResult(attachTraversal({
+        status: 'success',
+        schema: 'narada.site_task_lifecycle.mcp_plan_init_result.v0',
+        packageName: '@narada2/site-task-lifecycle',
+        siteId: traversal.target_site.site_id,
+        paths: planSiteTaskLifecyclePathsForMcp(stringField(args, 'site_root') ?? traversal.target_site.site_root),
+        mutationAttempted: false,
+        sourceStateImported: false,
+        packageExecutedSqliteMutation: false,
+      }, traversal));
+    case 'site_task_lifecycle.admit_task':
+      return jsonToolResult(attachTraversal(admitTaskLifecycleTask({
+        siteRoot: traversal.target_site.site_root,
+        siteId: traversal.target_site.site_id,
+        taskId: requiredString(args, 'task_id'),
+        title: requiredString(args, 'title'),
+        sourceRef: requiredString(args, 'source_ref'),
+        sourceSite: stringField(args, 'source_site') ?? traversal.target_site.site_id,
+        summary: stringField(args, 'summary') ?? '',
+        receivedAt: stringField(args, 'received_at') ?? new Date().toISOString(),
+        admittedBy: stringField(args, 'admitted_by') ?? 'mcp-client',
+        evidenceRefs: stringArrayField(args, 'evidence_refs') ?? [],
+      }), traversal));
+    case 'site_task_lifecycle.read_task':
+      return jsonToolResult(attachTraversal(readTaskLifecycleTask({
+        siteRoot: traversal.target_site.site_root,
+        taskId: requiredString(args, 'task_id'),
+      }), traversal));
     case 'narada_inbox_doctor':
       return commandToolResult(await inboxDoctorCommand({
         cwd: scopedCwd,
@@ -716,6 +779,215 @@ function targetSchema(): Record<string, unknown> {
     ref: stringSchema('Target Site reference resolved through the source Site routing registry.'),
     site_root: stringSchema('Explicit target Site root; path fallback for local proof and tests.'),
   });
+}
+
+function planSiteTaskLifecyclePathsForMcp(siteRoot: string): Record<string, string> {
+  const root = resolve(siteRoot);
+  return {
+    siteRoot: root,
+    taskDbPath: resolve(root, '.ai', 'task-lifecycle.db'),
+    taskSpecDir: resolve(root, '.ai', 'do-not-open', 'tasks'),
+    manifestPath: resolve(root, '.ai', 'site-task-lifecycle-admission.json'),
+  };
+}
+
+function admitTaskLifecycleTask(args: {
+  siteRoot: string;
+  siteId: string;
+  taskId: string;
+  title: string;
+  sourceRef: string;
+  sourceSite: string;
+  summary: string;
+  receivedAt: string;
+  admittedBy: string;
+  evidenceRefs: string[];
+}): Record<string, unknown> {
+  const refs = [args.sourceRef, ...args.evidenceRefs];
+  const denied = refs.flatMap(findDeniedSourceRefsForMcp);
+  if (denied.length > 0) {
+    return {
+      status: 'error',
+      error: 'denied_source_import_ref',
+      deniedSourceImportFindings: denied,
+      mutationAttempted: true,
+      mutationExecuted: false,
+      sourceStateImported: false,
+      packageExecutedSqliteMutation: false,
+    };
+  }
+
+  const paths = planSiteTaskLifecyclePathsForMcp(args.siteRoot);
+  mkdirSync(resolve(args.siteRoot, '.ai'), { recursive: true });
+  for (const statement of SITE_TASK_LIFECYCLE_SCHEMA) {
+    sqlite(paths.taskDbPath, statement);
+  }
+
+  const createdAt = new Date().toISOString();
+  sqlite(paths.taskDbPath, [
+    'INSERT OR IGNORE INTO task_records (task_id, title, source_site, source_ref, status, received_at, summary, created_at)',
+    `VALUES (${sqlLiteral(args.taskId)}, ${sqlLiteral(args.title)}, ${sqlLiteral(args.sourceSite)}, ${sqlLiteral(args.sourceRef)}, 'admitted', ${sqlLiteral(args.receivedAt)}, ${sqlLiteral(args.summary)}, ${sqlLiteral(createdAt)});`,
+  ].join(' '));
+  for (const ref of refs) {
+    sqlite(paths.taskDbPath, [
+      'INSERT OR IGNORE INTO task_evidence_refs (task_id, evidence_ref, evidence_kind)',
+      `VALUES (${sqlLiteral(args.taskId)}, ${sqlLiteral(ref)}, ${sqlLiteral(ref.startsWith('OSM:') ? 'operator_surface_message' : 'external_reference')});`,
+    ].join(' '));
+  }
+
+  const eventId = `mcp-task-admission-${createHash('sha256').update(`${args.taskId}\n${createdAt}\n${args.admittedBy}`).digest('hex').slice(0, 16)}`;
+  sqlite(paths.taskDbPath, [
+    'INSERT OR IGNORE INTO task_admission_events (event_id, task_id, event_type, recorded_at, payload_json)',
+    `VALUES (${sqlLiteral(eventId)}, ${sqlLiteral(args.taskId)}, 'mcp_task_admitted', ${sqlLiteral(createdAt)}, ${sqlLiteral(JSON.stringify({ admittedBy: args.admittedBy, sourceRef: args.sourceRef }))});`,
+  ].join(' '));
+
+  const readback = sqliteJson(paths.taskDbPath, `SELECT task_id, status, source_site, source_ref FROM task_records WHERE task_id = ${sqlLiteral(args.taskId)};`);
+  const evidencePath = writeTaskLifecycleMutationEvidence(args.siteRoot, {
+    taskId: args.taskId,
+    siteId: args.siteId,
+    sourceRef: args.sourceRef,
+    eventId,
+    dbPath: paths.taskDbPath,
+    recordedAt: createdAt,
+    admittedBy: args.admittedBy,
+    readback,
+  });
+
+  return {
+    status: 'success',
+    schema: 'narada.site_task_lifecycle.mcp_admit_task_result.v0',
+    taskId: args.taskId,
+    adapterId: 'narada-proper.adapter.task-0005.mcp-sqlite3-cli.v0',
+    taskDbPath: paths.taskDbPath,
+    mutationAttempted: true,
+    mutationExecuted: true,
+    sourceStateImported: false,
+    packageOwnsSqliteDependency: false,
+    packageExecutedSqliteMutation: false,
+    readback,
+    mutationEvidencePath: evidencePath,
+  };
+}
+
+function readTaskLifecycleTask(args: { siteRoot: string; taskId: string }): Record<string, unknown> {
+  const paths = planSiteTaskLifecyclePathsForMcp(args.siteRoot);
+  if (!existsSync(paths.taskDbPath)) {
+    return {
+      status: 'not_found',
+      taskId: args.taskId,
+      taskDbPath: paths.taskDbPath,
+      mutationAttempted: false,
+      mutationExecuted: false,
+      sourceStateImported: false,
+      packageExecutedSqliteMutation: false,
+    };
+  }
+
+  const taskRows = sqliteJson(paths.taskDbPath, `SELECT task_id, title, source_site, source_ref, status, received_at, summary, created_at FROM task_records WHERE task_id = ${sqlLiteral(args.taskId)};`);
+  if (taskRows.length === 0) {
+    return {
+      status: 'not_found',
+      taskId: args.taskId,
+      taskDbPath: paths.taskDbPath,
+      mutationAttempted: false,
+      mutationExecuted: false,
+      sourceStateImported: false,
+      packageExecutedSqliteMutation: false,
+    };
+  }
+
+  return {
+    status: 'success',
+    schema: 'narada.site_task_lifecycle.mcp_read_task_result.v0',
+    taskId: args.taskId,
+    taskDbPath: paths.taskDbPath,
+    task: taskRows[0],
+    evidenceRefs: sqliteJson(paths.taskDbPath, `SELECT evidence_ref, evidence_kind FROM task_evidence_refs WHERE task_id = ${sqlLiteral(args.taskId)} ORDER BY evidence_ref;`),
+    admissionEvents: sqliteJson(paths.taskDbPath, `SELECT event_id, event_type, recorded_at FROM task_admission_events WHERE task_id = ${sqlLiteral(args.taskId)} ORDER BY event_id;`),
+    mutationAttempted: false,
+    mutationExecuted: false,
+    sourceStateImported: false,
+    packageExecutedSqliteMutation: false,
+  };
+}
+
+const SITE_TASK_LIFECYCLE_SCHEMA = [
+  [
+    'CREATE TABLE IF NOT EXISTS task_records (',
+    'task_id TEXT PRIMARY KEY,',
+    'title TEXT NOT NULL,',
+    'source_site TEXT NOT NULL,',
+    'source_ref TEXT NOT NULL,',
+    'status TEXT NOT NULL,',
+    'received_at TEXT NOT NULL,',
+    'summary TEXT NOT NULL,',
+    'created_at TEXT NOT NULL',
+    ');',
+  ].join('\n'),
+  [
+    'CREATE TABLE IF NOT EXISTS task_evidence_refs (',
+    'task_id TEXT NOT NULL,',
+    'evidence_ref TEXT NOT NULL,',
+    'evidence_kind TEXT NOT NULL,',
+    'PRIMARY KEY (task_id, evidence_ref),',
+    'FOREIGN KEY (task_id) REFERENCES task_records(task_id)',
+    ');',
+  ].join('\n'),
+  [
+    'CREATE TABLE IF NOT EXISTS task_admission_events (',
+    'event_id TEXT PRIMARY KEY,',
+    'task_id TEXT NOT NULL,',
+    'event_type TEXT NOT NULL,',
+    'recorded_at TEXT NOT NULL,',
+    'payload_json TEXT NOT NULL,',
+    'FOREIGN KEY (task_id) REFERENCES task_records(task_id)',
+    ');',
+  ].join('\n'),
+];
+
+function sqlite(dbPath: string, sql: string): void {
+  execFileSync('sqlite3.exe', ['-cmd', '.timeout 5000', dbPath, sql], { stdio: 'pipe' });
+}
+
+function sqliteJson(dbPath: string, sql: string): unknown[] {
+  const output = execFileSync('sqlite3.exe', ['-cmd', '.timeout 5000', '-json', dbPath, sql], { encoding: 'utf8' });
+  return output.trim().length > 0 ? JSON.parse(output) as unknown[] : [];
+}
+
+function sqlLiteral(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`;
+}
+
+function writeTaskLifecycleMutationEvidence(siteRoot: string, evidence: Record<string, unknown>): string {
+  const digest = createHash('sha256').update(JSON.stringify(evidence)).digest('hex').slice(0, 16);
+  const evidenceDir = resolve(siteRoot, '.ai', 'mutation-evidence', 'task_lifecycle');
+  const evidencePath = resolve(evidenceDir, `mcp_${digest}.json`);
+  mkdirSync(evidenceDir, { recursive: true });
+  writeFileSync(evidencePath, `${JSON.stringify({
+    schema: 'narada.site_task_lifecycle.mcp_mutation_evidence.v0',
+    command: 'site_task_lifecycle.admit_task',
+    authority_class: 'mcp_adapter_bound_task_lifecycle_mutation',
+    packageExecutedSqliteMutation: false,
+    sourceStateImported: false,
+    ...evidence,
+  }, null, 2)}\n`, 'utf8');
+  return evidencePath;
+}
+
+function findDeniedSourceRefsForMcp(path: string): Array<{ path: string; reason: string }> {
+  const comparable = path.replaceAll('/', '\\').replace(/\\+/g, '\\');
+  const patterns: Array<{ pattern: RegExp; reason: string }> = [
+    { pattern: /(^|\\)\.ai\\task-lifecycle\.db(-shm|-wal)?$/i, reason: 'source task lifecycle database' },
+    { pattern: /(^|\\)\.ai\\do-not-open\\tasks(\\|$)/i, reason: 'source task history' },
+    { pattern: /(^|\\)\.ai\\inbox\.db$/i, reason: 'source inbox database' },
+    { pattern: /(^|\\)\.ai\\inbox-envelopes(\\|$)/i, reason: 'source inbox envelope history' },
+    { pattern: /(^|\\)\.ai\\agents\\roster\.json$/i, reason: 'source roster authority' },
+    { pattern: /(^|\\)operator-surfaces(\\|$)/i, reason: 'operator-surface binding or projection state' },
+    { pattern: /^c:\\programdata\\narada\\sites\\pc\\/i, reason: 'PC-locus runtime state' },
+    { pattern: /(^|\\)(secrets?|tokens?|credentials?)(\\|\.|$)/i, reason: 'secret or credential material' },
+  ];
+  const denied = patterns.find(({ pattern }) => pattern.test(comparable));
+  return denied ? [{ path, reason: denied.reason }] : [];
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

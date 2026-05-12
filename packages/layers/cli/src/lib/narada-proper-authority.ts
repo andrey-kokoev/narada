@@ -44,6 +44,7 @@ export interface AuthorityClonePosture {
   repo_root: string | null;
   authority_root: string | null;
   is_authority: boolean;
+  temporary_authority_admission: boolean;
   stale: boolean;
   ahead: number | null;
   behind: number | null;
@@ -137,7 +138,8 @@ export function inspectAuthorityClonePosture(cwd = process.cwd()): AuthorityClon
   const behind = numberOrNull(git(root, ['rev-list', '--count', 'HEAD..@{u}']));
   const embodiments = config ? inspectConfiguredEmbodiments(root, config) : [];
   const authorityRoot = config ? resolveConfiguredPath(root, config.authority_root) : null;
-  const isAuthority = authorityRoot ? samePath(root, authorityRoot) : false;
+  const temporaryAuthorityAdmission = Boolean(config && isTemporaryAuthorityAdmitted(root, config));
+  const isAuthority = authorityRoot ? samePath(root, authorityRoot) || temporaryAuthorityAdmission : temporaryAuthorityAdmission;
   const stale = Boolean(isAuthority && (behind ?? 0) > 0);
 
   return {
@@ -146,6 +148,7 @@ export function inspectAuthorityClonePosture(cwd = process.cwd()): AuthorityClon
     repo_root: repoRoot,
     authority_root: authorityRoot,
     is_authority: isAuthority,
+    temporary_authority_admission: temporaryAuthorityAdmission,
     stale,
     ahead,
     behind,
@@ -177,6 +180,27 @@ function readAuthorityCloneConfig(path: string): AuthorityCloneConfig | null {
     return JSON.parse(readFileSync(path, 'utf8')) as AuthorityCloneConfig;
   } catch {
     return null;
+  }
+}
+
+function isTemporaryAuthorityAdmitted(root: string, config: AuthorityCloneConfig): boolean {
+  const siteConfigPath = join(root, '.narada', 'site.json');
+  if (!existsSync(siteConfigPath)) return false;
+  try {
+    const siteConfig = JSON.parse(readFileSync(siteConfigPath, 'utf8')) as {
+      authority_admission?: {
+        kind?: string;
+        admitted_path?: string;
+        canonical_authority_root?: string;
+      };
+    };
+    const admission = siteConfig.authority_admission;
+    if (admission?.kind !== 'operator_explicit_temporary_path_admission') return false;
+    if (!admission.admitted_path || !samePath(root, admission.admitted_path)) return false;
+    if (admission.canonical_authority_root && admission.canonical_authority_root !== config.authority_root) return false;
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -232,7 +256,14 @@ function normalizeEmbodimentsConfig(config: AuthorityCloneConfig): SiteEmbodimen
 function resolveConfiguredPath(base: string, path: string): string {
   const windowsPath = path.match(/^([A-Za-z]):\\(.*)$/);
   if (windowsPath) {
+    if (process.platform === 'win32') {
+      return resolve(path);
+    }
     return `/${process.env.NARADA_WINDOWS_MOUNT_ROOT ?? 'mnt'}/${windowsPath[1].toLowerCase()}/${windowsPath[2].replace(/\\/g, '/')}`;
+  }
+  const wslMountPath = path.match(/^\/mnt\/([A-Za-z])\/(.*)$/);
+  if (process.platform === 'win32' && wslMountPath) {
+    return resolve(`${wslMountPath[1].toUpperCase()}:\\${wslMountPath[2].replace(/\//g, '\\')}`);
   }
   return resolve(base, path);
 }
@@ -264,7 +295,7 @@ function samePath(a: string, b: string): boolean {
 
 function git(cwd: string, args: string[]): string | null {
   try {
-    const output = execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', args, {
+    const output = execFileSync(gitBinary(), args, {
       cwd,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -273,6 +304,10 @@ function git(cwd: string, args: string[]): string | null {
   } catch {
     return null;
   }
+}
+
+function gitBinary(): string {
+  return process.env.NARADA_GIT_BINARY ?? (process.platform === 'win32' ? 'git' : '/usr/bin/git');
 }
 
 function numberOrNull(value: string | null): number | null {

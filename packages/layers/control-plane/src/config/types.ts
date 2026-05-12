@@ -96,6 +96,10 @@ export interface AdmissionConfig {
   mail?: MailAdmissionConfig;
 }
 
+export interface MaterializationConfig {
+  mail?: MailAdmissionConfig;
+}
+
 export interface ClientServiceMailboxProfile {
   /** Marks this mailbox scope as authored from a client-service onboarding path. */
   enabled: boolean;
@@ -122,6 +126,19 @@ export interface OperationIntakeRouteConfig {
   match: OperationIntakeRouteMatchConfig;
 }
 
+export interface OperationIntakeFreshWorkBoundaryConfig {
+  /**
+   * Folder refs treated as outbound artifacts for fresh-work admission.
+   * Defaults include common Graph folder aliases such as sentitems.
+   */
+  outbound_folder_refs?: string[];
+  /**
+   * By default, outbound artifacts remain available as source facts and
+   * reconciliation context but do not open routed fresh work.
+   */
+  outbound_folder_behavior?: "exclude" | "admit";
+}
+
 export interface MailContextStitchingConfig {
   enabled: boolean;
   lookback_days?: number;
@@ -132,6 +149,7 @@ export interface MailContextStitchingConfig {
 
 export interface OperationIntakeConfig {
   routes: OperationIntakeRouteConfig[];
+  fresh_work_boundary?: OperationIntakeFreshWorkBoundaryConfig;
   mail_context_stitching?: MailContextStitchingConfig;
 }
 
@@ -194,6 +212,8 @@ export interface ScopeConfig {
   charter?: CharterRuntimeConfig;
   /** Policy binding */
   policy: RuntimePolicy;
+  /** Source-record materialization policy. Controls which fetched records may be persisted locally. */
+  materialization?: MaterializationConfig;
   /** Source-record admission policy. Controls which synced source records may produce work. */
   admission?: AdmissionConfig;
   /** Client-service onboarding metadata for mailbox scopes. */

@@ -1,0 +1,74 @@
+{
+  "schema": "narada.create_site.options.v0",
+  "mode": "dry_run",
+  "preset": "site-machinery",
+  "template_catalog": {
+    "template_id": "narada-proper.templates.site.site-machinery.v0",
+    "template_components": [
+      "@narada2/site-inbox",
+      "@narada2/site-config",
+      "@narada2/site-lift"
+    ]
+  },
+  "site": {
+    "site_id": "site-machinery-alpha",
+    "site_kind": "project",
+    "authority_locus": "project",
+    "site_root": "D:\\Sites\\site-machinery-alpha",
+    "workspace_root": "D:\\Sites\\site-machinery-alpha",
+    "substrate": "windows-native",
+    "execution_surface": "windows_native",
+    "sync_posture": "git_backed"
+  },
+  "packages": [
+    {
+      "name": "@narada2/site-inbox",
+      "include_contracts": true,
+      "include_docs": true,
+      "include_schema_descriptors": true,
+      "include_conformance_tests": true
+    },
+    {
+      "name": "@narada2/site-config",
+      "include_contracts": true,
+      "include_docs": true,
+      "include_schema_descriptors": true,
+      "include_conformance_tests": true
+    },
+    {
+      "name": "@narada2/site-lift",
+      "include_contracts": true,
+      "include_docs": true,
+      "include_schema_descriptors": true,
+      "include_conformance_tests": true
+    }
+  ],
+  "identity": {
+    "named_agents": [],
+    "role_assignments": [],
+    "role_compatibility_identities": [],
+    "claimed_identity_evidence": [],
+    "mechanical_verification_basis": []
+  },
+  "storage": { "intent": "none" },
+  "mcp": { "intent": "none", "surfaces": [] },
+  "capabilities": {
+    "policy": "declare_required",
+    "required": ["canonical_inbox", "site_config_awareness", "site_lift_adoption"],
+    "denied": ["source_site_runtime_import", "cross_site_mutation"]
+  },
+  "inbox": { "enable": "canonical_envelope_intake" },
+  "task_lifecycle": { "enable": false },
+  "agent_context": { "enable": false },
+  "operator_surface": { "intent": "none" },
+  "windows_pwsh": { "profile": "emit_example", "path_style": "windows" },
+  "evidence": {
+    "template_refs": [
+      "narada-proper.templates.site.site-machinery.v0",
+      "package:@narada2/site-inbox",
+      "package:@narada2/site-config",
+      "package:@narada2/site-lift"
+    ],
+    "refused_imports": []
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "schema": "narada.task_implementation_audit.v0",
+  "task_id": "narada-proper.task-0001",
+  "carrier_id": "narada-proper.carrier.task-0001.package-implementation.v0",
+  "increment": "site-task-lifecycle-sqlite-adapter-decision",
+  "root": "D:\\code\\narada",
+  "source_evidence": [
+    "OSM:osm_20260509_235729_802_6ec50250"
+  ],
+  "decision": {
+    "chosen": "adapter_interface_only",
+    "package_owns_sqlite_dependency": false,
+    "package_executes_sqlite_mutation": false,
+    "adr_path": "packages/site-task-lifecycle/docs/adr-0001-sqlite-adapter-boundary.md"
+  },
+  "changed_files": [
+    "packages/site-task-lifecycle/README.md",
+    "packages/site-task-lifecycle/docs/adr-0001-sqlite-adapter-boundary.md",
+    "packages/site-task-lifecycle/src/index.ts",
+    "packages/site-task-lifecycle/src/task-db-adapter.ts",
+    "packages/site-task-lifecycle/src/types.ts",
+    "packages/site-task-lifecycle/test/task-db-adapter.test.ts"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages\\site-task-lifecycle typecheck",
+      "status": "passed"
+    },
+    {
+      "command": "pnpm --dir packages\\site-task-lifecycle exec vitest run test/initialize.test.ts test/import-refusal.test.ts test/admission-contract.test.ts test/mcp-facade.test.ts test/inbox-task-bridge.test.ts test/task-db-schema.test.ts test/task-db-adapter.test.ts",
+      "status": "passed",
+      "summary": "7 test files passed; 17 tests passed"
+    },
+    {
+      "command": "rg -n \"better-sqlite3|sqlite3|@libsql/client|node:sqlite\" packages\\site-task-lifecycle\\package.json packages\\site-task-lifecycle\\src packages\\site-task-lifecycle\\test packages\\site-task-lifecycle\\docs packages\\site-task-lifecycle\\README.md",
+      "status": "passed",
+      "summary": "Only negative dependency assertions mention concrete SQLite driver names."
+    }
+  ],
+  "lifted": [
+    "ADR-style package-local SQLite boundary decision",
+    "Typed adapter-interface-only boundary",
+    "Future adapter execution request shape for admitted DB write path",
+    "Tests proving source DB/history refusal evidence and absence of SQLite runtime dependencies"
+  ],
+  "rejected_alternatives": [
+    "Package owns a SQLite dependency",
+    "Package ships both dependency and adapter in this slice",
+    "Package imports source Site DBs or task history"
+  ],
+  "intentionally_refused": [
+    "narada-andrey runtime databases",
+    "source task/inbox state or history",
+    "source roster/checkpoint/operator-surface state",
+    "PC-locus runtime state",
+    "secrets or identity-specific data",
+    "live registration",
+    "SQLite mutation"
+  ],
+  "remaining_candidates": [
+    "admitted concrete SQLite adapter implementation in a receiving-Site runtime or storage package",
+    "DB write/admission path using the adapter boundary",
+    "admitted MCP runtime binding that cannot mutate without the adapter capability",
+    "neutral legacy role-preference migration fixture"
+  ],
+  "rollback_notes": "Remove the listed package-local files/edits and this audit event; no dependency metadata, live registration, SQLite DB, or external runtime state was changed.",
+  "recorded_by": "codex",
+  "recorded_at": "2026-05-10"
+}

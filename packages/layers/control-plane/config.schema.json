@@ -270,6 +270,154 @@
               ]
             }
           },
+          "materialization": {
+            "type": "object",
+            "properties": {
+              "mail": {
+                "type": "object",
+                "properties": {
+                  "included_folder_refs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "excluded_folder_refs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "allowed_sender_addresses": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "email"
+                    }
+                  },
+                  "allowed_sender_domains": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "unknown_sender_behavior": {
+                    "type": "string",
+                    "enum": [
+                      "ignore",
+                      "admit"
+                    ]
+                  },
+                  "predicates": {
+                    "type": "object",
+                    "properties": {
+                      "include": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "participant"
+                            },
+                            "fields": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "from",
+                                  "sender",
+                                  "to",
+                                  "cc",
+                                  "bcc",
+                                  "any_participant"
+                                ]
+                              }
+                            },
+                            "addresses": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "format": "email"
+                              }
+                            },
+                            "domains": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "exclude": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "participant"
+                            },
+                            "fields": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "from",
+                                  "sender",
+                                  "to",
+                                  "cc",
+                                  "bcc",
+                                  "any_participant"
+                                ]
+                              }
+                            },
+                            "addresses": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "format": "email"
+                              }
+                            },
+                            "domains": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "unknown_participant_behavior": {
+                        "type": "string",
+                        "enum": [
+                          "ignore",
+                          "admit"
+                        ]
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
           "admission": {
             "type": "object",
             "properties": {
@@ -866,6 +1014,26 @@
                   "additionalProperties": false
                 },
                 "minItems": 1
+              },
+              "fresh_work_boundary": {
+                "type": "object",
+                "properties": {
+                  "outbound_folder_refs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "outbound_folder_behavior": {
+                    "type": "string",
+                    "enum": [
+                      "exclude",
+                      "admit"
+                    ]
+                  }
+                },
+                "additionalProperties": false
               },
               "mail_context_stitching": {
                 "type": "object",

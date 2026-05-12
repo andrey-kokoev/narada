@@ -1,0 +1,88 @@
+{
+  "schema": "narada.audit.task_closeout.v0",
+  "task_id": "narada-proper.task-0011",
+  "title": "Implement descriptor-only narada sites create dry-run command",
+  "source_refs": [
+    "OSM:osm_20260510_192448_209_7a1a46a0",
+    "OSM:osm_20260510_192413_542_c3b0ffa7",
+    "task-0010:create-site-options-model-design"
+  ],
+  "decision_path": ".narada/admission/decisions/task-0011-create-site-dry-run-command-admission.md",
+  "task_path": ".narada/tasks/task-0011-create-site-dry-run-command.md",
+  "status": "completed",
+  "completed_at": "2026-05-10T19:33:22.8914916-05:00",
+  "changed_files": [
+    "packages/layers/cli/src/commands/sites.ts",
+    "packages/layers/cli/src/commands/sites-register.ts",
+    "packages/layers/cli/test/commands/sites-create.test.ts",
+    ".narada/tasks/task-0011-create-site-dry-run-command.md",
+    ".narada/admission/decisions/task-0011-create-site-dry-run-command-admission.md",
+    ".narada/audit/task-0011-create-site-dry-run-command-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "implemented": [
+    "Added descriptor-only sitesCreateCommand for narada sites create --dry-run --config <path> --format json.",
+    "Added optional --output-plan artifact write, bounded to explicit dry-run plan output.",
+    "Expanded minimal, agent-memory, and task-lifecycle greenfield presets into structured plan JSON.",
+    "Expanded @narada2/site-task-lifecycle and @narada2/agent-context-memory package selections as descriptor-only template components.",
+    "Refused full operator-surface-aware preset as fixture-only until live surfaces are separately admitted.",
+    "Added refusal guards for source Site runtime state, secrets/credentials, PC/operator-surface runtime state, live adapter/MCP/profile/hydration admissions, implicit live capability grants, unknown packages, and identity/role authority smear.",
+    "Registered narada sites create in the CLI command tree."
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages\\layers\\cli exec vitest run test/commands/sites-create.test.ts",
+      "result": "passed",
+      "summary": "1 test file, 8 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages\\layers\\cli typecheck",
+      "result": "passed",
+      "summary": "tsc --noEmit passed"
+    },
+    {
+      "command": "pnpm --dir packages\\layers\\cli build",
+      "result": "passed",
+      "summary": "tsc build passed"
+    },
+    {
+      "command": "node packages\\layers\\cli\\dist\\main.js sites create --dry-run --config docs\\product\\fixtures\\create-site-options\\create-site-minimal.json --format json",
+      "result": "passed",
+      "summary": "CLI registration smoke emitted narada.create_site.dry_run_plan.v0 with status planned"
+    }
+  ],
+  "earlier_failed_verification": [
+    {
+      "command": "pnpm --dir packages\\layers\\cli exec vitest run test/commands/sites-create.test.ts",
+      "result": "failed_then_repaired",
+      "summary": "Initial test harness read fixtures through memfs and tempdir setup failed; fixed by unmocking node:fs and node:fs/promises."
+    }
+  ],
+  "no_import_evidence": {
+    "source_state_imported": false,
+    "runtime_db_imported": false,
+    "checkpoint_history_imported": false,
+    "task_or_inbox_history_imported": false,
+    "operator_surface_or_pc_runtime_imported": false,
+    "secrets_or_credentials_imported": false,
+    "config_fixtures_used_as_greenfield_templates": true
+  },
+  "explicit_non_claims": [
+    "filesystem Site creation execution",
+    "local adapter admission",
+    "DB init execution",
+    "DB mutation",
+    "live MCP registration",
+    "runtime hydration",
+    "capability or secret grants",
+    "operator-surface or PC-locus runtime mutation",
+    "full operator-surface-aware User Site preset execution",
+    "migration/lift/import from existing Sites"
+  ],
+  "rollback": [
+    "Remove or revert the admitted CLI source/test edits.",
+    "Remove task-0011 .narada task/admission/audit entries before publication if the task is rejected.",
+    "No Site filesystem roots, live DBs, MCP registrations, secrets, or runtime state were created by this task."
+  ],
+  "next_smallest_slice": "Implement a schema-backed create-site config parser/normalizer module shared by CLI and future template catalog code, still dry-run only."
+}

@@ -1,0 +1,51 @@
+{
+  "schema": "narada.create_site.options.v0",
+  "mode": "dry_run",
+  "preset": "task-lifecycle",
+  "template_catalog": {
+    "template_id": "narada-proper.templates.site.task-lifecycle.v0",
+    "template_components": ["@narada2/site-task-lifecycle"]
+  },
+  "site": {
+    "site_id": "project-alpha",
+    "site_kind": "project",
+    "authority_locus": "project",
+    "site_root": "D:\\Projects\\alpha\\.narada",
+    "workspace_root": "D:\\Projects\\alpha",
+    "substrate": "windows-native",
+    "execution_surface": "windows_native",
+    "sync_posture": "git_backed"
+  },
+  "packages": [
+    {
+      "name": "@narada2/site-task-lifecycle",
+      "include_contracts": true,
+      "include_docs": true,
+      "include_schema_descriptors": true,
+      "include_mcp_descriptors": true,
+      "include_conformance_tests": true
+    }
+  ],
+  "identity": {
+    "named_agents": [],
+    "role_assignments": [],
+    "role_compatibility_identities": [],
+    "claimed_identity_evidence": [],
+    "mechanical_verification_basis": []
+  },
+  "storage": { "intent": "descriptor_only", "driver_preference": "sqlite3-cli", "mutation_mode": "none" },
+  "mcp": { "intent": "descriptor_only", "surfaces": ["site_task_lifecycle"] },
+  "capabilities": { "policy": "declare_required", "required": ["task_lifecycle"], "denied": ["source_task_db_import"] },
+  "inbox": { "enable": "canonical_envelope_intake" },
+  "task_lifecycle": {
+    "enable": "descriptor_only",
+    "package": "@narada2/site-task-lifecycle"
+  },
+  "agent_context": { "enable": false },
+  "operator_surface": { "intent": "none" },
+  "windows_pwsh": { "profile": "emit_example", "path_style": "windows" },
+  "evidence": {
+    "template_refs": ["narada-proper.templates.site.task-lifecycle.v0", "package:@narada2/site-task-lifecycle"],
+    "refused_imports": []
+  }
+}

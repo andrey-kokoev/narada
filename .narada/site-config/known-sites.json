@@ -1,0 +1,11 @@
+{
+  "schema": "narada.site_config.known_sites.v0",
+  "site_id": "narada-proper",
+  "target_site_root": "D:\\code\\narada",
+  "carrier_id": "site_config_local_registry",
+  "package_name": "@narada2/site-config",
+  "source_state_imported": false,
+  "known_sites": [],
+  "capability_edges": [],
+  "capability_denials": []
+}

@@ -1,0 +1,24 @@
+{
+  "task_number": 1223,
+  "task_id": "20260512-1223-migrate-narada-proper-to-windows-native-setup-posture",
+  "decision": "windows_native_setup_posture_admitted",
+  "operator_instruction": "migrate fully to windows-native set up",
+  "active_root": "D:\\code\\narada",
+  "supersedes_for_current_work": [
+    "task:1211",
+    "ee-mcp.windows-powershell-from-wsl prerequisite"
+  ],
+  "posture": {
+    "prefer_windows_native_carriers": true,
+    "wsl_crossing_required_for_current_work": false,
+    "raw_wsl_to_windows_shell_fallback_admitted": false,
+    "source_site_runtime_imported": false,
+    "live_capability_grants_added": false
+  },
+  "evidence_paths": [
+    ".narada/admission/decisions/windows-native-setup-posture.md",
+    ".ai/do-not-open/tasks/20260512-1211-admit-wsl-to-windows-ee-mcp-implementation-locus.md",
+    ".ai/do-not-open/tasks/20260512-1223-migrate-narada-proper-to-windows-native-setup-posture.md"
+  ],
+  "next_smallest_slice": "Windows-native Site setup carrier/task surface with dry-run first and explicit apply authority."
+}

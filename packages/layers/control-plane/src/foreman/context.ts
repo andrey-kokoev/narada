@@ -120,13 +120,17 @@ function extractMailTextSignals(fact: Fact): {
       (event.body as Record<string, unknown> | undefined) ??
       (normalizedPayload?.body as Record<string, unknown> | undefined);
     const bodyText =
-      typeof body?.text === "string"
-        ? body.text
-        : typeof body?.preview === "string"
-          ? body.preview
-          : typeof normalizedPayload?.body_text === "string"
-            ? normalizedPayload.body_text
-            : "";
+      typeof event.body_preview === "string"
+        ? event.body_preview
+        : typeof normalizedPayload?.body_preview === "string"
+          ? normalizedPayload.body_preview
+          : typeof body?.preview === "string"
+            ? body.preview
+            : typeof body?.text === "string"
+              ? body.text
+              : typeof normalizedPayload?.body_text === "string"
+                ? normalizedPayload.body_text
+                : "";
     return {
       conversation_id: typeof event.conversation_id === "string"
         ? event.conversation_id
@@ -279,7 +283,7 @@ function mailFactPassesPredicateAdmission(fact: Fact, admission: MailAdmissionCo
   return sawUnknown && unknownBehavior === "admit";
 }
 
-function mailFactPassesAdmission(fact: Fact, admission?: MailAdmissionConfig): boolean {
+export function mailFactPassesAdmission(fact: Fact, admission?: MailAdmissionConfig): boolean {
   if (!admission || fact.fact_type !== "mail.message.discovered") {
     return true;
   }
@@ -633,6 +637,31 @@ function routeMatchesFact(route: OperationIntakeRouteConfig, fact: Fact): { conv
   return { conversation_id: signals.conversation_id, matched };
 }
 
+const DEFAULT_OPERATION_INTAKE_OUTBOUND_FOLDER_REFS = new Set([
+  "sentitems",
+  "sent",
+  "sent items",
+  "drafts",
+  "outbox",
+]);
+
+function mailFactIsOperationIntakeOutboundArtifact(fact: Fact, config: OperationIntakeConfig): boolean {
+  if (config.fresh_work_boundary?.outbound_folder_behavior === "admit") {
+    return false;
+  }
+
+  const outboundRefs = new Set(
+    (config.fresh_work_boundary?.outbound_folder_refs ?? [...DEFAULT_OPERATION_INTAKE_OUTBOUND_FOLDER_REFS])
+      .map((ref) => ref.toLowerCase()),
+  );
+  if (outboundRefs.size === 0) {
+    return false;
+  }
+
+  const folderRefs = extractMailFolderRefs(fact);
+  return [...folderRefs].some((ref) => outboundRefs.has(ref));
+}
+
 function normalizeSubject(subject: string): string {
   return subject
     .toLowerCase()
@@ -743,6 +772,7 @@ export class OperationIntakeContextFormation implements ContextFormationStrategy
 
     for (const fact of facts) {
       if (fact.fact_type !== "mail.message.discovered") continue;
+      if (mailFactIsOperationIntakeOutboundArtifact(fact, this.config)) continue;
 
       for (const route of this.config.routes) {
         const result = routeMatchesFact(route, fact);

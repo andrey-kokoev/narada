@@ -6,7 +6,8 @@
  * then parses and validates the response into a CharterOutputEnvelope.
  *
  * The installed Kimi CLI supports non-interactive print mode. This runner uses
- * `--print --final-message-only --prompt` and captures stdout with a timeout.
+ * `--print --final-message-only` with prompt text on stdin and captures stdout
+ * with a timeout.
  */
 
 import { spawn } from "node:child_process";
@@ -150,13 +151,13 @@ export class KimiCliCharterRunner implements CharterRunner {
     if (this.opts.model) {
       args.push("--model", this.opts.model);
     }
-    args.push("--print", "--final-message-only", "--prompt", prompt);
+    args.push("--print", "--final-message-only", "--input-format", "text");
 
     const timeoutMs = this.opts.timeoutMs ?? 120000;
 
     return new Promise((resolve, reject) => {
       const child = spawn(cliPath, args, {
-        stdio: ["ignore", "pipe", "pipe"],
+        stdio: ["pipe", "pipe", "pipe"],
       });
 
       let stdout = "";
@@ -176,6 +177,8 @@ export class KimiCliCharterRunner implements CharterRunner {
       child.stderr?.on("data", (d) => {
         stderr += String(d);
       });
+
+      child.stdin?.end(prompt);
 
       child.on("error", (err) => {
         clearTimeout(timeout);

@@ -270,6 +270,41 @@ describe('doctor command', () => {
     expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
   });
 
+  it('uses .narada/site.json for Narada Site seed doctor when default config.json is absent', async () => {
+    vol.fromJSON({
+      '/repo/.narada/site.json': JSON.stringify({
+        schema: 'narada.site.seed.v0',
+        site_id: 'narada-proper',
+        repo_root: '/repo',
+        site_root: '/repo/.narada',
+        authority_admission: {
+          kind: 'operator_explicit_temporary_path_admission',
+        },
+        admission_state: {
+          runtime_state_imported: false,
+        },
+      }),
+      '/repo/.narada/capabilities/create-site-package-catalog.json': JSON.stringify({
+        schema: 'narada.capability.record.v0',
+      }),
+    });
+
+    const result = await doctorCommand({ format: 'json' }, createMockContext({ configPath: '/repo/config.json' }));
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const report = result.result as {
+      status: string;
+      site_id: string;
+      config_path: string;
+      checks: Array<{ name: string; status: string; detail: string }>;
+    };
+    expect(report.status).toBe('healthy');
+    expect(report.site_id).toBe('narada-proper');
+    expect(report.config_path.replaceAll('\\', '/')).toContain('/repo/.narada/site.json');
+    expect(report.checks.find((check) => check.name === 'narada-site-config')?.status).toBe('pass');
+    expect(report.checks.find((check) => check.name === 'runtime-state-import')?.status).toBe('pass');
+  });
+
   it('reports bootstrap readiness checks without requiring config', async () => {
     vol.fromJSON({
       '/repo/package.json': '{}',
@@ -292,7 +327,7 @@ describe('doctor command', () => {
     expect(report.checks.find((check) => check.name === 'package-manifest')?.status).toBe('pass');
     expect(report.checks.find((check) => check.name === 'dependencies-installed')?.status).toBe('pass');
     expect(report.checks.find((check) => check.name === 'cli-built')?.status).toBe('pass');
-    expect(report.checks.find((check) => check.name === 'cli-shim-source')?.detail).toContain('workspace_bin=/repo/node_modules/.bin/narada');
+    expect(report.checks.find((check) => check.name === 'cli-shim-source')?.detail.replaceAll('\\', '/')).toContain('/repo/node_modules/.bin/narada');
     expect(report.checks.find((check) => check.name === 'cli-dist-freshness')?.status).toBe('pass');
     expect(report.checks.find((check) => check.name === 'package-build-posture')?.status).toBe('pass');
     expect(report.checks.find((check) => check.name === 'governance-commands-allowed')?.status).toBe('pass');
@@ -324,7 +359,9 @@ describe('doctor command', () => {
       status: 'warn',
       remediation_command: 'pnpm --filter @narada2/cli build && pnpm run narada:install-shim',
     });
-    expect(freshness?.detail).toContain('source /repo/packages/layers/cli/src/main.ts is newer than dist /repo/packages/layers/cli/dist/main.js');
+    const freshnessDetail = freshness?.detail.replaceAll('\\', '/');
+    expect(freshnessDetail).toContain('packages/layers/cli/src/main.ts is newer than dist');
+    expect(freshnessDetail).toContain('packages/layers/cli/dist/main.js');
     expect(report.checks.find((check) => check.name === 'governance-commands-allowed')?.status).toBe('pass');
     expect(report.cli_execution_posture).toMatchObject({
       governance_commands_allowed: true,

@@ -1,0 +1,128 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0027",
+  "title": "Adopt Windows machinery package set first slices",
+  "status": "completed",
+  "recorded_at": "2026-05-11T23:27:18.6862362-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "source_envelope": "env_62d32705-0386-4820-8013-47a70cfbc8dd",
+    "source_artifact": "C:\\Users\\Andrey\\Narada\\kb\\proposals\\narada-proper-windows-machinery-capability-exchange-offer.md",
+    "source_task": "narada-andrey task #611",
+    "source_commit": "bc5ecc42",
+    "external_evidence_only": true
+  },
+  "decision": "accept_package_set_direction_with_descriptor_only_first_slices",
+  "adopted_packages": [
+    "@narada2/windows-machinery-capability-exchange",
+    "@narada2/mcp-shell-windows",
+    "@narada2/mcp-test-windows",
+    "@narada2/windows-operator-surface",
+    "@narada2/windows-osl",
+    "@narada2/windows-pc-site-template",
+    "@narada2/windows-komorebi-yasb-kit"
+  ],
+  "changed_files": [
+    "packages/windows-machinery-capability-exchange/**",
+    "packages/mcp-shell-windows/**",
+    "packages/mcp-test-windows/**",
+    "packages/windows-operator-surface/**",
+    "packages/windows-osl/**",
+    "packages/windows-pc-site-template/**",
+    "packages/windows-komorebi-yasb-kit/**",
+    ".narada/tasks/task-0027-windows-machinery-package-set-adoption.md",
+    ".narada/audit/task-0027-windows-machinery-package-set-adoption-audit.json",
+    ".narada/capabilities/windows-machinery-capability-exchange.json",
+    ".narada/admission/pending-handoffs.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "package": "@narada2/windows-machinery-capability-exchange",
+      "commands": [
+        "pnpm --dir packages/windows-machinery-capability-exchange test",
+        "pnpm --dir packages/windows-machinery-capability-exchange typecheck",
+        "pnpm --dir packages/windows-machinery-capability-exchange build"
+      ],
+      "result": "passed"
+    },
+    {
+      "package": "@narada2/windows-operator-surface",
+      "commands": [
+        "pnpm --dir packages/windows-operator-surface test",
+        "pnpm --dir packages/windows-operator-surface typecheck",
+        "pnpm --dir packages/windows-operator-surface build"
+      ],
+      "result": "passed"
+    },
+    {
+      "package": "@narada2/mcp-shell-windows",
+      "commands": [
+        "pnpm --dir packages/mcp-shell-windows test",
+        "pnpm --dir packages/mcp-shell-windows typecheck",
+        "pnpm --dir packages/mcp-shell-windows build"
+      ],
+      "result": "passed"
+    },
+    {
+      "package": "@narada2/mcp-test-windows",
+      "commands": [
+        "pnpm --dir packages/mcp-test-windows test",
+        "pnpm --dir packages/mcp-test-windows typecheck",
+        "pnpm --dir packages/mcp-test-windows build"
+      ],
+      "result": "passed"
+    },
+    {
+      "package": "@narada2/windows-osl",
+      "commands": [
+        "pnpm --dir packages/windows-osl test",
+        "pnpm --dir packages/windows-osl typecheck",
+        "pnpm --dir packages/windows-osl build"
+      ],
+      "result": "passed"
+    },
+    {
+      "package": "@narada2/windows-pc-site-template",
+      "commands": [
+        "pnpm --dir packages/windows-pc-site-template test",
+        "pnpm --dir packages/windows-pc-site-template typecheck",
+        "pnpm --dir packages/windows-pc-site-template build"
+      ],
+      "result": "passed"
+    },
+    {
+      "package": "@narada2/windows-komorebi-yasb-kit",
+      "commands": [
+        "pnpm --dir packages/windows-komorebi-yasb-kit test",
+        "pnpm --dir packages/windows-komorebi-yasb-kit typecheck",
+        "pnpm --dir packages/windows-komorebi-yasb-kit build"
+      ],
+      "result": "passed"
+    }
+  ],
+  "refused_imports": [
+    "PC runtime SQLite databases",
+    "live HWND bindings",
+    "generated runtime projections",
+    "logs and PIDs",
+    "socket paths",
+    "monitor names or display IDs",
+    "live Komorebi or YASB state",
+    "narada-andrey identity authority",
+    "secrets or credentials"
+  ],
+  "not_claimed": [
+    "live shell authority",
+    "PC-locus mutation authority",
+    "private MCP client mutation",
+    "task lifecycle mutation authority",
+    "external publication authority",
+    "runtime script portability",
+    "OSL WebView2 production completion",
+    "receiving Site safe runtime execution without local admission"
+  ],
+  "rollback": "Remove the seven adopted package directories and this task/capability/admission evidence. No source Site runtime state, PC state, private MCP config, Windows profile, or live operator-surface state was mutated.",
+  "next_smallest_slice": "Deepen @narada2/windows-operator-surface with source-inventory classification and fixture-safe service-module extraction, still excluding PC-locus repair scripts."
+}

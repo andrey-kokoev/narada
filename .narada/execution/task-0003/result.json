@@ -1,0 +1,291 @@
+{
+  "schema": "narada.task_0003.live_setup_result.v0",
+  "status": "partial_live_execution_completed",
+  "siteRoot": "D:\\code\\narada",
+  "initResult": {
+    "status": "initialized",
+    "siteId": "narada-proper",
+    "initializedBy": "narada-proper.architect",
+    "initializedAt": "2026-05-10T14:20:00.000-05:00",
+    "paths": {
+      "siteRoot": "D:\\code\\narada",
+      "taskDbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+      "taskSpecDir": "D:\\code\\narada\\.ai\\do-not-open\\tasks",
+      "manifestPath": "D:\\code\\narada\\.ai\\site-task-lifecycle-admission.json"
+    },
+    "roster": [
+      {
+        "identityId": "narada-proper.architect",
+        "role": "architect"
+      },
+      {
+        "identityId": "narada-proper.builder",
+        "role": "builder"
+      },
+      {
+        "identityId": "narada-proper.reviewer",
+        "role": "reviewer"
+      }
+    ],
+    "rejectedSourceImports": [
+      "source task lifecycle databases",
+      "source task history",
+      "source inbox databases and envelopes",
+      "source rosters",
+      "source checkpoints and agent-context databases",
+      "source operator-surface bindings",
+      "PC-locus runtime state",
+      "secrets and credentials"
+    ]
+  },
+  "adapterId": "narada-proper.adapter.task-0003.sqlite3-cli.v0",
+  "adapterExecutionRequest": {
+    "schema": "narada.site_task_lifecycle.task_db_adapter_execution_request.v0",
+    "taskDbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+    "statements": [
+      {
+        "name": "task_records",
+        "sql": "CREATE TABLE IF NOT EXISTS task_records (\n  task_id TEXT PRIMARY KEY,\n  title TEXT NOT NULL,\n  source_site TEXT NOT NULL,\n  source_ref TEXT NOT NULL,\n  status TEXT NOT NULL,\n  received_at TEXT NOT NULL,\n  summary TEXT NOT NULL,\n  created_at TEXT NOT NULL\n);"
+      },
+      {
+        "name": "task_evidence_refs",
+        "sql": "CREATE TABLE IF NOT EXISTS task_evidence_refs (\n  task_id TEXT NOT NULL,\n  evidence_ref TEXT NOT NULL,\n  evidence_kind TEXT NOT NULL,\n  PRIMARY KEY (task_id, evidence_ref),\n  FOREIGN KEY (task_id) REFERENCES task_records(task_id)\n);"
+      },
+      {
+        "name": "task_admission_events",
+        "sql": "CREATE TABLE IF NOT EXISTS task_admission_events (\n  event_id TEXT PRIMARY KEY,\n  task_id TEXT NOT NULL,\n  event_type TEXT NOT NULL,\n  recorded_at TEXT NOT NULL,\n  payload_json TEXT NOT NULL,\n  FOREIGN KEY (task_id) REFERENCES task_records(task_id)\n);"
+      }
+    ],
+    "adapterCapabilitiesRequired": [
+      {
+        "name": "execute_schema_statement",
+        "status": "required_for_future_write_path"
+      },
+      {
+        "name": "insert_task_record",
+        "status": "required_for_future_write_path"
+      },
+      {
+        "name": "record_admission_event",
+        "status": "required_for_future_write_path"
+      }
+    ],
+    "sourceImportFindings": []
+  },
+  "initPlan": {
+    "schema": "narada.site_task_lifecycle.task_db_init_plan.v0",
+    "taskDbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+    "statements": [
+      {
+        "name": "task_records",
+        "sql": "CREATE TABLE IF NOT EXISTS task_records (\n  task_id TEXT PRIMARY KEY,\n  title TEXT NOT NULL,\n  source_site TEXT NOT NULL,\n  source_ref TEXT NOT NULL,\n  status TEXT NOT NULL,\n  received_at TEXT NOT NULL,\n  summary TEXT NOT NULL,\n  created_at TEXT NOT NULL\n);"
+      },
+      {
+        "name": "task_evidence_refs",
+        "sql": "CREATE TABLE IF NOT EXISTS task_evidence_refs (\n  task_id TEXT NOT NULL,\n  evidence_ref TEXT NOT NULL,\n  evidence_kind TEXT NOT NULL,\n  PRIMARY KEY (task_id, evidence_ref),\n  FOREIGN KEY (task_id) REFERENCES task_records(task_id)\n);"
+      },
+      {
+        "name": "task_admission_events",
+        "sql": "CREATE TABLE IF NOT EXISTS task_admission_events (\n  event_id TEXT PRIMARY KEY,\n  task_id TEXT NOT NULL,\n  event_type TEXT NOT NULL,\n  recorded_at TEXT NOT NULL,\n  payload_json TEXT NOT NULL,\n  FOREIGN KEY (task_id) REFERENCES task_records(task_id)\n);"
+      }
+    ],
+    "deniedSourceImports": [
+      "source task lifecycle databases",
+      "source task history",
+      "source inbox databases and envelopes",
+      "source rosters",
+      "source checkpoints and agent-context databases",
+      "source operator-surface bindings",
+      "PC-locus runtime state",
+      "secrets and credentials"
+    ],
+    "sourceImportFindings": []
+  },
+  "conformanceContract": {
+    "schema": "narada.site_task_lifecycle.task_db_adapter_conformance_contract.v0",
+    "adapterId": "narada-proper.adapter.task-0003.sqlite3-cli.v0",
+    "admittedBy": {
+      "identityId": "narada-proper.architect",
+      "role": "architect"
+    },
+    "admittedAt": "2026-05-10T14:20:00.000-05:00",
+    "adapterDecision": "adapter_interface_only",
+    "packageOwnsSqliteDependency": false,
+    "packageExecutesSqliteMutation": false,
+    "requiredMethods": [
+      "executeSchemaStatement",
+      "executeAdmissionWriteOperation"
+    ],
+    "requiredCapabilities": [
+      {
+        "name": "execute_schema_statement",
+        "status": "required_for_future_write_path"
+      },
+      {
+        "name": "insert_task_record",
+        "status": "required_for_future_write_path"
+      },
+      {
+        "name": "record_admission_event",
+        "status": "required_for_future_write_path"
+      }
+    ],
+    "sourceImportFindings": []
+  },
+  "conformanceResult": {
+    "schema": "narada.site_task_lifecycle.task_db_adapter_conformance_result.v0",
+    "adapterId": "narada-proper.adapter.task-0003.sqlite3-cli.v0",
+    "status": "conforms",
+    "schemaStatementCount": 3,
+    "admissionOperationCount": 5,
+    "packageOwnsSqliteDependency": false,
+    "packageExecutesSqliteMutation": false,
+    "fixtureKind": "neutral_in_memory",
+    "recordedAt": "2026-05-10T14:20:00.000-05:00"
+  },
+  "writeRequest": {
+    "schema": "narada.site_task_lifecycle.task_admission_write_request.v0",
+    "taskDbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+    "candidate": {
+      "schema": "narada.site_task_lifecycle.task_candidate.v0",
+      "taskId": "narada-proper.task-0003",
+      "title": "Execute admitted task-0001 live task-lifecycle setup increment",
+      "sourceSite": "narada-proper",
+      "sourceRef": "OSM:osm_20260510_141620_083_98aa2fc4",
+      "receivedAt": "2026-05-10T14:20:00.000-05:00",
+      "summary": "Local live execution increment for initializer, concrete adapter, DB mutation, and MCP smoke evidence.",
+      "status": "pending_admission",
+      "evidenceRefs": [
+        "OSM:osm_20260510_141620_083_98aa2fc4",
+        ".narada/tasks/task-0003-live-task-lifecycle-setup-execution.md",
+        ".narada/admission/decisions/task-0003-live-setup-execution-admission.md"
+      ],
+      "requestedBy": "narada-proper.architect",
+      "rejectedSourceFindings": []
+    },
+    "admittedBy": {
+      "identityId": "narada-proper.architect",
+      "role": "architect"
+    },
+    "admittedAt": "2026-05-10T14:20:00.000-05:00",
+    "adapterDecision": "adapter_interface_only",
+    "adapterCapabilitiesRequired": [
+      {
+        "name": "execute_schema_statement",
+        "status": "required_for_future_write_path"
+      },
+      {
+        "name": "insert_task_record",
+        "status": "required_for_future_write_path"
+      },
+      {
+        "name": "record_admission_event",
+        "status": "required_for_future_write_path"
+      }
+    ],
+    "operations": [
+      {
+        "kind": "insert_task_record",
+        "description": "Insert admitted task record through the receiving-Site adapter.",
+        "parameters": {
+          "task_id": "narada-proper.task-0003",
+          "title": "Execute admitted task-0001 live task-lifecycle setup increment",
+          "source_site": "narada-proper",
+          "source_ref": "OSM:osm_20260510_141620_083_98aa2fc4",
+          "status": "admitted",
+          "received_at": "2026-05-10T14:20:00.000-05:00",
+          "summary": "Local live execution increment for initializer, concrete adapter, DB mutation, and MCP smoke evidence.",
+          "created_at": "2026-05-10T14:20:00.000-05:00"
+        }
+      },
+      {
+        "kind": "insert_evidence_ref",
+        "description": "Attach admitted evidence reference through the receiving-Site adapter.",
+        "parameters": {
+          "task_id": "narada-proper.task-0003",
+          "evidence_ref": "OSM:osm_20260510_141620_083_98aa2fc4",
+          "evidence_kind": "operator_surface_message"
+        }
+      },
+      {
+        "kind": "insert_evidence_ref",
+        "description": "Attach admitted evidence reference through the receiving-Site adapter.",
+        "parameters": {
+          "task_id": "narada-proper.task-0003",
+          "evidence_ref": ".narada/tasks/task-0003-live-task-lifecycle-setup-execution.md",
+          "evidence_kind": "external_reference"
+        }
+      },
+      {
+        "kind": "insert_evidence_ref",
+        "description": "Attach admitted evidence reference through the receiving-Site adapter.",
+        "parameters": {
+          "task_id": "narada-proper.task-0003",
+          "evidence_ref": ".narada/admission/decisions/task-0003-live-setup-execution-admission.md",
+          "evidence_kind": "external_reference"
+        }
+      },
+      {
+        "kind": "record_admission_event",
+        "description": "Record local task admission event through the receiving-Site adapter.",
+        "parameters": {
+          "event_id": "task-admission-4615ec77b25ad004",
+          "task_id": "narada-proper.task-0003",
+          "event_type": "task_admitted",
+          "recorded_at": "2026-05-10T14:20:00.000-05:00",
+          "payload_json": "{\"admittedBy\":\"narada-proper.architect\",\"sourceRef\":\"OSM:osm_20260510_141620_083_98aa2fc4\"}"
+        }
+      }
+    ]
+  },
+  "readback": {
+    "tables": [
+      {
+        "name": "task_admission_events"
+      },
+      {
+        "name": "task_evidence_refs"
+      },
+      {
+        "name": "task_records"
+      }
+    ],
+    "taskRecords": [
+      {
+        "task_id": "narada-proper.task-0003",
+        "status": "admitted",
+        "source_site": "narada-proper",
+        "source_ref": "OSM:osm_20260510_141620_083_98aa2fc4"
+      }
+    ],
+    "evidenceRefs": [
+      {
+        "task_id": "narada-proper.task-0003",
+        "evidence_ref": ".narada/admission/decisions/task-0003-live-setup-execution-admission.md",
+        "evidence_kind": "external_reference"
+      },
+      {
+        "task_id": "narada-proper.task-0003",
+        "evidence_ref": ".narada/tasks/task-0003-live-task-lifecycle-setup-execution.md",
+        "evidence_kind": "external_reference"
+      },
+      {
+        "task_id": "narada-proper.task-0003",
+        "evidence_ref": "OSM:osm_20260510_141620_083_98aa2fc4",
+        "evidence_kind": "operator_surface_message"
+      }
+    ],
+    "admissionEvents": [
+      {
+        "event_id": "task-admission-4615ec77b25ad004",
+        "task_id": "narada-proper.task-0003",
+        "event_type": "task_admitted"
+      }
+    ]
+  },
+  "mcpCapabilityPath": "D:\\code\\narada\\.ai\\mcp\\site-task-lifecycle-mcp.json",
+  "packageOwnsSqliteDependency": false,
+  "packageExecutedSqliteMutation": false,
+  "sourceStateImported": false,
+  "recordedAt": "2026-05-10T14:20:00.000-05:00"
+}

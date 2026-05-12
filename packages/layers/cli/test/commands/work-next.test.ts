@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { inboxSubmitCommand } from '../../src/commands/inbox.js';
-import { workNextCommand } from '../../src/commands/work-next.js';
+import { workAvailableCommand, workNextCommand } from '../../src/commands/work-next.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 
@@ -17,6 +17,10 @@ function setupRepo(tempDir: string): void {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments'), { recursive: true });
   seedRosterEntry(tempDir, 'architect', 'architect', 'idle', null);
+}
+
+function gitBinary(): string {
+  return process.env.NARADA_GIT_BINARY ?? (process.platform === 'win32' ? 'git' : '/usr/bin/git');
 }
 
 function seedRoster(tempDir: string, status: 'idle' | 'working', task: number | null): void {
@@ -109,6 +113,28 @@ describe('work-next unified next action', () => {
       primary: { task_number: 100 },
       task_result: { action: 'peek_next' },
       next_step: 'Inspect only; rerun without --peek to claim or execute the selected work.',
+    });
+    expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-test.md'), 'utf8')).toContain('status: opened');
+  });
+
+  it('exposes work-available as a read-only availability surface', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-test.md'),
+      '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n\n## Goal\nDo task work.\n\n## Acceptance Criteria\n- [ ] Do task work.\n',
+    );
+
+    const result = await workAvailableCommand({ agent: 'architect', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      surface: 'work_available',
+      mutates: false,
+      action_kind: 'task_work',
+      agent_id: 'architect',
+      primary: { task_number: 100 },
+      task_result: { action: 'peek_next' },
+      equivalent_command: 'narada work-next --agent architect --peek --format json',
     });
     expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-test.md'), 'utf8')).toContain('status: opened');
   });
@@ -798,11 +824,11 @@ describe('work-next unified next action', () => {
       }, null, 2),
     );
     writeFileSync(join(tempDir, 'packages', 'layers', 'cli', 'src', 'commands', 'work-next.ts'), 'base\n');
-    execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['init', '-b', 'main'], { cwd: tempDir });
-    execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['config', 'user.email', 'test@example.invalid'], { cwd: tempDir });
-    execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['config', 'user.name', 'Test Agent'], { cwd: tempDir });
-    execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['add', '.'], { cwd: tempDir });
-    execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['commit', '-m', 'base'], { cwd: tempDir });
+    execFileSync(gitBinary(), ['init', '-b', 'main'], { cwd: tempDir });
+    execFileSync(gitBinary(), ['config', 'user.email', 'test@example.invalid'], { cwd: tempDir });
+    execFileSync(gitBinary(), ['config', 'user.name', 'Test Agent'], { cwd: tempDir });
+    execFileSync(gitBinary(), ['add', '.'], { cwd: tempDir });
+    execFileSync(gitBinary(), ['commit', '-m', 'base'], { cwd: tempDir });
     writeFileSync(join(tempDir, 'packages', 'layers', 'cli', 'src', 'commands', 'work-next.ts'), 'changed\n');
 
     const result = await workNextCommand({ agent: 'architect', cwd: tempDir, format: 'json' });

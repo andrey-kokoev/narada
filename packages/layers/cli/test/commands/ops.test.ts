@@ -186,6 +186,70 @@ describe('ops command', () => {
     expect(report.draftsPendingReview[0].outbound_id).toBe('out-1');
   });
 
+  it('shows target-scope routed drafts stored in another configured scope database', async () => {
+    vol.fromJSON({
+      '/test/config.json': JSON.stringify({
+        root_dir: '/test',
+        scopes: [
+          createConfig('arrival@example.com', '/test/arrival').scopes[0],
+          createConfig('target@example.com', '/test/target').scopes[0],
+        ],
+      }),
+      '/test/target/daemon.pid': String(process.pid),
+      '/test/target/.health.json': JSON.stringify({
+        readiness: { dispatchReady: true, outboundHealthy: true, syncFresh: true, charterRuntimeHealthy: true },
+      }),
+    });
+    vol.mkdirSync('/test/arrival/.narada', { recursive: true });
+    vol.writeFileSync('/test/arrival/.narada/coordinator.db', '');
+    vol.mkdirSync('/test/target/.narada', { recursive: true });
+    vol.writeFileSync('/test/target/.narada/coordinator.db', '');
+
+    let routedDraftReturned = false;
+    mockDb.prepare.mockImplementation((sql: string) => {
+      return {
+        all: vi.fn((scopeId: string) => {
+          if (
+            !routedDraftReturned &&
+            scopeId === 'target@example.com' &&
+            sql.includes('outbound_handoffs oh') &&
+            sql.includes('join outbound_versions') &&
+            sql.includes("draft_ready")
+          ) {
+            routedDraftReturned = true;
+            return [
+              {
+                outbound_id: 'out-routed',
+                action_type: 'draft_reply',
+                context_id: 'target@example.com:conv-routed',
+                created_at: '2026-04-20T10:00:00Z',
+                status: 'draft_ready',
+                reviewed_at: null,
+                approved_at: null,
+                payload_json: JSON.stringify({ body_preview: 'Routed target draft' }),
+                subject: null,
+                decision_rationale: 'operation_intake routed draft',
+                charter_summary: null,
+              },
+            ];
+          }
+          return [];
+        }),
+        get: vi.fn(() => null),
+      };
+    });
+
+    const context = createMockContext();
+    const result = await opsCommand({ format: 'json', limit: 5 }, context);
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const reports = (result.result as { reports: Array<{ scopeId: string; draftsPendingReview: Array<{ outbound_id: string }> }> }).reports;
+    const targetReport = reports.find((report) => report.scopeId === 'target@example.com');
+    expect(targetReport?.draftsPendingReview).toEqual([
+      expect.objectContaining({ outbound_id: 'out-routed' }),
+    ]);
+  });
+
   it('shows stuck work items in attention queue', async () => {
     vol.fromJSON({
       '/test/config.json': JSON.stringify(createConfig('test@example.com', '/test/data')),

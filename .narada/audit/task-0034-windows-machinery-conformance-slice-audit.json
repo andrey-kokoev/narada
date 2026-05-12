@@ -1,0 +1,66 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0034",
+  "title": "Deepen Windows machinery conformance slice",
+  "status": "completed",
+  "recorded_at": "2026-05-11T23:46:50.3986147-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "builds_on": [
+      "narada-proper.task-0027",
+      "narada-proper.task-0028",
+      "narada-proper.task-0029",
+      "narada-proper.task-0030",
+      "narada-proper.task-0031",
+      "narada-proper.task-0032",
+      "narada-proper.task-0033"
+    ],
+    "external_evidence_only": true
+  },
+  "changed_files": [
+    "packages/windows-machinery-capability-exchange/README.md",
+    "packages/windows-machinery-capability-exchange/docs/source-inventory.md",
+    "packages/windows-machinery-capability-exchange/src/conformance.ts",
+    "packages/windows-machinery-capability-exchange/src/index.ts",
+    "packages/windows-machinery-capability-exchange/test/conformance.test.ts",
+    ".narada/tasks/task-0034-windows-machinery-conformance-slice.md",
+    ".narada/audit/task-0034-windows-machinery-conformance-slice-audit.json",
+    ".narada/capabilities/windows-machinery-capability-exchange.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/windows-machinery-capability-exchange test",
+      "result": "passed",
+      "evidence": "2 test files passed; 3 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages/windows-machinery-capability-exchange typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/windows-machinery-capability-exchange build",
+      "result": "passed"
+    }
+  ],
+  "terminal_claim": "@narada2/windows-machinery-capability-exchange now includes descriptor-only package-set conformance reporting for the adopted Windows machinery packages.",
+  "refused_imports": [
+    "runtime databases",
+    "task/inbox history",
+    "checkpoints or rosters",
+    "operator-surface runtime state",
+    "PC-locus state",
+    "secrets or credentials",
+    "live shell or process authority"
+  ],
+  "not_claimed": [
+    "package publication",
+    "receiving Site materialization",
+    "live Windows machinery execution",
+    "runtime carrier admission",
+    "PC-locus authority"
+  ],
+  "rollback": "Remove conformance source, tests, source inventory doc, README section, and this task evidence. No runtime state was mutated or imported.",
+  "next_smallest_slice": "Run an aggregate verification/status pass across all adopted Windows machinery packages, then decide whether any remaining package needs another descriptor-only increment."
+}

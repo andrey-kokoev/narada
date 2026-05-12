@@ -1,0 +1,74 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0052",
+  "title": "Create-site terminal capability assessment",
+  "status": "completed",
+  "recorded_at": "2026-05-12T12:01:10.7109547-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "source_context": "greenfield create-site CLI objective continuation",
+    "external_source_state_imported": false
+  },
+  "changed_files": [
+    ".narada/tasks/task-0052-create-site-terminal-capability-assessment.md",
+    ".narada/audit/task-0052-create-site-terminal-capability-assessment-audit.json",
+    ".narada/capabilities/create-site-package-catalog.json",
+    "docs/product/create-site-options-model.md",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "capability_state": {
+    "capability_id": "narada-proper.capability.create-site-package-catalog.v0",
+    "state": "trialed",
+    "exposure_class": "mutating_guarded",
+    "terminal_claim": "Greenfield create-site is operational for Narada proper template/catalog-driven target-local creation through descriptor dry-run, skeleton creation, and admitted target-local live carriers for task-lifecycle, agent-memory, and site-machinery presets."
+  },
+  "operational_commands": [
+    "narada sites create-presets --format json",
+    "narada sites create --dry-run --config <path> --format json",
+    "narada sites create --preset <preset> --site-id <id> --root <path> --dry-run --format json",
+    "narada sites create --preset <preset> --site-id <id> --root <path> --format json",
+    "narada sites create --preset task-lifecycle --site-id <id> --root <path> --execute-live --live-authority-basis <basis> --format json",
+    "narada sites create --preset agent-memory --site-id <id> --root <path> --execute-live --live-authority-basis <basis> --format json",
+    "narada sites create --preset site-machinery --site-id <id> --root <path> --execute-live --live-authority-basis <basis> --format json"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/layers/cli test test/commands/sites-create.test.ts",
+      "result": "passed",
+      "evidence": "22 tests passed in task-0051 verification"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli build",
+      "result": "passed"
+    },
+    {
+      "command": "node --test tools/site-init/site-live-carriers.test.mjs",
+      "result": "passed",
+      "evidence": "10 carrier tests passed in task-0050 verification"
+    },
+    {
+      "command": "built CLI smokes for create-presets, dry-run, skeleton, task-lifecycle live, agent-memory live, and site-machinery live",
+      "result": "passed"
+    }
+  ],
+  "source_state_imported": false,
+  "terminal_claim": "The current first greenfield create-site objective is terminal for target-local Site creation from Narada proper templates/catalog.",
+  "not_claimed": [
+    "source Site import/migration/lift",
+    "runtime DB/task/inbox/roster/checkpoint/operator-surface/PC/secrets/identity-state import",
+    "capability or secret grants",
+    "private MCP client config mutation",
+    "real Windows profile mutation outside target-root artifacts",
+    "PC/operator-surface mutation",
+    "site-inbox publication or task promotion",
+    "site-config external probe/trust admission/external target mutation",
+    "site-lift file copy/install/bootstrap/catalog publication",
+    "agent-context runtime hydration execution"
+  ],
+  "rollback": "Remove this assessment task/audit/ledger entry and restore the capability/doc wording to task-0051 state. No runtime Site state was mutated by this assessment."
+}

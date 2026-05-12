@@ -1,0 +1,23 @@
+{
+  "schema": "narada.capability.candidate.v0",
+  "site_id": "narada-proper",
+  "capability_id": "narada-proper.capability.site-config.v0",
+  "capability_name": "Site Config",
+  "state": "descriptor_package_first_slice_implemented",
+  "exposure_class": "descriptor_only",
+  "task_id": "narada-proper.task-0037",
+  "package": "@narada2/site-config",
+  "source_refs": [
+    "C:\\Users\\Andrey\\Narada\\kb\\proposals\\reusable-narada-site-machinery-extraction-map-20260507.md",
+    "narada-andrey task #445"
+  ],
+  "audit_path": ".narada/audit/task-0037-site-config-package-first-slice-audit.json",
+  "not_admitted": [
+    "target Site config mutation",
+    "live probe execution",
+    "arbitrary client/project data scan",
+    "target task/inbox DB import",
+    "target runtime state import",
+    "secrets or credentials"
+  ]
+}

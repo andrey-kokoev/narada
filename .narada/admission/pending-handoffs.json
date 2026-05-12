@@ -1,0 +1,63 @@
+{
+  "schema": "narada.pending_handoffs.v0",
+  "site_id": "narada-proper",
+  "intake_protocol": ".narada/inbox/external-handoff-protocol.md",
+  "handoffs": [
+    {
+      "source_site": "narada-andrey",
+      "source_ref": "C:\\Users\\Andrey\\Narada\\kb\\proposals\\narada-proper-site-seed-admission-package.md",
+      "source_task": "#531",
+      "source_commit": "93881ac1",
+      "received_at": "2026-05-10",
+      "status": "admitted_requirement",
+      "summary": "Seed admission package for the minimal Narada proper .narada substrate; admitted only as the seed/admission requirement already materialized locally."
+    },
+    {
+      "source_site": "narada-andrey",
+      "source_ref": "C:\\Users\\Andrey\\Narada\\kb\\proposals\\narada-proper-first-architect-site-exposure-handoff.md",
+      "received_at": "2026-05-10",
+      "status": "admitted_orientation_only",
+      "summary": "First architect orientation packet for why Narada proper needs a local Site substrate and how to avoid importing narada-andrey runtime state."
+    },
+    {
+      "source_site": "narada-andrey",
+      "source_ref": "C:\\Users\\Andrey\\Narada\\kb\\proposals\\public-lift-packet-index.md",
+      "companion_for": "C:\\Users\\Andrey\\Narada\\kb\\proposals\\narada-proper-site-seed-admission-package.md",
+      "received_at": "2026-05-10",
+      "status": "admitted_orientation_only",
+      "summary": "Navigation index for public lift packets prepared by narada-andrey; advisory only, not adoption authority."
+    },
+    {
+      "source_site": "narada-andrey",
+      "source_ref": "C:\\Users\\Andrey\\Narada\\kb\\proposals\\reusable-narada-site-machinery-extraction-map-20260507.md",
+      "received_at": "2026-05-10",
+      "status": "materially_covered_descriptor_packages",
+      "summary": "Extraction map for reusable Narada Site machinery is materially covered by Narada proper descriptor/contracts/docs/tests package slices. Live carriers, publication, source-Site migration/import, and receiving-Site materialization remain residual separate admissions.",
+      "latest_task_surface": ".narada/tasks/task-0039-reusable-site-machinery-aggregate-verification.md",
+      "latest_implementation_audit": ".narada/audit/task-0039-reusable-site-machinery-aggregate-verification-audit.json"
+    },
+    {
+      "source_site": "narada-andrey",
+      "source_ref": "C:\\Users\\Andrey\\Narada\\kb\\proposals\\site-task-lifecycle-first-slice-handoff.md",
+      "received_at": "2026-05-10",
+      "status": "implementation_increment_complete",
+      "summary": "Candidate first package scaffold for @narada/site-task-lifecycle, excluding source runtime databases and task history.",
+      "candidate_packet": ".narada/admission/candidates/site-task-lifecycle-first-slice-candidate.md",
+      "task_surface": ".narada/tasks/task-0001-site-task-lifecycle-first-slice.md",
+      "implementation_authority": "admitted_for_first_increment",
+      "implementation_audit": ".narada/audit/task-0001-implementation-audit.json"
+    },
+    {
+      "source_site": "narada-andrey",
+      "source_ref": "C:\\Users\\Andrey\\Narada\\kb\\proposals\\narada-proper-windows-machinery-capability-exchange-offer.md",
+      "source_task": "#611",
+      "source_commit": "bc5ecc42",
+      "received_at": "2026-05-12T04:20:03.925Z",
+      "status": "admitted_descriptor_package_set_first_slices",
+      "summary": "Windows machinery Capability Exchange offer adopted as Narada proper descriptor-only first slices for seven packages; runtime/PC/source state explicitly refused.",
+      "inbound_envelope": "env_62d32705-0386-4820-8013-47a70cfbc8dd",
+      "task_surface": ".narada/tasks/task-0027-windows-machinery-package-set-adoption.md",
+      "implementation_audit": ".narada/audit/task-0027-windows-machinery-package-set-adoption-audit.json"
+    }
+  ]
+}

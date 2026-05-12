@@ -1,0 +1,62 @@
+{
+  "schema": "narada.task_implementation_audit.v0",
+  "task_id": "narada-proper.task-0001",
+  "carrier_id": "narada-proper.carrier.task-0001.package-implementation.v0",
+  "increment": "site-task-lifecycle-receiving-site-setup-plan",
+  "root": "D:\\code\\narada",
+  "source_evidence": [
+    "OSM:osm_20260510_135139_031_37397b5c"
+  ],
+  "changed_files": [
+    "packages/site-task-lifecycle/README.md",
+    "packages/site-task-lifecycle/docs/receiving-site-setup.md",
+    "packages/site-task-lifecycle/src/index.ts",
+    "packages/site-task-lifecycle/src/receiving-site-setup.ts",
+    "packages/site-task-lifecycle/src/types.ts",
+    "packages/site-task-lifecycle/test/receiving-site-setup.test.ts"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages\\site-task-lifecycle typecheck",
+      "status": "passed"
+    },
+    {
+      "command": "pnpm --dir packages\\site-task-lifecycle exec vitest run test/initialize.test.ts test/import-refusal.test.ts test/admission-contract.test.ts test/mcp-facade.test.ts test/mcp-runtime-binding.test.ts test/inbox-task-bridge.test.ts test/task-db-schema.test.ts test/task-db-adapter.test.ts test/task-admission-write.test.ts test/receiving-site-setup.test.ts",
+      "status": "passed",
+      "summary": "10 test files passed; 36 tests passed"
+    },
+    {
+      "command": "rg -n \"better-sqlite3|sqlite3|@libsql/client|node:sqlite|C:\\\\Users\\\\Andrey\\\\Narada|ProgramData\\\\Narada|narada-andrey|secrets|credentials|tokens\" packages\\site-task-lifecycle\\src packages\\site-task-lifecycle\\test packages\\site-task-lifecycle\\docs packages\\site-task-lifecycle\\README.md packages\\site-task-lifecycle\\package.json",
+      "status": "passed",
+      "summary": "Only refusal docs, guard patterns, negative fixtures, and negative dependency assertions matched."
+    }
+  ],
+  "lifted": [
+    "Receiving-Site setup plan that composes initializer paths/options, adapter conformance, task DB init plan, task admission write request, and MCP runtime binding request",
+    "Receiving-Site setup result shape that remains ready_for_admitted_execution",
+    "Validation/refusal tests for source state refs and non-neutral setup identities",
+    "Package-local composition documentation"
+  ],
+  "intentionally_refused": [
+    "narada-andrey runtime databases",
+    "source task/inbox state or history",
+    "source roster/checkpoint/operator-surface state",
+    "PC-locus runtime state",
+    "secrets or identity-specific data",
+    "live MCP registration",
+    "SQLite dependency ownership",
+    "SQLite DB mutation",
+    "claiming receiving-Site setup is live before separate execution admissions"
+  ],
+  "remaining_blockers": [
+    "receiving-Site initializer execution admission",
+    "real concrete adapter admission outside @narada2/site-task-lifecycle",
+    "receiving-Site DB mutation execution admission",
+    "Narada proper live MCP registration/admission surface",
+    "neutral legacy role-preference migration fixture"
+  ],
+  "recommended_next_increment": "Define the live-execution admission checklist/surface for receiving-Site setup, still descriptor-only, naming the exact external executions required before terminal live Site functionality can be claimed.",
+  "rollback_notes": "Remove the listed package-local files/edits and this audit event; no dependency metadata, live MCP registration, SQLite DB, filesystem setup execution, or external runtime state was changed.",
+  "recorded_by": "codex",
+  "recorded_at": "2026-05-10"
+}

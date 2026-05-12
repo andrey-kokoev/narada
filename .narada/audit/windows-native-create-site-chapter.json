@@ -1,0 +1,78 @@
+{
+  "chapter": "Windows Native Create Site",
+  "created_at": "2026-05-12T19:40:00.000Z",
+  "authority_root": "D:\\code\\narada",
+  "posture": "windows_native_greenfield_site_creation",
+  "active_tasks": [1224, 1225, 1226, 1227],
+  "source_task_map": [
+    ".narada/tasks/task-0010-create-site-options-model-design.md",
+    ".narada/tasks/task-0011-create-site-dry-run-command.md",
+    ".narada/tasks/task-0012-create-site-minimal-filesystem-skeleton.md",
+    ".narada/tasks/task-0024-create-site-live-carriers-implementation.md",
+    ".narada/tasks/task-0025-create-site-live-carrier-cli-surface.md",
+    ".narada/tasks/task-0026-create-site-execute-live-orchestration.md",
+    ".narada/tasks/task-0044-create-site-shorthand-live-carrier-orchestration.md",
+    ".narada/tasks/task-0052-create-site-terminal-capability-assessment.md"
+  ],
+  "operational_commands": [
+    "narada sites create-presets --format json",
+    "narada sites create --preset minimal --site-id <id> --root <path> --dry-run --format json",
+    "narada sites create --preset minimal --site-id <id> --root <path> --format json",
+    "narada sites create --preset task-lifecycle --site-id <id> --root <path> --execute-live --live-authority-basis <basis> --format json",
+    "narada sites create --preset agent-memory --site-id <id> --root <path> --execute-live --live-authority-basis <basis> --format json",
+    "narada sites create --preset site-machinery --site-id <id> --root <path> --execute-live --live-authority-basis <basis> --format json",
+    "narada sites live-carrier --carrier <id> --mode <plan|apply|verify|recover> --target-site-root <root> --site-id <id> --authority-basis <basis>"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/layers/cli test test/commands/sites-create.test.ts",
+      "result": "passed: 22 tests"
+    },
+    {
+      "command": "node --test tools/site-init/site-live-carriers.test.mjs",
+      "result": "passed: 10 tests"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli build",
+      "result": "passed"
+    },
+    {
+      "command": "node packages/layers/cli/dist/main.js sites create --preset minimal --site-id smoke-minimal-dry-run --root <temp> --dry-run --format json",
+      "result": "passed: dry-run planned with no mutation claim"
+    },
+    {
+      "command": "node packages/layers/cli/dist/main.js sites create --preset minimal --site-id smoke-minimal-site --root <temp> --format json",
+      "result": "passed: skeleton created under temp root"
+    },
+    {
+      "command": "node packages/layers/cli/dist/main.js sites create --preset task-lifecycle --site-id smoke-task-site --root <temp> --execute-live --live-authority-basis operator_windows_native_smoke --format json",
+      "result": "passed: skeleton plus site_local_db_init, site_local_storage_hydration, site_mcp_registration_transport, windows_profile_site_binding"
+    }
+  ],
+  "terminal_claim": {
+    "claimable": true,
+    "scope": "Windows-native greenfield Site creation from Narada proper templates/catalog for minimal, task-lifecycle, agent-memory, and site-machinery presets.",
+    "source_state_imported": false,
+    "temporary_smoke_roots_removed": true
+  },
+  "non_claims": [
+    "source Site import, migration, or lift",
+    "runtime DB/history/checkpoint/task/inbox/roster/operator-surface/PC/secrets import",
+    "private MCP client config mutation",
+    "real Windows profile mutation outside target-root artifacts",
+    "capability or credential grants",
+    "operator-surface or PC authority mutation",
+    "post-creation business workflow readiness"
+  ],
+  "next_future_admissions": [
+    "private MCP client config mutation if desired",
+    "real Windows profile mutation if desired",
+    "capability/secret grants",
+    "operator-surface or PC-locus setup",
+    "source Site migration/lift/import command, separate from create site"
+  ]
+}

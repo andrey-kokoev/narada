@@ -1,0 +1,14 @@
+{
+  "schema": "narada.site_inbox.publication_policy.v0",
+  "site_id": "narada-proper",
+  "target_site_root": "D:\\code\\narada",
+  "carrier_id": "site_inbox_local_substrate",
+  "publication_executed": false,
+  "source_inbox_history_imported": false,
+  "next_admission_required_for": [
+    "portable envelope file write",
+    "task promotion",
+    "Git publication",
+    "live MCP registration"
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0023",
+  "title": "Implement crew startup shortcut descriptor package first slice",
+  "status": "completed",
+  "recorded_at": "2026-05-11T10:58:19.4270555-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "preceding_candidate": ".narada/admission/candidates/task-0022-crew-startup-shortcut-capability-candidate.md",
+    "capability_id": "narada-proper.capability.crew-startup-shortcut.v0",
+    "source_ref": "env_f2c20035-bec3-4790-b223-3fccebc6de24"
+  },
+  "changed_files": [
+    "packages/crew-startup-shortcut/package.json",
+    "packages/crew-startup-shortcut/tsconfig.json",
+    "packages/crew-startup-shortcut/README.md",
+    "packages/crew-startup-shortcut/src/types.ts",
+    "packages/crew-startup-shortcut/src/import-refusal.ts",
+    "packages/crew-startup-shortcut/src/contracts.ts",
+    "packages/crew-startup-shortcut/src/index.ts",
+    "packages/crew-startup-shortcut/test/fixtures/neutral-requests.ts",
+    "packages/crew-startup-shortcut/test/crew-startup-shortcut.test.ts",
+    "packages/crew-startup-shortcut/docs/windows-pwsh-consuming-site.md",
+    ".narada/capabilities/crew-startup-shortcut-capability-candidate.json",
+    ".narada/tasks/task-0023-crew-startup-shortcut-package-first-slice.md",
+    ".narada/audit/task-0023-crew-startup-shortcut-package-first-slice-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages\\crew-startup-shortcut test",
+      "result": "passed",
+      "evidence": "1 test file passed; 3 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages\\crew-startup-shortcut typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages\\crew-startup-shortcut build",
+      "result": "passed"
+    }
+  ],
+  "terminal_claim": "Descriptor package first slice implemented for MCP-only crew startup planning, request/result contracts, refusal guards, neutral fixtures, and Windows PowerShell consuming-Site guidance.",
+  "refused_imports": [
+    "User Site shortcut file copy",
+    "User Site runtime state import",
+    "workboard state import",
+    "task or inbox state import",
+    "checkpoint history import",
+    "operator-surface runtime state import",
+    "PC-locus runtime state import",
+    "secrets or credentials"
+  ],
+  "not_claimed": [
+    "live startup execution",
+    "native shell fallback",
+    "PC-locus mutation",
+    "operator-surface launch/focus/bind execution",
+    "live MCP registration",
+    "runtime hydration",
+    "capability grants"
+  ],
+  "rollback": "Remove packages/crew-startup-shortcut and this task/audit/capability implementation evidence; no live Site state, DB, MCP registration, or PC state was mutated.",
+  "next_smallest_slice": "Admit a concrete MCP/operator-surface carrier for startup launch/focus/bind, or keep the capability descriptor-only for future Sites."
+}

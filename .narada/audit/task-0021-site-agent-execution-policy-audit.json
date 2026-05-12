@@ -1,0 +1,63 @@
+{
+  "schema": "narada.audit.task_closeout.v0",
+  "task_id": "narada-proper.task-0021",
+  "title": "Add Narada proper MCP-only agent execution policy",
+  "status": "completed",
+  "completed_at": "2026-05-11T10:56:00.000-05:00",
+  "source_refs": [
+    "env_caffd9c1-aa39-4154-ba8b-73808ead35d9",
+    "mcp_payload:p_4452d59440f14193a6f9ac84@v1",
+    "codex-chat:2026-05-11:operator-send-narada-proper-site-config-gap"
+  ],
+  "changed_files": [
+    ".narada/site.json",
+    ".narada/bootstrap/startup.md",
+    ".narada/bootstrap/agent-execution-policy-startup.md",
+    ".narada/tasks/task-0021-site-agent-execution-policy.md",
+    ".narada/audit/task-0021-site-agent-execution-policy-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "implemented": [
+    "Added agent_execution_policy to Narada proper site authority seed.",
+    "Declared default_posture=mcp_only.",
+    "Denied native shell by default except recorded break-glass operator authorization.",
+    "Declared shell-like operations must route through admitted audited MCP surfaces.",
+    "Declared stop_and_report_missing_mcp_capability behavior.",
+    "Added startup verification checklist and linked it from startup.md."
+  ],
+  "verification": [
+    {
+      "command": "Get-Content -Raw .narada/site.json | ConvertFrom-Json",
+      "result": "passed",
+      "summary": "site json ok"
+    },
+    {
+      "command": "Get-Content .narada/admission/admission-ledger.jsonl | ConvertFrom-Json per line",
+      "result": "passed",
+      "summary": "ledger jsonl ok (151 lines)"
+    },
+    {
+      "command": "Get-Content -Raw .narada/audit/task-0021-site-agent-execution-policy-audit.json | ConvertFrom-Json",
+      "result": "passed",
+      "summary": "audit json ok"
+    }
+  ],
+  "no_import_evidence": {
+    "user_site_runtime_state_imported": false,
+    "user_site_task_or_inbox_history_imported": false,
+    "operator_surface_or_pc_runtime_imported": false,
+    "secrets_or_credentials_imported": false
+  },
+  "not_claimed": [
+    "carrier enforcement",
+    "live MCP registration",
+    "native shell grant",
+    "runtime hydration enforcement",
+    "capability registry reconciliation beyond declared allowlist source"
+  ],
+  "rollback": [
+    "Remove agent_execution_policy from .narada/site.json.",
+    "Remove startup verification checklist and the startup.md bullets if task is rejected.",
+    "Remove task-0021 audit/task/ledger evidence before publication if rejected."
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "schema": "narada.task_implementation_audit.v0",
+  "task_id": "narada-proper.task-0004",
+  "increment": "live-mcp-tool-binding",
+  "decision": "admitted_minimal_source_increment",
+  "root": "D:\\code\\narada",
+  "source_evidence": [
+    ".narada/audit/task-0003-live-setup-execution-audit.json",
+    ".narada/admission/decisions/task-0004-live-mcp-tool-binding-admission.md"
+  ],
+  "changed_files": [
+    ".narada/tasks/task-0004-live-task-lifecycle-mcp-tool-binding.md",
+    ".narada/admission/decisions/task-0004-live-mcp-tool-binding-admission.md",
+    ".narada/audit/task-0004-live-mcp-tool-binding-audit.json",
+    ".narada/admission/admission-ledger.jsonl",
+    ".narada/surfaces/task-0001-live-task-lifecycle-mcp-registration-surface.md",
+    ".narada/capabilities/mcp-surfaces.json",
+    ".ai/mcp/site-task-lifecycle-mcp.json",
+    "packages/layers/cli/src/mcp-server.ts",
+    "packages/layers/cli/test/commands/mcp-server.test.ts",
+    "packages/layers/cli/dist/mcp-server.js",
+    "packages/layers/cli/dist/mcp-server.d.ts",
+    "packages/layers/cli/dist/mcp-server.js.map"
+  ],
+  "live_mcp_tool_binding": "completed_initial_descriptor_tool",
+  "terminal_live_site_setup_claimable": true,
+  "terminal_claim_scope": "Initial first-slice live task-lifecycle setup is claimable: root init, sqlite3 adapter DB mutation, and live descriptor MCP plan tool are verified. Mutating MCP tools remain intentionally not exposed.",
+  "no_import_evidence": "The source change exposes descriptor-only task lifecycle planning through MCP and imports no narada-andrey runtime/source state. Live smoke returned sourceStateImported=false and packageExecutedSqliteMutation=false.",
+  "verification": [
+    {
+      "command": "pnpm --dir packages\\layers\\cli exec vitest run test/commands/mcp-server.test.ts",
+      "status": "passed",
+      "summary": "1 test file passed; 17 tests passed, including site_task_lifecycle.plan_init listing and handler coverage."
+    },
+    {
+      "command": "pnpm --dir packages\\layers\\cli typecheck",
+      "status": "passed",
+      "summary": "tsc --noEmit completed successfully."
+    },
+    {
+      "command": "pnpm --dir packages\\site-task-lifecycle typecheck",
+      "status": "passed",
+      "summary": "tsc --noEmit completed successfully."
+    },
+    {
+      "command": "pnpm --dir packages\\site-task-lifecycle exec vitest run",
+      "status": "passed",
+      "summary": "11 test files passed; 39 tests passed."
+    },
+    {
+      "command": "pnpm --dir packages\\layers\\cli build",
+      "status": "passed",
+      "summary": "Built CLI dist so node_modules/.bin/narada-mcp uses the new MCP tool binding."
+    },
+    {
+      "command": "node_modules\\.bin\\narada-mcp.cmd --site-root D:\\code\\narada --site-id narada-proper tools/list smoke",
+      "status": "passed",
+      "summary": "tools/list includes site_task_lifecycle.plan_init."
+    },
+    {
+      "command": "node_modules\\.bin\\narada-mcp.cmd --site-root D:\\code\\narada --site-id narada-proper tools/call site_task_lifecycle.plan_init",
+      "status": "passed",
+      "summary": "Returned Narada proper task lifecycle paths with mutationAttempted=false, sourceStateImported=false, and packageExecutedSqliteMutation=false."
+    }
+  ],
+  "rollback_notes": "Revert the task-0004 package source changes and preserve .narada audit/ledger as superseded evidence. No DB rollback is needed for the MCP binding change.",
+  "remaining_blockers": [
+    "adapter-bound mutating task lifecycle MCP tools are not exposed and require a separate admission if needed"
+  ],
+  "recorded_by": "codex",
+  "recorded_at": "2026-05-10"
+}

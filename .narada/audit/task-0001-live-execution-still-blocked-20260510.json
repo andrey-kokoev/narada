@@ -1,0 +1,48 @@
+{
+  "schema": "narada.task_implementation_audit.v0",
+  "task_id": "narada-proper.task-0001",
+  "increment": "live-execution-admission-recheck",
+  "decision": "blocked",
+  "root": "D:\\code\\narada",
+  "source_evidence": [
+    "OSM:osm_20260510_140632_853_e281b88c",
+    "operator_chat:2026-05-10:approve-task-0001-live-admissions",
+    "env_5633dd81-d6b2-4490-ab52-8753d5652dd1"
+  ],
+  "changed_files": [
+    ".narada/audit/task-0001-live-execution-still-blocked-20260510.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "Get-Content .narada\\capabilities\\mcp-surfaces.json",
+      "status": "passed",
+      "summary": "mcp_surfaces is empty and site-local task lifecycle MCP remains listed as missing capability."
+    },
+    {
+      "command": "rg -n \"site_task_lifecycle|narada_mcp\" packages\\layers\\cli\\src packages\\site-task-lifecycle\\src .narada\\capabilities",
+      "status": "passed",
+      "summary": "Package descriptors define site_task_lifecycle names, but admitted Narada MCP facade surfaces do not expose them as live tools."
+    }
+  ],
+  "blocker": "Operator approval was relayed, but Narada proper still lacks admitted concrete live execution carriers/surfaces, especially a live MCP registration/transport for site_task_lifecycle tools.",
+  "why_partial_execution_refused": "The requested scope requires all four live admissions. Running initializer or DB mutation without admitted live MCP registration would create live state while terminal setup remains unclaimable.",
+  "exact_admissions_needed": [
+    "receiving Site write root plus exact initializer carrier/tool",
+    "concrete adapter implementation outside @narada2/site-task-lifecycle plus dependency/driver owner",
+    "DB mutation carrier through the admitted adapter with readback/idempotency/rollback evidence",
+    "Narada proper live MCP registration tool/transport exposing site_task_lifecycle tools and constrained by adapter authority"
+  ],
+  "refused_actions": [
+    "initializer execution",
+    "concrete adapter admission",
+    "DB mutation execution",
+    "live MCP registration",
+    "narada-andrey runtime DB/task/inbox/roster/checkpoint/operator-surface/PC/secrets/identity state import",
+    "source history import"
+  ],
+  "terminal_live_site_setup_claimable": false,
+  "rollback_notes": "Remove this audit entry and the corresponding ledger entries if superseded by a later explicit admission that names concrete live carriers/surfaces. No package files, runtime registrations, SQLite DBs, or source Site state were changed.",
+  "recorded_by": "codex",
+  "recorded_at": "2026-05-10"
+}

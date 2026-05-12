@@ -1,0 +1,21 @@
+{
+  "schema": "narada.site_lift.adoption_catalog.v0",
+  "site_id": "narada-proper",
+  "target_site_root": "D:\\code\\narada",
+  "carrier_id": "site_lift_local_adoption",
+  "package_name": "@narada2/site-lift",
+  "source_state_imported": false,
+  "adoption_candidates": [],
+  "refused_nonportable_state": [
+    ".ai",
+    "SQLite databases from another Site",
+    "task history",
+    "inbox history",
+    "checkpoint history",
+    "roster runtime",
+    "operator-surface runtime state",
+    "PC-locus evidence",
+    "display/window state",
+    "secrets"
+  ]
+}

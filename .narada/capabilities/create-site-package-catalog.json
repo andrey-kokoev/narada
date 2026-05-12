@@ -1,0 +1,120 @@
+{
+  "schema": "narada.capability.record.v0",
+  "site_id": "narada-proper",
+  "capability_id": "narada-proper.capability.create-site-package-catalog.v0",
+  "name": "Greenfield create-site package catalog",
+  "state": "trialed",
+  "exposure_class": "mutating_guarded",
+  "implemented_by": {
+    "task_surface_id": "narada-proper.task-0041",
+    "audit_path": ".narada/audit/task-0041-create-site-site-machinery-preset-audit.json"
+  },
+  "operational_commands": [
+    "narada sites create --dry-run --config <path> --format json",
+    "narada sites create-presets --format json",
+    "narada sites create --preset <preset> --site-id <id> --root <path> --dry-run --format json",
+    "narada sites create --preset <preset> --site-id <id> --root <path> --format json",
+    "narada sites create --preset task-lifecycle --site-id <id> --root <path> --execute-live --live-authority-basis <basis> --format json",
+    "narada sites create --preset agent-memory --site-id <id> --root <path> --execute-live --live-authority-basis <basis> --format json",
+    "narada sites create --preset site-machinery --site-id <id> --root <path> --execute-live --live-authority-basis <basis> --format json"
+  ],
+  "catalog_components": [
+    "@narada2/site-task-lifecycle",
+    "@narada2/agent-context-memory",
+    "@narada2/site-inbox",
+    "@narada2/site-config",
+    "@narada2/site-lift"
+  ],
+  "supported_presets": [
+    "minimal",
+    "agent-memory",
+    "task-lifecycle",
+    "site-machinery"
+  ],
+  "admission_boundary": {
+    "package_selection_provides": "contracts/descriptors/docs/tests and descriptor package-slice plans",
+    "separate_admissions_required_for": [
+      "local storage adapter",
+      "inbox substrate/publication",
+      "site-config registry probe execution",
+      "Site-lift adoption materialization",
+      "DB init",
+      "MCP registration",
+      "runtime hydration",
+      "capability grants",
+      "Windows/PC/operator-surface mutation"
+    ],
+    "source_state_imported": false
+  },
+  "verification": [
+    {
+      "command": "pnpm --dir packages/layers/cli test test/commands/sites-create.test.ts",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli build",
+      "result": "passed"
+    },
+    {
+      "command": "node packages/layers/cli/dist/main.js sites create --preset site-machinery --site-id smoke-site-machinery --root D:\\Sites\\smoke-site-machinery --dry-run --format json",
+      "result": "passed"
+    },
+    {
+      "command": "node packages/layers/cli/dist/main.js sites create --preset site-machinery --site-id smoke-created-site --root <temp-root> --format json",
+      "result": "passed"
+    },
+    {
+      "command": "node packages/layers/cli/dist/main.js sites create --preset task-lifecycle --site-id smoke-live-task-site --root <temp-root> --execute-live --live-authority-basis smoke_receiving_site_live_authority --format json",
+      "result": "passed"
+    },
+    {
+      "command": "node packages/layers/cli/dist/main.js sites create-presets --format json",
+      "result": "passed"
+    },
+    {
+      "command": "node packages/layers/cli/dist/main.js sites create --preset agent-memory --site-id smoke-agent-memory-site --root <temp-root> --execute-live --live-authority-basis smoke_agent_memory_live_authority --format json",
+      "result": "passed"
+    },
+    {
+      "command": "node packages/layers/cli/dist/main.js sites create --preset site-machinery --site-id smoke-site-machinery-live --root <temp-root> --execute-live --live-authority-basis smoke_site_machinery_live_authority --format json",
+      "result": "passed"
+    },
+    {
+      "command": "node packages/layers/cli/dist/main.js sites create --preset site-machinery --site-id smoke-site-config-live --root <temp-root> --execute-live --live-authority-basis smoke_site_config_live_authority --format json",
+      "result": "passed"
+    },
+    {
+      "command": "node packages/layers/cli/dist/main.js sites create --preset site-machinery --site-id smoke-site-lift-live --root <temp-root> --execute-live --live-authority-basis smoke_site_lift_live_authority --format json",
+      "result": "passed"
+    }
+  ],
+  "latest_increment": {
+    "task_surface_id": "narada-proper.task-0052",
+    "audit_path": ".narada/audit/task-0052-create-site-terminal-capability-assessment-audit.json",
+    "claim": "Greenfield create-site is operational for Narada proper template/catalog-driven target-local creation through descriptor dry-run, skeleton creation, and admitted target-local live carriers for task-lifecycle, agent-memory, and site-machinery presets."
+  },
+  "terminal_assessment": {
+    "task_surface_id": "narada-proper.task-0052",
+    "audit_path": ".narada/audit/task-0052-create-site-terminal-capability-assessment-audit.json",
+    "claimable": true,
+    "claim": "The current first create-site objective is terminal for target-local greenfield Site creation from Narada proper templates/catalog.",
+    "source_state_imported": false
+  },
+  "not_claimed": [
+    "source Site import/migration/lift",
+    "runtime DB/task/inbox/roster/checkpoint/operator-surface/PC/secrets/identity-state import",
+    "capability grants",
+    "secret grants",
+    "private MCP client config mutation",
+    "real Windows profile mutation outside target-root artifacts",
+    "PC/operator-surface mutation",
+    "site-inbox publication or task promotion",
+    "site-config external probe/trust admission/external target mutation",
+    "site-lift file copy/install/bootstrap/catalog publication",
+    "agent-context runtime hydration execution"
+  ]
+}

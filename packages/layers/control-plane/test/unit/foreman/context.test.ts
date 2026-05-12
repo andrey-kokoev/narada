@@ -585,8 +585,18 @@ describe("OperationIntakeContextFormation", () => {
     senderEmail: string,
     subject: string,
     bodyText: string,
+    options?: {
+      folderRefs?: string[];
+      queriedFolderRef?: string;
+      bodyPreview?: string;
+      rawBodyText?: string;
+    },
   ): Fact {
     const receivedAt = new Date().toISOString();
+    const graphExtensions: Record<string, string> = {};
+    if (options?.queriedFolderRef) {
+      graphExtensions.queried_folder_ref = options.queriedFolderRef;
+    }
     const payload = {
       record_id: `rec-${conversationId}`,
       ordinal: receivedAt,
@@ -597,8 +607,27 @@ describe("OperationIntakeContextFormation", () => {
         thread_id: conversationId,
         from: { email: senderEmail, display_name: "Sender" },
         subject,
-        body: { text: bodyText, preview: bodyText.slice(0, 100) },
+        body: { text: options?.rawBodyText ?? bodyText, preview: options?.bodyPreview ?? bodyText.slice(0, 100) },
         received_at: receivedAt,
+        payload: {
+          conversation_id: conversationId,
+          from: { email: senderEmail, display_name: "Sender" },
+          sender: { email: senderEmail, display_name: "Sender" },
+          subject,
+          body: { text: options?.rawBodyText ?? bodyText, preview: options?.bodyPreview ?? bodyText.slice(0, 100) },
+          ...(options?.bodyPreview ? { body_preview: options.bodyPreview } : {}),
+          received_at: receivedAt,
+          folder_refs: options?.folderRefs ?? [],
+          ...(Object.keys(graphExtensions).length
+            ? {
+                source_extensions: {
+                  namespaces: {
+                    graph: graphExtensions,
+                  },
+                },
+              }
+            : {}),
+        },
       },
     };
     return {
@@ -644,6 +673,95 @@ describe("OperationIntakeContextFormation", () => {
     expect(contexts[0]!.scope_id).toBe("email-marketing");
     expect(contexts[0]!.context_id).toBe("email-marketing:conv-shared-1");
     expect(contexts[0]!.change_kinds).toContain("operation_intake:campaign-intake");
+  });
+
+  it("keeps sentitems as source context but excludes it from operation-intake fresh work by default", () => {
+    const strategy = new OperationIntakeContextFormation({
+      routes: [
+        {
+          route_id: "campaign-intake",
+          target_scope_id: "email-marketing",
+          match: {
+            sender_domains: ["global-maxima.com"],
+            body_keywords: ["email campaign"],
+          },
+        },
+      ],
+    });
+
+    const contexts = strategy.formContexts([
+      makeSharedMailboxFact(
+        "conv-self-outbound",
+        "staccato.narada@global-maxima.com",
+        "Re: test",
+        "Please provide details for the email campaign.",
+        { queriedFolderRef: "sentitems" },
+      ),
+    ], "shared-mailbox");
+
+    expect(contexts).toHaveLength(0);
+  });
+
+  it("can explicitly admit outbound folders for operation-intake fresh work", () => {
+    const strategy = new OperationIntakeContextFormation({
+      fresh_work_boundary: {
+        outbound_folder_behavior: "admit",
+      },
+      routes: [
+        {
+          route_id: "campaign-intake",
+          target_scope_id: "email-marketing",
+          match: {
+            sender_domains: ["global-maxima.com"],
+            body_keywords: ["email campaign"],
+          },
+        },
+      ],
+    });
+
+    const contexts = strategy.formContexts([
+      makeSharedMailboxFact(
+        "conv-admitted-outbound",
+        "staccato.narada@global-maxima.com",
+        "Re: test",
+        "Please provide details for the email campaign.",
+        { queriedFolderRef: "sentitems" },
+      ),
+    ], "shared-mailbox");
+
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]!.context_id).toBe("email-marketing:conv-admitted-outbound");
+  });
+
+  it("matches operation-intake body keywords from body_preview before raw body text", () => {
+    const strategy = new OperationIntakeContextFormation({
+      routes: [
+        {
+          route_id: "campaign-intake",
+          target_scope_id: "email-marketing",
+          match: {
+            sender_domains: ["client.example"],
+            body_keywords: ["email campaign"],
+          },
+        },
+      ],
+    });
+
+    const contexts = strategy.formContexts([
+      makeSharedMailboxFact(
+        "conv-preview",
+        "willem@client.example",
+        "test",
+        "I want to test email campaign creation.",
+        {
+          bodyPreview: "I want to test email campaign creation.",
+          rawBodyText: "<html><body><div>Graph raw body without matching plain semantic text</div></body></html>",
+        },
+      ),
+    ], "shared-mailbox");
+
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]!.context_id).toBe("email-marketing:conv-preview");
   });
 
   it("does not route unmatched mailbox messages", () => {

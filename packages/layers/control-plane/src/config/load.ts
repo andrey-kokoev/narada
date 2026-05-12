@@ -232,8 +232,32 @@ function buildOperationIntakeConfig(value: unknown, path: string): OperationInta
     throw new Error(`${path}.routes must contain at least one route`);
   }
   const stitchingRaw = isObject(config.mail_context_stitching) ? config.mail_context_stitching : null;
+  const freshWorkBoundaryRaw = isObject(config.fresh_work_boundary) ? config.fresh_work_boundary : null;
+  const outboundFolderBehavior = freshWorkBoundaryRaw?.outbound_folder_behavior;
+  if (
+    outboundFolderBehavior !== undefined &&
+    outboundFolderBehavior !== "exclude" &&
+    outboundFolderBehavior !== "admit"
+  ) {
+    throw new Error(`${path}.fresh_work_boundary.outbound_folder_behavior must be exclude or admit`);
+  }
   return {
     routes: config.routes.map((route, index) => buildOperationIntakeRoute(route, `${path}.routes[${index}]`)),
+    ...(freshWorkBoundaryRaw
+      ? {
+          fresh_work_boundary: {
+            ...(Array.isArray(freshWorkBoundaryRaw.outbound_folder_refs)
+              ? {
+                  outbound_folder_refs: expectStringArray(
+                    freshWorkBoundaryRaw.outbound_folder_refs,
+                    `${path}.fresh_work_boundary.outbound_folder_refs`,
+                  ),
+                }
+              : {}),
+            ...(outboundFolderBehavior ? { outbound_folder_behavior: outboundFolderBehavior } : {}),
+          },
+        }
+      : {}),
     ...(stitchingRaw
       ? {
           mail_context_stitching: {
@@ -251,6 +275,55 @@ function buildOperationIntakeConfig(value: unknown, path: string): OperationInta
               ? { signals: expectStringArray(stitchingRaw.signals, `${path}.mail_context_stitching.signals`) }
               : {}),
           },
+        }
+      : {}),
+  };
+}
+
+function buildMailAdmissionConfig(value: unknown, path: string): NonNullable<ScopeConfig["admission"]>["mail"] {
+  const mailRaw = expectObject(value, path);
+  return {
+    ...(Array.isArray(mailRaw.included_folder_refs)
+      ? {
+          included_folder_refs: expectStringArray(
+            mailRaw.included_folder_refs,
+            `${path}.included_folder_refs`,
+          ),
+        }
+      : {}),
+    ...(Array.isArray(mailRaw.excluded_folder_refs)
+      ? {
+          excluded_folder_refs: expectStringArray(
+            mailRaw.excluded_folder_refs,
+            `${path}.excluded_folder_refs`,
+          ),
+        }
+      : {}),
+    ...(Array.isArray(mailRaw.allowed_sender_addresses)
+      ? {
+          allowed_sender_addresses: expectStringArray(
+            mailRaw.allowed_sender_addresses,
+            `${path}.allowed_sender_addresses`,
+          ),
+        }
+      : {}),
+    ...(Array.isArray(mailRaw.allowed_sender_domains)
+      ? {
+          allowed_sender_domains: expectStringArray(
+            mailRaw.allowed_sender_domains,
+            `${path}.allowed_sender_domains`,
+          ),
+        }
+      : {}),
+    ...(mailRaw.unknown_sender_behavior === "ignore" || mailRaw.unknown_sender_behavior === "admit"
+      ? { unknown_sender_behavior: mailRaw.unknown_sender_behavior }
+      : {}),
+    ...(mailRaw.predicates && isObject(mailRaw.predicates)
+      ? {
+          predicates: normalizeMailAdmissionPredicates(
+            mailRaw.predicates,
+            `${path}.predicates`,
+          ),
         }
       : {}),
   };
@@ -439,55 +512,19 @@ function loadScopeConfig(rawScope: unknown, pathPrefix: string): ScopeConfig {
       : {}),
   };
 
+  const materializationRaw = isObject(scope.materialization) ? scope.materialization : null;
+  const mailMaterializationRaw = materializationRaw && isObject(materializationRaw.mail) ? materializationRaw.mail : null;
+  const materialization: ScopeConfig["materialization"] | undefined = mailMaterializationRaw
+    ? {
+        mail: buildMailAdmissionConfig(mailMaterializationRaw, `${pathPrefix}.materialization.mail`),
+      }
+    : undefined;
+
   const admissionRaw = isObject(scope.admission) ? scope.admission : null;
   const mailAdmissionRaw = admissionRaw && isObject(admissionRaw.mail) ? admissionRaw.mail : null;
   const admission: ScopeConfig["admission"] | undefined = mailAdmissionRaw
     ? {
-        mail: {
-          ...(Array.isArray(mailAdmissionRaw.included_folder_refs)
-            ? {
-                included_folder_refs: expectStringArray(
-                  mailAdmissionRaw.included_folder_refs,
-                  `${pathPrefix}.admission.mail.included_folder_refs`,
-                ),
-              }
-            : {}),
-          ...(Array.isArray(mailAdmissionRaw.excluded_folder_refs)
-            ? {
-                excluded_folder_refs: expectStringArray(
-                  mailAdmissionRaw.excluded_folder_refs,
-                  `${pathPrefix}.admission.mail.excluded_folder_refs`,
-                ),
-              }
-            : {}),
-          ...(Array.isArray(mailAdmissionRaw.allowed_sender_addresses)
-            ? {
-                allowed_sender_addresses: expectStringArray(
-                  mailAdmissionRaw.allowed_sender_addresses,
-                  `${pathPrefix}.admission.mail.allowed_sender_addresses`,
-                ),
-              }
-            : {}),
-          ...(Array.isArray(mailAdmissionRaw.allowed_sender_domains)
-            ? {
-                allowed_sender_domains: expectStringArray(
-                  mailAdmissionRaw.allowed_sender_domains,
-                  `${pathPrefix}.admission.mail.allowed_sender_domains`,
-                ),
-              }
-            : {}),
-          ...(mailAdmissionRaw.unknown_sender_behavior === "ignore" || mailAdmissionRaw.unknown_sender_behavior === "admit"
-            ? { unknown_sender_behavior: mailAdmissionRaw.unknown_sender_behavior }
-            : {}),
-          ...(mailAdmissionRaw.predicates && isObject(mailAdmissionRaw.predicates)
-            ? {
-                predicates: normalizeMailAdmissionPredicates(
-                  mailAdmissionRaw.predicates,
-                  `${pathPrefix}.admission.mail.predicates`,
-                ),
-              }
-            : {}),
-        },
+        mail: buildMailAdmissionConfig(mailAdmissionRaw, `${pathPrefix}.admission.mail`),
       }
     : undefined;
 
@@ -589,6 +626,7 @@ function loadScopeConfig(rawScope: unknown, pathPrefix: string): ScopeConfig {
     runtime,
     charter,
     policy,
+    ...(materialization ? { materialization } : {}),
     ...(admission ? { admission } : {}),
     ...(tool_catalogs ? { tool_catalogs } : {}),
     ...(executors ? { executors } : {}),
@@ -915,6 +953,7 @@ export async function loadConfig(
       lifecycle: root.lifecycle,
       charter: root.charter,
       policy: root.policy,
+      materialization: root.materialization,
       admission: root.admission,
       webhook: root.webhook,
       sources: [], // will be backfilled from graph

@@ -1,0 +1,78 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0053",
+  "title": "Doctor Site config locus fallback",
+  "status": "completed",
+  "recorded_at": "2026-05-12T12:16:10.7978077-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "source_context": "operator identified root config.json as wrong Narada Site config locus",
+    "external_source_state_imported": false
+  },
+  "changed_files": [
+    "packages/layers/cli/src/commands/doctor.ts",
+    "packages/layers/cli/test/commands/doctor.test.ts",
+    ".narada/tasks/task-0053-doctor-site-config-locus-fallback.md",
+    ".narada/audit/task-0053-doctor-site-config-locus-fallback-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "external_environment_changes": [
+    {
+      "path": "C:\\Users\\Andrey\\.local\\bin\\narada.ps1",
+      "purpose": "PowerShell-visible shim wrapper to repo-local node_modules/.bin/narada.ps1"
+    },
+    {
+      "path": "C:\\Users\\Andrey\\.local\\bin\\narada.cmd",
+      "purpose": "cmd-visible shim wrapper to repo-local node_modules/.bin/narada.ps1"
+    },
+    {
+      "path": "C:\\Users\\Andrey\\.local\\bin\\narada-mcp.ps1",
+      "purpose": "PowerShell-visible shim wrapper to repo-local node_modules/.bin/narada-mcp.ps1"
+    },
+    {
+      "path": "C:\\Users\\Andrey\\.local\\bin\\narada-mcp.cmd",
+      "purpose": "cmd-visible shim wrapper to repo-local node_modules/.bin/narada-mcp.ps1"
+    }
+  ],
+  "implementation": {
+    "default_operation_config_path": "D:\\code\\narada\\config.json",
+    "narada_site_config_path": "D:\\code\\narada\\.narada\\site.json",
+    "behavior": "When the default operation config is absent and .narada/site.json exists beside it, doctor reports Narada Site seed posture instead of failing on the legacy operation config path.",
+    "legacy_operation_config_preserved": true,
+    "source_state_imported": false
+  },
+  "verification": [
+    {
+      "command": "pnpm --dir packages/layers/cli test test/commands/doctor.test.ts",
+      "result": "passed",
+      "evidence": "11 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli build",
+      "result": "passed"
+    },
+    {
+      "command": "narada doctor --format json",
+      "result": "passed",
+      "evidence": "status=healthy; config_path=D:\\code\\narada\\.narada\\site.json; pass=7 fail=0 warn=0"
+    },
+    {
+      "command": "narada --version",
+      "result": "passed",
+      "evidence": "1.0.0"
+    }
+  ],
+  "terminal_claim": "Narada proper doctor now resolves the Site seed config locus under .narada/site.json when root config.json is absent.",
+  "not_claimed": [
+    "operation config migration",
+    "root config.json creation",
+    "runtime DB import",
+    "source Site state import"
+  ],
+  "rollback": "Revert doctor.ts and doctor.test.ts changes, remove this task/audit/ledger evidence, and remove optional user-local shim wrappers if desired."
+}

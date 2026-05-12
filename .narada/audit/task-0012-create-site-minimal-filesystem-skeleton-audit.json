@@ -1,0 +1,64 @@
+{
+  "schema": "narada.audit.task_closeout.v0",
+  "task_id": "narada-proper.task-0012",
+  "title": "Implement minimal greenfield Site filesystem creation",
+  "status": "completed",
+  "completed_at": "2026-05-10T20:24:30.000-05:00",
+  "changed_files": [
+    "packages/layers/cli/src/commands/sites.ts",
+    "packages/layers/cli/test/commands/sites-create.test.ts",
+    ".narada/tasks/task-0012-create-site-minimal-filesystem-skeleton.md",
+    ".narada/audit/task-0012-create-site-minimal-filesystem-skeleton-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "implemented": [
+    "Allowed non-dry-run narada sites create for valid greenfield create-site configs.",
+    "Materialized a minimal Site skeleton under site.site_root.",
+    "Wrote config.json, AGENTS.md, .narada/site.json, .narada/README.md, .narada/admission/admission-ledger.jsonl, and .narada/inbox/README.md.",
+    "Refused collisions, source Site state imports, live runtime setup, and implicit capability grants."
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages\\layers\\cli exec vitest run test/commands/sites-create.test.ts",
+      "result": "passed",
+      "summary": "11 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages\\layers\\cli typecheck",
+      "result": "passed",
+      "summary": "tsc --noEmit passed"
+    },
+    {
+      "command": "pnpm --dir packages\\layers\\cli build",
+      "result": "passed",
+      "summary": "tsc build passed"
+    },
+    {
+      "command": "node packages\\layers\\cli\\dist\\main.js sites create --config <temp-create-site-minimal.json> --format json",
+      "result": "passed",
+      "summary": "Built CLI created a temp minimal Site skeleton with 6 files, .narada/site.json, and .narada/admission/admission-ledger.jsonl."
+    }
+  ],
+  "no_import_evidence": {
+    "source_state_imported": false,
+    "runtime_db_imported": false,
+    "task_or_inbox_history_imported": false,
+    "checkpoint_history_imported": false,
+    "operator_surface_or_pc_runtime_imported": false,
+    "secrets_or_credentials_imported": false
+  },
+  "not_claimed": [
+    "DB init execution",
+    "DB mutation",
+    "MCP registration execution",
+    "runtime hydration execution",
+    "capability or credential grants",
+    "operator-surface or PC-locus runtime mutation",
+    "migration/lift/import from existing Sites"
+  ],
+  "rollback": [
+    "Revert the task-0012 edits in packages/layers/cli/src/commands/sites.ts and packages/layers/cli/test/commands/sites-create.test.ts.",
+    "Remove task-0012 .narada task/audit/ledger evidence before publication if rejected.",
+    "No persistent Site root was created by verification; smoke roots were temporary and removed."
+  ]
+}

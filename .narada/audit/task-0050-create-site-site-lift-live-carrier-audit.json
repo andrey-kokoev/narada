@@ -1,0 +1,82 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0050",
+  "title": "Create-site site-lift live carrier",
+  "status": "completed",
+  "recorded_at": "2026-05-12T11:54:22.5183111-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "source_context": "greenfield create-site CLI objective continuation",
+    "external_source_state_imported": false
+  },
+  "changed_files": [
+    "tools/site-init/site-live-carriers.mjs",
+    "tools/site-init/site-live-carriers.test.mjs",
+    "tools/site-init/README.md",
+    "packages/layers/cli/src/commands/sites.ts",
+    "packages/layers/cli/src/commands/sites-register.ts",
+    "packages/layers/cli/test/commands/sites-create.test.ts",
+    "docs/product/create-site-options-model.md",
+    ".narada/tasks/task-0050-create-site-site-lift-live-carrier.md",
+    ".narada/audit/task-0050-create-site-site-lift-live-carrier-audit.json",
+    ".narada/capabilities/create-site-package-catalog.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "implementation": {
+    "carrier_added": "site_lift_local_adoption",
+    "command_proven": "narada sites create --preset site-machinery --site-id <id> --root <path> --execute-live --live-authority-basis <basis> --format json",
+    "carrier_sequence_proven": [
+      "site_local_db_init",
+      "site_local_storage_hydration",
+      "site_inbox_local_substrate",
+      "site_config_local_registry",
+      "site_lift_local_adoption",
+      "windows_profile_site_binding"
+    ],
+    "created_target_local_artifacts": [
+      ".narada/site-lift/adoption-catalog.json",
+      ".narada/site-lift/materialization-policy.json"
+    ],
+    "source_state_imported": false,
+    "files_copied": false,
+    "packages_installed": false
+  },
+  "verification": [
+    {
+      "command": "node --test tools/site-init/site-live-carriers.test.mjs",
+      "result": "passed",
+      "evidence": "10 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli test test/commands/sites-create.test.ts",
+      "result": "passed",
+      "evidence": "1 test file passed, 22 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli build",
+      "result": "passed"
+    },
+    {
+      "command": "node packages/layers/cli/dist/main.js sites create --preset site-machinery --site-id smoke-site-lift-live --root <temp-root> --execute-live --live-authority-basis smoke_site_lift_live_authority --format json",
+      "result": "passed",
+      "evidence": "Returned execution_result created_live_carriers_applied with site_lift_local_adoption applied and source_state_imported false. Temporary smoke root was removed after the run."
+    }
+  ],
+  "terminal_claim": "The site-machinery create-site preset has tested target-local live-carrier paths for inbox, site-config, and Site-lift policy artifacts.",
+  "not_claimed": [
+    "file copy/install/bootstrap",
+    "source runtime import",
+    "MCP registration mutation for Site-lift",
+    "catalog publication",
+    "receiving Site mutation beyond target-local empty policy/catalog artifacts",
+    "private MCP client config mutation",
+    "real Windows profile mutation",
+    "PC/operator-surface mutation"
+  ],
+  "rollback": "Remove the site_lift_local_adoption carrier, CLI orchestration branch, tests/docs updates, and this task/audit/ledger evidence."
+}

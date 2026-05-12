@@ -1,0 +1,69 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0029",
+  "title": "Deepen Windows OSL panel payload slice",
+  "status": "completed",
+  "recorded_at": "2026-05-11T23:36:19.7811937-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "builds_on": "narada-proper.task-0027",
+    "source_evidence": [
+      "C:\\Users\\Andrey\\Narada\\kb\\operator-surface\\osl-webview2-panel-payload-contract.md",
+      "C:\\Users\\Andrey\\Narada\\tools\\window-surface-overlay\\osl-panel-payload-contract.test.mjs",
+      "C:\\Users\\Andrey\\Narada\\tools\\window-surface-overlay\\panel-payload-contract.test.mjs",
+      "C:\\Users\\Andrey\\Narada\\tools\\window-surface-overlay\\src\\main.rs",
+      "C:\\Users\\Andrey\\Narada\\tools\\osl-webview2-panel-host\\README.md"
+    ],
+    "external_evidence_only": true
+  },
+  "changed_files": [
+    "packages/windows-osl/README.md",
+    "packages/windows-osl/docs/source-inventory.md",
+    "packages/windows-osl/src/index.ts",
+    "packages/windows-osl/src/panel-payload.ts",
+    "packages/windows-osl/test/panel-payload.test.ts",
+    ".narada/tasks/task-0029-windows-osl-panel-payload-slice.md",
+    ".narada/audit/task-0029-windows-osl-panel-payload-slice-audit.json",
+    ".narada/capabilities/windows-machinery-capability-exchange.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/windows-osl test",
+      "result": "passed",
+      "evidence": "2 test files passed; 4 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages/windows-osl typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/windows-osl build",
+      "result": "passed"
+    }
+  ],
+  "terminal_claim": "@narada2/windows-osl now includes read-only OSL WebView2 panel payload contracts, builder, validation, refusal guards, and source inventory documentation.",
+  "refused_imports": [
+    "live WebView2 host runtime",
+    "runtime payload files",
+    "HWND/window binding state",
+    "generated labels",
+    "PIDs, logs, and display topology",
+    "Komorebi and YASB state",
+    "operator-surface runtime state",
+    "task/inbox history",
+    "secrets or credentials",
+    "narada-andrey identity authority"
+  ],
+  "not_claimed": [
+    "live panel launch",
+    "WebView2 install or carrier execution",
+    "PC-locus mutation",
+    "shell/lifecycle/SQLite/binding mutation authority",
+    "future interactive panel controls",
+    "runtime projection authority for any receiving Site"
+  ],
+  "rollback": "Remove OSL panel payload source, tests, source inventory doc, README section, and this task evidence. No runtime state was mutated or imported.",
+  "next_smallest_slice": "Deepen @narada2/mcp-shell-windows with typed command-intent/refusal descriptors or expose package-local OSL payload validation through a read-only descriptor surface."
+}

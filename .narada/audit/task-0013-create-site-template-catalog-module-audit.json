@@ -1,0 +1,45 @@
+{
+  "schema": "narada.audit.task_closeout.v0",
+  "task_id": "narada-proper.task-0013",
+  "title": "Extract create-site template catalog and config normalization module",
+  "status": "completed",
+  "completed_at": "2026-05-10T20:24:40.000-05:00",
+  "changed_files": [
+    "packages/layers/cli/src/lib/create-site-template-catalog.ts",
+    "packages/layers/cli/src/commands/sites.ts",
+    ".narada/tasks/task-0013-create-site-template-catalog-module.md",
+    ".narada/audit/task-0013-create-site-template-catalog-module-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "implemented": [
+    "Extracted supported create-site presets into create-site-template-catalog.ts.",
+    "Extracted package descriptor expansion for @narada2/site-task-lifecycle and @narada2/agent-context-memory.",
+    "Extracted template selection logic so dry-run and execution use one descriptor catalog."
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages\\layers\\cli exec vitest run test/commands/sites-create.test.ts",
+      "result": "passed",
+      "summary": "11 tests passed after refactor"
+    },
+    {
+      "command": "pnpm --dir packages\\layers\\cli typecheck",
+      "result": "passed",
+      "summary": "tsc --noEmit passed after type signature repair"
+    },
+    {
+      "command": "pnpm --dir packages\\layers\\cli build",
+      "result": "passed",
+      "summary": "tsc build passed"
+    }
+  ],
+  "not_claimed": [
+    "External package catalog loading",
+    "Interactive UX",
+    "Migration/lift/import path",
+    "Live setup execution"
+  ],
+  "rollback": [
+    "Inline the catalog constants/functions back into sites.ts and remove create-site-template-catalog.ts if rejected."
+  ]
+}

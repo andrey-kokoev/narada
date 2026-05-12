@@ -1,0 +1,22 @@
+{
+  "schema": "narada.site_task_lifecycle.mcp_mutation_evidence.v0",
+  "command": "site_task_lifecycle.admit_task",
+  "authority_class": "mcp_adapter_bound_task_lifecycle_mutation",
+  "packageExecutedSqliteMutation": false,
+  "sourceStateImported": false,
+  "taskId": "narada-proper.task-0005-smoke",
+  "siteId": "narada-proper",
+  "sourceRef": "OSM:osm_20260510_142839_058_af43c473",
+  "eventId": "mcp-task-admission-8ded3b20ca541eda",
+  "dbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+  "recordedAt": "2026-05-10T19:34:48.462Z",
+  "admittedBy": "narada-proper.architect",
+  "readback": [
+    {
+      "task_id": "narada-proper.task-0005-smoke",
+      "status": "admitted",
+      "source_site": "narada-proper",
+      "source_ref": "OSM:osm_20260510_142839_058_af43c473"
+    }
+  ]
+}

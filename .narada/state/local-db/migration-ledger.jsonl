@@ -1,0 +1,1 @@
+{"schema":"narada.site_local_db.migration_event.v0","carrier_id":"site_local_db_init","site_id":"narada-proper","target_site_root":"D:\\code\\narada","migration":"create_site_local_db_v0","status":"applied","at":"2026-05-12T19:50:04.463Z"}

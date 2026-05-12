@@ -534,6 +534,10 @@ describe("loadConfig", () => {
         included_item_kinds: ["message"],
       },
       operation_intake: {
+        fresh_work_boundary: {
+          outbound_folder_refs: ["sentitems"],
+          outbound_folder_behavior: "exclude",
+        },
         routes: [
           {
             route_id: "campaign-intake",
@@ -552,6 +556,10 @@ describe("loadConfig", () => {
     const config = await loadConfig({ path });
     const scope = config.scopes[0]!;
     expect(scope.context_strategy).toBe("operation_intake");
+    expect(scope.operation_intake?.fresh_work_boundary).toEqual({
+      outbound_folder_refs: ["sentitems"],
+      outbound_folder_behavior: "exclude",
+    });
     expect(scope.operation_intake?.routes[0]).toEqual({
       route_id: "campaign-intake",
       target_scope_id: "email-marketing",
@@ -641,6 +649,50 @@ describe("loadConfig", () => {
       addresses: ["blocked@staccato2011.com"],
     });
     expect(predicates?.unknown_participant_behavior).toBe("ignore");
+  });
+
+  it("accepts mail materialization participant predicate filters separately from admission", async () => {
+    const path = await writeConfigFile({
+      mailbox_id: "mailbox_primary",
+      root_dir: "./data/mail-sync",
+      graph: {
+        user_id: "user@example.com",
+        prefer_immutable_ids: true,
+      },
+      scope: {
+        included_container_refs: ["inbox", "sentitems"],
+        included_item_kinds: ["message"],
+      },
+      materialization: {
+        mail: {
+          predicates: {
+            include: [
+              {
+                kind: "participant",
+                fields: ["from", "to", "cc"],
+                domains: ["corepoweryoga.com"],
+              },
+            ],
+            unknown_participant_behavior: "ignore",
+          },
+        },
+      },
+      admission: {
+        mail: {
+          included_folder_refs: ["inbox"],
+        },
+      },
+    });
+    createdPaths.push(path);
+
+    const config = await loadConfig({ path });
+    const scope = config.scopes[0]!;
+    expect(scope.materialization?.mail?.predicates?.include?.[0]).toMatchObject({
+      kind: "participant",
+      fields: ["from", "to", "cc"],
+      domains: ["corepoweryoga.com"],
+    });
+    expect(scope.admission?.mail?.included_folder_refs).toEqual(["inbox"]);
   });
 
   it("rejects invalid campaign_request_lookback_days", async () => {

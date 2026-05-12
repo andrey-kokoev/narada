@@ -1,0 +1,38 @@
+{
+  "schema": "narada.site_task_lifecycle.admission.v0",
+  "status": "initialized",
+  "siteId": "narada-proper",
+  "initializedBy": "narada-proper.architect",
+  "initializedAt": "2026-05-10T14:20:00.000-05:00",
+  "paths": {
+    "siteRoot": "D:\\code\\narada",
+    "taskDbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+    "taskSpecDir": "D:\\code\\narada\\.ai\\do-not-open\\tasks",
+    "manifestPath": "D:\\code\\narada\\.ai\\site-task-lifecycle-admission.json"
+  },
+  "roster": [
+    {
+      "identityId": "narada-proper.architect",
+      "role": "architect"
+    },
+    {
+      "identityId": "narada-proper.builder",
+      "role": "builder"
+    },
+    {
+      "identityId": "narada-proper.reviewer",
+      "role": "reviewer"
+    }
+  ],
+  "rejectedSourceImports": [
+    "source task lifecycle databases",
+    "source task history",
+    "source inbox databases and envelopes",
+    "source rosters",
+    "source checkpoints and agent-context databases",
+    "source operator-surface bindings",
+    "PC-locus runtime state",
+    "secrets and credentials"
+  ],
+  "deniedSourceImportFindings": []
+}

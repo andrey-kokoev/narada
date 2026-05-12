@@ -1,0 +1,52 @@
+{
+  "schema": "narada.terminal_assessment.v0",
+  "site_id": "narada-proper",
+  "assessment_id": "narada-proper.task-0006.terminal-first-slice-assessment",
+  "source_osm": "OSM:osm_20260510_144146_379_9a0003cb",
+  "decision": "terminal_first_slice_claimable",
+  "claim_scope": "Admitted first slice only: root init, DB mutation via admitted sqlite3 adapter, live MCP plan_init/admit_task/read_task, and evidence readback.",
+  "evidence": {
+    "root_init": ".ai/site-task-lifecycle-admission.json",
+    "task_db": ".ai/task-lifecycle.db",
+    "mcp_capability": ".ai/mcp/site-task-lifecycle-mcp.json",
+    "mutating_evidence": ".ai/mutation-evidence/task_lifecycle/mcp_582af2d48056b375.json",
+    "audits": [
+      ".narada/audit/task-0003-live-setup-execution-audit.json",
+      ".narada/audit/task-0004-live-mcp-tool-binding-audit.json",
+      ".narada/audit/task-0005-mutating-mcp-audit.json",
+      ".narada/audit/task-0006-readback-mcp-audit.json"
+    ]
+  },
+  "checks": [
+    {
+      "name": "mcp_tools_present",
+      "status": "passed",
+      "summary": "tools/list includes site_task_lifecycle.plan_init, site_task_lifecycle.admit_task, and site_task_lifecycle.read_task."
+    },
+    {
+      "name": "plan_init_smoke",
+      "status": "passed",
+      "summary": "plan_init returned Narada proper paths with sourceStateImported=false and packageExecutedSqliteMutation=false."
+    },
+    {
+      "name": "read_task_smoke",
+      "status": "passed",
+      "summary": "read_task returned narada-proper.task-0005-smoke with task row, evidence refs, and admission event without mutation."
+    },
+    {
+      "name": "db_readback",
+      "status": "passed",
+      "summary": "SQLite readback confirmed narada-proper.task-0003 and narada-proper.task-0005-smoke admitted rows, plus smoke evidence refs and event."
+    }
+  ],
+  "smallest_blocker": null,
+  "not_claimed": [
+    "richer task query/list MCP",
+    "arbitrary SQL",
+    "cross-Site mutation",
+    "narada-andrey runtime/source state import",
+    "package-owned SQLite dependency"
+  ],
+  "recorded_by": "codex",
+  "recorded_at": "2026-05-10"
+}

@@ -1,0 +1,13 @@
+{
+  "schema": "https://narada.dev/schemas/law-receipt/v1",
+  "receipt_id": "law_receipt_2026-05-12T18-53-41-496Z_ad94a342-1a38-44d4-b7da-a54990eadcfb",
+  "change_id": "law_2026-04-29T23-57-30-951Z_a5029d6a-88a7-4333-98f1-158c8cbb596d",
+  "agent_id": "architect",
+  "role": "architect",
+  "session_id": null,
+  "operator_surface_identity": null,
+  "status": "acknowledged",
+  "read_at": "2026-05-12T18:53:41.496Z",
+  "acknowledged_at": "2026-05-12T18:53:41.496Z",
+  "questions_or_blockers": []
+}

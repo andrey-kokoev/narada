@@ -1,0 +1,13 @@
+{
+  "schema": "narada.agent_context_memory.local_store.v0",
+  "site_id": "narada-proper",
+  "target_site_root": "D:\\code\\narada",
+  "carrier_id": "agent_context_memory_local_storage",
+  "package_name": "@narada2/agent-context-memory",
+  "package_owns_sqlite_dependency": false,
+  "source_state_imported": false,
+  "named_agents": [],
+  "sessions": [],
+  "checkpoints": [],
+  "hydration_events": []
+}

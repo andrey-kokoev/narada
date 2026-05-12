@@ -1,0 +1,26 @@
+{
+  "schema": "narada.site_local_storage_hydration_manifest.v0",
+  "site_id": "narada-proper",
+  "target_site_root": "D:\\code\\narada",
+  "carrier_id": "site_local_storage_hydration",
+  "handoff_disposition": "none",
+  "empty_histories_created": [
+    "runtime",
+    "inbox_exports",
+    "checkpoints",
+    "logs",
+    "mcp_payload_staging"
+  ],
+  "refused_non_portable_classes": [
+    ".ai",
+    "SQLite databases from another Site",
+    "task history",
+    "inbox history",
+    "checkpoint history",
+    "roster runtime",
+    "operator-surface runtime state",
+    "PC-locus evidence",
+    "display/window state",
+    "secrets"
+  ]
+}

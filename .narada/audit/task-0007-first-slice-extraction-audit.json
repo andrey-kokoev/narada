@@ -1,0 +1,90 @@
+{
+  "schema": "narada.task_audit.v0",
+  "site_id": "narada-proper",
+  "task_id": "narada-proper.task-0007",
+  "title": "Stabilize proven first-slice Site task lifecycle extraction",
+  "source_ref": "OSM:osm_20260510_183851_655_98580115",
+  "authority_root": "D:\\code\\narada",
+  "decision_path": ".narada/admission/decisions/task-0007-first-slice-extraction-admission.md",
+  "changed_files": [
+    ".narada/tasks/task-0007-first-slice-extraction-stabilization.md",
+    ".narada/admission/decisions/task-0007-first-slice-extraction-admission.md",
+    ".narada/audit/task-0007-first-slice-extraction-audit.json",
+    ".narada/admission/admission-ledger.jsonl",
+    "packages/site-task-lifecycle/README.md",
+    "packages/site-task-lifecycle/docs/first-slice-extraction.md",
+    "packages/site-task-lifecycle/test/first-slice-extraction.test.ts",
+    "packages/layers/cli/test/commands/mcp-server.test.ts"
+  ],
+  "pre_existing_first_slice_files_preserved": [
+    "packages/layers/cli/src/mcp-server.ts",
+    ".ai/site-task-lifecycle-admission.json",
+    ".ai/task-lifecycle.db",
+    ".ai/mcp/site-task-lifecycle-mcp.json",
+    ".ai/mutation-evidence/task_lifecycle/mcp_582af2d48056b375.json"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages\\site-task-lifecycle typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages\\site-task-lifecycle exec vitest run",
+      "result": "passed",
+      "summary": "12 files, 41 tests"
+    },
+    {
+      "command": "pnpm --dir packages\\layers\\cli typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages\\layers\\cli exec vitest run test/commands/mcp-server.test.ts",
+      "result": "passed",
+      "summary": "1 file, 22 tests"
+    },
+    {
+      "command": "pnpm --dir packages\\site-task-lifecycle build",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages\\layers\\cli build",
+      "result": "passed"
+    },
+    {
+      "command": "node --input-type=module MCP smoke using packages/layers/cli/dist/mcp-server.js",
+      "result": "passed",
+      "summary": "tools/list returned plan_init/admit_task/read_task; plan_init returned sourceStateImported=false and packageExecutedSqliteMutation=false; read_task returned narada-proper.task-0005-smoke with evidence refs and no mutation"
+    }
+  ],
+  "evidence_chain": {
+    "audit": ".narada/audit/task-0007-first-slice-extraction-audit.json",
+    "ledger": ".narada/admission/admission-ledger.jsonl",
+    "mutation_evidence": ".ai/mutation-evidence/task_lifecycle/mcp_582af2d48056b375.json",
+    "db_readback": ".ai/task-lifecycle.db:narada-proper.task-0005-smoke",
+    "read_task_proof": "site_task_lifecycle.read_task returned task row, evidence refs, and admission event"
+  },
+  "no_import_evidence": {
+    "package_owns_sqlite_dependency": false,
+    "package_executed_sqlite_mutation": false,
+    "source_state_imported": false,
+    "package_guard": "packages/site-task-lifecycle/test/first-slice-extraction.test.ts",
+    "cli_guard": "packages/layers/cli/test/commands/mcp-server.test.ts refuses cross-Site site_task_lifecycle.admit_task"
+  },
+  "rollback": [
+    "Remove task-0007 .narada task/admission/audit/ledger entries.",
+    "Revert package README/doc/test additions for first-slice extraction posture.",
+    "Revert the added CLI MCP cross-Site task lifecycle refusal test.",
+    "Do not delete existing terminal first-slice DB/evidence unless a separate rollback admission targets live state."
+  ],
+  "terminal_claim": "The admitted first slice remains terminal/claimable: root init, DB mutation via admitted sqlite3 adapter, live MCP plan_init/admit_task/read_task, and evidence readback.",
+  "not_claimed_future_admissions": [
+    "richer list/query tools",
+    "richer lifecycle transitions",
+    "cross-Site mutation",
+    "OSM policy",
+    "package-owned SQLite dependency",
+    "arbitrary SQL execution"
+  ],
+  "recorded_by": "codex",
+  "recorded_at": "2026-05-10T18:43:11.3881134-05:00"
+}

@@ -1,0 +1,60 @@
+{
+  "schema": "narada.create_site.options.v0",
+  "mode": "dry_run",
+  "preset": "agent-memory",
+  "template_catalog": {
+    "template_id": "narada-proper.templates.site.agent-memory.v0",
+    "template_components": ["@narada2/agent-context-memory"]
+  },
+  "site": {
+    "site_id": "user-alpha",
+    "site_kind": "user",
+    "authority_locus": "user",
+    "site_root": "C:\\Users\\Ada\\Narada",
+    "workspace_root": "C:\\Users\\Ada\\Narada",
+    "substrate": "windows-native",
+    "execution_surface": "windows_native",
+    "sync_posture": "hybrid_capable_plain_folder"
+  },
+  "packages": [
+    {
+      "name": "@narada2/agent-context-memory",
+      "include_contracts": true,
+      "include_docs": true,
+      "include_schema_descriptors": true,
+      "include_mcp_descriptors": true,
+      "include_conformance_tests": true
+    }
+  ],
+  "identity": {
+    "named_agents": [
+      { "named_agent_id": "user-alpha.agent.kevin", "display_name": "Kevin" }
+    ],
+    "role_assignments": [
+      { "named_agent_id": "user-alpha.agent.kevin", "role_name": "architect", "assignment_ref": "operator:create-site-plan" }
+    ],
+    "role_compatibility_identities": [
+      { "role_name": "architect", "compatibility_identity": "user-alpha.architect", "admission_ref": "operator:create-site-plan" }
+    ],
+    "claimed_identity_evidence": [],
+    "mechanical_verification_basis": [
+      { "kind": "operator_admission", "evidence_ref": "operator:create-site-plan" }
+    ]
+  },
+  "storage": { "intent": "descriptor_only", "driver_preference": "sqlite3-cli", "mutation_mode": "none" },
+  "mcp": { "intent": "descriptor_only", "surfaces": ["agent_context_memory"] },
+  "capabilities": { "policy": "declare_required", "required": ["agent_context_memory"], "denied": ["source_checkpoint_import"] },
+  "inbox": { "enable": "drop_only" },
+  "task_lifecycle": { "enable": false },
+  "agent_context": {
+    "enable": "descriptor_only",
+    "package": "@narada2/agent-context-memory",
+    "checkpoint_policy": "manual_descriptor"
+  },
+  "operator_surface": { "intent": "declare_relation", "pc_locus_required": false },
+  "windows_pwsh": { "profile": "emit_example", "path_style": "windows" },
+  "evidence": {
+    "template_refs": ["narada-proper.templates.site.agent-memory.v0", "package:@narada2/agent-context-memory"],
+    "refused_imports": []
+  }
+}

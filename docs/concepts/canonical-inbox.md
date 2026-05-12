@@ -39,6 +39,14 @@ Use low-level `submit` when the caller already has a complete typed envelope pay
 
 Successful `inbox submit` and `inbox submit-observation` write two surfaces:
 
+When `message_routing_authority` admits a cross-locus route with
+`capability_kind`, inbox submission also requires an active local capability
+consent grant for the requested principal, target Site/locus, capability kind,
+and action. Direct submission through the target Site authority surface remains
+reported as `direct_target_authority`; delegated cross-Site submission is
+reported as `source_site_delegated_authority` with capability status and grant
+evidence. Missing, expired, or revoked grants refuse before inbox mutation.
+
 | Surface | Role |
 | --- | --- |
 | `.ai/inbox.db` | Local runtime substrate for the current embodiment. It is ignored and must not be merged as authority. |

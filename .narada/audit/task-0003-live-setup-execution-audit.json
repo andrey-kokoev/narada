@@ -1,0 +1,80 @@
+{
+  "schema": "narada.task_implementation_audit.v0",
+  "task_id": "narada-proper.task-0003",
+  "increment": "live-setup-execution",
+  "decision": "admitted_partial_live_execution_increment",
+  "root": "D:\\code\\narada",
+  "source_evidence": [
+    "OSM:osm_20260510_141620_083_98aa2fc4",
+    ".narada/admission/decisions/task-0003-live-setup-execution-admission.md",
+    ".narada/admission/decisions/task-0002-live-carriers-surface-admission.md"
+  ],
+  "changed_files": [
+    ".narada/tasks/task-0003-live-task-lifecycle-setup-execution.md",
+    ".narada/admission/decisions/task-0003-live-setup-execution-admission.md",
+    ".narada/execution/task-0003/live-setup.ts",
+    ".narada/execution/task-0003/result.json",
+    ".narada/audit/task-0003-live-setup-execution-audit.json",
+    ".narada/admission/admission-ledger.jsonl",
+    ".ai/site-task-lifecycle-admission.json",
+    ".ai/task-lifecycle.db",
+    ".ai/mcp/site-task-lifecycle-mcp.json"
+  ],
+  "live_execution_performed": true,
+  "initializer_execution": "completed",
+  "concrete_adapter_activation": "completed_sqlite3_cli",
+  "db_mutation_execution": "completed",
+  "mcp_transport_smoke": "generic_transport_passed_site_task_lifecycle_tools_missing",
+  "terminal_live_site_setup_claimable": false,
+  "no_import_evidence": "The harness used empty sourceImportRefs, neutral Narada proper identities, Windows sqlite3.exe outside @narada2/site-task-lifecycle, and no narada-andrey runtime DB/task/inbox/roster/checkpoint/operator-surface/PC/secrets/identity/source-history inputs. Result evidence reports sourceStateImported=false, packageOwnsSqliteDependency=false, and packageExecutedSqliteMutation=false.",
+  "verification": [
+    {
+      "command": "pnpm exec tsx .narada\\execution\\task-0003\\live-setup.ts",
+      "status": "passed",
+      "summary": "Created .ai/site-task-lifecycle-admission.json, .ai/task-lifecycle.db, .ai/mcp/site-task-lifecycle-mcp.json, and .narada/execution/task-0003/result.json."
+    },
+    {
+      "command": "sqlite3.exe -json .ai\\task-lifecycle.db \"SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;\"",
+      "status": "passed",
+      "summary": "Readback returned task_admission_events, task_evidence_refs, and task_records."
+    },
+    {
+      "command": "sqlite3.exe -json .ai\\task-lifecycle.db \"SELECT task_id,status,source_site,source_ref FROM task_records ORDER BY task_id;\"",
+      "status": "passed",
+      "summary": "Readback returned narada-proper.task-0003 admitted from OSM:osm_20260510_141620_083_98aa2fc4."
+    },
+    {
+      "command": "sqlite3.exe counts for task_evidence_refs and task_admission_events",
+      "status": "passed",
+      "summary": "Readback returned 3 evidence refs and 1 admission event."
+    },
+    {
+      "command": "node_modules\\.bin\\narada-mcp.cmd --site-root D:\\code\\narada --site-id narada-proper tools/list smoke",
+      "status": "passed",
+      "summary": "Generic Narada MCP transport responded and listed narada_site_context; site_task_lifecycle.plan_init was missing."
+    },
+    {
+      "command": "pnpm --dir packages\\site-task-lifecycle typecheck",
+      "status": "passed",
+      "summary": "tsc --noEmit completed successfully."
+    },
+    {
+      "command": "pnpm --dir packages\\site-task-lifecycle exec vitest run",
+      "status": "passed",
+      "summary": "11 test files passed; 39 tests passed."
+    },
+    {
+      "command": "JSON evidence parse checks for result, manifest, MCP evidence, and ledger",
+      "status": "passed",
+      "summary": "Generated evidence and admission ledger parse successfully."
+    }
+  ],
+  "rollback_notes": "If rollback is required before dependent mutations, remove .ai/site-task-lifecycle-admission.json, .ai/task-lifecycle.db, .ai/mcp/site-task-lifecycle-mcp.json, and .narada/execution/task-0003/result.json. Preserve task/admission/audit/ledger evidence as superseded records.",
+  "remaining_blockers": [
+    "admit and implement site_task_lifecycle.* tool exposure in the live narada-mcp server or a separate task-lifecycle MCP server",
+    "run MCP tools/list smoke test proving site_task_lifecycle.plan_init is visible",
+    "run at least one site_task_lifecycle.* tool smoke call through the admitted MCP transport"
+  ],
+  "recorded_by": "codex",
+  "recorded_at": "2026-05-10"
+}

@@ -1,0 +1,75 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0024",
+  "title": "Implement greenfield create-Site live carriers",
+  "status": "completed",
+  "recorded_at": "2026-05-11T11:30:59.4908227-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "upstream_evidence": [
+      "C:\\Users\\Andrey\\Narada\\kb\\operations\\greenfield-create-site-live-carriers.md",
+      "C:\\Users\\Andrey\\Narada\\tools\\site-init\\site-live-carriers.mjs",
+      "C:\\Users\\Andrey\\Narada\\tools\\site-init\\site-live-carriers.test.mjs"
+    ],
+    "external_evidence_only": true
+  },
+  "completed_prior_tasks": [
+    "narada-proper.task-0015",
+    "narada-proper.task-0016",
+    "narada-proper.task-0017",
+    "narada-proper.task-0018"
+  ],
+  "integrated_proof_task": "narada-proper.task-0019",
+  "changed_files": [
+    "tools/site-init/README.md",
+    "tools/site-init/site-live-carriers.mjs",
+    "tools/site-init/site-live-carriers.test.mjs",
+    ".narada/tasks/task-0015-create-site-task-lifecycle-local-db-init.md",
+    ".narada/tasks/task-0016-create-site-agent-context-local-storage-init.md",
+    ".narada/tasks/task-0017-create-site-mcp-registration-execution.md",
+    ".narada/tasks/task-0018-create-site-windows-pwsh-profile-integration.md",
+    ".narada/tasks/task-0019-create-site-integrated-terminal-proof.md",
+    ".narada/tasks/task-0024-create-site-live-carriers-implementation.md",
+    ".narada/audit/task-0024-create-site-live-carriers-implementation-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "node --check tools\\site-init\\site-live-carriers.mjs",
+      "result": "passed"
+    },
+    {
+      "command": "node --test tools\\site-init\\site-live-carriers.test.mjs",
+      "result": "passed",
+      "evidence": "6 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli test test/commands/sites-create.test.ts",
+      "result": "passed",
+      "evidence": "1 test file passed; 11 tests passed"
+    }
+  ],
+  "terminal_claim": "Narada proper now has tested plan/apply/verify/recover carriers for target-Site local DB init/mutation, local storage/hydration, MCP registration manifest transport, and target-local Windows profile binding artifacts.",
+  "refused_imports": [
+    "source Site runtime state",
+    ".ai databases",
+    "task history",
+    "inbox history",
+    "checkpoint history",
+    "roster state",
+    "operator-surface runtime state",
+    "PC-locus state",
+    "secrets or credentials"
+  ],
+  "not_claimed": [
+    "single-command live orchestration through narada sites create",
+    "private MCP client config mutation",
+    "real Windows profile mutation outside the target Site",
+    "source-Site migration or import",
+    "arbitrary SQL",
+    "destructive rollback"
+  ],
+  "rollback": "Remove tools/site-init live carrier files and this task evidence. Test-created Sites were temporary OS directories; no source Site state, private MCP client config, or real Windows profile files were mutated.",
+  "next_smallest_slice": "Expose a Narada CLI orchestration surface that runs the four carriers in order against an already-created greenfield Site with explicit --execute-live/authority confirmation."
+}

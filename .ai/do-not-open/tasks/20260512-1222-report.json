@@ -1,0 +1,60 @@
+{
+  "task_number": 1222,
+  "task_id": "20260512-1222-execute-routed-work-observability-and-replay-hardening",
+  "status": "implemented",
+  "source_envelope": "env_628ef8b4-01ad-408d-b5c2-c32ac772bc35",
+  "implemented_slice": [
+    "narada ops reads target-scope observability rows across all configured scope storage roots",
+    "operation_intake routing signal extraction prefers body_preview before raw body text",
+    "foreman replay/stitch candidate extraction uses the same body_preview preference",
+    "source-conversation materialization for prefixed operation_intake contexts is covered by test"
+  ],
+  "changed_files": [
+    "packages/layers/cli/src/commands/ops.ts",
+    "packages/layers/cli/test/commands/ops.test.ts",
+    "packages/layers/control-plane/src/foreman/context.ts",
+    "packages/layers/control-plane/src/foreman/facade.ts",
+    "packages/layers/control-plane/test/unit/foreman/context.test.ts",
+    "packages/layers/control-plane/test/unit/charter/mailbox-materializer.test.ts",
+    ".ai/do-not-open/tasks/20260512-1222-execute-routed-work-observability-and-replay-hardening.md"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/layers/control-plane test test/unit/foreman/context.test.ts test/unit/charter/mailbox-materializer.test.ts",
+      "result": "passed: 32 tests"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli test test/commands/ops.test.ts",
+      "result": "passed: 8 tests"
+    },
+    {
+      "command": "pnpm --dir packages/layers/control-plane typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/control-plane build",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli build",
+      "result": "passed"
+    }
+  ],
+  "no_import_evidence": {
+    "source_site_runtime_imported": false,
+    "source_site_db_imported": false,
+    "source_site_task_or_inbox_state_imported": false,
+    "source_site_outbound_state_imported": false,
+    "live_external_system_mutated": false
+  },
+  "residuals": [
+    "governed reroute/replay/migration command for already-admitted historical facts",
+    "target-only inert scope daemon noise classification",
+    "full shared-mailbox live fixture beyond focused package and CLI tests"
+  ],
+  "rollback": "Revert the listed code/test/docs task-file changes; no live external state or source Site state was mutated."
+}

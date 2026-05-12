@@ -1,0 +1,39 @@
+{
+  "schema": "narada.create_site.options.v0",
+  "mode": "dry_run",
+  "preset": "minimal",
+  "template_catalog": {
+    "template_id": "narada-proper.templates.site.minimal.v0",
+    "template_components": []
+  },
+  "site": {
+    "site_id": "site-alpha",
+    "site_kind": "project",
+    "authority_locus": "project",
+    "site_root": "D:\\Sites\\site-alpha",
+    "workspace_root": "D:\\Sites\\site-alpha",
+    "substrate": "windows-native",
+    "execution_surface": "windows_native",
+    "sync_posture": "hybrid_capable_plain_folder"
+  },
+  "packages": [],
+  "identity": {
+    "named_agents": [],
+    "role_assignments": [],
+    "role_compatibility_identities": [],
+    "claimed_identity_evidence": [],
+    "mechanical_verification_basis": []
+  },
+  "storage": { "intent": "none" },
+  "mcp": { "intent": "none", "surfaces": [] },
+  "capabilities": { "policy": "none", "required": [], "denied": [] },
+  "inbox": { "enable": "drop_only" },
+  "task_lifecycle": { "enable": false },
+  "agent_context": { "enable": false },
+  "operator_surface": { "intent": "none" },
+  "windows_pwsh": { "profile": "emit_example", "path_style": "windows" },
+  "evidence": {
+    "template_refs": ["narada-proper.templates.site.minimal.v0"],
+    "refused_imports": []
+  }
+}

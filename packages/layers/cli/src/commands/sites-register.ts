@@ -6,6 +6,9 @@ import {
   sitesRemoveCommand,
   sitesDoctorCommand,
   sitesInitCommand,
+  sitesCreateCommand,
+  sitesCreatePresetsCommand,
+  sitesLiveCarrierCommand,
   sitesBootstrapClientCommand,
   sitesBootstrapProjectCommand,
   sitesBootstrapWindowsCommand,
@@ -30,6 +33,114 @@ export function registerSitesCommands(program: Command): void {
   const sitesCmd = program
     .command('sites')
     .description('Discover and manage Narada Sites');
+
+  sitesCmd
+    .command('create')
+    .description('Plan greenfield Narada Site creation from Narada proper templates/catalog')
+    .option('--config <path>', 'Create-site config JSON')
+    .option('--preset <preset>', 'Greenfield template preset: minimal, agent-memory, task-lifecycle, or site-machinery')
+    .option('--site-id <id>', 'Site id for shorthand create-site planning')
+    .option('--root <path>', 'Site root for shorthand create-site planning')
+    .option('--site-kind <kind>', 'Site kind for shorthand create-site planning', 'project')
+    .option('--authority-locus <locus>', 'Authority locus for shorthand create-site planning', 'project')
+    .option('--dry-run', 'Preview without creating a Site', false)
+    .option('--execute-live', 'After creating the Site skeleton, run admitted live carriers in sequence', false)
+    .option('--live-authority-basis <basis>', 'Authority basis for --execute-live carrier applies')
+    .option('--output-plan <path>', 'Write the dry-run plan JSON artifact')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (opts: Record<string, unknown>) => {
+      const result = await sitesCreateCommand({
+        config: opts.config as string | undefined,
+        preset: opts.preset as string | undefined,
+        siteId: opts.siteId as string | undefined,
+        root: opts.root as string | undefined,
+        siteKind: opts.siteKind as string | undefined,
+        authorityLocus: opts.authorityLocus as string | undefined,
+        dryRun: opts.dryRun as boolean | undefined,
+        executeLive: opts.executeLive as boolean | undefined,
+        liveAuthorityBasis: opts.liveAuthorityBasis as string | undefined,
+        outputPlan: opts.outputPlan as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitCommandResult(result.result, opts.format);
+      if (result.exitCode !== 0) {
+        process.exit(result.exitCode);
+      }
+    });
+
+  sitesCmd
+    .command('create-presets')
+    .description('List greenfield create-site presets from the Narada proper template catalog')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (opts: Record<string, unknown>) => {
+      const result = await sitesCreatePresetsCommand({
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitCommandResult(result.result, opts.format);
+      if (result.exitCode !== 0) {
+        process.exit(result.exitCode);
+      }
+    });
+
+  sitesCmd
+    .command('live-carrier')
+    .description('Run an admitted greenfield create-Site live carrier with explicit authority gates')
+    .requiredOption('--carrier <id>', 'Carrier id: site_local_db_init, site_local_storage_hydration, agent_context_memory_local_storage, site_inbox_local_substrate, site_config_local_registry, site_lift_local_adoption, site_mcp_registration_transport, windows_profile_site_binding')
+    .option('--mode <mode>', 'Carrier mode: plan, apply, verify, or recover', 'plan')
+    .requiredOption('--target-site-root <path>', 'Receiving Site root')
+    .requiredOption('--site-id <id>', 'Receiving Site id')
+    .requiredOption('--authority-basis <basis>', 'Explicit receiving authority basis')
+    .option('--source-site-root <path>', 'Optional source Site root for refusal checks')
+    .option('--runtime-target <target>', 'Runtime target for MCP registration')
+    .option('--mcp-server-json <json>', 'MCP server descriptors JSON array')
+    .option('--profile-artifact-path <path>', 'Target-local profile artifact path')
+    .option('--profile-target <target>', 'Profile target label')
+    .option('--db-verified', 'Declare DB carrier verification evidence is present', false)
+    .option('--storage-verified', 'Declare storage carrier verification evidence is present', false)
+    .option('--db-init-verified', 'Declare DB init verification evidence is present', false)
+    .option('--mcp-registration-verified', 'Declare MCP registration verification evidence is present', false)
+    .option('--profile-can-precede-mcp-registration', 'Allow profile binding to precede MCP registration verification', false)
+    .option('--mutation-authorized', 'Authorize apply mode under receiving Site/profile authority', false)
+    .option('--handoff-as-checkpoint-truth', 'Test/refuse handoff-as-checkpoint-truth posture', false)
+    .option('--import-source-runtime-state', 'Test/refuse source runtime import posture', false)
+    .option('--include-secrets', 'Test/refuse secret capture posture', false)
+    .option('--register-mcp', 'Test/refuse MCP registration from profile carrier', false)
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (opts: Record<string, unknown>) => {
+      const result = await sitesLiveCarrierCommand({
+        carrier: opts.carrier as string | undefined,
+        mode: opts.mode as string | undefined,
+        targetSiteRoot: opts.targetSiteRoot as string | undefined,
+        siteId: opts.siteId as string | undefined,
+        authorityBasis: opts.authorityBasis as string | undefined,
+        sourceSiteRoot: opts.sourceSiteRoot as string | undefined,
+        runtimeTarget: opts.runtimeTarget as string | undefined,
+        mcpServerJson: opts.mcpServerJson as string | undefined,
+        profileArtifactPath: opts.profileArtifactPath as string | undefined,
+        profileTarget: opts.profileTarget as string | undefined,
+        dbVerified: opts.dbVerified as boolean | undefined,
+        storageVerified: opts.storageVerified as boolean | undefined,
+        dbInitVerified: opts.dbInitVerified as boolean | undefined,
+        mcpRegistrationVerified: opts.mcpRegistrationVerified as boolean | undefined,
+        profileCanPrecedeMcpRegistration: opts.profileCanPrecedeMcpRegistration as boolean | undefined,
+        mutationAuthorized: opts.mutationAuthorized as boolean | undefined,
+        handoffAsCheckpointTruth: opts.handoffAsCheckpointTruth as boolean | undefined,
+        importSourceRuntimeState: opts.importSourceRuntimeState as boolean | undefined,
+        includeSecrets: opts.includeSecrets as boolean | undefined,
+        registerMcp: opts.registerMcp as boolean | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitCommandResult(result.result, opts.format);
+      if (result.exitCode !== 0) {
+        process.exit(result.exitCode);
+      }
+    });
 
   sitesCmd
     .command('list')

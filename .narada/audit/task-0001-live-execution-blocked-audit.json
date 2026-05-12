@@ -1,0 +1,45 @@
+{
+  "schema": "narada.task_implementation_audit.v0",
+  "task_id": "narada-proper.task-0001",
+  "increment": "live-execution-admission-decision",
+  "decision": "blocked",
+  "root": "D:\\code\\narada",
+  "source_evidence": [
+    "OSM:osm_20260510_140315_296_726d772e",
+    ".narada/admission/candidates/task-0001-live-execution-admission-packet.md"
+  ],
+  "changed_files": [
+    ".narada/admission/decisions/task-0001-live-execution-admission.md",
+    ".narada/audit/task-0001-live-execution-blocked-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "Get-Content .narada\\audit\\task-0001-live-execution-blocked-audit.json | ConvertFrom-Json",
+      "status": "passed"
+    },
+    {
+      "command": "Get-Content .narada\\admission\\admission-ledger.jsonl | ForEach-Object { $_ | ConvertFrom-Json }",
+      "status": "passed"
+    }
+  ],
+  "blocker": "Prepared live-execution packet does not admit concrete execution carriers/surfaces; existing admitted carrier is package-implementation only.",
+  "exact_admissions_needed": [
+    "initializer execution carrier/tool and receiving Site write root",
+    "concrete adapter implementation outside @narada2/site-task-lifecycle",
+    "DB mutation carrier through admitted adapter",
+    "Narada proper live MCP registration tool/transport"
+  ],
+  "refused_actions": [
+    "initializer execution",
+    "concrete adapter admission",
+    "DB mutation execution",
+    "live MCP registration",
+    "narada-andrey runtime DB/task/inbox/roster/checkpoint/operator-surface/PC/secrets/identity state import",
+    "source history import"
+  ],
+  "terminal_live_site_setup_claimable": false,
+  "rollback_notes": "Remove this decision packet and audit entry if superseded by a later explicit live-execution admission. No package files, runtime registrations, SQLite DBs, or source Site state were changed.",
+  "recorded_by": "codex",
+  "recorded_at": "2026-05-10"
+}

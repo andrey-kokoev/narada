@@ -1,0 +1,23 @@
+{
+  "schema": "narada.capability.candidate.v0",
+  "site_id": "narada-proper",
+  "capability_id": "narada-proper.capability.site-lift.v0",
+  "capability_name": "Site Lift",
+  "state": "descriptor_package_first_slice_implemented",
+  "exposure_class": "descriptor_only",
+  "task_id": "narada-proper.task-0038",
+  "package": "@narada2/site-lift",
+  "source_refs": [
+    "C:\\Users\\Andrey\\Narada\\kb\\proposals\\reusable-narada-site-machinery-extraction-map-20260507.md",
+    "narada-andrey task #445"
+  ],
+  "audit_path": ".narada/audit/task-0038-site-lift-package-first-slice-audit.json",
+  "not_admitted": [
+    "file copy",
+    "install/bootstrap",
+    "live MCP registration",
+    "source runtime state import",
+    "receiving Site mutation authority",
+    "secrets or credentials"
+  ]
+}

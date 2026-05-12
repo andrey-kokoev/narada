@@ -1,0 +1,23 @@
+{
+  "schema": "narada.site_mcp_registration.v0",
+  "site_id": "narada-proper",
+  "target_site_root": "D:\\code\\narada",
+  "carrier_id": "site_mcp_registration_transport",
+  "runtime_target": "codex",
+  "mcp_servers": [
+    {
+      "name": "site-task-lifecycle",
+      "transport": "stdio",
+      "command": "node",
+      "args": [
+        "packages/layers/cli/dist/main.js",
+        "mcp",
+        "site-task-lifecycle"
+      ],
+      "entrypoint": null,
+      "grants_broader_authority": false
+    }
+  ],
+  "restart_required": true,
+  "stale_live_pressure": "pending_external_restart_or_reprobe"
+}

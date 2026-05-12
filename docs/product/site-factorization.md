@@ -8,6 +8,8 @@ The admissible-crossing language is grounded in Governed Crossing: arrival is no
 
 For the structured config grammar that declares law source, authority locus, embodiments, evidence locus, capability posture, readiness phase, and federation posture, see [`site-governance-coordinates.md`](site-governance-coordinates.md).
 
+For a provisional concept proposal that treats recurring Site kinds as earned factor profiles rather than a class hierarchy, see [`../concepts/site-factor-profile-hypothesis.md`](../concepts/site-factor-profile-hypothesis.md). That note is not canonical terminology unless later admitted into `SEMANTICS.md`.
+
 ## Ten-Part Factorization
 
 | Dimension | Meaning | Not The Same As |

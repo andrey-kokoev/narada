@@ -1,0 +1,77 @@
+{
+  "schema": "narada.task_audit.v0",
+  "site_id": "narada-proper",
+  "task_id": "narada-proper.task-0008",
+  "title": "Windows PowerShell package portability for Site task lifecycle first slice",
+  "source_ref": "OSM:osm_20260510_185330_862_8db62965",
+  "clarification_ref": "OSM:osm_20260510_185641_831_2f524224",
+  "authority_root": "D:\\code\\narada",
+  "checkpoint": ".narada/checkpoints/2026-05-10-task-0008-agent-thread-checkpoint.md",
+  "decision_path": ".narada/admission/decisions/task-0008-windows-pwsh-package-portability-admission.md",
+  "changed_files": [
+    ".narada/tasks/task-0008-windows-pwsh-package-portability.md",
+    ".narada/admission/decisions/task-0008-windows-pwsh-package-portability-admission.md",
+    ".narada/checkpoints/2026-05-10-task-0008-agent-thread-checkpoint.md",
+    ".narada/audit/task-0008-windows-pwsh-package-portability-audit.json",
+    ".narada/admission/admission-ledger.jsonl",
+    "packages/site-task-lifecycle/docs/windows-pwsh-consuming-site.md",
+    "packages/site-task-lifecycle/src/import-refusal.ts",
+    "packages/site-task-lifecycle/test/windows-pwsh-portability.test.ts"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages\\site-task-lifecycle typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages\\site-task-lifecycle exec vitest run",
+      "result": "passed",
+      "summary": "13 files, 43 tests"
+    },
+    {
+      "command": "pnpm --dir packages\\site-task-lifecycle build",
+      "result": "passed"
+    }
+  ],
+  "shell_carrier_note": "Package-local pnpm verification ran through the current PowerShell shell as bounded task-0008 verification under the admitted implementation root. No raw shell search was used after checkpoint clarification.",
+  "portable_package_claim": "A future Windows PowerShell Narada Site can consume @narada2/site-task-lifecycle from the repo package/contracts/docs/tests and then admit its own local adapter/runtime state.",
+  "excluded_live_state": [
+    ".ai/task-lifecycle.db",
+    ".ai/site-task-lifecycle-admission.json",
+    ".ai/mutation-evidence/task_lifecycle/*",
+    "task rows/history",
+    "inbox history",
+    "live MCP registration state",
+    "adapter admission records",
+    "narada-andrey runtime state",
+    "narada-proper runtime state"
+  ],
+  "no_import_evidence": {
+    "package_owns_sqlite_dependency": false,
+    "package_executed_sqlite_mutation": false,
+    "source_state_imported": false,
+    "new_refusal_guard": "packages/site-task-lifecycle/src/import-refusal.ts refuses .ai/mutation-evidence/task_lifecycle paths",
+    "new_portability_test": "packages/site-task-lifecycle/test/windows-pwsh-portability.test.ts assembles descriptors for D:\\Sites\\site-alpha without writing that Site root"
+  },
+  "rollback": [
+    "Remove task-0008 .narada task/admission/checkpoint/audit/ledger entries.",
+    "Remove packages/site-task-lifecycle/docs/windows-pwsh-consuming-site.md.",
+    "Remove packages/site-task-lifecycle/test/windows-pwsh-portability.test.ts.",
+    "Revert the mutation-evidence refusal guard if the package no longer needs to classify task lifecycle mutation evidence as live source state."
+  ],
+  "terminal_claim": "Task-0008 package portability is claimable for reusable first-slice contracts/docs/tests by future Windows PowerShell Narada Sites. It does not claim live setup for any future Site.",
+  "not_claimed_future_admissions": [
+    "future Site initializer execution",
+    "future Site concrete adapter admission",
+    "future Site DB mutation",
+    "future Site live MCP registration",
+    "richer list/query",
+    "richer transitions",
+    "cross-Site mutation",
+    "OSM policy",
+    "package-owned SQLite",
+    "arbitrary SQL"
+  ],
+  "recorded_by": "codex",
+  "recorded_at": "2026-05-10T18:59:00.000-05:00"
+}

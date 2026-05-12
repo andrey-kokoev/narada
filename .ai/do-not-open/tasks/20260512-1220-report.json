@@ -1,0 +1,25 @@
+{
+  "summary": "Implemented canonical greenfield Site origin lineage for narada sites create skeleton execution and added doctor warning posture for missing origin lineage projections.",
+  "changed_files": [
+    "packages/layers/cli/src/commands/sites.ts",
+    "packages/layers/cli/test/commands/sites-create.test.ts",
+    "docs/product/site-provenance-lineage.md"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/layers/cli test test/commands/sites-create.test.ts",
+      "result": "passed: 22 tests"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli build",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "Site lifecycle transformations beyond greenfield create already have relation/lineage surfaces but are outside this task."
+  ]
+}

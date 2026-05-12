@@ -18,6 +18,8 @@ import {
   FileLock,
   FileViewStore,
   ProjectionRebuildRegistry,
+  mailFactPassesAdmission,
+  sourceRecordToFact,
   normalizeFolderRef,
   normalizeFlagged,
   loadMultiMailboxConfig,
@@ -145,6 +147,12 @@ export async function syncCommand(
   logger.info('Starting sync cycle', { dryRun: options.dryRun });
 
   const source = new ExchangeSource({ adapter, sourceId: scope.scope_id });
+  const shouldMaterializeRecord = scope.materialization?.mail
+    ? (record: Parameters<typeof sourceRecordToFact>[0]) => mailFactPassesAdmission(
+        { ...sourceRecordToFact(record, null), created_at: new Date().toISOString() },
+        scope.materialization?.mail,
+      )
+    : undefined;
 
   let rebuildProjections: (() => Promise<void>) | undefined;
   if (!options.dryRun) {
@@ -165,7 +173,7 @@ export async function syncCommand(
   }
 
   const result = options.dryRun
-    ? await previewSync({ adapter, cursorStore, applyLogStore, logger })
+    ? await previewSync({ adapter, cursorStore, applyLogStore, logger, shouldMaterializeRecord })
     : await new DefaultSyncRunner({
         rootDir,
         source,
@@ -176,6 +184,7 @@ export async function syncCommand(
           ? () => cleanupTmp({ rootDir })
           : undefined,
         acquireLock: () => lock.acquire(),
+        shouldMaterializeRecord,
         rebuildViewsAfterSync: scope.runtime.rebuild_views_after_sync,
         rebuildProjectionsAfterSync: scope.runtime.rebuild_search_after_sync || scope.runtime.rebuild_views_after_sync,
         rebuildProjections,
@@ -324,6 +333,7 @@ async function previewSync(
     cursorStore: FileCursorStore;
     applyLogStore: FileApplyLogStore;
     logger: CommandContext['logger'];
+    shouldMaterializeRecord?: (record: Parameters<typeof sourceRecordToFact>[0]) => boolean;
   },
 ): Promise<RunResult> {
   const startedAt = Date.now();
@@ -332,10 +342,23 @@ async function previewSync(
   const batch = await deps.adapter.fetch_since(priorCursor);
 
   let skippedCount = 0;
+  let filteredCount = 0;
 
   for (const event of batch.events) {
     if (await deps.applyLogStore.hasApplied(event.event_id)) {
       skippedCount += 1;
+    } else if (deps.shouldMaterializeRecord && !deps.shouldMaterializeRecord({
+      recordId: event.event_id,
+      ordinal: event.observed_at ?? event.received_at ?? batch.fetched_at,
+      payload: event,
+      provenance: {
+        sourceId: batch.mailbox_id,
+        observedAt: event.observed_at ?? batch.fetched_at,
+        sourceVersion: event.source_version,
+      },
+    })) {
+      skippedCount += 1;
+      filteredCount += 1;
     }
   }
 
@@ -355,6 +378,7 @@ async function previewSync(
     event_count: batch.events.length,
     applied_count: appliedCount,
     skipped_count: skippedCount,
+    filtered_count: filteredCount,
     duration_ms: Date.now() - startedAt,
     status: 'success',
   };
@@ -387,6 +411,9 @@ function outputHumanReadable(
   fmt.kv('Status', status === 'success' ? 'Success' : status === 'retryable_failure' ? 'Retryable' : 'Fatal');
   fmt.kv('Messages applied', result.applied_count);
   fmt.kv('Messages skipped', result.skipped_count);
+  if (result.filtered_count !== undefined && result.filtered_count > 0) {
+    fmt.kv('Messages filtered before materialization', result.filtered_count);
+  }
   fmt.kv('Total events', result.event_count);
   fmt.kv('Duration', fmt.duration(result.duration_ms));
 

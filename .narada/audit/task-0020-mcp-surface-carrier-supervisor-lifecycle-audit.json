@@ -1,0 +1,73 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0020",
+  "title": "MCP Surface Carrier Supervisor Lifecycle",
+  "status": "completed",
+  "recorded_at": "2026-05-11T11:02:09.1591112-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "capability_id": "narada-proper.capability.mcp-surface-carrier-supervisor-lifecycle.v0",
+    "candidate_path": ".narada/admission/candidates/task-0020-mcp-surface-carrier-supervisor-lifecycle-candidate.md",
+    "source_refs": [
+      "OSM:osm_20260510_202553_877_8944d35c",
+      "OSM:osm_20260510_205048_269_dfd91a90"
+    ]
+  },
+  "changed_files": [
+    "packages/mcp-surface-carrier-supervisor/package.json",
+    "packages/mcp-surface-carrier-supervisor/tsconfig.json",
+    "packages/mcp-surface-carrier-supervisor/README.md",
+    "packages/mcp-surface-carrier-supervisor/docs/status-registry.md",
+    "packages/mcp-surface-carrier-supervisor/src/types.ts",
+    "packages/mcp-surface-carrier-supervisor/src/refusal.ts",
+    "packages/mcp-surface-carrier-supervisor/src/status.ts",
+    "packages/mcp-surface-carrier-supervisor/src/index.ts",
+    "packages/mcp-surface-carrier-supervisor/test/fixtures/status-fixtures.ts",
+    "packages/mcp-surface-carrier-supervisor/test/mcp-surface-carrier-supervisor.test.ts",
+    ".narada/tasks/task-0020-mcp-surface-carrier-supervisor-lifecycle.md",
+    ".narada/capabilities/mcp-surface-carrier-supervisor-lifecycle-candidate.json",
+    ".narada/audit/task-0020-mcp-surface-carrier-supervisor-lifecycle-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages\\mcp-surface-carrier-supervisor test",
+      "result": "passed",
+      "evidence": "1 test file passed; 3 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages\\mcp-surface-carrier-supervisor typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages\\mcp-surface-carrier-supervisor build",
+      "result": "passed"
+    }
+  ],
+  "terminal_claim": "Read-only status-registry first slice implemented for MCP Surface Carrier Supervisor Lifecycle with stale, restart_requested, carrier_restarted, and live_verified state projection.",
+  "refused_actions": [
+    "arbitrary process kill",
+    "stdio MCP self-restart",
+    "native shell fallback",
+    "live carrier restart execution",
+    "live rebind execution",
+    "runtime registry mutation"
+  ],
+  "refused_imports": [
+    "narada-andrey runtime registry import",
+    "PC-locus state import",
+    "operator-surface runtime copying",
+    "source Site MCP runtime import",
+    "secrets or credentials"
+  ],
+  "not_claimed": [
+    "live restart/rebind carrier",
+    "process control",
+    "live runtime registry write",
+    "MCP transport registration",
+    "operator-surface launch/focus/bind"
+  ],
+  "rollback": "Remove packages/mcp-surface-carrier-supervisor and this audit/capability implementation evidence. No process, registry, MCP transport, PC state, or operator-surface state was mutated.",
+  "next_smallest_slice": "Admit an external carrier/supervisor execution surface for guarded restart/rebind, with smoke verification, if live process lifecycle control is required."
+}

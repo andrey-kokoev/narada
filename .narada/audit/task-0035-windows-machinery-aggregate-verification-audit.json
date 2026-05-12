@@ -1,0 +1,67 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0035",
+  "title": "Windows machinery aggregate verification",
+  "status": "completed",
+  "recorded_at": "2026-05-11T23:48:14.1347047-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "builds_on": [
+      "narada-proper.task-0027",
+      "narada-proper.task-0028",
+      "narada-proper.task-0029",
+      "narada-proper.task-0030",
+      "narada-proper.task-0031",
+      "narada-proper.task-0032",
+      "narada-proper.task-0033",
+      "narada-proper.task-0034"
+    ]
+  },
+  "changed_files": [
+    ".narada/tasks/task-0035-windows-machinery-aggregate-verification.md",
+    ".narada/audit/task-0035-windows-machinery-aggregate-verification-audit.json",
+    ".narada/capabilities/windows-machinery-capability-exchange.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verified_packages": [
+    "@narada2/windows-machinery-capability-exchange",
+    "@narada2/mcp-shell-windows",
+    "@narada2/mcp-test-windows",
+    "@narada2/windows-operator-surface",
+    "@narada2/windows-osl",
+    "@narada2/windows-pc-site-template",
+    "@narada2/windows-komorebi-yasb-kit"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/<each adopted package> test",
+      "result": "passed",
+      "evidence": "All 7 packages passed package-local test suites"
+    },
+    {
+      "command": "pnpm --dir packages/<each adopted package> typecheck",
+      "result": "passed",
+      "evidence": "All 7 packages passed TypeScript no-emit checks"
+    },
+    {
+      "command": "pnpm --dir packages/<each adopted package> build",
+      "result": "passed",
+      "evidence": "All 7 packages built with tsc"
+    }
+  ],
+  "terminal_claim": "The adopted Windows machinery package set is coherent as descriptor/contracts/docs/tests only.",
+  "not_claimed": [
+    "live shell authority",
+    "test process execution authority",
+    "PC Site materialization",
+    "Windows profile mutation",
+    "Komorebi/YASB restart or repair",
+    "WebView2 panel launch",
+    "operator-surface live binding mutation",
+    "runtime carrier admission",
+    "PC-locus authority",
+    "package publication"
+  ],
+  "rollback": "Remove task-0035 evidence and capability status update. Package source changes remain governed by their package-local task audits."
+}

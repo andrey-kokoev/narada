@@ -1,0 +1,46 @@
+{
+  "schema": "narada.task_implementation_audit.v0",
+  "task_id": "narada-proper.task-0001",
+  "carrier_id": "narada-proper.carrier.task-0001.package-implementation.v0",
+  "increment": "site-task-lifecycle-admission-contract",
+  "root": "D:\\code\\narada",
+  "source_evidence": [
+    "OSM:osm_20260509_234431_008_d5058248",
+    "C:\\Users\\Andrey\\Narada\\kb\\proposals\\site-task-lifecycle-first-slice-handoff.md"
+  ],
+  "changed_files": [
+    "packages/site-task-lifecycle/README.md",
+    "packages/site-task-lifecycle/src/admission-contract.ts",
+    "packages/site-task-lifecycle/src/index.ts",
+    "packages/site-task-lifecycle/src/types.ts",
+    "packages/site-task-lifecycle/test/admission-contract.test.ts"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages\\site-task-lifecycle typecheck",
+      "status": "passed"
+    },
+    {
+      "command": "pnpm --dir packages\\site-task-lifecycle exec vitest run test/initialize.test.ts test/import-refusal.test.ts test/admission-contract.test.ts",
+      "status": "passed",
+      "summary": "3 test files passed; 8 tests passed"
+    }
+  ],
+  "lifted": [
+    "Receiving-Site admission contract fields from the first-slice handoff",
+    "Neutral MCP registration snippet shape without live transport registration",
+    "Compatibility projection policy that names narada_andrey_task_role_preferences only as legacy source evidence and writes to neutral table names",
+    "Import-refusal evidence for rejected source paths in the contract"
+  ],
+  "intentionally_refused": [
+    "narada-andrey runtime databases",
+    "narada-andrey task and inbox history",
+    "narada-andrey roster/checkpoint/operator-surface state",
+    "PC-locus runtime state",
+    "secrets or identity-specific data",
+    "live MCP registration or package source outside packages/site-task-lifecycle"
+  ],
+  "rollback_notes": "Remove the listed package-local files/edits and this audit event; no workspace metadata or external runtime state was changed.",
+  "recorded_by": "codex",
+  "recorded_at": "2026-05-10"
+}

@@ -1,9 +1,26 @@
 import type { Command } from 'commander';
 import { directCommandAction } from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
-import { workNextCommand } from './work-next.js';
+import { workAvailableCommand, workNextCommand } from './work-next.js';
 
 export function registerWorkNextCommands(program: Command): void {
+  program
+    .command('work-available')
+    .description('Read-only work availability for an agent; never claims inbox/task work')
+    .requiredOption('--agent <id>', 'Agent ID')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'work-available',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => workAvailableCommand({
+        agent: opts.agent as string | undefined,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }),
+    }));
+
   program
     .command('work-next')
     .description('Unified next action for an agent: task work, inbox work, or idle')

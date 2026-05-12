@@ -1,0 +1,70 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0042",
+  "title": "Create-site shorthand dry-run flags",
+  "status": "completed",
+  "recorded_at": "2026-05-12T10:52:36.9257956-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "source_context": "greenfield create-site CLI objective continuation",
+    "external_source_state_imported": false
+  },
+  "changed_files": [
+    "packages/layers/cli/src/commands/sites.ts",
+    "packages/layers/cli/src/commands/sites-register.ts",
+    "packages/layers/cli/test/commands/sites-create.test.ts",
+    "docs/product/create-site-options-model.md",
+    ".narada/tasks/task-0042-create-site-shorthand-dry-run.md",
+    ".narada/audit/task-0042-create-site-shorthand-dry-run-audit.json",
+    ".narada/capabilities/create-site-package-catalog.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "implementation": {
+    "commands_added": [
+      "narada sites create --preset <preset> --site-id <id> --root <path> --dry-run --format json"
+    ],
+    "presets_supported": [
+      "minimal",
+      "agent-memory",
+      "task-lifecycle",
+      "site-machinery"
+    ],
+    "exposure_class": "descriptor_only",
+    "inline_config_path_marker": "<inline:create-site-options>",
+    "source_state_imported": false,
+    "package_selection_grants_live_capability": false
+  },
+  "verification": [
+    {
+      "command": "pnpm --dir packages/layers/cli test test/commands/sites-create.test.ts",
+      "result": "passed",
+      "evidence": "1 test file passed, 16 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli build",
+      "result": "passed"
+    },
+    {
+      "command": "node packages/layers/cli/dist/main.js sites create --preset site-machinery --site-id smoke-site-machinery --root D:\\Sites\\smoke-site-machinery --dry-run --format json",
+      "result": "passed",
+      "evidence": "Returned planned dry-run JSON with config_path <inline:create-site-options>, site-machinery template components, no refusals, dry_run_only true, source_state_imported false."
+    }
+  ],
+  "terminal_claim": "Greenfield create-site descriptor planning now supports config-file and shorthand preset invocation.",
+  "not_claimed": [
+    "source Site import/migration/lift",
+    "implicit live filesystem creation",
+    "DB init",
+    "MCP registration",
+    "runtime hydration",
+    "capability grants",
+    "Windows profile mutation",
+    "PC/operator-surface mutation"
+  ],
+  "rollback": "Remove shorthand fields and inline config expansion from sites create, restore --config as required in command registration, revert tests/docs, and remove this task/audit/ledger evidence."
+}

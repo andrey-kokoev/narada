@@ -1,0 +1,71 @@
+{
+  "schema": "narada.task_implementation_audit.v0",
+  "task_id": "narada-proper.task-0006",
+  "increment": "readback-task-lifecycle-mcp",
+  "decision": "admitted_non_mutating_readback_tool",
+  "root": "D:\\code\\narada",
+  "source_evidence": [
+    "OSM:osm_20260510_143649_320_8a0032bf",
+    ".narada/admission/decisions/task-0006-readback-mcp-admission.md"
+  ],
+  "tools": [
+    "site_task_lifecycle.read_task"
+  ],
+  "changed_files": [
+    ".narada/tasks/task-0006-readback-task-lifecycle-mcp.md",
+    ".narada/admission/decisions/task-0006-readback-mcp-admission.md",
+    ".narada/audit/task-0006-readback-mcp-audit.json",
+    ".narada/admission/admission-ledger.jsonl",
+    ".narada/capabilities/mcp-surfaces.json",
+    ".ai/mcp/site-task-lifecycle-mcp.json",
+    "packages/layers/cli/src/mcp-server.ts",
+    "packages/layers/cli/test/commands/mcp-server.test.ts"
+  ],
+  "mcp_evidence": "tools/list exposes site_task_lifecycle.read_task; live tools/call returned task row, evidence refs, and admission event for narada-proper.task-0005-smoke; missing task read returned status=not_found.",
+  "db_evidence": "SQLite readback confirms narada-proper.task-0005-smoke is admitted with OSM:osm_20260510_142839_058_af43c473 and two evidence refs.",
+  "terminal_readback_mcp_slice_claimable": true,
+  "no_import_evidence": "The readback tool accepts only task_id and reads local task lifecycle tables. Live smoke returned mutationAttempted=false, mutationExecuted=false, sourceStateImported=false, and packageExecutedSqliteMutation=false.",
+  "verification": [
+    {
+      "command": "pnpm --dir packages\\layers\\cli exec vitest run test/commands/mcp-server.test.ts",
+      "status": "passed",
+      "summary": "1 test file passed; 21 tests passed, including read_task success and not_found coverage."
+    },
+    {
+      "command": "pnpm --dir packages\\layers\\cli typecheck",
+      "status": "passed",
+      "summary": "tsc --noEmit completed successfully."
+    },
+    {
+      "command": "pnpm --dir packages\\layers\\cli build",
+      "status": "passed",
+      "summary": "Built CLI dist so node_modules/.bin/narada-mcp uses site_task_lifecycle.read_task."
+    },
+    {
+      "command": "pnpm --dir packages\\site-task-lifecycle typecheck && pnpm --dir packages\\site-task-lifecycle exec vitest run",
+      "status": "passed",
+      "summary": "site-task-lifecycle typecheck passed; 11 test files and 39 tests passed."
+    },
+    {
+      "command": "node_modules\\.bin\\narada-mcp.cmd tools/list",
+      "status": "passed",
+      "summary": "tools/list includes site_task_lifecycle.read_task."
+    },
+    {
+      "command": "node_modules\\.bin\\narada-mcp.cmd tools/call site_task_lifecycle.read_task",
+      "status": "passed",
+      "summary": "Read narada-proper.task-0005-smoke with task row, evidence refs, and admission events; no mutation attempted."
+    },
+    {
+      "command": "node_modules\\.bin\\narada-mcp.cmd tools/call site_task_lifecycle.read_task for missing task",
+      "status": "passed",
+      "summary": "Returned status=not_found with mutationAttempted=false."
+    }
+  ],
+  "rollback_notes": "Revert task-0006 MCP source/test changes and remove the live tool from capability evidence if superseded. No DB rollback is required.",
+  "remaining_blockers": [
+    "none for readback first slice"
+  ],
+  "recorded_by": "codex",
+  "recorded_at": "2026-05-10"
+}

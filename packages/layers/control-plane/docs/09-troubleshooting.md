@@ -123,6 +123,12 @@ admission to folders that may produce work:
 }
 ```
 
+For `context_strategy: "operation_intake"`, outbound folders such as
+`sentitems`, `drafts`, and `outbox` are excluded from fresh-work routing by
+default. They can still support reconciliation and context stitching. Only set
+`operation_intake.fresh_work_boundary.outbound_folder_behavior` to `"admit"` if
+that Site has explicitly decided outbound artifacts should open routed work.
+
 ---
 
 ### "Cannot commit empty cursor"

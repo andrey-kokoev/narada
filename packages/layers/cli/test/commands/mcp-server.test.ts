@@ -42,6 +42,9 @@ describe('Narada MCP facade', () => {
 
     expect(tools).toContain('narada_site_context');
     expect(tools).toContain('narada_mcp_fabric_context');
+    expect(tools).toContain('site_task_lifecycle.plan_init');
+    expect(tools).toContain('site_task_lifecycle.admit_task');
+    expect(tools).toContain('site_task_lifecycle.read_task');
     expect(tools).toContain('narada_inbox_doctor');
     expect(tools).toContain('narada_inbox_work_next');
     expect(tools).toContain('narada_task_work_next');
@@ -123,6 +126,165 @@ describe('Narada MCP facade', () => {
         mutation_attempted: false,
         capability_status: 'not_required',
       },
+    });
+  });
+
+  it('plans Site task lifecycle paths through the descriptor MCP tool', async () => {
+    const response = await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 16,
+      method: 'tools/call',
+      params: {
+        name: 'site_task_lifecycle.plan_init',
+        arguments: { site_root: tempDir },
+      },
+    }, { siteRoot: tempDir, siteId: 'task-lifecycle-site' });
+
+    const result = JSON.parse(((response?.result as { content: Array<{ text: string }> }).content[0].text));
+    expect(result).toMatchObject({
+      status: 'success',
+      schema: 'narada.site_task_lifecycle.mcp_plan_init_result.v0',
+      packageName: '@narada2/site-task-lifecycle',
+      siteId: 'task-lifecycle-site',
+      mutationAttempted: false,
+      sourceStateImported: false,
+      packageExecutedSqliteMutation: false,
+      traversal: {
+        mutation_attempted: false,
+        cross_site: false,
+      },
+    });
+    expect(result.paths.taskDbPath).toBe(join(tempDir, '.ai', 'task-lifecycle.db'));
+    expect(result.paths.manifestPath).toBe(join(tempDir, '.ai', 'site-task-lifecycle-admission.json'));
+  });
+
+  it('admits a local task through the mutating task lifecycle MCP tool', async () => {
+    const response = await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 17,
+      method: 'tools/call',
+      params: {
+        name: 'site_task_lifecycle.admit_task',
+        arguments: {
+          task_id: 'site-alpha.task-1',
+          title: 'MCP admitted task',
+          source_ref: 'OSM:test-local-admission',
+          summary: 'Admitted through MCP in a neutral fixture.',
+          admitted_by: 'site-alpha.architect',
+        },
+      },
+    }, { siteRoot: tempDir, siteId: 'site-alpha' });
+
+    expect(response).not.toHaveProperty('error');
+    const result = JSON.parse(((response?.result as { content: Array<{ text: string }> }).content[0].text));
+    expect(result).toMatchObject({
+      status: 'success',
+      schema: 'narada.site_task_lifecycle.mcp_admit_task_result.v0',
+      taskId: 'site-alpha.task-1',
+      mutationAttempted: true,
+      mutationExecuted: true,
+      sourceStateImported: false,
+      packageExecutedSqliteMutation: false,
+      traversal: {
+        mutation_attempted: true,
+        cross_site: false,
+      },
+    });
+    expect(result.readback).toEqual([
+      {
+        task_id: 'site-alpha.task-1',
+        status: 'admitted',
+        source_site: 'site-alpha',
+        source_ref: 'OSM:test-local-admission',
+      },
+    ]);
+    expect(readdirSync(join(tempDir, '.ai', 'mutation-evidence', 'task_lifecycle'))).toHaveLength(1);
+  });
+
+  it('refuses denied source-state refs before task lifecycle MCP mutation', async () => {
+    const response = await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 18,
+      method: 'tools/call',
+      params: {
+        name: 'site_task_lifecycle.admit_task',
+        arguments: {
+          task_id: 'site-alpha.refused',
+          title: 'Refused import',
+          source_ref: 'C:\\Users\\Andrey\\Narada\\.ai\\task-lifecycle.db',
+        },
+      },
+    }, { siteRoot: tempDir, siteId: 'site-alpha' });
+
+    const result = JSON.parse(((response?.result as { content: Array<{ text: string }> }).content[0].text));
+    expect(result).toMatchObject({
+      status: 'error',
+      error: 'denied_source_import_ref',
+      mutationExecuted: false,
+      sourceStateImported: false,
+      packageExecutedSqliteMutation: false,
+    });
+    expect(() => readdirSync(join(tempDir, '.ai', 'mutation-evidence', 'task_lifecycle'))).toThrow();
+  });
+
+  it('reads admitted task lifecycle evidence without mutating', async () => {
+    await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 19,
+      method: 'tools/call',
+      params: {
+        name: 'site_task_lifecycle.admit_task',
+        arguments: {
+          task_id: 'site-alpha.task-readback',
+          title: 'Readback task',
+          source_ref: 'OSM:test-readback',
+          evidence_refs: ['local:evidence'],
+        },
+      },
+    }, { siteRoot: tempDir, siteId: 'site-alpha' });
+
+    const response = await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 20,
+      method: 'tools/call',
+      params: {
+        name: 'site_task_lifecycle.read_task',
+        arguments: { task_id: 'site-alpha.task-readback' },
+      },
+    }, { siteRoot: tempDir, siteId: 'site-alpha' });
+
+    const result = JSON.parse(((response?.result as { content: Array<{ text: string }> }).content[0].text));
+    expect(result).toMatchObject({
+      status: 'success',
+      schema: 'narada.site_task_lifecycle.mcp_read_task_result.v0',
+      taskId: 'site-alpha.task-readback',
+      mutationAttempted: false,
+      mutationExecuted: false,
+      sourceStateImported: false,
+      packageExecutedSqliteMutation: false,
+      task: { task_id: 'site-alpha.task-readback', status: 'admitted' },
+    });
+    expect(result.evidenceRefs).toHaveLength(2);
+    expect(result.admissionEvents).toHaveLength(1);
+  });
+
+  it('returns not_found for missing task lifecycle readback', async () => {
+    const response = await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 21,
+      method: 'tools/call',
+      params: {
+        name: 'site_task_lifecycle.read_task',
+        arguments: { task_id: 'site-alpha.missing' },
+      },
+    }, { siteRoot: tempDir, siteId: 'site-alpha' });
+
+    const result = JSON.parse(((response?.result as { content: Array<{ text: string }> }).content[0].text));
+    expect(result).toMatchObject({
+      status: 'not_found',
+      taskId: 'site-alpha.missing',
+      mutationAttempted: false,
+      mutationExecuted: false,
     });
   });
 
@@ -439,6 +601,56 @@ describe('Narada MCP facade', () => {
       },
     });
     expect(() => readdirSync(join(targetRoot, '.ai', 'mutation-evidence', 'inbox'))).toThrow();
+  });
+
+  it('refuses cross-Site task lifecycle MCP admission before target-local authority', async () => {
+    const sourceRoot = join(tempDir, 'source-task-lifecycle-refuse');
+    const targetRoot = join(tempDir, 'target-task-lifecycle-refuse');
+    mkdirSync(sourceRoot);
+    mkdirSync(targetRoot);
+    writeSiteConfig(sourceRoot, {
+      site_id: 'source-task-lifecycle-site',
+      site_kind: 'user',
+      site_root: sourceRoot,
+      locus: { authority_locus: 'user' },
+    });
+    writeSiteConfig(targetRoot, {
+      site_id: 'target-task-lifecycle-site',
+      site_kind: 'project',
+      site_root: targetRoot,
+      locus: { authority_locus: 'project' },
+    });
+
+    const response = await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 22,
+      method: 'tools/call',
+      params: {
+        name: 'site_task_lifecycle.admit_task',
+        arguments: {
+          target: { kind: 'site', site_root: targetRoot },
+          task_id: 'target-task-lifecycle-site.refused',
+          title: 'Refused cross-Site task lifecycle admission',
+          source_ref: 'OSM:test-cross-site-refusal',
+        },
+      },
+    }, { siteRoot: sourceRoot });
+
+    const result = response?.result as { content: Array<{ text: string }>; isError?: boolean };
+    const payload = JSON.parse(result.content[0].text);
+    expect(result.isError).toBe(true);
+    expect(payload).toMatchObject({
+      status: 'error',
+      error: 'Cross-Site MCP mutation is not admitted in v1 fabric proof.',
+      traversal: {
+        source_site: { site_id: 'source-task-lifecycle-site' },
+        target_site: { site_id: 'target-task-lifecycle-site' },
+        cross_site: true,
+        mutation_attempted: true,
+      },
+    });
+    expect(() => readdirSync(join(targetRoot, '.ai', 'mutation-evidence', 'task_lifecycle'))).toThrow();
+    expect(() => readdirSync(join(targetRoot, '.ai'))).toThrow();
   });
 
   it('defaults inbox tools to the MCP Site root when cwd is omitted', async () => {

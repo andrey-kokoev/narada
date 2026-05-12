@@ -137,6 +137,23 @@ export async function taskStageCommand(
     .filter((path) => !isTaskStageRuntimePath(path));
   const selectedDirty = dirtyBefore.filter((path) => isSelected(path, includes));
   const excludedDirty = dirtyBefore.filter((path) => !isSelected(path, includes));
+
+  // Guard: fail if the index already contains staged files outside the task scope
+  const preStaged = runGit(repoRoot, ['diff', '--cached', '--name-only'])
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((path) => path.replace(/\\/g, '/'));
+  const foreignStaged = preStaged.filter((path) => !isSelected(path, includes) && !isTaskStageRuntimePath(path));
+  if (foreignStaged.length > 0) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: {
+        status: 'error',
+        error: `Index contains staged files outside task scope: ${foreignStaged.join(', ')}. Reset with 'git reset HEAD' or commit them separately before staging this task.`,
+      },
+    };
+  }
+
   if (!options.dryRun) {
     runGit(repoRoot, ['add', '--', ...includes]);
   }

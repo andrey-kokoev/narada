@@ -1,0 +1,15 @@
+{
+  "schema": "narada.windows_profile.site_binding.v0",
+  "site_id": "narada-proper",
+  "target_site_root": "D:\\code\\narada",
+  "carrier_id": "windows_profile_site_binding",
+  "profile_target": "target_site_local_profile_artifact",
+  "bindings": {
+    "NARADA_SITE_ID": "narada-proper",
+    "NARADA_SITE_ROOT": "D:\\code\\narada",
+    "profile_target": "target_site_local_profile_artifact"
+  },
+  "restart_or_new_shell_required": true,
+  "does_not_register_mcp": true,
+  "does_not_capture_secrets": true
+}

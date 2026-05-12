@@ -19,3 +19,8 @@ config.json
 .ai/inbox.db-*
 .ai/task-lifecycle.db
 .ai/task-lifecycle.db-*
+.ai/runtime/
+.ai/mcp/
+packages/layers/cli/.ai/inbox.db
+packages/layers/cli/.ai/inbox.db-*
+packages/layers/cli/.ai/mutation-evidence/

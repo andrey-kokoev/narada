@@ -1,0 +1,54 @@
+{
+  "schema": "narada.task_implementation_audit.v0",
+  "task_id": "narada-proper.task-0001",
+  "carrier_id": "narada-proper.carrier.task-0001.package-implementation.v0",
+  "increment": "live-execution-admission-packet",
+  "root": "D:\\code\\narada",
+  "source_evidence": [
+    "OSM:osm_20260510_135938_545_04b201e1",
+    "OSM:osm_20260510_135815_964_179155b0"
+  ],
+  "changed_files": [
+    ".narada/admission/candidates/task-0001-live-execution-admission-packet.md",
+    ".narada/audit/task-0001-live-execution-admission-packet-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "Get-Content .narada\\audit\\task-0001-live-execution-admission-packet-audit.json | ConvertFrom-Json",
+      "status": "passed"
+    },
+    {
+      "command": "Get-Content .narada\\admission\\admission-ledger.jsonl | ForEach-Object { $_ | ConvertFrom-Json }",
+      "status": "passed"
+    },
+    {
+      "command": "Test-Path .narada\\admission\\candidates\\task-0001-live-execution-admission-packet.md",
+      "status": "passed"
+    }
+  ],
+  "lifted": [
+    "Narada proper live-execution admission packet",
+    "Per-execution authority owner, expected surface, preconditions, evidence, refusal conditions, rollback posture, and terminal criteria",
+    "Explicit terminal-state criteria and blocked execution status"
+  ],
+  "intentionally_refused": [
+    "live initializer execution",
+    "concrete adapter admission",
+    "DB mutation execution",
+    "live MCP registration execution",
+    "narada-andrey runtime DB/task/inbox/roster/checkpoint/operator-surface/PC/secrets/identity state import",
+    "source history import"
+  ],
+  "packet_enough_for_live_execution": false,
+  "packet_enough_for_admission_decision": true,
+  "remaining_blockers": [
+    "explicit Narada proper admission of initializer execution",
+    "concrete adapter command/tool and owning surface",
+    "DB mutation carrier through admitted adapter",
+    "live MCP registration command/tool and owning surface"
+  ],
+  "rollback_notes": "Remove the candidate packet and this audit entry; no package files, live runtime registrations, SQLite DBs, or source Site state were changed.",
+  "recorded_by": "codex",
+  "recorded_at": "2026-05-10"
+}

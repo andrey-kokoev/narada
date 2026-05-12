@@ -1,0 +1,14 @@
+{
+  "schema": "narada.agent_context_memory.hydration_policy.v0",
+  "site_id": "narada-proper",
+  "target_site_root": "D:\\code\\narada",
+  "carrier_id": "agent_context_memory_local_storage",
+  "runtime_hydration_executed": false,
+  "checkpoint_history_imported": false,
+  "secrets_imported": false,
+  "next_admission_required_for": [
+    "runtime hydration execution",
+    "checkpoint persistence from live runtime",
+    "MCP tool mutation exposure"
+  ]
+}

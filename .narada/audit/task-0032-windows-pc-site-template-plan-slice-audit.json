@@ -1,0 +1,66 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0032",
+  "title": "Deepen Windows PC Site template plan slice",
+  "status": "completed",
+  "recorded_at": "2026-05-11T23:43:07.4884021-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "builds_on": "narada-proper.task-0027",
+    "source_evidence": [
+      "C:\\Users\\Andrey\\Narada\\templates\\pc-sites\\windows-komorebi-yasb\\README.md",
+      "C:\\Users\\Andrey\\Narada\\kb\\proposals\\shared-windows-site-machinery-extraction-plan.md",
+      "C:\\Users\\Andrey\\Narada\\kb\\proposals\\windows-operator-surface-first-slice-source-inventory.md",
+      "C:\\Users\\Andrey\\Narada\\kb\\komorebi\\windows-komorebi-yasb-portable-template.md"
+    ],
+    "external_evidence_only": true
+  },
+  "changed_files": [
+    "packages/windows-pc-site-template/README.md",
+    "packages/windows-pc-site-template/docs/source-inventory.md",
+    "packages/windows-pc-site-template/src/index.ts",
+    "packages/windows-pc-site-template/src/template-plan.ts",
+    "packages/windows-pc-site-template/test/template-plan.test.ts",
+    ".narada/tasks/task-0032-windows-pc-site-template-plan-slice.md",
+    ".narada/audit/task-0032-windows-pc-site-template-plan-slice-audit.json",
+    ".narada/capabilities/windows-machinery-capability-exchange.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/windows-pc-site-template test",
+      "result": "passed",
+      "evidence": "2 test files passed; 4 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages/windows-pc-site-template typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/windows-pc-site-template build",
+      "result": "passed"
+    }
+  ],
+  "terminal_claim": "@narada2/windows-pc-site-template now includes descriptor-only greenfield Windows PC Site template planning with local admission and refusal guards.",
+  "refused_imports": [
+    "desktop-sunroom-2 runtime state",
+    "machine identity",
+    "display topology",
+    "live diagnostic exports",
+    "HWND bindings",
+    "Komorebi/YASB runtime state",
+    "logs, PIDs, and socket paths",
+    "operator preferences",
+    "secrets or credentials"
+  ],
+  "not_claimed": [
+    "PC Site materialization",
+    "filesystem creation",
+    "Windows profile mutation",
+    "live carrier execution",
+    "PC-locus authority"
+  ],
+  "rollback": "Remove template plan source, tests, source inventory doc, README section, and this task evidence. No PC runtime or filesystem state was created or imported.",
+  "next_smallest_slice": "Deepen @narada2/windows-komorebi-yasb-kit with policy/template descriptors and no live Komorebi/YASB state import."
+}

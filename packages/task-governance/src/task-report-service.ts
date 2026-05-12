@@ -1,4 +1,5 @@
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import {
   createReportId,
   findReportByAssignmentId,
@@ -19,7 +20,21 @@ import {
 } from './task-governance.js';
 import { openTaskLifecycleStore, type TaskLifecycleStore } from './task-lifecycle-store.js';
 import { ExitCode } from './exit-codes.js';
-import { resolveReviewTargetFromRoster } from './task-review-authority.js';
+import { resolveReviewTargetFromRoster, resolveDefaultReviewerFromRoster, type ResolvedReviewTarget } from './task-review-authority.js';
+
+function readSiteConfigDefaultReviewerRole(cwd: string): string | undefined {
+  try {
+    const configPath = join(cwd, 'config.json');
+    const raw = readFileSync(configPath, 'utf8');
+    const config = JSON.parse(raw) as Record<string, unknown>;
+    const governance = config?.task_governance as Record<string, unknown> | undefined;
+    return typeof governance?.default_reviewer_role === 'string'
+      ? governance.default_reviewer_role
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export interface ReportTaskServiceOptions {
   taskNumber?: string;
@@ -399,9 +414,10 @@ export async function reportTaskService(
 
   const now = new Date().toISOString();
   const reportId = createReportId(taskFile.taskId, agentId, assignmentId);
-  const obligationId = reviewTarget?.ok
-    ? `obl_review_${safeIdPart(taskFile.taskId)}_${safeIdPart(reportId)}_${safeIdPart(reviewTarget.target_agent_id)}`
-    : undefined;
+  const obligationSuffix = reviewTarget?.ok
+    ? safeIdPart(reviewTarget.target_agent_id)
+    : 'unrouted';
+  const obligationId = `obl_review_${safeIdPart(taskFile.taskId)}_${safeIdPart(reportId)}_${obligationSuffix}`;
   const report: WorkResultReport = {
     report_id: reportId,
     task_number: taskNumber,
@@ -430,6 +446,8 @@ export async function reportTaskService(
     body = body.trimEnd() + '\n\n' + missingSections.join('\n');
   }
 
+  let routedTarget: ResolvedReviewTarget | null = null;
+
   if (isContinuation) {
     activeContinuation!.completed_at = now;
     await saveAssignment(cwd, assignmentRecord);
@@ -453,37 +471,82 @@ export async function reportTaskService(
 
     try {
       store.updateStatus(taskFile.taskId, 'in_review', agentId);
-      if (reviewTarget?.ok && obligationId) {
-        store.upsertDirectedObligation({
-          obligation_id: obligationId,
-          source_kind: 'task_report',
-          source_ref: reportId,
-          source_agent_id: agentId,
-          target_agent_id: reviewTarget.target_agent_id,
-          target_role: reviewTarget.target_role,
-          target_ref: reviewTarget.requested,
-          kind: 'review_request',
-          status: 'open',
-          task_id: taskFile.taskId,
+
+      const initialTarget = reviewTarget?.ok ? reviewTarget : null;
+      store.upsertDirectedObligation({
+        obligation_id: obligationId,
+        source_kind: 'task_report',
+        source_ref: reportId,
+        source_agent_id: agentId,
+        target_agent_id: initialTarget?.target_agent_id ?? null,
+        target_role: initialTarget?.target_role ?? null,
+        target_ref: initialTarget?.requested ?? 'unrouted',
+        kind: 'review_request',
+        status: 'open',
+        task_id: taskFile.taskId,
+        task_number: Number(taskNumber),
+        evidence_json: JSON.stringify({
+          report_id: reportId,
+          assignment_id: assignmentId,
           task_number: Number(taskNumber),
-          evidence_json: JSON.stringify({
-            report_id: reportId,
-            assignment_id: assignmentId,
-            task_number: Number(taskNumber),
-            requested_target: reviewTarget.requested,
-            target_resolution: reviewTarget.resolution,
-          }),
-          consumption_rule_json: JSON.stringify({
-            consume_on: ['task_review', 'task_defer', 'delegation', 'rejection', 'completion'],
-            review_command: `narada task review ${taskNumber} --agent ${reviewTarget.target_agent_id} --verdict accepted --report ${reportId}`,
-          }),
-          created_at: now,
-          updated_at: now,
-          consumed_at: null,
-          consumed_by: null,
-          consumption_ref: null,
-        });
+          requested_target: initialTarget?.requested ?? null,
+          target_resolution: initialTarget?.resolution ?? null,
+        }),
+        consumption_rule_json: JSON.stringify({
+          consume_on: ['task_review', 'task_defer', 'delegation', 'rejection', 'completion'],
+          review_command: initialTarget?.ok
+            ? `narada task review ${taskNumber} --agent ${initialTarget.target_agent_id} --verdict accepted --report ${reportId}`
+            : null,
+        }),
+        created_at: now,
+        updated_at: now,
+        consumed_at: null,
+        consumed_by: null,
+        consumption_ref: null,
+      });
+
+      // Route un-targeted obligations to the site default reviewer
+      if (!initialTarget) {
+        const defaultRole = readSiteConfigDefaultReviewerRole(cwd);
+        if (defaultRole) {
+          const resolved = resolveDefaultReviewerFromRoster(roster, defaultRole);
+          if (resolved.ok) {
+            routedTarget = resolved;
+            const routedNow = new Date().toISOString();
+            store.upsertDirectedObligation({
+              obligation_id: obligationId,
+              source_kind: 'task_report',
+              source_ref: reportId,
+              source_agent_id: agentId,
+              target_agent_id: resolved.target_agent_id,
+              target_role: resolved.target_role,
+              target_ref: `default_routed:${defaultRole}`,
+              kind: 'review_request',
+              status: 'open',
+              task_id: taskFile.taskId,
+              task_number: Number(taskNumber),
+              evidence_json: JSON.stringify({
+                report_id: reportId,
+                assignment_id: assignmentId,
+                task_number: Number(taskNumber),
+                requested_target: `default_routed:${defaultRole}`,
+                target_resolution: resolved.resolution,
+                routing: `default_reviewer_role:${defaultRole}`,
+              }),
+              consumption_rule_json: JSON.stringify({
+                consume_on: ['task_review', 'task_defer', 'delegation', 'rejection', 'completion'],
+                review_command: `narada task review ${taskNumber} --agent ${resolved.target_agent_id} --verdict accepted --report ${reportId}`,
+              }),
+              created_at: now,
+              updated_at: routedNow,
+              consumed_at: null,
+              consumed_by: null,
+              consumption_ref: null,
+            });
+          }
+        }
       }
+
       closeOwnStore();
     } catch {
       closeOwnStore();
@@ -496,6 +559,7 @@ export async function reportTaskService(
     last_done: Number(taskNumber) || null,
   });
 
+  const effectiveReviewTarget = reviewTarget?.ok ? reviewTarget : routedTarget;
   return {
     exitCode: ExitCode.SUCCESS,
     result: {
@@ -506,13 +570,13 @@ export async function reportTaskService(
       new_status: 'in_review',
       assignment_id: assignmentId,
       obligation_id: obligationId,
-      review_target: reviewTarget?.ok
+      review_target: effectiveReviewTarget?.ok
         ? {
-            requested: reviewTarget.requested,
-            target_agent_id: reviewTarget.target_agent_id,
-            target_role: reviewTarget.target_role,
-            resolution: reviewTarget.resolution,
-            review_authority: reviewTarget.review_authority,
+            requested: effectiveReviewTarget.requested,
+            target_agent_id: effectiveReviewTarget.target_agent_id,
+            target_role: effectiveReviewTarget.target_role,
+            resolution: effectiveReviewTarget.resolution,
+            review_authority: effectiveReviewTarget.review_authority,
           }
         : undefined,
     },

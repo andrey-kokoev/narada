@@ -126,6 +126,11 @@ const config = await loadConfig({ path: "./config.json" });
 
 ### Mail Admission Predicates
 
+`materialization.mail` controls which fetched mail records may be persisted
+locally at all. Use it when the Site boundary says out-of-scope messages must
+not become local files, facts, or view entries. It uses the same folder and
+participant predicate shape as `admission.mail`.
+
 `admission.mail` controls which synced mail facts may produce work. Folder refs
 gate container admission. Predicate filters gate message admission after
 normalization.

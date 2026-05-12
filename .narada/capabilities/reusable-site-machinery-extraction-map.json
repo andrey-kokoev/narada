@@ -1,0 +1,33 @@
+{
+  "schema": "narada.capability.candidate.v0",
+  "site_id": "narada-proper",
+  "capability_id": "narada-proper.capability.reusable-site-machinery-extraction-map.v0",
+  "capability_name": "Reusable Site Machinery Extraction Map",
+  "state": "descriptor_package_map_materially_covered",
+  "exposure_class": "descriptor_only",
+  "task_id": "narada-proper.task-0039",
+  "source_refs": [
+    "C:\\Users\\Andrey\\Narada\\kb\\proposals\\reusable-narada-site-machinery-extraction-map-20260507.md",
+    "narada-andrey task #445"
+  ],
+  "covered_packages": [
+    "@narada2/site-task-lifecycle",
+    "@narada2/agent-context-memory",
+    "@narada2/site-inbox",
+    "@narada2/site-config",
+    "@narada2/site-lift",
+    "@narada2/mcp-shell-windows",
+    "@narada2/mcp-test-windows",
+    "@narada2/windows-operator-surface"
+  ],
+  "audit_path": ".narada/audit/task-0039-reusable-site-machinery-aggregate-verification-audit.json",
+  "not_admitted": [
+    "package publication",
+    "receiving Site materialization",
+    "source Site migration/import",
+    "live DB mutation",
+    "target Site mutation authority",
+    "PC-locus authority",
+    "secrets or credentials"
+  ]
+}

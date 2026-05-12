@@ -1,0 +1,60 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0039",
+  "title": "Reusable Site machinery aggregate verification",
+  "status": "completed",
+  "recorded_at": "2026-05-12T10:06:54.5736104-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "source_handoff": "C:\\Users\\Andrey\\Narada\\kb\\proposals\\reusable-narada-site-machinery-extraction-map-20260507.md",
+    "external_evidence_only": true
+  },
+  "changed_files": [
+    ".narada/tasks/task-0039-reusable-site-machinery-aggregate-verification.md",
+    ".narada/audit/task-0039-reusable-site-machinery-aggregate-verification-audit.json",
+    ".narada/capabilities/reusable-site-machinery-extraction-map.json",
+    ".narada/admission/pending-handoffs.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verified_packages": [
+    "@narada2/site-task-lifecycle",
+    "@narada2/agent-context-memory",
+    "@narada2/site-inbox",
+    "@narada2/site-config",
+    "@narada2/site-lift",
+    "@narada2/mcp-shell-windows",
+    "@narada2/mcp-test-windows",
+    "@narada2/windows-operator-surface"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/<each verified package> test",
+      "result": "passed",
+      "evidence": "All 8 packages passed package-local test suites"
+    },
+    {
+      "command": "pnpm --dir packages/<each verified package> typecheck",
+      "result": "passed",
+      "evidence": "All 8 packages passed TypeScript no-emit checks"
+    },
+    {
+      "command": "pnpm --dir packages/<each verified package> build",
+      "result": "passed",
+      "evidence": "All 8 packages built with tsc"
+    }
+  ],
+  "terminal_claim": "The reusable Site machinery extraction map is materially covered by Narada proper descriptor/contracts/docs/tests package slices.",
+  "not_claimed": [
+    "package publication",
+    "receiving Site materialization",
+    "source Site migration/import",
+    "live inbox DB mutation",
+    "live site-config writes",
+    "live Site-lift copy/install/bootstrap",
+    "target Site mutation authority",
+    "PC-locus authority",
+    "secrets or credential handling"
+  ],
+  "rollback": "Remove task-0039 evidence and capability status record. Package source changes remain governed by their package-local task audits."
+}

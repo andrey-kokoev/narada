@@ -1,0 +1,20 @@
+{
+  "schema": "narada.site_local_db.v0",
+  "schema_version": "site-local-db.v0",
+  "site_id": "narada-proper",
+  "target_site_root": "D:\\code\\narada",
+  "created_by_carrier": "site_local_db_init",
+  "tables": {
+    "admissions": [],
+    "checkpoints": [],
+    "inbox_index": [],
+    "capability_state": [],
+    "site_metadata": []
+  },
+  "migration_ledger": [
+    {
+      "migration": "create_site_local_db_v0",
+      "status": "applied"
+    }
+  ]
+}

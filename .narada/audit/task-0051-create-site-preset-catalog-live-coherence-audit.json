@@ -1,0 +1,60 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0051",
+  "title": "Create-site preset catalog live coherence",
+  "status": "completed",
+  "recorded_at": "2026-05-12T11:57:12.9318424-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "source_context": "greenfield create-site CLI objective continuation",
+    "external_source_state_imported": false
+  },
+  "changed_files": [
+    "packages/layers/cli/src/commands/sites.ts",
+    "packages/layers/cli/test/commands/sites-create.test.ts",
+    ".narada/tasks/task-0051-create-site-preset-catalog-live-coherence.md",
+    ".narada/audit/task-0051-create-site-preset-catalog-live-coherence-audit.json",
+    ".narada/capabilities/create-site-package-catalog.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "implementation": {
+    "command": "narada sites create-presets --format json",
+    "live_paths_reported": [
+      "agent-memory",
+      "task-lifecycle",
+      "site-machinery"
+    ],
+    "source_state_imported": false
+  },
+  "verification": [
+    {
+      "command": "pnpm --dir packages/layers/cli test test/commands/sites-create.test.ts",
+      "result": "passed",
+      "evidence": "1 test file passed, 22 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli build",
+      "result": "passed"
+    },
+    {
+      "command": "node packages/layers/cli/dist/main.js sites create-presets --format json",
+      "result": "passed",
+      "evidence": "Returned live command strings for agent-memory, task-lifecycle, and site-machinery."
+    }
+  ],
+  "terminal_claim": "Create-site preset discovery accurately reports implemented live paths.",
+  "not_claimed": [
+    "new carrier behavior",
+    "Site creation",
+    "source Site import/migration/lift",
+    "private MCP client config mutation",
+    "real Windows profile mutation",
+    "PC/operator-surface mutation"
+  ],
+  "rollback": "Revert create-presets live command reporting and this task/audit/ledger evidence."
+}

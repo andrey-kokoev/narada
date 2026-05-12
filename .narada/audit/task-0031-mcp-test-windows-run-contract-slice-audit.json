@@ -1,0 +1,64 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0031",
+  "title": "Deepen MCP test Windows run contract slice",
+  "status": "completed",
+  "recorded_at": "2026-05-11T23:40:36.2930576-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "builds_on": "narada-proper.task-0027",
+    "source_evidence": [
+      "C:\\Users\\Andrey\\Narada\\tools\\mcp-servers\\test\\test-mcp-server.mjs",
+      "C:\\Users\\Andrey\\Narada\\tools\\mcp-servers\\test\\test-mcp-server.test.mjs",
+      "C:\\Users\\Andrey\\Narada\\tools\\mcp-smoke-test.mjs",
+      "C:\\Users\\Andrey\\Narada\\tools\\mcp-smoke-test.test.mjs"
+    ],
+    "external_evidence_only": true
+  },
+  "changed_files": [
+    "packages/mcp-test-windows/README.md",
+    "packages/mcp-test-windows/docs/source-inventory.md",
+    "packages/mcp-test-windows/src/index.ts",
+    "packages/mcp-test-windows/src/run-contract.ts",
+    "packages/mcp-test-windows/test/run-contract.test.ts",
+    ".narada/tasks/task-0031-mcp-test-windows-run-contract-slice.md",
+    ".narada/audit/task-0031-mcp-test-windows-run-contract-slice-audit.json",
+    ".narada/capabilities/windows-machinery-capability-exchange.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/mcp-test-windows test",
+      "result": "passed",
+      "evidence": "2 test files passed; 6 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages/mcp-test-windows typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/mcp-test-windows build",
+      "result": "passed"
+    }
+  ],
+  "terminal_claim": "@narada2/mcp-test-windows now includes descriptor-only test registry and run-request decision contracts with refusal guards.",
+  "refused_imports": [
+    "live Test MCP server",
+    "source pass/fail history",
+    "bound-agent roster",
+    "path policy",
+    "runtime logs",
+    "credentials or secrets",
+    "shell execution state"
+  ],
+  "not_claimed": [
+    "test process execution",
+    "bound-agent authorization",
+    "test evidence storage mutation",
+    "live MCP registration",
+    "receiving Site test carrier admission"
+  ],
+  "rollback": "Remove test run contract source, tests, source inventory doc, README section, and this task evidence. No tests were launched by the package and no runtime evidence was imported.",
+  "next_smallest_slice": "Deepen @narada2/windows-pc-site-template with template option descriptors and no-runtime-state guards, or compose mcp-shell/mcp-test package examples."
+}

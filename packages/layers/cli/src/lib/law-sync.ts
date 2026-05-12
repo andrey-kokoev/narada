@@ -229,9 +229,10 @@ export function lawUpdateRequiredResult(admission: LawAdmissionResult): Record<s
 }
 
 function appliesToRole(change: LawChangeRecord, role: string | null): boolean {
-  if (change.required_roles.length === 0 || change.required_roles.includes('*')) return true;
+  const requiredRoles = normalizeList(change.required_roles);
+  if (requiredRoles.length === 0 || requiredRoles.includes('*')) return true;
   if (!role) return true;
-  return change.required_roles.includes(role);
+  return requiredRoles.includes(role);
 }
 
 function normalizeReceiptStatus(status: LawReceiptStatus): LawReceiptStatus {
@@ -288,9 +289,28 @@ async function readJsonDir<T>(dir: string): Promise<T[]> {
   for (const name of names.sort()) {
     if (!name.endsWith('.json')) continue;
     const raw = await readFile(join(dir, basename(name)), 'utf8');
-    records.push(JSON.parse(raw) as T);
+    records.push(normalizeLawRecord(JSON.parse(raw)) as T);
   }
   return records;
+}
+
+function normalizeLawRecord(record: unknown): unknown {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) {
+    return record;
+  }
+  const candidate = record as Partial<LawChangeRecord>;
+  if (candidate.schema !== 'https://narada.dev/schemas/law-change/v1') {
+    return record;
+  }
+  return {
+    ...candidate,
+    files: normalizeList(candidate.files),
+    required_roles: normalizeRoles(candidate.required_roles),
+    affected_agents: normalizeList(candidate.affected_agents),
+    supersedes: normalizeList(candidate.supersedes),
+    references: normalizeList(candidate.references),
+    law_sources: normalizeList(candidate.law_sources),
+  };
 }
 
 async function inferAgentRole(cwd: string, agentId: string): Promise<string | null> {

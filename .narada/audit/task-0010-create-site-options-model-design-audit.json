@@ -1,0 +1,111 @@
+{
+  "schema": "narada.task_audit.v0",
+  "site_id": "narada-proper",
+  "task_id": "narada-proper.task-0010",
+  "title": "Create-Site option model and UX design",
+  "source_ref": "OSM:osm_20260510_192056_073_3aec7e63",
+  "correction_ref": "OSM:osm_20260510_192413_542_c3b0ffa7",
+  "authority_root": "D:\\code\\narada",
+  "decision_path": ".narada/admission/decisions/task-0010-create-site-options-model-design-admission.md",
+  "artifact_paths": [
+    "docs/product/create-site-options-model.md",
+    "docs/product/fixtures/create-site-options/create-site-minimal.json",
+    "docs/product/fixtures/create-site-options/create-site-agent-memory.json",
+    "docs/product/fixtures/create-site-options/create-site-task-lifecycle.json",
+    "docs/product/fixtures/create-site-options/create-site-user-surface-aware.json",
+    "docs/product/fixtures/create-site-options/create-site-refusal-runtime-state-import.json"
+  ],
+  "changed_files": [
+    ".narada/tasks/task-0010-create-site-options-model-design.md",
+    ".narada/admission/decisions/task-0010-create-site-options-model-design-admission.md",
+    ".narada/audit/task-0010-create-site-options-model-design-audit.json",
+    ".narada/admission/admission-ledger.jsonl",
+    "docs/product/create-site-options-model.md",
+    "docs/product/fixtures/create-site-options/create-site-minimal.json",
+    "docs/product/fixtures/create-site-options/create-site-agent-memory.json",
+    "docs/product/fixtures/create-site-options/create-site-task-lifecycle.json",
+    "docs/product/fixtures/create-site-options/create-site-user-surface-aware.json",
+    "docs/product/fixtures/create-site-options/create-site-refusal-runtime-state-import.json"
+  ],
+  "verification": [
+    {
+      "command": "Get-ChildItem docs\\product\\fixtures\\create-site-options\\*.json | ForEach-Object { Get-Content $_.FullName | ConvertFrom-Json | Out-Null }",
+      "result": "passed",
+      "summary": "5 JSON fixtures parse"
+    },
+    {
+      "command": "Select-String design content check",
+      "result": "passed",
+      "summary": "Design artifact contains option taxonomy, package slices, presets, refusal messages, Windows PowerShell examples, and first implementation slice"
+    }
+  ],
+  "designed_scope": [
+    "greenfield template/catalog-driven Site creation from Narada proper",
+    "Site locus/kind/id and root coordinates",
+    "package slice selection for @narada2/site-task-lifecycle and @narada2/agent-context-memory",
+    "agent identities versus role assignments",
+    "storage adapter posture",
+    "MCP registration posture",
+    "capability policy",
+    "inbox/task lifecycle enablement",
+    "agent-context memory enablement",
+    "operator-surface relation without PC authority assumption",
+    "Windows PowerShell profile posture",
+    "interactive and noninteractive modes",
+    "dry-run plan and audit/evidence output",
+    "structured refusal messages"
+  ],
+  "corrected_primary_model": {
+    "normal_create_site_source_site_input": false,
+    "packages_are_template_components": true,
+    "existing_sites_are_learning_evidence_only": true,
+    "migration_lift_import_is_separate_command_family": true
+  },
+  "presets": [
+    "minimal",
+    "agent-memory",
+    "task-lifecycle",
+    "full-operator-surface-aware-user-site"
+  ],
+  "refusal_fixtures": [
+    "source_runtime_state_import_refused",
+    "raw_secret_in_config_refused",
+    "pc_locus_authority_missing",
+    "claimed_identity_not_authority",
+    "package_selection_does_not_grant_live_capability",
+    "live_adapter_admission_missing",
+    "live_mcp_registration_admission_missing"
+  ],
+  "no_import_evidence": {
+    "runtime_state_imported": false,
+    "secrets_imported": false,
+    "live_capability_granted": false,
+    "full_cli_implemented": false
+  },
+  "blockers": [
+    "No blocker for design completion",
+    "Live execution remains blocked pending separate implementation/admission surfaces"
+  ],
+  "recommended_first_implementation_slice": [
+    "Add narada sites create --dry-run --config <path> --format json",
+    "Parse and validate the config shape",
+    "Support descriptor-only presets: minimal, agent-memory, task-lifecycle",
+    "Expand package selections to descriptor surfaces",
+    "Emit structured dry-run plan and refusal messages",
+    "Avoid filesystem creation except optional explicit --output-plan <path>",
+    "Add tests for preset expansion, identity doctrine refusals, source-state refusals, and Windows PowerShell path examples"
+  ],
+  "not_claimed": [
+    "full CLI implementation",
+    "migration/lift/import from existing Sites",
+    "filesystem creation execution",
+    "local adapter admission",
+    "DB init execution",
+    "MCP registration execution",
+    "runtime hydration execution",
+    "capability or secret grants",
+    "operator-surface or PC-locus runtime mutation"
+  ],
+  "recorded_by": "codex",
+  "recorded_at": "2026-05-10T19:24:00.000-05:00"
+}

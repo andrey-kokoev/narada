@@ -159,4 +159,57 @@ describe("MailboxContextMaterializer", () => {
 
     expect(result.messages.map((message) => message.message_id)).toEqual(["msg-a", "msg-b"]);
   });
+
+  it("materializes source conversation messages for prefixed operation-intake contexts", async () => {
+    await mkdir(tempRoot, { recursive: true });
+    const rootDir = await mkdtemp(join(tempRoot, "narada-mat-"));
+    const messageStore = new FileMessageStore({ rootDir });
+    const viewStore = new FileViewStore({ rootDir });
+    await messageStore.upsertFromPayload({
+      message_id: "msg-source",
+      conversation_id: "conv-source",
+      from: { email: "willem@client.example" },
+      to: [{ email: "staccato@example.com" }],
+      cc: [],
+      bcc: [],
+      subject: "test",
+      body: { text: "Source conversation campaign request." },
+      attachments: [],
+      folder_refs: ["inbox"],
+      category_refs: [],
+      flags: {},
+      received_at: "2026-05-04T00:00:00Z",
+    });
+    await viewStore.markFromPayload({
+      message_id: "msg-source",
+      conversation_id: "conv-source",
+      from: { email: "willem@client.example" },
+      to: [],
+      cc: [],
+      bcc: [],
+      subject: "test",
+      body: { text: "Source conversation campaign request." },
+      attachments: [],
+      folder_refs: ["inbox"],
+      category_refs: [],
+      flags: {},
+      received_at: "2026-05-04T00:00:00Z",
+    });
+
+    const materializer = new MailboxContextMaterializer(rootDir, messageStore);
+    const context: PolicyContext = {
+      context_id: "email-marketing:conv-source",
+      scope_id: "email-marketing",
+      revision_id: "email-marketing:conv-source:rev:1",
+      previous_revision_ordinal: null,
+      current_revision_ordinal: 1,
+      change_kinds: ["operation_intake"],
+      facts: [],
+      synced_at: new Date().toISOString(),
+    };
+
+    const result = (await materializer.materialize(context)) as { messages: Array<{ message_id: string }> };
+
+    expect(result.messages.map((message) => message.message_id)).toEqual(["msg-source"]);
+  });
 });

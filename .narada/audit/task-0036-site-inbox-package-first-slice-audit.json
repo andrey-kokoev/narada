@@ -1,0 +1,65 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0036",
+  "title": "Site Inbox package first slice",
+  "status": "completed",
+  "recorded_at": "2026-05-12T09:55:29.8849968-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "source_handoff": "C:\\Users\\Andrey\\Narada\\kb\\proposals\\reusable-narada-site-machinery-extraction-map-20260507.md",
+    "source_task": "#445",
+    "external_evidence_only": true
+  },
+  "changed_files": [
+    "packages/site-inbox/package.json",
+    "packages/site-inbox/tsconfig.json",
+    "packages/site-inbox/README.md",
+    "packages/site-inbox/docs/source-inventory.md",
+    "packages/site-inbox/src/index.ts",
+    "packages/site-inbox/test/admission.test.ts",
+    ".narada/tasks/task-0036-site-inbox-package-first-slice.md",
+    ".narada/audit/task-0036-site-inbox-package-first-slice-audit.json",
+    ".narada/capabilities/site-inbox.json",
+    ".narada/admission/pending-handoffs.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/site-inbox test",
+      "result": "passed",
+      "evidence": "1 test file passed; 4 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages/site-inbox typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/site-inbox build",
+      "result": "passed"
+    }
+  ],
+  "terminal_claim": "@narada2/site-inbox now includes descriptor-only Canonical Inbox first-slice admission and portable artifact contracts with refusal guards.",
+  "refused_imports": [
+    ".ai/inbox.db",
+    "source inbox envelope history",
+    "disposition logs",
+    "task/inbox promotion state",
+    "rosters",
+    "checkpoints",
+    "operator-surface runtime state",
+    "PC-locus state",
+    "secrets or credentials"
+  ],
+  "not_claimed": [
+    "local inbox DB mutation",
+    "portable envelope file write",
+    "Git publication",
+    "inbox import/replay",
+    "task promotion",
+    "live MCP registration",
+    "receiving Site inbox carrier admission"
+  ],
+  "rollback": "Remove the packages/site-inbox directory and task/capability/admission evidence for task-0036. No source runtime state was imported or mutated.",
+  "next_smallest_slice": "Extract @narada2/site-config descriptor contracts after reconciling existing create-site/site registry artifacts, or deepen site-inbox with descriptor-only disposition/admission-log contracts."
+}

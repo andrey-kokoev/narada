@@ -1,0 +1,63 @@
+{
+  "schema": "narada.capability.record.v0",
+  "site_id": "narada-proper",
+  "capability_id": "narada-proper.capability.self-adopted-windows-native-site-package-set.v0",
+  "name": "Self-adopted Windows-native Site package set",
+  "state": "admitted_applied_verified",
+  "exposure_class": "mutating_guarded",
+  "task_id": "narada-proper.task-1228",
+  "authority_basis": "narada_proper_self_adoption_task_1228",
+  "target_locus": {
+    "repo_root": "D:\\code\\narada",
+    "site_root": "D:\\code\\narada\\.narada"
+  },
+  "adopted_target_local_carriers": [
+    "site_local_db_init",
+    "site_local_storage_hydration",
+    "agent_context_memory_local_storage",
+    "site_inbox_local_substrate",
+    "site_config_local_registry",
+    "site_lift_local_adoption",
+    "site_mcp_registration_transport",
+    "windows_profile_site_binding"
+  ],
+  "evidence": {
+    "decision": ".narada/admission/decisions/task-1228-self-adopt-windows-native-site-package-set.md",
+    "audit": ".narada/audit/task-1228-self-adopt-windows-native-site-package-set.json",
+    "carrier_audit": ".narada/admission/live-carrier-audit.jsonl",
+    "mcp_registration_manifest": ".narada/capabilities/mcp-registration.json"
+  },
+  "local_artifacts": [
+    ".narada/state/local-db/site-local-db.json",
+    ".narada/hydration/hydration-manifest.json",
+    ".narada/agent-context-memory/memory-store.json",
+    ".narada/agent-context-memory/hydration-policy.json",
+    ".narada/inbox/index.json",
+    ".narada/inbox/publication-policy.json",
+    ".narada/site-config/known-sites.json",
+    ".narada/site-config/probe-policy.json",
+    ".narada/site-lift/adoption-catalog.json",
+    ".narada/site-lift/materialization-policy.json",
+    ".narada/capabilities/mcp-registration.json",
+    ".narada/profile/windows-profile-binding.json"
+  ],
+  "verification": {
+    "carrier_apply_events": 8,
+    "all_carriers_verified": true,
+    "source_state_imported": false,
+    "private_mcp_client_config_mutated": false,
+    "external_windows_profile_mutated": false
+  },
+  "not_claimed": [
+    "source Site import/migration/lift",
+    "private MCP client config mutation",
+    "external Windows profile mutation",
+    "runtime hydration execution",
+    "inbox publication execution",
+    "external Site probe execution",
+    "site-lift file copy/install/bootstrap",
+    "capability grants",
+    "credential grants",
+    "operator-surface or PC-locus mutation"
+  ]
+}

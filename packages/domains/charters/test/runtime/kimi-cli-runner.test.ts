@@ -355,11 +355,13 @@ describe("KimiCliCharterRunner", () => {
           "moonshot-v1-8k",
           "--print",
           "--final-message-only",
-          "--prompt",
-          expect.stringContaining("single JSON object"),
+          "--input-format",
+          "text",
         ],
-        { stdio: ["ignore", "pipe", "pipe"] },
+        { stdio: ["pipe", "pipe", "pipe"] },
       );
+      const child = mockedSpawn.mock.results[0]?.value as { stdin?: { end?: ReturnType<typeof vi.fn> } };
+      expect(child.stdin?.end).toHaveBeenCalledWith(expect.stringContaining("single JSON object"));
     });
   });
 });

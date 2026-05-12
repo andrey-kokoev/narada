@@ -122,6 +122,17 @@ When campaign requests arrive through a shared/client-service mailbox rather tha
 
 Each route declares inert matching signals (`sender_addresses`, `sender_domains`, `subject_keywords`, `body_keywords`) and a `target_scope_id`. All configured signal groups on a route must match; omitted groups are ignored. A matched `mail.message.discovered` fact opens work in the target operation scope. The source mailbox remains the arrival locus; the target scope's own policy and charter own evaluation.
 
+Operation-intake fresh-work routing excludes outbound artifact folders such as `sentitems`, `drafts`, and `outbox` by default. Those records may still be fetched and retained as source facts for thread context, stitching, reconciliation, and audit evidence, but they do not open new routed work unless the Site explicitly admits outbound folders:
+
+```json
+"operation_intake": {
+  "fresh_work_boundary": {
+    "outbound_folder_behavior": "admit"
+  },
+  "routes": []
+}
+```
+
 Example:
 
 ```json

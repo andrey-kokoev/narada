@@ -1,0 +1,27 @@
+{
+  "summary": "Implemented the first capability-gated cross-Site inbox submission slice: configured cross-locus inbox routes can require active capability grants before mutation, while direct target authority remains explicit in routing evidence.",
+  "changed_files": [
+    "packages/layers/cli/src/lib/message-routing-authority.ts",
+    "packages/layers/cli/test/commands/inbox.test.ts",
+    "docs/concepts/canonical-inbox.md"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/layers/cli test test/commands/inbox.test.ts -t \"message routing authority|requires active capability grant\"",
+      "result": "passed: 2 tests, 46 skipped"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli build",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "MCP cross-Site mutation remains blocked by its own v1 transport policy until a separate admitted MCP parity slice.",
+    "Inert local intent/request fallback for denied source Sites remains a separate UX slice.",
+    "Expired/revoked grant variants are supported in the route evaluator but only active/missing paths were covered by focused tests in this increment."
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "schema": "narada.task_implementation_audit.v0",
+  "task_id": "narada-proper.task-0001",
+  "increment": "live-execution-missing-carriers-confirmation",
+  "decision": "blocked",
+  "root": "D:\\code\\narada",
+  "source_evidence": [
+    "OSM:osm_20260510_140852_490_878f49f4",
+    "OSM:osm_20260510_140823_689_422deaad"
+  ],
+  "changed_files": [
+    ".narada/audit/task-0001-live-execution-missing-carriers-20260510.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "Get-Content .narada\\capabilities\\mcp-surfaces.json",
+      "status": "passed",
+      "summary": "Narada proper mcp_surfaces remains empty; site-local task lifecycle MCP remains missing."
+    },
+    {
+      "command": "Get-Content .narada\\admission\\admission-ledger.jsonl | ForEach-Object { $_ | ConvertFrom-Json }",
+      "status": "passed"
+    }
+  ],
+  "accepted_state": "Operator approval alone is insufficient because concrete admitted carriers/surfaces are missing.",
+  "missing_carriers": [
+    {
+      "id": "narada-proper.carrier.task-0001.initializer-execution.v0",
+      "missing_surface": "receiving Site write root plus exact initializer execution tool for initializeSiteTaskLifecycle(options)"
+    },
+    {
+      "id": "narada-proper.carrier.task-0001.concrete-adapter.v0",
+      "missing_surface": "concrete adapter implementation outside @narada2/site-task-lifecycle with dependency/driver owner and conformance evidence"
+    },
+    {
+      "id": "narada-proper.carrier.task-0001.db-mutation.v0",
+      "missing_surface": "DB mutation carrier through admitted adapter with readback, idempotency, and rollback evidence"
+    },
+    {
+      "id": "narada-proper.surface.task-0001.live-task-lifecycle-mcp-registration.v0",
+      "missing_surface": "Narada proper live MCP registration/transport exposing site_task_lifecycle tools constrained by adapter authority"
+    }
+  ],
+  "refused_actions": [
+    "initializer execution",
+    "concrete adapter admission",
+    "DB mutation execution",
+    "live MCP registration",
+    "narada-andrey runtime DB/task/inbox/roster/checkpoint/operator-surface/PC/secrets/identity state import",
+    "source history import"
+  ],
+  "terminal_live_site_setup_claimable": false,
+  "rollback_notes": "Remove this audit entry and matching ledger entries if superseded by later explicit admission of the named carriers/surface. No package files, runtime registrations, SQLite DBs, or source Site state were changed.",
+  "recorded_by": "codex",
+  "recorded_at": "2026-05-10"
+}

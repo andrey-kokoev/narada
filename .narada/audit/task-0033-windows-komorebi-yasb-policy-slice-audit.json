@@ -1,0 +1,64 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0033",
+  "title": "Deepen Windows Komorebi/YASB policy slice",
+  "status": "completed",
+  "recorded_at": "2026-05-11T23:45:00.1873165-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "builds_on": "narada-proper.task-0027",
+    "source_evidence": [
+      "C:\\Users\\Andrey\\Narada\\kb\\komorebi\\windows-komorebi-yasb-portable-template.md",
+      "C:\\Users\\Andrey\\Narada\\templates\\pc-sites\\windows-komorebi-yasb\\README.md",
+      "C:\\Users\\Andrey\\Narada\\templates\\pc-sites\\windows-komorebi-yasb\\policy\\tiling-surface-desktop-policy.json",
+      "C:\\Users\\Andrey\\Narada\\templates\\pc-sites\\windows-komorebi-yasb\\kb\\yasb-authority-projection.md"
+    ],
+    "external_evidence_only": true
+  },
+  "changed_files": [
+    "packages/windows-komorebi-yasb-kit/README.md",
+    "packages/windows-komorebi-yasb-kit/docs/source-inventory.md",
+    "packages/windows-komorebi-yasb-kit/src/index.ts",
+    "packages/windows-komorebi-yasb-kit/src/materialization-policy.ts",
+    "packages/windows-komorebi-yasb-kit/test/materialization-policy.test.ts",
+    ".narada/tasks/task-0033-windows-komorebi-yasb-policy-slice.md",
+    ".narada/audit/task-0033-windows-komorebi-yasb-policy-slice-audit.json",
+    ".narada/capabilities/windows-machinery-capability-exchange.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/windows-komorebi-yasb-kit test",
+      "result": "passed",
+      "evidence": "2 test files passed; 4 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages/windows-komorebi-yasb-kit typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/windows-komorebi-yasb-kit build",
+      "result": "passed"
+    }
+  ],
+  "terminal_claim": "@narada2/windows-komorebi-yasb-kit now includes descriptor-only Komorebi/YASB materialization policy contracts with local admission and refusal guards.",
+  "refused_imports": [
+    "live YASB runtime config",
+    "monitor/display topology",
+    "occupied workspace state",
+    "process state",
+    "logs, PIDs, and socket paths",
+    "user preference authority",
+    "secrets or credentials"
+  ],
+  "not_claimed": [
+    "Komorebi/YASB restart",
+    "repair execution",
+    "runtime config copy",
+    "operator-surface materialization execution",
+    "PC Site fallback execution"
+  ],
+  "rollback": "Remove materialization policy source, tests, source inventory doc, README section, and this task evidence. No live PC runtime state was mutated or imported.",
+  "next_smallest_slice": "Deepen @narada2/windows-machinery-capability-exchange with cross-package adoption manifest/conformance descriptors tying the package set together."
+}

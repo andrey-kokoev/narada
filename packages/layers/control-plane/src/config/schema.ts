@@ -144,6 +144,10 @@ const AdmissionSchema = z.object({
   mail: MailAdmissionSchema.optional(),
 });
 
+const MaterializationSchema = z.object({
+  mail: MailAdmissionSchema.optional(),
+});
+
 // Webhook configuration schema
 const WebhookConfigSchema = z.object({
   enabled: z.boolean(),
@@ -198,8 +202,14 @@ const MailContextStitchingSchema = z.object({
   signals: z.array(z.string().min(1)).optional(),
 });
 
+const OperationIntakeFreshWorkBoundarySchema = z.object({
+  outbound_folder_refs: z.array(z.string().min(1)).optional(),
+  outbound_folder_behavior: z.enum(['exclude', 'admit']).optional(),
+});
+
 const OperationIntakeSchema = z.object({
   routes: z.array(OperationIntakeRouteSchema).min(1),
+  fresh_work_boundary: OperationIntakeFreshWorkBoundarySchema.optional(),
   mail_context_stitching: MailContextStitchingSchema.optional(),
 });
 
@@ -288,6 +298,7 @@ const ScopeConfigSchema = z.object({
   runtime: RuntimeConfigSchema.default({}),
   charter: CharterRuntimeConfigSchema.default({}),
   policy: RuntimePolicySchema.default({ allowed_actions: ['no_action'] }),
+  materialization: MaterializationSchema.optional(),
   admission: AdmissionSchema.optional(),
   tool_catalogs: z.array(ToolCatalogRefSchema).optional(),
   executors: z.array(ExecutorConfigSchema).optional(),

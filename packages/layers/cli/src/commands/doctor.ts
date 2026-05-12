@@ -68,6 +68,19 @@ interface BootstrapDoctorReport {
   };
 }
 
+interface NaradaSiteSeedDoctorReport {
+  status: 'healthy' | 'degraded';
+  site_id: string | null;
+  site_root: string;
+  config_path: string;
+  checks: DoctorCheck[];
+  summary: {
+    pass: number;
+    fail: number;
+    warn: number;
+  };
+}
+
 async function pathExists(path: string): Promise<boolean> {
   try {
     await access(path);
@@ -75,6 +88,124 @@ async function pathExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+async function doctorNaradaSiteSeed(
+  repoRoot: string,
+  fmt: ReturnType<typeof createFormatter>,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const siteRoot = join(repoRoot, '.narada');
+  const siteConfigPath = join(siteRoot, 'site.json');
+  const checks: DoctorCheck[] = [];
+
+  let parsed: Record<string, unknown> | null = null;
+  try {
+    const raw = await readFile(siteConfigPath, 'utf8');
+    parsed = asRecord(JSON.parse(raw));
+    checks.push({
+      name: 'narada-site-config',
+      status: parsed ? 'pass' : 'fail',
+      detail: parsed ? `.narada/site.json parses: ${siteConfigPath}` : `.narada/site.json must contain a JSON object: ${siteConfigPath}`,
+    });
+  } catch (error) {
+    checks.push({
+      name: 'narada-site-config',
+      status: 'fail',
+      detail: `Failed to read .narada/site.json: ${error instanceof Error ? error.message : String(error)}`,
+    });
+  }
+
+  const siteId = typeof parsed?.site_id === 'string' ? parsed.site_id : null;
+  checks.push({
+    name: 'site-id',
+    status: siteId ? 'pass' : 'fail',
+    detail: siteId ? `Site id: ${siteId}` : '.narada/site.json must define site_id',
+  });
+
+  const declaredSiteRoot = typeof parsed?.site_root === 'string' ? resolve(parsed.site_root) : null;
+  checks.push({
+    name: 'site-root',
+    status: declaredSiteRoot === resolve(siteRoot) ? 'pass' : 'fail',
+    detail: declaredSiteRoot
+      ? `declared=${declaredSiteRoot}; expected=${resolve(siteRoot)}`
+      : `.narada/site.json must define site_root=${resolve(siteRoot)}`,
+  });
+
+  const declaredRepoRoot = typeof parsed?.repo_root === 'string' ? resolve(parsed.repo_root) : null;
+  checks.push({
+    name: 'repo-root',
+    status: declaredRepoRoot === resolve(repoRoot) ? 'pass' : 'warn',
+    detail: declaredRepoRoot
+      ? `declared=${declaredRepoRoot}; current=${resolve(repoRoot)}`
+      : `.narada/site.json does not define repo_root`,
+  });
+
+  const authorityAdmission = asRecord(parsed?.authority_admission);
+  checks.push({
+    name: 'authority-admission',
+    status: authorityAdmission ? 'pass' : 'warn',
+    detail: authorityAdmission
+      ? `authority admission present: ${String(authorityAdmission.kind ?? 'unspecified')}`
+      : '.narada/site.json does not include authority_admission',
+  });
+
+  const admissionState = asRecord(parsed?.admission_state);
+  const runtimeImported = admissionState?.runtime_state_imported;
+  checks.push({
+    name: 'runtime-state-import',
+    status: runtimeImported === false ? 'pass' : 'fail',
+    detail: runtimeImported === false
+      ? 'runtime_state_imported=false'
+      : 'Narada Site seed must explicitly preserve runtime_state_imported=false',
+  });
+
+  const capabilityCatalog = join(siteRoot, 'capabilities', 'create-site-package-catalog.json');
+  checks.push({
+    name: 'create-site-capability-record',
+    status: await pathExists(capabilityCatalog) ? 'pass' : 'warn',
+    detail: await pathExists(capabilityCatalog)
+      ? `capability record exists: ${capabilityCatalog}`
+      : `capability record not found: ${capabilityCatalog}`,
+  });
+
+  const pass = checks.filter((check) => check.status === 'pass').length;
+  const fail = checks.filter((check) => check.status === 'fail').length;
+  const warn = checks.filter((check) => check.status === 'warn').length;
+  const status: NaradaSiteSeedDoctorReport['status'] = fail > 0 ? 'degraded' : 'healthy';
+  const report: NaradaSiteSeedDoctorReport = {
+    status,
+    site_id: siteId,
+    site_root: resolve(siteRoot),
+    config_path: siteConfigPath,
+    checks,
+    summary: { pass, fail, warn },
+  };
+
+  if (fmt.getFormat() === 'json') {
+    return {
+      exitCode: status === 'healthy' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
+      result: report,
+    };
+  }
+
+  fmt.message(`Narada Site Doctor: ${status.toUpperCase()}`, status === 'healthy' ? 'success' : 'error');
+  fmt.message(`${pass} pass, ${fail} fail, ${warn} warn`, 'info');
+  for (const check of checks) {
+    const icon = check.status === 'pass' ? '✓' : check.status === 'warn' ? '⚠' : '✗';
+    const fmtType = check.status === 'pass' ? 'success' : check.status === 'fail' ? 'error' : 'warning';
+    fmt.message(`${icon} ${check.name}: ${check.detail}`, fmtType);
+  }
+
+  return {
+    exitCode: status === 'healthy' ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
+    result: report,
+  };
 }
 
 async function newestSourceFile(root: string): Promise<{ path: string; mtimeMs: number } | null> {
@@ -719,6 +850,11 @@ export async function doctorCommand(
   logger.info('Running doctor', { configPath, staleThresholdMinutes });
   const resolvedConfigPath = resolve(configPath);
   const configDir = dirname(resolvedConfigPath);
+
+  if (!await pathExists(resolvedConfigPath) && await pathExists(join(configDir, '.narada', 'site.json'))) {
+    return doctorNaradaSiteSeed(configDir, fmt);
+  }
+
   loadEnvFile(join(configDir, '.env'));
   loadEnvFile(join(dirname(configDir), '.env'));
 

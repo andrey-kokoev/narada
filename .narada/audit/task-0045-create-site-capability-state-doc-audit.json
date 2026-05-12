@@ -1,0 +1,45 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0045",
+  "title": "Create-site capability state documentation",
+  "status": "completed",
+  "recorded_at": "2026-05-12T11:20:28.3378776-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "source_context": "greenfield create-site CLI objective continuation",
+    "external_source_state_imported": false
+  },
+  "changed_files": [
+    "docs/product/create-site-options-model.md",
+    ".narada/tasks/task-0045-create-site-capability-state-doc.md",
+    ".narada/audit/task-0045-create-site-capability-state-doc-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "implementation": {
+    "documented_capabilities": [
+      "create-site config dry-run",
+      "create-site shorthand dry-run",
+      "create-site shorthand skeleton",
+      "task-lifecycle live carriers"
+    ],
+    "exposure_classes": [
+      "descriptor_only",
+      "mutating_guarded"
+    ]
+  },
+  "verification": [
+    {
+      "command": "documentation review",
+      "result": "passed",
+      "evidence": "create-site options model now lists current command states and blockers."
+    }
+  ],
+  "terminal_claim": "Create-site documentation now reflects implemented/trialed CLI states through task-0044.",
+  "not_claimed": [
+    "new CLI behavior",
+    "source Site import/migration/lift",
+    "PC/operator-surface/private MCP client mutation"
+  ],
+  "rollback": "Revert the documentation addition and remove this task/audit/ledger evidence."
+}

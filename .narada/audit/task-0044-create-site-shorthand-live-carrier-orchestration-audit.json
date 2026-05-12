@@ -1,0 +1,65 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0044",
+  "title": "Create-site shorthand live-carrier orchestration proof",
+  "status": "completed",
+  "recorded_at": "2026-05-12T11:17:45.0852784-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "source_context": "greenfield create-site CLI objective continuation",
+    "external_source_state_imported": false
+  },
+  "changed_files": [
+    "packages/layers/cli/test/commands/sites-create.test.ts",
+    ".narada/tasks/task-0044-create-site-shorthand-live-carrier-orchestration.md",
+    ".narada/audit/task-0044-create-site-shorthand-live-carrier-orchestration-audit.json",
+    ".narada/capabilities/create-site-package-catalog.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "implementation": {
+    "commands_proven": [
+      "narada sites create --preset task-lifecycle --site-id <id> --root <path> --execute-live --live-authority-basis <basis> --format json"
+    ],
+    "carrier_sequence_proven": [
+      "site_local_db_init",
+      "site_local_storage_hydration",
+      "site_mcp_registration_transport",
+      "windows_profile_site_binding"
+    ],
+    "source_state_imported": false,
+    "package_selection_grants_live_capability": false
+  },
+  "verification": [
+    {
+      "command": "pnpm --dir packages/layers/cli test test/commands/sites-create.test.ts",
+      "result": "passed",
+      "evidence": "1 test file passed, 19 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli build",
+      "result": "passed"
+    },
+    {
+      "command": "node packages/layers/cli/dist/main.js sites create --preset task-lifecycle --site-id smoke-live-task-site --root <temp-root> --execute-live --live-authority-basis smoke_receiving_site_live_authority --format json",
+      "result": "passed",
+      "evidence": "Returned execution_result created_live_carriers_applied with all four carriers applied and source_state_imported false. Temporary smoke root was removed after the run."
+    }
+  ],
+  "terminal_claim": "Shorthand create-site execution can create a task-lifecycle Site skeleton and run the admitted local live carriers in sequence for an explicit target root.",
+  "not_claimed": [
+    "persistent operator Site creation in this repo task",
+    "private MCP client config mutation",
+    "real Windows profile mutation outside the target Site",
+    "package-owned SQLite dependency",
+    "source Site import/migration/lift",
+    "source DB/history/state import",
+    "secrets or credentials",
+    "PC/operator-surface mutation"
+  ],
+  "rollback": "Remove the shorthand live-carrier orchestration test and this task/audit/ledger evidence."
+}

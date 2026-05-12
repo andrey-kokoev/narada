@@ -1,0 +1,55 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0025",
+  "title": "Expose create-Site live carriers through Narada CLI",
+  "status": "completed",
+  "recorded_at": "2026-05-11T11:34:28.6294514-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "builds_on": "narada-proper.task-0024"
+  },
+  "changed_files": [
+    "packages/layers/cli/src/commands/sites.ts",
+    "packages/layers/cli/src/commands/sites-register.ts",
+    "packages/layers/cli/test/commands/sites-create.test.ts",
+    ".narada/tasks/task-0025-create-site-live-carrier-cli-surface.md",
+    ".narada/audit/task-0025-create-site-live-carrier-cli-surface-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "commands_now_operational": [
+    "narada sites create --config <path> --format json",
+    "narada sites create --dry-run --config <path> --format json",
+    "narada sites live-carrier --carrier site_local_db_init --mode plan|apply|verify|recover --target-site-root <root> --site-id <site-id> --authority-basis <basis>",
+    "narada sites live-carrier --carrier site_local_storage_hydration --mode plan|apply|verify|recover --target-site-root <root> --site-id <site-id> --authority-basis <basis>",
+    "narada sites live-carrier --carrier site_mcp_registration_transport --mode plan|apply|verify|recover --target-site-root <root> --site-id <site-id> --authority-basis <basis>",
+    "narada sites live-carrier --carrier windows_profile_site_binding --mode plan|apply|verify|recover --target-site-root <root> --site-id <site-id> --authority-basis <basis>"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/layers/cli test test/commands/sites-create.test.ts",
+      "result": "passed",
+      "evidence": "1 test file passed; 12 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "node --test tools\\site-init\\site-live-carriers.test.mjs",
+      "result": "passed",
+      "evidence": "6 tests passed"
+    }
+  ],
+  "terminal_claim": "Narada proper has a CLI-visible greenfield Site creation path: create minimal Site skeleton, then execute the four admitted live carriers through guarded narada sites live-carrier commands.",
+  "not_claimed": [
+    "single command that automatically runs all live carriers",
+    "private MCP client config mutation",
+    "real Windows profile mutation outside the target Site",
+    "source-Site migration or import",
+    "arbitrary SQL",
+    "destructive rollback"
+  ],
+  "rollback": "Remove the sites live-carrier command wiring and focused test addition. The underlying carrier implementation remains task-0024 evidence unless separately rolled back.",
+  "next_smallest_slice": "Add an optional convenience orchestration command that runs all four live carriers in sequence from a create-site config with explicit execute-live confirmation."
+}

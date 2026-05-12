@@ -1,0 +1,66 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0030",
+  "title": "Deepen MCP shell Windows boundary slice",
+  "status": "completed",
+  "recorded_at": "2026-05-11T23:38:32.8390536-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "builds_on": "narada-proper.task-0027",
+    "source_evidence": [
+      "C:\\Users\\Andrey\\Narada\\kb\\operations\\shell-filesystem-mcp-boundaries.md",
+      "C:\\Users\\Andrey\\Narada\\tools\\mcp-servers\\shell\\shell-mcp-server.mjs",
+      "C:\\Users\\Andrey\\Narada\\tools\\mcp-servers\\shell\\shell-mcp-server.test.mjs",
+      "C:\\Users\\Andrey\\Narada\\tools\\mcp-servers\\shell\\scoped-index-commit-guard.test.mjs",
+      "C:\\Users\\Andrey\\Narada\\tools\\mcp-servers\\shell\\closeout-volatile-projection-boundary.test.mjs"
+    ],
+    "external_evidence_only": true
+  },
+  "changed_files": [
+    "packages/mcp-shell-windows/README.md",
+    "packages/mcp-shell-windows/docs/source-inventory.md",
+    "packages/mcp-shell-windows/src/index.ts",
+    "packages/mcp-shell-windows/src/policy-boundary.ts",
+    "packages/mcp-shell-windows/test/policy-boundary.test.ts",
+    ".narada/tasks/task-0030-mcp-shell-windows-boundary-slice.md",
+    ".narada/audit/task-0030-mcp-shell-windows-boundary-slice-audit.json",
+    ".narada/capabilities/windows-machinery-capability-exchange.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/mcp-shell-windows test",
+      "result": "passed",
+      "evidence": "2 test files passed; 6 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages/mcp-shell-windows typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/mcp-shell-windows build",
+      "result": "passed"
+    }
+  ],
+  "terminal_claim": "@narada2/mcp-shell-windows now includes descriptor-only boundary decisions for filesystem MCP, shell MCP Git tools, domain MCP routing, and refusal.",
+  "refused_imports": [
+    "live shell MCP server",
+    "source Site roster or path policy",
+    "task lifecycle and inbox state",
+    "closeout state",
+    "shell allowlists and command history",
+    "Git remotes",
+    "credentials or secrets",
+    "runtime logs"
+  ],
+  "not_claimed": [
+    "live shell authority",
+    "native shell fallback",
+    "Git mutation execution",
+    "domain MCP mutation authority",
+    "receiving Site path policy admission"
+  ],
+  "rollback": "Remove shell boundary source, tests, source inventory doc, README section, and this task evidence. No command, Git, or runtime state was executed or imported.",
+  "next_smallest_slice": "Deepen @narada2/mcp-test-windows with test-command descriptor/refusal contracts, or add receiving-Site examples composing shell boundary decisions with admitted carriers."
+}

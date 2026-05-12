@@ -1,11 +1,12 @@
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import {
   findTaskFile,
   listReportsForTask,
   loadRoster,
   type WorkResultReport,
 } from '@narada2/task-governance/task-governance';
-import { resolveReviewTargetFromRoster } from '@narada2/task-governance/task-review-authority';
+import { resolveReviewTargetFromRoster, resolveDefaultReviewerFromRoster } from '@narada2/task-governance/task-review-authority';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import {
@@ -47,10 +48,6 @@ export async function taskReviewRequestCommand(
   if (!options.agent) {
     return { exitCode: ExitCode.GENERAL_ERROR, result: { status: 'error', error: '--agent is required' } };
   }
-  if (!options.reviewer) {
-    return { exitCode: ExitCode.GENERAL_ERROR, result: { status: 'error', error: '--reviewer is required' } };
-  }
-
   const before = await captureTaskLifecycleEvidenceState(cwd, options.taskNumber, options.store);
   const taskFile = await findTaskFile(cwd, options.taskNumber);
   if (!taskFile) {
@@ -78,9 +75,27 @@ export async function taskReviewRequestCommand(
   }
 
   const roster = await loadRoster(cwd);
-  const target = resolveReviewTargetFromRoster(roster, options.reviewer, { taskNumber: options.taskNumber });
+  let target = resolveReviewTargetFromRoster(roster, options.reviewer, { taskNumber: options.taskNumber });
+  if (!target && !options.reviewer) {
+    // No reviewer specified; try to resolve site default reviewer role
+    let defaultRole: string | undefined;
+    try {
+      const configPath = join(cwd, 'config.json');
+      const raw = readFileSync(configPath, 'utf8');
+      const config = JSON.parse(raw) as Record<string, unknown>;
+      const governance = config?.task_governance as Record<string, unknown> | undefined;
+      defaultRole = typeof governance?.default_reviewer_role === 'string'
+        ? governance.default_reviewer_role
+        : undefined;
+    } catch {
+      defaultRole = undefined;
+    }
+    if (defaultRole) {
+      target = resolveDefaultReviewerFromRoster(roster, defaultRole);
+    }
+  }
   if (!target) {
-    return { exitCode: ExitCode.GENERAL_ERROR, result: { status: 'error', error: '--reviewer is required' } };
+    return { exitCode: ExitCode.GENERAL_ERROR, result: { status: 'error', error: '--reviewer is required when no site default_reviewer_role is configured' } };
   }
   if (!target.ok) {
     return {

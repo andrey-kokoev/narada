@@ -87,4 +87,9 @@ narada sites relation list
 narada sites relation validate
 ```
 
-The lineage surface exposes the vocabulary and required fields without creating lineage records. The relation surface records evidence edges without changing Site authority. Future mutating Site lifecycle and pub/sub commands must write lineage events before changing authority-bearing Site state.
+The lineage surface exposes the vocabulary and required fields. The greenfield
+`narada sites create` skeleton path writes a local `site.created` origin event
+under `.narada/lineage/events/` and projects that event ref into local Site
+config/seed records. The relation surface records evidence edges without
+changing Site authority. Future mutating Site lifecycle and pub/sub commands
+must write lineage events before changing authority-bearing Site state.

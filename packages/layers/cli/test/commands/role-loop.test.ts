@@ -12,15 +12,19 @@ import { roleLoopNextCommand, roleLoopNextObligationCommand } from '../../src/co
 import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
+function gitBinary(): string {
+  return process.env.NARADA_GIT_BINARY ?? (process.platform === 'win32' ? 'git' : '/usr/bin/git');
+}
+
 describe('role-loop next command', () => {
   let tempDir: string;
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'narada-role-loop-'));
     mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
-    execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['init', '-b', 'main'], { cwd: tempDir });
-    execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['config', 'user.email', 'test@example.invalid'], { cwd: tempDir });
-    execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['config', 'user.name', 'Test Agent'], { cwd: tempDir });
+    execFileSync(gitBinary(), ['init', '-b', 'main'], { cwd: tempDir });
+    execFileSync(gitBinary(), ['config', 'user.email', 'test@example.invalid'], { cwd: tempDir });
+    execFileSync(gitBinary(), ['config', 'user.name', 'Test Agent'], { cwd: tempDir });
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260430-20-review.md'),
       '---\ntask_id: 20260430-20-review\nstatus: in_review\n---\n\n# Pending review\n\n## Goal\nReview it.\n',
@@ -66,8 +70,8 @@ describe('role-loop next command', () => {
     } finally {
       store.db.close();
     }
-    execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['add', '.'], { cwd: tempDir });
-    execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['commit', '-m', 'base'], { cwd: tempDir });
+    execFileSync(gitBinary(), ['add', '.'], { cwd: tempDir });
+    execFileSync(gitBinary(), ['commit', '-m', 'base'], { cwd: tempDir });
     writeFileSync(join(tempDir, 'packages.txt'), 'dirty\n');
   });
 

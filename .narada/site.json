@@ -1,0 +1,88 @@
+{
+  "schema": "narada.site.seed.v0",
+  "site_id": "narada-proper",
+  "site_name": "Narada proper",
+  "locus": "narada_proper",
+  "repo_root": "D:\\code\\narada",
+  "site_root": "D:\\code\\narada\\.narada",
+  "seed_state": "seed_admitted_minimal",
+  "created_from": {
+    "kind": "external_handoff",
+    "source_site": "narada-andrey",
+    "source_ref": "C:\\Users\\Andrey\\Narada\\kb\\proposals\\narada-proper-site-seed-admission-package.md",
+    "source_task": "#531",
+    "source_commit": "93881ac1"
+  },
+  "authority_admission": {
+    "kind": "operator_explicit_temporary_path_admission",
+    "admitted_path": "D:\\code\\narada",
+    "canonical_authority_root": "/home/andrey/src/narada",
+    "reason": "The declared WSL authority root was unreachable from this carrier; the operator explicitly selected option B to admit D:\\code\\narada as temporary mutation authority for this seed only."
+  },
+  "admission_state": {
+    "seed_decision": "admit_minimal_seed_substrate",
+    "first_memory_status": "external_orientation_pending_admission",
+    "runtime_state_imported": false
+  },
+  "agent_execution_policy": {
+    "schema": "narada.agent_execution_policy.v0",
+    "default_posture": "mcp_only",
+    "runtime_authority": "declared_mcp_surfaces_only",
+    "authority_note": "This is a Narada proper Site-owned declaration and startup validation target. Runtime enforcement belongs to carriers, MCP surfaces, and capability-policy guards.",
+    "native_shell": {
+      "granted": false,
+      "exception": "break_glass_operator_authorized_only",
+      "recording_required": true
+    },
+    "raw_sql": {
+      "granted": false,
+      "exception": "declared_mcp_or_maintainer_tool_only"
+    },
+    "secrets_access": {
+      "granted": false,
+      "exception": "declared_secret_storage_tools_only"
+    },
+    "cross_site_mutation": {
+      "granted": false,
+      "exception": "target_site_authority_or_governed_crossing_only"
+    },
+    "non_grants": [
+      "native_shell",
+      "arbitrary_shell",
+      "raw_sql",
+      "ad_hoc_scripts",
+      "unlisted_scripts",
+      "secrets_access",
+      "cross_site_mutation",
+      "client_file_mutation"
+    ],
+    "allowlist_source": {
+      "registry_path": ".narada/capabilities/mcp-surfaces.json",
+      "derivation": "mcp_surfaces[].registered_live_tools and admitted surface records",
+      "projection_note": "Carrier-specific MCP config files are transport projections, not policy authority."
+    },
+    "allowed_mcp_entrypoints": [
+      {
+        "surface_id": "narada-proper.surface.task-0001.live-task-lifecycle-mcp-registration.v0",
+        "kind": "mcp_surface",
+        "package": "@narada2/site-task-lifecycle",
+        "transport": "narada-mcp_stdio",
+        "tools": [
+          "site_task_lifecycle.plan_init",
+          "site_task_lifecycle.admit_task",
+          "site_task_lifecycle.read_task"
+        ]
+      }
+    ],
+    "shell_like_operations": {
+      "direct_native_shell": "denied_by_default",
+      "required_route": "admitted_audited_mcp_surface",
+      "missing_capability_behavior": "stop_and_report_missing_mcp_capability"
+    },
+    "startup_verification": {
+      "required": true,
+      "checklist_path": ".narada/bootstrap/agent-execution-policy-startup.md"
+    }
+  },
+  "authority_warning": "External handoff material remains orientation evidence until admitted by Narada proper authority. This seed does not import narada-andrey runtime state."
+}

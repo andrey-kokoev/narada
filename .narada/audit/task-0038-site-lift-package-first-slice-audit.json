@@ -1,0 +1,62 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0038",
+  "title": "Site Lift package first slice",
+  "status": "completed",
+  "recorded_at": "2026-05-12T10:04:23.0103653-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "source_handoff": "C:\\Users\\Andrey\\Narada\\kb\\proposals\\reusable-narada-site-machinery-extraction-map-20260507.md",
+    "source_task": "#445",
+    "external_evidence_only": true
+  },
+  "changed_files": [
+    "packages/site-lift/package.json",
+    "packages/site-lift/tsconfig.json",
+    "packages/site-lift/README.md",
+    "packages/site-lift/docs/source-inventory.md",
+    "packages/site-lift/src/index.ts",
+    "packages/site-lift/test/site-lift.test.ts",
+    ".narada/tasks/task-0038-site-lift-package-first-slice.md",
+    ".narada/audit/task-0038-site-lift-package-first-slice-audit.json",
+    ".narada/capabilities/site-lift.json",
+    ".narada/admission/pending-handoffs.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/site-lift test",
+      "result": "passed",
+      "evidence": "1 test file passed; 3 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages/site-lift typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/site-lift build",
+      "result": "passed"
+    }
+  ],
+  "terminal_claim": "@narada2/site-lift now includes descriptor-only advisory catalog and receiving-Site adoption packet contracts with refusal guards.",
+  "refused_imports": [
+    "source runtime databases",
+    "source task or inbox history",
+    "source rosters or checkpoints",
+    "operator-surface runtime state",
+    "PC-locus state",
+    "secrets or credentials",
+    "implicit live authority"
+  ],
+  "not_claimed": [
+    "live Site-lift MCP server",
+    "file copy",
+    "install or bootstrap",
+    "MCP registration mutation",
+    "receiving Site mutation authority",
+    "catalog publication"
+  ],
+  "rollback": "Remove the packages/site-lift directory and task/capability/admission evidence for task-0038. No source or receiving Site state was imported or mutated.",
+  "next_smallest_slice": "Run aggregate verification across reusable Site machinery descriptor packages and update the extraction-map handoff to completed-or-residual."
+}

@@ -1,0 +1,58 @@
+{
+  "schema": "narada.create_site.options.v0",
+  "mode": "dry_run",
+  "preset": "full-operator-surface-aware-user-site",
+  "template_catalog": {
+    "template_id": "narada-proper.templates.site.user-surface-aware.v0",
+    "template_components": ["@narada2/site-task-lifecycle", "@narada2/agent-context-memory"]
+  },
+  "site": {
+    "site_id": "ada-user",
+    "site_kind": "user",
+    "authority_locus": "user",
+    "site_root": "C:\\Users\\Ada\\Narada",
+    "workspace_root": "C:\\Users\\Ada\\Narada",
+    "substrate": "windows-native",
+    "execution_surface": "windows_native",
+    "sync_posture": "hybrid_capable_plain_folder"
+  },
+  "packages": [
+    { "name": "@narada2/site-task-lifecycle", "include_contracts": true, "include_docs": true, "include_schema_descriptors": true, "include_mcp_descriptors": true, "include_conformance_tests": true },
+    { "name": "@narada2/agent-context-memory", "include_contracts": true, "include_docs": true, "include_schema_descriptors": true, "include_mcp_descriptors": true, "include_conformance_tests": true }
+  ],
+  "identity": {
+    "named_agents": [
+      { "named_agent_id": "ada-user.agent.kevin", "display_name": "Kevin" }
+    ],
+    "role_assignments": [
+      { "named_agent_id": "ada-user.agent.kevin", "role_name": "architect", "assignment_ref": "operator:create-site-plan" }
+    ],
+    "role_compatibility_identities": [
+      { "role_name": "architect", "compatibility_identity": "ada-user.architect", "admission_ref": "operator:create-site-plan" }
+    ],
+    "claimed_identity_evidence": [],
+    "mechanical_verification_basis": [
+      { "kind": "operator_admission", "evidence_ref": "operator:create-site-plan" }
+    ]
+  },
+  "storage": { "intent": "descriptor_only", "driver_preference": "sqlite3-cli", "mutation_mode": "none" },
+  "mcp": { "intent": "descriptor_only", "surfaces": ["site_task_lifecycle", "agent_context_memory"] },
+  "capabilities": {
+    "policy": "declare_required",
+    "required": ["task_lifecycle", "agent_context_memory"],
+    "denied": ["pc_locus_mutation", "source_runtime_state_import"]
+  },
+  "inbox": { "enable": "canonical_envelope_intake" },
+  "task_lifecycle": { "enable": "descriptor_only", "package": "@narada2/site-task-lifecycle" },
+  "agent_context": { "enable": "descriptor_only", "package": "@narada2/agent-context-memory", "checkpoint_policy": "manual_descriptor" },
+  "operator_surface": {
+    "intent": "declare_relation",
+    "relation_refs": ["operator_surface:future-local"],
+    "pc_locus_required": false
+  },
+  "windows_pwsh": { "profile": "emit_example", "path_style": "windows" },
+  "evidence": {
+    "template_refs": ["narada-proper.templates.site.user-surface-aware.v0", "package:@narada2/site-task-lifecycle", "package:@narada2/agent-context-memory"],
+    "refused_imports": []
+  }
+}

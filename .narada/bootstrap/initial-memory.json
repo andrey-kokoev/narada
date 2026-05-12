@@ -1,0 +1,18 @@
+{
+  "schema": "narada.initial_memory.v0",
+  "memory_id": "initial-memory.narada-proper.2026-05-10",
+  "status": "external_orientation_pending_admission",
+  "source_site": "narada-andrey",
+  "source_kind": "handoff_packet",
+  "source_ref": "C:\\Users\\Andrey\\Narada\\kb\\proposals\\narada-proper-first-architect-site-exposure-handoff.md",
+  "receiving_site": "narada-proper",
+  "recommended_reader": "narada.architect",
+  "admission_required": true,
+  "must_not_be_treated_as": [
+    "checkpoint",
+    "task_history",
+    "inbox_authority",
+    "roster_authority",
+    "runtime_state"
+  ]
+}

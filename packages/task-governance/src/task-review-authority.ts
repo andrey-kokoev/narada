@@ -117,12 +117,13 @@ export function resolveReviewTargetFromRoster(
   const resolveAgent = (
     agent: AgentRosterEntry,
     resolution: ResolvedReviewTarget['resolution'],
+    requestedLabel: string = trimmed,
   ): ResolvedReviewTarget | { ok: false; error: string; review_authority_repair?: ReviewAuthorityRepair } => {
     const authority = explainTaskReviewAuthority(agent);
     if (!authority.admitted) {
       return {
         ok: false,
-        error: `Review target '${trimmed}' resolves to ${agent.agent_id}, but task review would refuse it: ${authority.rationale}`,
+        error: `Review target '${requestedLabel}' resolves to ${agent.agent_id}, but task review would refuse it: ${authority.rationale}`,
         review_authority_repair: options.taskNumber
           ? reviewerAuthorityRepair({
               taskNumber: options.taskNumber,
@@ -135,7 +136,7 @@ export function resolveReviewTargetFromRoster(
     }
     return {
       ok: true,
-      requested: trimmed,
+      requested: requestedLabel,
       target_agent_id: agent.agent_id,
       target_role: agent.role ?? null,
       resolution,
@@ -164,5 +165,31 @@ export function resolveReviewTargetFromRoster(
           reason: 'missing_reviewer_identity',
         })
       : undefined,
+  };
+}
+
+export function resolveDefaultReviewerFromRoster(
+  roster: AgentRoster,
+  defaultRole: string,
+): ResolvedReviewTarget | { ok: false; error: string } {
+  const roleMatches = roster.agents.filter(
+    (agent) => agent.role === defaultRole && hasTaskReviewAuthority(agent),
+  );
+  if (roleMatches.length === 0) {
+    return {
+      ok: false,
+      error: `Default reviewer role '${defaultRole}' matches no agents with review authority`,
+    };
+  }
+  const exact = roleMatches.find((agent) => agent.agent_id.endsWith(`.${defaultRole}`));
+  const agent = exact ?? roleMatches[0]!;
+  const authority = explainTaskReviewAuthority(agent);
+  return {
+    ok: true,
+    requested: defaultRole,
+    target_agent_id: agent.agent_id,
+    target_role: agent.role ?? null,
+    resolution: exact ? 'unique_role_alias' : 'agent_id',
+    review_authority: authority as ReviewAuthorityAdmission & { admitted: true },
   };
 }

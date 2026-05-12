@@ -1,0 +1,66 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0043",
+  "title": "Create-site shorthand skeleton execution proof",
+  "status": "completed",
+  "recorded_at": "2026-05-12T11:15:01.2473623-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "source_context": "greenfield create-site CLI objective continuation",
+    "external_source_state_imported": false
+  },
+  "changed_files": [
+    "packages/layers/cli/test/commands/sites-create.test.ts",
+    ".narada/tasks/task-0043-create-site-shorthand-execute-skeleton.md",
+    ".narada/audit/task-0043-create-site-shorthand-execute-skeleton-audit.json",
+    ".narada/capabilities/create-site-package-catalog.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "implementation": {
+    "commands_proven": [
+      "narada sites create --preset minimal --site-id <id> --root <path> --format json",
+      "narada sites create --preset site-machinery --site-id <id> --root <path> --format json"
+    ],
+    "execution_scope": [
+      "minimal Site skeleton files",
+      "descriptor package-slice artifacts",
+      "descriptor-only capability policy artifact"
+    ],
+    "source_state_imported": false,
+    "package_selection_grants_live_capability": false
+  },
+  "verification": [
+    {
+      "command": "pnpm --dir packages/layers/cli test test/commands/sites-create.test.ts",
+      "result": "passed",
+      "evidence": "1 test file passed, 18 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli build",
+      "result": "passed"
+    },
+    {
+      "command": "node packages/layers/cli/dist/main.js sites create --preset site-machinery --site-id smoke-created-site --root <temp-root> --format json",
+      "result": "passed",
+      "evidence": "Returned execution_result created with descriptor package slices and source_state_imported false. Temporary smoke root was removed after the run."
+    }
+  ],
+  "terminal_claim": "Shorthand create-site execution can create a greenfield skeleton and descriptor package-slice artifacts in an explicit target root.",
+  "not_claimed": [
+    "persistent operator Site creation in this repo task",
+    "source Site import/migration/lift",
+    "DB init",
+    "DB mutation",
+    "MCP registration",
+    "runtime hydration",
+    "capability grants",
+    "Windows profile mutation",
+    "PC/operator-surface mutation"
+  ],
+  "rollback": "Remove the shorthand execution tests and this task/audit/ledger evidence."
+}

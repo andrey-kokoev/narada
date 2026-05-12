@@ -246,6 +246,84 @@ describe('Canonical Inbox CLI commands', () => {
     expect((doctor.result as { message_routing_authority: { principals: string[] } }).message_routing_authority.principals).toEqual(['architect', 'builder']);
   });
 
+  it('requires active capability grant for configured cross-Site inbox submission routes', async () => {
+    writeFileSync(join(tempDir, 'config.json'), JSON.stringify({
+      message_routing_authority: {
+        default_policy: 'deny_cross_locus_unless_allowed',
+        principals: {
+          architect: {
+            may_send: [
+              {
+                target_locus: 'narada_proper',
+                kinds: ['observation'],
+                authority_levels: ['agent_reported'],
+                condition: 'always',
+                capability_kind: 'inbox.submit',
+                capability_action: 'inbox.submit',
+              },
+            ],
+          },
+        },
+      },
+    }), 'utf8');
+
+    const refused = await inboxSubmitObservationCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceRef: 'test:missing-grant',
+      title: 'Upstream without grant',
+      principal: 'architect',
+      targetLocus: 'narada_proper',
+    });
+    expect(refused.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect((refused.result as { routing: { capability_status: string; required_capability_kind: string } }).routing).toMatchObject({
+      required_capability_kind: 'inbox.submit',
+      capability_status: 'missing',
+    });
+
+    mkdirSync(join(tempDir, '.ai'), { recursive: true });
+    writeFileSync(join(tempDir, '.ai', 'capability-consent-registry.json'), JSON.stringify({
+      registry_kind: 'capability_consent_registry',
+      registry_version: 1,
+      grants: [
+        {
+          grant_id: 'cap_test_inbox_submit',
+          site_id: 'narada_proper',
+          principal_id: 'architect',
+          agent_id: null,
+          capability_kind: 'inbox.submit',
+          scope_json: {},
+          allowed_actions: ['inbox.submit'],
+          denied_actions: [],
+          credential_ref: null,
+          evidence_ref: 'test:grant',
+          expires_at: null,
+          status: 'active',
+          granted_by: 'operator',
+          granted_at: new Date().toISOString(),
+          revoked_by: null,
+          revoked_at: null,
+          revocation_reason: null,
+        },
+      ],
+    }), 'utf8');
+
+    const admitted = await inboxSubmitObservationCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceRef: 'test:active-grant',
+      title: 'Upstream with grant',
+      principal: 'architect',
+      targetLocus: 'narada_proper',
+    });
+    expect(admitted.exitCode).toBe(ExitCode.SUCCESS);
+    expect((admitted.result as { routing: { authority_posture: string; capability_status: string; capability_grant_id: string } }).routing).toMatchObject({
+      authority_posture: 'source_site_delegated_authority',
+      capability_status: 'active',
+      capability_grant_id: 'cap_test_inbox_submit',
+    });
+  });
+
   it('submits payload from stdin for pipe-safe ingestion', async () => {
     const submitted = await inboxSubmitCommand({
       cwd: tempDir,

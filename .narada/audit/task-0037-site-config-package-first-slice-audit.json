@@ -1,0 +1,62 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0037",
+  "title": "Site Config package first slice",
+  "status": "completed",
+  "recorded_at": "2026-05-12T10:00:24.9999898-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "source_handoff": "C:\\Users\\Andrey\\Narada\\kb\\proposals\\reusable-narada-site-machinery-extraction-map-20260507.md",
+    "source_task": "#445",
+    "external_evidence_only": true
+  },
+  "changed_files": [
+    "packages/site-config/package.json",
+    "packages/site-config/tsconfig.json",
+    "packages/site-config/README.md",
+    "packages/site-config/docs/source-inventory.md",
+    "packages/site-config/src/index.ts",
+    "packages/site-config/test/site-config.test.ts",
+    ".narada/tasks/task-0037-site-config-package-first-slice.md",
+    ".narada/audit/task-0037-site-config-package-first-slice-audit.json",
+    ".narada/capabilities/site-config.json",
+    ".narada/admission/pending-handoffs.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/site-config test",
+      "result": "passed",
+      "evidence": "1 test file passed; 4 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages/site-config typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/site-config build",
+      "result": "passed"
+    }
+  ],
+  "terminal_claim": "@narada2/site-config now includes descriptor-only Site registry awareness and registered Site probe contracts with refusal guards.",
+  "refused_imports": [
+    "target Site config mutation",
+    "arbitrary client/project data",
+    "target task/inbox databases",
+    "target histories",
+    "deployments",
+    "trust records",
+    "secrets or credentials",
+    "target runtime state"
+  ],
+  "not_claimed": [
+    "live probe execution",
+    "target-rooted MCP registration",
+    "local config write command",
+    "Site identity trust admission",
+    "target Site mutation authority"
+  ],
+  "rollback": "Remove the packages/site-config directory and task/capability/admission evidence for task-0037. No target Site state was inspected, imported, or mutated.",
+  "next_smallest_slice": "Extract @narada2/site-lift descriptor/adoption catalog contracts, or deepen @narada2/site-inbox with disposition/admission-log descriptors."
+}

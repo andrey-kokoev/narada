@@ -122,7 +122,7 @@ const PROJECTION_NOISE_PATTERN =
 const NEGATED_AUTHORITY_DEFECT_PATTERN =
   /\bnot (?:a |an )?(?:lifecycle )?authority defect\b|\bno (?:lifecycle )?authority defect\b/i;
 const EXPLICIT_AUTHORITY_DEFECT_PATTERN =
-  /\bauthority defect\b|\blifecycle row\b|\btransition\b|\badmission\b|\bclosure artifact\b|\bstate machine\b|\btamper\b|\bcorrupt\b|\billicit crossing\b|\bunauthori[sz]ed\b/i;
+  /\bauthority defect\b|\bauthority mismatch\b|\bboundary mismatch\b|\blifecycle row\b|\btransition defect\b|\badmission defect\b|\badmission mismatch\b|\bclosure artifact\b|\bstate machine\b|\btamper\b|\bcorrupt\b|\billicit crossing\b|\bunauthori[sz]ed\b/i;
 const LIFECYCLE_AUTHORITY_PATTERN =
   /\blifecycle\b|\bauthority\b|\bboundary\b|\billicit crossing\b|\bstate machine\b|\bevidence\b|\btamper\b|\bunauthori[sz]ed\b|\bwrong authority\b/i;
 
@@ -153,11 +153,14 @@ function isCompatibilityProjectionNoise(finding: ReviewFinding): boolean {
 
 function classifyReviewFinding(finding: ReviewFinding, index: number): ReviewFindingDiagnostic {
   const blocking = finding.severity === 'blocking';
+  const text = findingText(finding);
   const triggers = triggersForFinding(finding);
   const projectionOnly = isCompatibilityProjectionNoise(finding);
-  const lifecycleAuthorityDefect = !projectionOnly && LIFECYCLE_AUTHORITY_PATTERN.test(findingText(finding));
+  const explicitAuthorityDefect =
+    EXPLICIT_AUTHORITY_DEFECT_PATTERN.test(text) && !NEGATED_AUTHORITY_DEFECT_PATTERN.test(text);
+  const lifecycleAuthorityDefect = !projectionOnly && explicitAuthorityDefect && LIFECYCLE_AUTHORITY_PATTERN.test(text);
   const compatibilityOnly = projectionOnly || (
-    COMPATIBILITY_PROJECTION_PATTERN.test(findingText(finding)) && !lifecycleAuthorityDefect
+    COMPATIBILITY_PROJECTION_PATTERN.test(text) && !lifecycleAuthorityDefect
   );
   const posture: ReviewFindingPosture = projectionOnly
     ? 'projection_only'
@@ -181,7 +184,7 @@ function classifyReviewFinding(finding: ReviewFinding, index: number): ReviewFin
     compatibility_only: compatibilityOnly,
     projection_only: projectionOnly,
     lifecycle_authority_defect: lifecycleAuthorityDefect,
-    capa_relevant: !compatibilityOnly && (blocking || lifecycleAuthorityDefect || triggers.length > 0),
+    capa_relevant: !compatibilityOnly && (blocking || lifecycleAuthorityDefect),
     triggers,
     reason: projectionOnly
       ? 'Legacy roster compatibility projection drift is not lifecycle authority.'

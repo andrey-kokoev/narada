@@ -72,6 +72,16 @@ function extractFactMailSignals(fact: Fact): Omit<MailContextStitchCandidate, "c
     const from =
       (event.from as Record<string, unknown> | undefined) ??
       (normalizedPayload?.from as Record<string, unknown> | undefined);
+    const bodyText =
+      typeof event.body_preview === "string"
+        ? event.body_preview
+        : typeof normalizedPayload?.body_preview === "string"
+          ? normalizedPayload.body_preview
+          : typeof body?.preview === "string"
+            ? body.preview
+            : typeof body?.text === "string"
+              ? body.text
+              : "";
     return {
       conversation_id: typeof event.conversation_id === "string"
         ? event.conversation_id
@@ -84,11 +94,7 @@ function extractFactMailSignals(fact: Fact): Omit<MailContextStitchCandidate, "c
         : typeof normalizedPayload?.subject === "string"
           ? normalizedPayload.subject
           : "",
-      body_text: typeof body?.text === "string"
-        ? body.text
-        : typeof body?.preview === "string"
-          ? body.preview
-          : "",
+      body_text: bodyText,
       received_at: typeof event.received_at === "string"
         ? event.received_at
         : typeof normalizedPayload?.received_at === "string"

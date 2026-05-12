@@ -1,0 +1,67 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0041",
+  "title": "Create-site site-machinery preset",
+  "status": "completed",
+  "recorded_at": "2026-05-12T10:47:35.3080839-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "source_context": "greenfield create-site CLI objective continuation",
+    "external_source_state_imported": false
+  },
+  "changed_files": [
+    "packages/layers/cli/src/lib/create-site-template-catalog.ts",
+    "packages/layers/cli/test/commands/sites-create.test.ts",
+    "docs/product/create-site-options-model.md",
+    "docs/product/fixtures/create-site-options/create-site-site-machinery.json",
+    ".narada/tasks/task-0041-create-site-site-machinery-preset.md",
+    ".narada/audit/task-0041-create-site-site-machinery-preset-audit.json",
+    ".narada/capabilities/create-site-package-catalog.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "implementation": {
+    "preset_added": "site-machinery",
+    "template_id": "narada-proper.templates.site.site-machinery.v0",
+    "template_components": [
+      "@narada2/site-inbox",
+      "@narada2/site-config",
+      "@narada2/site-lift"
+    ],
+    "exposure_class": "descriptor_only",
+    "operational_command": "narada sites create --dry-run --config docs/product/fixtures/create-site-options/create-site-site-machinery.json --format json"
+  },
+  "verification": [
+    {
+      "command": "Get-Content -Raw docs\\product\\fixtures\\create-site-options\\create-site-site-machinery.json | ConvertFrom-Json | Out-Null",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli test test/commands/sites-create.test.ts",
+      "result": "passed",
+      "evidence": "1 test file passed, 14 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli build",
+      "result": "passed"
+    }
+  ],
+  "terminal_claim": "The greenfield create-site CLI supports a descriptor-only site-machinery preset/fixture for reusable Site machinery packages.",
+  "not_claimed": [
+    "source Site import/migration/lift",
+    "live inbox DB mutation",
+    "site-config probe execution",
+    "Site-lift materialization",
+    "DB init",
+    "MCP registration",
+    "runtime hydration",
+    "capability grants",
+    "Windows profile mutation",
+    "PC/operator-surface mutation"
+  ],
+  "rollback": "Remove the site-machinery preset from the create-site catalog, delete its fixture, revert docs/test additions, and remove this task/audit/ledger evidence."
+}

@@ -1,0 +1,132 @@
+{
+  "schema": "narada.execution_carrier.audit.v0",
+  "carrier_id": "narada-proper.carrier.task-0001.package-implementation.v0",
+  "task_surface_id": "narada-proper.task-0001",
+  "authority_surface_id": "narada-proper.surface.package-implementation-task.v0",
+  "admitted_root": "D:\\code\\narada",
+  "authority_verification": {
+    "authority_clone_path": "D:\\code\\narada\\.ai\\authority-clone.json",
+    "site_id": "narada-proper",
+    "canonical_authority_root": "/home/andrey/src/narada",
+    "fallback_root_admission": ".narada/admission/decisions/task-0001-execution-carrier-admission.md",
+    "scope_source": ".narada/admission/candidates/task-0001-execution-carrier-candidate.md"
+  },
+  "preflight_git_status": {
+    "head": "603d4b3242cd6fe8e2ff64f745bad4b8074628c7",
+    "preflight_path": ".narada/audit/task-0001-preflight-20260510.json",
+    "unrelated_dirty_worktree_present": true,
+    "unrelated_dirty_files_touched": false
+  },
+  "changed_files": [
+    {
+      "path": "packages/site-task-lifecycle/package.json",
+      "kind": "additive",
+      "purpose": "Package metadata and package-local scripts."
+    },
+    {
+      "path": "packages/site-task-lifecycle/tsconfig.json",
+      "kind": "additive",
+      "purpose": "Package-local TypeScript compiler configuration."
+    },
+    {
+      "path": "packages/site-task-lifecycle/README.md",
+      "kind": "additive",
+      "purpose": "Package boundary, current slice, and out-of-scope documentation."
+    },
+    {
+      "path": "packages/site-task-lifecycle/src/index.ts",
+      "kind": "additive",
+      "purpose": "Public API exports."
+    },
+    {
+      "path": "packages/site-task-lifecycle/src/types.ts",
+      "kind": "additive",
+      "purpose": "Initializer and guard types."
+    },
+    {
+      "path": "packages/site-task-lifecycle/src/initialize.ts",
+      "kind": "additive",
+      "purpose": "Receiving-Site local initializer and admission manifest writer."
+    },
+    {
+      "path": "packages/site-task-lifecycle/src/import-refusal.ts",
+      "kind": "additive",
+      "purpose": "Denied source import and non-neutral identity guards."
+    },
+    {
+      "path": "packages/site-task-lifecycle/test/fixtures/neutral-site.ts",
+      "kind": "additive",
+      "purpose": "Neutral fixture identities and temp Site options."
+    },
+    {
+      "path": "packages/site-task-lifecycle/test/initialize.test.ts",
+      "kind": "additive",
+      "purpose": "Initializer behavior test."
+    },
+    {
+      "path": "packages/site-task-lifecycle/test/import-refusal.test.ts",
+      "kind": "additive",
+      "purpose": "Runtime-state import refusal and neutral identity tests."
+    }
+  ],
+  "denied_inputs_checked": [
+    "C:\\Users\\Andrey\\Narada\\.ai\\ task lifecycle databases",
+    "C:\\Users\\Andrey\\Narada\\.ai\\ task history",
+    "C:\\Users\\Andrey\\Narada\\.ai\\ inbox database and envelopes",
+    "C:\\Users\\Andrey\\Narada\\.ai\\ roster and checkpoint state",
+    "C:\\ProgramData\\Narada\\sites\\pc\\desktop-sunroom-2\\ PC-locus runtime state",
+    "narada-andrey.* fixture identities",
+    "Andrey operator identity",
+    "secrets, tokens, credentials, private operator preferences"
+  ],
+  "verification_commands": [
+    {
+      "command": "pnpm --dir packages\\site-task-lifecycle typecheck",
+      "status": "passed",
+      "summary": "tsc --noEmit completed successfully."
+    },
+    {
+      "command": "pnpm --dir packages\\site-task-lifecycle exec vitest run test/initialize.test.ts test/import-refusal.test.ts",
+      "status": "passed",
+      "summary": "2 test files passed; 4 tests passed."
+    }
+  ],
+  "rollback_evidence": [
+    {
+      "group": "new package scaffold",
+      "paths": [
+        "packages/site-task-lifecycle/"
+      ],
+      "reversal": "Remove the additive packages/site-task-lifecycle directory if this increment is rejected.",
+      "broad_reset_required": false
+    },
+    {
+      "group": "audit and ledger evidence",
+      "paths": [
+        ".narada/audit/task-0001-implementation-audit.json",
+        ".narada/admission/admission-ledger.jsonl"
+      ],
+      "reversal": "Append a superseding admission event rather than deleting ledger history; remove audit only if directed by Narada proper authority.",
+      "broad_reset_required": false
+    }
+  ],
+  "no_import_proof": {
+    "source_artifacts_read_as_external_evidence_only": true,
+    "narada_andrey_runtime_db_copied": false,
+    "narada_andrey_task_history_copied": false,
+    "narada_andrey_inbox_history_copied": false,
+    "narada_andrey_roster_copied": false,
+    "narada_andrey_checkpoints_copied": false,
+    "operator_surface_bindings_copied": false,
+    "pc_locus_state_copied": false,
+    "secrets_copied": false,
+    "fixtures_use_neutral_identities": true,
+    "import_refusal_tests_present": true
+  },
+  "handoff_to_surface": {
+    "surface_path": ".narada/surfaces/package-implementation-task-surface.md",
+    "task_path": ".narada/tasks/task-0001-site-task-lifecycle-first-slice.md",
+    "ledger_path": ".narada/admission/admission-ledger.jsonl",
+    "closeout_status": "implementation_increment_complete"
+  }
+}

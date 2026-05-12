@@ -1,0 +1,61 @@
+{
+  "schema": "narada.capability.candidate.v0",
+  "site_id": "narada-proper",
+  "capability_id": "narada-proper.capability.mcp-surface-carrier-supervisor-lifecycle.v0",
+  "capability_name": "MCP Surface Carrier Supervisor Lifecycle",
+  "state": "read_only_status_registry_first_slice_implemented",
+  "exposure_class": "read_only",
+  "task_id": "narada-proper.task-0020",
+  "candidate_path": ".narada/admission/candidates/task-0020-mcp-surface-carrier-supervisor-lifecycle-candidate.md",
+  "core_invariant": "stdio MCP server must not self-restart; restart/rebind belongs to an external carrier/supervisor",
+  "first_slice": {
+    "kind": "read_only_status_registry",
+    "implementation_task": "narada-proper.task-0020",
+    "package": "@narada2/mcp-surface-carrier-supervisor",
+    "package_path": "packages/mcp-surface-carrier-supervisor",
+    "lifecycle_states": [
+      "stale",
+      "restart_requested",
+      "carrier_restarted",
+      "live_verified"
+    ],
+    "separated_concepts": [
+      "Site authority",
+      "MCP process",
+      "carrier/session",
+      "runtime registry",
+      "restart request",
+      "verification",
+      "Capability Lifecycle"
+    ],
+    "fixtures": [
+      "stale stdio surface",
+      "verified live surface"
+    ],
+    "verification": [
+      "pnpm --dir packages\\mcp-surface-carrier-supervisor test",
+      "pnpm --dir packages\\mcp-surface-carrier-supervisor typecheck",
+      "pnpm --dir packages\\mcp-surface-carrier-supervisor build"
+    ],
+    "audit_path": ".narada/audit/task-0020-mcp-surface-carrier-supervisor-lifecycle-audit.json"
+  },
+  "external_orientation_evidence": [
+    "narada-andrey:docs/concepts/mcp-surface-carrier-supervisor-lifecycle.md",
+    "narada-andrey:docs/concepts/fixtures/mcp-surface-carrier-supervisor/",
+    "narada-andrey:kb/operator-surface/operator-surface-message-bus.md",
+    "narada-andrey task #559",
+    "narada-andrey task #562",
+    "commit:f4ba725e0d5c19a9c7e6fc46187dcf553957f5a2"
+  ],
+  "not_admitted": [
+    "arbitrary process kill",
+    "native shell fallback",
+    "stdio MCP self-restart",
+    "live carrier restart execution",
+    "live rebind execution",
+    "process mutation",
+    "narada-andrey runtime registry import",
+    "PC-locus state import",
+    "operator-surface runtime copying"
+  ]
+}

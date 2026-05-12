@@ -1,0 +1,16 @@
+{
+  "schema": "narada.site_lift.materialization_policy.v0",
+  "site_id": "narada-proper",
+  "target_site_root": "D:\\code\\narada",
+  "carrier_id": "site_lift_local_adoption",
+  "files_copied": false,
+  "packages_installed": false,
+  "source_runtime_imported": false,
+  "next_admission_required_for": [
+    "adoption artifact selection",
+    "file copy/install/bootstrap",
+    "MCP registration mutation",
+    "receiving Site mutation authority",
+    "catalog publication"
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "schema": "narada.create_site.options.v0",
+  "mode": "dry_run",
+  "preset": "agent-memory",
+  "template_catalog": {
+    "template_id": "narada-proper.templates.site.agent-memory.v0",
+    "template_components": ["@narada2/agent-context-memory"]
+  },
+  "site": {
+    "site_id": "bad-import",
+    "site_kind": "user",
+    "authority_locus": "user",
+    "site_root": "C:\\Users\\Ada\\Narada",
+    "workspace_root": "C:\\Users\\Ada\\Narada",
+    "substrate": "windows-native",
+    "execution_surface": "windows_native",
+    "sync_posture": "hybrid_capable_plain_folder"
+  },
+  "packages": [
+    { "name": "@narada2/agent-context-memory", "include_contracts": true, "include_docs": true, "include_schema_descriptors": true, "include_mcp_descriptors": true, "include_conformance_tests": true }
+  ],
+  "identity": {
+    "named_agents": [],
+    "role_assignments": [],
+    "role_compatibility_identities": [],
+    "claimed_identity_evidence": [
+      { "claimed_identity": "narada-andrey.Kevin", "authority": false }
+    ],
+    "mechanical_verification_basis": []
+  },
+  "storage": {
+    "intent": "local_adapter_admitted",
+    "driver_preference": "sqlite3-cli",
+    "mutation_mode": "execute_with_admitted_adapter",
+    "source_import": "C:\\Users\\Andrey\\Narada\\.ai\\state\\agent-context.sqlite"
+  },
+  "mcp": { "intent": "local_registration_admitted", "surfaces": ["agent_context_memory"] },
+  "capabilities": {
+    "policy": "admit_local",
+    "required": ["agent_context_memory"],
+    "credential_refs": ["C:\\Users\\Andrey\\Narada\\secrets\\token.txt"]
+  },
+  "inbox": { "enable": "drop_only" },
+  "task_lifecycle": { "enable": false },
+  "agent_context": {
+    "enable": "local_adapter_admitted",
+    "package": "@narada2/agent-context-memory",
+    "checkpoint_policy": "local_persistence_admitted",
+    "source_checkpoint_import": "C:\\Users\\Andrey\\Narada\\.narada\\checkpoints\\old.md"
+  },
+  "operator_surface": {
+    "intent": "admit_local_surface",
+    "pc_locus_required": true,
+    "source_runtime_import": "C:\\ProgramData\\Narada\\sites\\pc\\desktop-sunroom-2\\runtime\\operator-surface-input-events\\input.json"
+  },
+  "windows_pwsh": { "profile": "admit_profile_write", "path_style": "windows" },
+  "evidence": {
+    "template_refs": ["narada-proper.templates.site.agent-memory.v0", "package:@narada2/agent-context-memory"],
+    "invalid_source_site_inputs": ["OSM:bad-import-fixture"],
+    "expected_refusals": [
+      "source_runtime_state_import_refused",
+      "raw_secret_in_config_refused",
+      "pc_locus_authority_missing",
+      "claimed_identity_not_authority",
+      "package_selection_does_not_grant_live_capability",
+      "live_adapter_admission_missing",
+      "live_mcp_registration_admission_missing"
+    ]
+  }
+}

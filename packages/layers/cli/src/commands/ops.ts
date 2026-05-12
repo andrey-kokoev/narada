@@ -105,33 +105,49 @@ async function loadOpsReport(
   scopeId: string,
   rootDir: string,
   limit: number,
+  storageScopes: Array<{ scopeId: string; rootDir: string }> = [{ scopeId, rootDir }],
 ): Promise<OpsReport> {
   const { Database, SqliteCoordinatorStore, SqliteOutboundStore } = await import(
     '@narada2/control-plane'
   );
-  const db = new Database(join(rootDir, '.narada', 'coordinator.db'));
   const capturedAt = new Date().toISOString();
 
+  // ── Health summary from .health.json ──
+  const health: HealthSummary = { overall: 'unknown' };
   try {
-    const coordinatorStore = new SqliteCoordinatorStore({ db });
-    const outboundStore = new SqliteOutboundStore({ db });
-
-    // ── Health summary from .health.json ──
-    const health: HealthSummary = { overall: 'unknown' };
+    const healthPath = join(dirname(rootDir), '.health.json');
+    const healthRaw = await readFile(healthPath, 'utf8');
+    const healthData = JSON.parse(healthRaw) as {
+      status?: string;
+      scopes?: Array<{
+        scopeId?: string;
+        readiness?: {
+          dispatchReady?: boolean;
+          outboundHealthy?: boolean;
+          syncFresh?: boolean;
+          charterRuntimeHealthy?: boolean;
+        };
+      }>;
+      readiness?: {
+        dispatchReady?: boolean;
+        outboundHealthy?: boolean;
+        syncFresh?: boolean;
+        charterRuntimeHealthy?: boolean;
+      };
+    };
+    const readiness = healthData.scopes?.find((scope) => scope.scopeId === scopeId)?.readiness ?? healthData.readiness;
+    health.status = healthData.status;
+    if (readiness) {
+      health.syncFresh = readiness.syncFresh;
+      health.outboundHealthy = readiness.outboundHealthy;
+      health.charterRuntimeHealthy = readiness.charterRuntimeHealthy;
+    }
+  } catch {
     try {
-      const healthPath = join(dirname(rootDir), '.health.json');
+      const healthPath = join(rootDir, '.health.json');
       const healthRaw = await readFile(healthPath, 'utf8');
       const healthData = JSON.parse(healthRaw) as {
         status?: string;
-        scopes?: Array<{
-          scopeId?: string;
-          readiness?: {
-            dispatchReady?: boolean;
-            outboundHealthy?: boolean;
-            syncFresh?: boolean;
-            charterRuntimeHealthy?: boolean;
-          };
-        }>;
         readiness?: {
           dispatchReady?: boolean;
           outboundHealthy?: boolean;
@@ -139,158 +155,145 @@ async function loadOpsReport(
           charterRuntimeHealthy?: boolean;
         };
       };
-      const readiness = healthData.scopes?.find((scope) => scope.scopeId === scopeId)?.readiness ?? healthData.readiness;
       health.status = healthData.status;
-      if (readiness) {
-        health.syncFresh = readiness.syncFresh;
-        health.outboundHealthy = readiness.outboundHealthy;
-        health.charterRuntimeHealthy = readiness.charterRuntimeHealthy;
+      if (healthData.readiness) {
+        health.syncFresh = healthData.readiness.syncFresh;
+        health.outboundHealthy = healthData.readiness.outboundHealthy;
+        health.charterRuntimeHealthy = healthData.readiness.charterRuntimeHealthy;
       }
     } catch {
-      try {
-        const healthPath = join(rootDir, '.health.json');
-        const healthRaw = await readFile(healthPath, 'utf8');
-        const healthData = JSON.parse(healthRaw) as {
-          status?: string;
-          readiness?: {
-            dispatchReady?: boolean;
-            outboundHealthy?: boolean;
-            syncFresh?: boolean;
-            charterRuntimeHealthy?: boolean;
-          };
-        };
-        health.status = healthData.status;
-        if (healthData.readiness) {
-          health.syncFresh = healthData.readiness.syncFresh;
-          health.outboundHealthy = healthData.readiness.outboundHealthy;
-          health.charterRuntimeHealthy = healthData.readiness.charterRuntimeHealthy;
-        }
-      } catch {
-        // No health file yet
-      }
+      // No health file yet
     }
+  }
 
-    // Daemon running? Check PID file (same candidates as doctor.ts)
-    const pidCandidates = [
-      join(rootDir, 'daemon.pid'),
-      join(rootDir, 'narada-daemon.pid'),
-      './narada-daemon.pid',
-      './daemon.pid',
-    ];
-    let daemonPid: number | null = null;
-    for (const pidPath of pidCandidates) {
-      try {
-        const pidRaw = await readFile(pidPath, 'utf8');
-        const pid = parseInt(pidRaw.trim(), 10);
-        if (!isNaN(pid)) {
-          daemonPid = pid;
-          break;
-        }
-      } catch {
-        // try next candidate
+  // Daemon running? Check PID file (same candidates as doctor.ts)
+  const pidCandidates = [
+    join(rootDir, 'daemon.pid'),
+    join(rootDir, 'narada-daemon.pid'),
+    './narada-daemon.pid',
+    './daemon.pid',
+  ];
+  let daemonPid: number | null = null;
+  for (const pidPath of pidCandidates) {
+    try {
+      const pidRaw = await readFile(pidPath, 'utf8');
+      const pid = parseInt(pidRaw.trim(), 10);
+      if (!isNaN(pid)) {
+        daemonPid = pid;
+        break;
       }
+    } catch {
+      // try next candidate
     }
-    if (daemonPid !== null) {
-      try {
-        process.kill(daemonPid, 0);
-        health.daemonRunning = true;
-      } catch {
-        health.daemonRunning = false;
-      }
-    } else {
+  }
+  if (daemonPid !== null) {
+    try {
+      process.kill(daemonPid, 0);
+      health.daemonRunning = true;
+    } catch {
       health.daemonRunning = false;
     }
+  } else {
+    health.daemonRunning = false;
+  }
 
-    // Overall health classification
-    const readinessChecks = [
-      health.syncFresh,
-      health.outboundHealthy,
-      health.charterRuntimeHealthy,
-    ].filter((v) => v !== undefined);
-    const checks = readinessChecks.length > 0 ? readinessChecks : [health.daemonRunning].filter((v) => v !== undefined);
-    const passes = checks.filter((v) => v === true).length;
-    if (checks.length === 0) {
-      health.overall = 'unknown';
-    } else if (passes === checks.length) {
-      health.overall = 'healthy';
-    } else if (passes >= checks.length / 2) {
-      health.overall = 'degraded';
-    } else {
-      health.overall = 'failing';
-    }
+  // Overall health classification
+  const readinessChecks = [
+    health.syncFresh,
+    health.outboundHealthy,
+    health.charterRuntimeHealthy,
+  ].filter((v) => v !== undefined);
+  const checks = readinessChecks.length > 0 ? readinessChecks : [health.daemonRunning].filter((v) => v !== undefined);
+  const passes = checks.filter((v) => v === true).length;
+  if (checks.length === 0) {
+    health.overall = 'unknown';
+  } else if (passes === checks.length) {
+    health.overall = 'healthy';
+  } else if (passes >= checks.length / 2) {
+    health.overall = 'degraded';
+  } else {
+    health.overall = 'failing';
+  }
 
-    // ── Recent Activity ──
-    const recentActivity: RecentActivity = {
-      evaluations: [],
-      decisions: [],
-      executions: [],
-    };
+  // ── Recent Activity ──
+  const recentActivity: RecentActivity = {
+    evaluations: [],
+    decisions: [],
+    executions: [],
+  };
+  const attentionQueue: AttentionItem[] = [];
+  const draftsPendingReview: DraftPendingReview[] = [];
+  let failedRowCount = 0;
+  let stuckWorkRowCount = 0;
 
-    const evalRows = coordinatorStore.db
-      .prepare(
-        `select evaluation_id, charter_id, outcome, analyzed_at, summary from evaluations where scope_id = ? order by analyzed_at desc limit ?`
-      )
-      .all(scopeId, limit) as Array<{
-        evaluation_id: string;
-        charter_id: string;
-        outcome: string;
-        analyzed_at: string;
-        summary: string | null;
-      }>;
-    recentActivity.evaluations = evalRows.map((r) => ({
-      id: r.evaluation_id,
-      charter_id: r.charter_id,
-      outcome: r.outcome,
-      analyzed_at: r.analyzed_at,
-      summary: r.summary ?? undefined,
-    }));
+  for (const storageScope of storageScopes) {
+    const db = new Database(join(storageScope.rootDir, '.narada', 'coordinator.db'));
+    try {
+      const coordinatorStore = new SqliteCoordinatorStore({ db });
+      const outboundStore = new SqliteOutboundStore({ db });
 
-    const decisionRows = coordinatorStore.db
-      .prepare(
-        `select decision_id, approved_action, decided_at, outbound_id from foreman_decisions where scope_id = ? order by decided_at desc limit ?`
-      )
-      .all(scopeId, limit) as Array<{
-        decision_id: string;
-        approved_action: string;
-        decided_at: string;
-        outbound_id: string | null;
-      }>;
-    recentActivity.decisions = decisionRows.map((r) => ({
-      id: r.decision_id,
-      approved_action: r.approved_action,
-      decided_at: r.decided_at,
-      outbound_id: r.outbound_id ?? undefined,
-    }));
+      const evalRows = coordinatorStore.db
+        .prepare(
+          `select evaluation_id, charter_id, outcome, analyzed_at, summary from evaluations where scope_id = ? order by analyzed_at desc limit ?`
+        )
+        .all(scopeId, limit) as Array<{
+          evaluation_id: string;
+          charter_id: string;
+          outcome: string;
+          analyzed_at: string;
+          summary: string | null;
+        }>;
+      recentActivity.evaluations.push(...evalRows.map((r) => ({
+        id: r.evaluation_id,
+        charter_id: r.charter_id,
+        outcome: r.outcome,
+        analyzed_at: r.analyzed_at,
+        summary: r.summary ?? undefined,
+      })));
 
-    const execRows = coordinatorStore.db
-      .prepare(
-        `select ea.execution_id, ea.status, ea.started_at, ea.completed_at
+      const decisionRows = coordinatorStore.db
+        .prepare(
+          `select decision_id, approved_action, decided_at, outbound_id from foreman_decisions where scope_id = ? order by decided_at desc limit ?`
+        )
+        .all(scopeId, limit) as Array<{
+          decision_id: string;
+          approved_action: string;
+          decided_at: string;
+          outbound_id: string | null;
+        }>;
+      recentActivity.decisions.push(...decisionRows.map((r) => ({
+        id: r.decision_id,
+        approved_action: r.approved_action,
+        decided_at: r.decided_at,
+        outbound_id: r.outbound_id ?? undefined,
+      })));
+
+      const execRows = coordinatorStore.db
+        .prepare(
+          `select ea.execution_id, ea.status, ea.started_at, ea.completed_at
          from execution_attempts ea
          join work_items wi on wi.work_item_id = ea.work_item_id
          where wi.scope_id = ?
          order by ea.started_at desc
          limit ?`
-      )
-      .all(scopeId, limit) as Array<{
-        execution_id: string;
-        status: string;
-        started_at: string;
-        completed_at: string | null;
-      }>;
-    recentActivity.executions = execRows.map((r) => ({
-      id: r.execution_id,
-      status: r.status,
-      started_at: r.started_at,
-      completed_at: r.completed_at ?? undefined,
-    }));
+        )
+        .all(scopeId, limit) as Array<{
+          execution_id: string;
+          status: string;
+          started_at: string;
+          completed_at: string | null;
+        }>;
+      recentActivity.executions.push(...execRows.map((r) => ({
+        id: r.execution_id,
+        status: r.status,
+        started_at: r.started_at,
+        completed_at: r.completed_at ?? undefined,
+      })));
 
-    // ── Attention Queue ──
-    const attentionQueue: AttentionItem[] = [];
-
-    // Stuck work items
-    const stuckWorkRows = coordinatorStore.db
-      .prepare(
-        `select wi.work_item_id, wi.status, wi.updated_at, wi.created_at, wi.context_id
+      // Stuck work items
+      const stuckWorkRows = coordinatorStore.db
+        .prepare(
+          `select wi.work_item_id, wi.status, wi.updated_at, wi.created_at, wi.context_id
          from work_items wi
          where wi.scope_id = ?
            and wi.status in ('opened', 'leased', 'executing', 'failed_retryable')
@@ -301,53 +304,55 @@ async function loadOpsReport(
              or (wi.status = 'failed_retryable' and wi.retry_count >= 3 and (wi.next_retry_at is null or wi.next_retry_at < datetime('now')))
            )
          order by wi.priority desc, wi.created_at asc`
-      )
-      .all(scopeId) as Array<{
-        work_item_id: string;
-        status: string;
-        updated_at: string;
-        created_at: string;
-        context_id: string;
-      }>;
-    for (const row of stuckWorkRows) {
-      attentionQueue.push({
-        type: 'stuck_work',
-        id: row.work_item_id,
-        description: `${row.status} — ${row.context_id}`,
-        since: row.status === 'opened' ? row.created_at : row.updated_at,
-      });
-    }
+        )
+        .all(scopeId) as Array<{
+          work_item_id: string;
+          status: string;
+          updated_at: string;
+          created_at: string;
+          context_id: string;
+        }>;
+      stuckWorkRowCount += stuckWorkRows.length;
+      for (const row of stuckWorkRows) {
+        attentionQueue.push({
+          type: 'stuck_work',
+          id: row.work_item_id,
+          description: `${row.status} — ${row.context_id}`,
+          since: row.status === 'opened' ? row.created_at : row.updated_at,
+        });
+      }
 
-    // Failed terminal work items
-    const failedRows = coordinatorStore.db
-      .prepare(
-        `select work_item_id, status, updated_at, context_id
+      // Failed terminal work items
+      const failedRows = coordinatorStore.db
+        .prepare(
+          `select work_item_id, status, updated_at, context_id
          from work_items
          where scope_id = ?
            and status = 'failed_terminal'
            and coalesce(error_message, '') not like '%[acknowledged by operator]%'
          order by updated_at desc
          limit ?`
-      )
-      .all(scopeId, limit) as Array<{
-        work_item_id: string;
-        status: string;
-        updated_at: string;
-        context_id: string;
-      }>;
-    for (const row of failedRows) {
-      attentionQueue.push({
-        type: 'failed',
-        id: row.work_item_id,
-        description: `failed_terminal — ${row.context_id}`,
-        since: row.updated_at,
-      });
-    }
+        )
+        .all(scopeId, limit) as Array<{
+          work_item_id: string;
+          status: string;
+          updated_at: string;
+          context_id: string;
+        }>;
+      failedRowCount += failedRows.length;
+      for (const row of failedRows) {
+        attentionQueue.push({
+          type: 'failed',
+          id: row.work_item_id,
+          description: `failed_terminal — ${row.context_id}`,
+          since: row.updated_at,
+        });
+      }
 
-    // Stuck outbound
-    const stuckOutboundRows = outboundStore.db
-      .prepare(
-        `select oh.outbound_id, oh.status, oh.created_at, oh.action_type, oh.context_id
+      // Stuck outbound
+      const stuckOutboundRows = outboundStore.db
+        .prepare(
+          `select oh.outbound_id, oh.status, oh.created_at, oh.action_type, oh.context_id
          from outbound_handoffs oh
          where oh.scope_id = ?
            and oh.status in ('pending', 'draft_creating', 'draft_ready', 'sending')
@@ -358,27 +363,27 @@ async function loadOpsReport(
              or (oh.status = 'sending' and oh.created_at < datetime('now', '-5 minutes'))
            )
          order by oh.created_at asc`
-      )
-      .all(scopeId) as Array<{
-        outbound_id: string;
-        status: string;
-        created_at: string;
-        action_type: string;
-        context_id: string;
-      }>;
-    for (const row of stuckOutboundRows) {
-      attentionQueue.push({
-        type: 'stuck_outbound',
-        id: row.outbound_id,
-        description: `${row.status} — ${row.action_type} — ${row.context_id}`,
-        since: row.created_at,
-      });
-    }
+        )
+        .all(scopeId) as Array<{
+          outbound_id: string;
+          status: string;
+          created_at: string;
+          action_type: string;
+          context_id: string;
+        }>;
+      for (const row of stuckOutboundRows) {
+        attentionQueue.push({
+          type: 'stuck_outbound',
+          id: row.outbound_id,
+          description: `${row.status} — ${row.action_type} — ${row.context_id}`,
+          since: row.created_at,
+        });
+      }
 
-    // ── Drafts Pending Review ──
-    const draftRows = outboundStore.db
-      .prepare(
-        `select
+      // ── Drafts Pending Review ──
+      const draftRows = outboundStore.db
+        .prepare(
+          `select
            oh.outbound_id,
            oh.action_type,
            oh.context_id,
@@ -401,105 +406,115 @@ async function loadOpsReport(
          left join foreman_decisions fd on fd.outbound_id = oh.outbound_id
          where oh.scope_id = ? and oh.status in ('draft_ready', 'approved_for_send', 'blocked_policy')
          order by oh.created_at desc`
-      )
-      .all(scopeId) as Array<{
-        outbound_id: string;
-        action_type: string;
-        context_id: string;
-        created_at: string;
-        status: string;
-        reviewed_at: string | null;
-        approved_at: string | null;
-        payload_json: string;
-        subject: string | null;
-        decision_rationale: string | null;
-        charter_summary: string | null;
-      }>;
-    const draftsPendingReview: DraftPendingReview[] = draftRows.map((r) => {
-      let payloadSummary: string | undefined;
-      try {
-        const payload = JSON.parse(r.payload_json) as { subject?: string; body_preview?: string };
-        payloadSummary = payload.subject ?? payload.body_preview ?? undefined;
-      } catch {
-        // ignore parse errors
-      }
-
-      const actions: string[] = [];
-      if (r.status === 'draft_ready') {
-        actions.push('mark-reviewed', 'reject-draft', 'handled-externally');
-        if (r.action_type === 'send_reply' || r.action_type === 'send_new_message') {
-          actions.push('approve-draft-for-send');
+        )
+        .all(scopeId) as Array<{
+          outbound_id: string;
+          action_type: string;
+          context_id: string;
+          created_at: string;
+          status: string;
+          reviewed_at: string | null;
+          approved_at: string | null;
+          payload_json: string;
+          subject: string | null;
+          decision_rationale: string | null;
+          charter_summary: string | null;
+        }>;
+      draftsPendingReview.push(...draftRows.map((r) => {
+        let payloadSummary: string | undefined;
+        try {
+          const payload = JSON.parse(r.payload_json) as { subject?: string; body_preview?: string };
+          payloadSummary = payload.subject ?? payload.body_preview ?? undefined;
+        } catch {
+          // ignore parse errors
         }
-        // campaign_brief is document-only in v0; never executable
-      }
-      if (r.status === 'blocked_policy') {
-        actions.push('reject-draft');
-      }
 
-      let reviewStatus: string;
-      if (r.approved_at) reviewStatus = 'approved_for_send';
-      else if (r.reviewed_at) reviewStatus = 'reviewed';
-      else reviewStatus = 'awaiting_review';
+        const actions: string[] = [];
+        if (r.status === 'draft_ready') {
+          actions.push('mark-reviewed', 'reject-draft', 'handled-externally');
+          if (r.action_type === 'send_reply' || r.action_type === 'send_new_message') {
+            actions.push('approve-draft-for-send');
+          }
+          // campaign_brief is document-only in v0; never executable
+        }
+        if (r.status === 'blocked_policy') {
+          actions.push('reject-draft');
+        }
 
-      return {
-        outbound_id: r.outbound_id,
-        action_type: r.action_type,
-        context_id: r.context_id,
-        created_at: r.created_at,
-        payload_summary: r.subject ?? payloadSummary,
-        review_status: reviewStatus,
-        decision_rationale: r.decision_rationale ?? undefined,
-        charter_summary: r.charter_summary ?? undefined,
-        available_actions: actions,
-      };
-    });
+        let reviewStatus: string;
+        if (r.approved_at) reviewStatus = 'approved_for_send';
+        else if (r.reviewed_at) reviewStatus = 'reviewed';
+        else reviewStatus = 'awaiting_review';
 
-    // ── Suggested Next Actions ──
-    const suggestedActions: string[] = [];
-    if (!health.daemonRunning) {
-      suggestedActions.push('Start the daemon: pnpm daemon');
+        return {
+          outbound_id: r.outbound_id,
+          action_type: r.action_type,
+          context_id: r.context_id,
+          created_at: r.created_at,
+          payload_summary: r.subject ?? payloadSummary,
+          review_status: reviewStatus,
+          decision_rationale: r.decision_rationale ?? undefined,
+          charter_summary: r.charter_summary ?? undefined,
+          available_actions: actions,
+        };
+      }));
+    } finally {
+      db.close();
     }
-    if (health.daemonRunning && !health.syncFresh) {
-      suggestedActions.push('Sync is stale. Check logs and run: narada sync --mailbox <id>');
-    }
-    if (draftsPendingReview.length > 0) {
-      suggestedActions.push(
-        `${draftsPendingReview.length} draft(s) pending review. Inspect with: narada show-draft <outbound-id>`,
-      );
-    }
-    const totalDrafts = draftRows.length;
-    if (totalDrafts > 0) {
-      suggestedActions.push(
-        `Full draft overview: narada drafts`,
-      );
-    }
-    if (failedRows.length > 0) {
-      suggestedActions.push(
-        `${failedRows.length} failed work item(s). Inspect with: narada ops; quiet known history with: narada acknowledge-alert <work-item-id>`
-      );
-    }
-    if (stuckWorkRows.length > 0) {
-      suggestedActions.push(
-        `${stuckWorkRows.length} stuck work item(s). Consider: narada recover --scope ${scopeId} --dry-run`
-      );
-    }
-    if (suggestedActions.length === 0) {
-      suggestedActions.push('All clear. No immediate action required.');
-    }
-
-    return {
-      scopeId,
-      rootDir,
-      capturedAt,
-      health,
-      recentActivity,
-      attentionQueue,
-      draftsPendingReview,
-      suggestedActions,
-    };
-  } finally {
-    db.close();
   }
+
+  recentActivity.evaluations.sort((a, b) => b.analyzed_at.localeCompare(a.analyzed_at));
+  recentActivity.decisions.sort((a, b) => b.decided_at.localeCompare(a.decided_at));
+  recentActivity.executions.sort((a, b) => b.started_at.localeCompare(a.started_at));
+  recentActivity.evaluations = recentActivity.evaluations.slice(0, limit);
+  recentActivity.decisions = recentActivity.decisions.slice(0, limit);
+  recentActivity.executions = recentActivity.executions.slice(0, limit);
+  draftsPendingReview.sort((a, b) => b.created_at.localeCompare(a.created_at));
+  draftsPendingReview.splice(limit);
+
+  // ── Suggested Next Actions ──
+  const suggestedActions: string[] = [];
+  if (!health.daemonRunning) {
+    suggestedActions.push('Start the daemon: pnpm daemon');
+  }
+  if (health.daemonRunning && !health.syncFresh) {
+    suggestedActions.push('Sync is stale. Check logs and run: narada sync --mailbox <id>');
+  }
+  if (draftsPendingReview.length > 0) {
+    suggestedActions.push(
+      `${draftsPendingReview.length} draft(s) pending review. Inspect with: narada show-draft <outbound-id>`,
+    );
+  }
+  const totalDrafts = draftsPendingReview.length;
+  if (totalDrafts > 0) {
+    suggestedActions.push(
+      `Full draft overview: narada drafts`,
+    );
+  }
+  if (failedRowCount > 0) {
+    suggestedActions.push(
+      `${failedRowCount} failed work item(s). Inspect with: narada ops; quiet known history with: narada acknowledge-alert <work-item-id>`
+    );
+  }
+  if (stuckWorkRowCount > 0) {
+    suggestedActions.push(
+      `${stuckWorkRowCount} stuck work item(s). Consider: narada recover --scope ${scopeId} --dry-run`
+    );
+  }
+  if (suggestedActions.length === 0) {
+    suggestedActions.push('All clear. No immediate action required.');
+  }
+
+  return {
+    scopeId,
+    rootDir,
+    capturedAt,
+    health,
+    recentActivity,
+    attentionQueue,
+    draftsPendingReview,
+    suggestedActions,
+  };
 }
 
 export async function opsCommand(
@@ -567,7 +582,11 @@ export async function opsCommand(
       };
     }
     for (const mailbox of config.mailboxes) {
-      reports.push(await loadOpsReport(mailbox.mailbox_id, resolve(mailbox.root_dir), limit));
+      const storageScopes = config.mailboxes.map((configuredMailbox) => ({
+        scopeId: configuredMailbox.mailbox_id,
+        rootDir: resolve(configuredMailbox.root_dir),
+      }));
+      reports.push(await loadOpsReport(mailbox.mailbox_id, resolve(mailbox.root_dir), limit, storageScopes));
     }
   } else {
     let config;
@@ -579,8 +598,12 @@ export async function opsCommand(
         result: { status: 'error', error: 'Failed to load config: ' + (error as Error).message },
       };
     }
+    const storageScopes = config.scopes.map((configuredScope) => ({
+      scopeId: configuredScope.scope_id,
+      rootDir: resolve(configuredScope.root_dir),
+    }));
     for (const scope of config.scopes) {
-      reports.push(await loadOpsReport(scope.scope_id, resolve(scope.root_dir), limit));
+      reports.push(await loadOpsReport(scope.scope_id, resolve(scope.root_dir), limit, storageScopes));
     }
   }
 

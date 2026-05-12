@@ -1,0 +1,63 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0028",
+  "title": "Deepen Windows operator surface service slice",
+  "status": "completed",
+  "recorded_at": "2026-05-11T23:33:01.9889653-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "builds_on": "narada-proper.task-0027",
+    "source_evidence": [
+      "C:\\Users\\Andrey\\Narada\\docs\\concepts\\operator-surface-identity-ledger.md",
+      "C:\\Users\\Andrey\\Narada\\docs\\concepts\\operator-surface-task-activity.md",
+      "C:\\Users\\Andrey\\Narada\\tools\\operator-surface\\operator-surface-binding-services.mjs"
+    ],
+    "external_evidence_only": true
+  },
+  "changed_files": [
+    "packages/windows-operator-surface/README.md",
+    "packages/windows-operator-surface/docs/source-inventory.md",
+    "packages/windows-operator-surface/src/binding-diagnosis.ts",
+    "packages/windows-operator-surface/src/index.ts",
+    "packages/windows-operator-surface/test/binding-diagnosis.test.ts",
+    ".narada/tasks/task-0028-windows-operator-surface-service-slice.md",
+    ".narada/audit/task-0028-windows-operator-surface-service-slice-audit.json",
+    ".narada/capabilities/windows-machinery-capability-exchange.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/windows-operator-surface test",
+      "result": "passed",
+      "evidence": "2 test files passed; 5 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages/windows-operator-surface typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/windows-operator-surface build",
+      "result": "passed"
+    }
+  ],
+  "terminal_claim": "@narada2/windows-operator-surface now includes source inventory classification and fixture-safe pure binding diagnosis/projection services.",
+  "refused_imports": [
+    "live HWND bindings",
+    "operator-surface SQLite databases",
+    "generated runtime projections",
+    "live window/process evidence",
+    "narada-andrey identity authority",
+    "PC-locus repair scripts",
+    "native Windows API mutation"
+  ],
+  "not_claimed": [
+    "live bind/unbind execution",
+    "PC runtime mutation",
+    "OSL renderer restart",
+    "MCP facade exposure",
+    "operator-surface SQLite ownership"
+  ],
+  "rollback": "Remove binding-diagnosis service, source-inventory doc, tests, and this task evidence. No runtime state was mutated or imported.",
+  "next_smallest_slice": "Expose the binding diagnosis service through a descriptor/read-only MCP or CLI surface, or deepen OSL/WebView2 panel descriptors."
+}

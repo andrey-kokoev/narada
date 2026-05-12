@@ -1,0 +1,58 @@
+{
+  "schema": "narada.audit.task_closeout.v0",
+  "task_id": "narada-proper.task-0014",
+  "title": "Emit package-slice local admission artifacts during Site creation",
+  "status": "completed",
+  "completed_at": "2026-05-10T20:24:50.000-05:00",
+  "changed_files": [
+    "packages/layers/cli/src/commands/sites.ts",
+    "packages/layers/cli/test/commands/sites-create.test.ts",
+    ".narada/tasks/task-0014-create-site-package-slice-admission-artifacts.md",
+    ".narada/audit/task-0014-create-site-package-slice-admission-artifacts-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "implemented": [
+    "Allowed task-lifecycle and agent-memory create-site presets to materialize descriptor-only package-slice artifacts.",
+    "Wrote .narada/admission/package-slices/*.json for selected package descriptors.",
+    "Wrote .narada/mcp/descriptors/*.json for descriptor-only MCP surfaces.",
+    "Wrote .narada/capabilities/capability-policy.json for declare_required policies.",
+    "Preserved refusals for live storage adapter setup, DB mutation, live MCP registration, runtime hydration, capability grants, and operator-surface runtime setup."
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages\\layers\\cli exec vitest run test/commands/sites-create.test.ts",
+      "result": "passed",
+      "summary": "11 tests passed including package-slice descriptor materialization"
+    },
+    {
+      "command": "pnpm --dir packages\\layers\\cli typecheck",
+      "result": "passed",
+      "summary": "tsc --noEmit passed"
+    },
+    {
+      "command": "pnpm --dir packages\\layers\\cli build",
+      "result": "passed",
+      "summary": "tsc build passed"
+    },
+    {
+      "command": "node packages\\layers\\cli\\dist\\main.js sites create --config <temp-create-site-task-lifecycle.json> --format json",
+      "result": "passed",
+      "summary": "Built CLI created a temp task-lifecycle Site skeleton with package-slice, MCP descriptor, and capability policy artifacts; no task lifecycle DB was created."
+    }
+  ],
+  "no_import_evidence": {
+    "source_state_imported": false,
+    "runtime_db_imported": false,
+    "live_mcp_registered": false,
+    "package_selection_grants_live_capability": false
+  },
+  "remaining_blocker": {
+    "next_task": "narada-proper.task-0015",
+    "smallest_missing_admission": "Concrete target-Site local DB init/mutation carrier admission for create-site task-lifecycle setup.",
+    "why_blocked": "The completed create-site path can materialize descriptors and admission artifacts, but live DB creation/mutation must be admitted for the target Site and adapter before task-0015 can execute."
+  },
+  "rollback": [
+    "Revert package-slice descriptor materialization edits in sites.ts and sites-create.test.ts.",
+    "No persistent Site root was created by verification; smoke roots were temporary and removed."
+  ]
+}

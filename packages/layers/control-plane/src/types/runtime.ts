@@ -13,6 +13,7 @@ export interface RunResult {
   event_count: number;
   applied_count: number;
   skipped_count: number;
+  filtered_count?: number;
   duration_ms: number;
   status: "success" | "retryable_failure" | "fatal_failure";
   error?: string;

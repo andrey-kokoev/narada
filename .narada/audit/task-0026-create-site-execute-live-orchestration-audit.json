@@ -1,0 +1,51 @@
+{
+  "schema": "narada.audit.task.v0",
+  "site_id": "narada-proper",
+  "task_surface_id": "narada-proper.task-0026",
+  "title": "Add guarded execute-live create-Site orchestration",
+  "status": "completed",
+  "recorded_at": "2026-05-11T11:37:08.2758921-05:00",
+  "authority_basis": {
+    "authority_root": "D:\\code\\narada",
+    "builds_on": [
+      "narada-proper.task-0024",
+      "narada-proper.task-0025"
+    ]
+  },
+  "changed_files": [
+    "packages/layers/cli/src/commands/sites.ts",
+    "packages/layers/cli/src/commands/sites-register.ts",
+    "packages/layers/cli/test/commands/sites-create.test.ts",
+    ".narada/tasks/task-0026-create-site-execute-live-orchestration.md",
+    ".narada/audit/task-0026-create-site-execute-live-orchestration-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "commands_now_operational": [
+    "narada sites create --dry-run --config <path> --format json",
+    "narada sites create --config <path> --format json",
+    "narada sites create --config <path> --format json --execute-live --live-authority-basis <basis>",
+    "narada sites live-carrier --carrier <id> --mode <plan|apply|verify|recover> --target-site-root <root> --site-id <site-id> --authority-basis <basis>"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/layers/cli test test/commands/sites-create.test.ts",
+      "result": "passed",
+      "evidence": "1 test file passed; 13 tests passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli typecheck",
+      "result": "passed"
+    }
+  ],
+  "terminal_claim": "Narada proper supports a greenfield create-Site CLI path that creates a Site from Narada proper templates and runs admitted local live setup carriers under explicit authority.",
+  "not_claimed": [
+    "private MCP client config mutation",
+    "real Windows profile mutation outside the target Site",
+    "source-Site migration or import",
+    "arbitrary SQL",
+    "destructive rollback",
+    "full operator-surface-aware User Site preset execution"
+  ],
+  "rollback": "Remove --execute-live/--live-authority-basis wiring and the execute-live test. The explicit live-carrier command remains task-0025 evidence unless separately rolled back.",
+  "next_smallest_slice": "Add human-format documentation/examples for the full greenfield command path, or admit private MCP client/profile mutation carriers if those external mutations are required."
+}

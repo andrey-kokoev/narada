@@ -1,0 +1,136 @@
+{
+  "schema": "narada.audit.task.v0",
+  "task_number": 1228,
+  "task_id": "20260512-1228-self-adopt-windows-native-site-package-set-into-narada-prope",
+  "title": "Self-adopt Windows-native Site package set into Narada proper .narada Site",
+  "decision": "admitted_and_applied_target_local_self_adoption",
+  "target_locus": {
+    "site_id": "narada-proper",
+    "site_root": "D:\\code\\narada\\.narada",
+    "repo_root": "D:\\code\\narada"
+  },
+  "authority_basis": "narada_proper_self_adoption_task_1228",
+  "carrier_sequence": [
+    "site_local_db_init",
+    "site_local_storage_hydration",
+    "agent_context_memory_local_storage",
+    "site_inbox_local_substrate",
+    "site_config_local_registry",
+    "site_lift_local_adoption",
+    "site_mcp_registration_transport",
+    "windows_profile_site_binding"
+  ],
+  "carrier_status": {
+    "site_local_db_init": "applied_verified",
+    "site_local_storage_hydration": "applied_verified",
+    "agent_context_memory_local_storage": "applied_verified",
+    "site_inbox_local_substrate": "applied_verified",
+    "site_config_local_registry": "applied_verified",
+    "site_lift_local_adoption": "applied_verified",
+    "site_mcp_registration_transport": "applied_verified",
+    "windows_profile_site_binding": "applied_verified"
+  },
+  "changed_files": [
+    ".narada/admission/live-carrier-audit.jsonl",
+    ".narada/state/local-db/site-local-db.json",
+    ".narada/state/local-db/migration-ledger.jsonl",
+    ".narada/runtime/README.md",
+    ".narada/inbox/exports/README.md",
+    ".narada/logs/README.md",
+    ".narada/mcp-payloads/staging/README.md",
+    ".narada/hydration/hydration-manifest.json",
+    ".narada/agent-context-memory/memory-store.json",
+    ".narada/agent-context-memory/hydration-policy.json",
+    ".narada/inbox/index.json",
+    ".narada/inbox/publication-policy.json",
+    ".narada/site-config/known-sites.json",
+    ".narada/site-config/probe-policy.json",
+    ".narada/site-lift/adoption-catalog.json",
+    ".narada/site-lift/materialization-policy.json",
+    ".narada/capabilities/mcp-registration.json",
+    ".narada/profile/windows-profile-binding.json",
+    ".narada/capabilities/self-adopted-windows-native-site-package-set.json",
+    ".narada/admission/decisions/task-1228-self-adopt-windows-native-site-package-set.md",
+    ".narada/audit/task-1228-self-adopt-windows-native-site-package-set.json",
+    ".ai/do-not-open/tasks/20260512-1228-self-adopt-windows-native-site-package-set-into-narada-prope.md"
+  ],
+  "verification": [
+    {
+      "carrier": "site_local_db_init",
+      "mode": "verify",
+      "status": "verified"
+    },
+    {
+      "carrier": "site_local_storage_hydration",
+      "mode": "verify",
+      "status": "verified"
+    },
+    {
+      "carrier": "agent_context_memory_local_storage",
+      "mode": "verify",
+      "status": "verified",
+      "source_state_imported": false,
+      "runtime_hydration_executed": false
+    },
+    {
+      "carrier": "site_inbox_local_substrate",
+      "mode": "verify",
+      "status": "verified",
+      "source_state_imported": false,
+      "publication_executed": false
+    },
+    {
+      "carrier": "site_config_local_registry",
+      "mode": "verify",
+      "status": "verified",
+      "source_state_imported": false,
+      "external_probe_executed": false
+    },
+    {
+      "carrier": "site_lift_local_adoption",
+      "mode": "verify",
+      "status": "verified",
+      "source_state_imported": false,
+      "files_copied": false,
+      "packages_installed": false
+    },
+    {
+      "carrier": "site_mcp_registration_transport",
+      "mode": "verify",
+      "status": "verified",
+      "manifest_path": ".narada/capabilities/mcp-registration.json",
+      "restart_required": true
+    },
+    {
+      "carrier": "windows_profile_site_binding",
+      "mode": "verify",
+      "status": "verified",
+      "profile_artifact_path": ".narada/profile/windows-profile-binding.json",
+      "points_to_source_site": false
+    }
+  ],
+  "no_import_evidence": {
+    "source_state_imported": false,
+    "runtime_db_imported": false,
+    "task_history_imported": false,
+    "inbox_history_imported": false,
+    "checkpoint_history_imported": false,
+    "roster_state_imported": false,
+    "operator_surface_state_imported": false,
+    "pc_locus_state_imported": false,
+    "secrets_imported": false,
+    "credentials_imported": false
+  },
+  "not_claimed": [
+    "private MCP client config mutation",
+    "external Windows profile mutation",
+    "runtime hydration execution",
+    "inbox publication execution",
+    "external Site probe execution",
+    "site-lift file copy/install/bootstrap",
+    "source Site import or migration",
+    "capability or credential grants",
+    "operator-surface or PC-locus mutation"
+  ],
+  "audit_log": ".narada/admission/live-carrier-audit.jsonl"
+}

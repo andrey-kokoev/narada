@@ -1,0 +1,103 @@
+{
+  "schema": "narada.task_audit.v0",
+  "site_id": "narada-proper",
+  "task_id": "narada-proper.task-0009",
+  "title": "Agent-context checkpoint memory package extraction",
+  "source_ref": "OSM:osm_20260510_191344_269_1cc2f2f2",
+  "source_evidence": [
+    "User Site task #552",
+    "CPY observation env_c3abf79a-0e51-48a1-a437-f82312567d33"
+  ],
+  "authority_root": "D:\\code\\narada",
+  "decision_path": ".narada/admission/decisions/task-0009-agent-context-memory-package-extraction-admission.md",
+  "changed_files": [
+    ".narada/tasks/task-0009-agent-context-memory-package-extraction.md",
+    ".narada/admission/decisions/task-0009-agent-context-memory-package-extraction-admission.md",
+    ".narada/audit/task-0009-agent-context-memory-package-extraction-audit.json",
+    ".narada/admission/admission-ledger.jsonl",
+    "packages/agent-context-memory/package.json",
+    "packages/agent-context-memory/tsconfig.json",
+    "packages/agent-context-memory/README.md",
+    "packages/agent-context-memory/docs/windows-pwsh-consuming-site.md",
+    "packages/agent-context-memory/src/index.ts",
+    "packages/agent-context-memory/src/types.ts",
+    "packages/agent-context-memory/src/import-refusal.ts",
+    "packages/agent-context-memory/src/identity.ts",
+    "packages/agent-context-memory/src/schema.ts",
+    "packages/agent-context-memory/src/contracts.ts",
+    "packages/agent-context-memory/test/refusal.test.ts",
+    "packages/agent-context-memory/test/identity-contracts.test.ts",
+    "packages/agent-context-memory/test/descriptors.test.ts",
+    "packages/agent-context-memory/test/windows-pwsh-portability.test.ts"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages\\agent-context-memory typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages\\agent-context-memory exec vitest run",
+      "result": "passed",
+      "summary": "4 files, 11 tests"
+    },
+    {
+      "command": "pnpm --dir packages\\agent-context-memory build",
+      "result": "passed"
+    }
+  ],
+  "created_package_surfaces": [
+    "named-agent registry config fragment",
+    "session start contract",
+    "checkpoint descriptor",
+    "hydration request descriptor",
+    "SQLite schema/init descriptor",
+    "MCP registration descriptor",
+    "capability registry fragment",
+    "Windows PowerShell consuming-Site guidance",
+    "neutral conformance/refusal tests"
+  ],
+  "identity_doctrine_evidence": {
+    "named_agent_identity_separate_from_role_assignment": true,
+    "claimed_identity_is_authority": false,
+    "role_compatibility_requires_admission_ref": true,
+    "mechanical_verification_basis_required": true,
+    "test": "packages/agent-context-memory/test/identity-contracts.test.ts"
+  },
+  "refused_imports": [
+    "source agent-context database",
+    "source checkpoint history",
+    "source roster authority",
+    "source task lifecycle database",
+    "source task history",
+    "source inbox state",
+    "operator-surface runtime state",
+    "PC-locus runtime state",
+    "secret or credential material",
+    "identity-specific agent runtime state"
+  ],
+  "no_import_evidence": {
+    "package_owns_sqlite_dependency": false,
+    "package_executes_sqlite_mutation": false,
+    "source_state_imported": false,
+    "live_mcp_registration_performed": false,
+    "runtime_hydration_executed": false
+  },
+  "shell_carrier_note": "Initial survey and package-local verification used the current PowerShell shell as bounded task-0009 implementation/verification under the admitted root. No source runtime DB/history/state was read or imported.",
+  "rollback": [
+    "Remove task-0009 .narada task/admission/audit/ledger entries.",
+    "Remove packages/agent-context-memory.",
+    "No live Site state rollback is required because the package did not mutate SQLite, hydrate runtime memory, or register MCP transport."
+  ],
+  "terminal_claim": "Reusable first-slice agent-context checkpoint memory package is claimable as descriptor/contracts/docs/tests only.",
+  "not_claimed_future_admissions": [
+    "live storage adapter",
+    "live SQLite mutation",
+    "live MCP registration",
+    "runtime hydration execution",
+    "source Site state import",
+    "secrets/capability grants",
+    "operator-surface or PC runtime copying"
+  ],
+  "recorded_by": "codex",
+  "recorded_at": "2026-05-10T19:17:00.000-05:00"
+}

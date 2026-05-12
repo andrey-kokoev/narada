@@ -19,6 +19,11 @@ export interface MessageRouteDecision {
   envelope_kind: string;
   authority_level: string | null;
   reason: string;
+  authority_posture: 'direct_target_authority' | 'source_site_delegated_authority';
+  required_capability_kind: string | null;
+  capability_action: string | null;
+  capability_status: 'not_required' | 'active' | 'missing' | 'expired' | 'revoked';
+  capability_grant_id: string | null;
   matched_rule?: unknown;
 }
 
@@ -37,6 +42,8 @@ interface RouteRule {
   target_loci?: string[];
   kinds?: string[];
   authority_levels?: string[];
+  capability_kind?: string;
+  capability_action?: string;
   condition?: string;
   reason?: string;
 }
@@ -73,6 +80,11 @@ export function decideMessageRoute(cwdInput: string, request: MessageRouteReques
       target_locus: targetLocus,
       envelope_kind: envelopeKind,
       authority_level: authorityLevel,
+      authority_posture: targetLocus === LOCAL_TARGET ? 'direct_target_authority' : 'source_site_delegated_authority',
+      required_capability_kind: null,
+      capability_action: null,
+      capability_status: 'not_required',
+      capability_grant_id: null,
       reason: 'No message_routing_authority policy configured; legacy local submission posture admits the route.',
     };
   }
@@ -87,6 +99,11 @@ export function decideMessageRoute(cwdInput: string, request: MessageRouteReques
       target_locus: targetLocus,
       envelope_kind: envelopeKind,
       authority_level: authorityLevel,
+      authority_posture: targetLocus === LOCAL_TARGET ? 'direct_target_authority' : 'source_site_delegated_authority',
+      required_capability_kind: null,
+      capability_action: null,
+      capability_status: 'not_required',
+      capability_grant_id: null,
       reason: denied.reason ?? `Principal ${principal ?? '(none)'} is not admitted to send ${envelopeKind} to ${targetLocus}.`,
       matched_rule: denied,
     };
@@ -94,6 +111,24 @@ export function decideMessageRoute(cwdInput: string, request: MessageRouteReques
 
   const allowed = policy?.may_send?.find((rule) => routeRuleMatches(rule, { targetLocus, envelopeKind, authorityLevel }));
   if (allowed) {
+    const capability = explainRouteCapability(cwdInput, targetLocus, principal, allowed);
+    if (capability.status !== 'not_required' && capability.status !== 'active') {
+      return {
+        configured: true,
+        status: 'refused',
+        principal,
+        target_locus: targetLocus,
+        envelope_kind: envelopeKind,
+        authority_level: authorityLevel,
+        authority_posture: targetLocus === LOCAL_TARGET ? 'direct_target_authority' : 'source_site_delegated_authority',
+        required_capability_kind: capability.kind,
+        capability_action: capability.action,
+        capability_status: capability.status,
+        capability_grant_id: capability.grantId,
+        reason: `Route requires active capability grant ${capability.kind} for ${principal ?? '(none)'} on ${targetLocus}; current status is ${capability.status}.`,
+        matched_rule: allowed,
+      };
+    }
     const condition = allowed.condition ?? 'always';
     return {
       configured: true,
@@ -102,6 +137,11 @@ export function decideMessageRoute(cwdInput: string, request: MessageRouteReques
       target_locus: targetLocus,
       envelope_kind: envelopeKind,
       authority_level: authorityLevel,
+      authority_posture: targetLocus === LOCAL_TARGET ? 'direct_target_authority' : 'source_site_delegated_authority',
+      required_capability_kind: capability.kind,
+      capability_action: capability.action,
+      capability_status: capability.status,
+      capability_grant_id: capability.grantId,
       reason: condition === 'always'
         ? `Principal ${principal ?? '(none)'} is admitted to send ${envelopeKind} to ${targetLocus}.`
         : `Route matched condition: ${condition}.`,
@@ -118,6 +158,11 @@ export function decideMessageRoute(cwdInput: string, request: MessageRouteReques
       target_locus: targetLocus,
       envelope_kind: envelopeKind,
       authority_level: authorityLevel,
+      authority_posture: 'source_site_delegated_authority',
+      required_capability_kind: null,
+      capability_action: null,
+      capability_status: 'not_required',
+      capability_grant_id: null,
       reason: `No message_routing_authority rule admits principal ${principal ?? '(none)'} to send ${envelopeKind} to ${targetLocus}.`,
     };
   }
@@ -129,6 +174,11 @@ export function decideMessageRoute(cwdInput: string, request: MessageRouteReques
       target_locus: targetLocus,
       envelope_kind: envelopeKind,
       authority_level: authorityLevel,
+      authority_posture: targetLocus === LOCAL_TARGET ? 'direct_target_authority' : 'source_site_delegated_authority',
+      required_capability_kind: null,
+      capability_action: null,
+      capability_status: 'not_required',
+      capability_grant_id: null,
       reason: `No message_routing_authority rule admits this route under deny_unless_allowed.`,
     };
   }
@@ -140,6 +190,11 @@ export function decideMessageRoute(cwdInput: string, request: MessageRouteReques
     target_locus: targetLocus,
     envelope_kind: envelopeKind,
     authority_level: authorityLevel,
+    authority_posture: targetLocus === LOCAL_TARGET ? 'direct_target_authority' : 'source_site_delegated_authority',
+    required_capability_kind: null,
+    capability_action: null,
+    capability_status: 'not_required',
+    capability_grant_id: null,
     reason: `No explicit rule matched; default policy ${defaultPolicy} admits the route.`,
   };
 }
@@ -185,6 +240,54 @@ function routeRuleMatches(
 
 function matchesList(values: string[], candidate: string): boolean {
   return values.includes('*') || values.includes(candidate);
+}
+
+function explainRouteCapability(
+  cwdInput: string,
+  targetLocus: string,
+  principal: string | null,
+  rule: RouteRule,
+): {
+  kind: string | null;
+  action: string | null;
+  status: MessageRouteDecision['capability_status'];
+  grantId: string | null;
+} {
+  const kind = clean(rule.capability_kind);
+  if (!kind) return { kind: null, action: null, status: 'not_required', grantId: null };
+  const action = clean(rule.capability_action) ?? 'inbox.submit';
+  if (!principal) return { kind, action, status: 'missing', grantId: null };
+  const registryPath = join(resolve(cwdInput), '.ai', 'capability-consent-registry.json');
+  if (!existsSync(registryPath)) return { kind, action, status: 'missing', grantId: null };
+  try {
+    const parsed = JSON.parse(readFileSync(registryPath, 'utf8')) as {
+      grants?: Array<{
+        grant_id?: string;
+        site_id?: string;
+        principal_id?: string;
+        capability_kind?: string;
+        allowed_actions?: string[];
+        denied_actions?: string[];
+        status?: string;
+        expires_at?: string | null;
+      }>;
+    };
+    const grant = (parsed.grants ?? []).find((candidate) => (
+      candidate.site_id === targetLocus &&
+      candidate.principal_id === principal &&
+      candidate.capability_kind === kind &&
+      (candidate.allowed_actions ?? []).some((allowedAction) => allowedAction === action || allowedAction === '*') &&
+      !(candidate.denied_actions ?? []).includes(action)
+    ));
+    if (!grant) return { kind, action, status: 'missing', grantId: null };
+    if (grant.status === 'revoked') return { kind, action, status: 'revoked', grantId: grant.grant_id ?? null };
+    if (grant.expires_at && Date.parse(grant.expires_at) <= Date.now()) {
+      return { kind, action, status: 'expired', grantId: grant.grant_id ?? null };
+    }
+    return { kind, action, status: 'active', grantId: grant.grant_id ?? null };
+  } catch {
+    return { kind, action, status: 'missing', grantId: null };
+  }
 }
 
 function clean(value: unknown): string | null {

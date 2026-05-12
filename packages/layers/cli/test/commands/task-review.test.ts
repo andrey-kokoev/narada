@@ -119,6 +119,11 @@ function setupRepo(tempDir: string): void {
     join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-1006-accepted-authority-defect-task.md'),
     '---\ntask_id: 1006\nstatus: opened\n---\n\n# Task 1006: Accepted Authority Defect Task\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Execution Notes\nCompleted.\n\n## Verification\nFocused test passed.\n',
   );
+
+  writeFileSync(
+    join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-1007-benign-authority-note-task.md'),
+    '---\ntask_id: 1007\nstatus: opened\n---\n\n# Task 1007: Benign Authority Note Task\n\n## Acceptance Criteria\n\n- [x] Done\n\n## Execution Notes\nCompleted.\n\n## Verification\nFocused test passed.\n',
+  );
 }
 
 function insertReviewRequestEnvelope(tempDir: string, taskNumber: number, requester = 'worker'): string {
@@ -544,6 +549,51 @@ describe('task review command', () => {
       'authority_boundary_bug',
       'lifecycle_or_roster_authority_mismatch',
     ]));
+  });
+
+  it('does not classify benign authority and lifecycle verification notes as CAPA defects', async () => {
+    await claimTaskService({ taskNumber: '1007', agent: 'worker', cwd: tempDir });
+    await releaseTaskService({ taskNumber: '1007', reason: 'completed', cwd: tempDir });
+
+    const result = await taskReviewCommand({
+      taskNumber: '1007',
+      agent: 'reviewer',
+      verdict: 'accepted_with_notes',
+      findings: JSON.stringify([
+        {
+          severity: 'note',
+          description: 'Authority and lifecycle verification were checked during review; evidence notes are present and no lifecycle authority defect was found.',
+          location: 'review notes',
+        },
+      ]),
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      verdict: 'accepted_with_notes',
+      new_status: 'closed',
+      review_diagnostics: {
+        findings: [
+          {
+            posture: 'non_blocking',
+            authority_class: 'review_content',
+            blocking: false,
+            compatibility_only: false,
+            projection_only: false,
+            lifecycle_authority_defect: false,
+            capa_relevant: false,
+          },
+        ],
+        has_lifecycle_authority_defect: false,
+      },
+    });
+    const review = result.result as {
+      capa_recommendation?: { recommended: boolean };
+    };
+    expect(review.capa_recommendation).toBeUndefined();
   });
 
   it('routes review result replies to canonical inbox when requester has no reachable operator surface', async () => {
