@@ -1,0 +1,68 @@
+{
+  "schema": "narada.operator_surface.agent_launch_affordances.v0",
+  "site_id": "narada",
+  "source_refs": [
+    "inbox:env_50302706-98d2-4076-9916-c8d82aba4820",
+    ".narada/crew/architect.startup-request.json"
+  ],
+  "projection_boundary": "Shortcut projection files are local materializations, not authority.",
+  "affordances": [
+    {
+      "affordance_id": "narada.architect.codex",
+      "label": "Narada Agent - architect (codex)",
+      "identity_name": "narada.architect",
+      "runtime": "codex",
+      "enabled": true,
+      "role": "architect",
+      "materializations": [
+        {
+          "kind": "desktop_shortcut",
+          "default_projection_dir": ".crew/agent-shortcuts"
+        }
+      ],
+      "required_binding_proof": {
+        "before_window_snapshot": true,
+        "unique_new_carrier_window": true,
+        "inhabited_child_claim": true,
+        "exactly_one_new_visible_cascadia_hwnd": true,
+        "sqlite_binding_to_admitted_identity": true,
+        "osl_projection_refresh": true,
+        "fail_closed_on_ambiguous_or_missing_window_delta": true
+      }
+    },
+    {
+      "affordance_id": "narada.builder.codex",
+      "label": "Narada Agent - builder (codex)",
+      "identity_name": "narada.builder",
+      "runtime": "codex",
+      "enabled": true,
+      "role": "builder",
+      "materializations": [
+        {
+          "kind": "desktop_shortcut",
+          "default_projection_dir": ".crew/agent-shortcuts"
+        }
+      ],
+      "required_binding_proof": {
+        "before_window_snapshot": true,
+        "unique_new_carrier_window": true,
+        "inhabited_child_claim": true,
+        "exactly_one_new_visible_cascadia_hwnd": true,
+        "sqlite_binding_to_admitted_identity": true,
+        "osl_projection_refresh": true,
+        "fail_closed_on_ambiguous_or_missing_window_delta": true
+      }
+    }
+  ],
+  "not_admitted": [
+    "direct_substrate_shortcut_execution",
+    "native_shell_fallback",
+    "pc_locus_mutation",
+    "operator_surface_runtime_copying",
+    "source_site_runtime_state_import",
+    "secrets_or_credentials",
+    "binding_from_shortcut_filename",
+    "binding_from_terminal_title",
+    "binding_from_foreground_focus"
+  ]
+}

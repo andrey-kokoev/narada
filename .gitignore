@@ -22,6 +22,7 @@ config.json
 .ai/runtime/
 .ai/mcp/
 .ai/operator-surface-send-queue/
+.crew/agent-shortcuts/
 packages/layers/cli/.ai/inbox.db
 packages/layers/cli/.ai/inbox.db-*
 packages/layers/cli/.ai/mutation-evidence/

@@ -1,0 +1,59 @@
+{
+  "schema": "narada.audit.task.v1",
+  "task": {
+    "id": "20260512-1231-admit-crew-launch-affordance-intent-and-projection-carrier",
+    "number": 1231,
+    "title": "Admit crew launch affordance intent and projection carrier"
+  },
+  "source_envelope": "env_50302706-98d2-4076-9916-c8d82aba4820",
+  "decision": "completed_projection_only_launch_affordance_first_slice",
+  "changed_files": [
+    ".gitignore",
+    ".ai/do-not-open/tasks/20260512-1231-admit-crew-launch-affordance-intent-and-projection-carrier.md",
+    "operator-surfaces/agent-launch-affordances.json",
+    "operator-surfaces/agent-launch-affordances.schema.md",
+    "tools/operator-surface-carriers/agent-launch-affordance-materializer.mjs",
+    "tools/operator-surface-carriers/agent-launch-affordance-materializer.test.mjs",
+    ".narada/audit/task-1231-crew-launch-affordance-projection-carrier-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "local_projection_state": {
+    "path": ".crew/agent-shortcuts",
+    "tracked": false,
+    "projection_count": 2,
+    "projection_only": true
+  },
+  "verification": [
+    {
+      "command": "node --test tools/operator-surface-carriers/agent-launch-affordance-materializer.test.mjs",
+      "result": "4 tests passed"
+    },
+    {
+      "command": "node tools/operator-surface-carriers/agent-launch-affordance-materializer.mjs --mode plan --site-root D:\\code\\narada --site-id narada",
+      "result": "planned projections for narada.architect and narada.builder; no refusals"
+    },
+    {
+      "command": "node tools/operator-surface-carriers/agent-launch-affordance-materializer.mjs --mode apply --site-root D:\\code\\narada --site-id narada --mutation-authorized",
+      "result": "applied projection JSON files under .crew/agent-shortcuts"
+    },
+    {
+      "command": "node tools/operator-surface-carriers/agent-launch-affordance-materializer.mjs --mode verify --site-root D:\\code\\narada --site-id narada",
+      "result": "verified; projection_count=2; missing_projection_files=[]"
+    }
+  ],
+  "terminal_claim": "Narada proper has portable launch affordance intent plus a projection-only local materializer for crew startup affordances.",
+  "not_claimed": [
+    "executable .lnk creation",
+    "process launch",
+    "direct substrate shortcut execution",
+    "native shell fallback",
+    "PC-locus mutation",
+    "operator-surface runtime copying",
+    "runtime binding mutation",
+    "source Site runtime state import",
+    "secret or credential capture"
+  ],
+  "rollback": {
+    "note": "Remove/supersede the affordance records and materializer files; delete ignored .crew/agent-shortcuts projection files if desired. No executable shortcut, process, PC-locus, or runtime binding mutation was performed."
+  }
+}

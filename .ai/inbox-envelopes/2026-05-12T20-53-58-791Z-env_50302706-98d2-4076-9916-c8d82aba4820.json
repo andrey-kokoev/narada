@@ -1,0 +1,36 @@
+{
+  "envelope_id": "env_50302706-98d2-4076-9916-c8d82aba4820",
+  "received_at": "2026-05-12T20:53:58.791Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "operator:2026-05-12:send-narada-crew-shortcut-setup"
+  },
+  "target_locus": "upstream_site",
+  "kind": "knowledge_candidate",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada-andrey.Kevin"
+  },
+  "payload": {
+    "details": {
+      "binding_requirement": "Launch must go through a carrier that proves the visible Windows Terminal window before mutating runtime binding authority: before-window snapshot, unique new carrier window/id, inhabited child claim, exactly one new visible `CASCADIA_HOSTING_WINDOW_CLASS` HWND, SQLite binding to admitted identity, then OSL projection refresh. Fail closed on missing/mismatched claim or ambiguous/missing window delta. Do not infer identity from terminal title, process order, or foreground focus.",
+      "command_shape": "`pwsh.exe -NoProfile -ExecutionPolicy Bypass -File tools/operator-surface-carriers/Install-AgentDesktopShortcuts.ps1 -SiteRoot <site-root> -Runtime codex`",
+      "materializer": "Current local materializer is `tools/operator-surface-carriers/Install-AgentDesktopShortcuts.ps1`. Default output is `.crew/agent-shortcuts`; optional `-DesktopPath` redirects projection to Desktop or another folder.",
+      "portable_authority": "`operator-surfaces/agent-launch-affordances.json` owns portable launch affordance intent. The schema/doc is `operator-surfaces/agent-launch-affordances.schema.md`. Records include `affordance_id`, `label`, admitted `identity_name`, `runtime`, `enabled`, and `materializations` such as `desktop_shortcut`.",
+      "projection_boundary": "Shortcut files under `.crew/agent-shortcuts` or Desktop are projections, not authority. They should be untracked/local materializations.",
+      "runtime_launcher": "Shortcuts invoke `tools/operator-surface-carriers/windows-glue/Start-CodexResumeOperatorSurfaces.ps1`; per-agent shortcuts pass `-IdentityResumePair \"<identity>=<identity>\" -Runtime <runtime> -EnsurePresent -ShowSummary`.",
+      "shortcut_shape": "Per-agent shortcuts are named like `Narada Agent - Kevin (codex).lnk`; aggregate shortcut is `Narada Agents - All (codex).lnk`."
+    },
+    "local_caveat": "A prior OSM attempt for this packet was refused by the User Site operator-surface bus because cross-site binding lookup for `narada.architect` is not authority-bearing from `narada-andrey`. This staged inbox path is used as the admitted cross-Site handoff fallback.",
+    "suggested_narada_work": [
+      "Add or standardize `operator-surfaces/agent-launch-affordances.json` for Narada proper identities such as `narada.architect` and `narada.builder`.",
+      "Provide an admitted materializer equivalent to `Install-AgentDesktopShortcuts.ps1` that emits `.crew/agent-shortcuts` by default and can target Desktop explicitly.",
+      "Keep `.lnk` artifacts projection-only and untracked.",
+      "Keep identity admission and binding authority in agent-context/operator-surface authority stores, not shortcut filenames.",
+      "Add smoke coverage that materialization refuses non-admitted identities and launched carrier performs proof-before-bind."
+    ],
+    "summary": "Operator requested direct delivery to Narada. This packet documents the narada-andrey pattern for portable crew/agent shortcut intent, local materialization into `.lnk` files, and proof-before-bind safety requirements.",
+    "title": "Crew shortcut setup packet from narada-andrey"
+  },
+  "status": "received"
+}
