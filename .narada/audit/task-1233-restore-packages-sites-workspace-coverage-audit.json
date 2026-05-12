@@ -1,0 +1,26 @@
+{
+  "schema": "narada.audit.task.v1",
+  "task": {
+    "id": "20260512-1233-restore-packages-sites-workspace-coverage",
+    "number": 1233,
+    "title": "Restore packages/sites workspace coverage"
+  },
+  "decision": "completed_workspace_coverage_repair",
+  "changed_files": [
+    "pnpm-workspace.yaml",
+    ".ai/do-not-open/tasks/20260512-1233-restore-packages-sites-workspace-coverage.md",
+    ".narada/audit/task-1233-restore-packages-sites-workspace-coverage-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "pnpm -r --depth -1 list --json | Select-String -Pattern '\"name\": \"@narada2/(windows-site|cloudflare-site|linux-site|macos-site)\"'",
+      "result": "@narada2/windows-site, @narada2/cloudflare-site, @narada2/linux-site, and @narada2/macos-site found"
+    }
+  ],
+  "terminal_claim": "packages/sites/* is restored to the pnpm workspace and Site packages are discoverable.",
+  "not_claimed": [
+    "full workspace build",
+    "Site package behavior changes"
+  ]
+}

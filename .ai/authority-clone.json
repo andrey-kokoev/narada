@@ -1,22 +1,22 @@
 {
   "site_id": "narada-proper",
-  "authority_root": "/home/andrey/src/narada",
+  "authority_root": "D:\\code\\narada",
   "embodiments": [
     {
-      "id": "wsl-authority",
-      "kind": "git_clone",
-      "root": "/home/andrey/src/narada",
-      "role": "authority",
-      "mutation_policy": "allow",
-      "purpose": "Narada proper mutation authority clone"
-    },
-    {
-      "id": "windows-clone",
+      "id": "windows-authority",
       "kind": "git_clone",
       "root": "D:\\code\\narada",
-      "role": "read_only_forwarding",
+      "role": "authority",
+      "mutation_policy": "allow",
+      "purpose": "Narada proper Windows-native mutation authority clone"
+    },
+    {
+      "id": "former-wsl-authority",
+      "kind": "git_clone",
+      "root": "/home/andrey/src/narada",
+      "role": "read_only",
       "mutation_policy": "refuse_or_forward",
-      "purpose": "Windows embodiment; inspect or forward, do not mutate Narada proper state directly"
+      "purpose": "Former Narada proper WSL authority path retained as historical reference; not admitted for mutation authority"
     }
   ]
 }

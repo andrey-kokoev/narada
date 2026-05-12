@@ -1,0 +1,34 @@
+{
+  "schema": "narada.operator_surface.launch_carrier_descriptor.v0",
+  "carrier_id": "narada-proper.carrier.operator-surface.codex-resume-launch.descriptor.v0",
+  "label": "Codex resume operator-surface launch carrier descriptor",
+  "posture": "descriptor_only",
+  "execution_admitted": false,
+  "intended_future_script_name": "Start-CodexResumeOperatorSurfaces.ps1",
+  "purpose": "Describe the intended Windows PowerShell carrier shape for launching or resuming Codex operator surfaces without admitting live launch execution in this slice.",
+  "required_binding_proof": [
+    "before_window_snapshot",
+    "unique_new_carrier_window",
+    "inhabited_child_claim",
+    "exactly_one_new_visible_CASCADIA_HOSTING_WINDOW_CLASS_hwnd",
+    "sqlite_binding_to_admitted_identity",
+    "osl_projection_refresh",
+    "fail_closed_on_ambiguous_or_missing_window_delta"
+  ],
+  "not_admitted": [
+    "process_launch",
+    "direct_substrate_shortcut_execution",
+    "native_shell_fallback",
+    "PC-locus_mutation",
+    "operator-surface_runtime_copying",
+    "runtime_binding_mutation",
+    "secret_or_credential_capture"
+  ],
+  "next_admission_required_for": [
+    "PowerShell carrier script implementation",
+    "real Windows shortcut materialization",
+    "process launch",
+    "PC-locus window proof",
+    "runtime binding mutation"
+  ]
+}

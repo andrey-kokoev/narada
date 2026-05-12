@@ -1,0 +1,37 @@
+{
+  "schema": "narada.audit.task.v1",
+  "task": {
+    "id": "20260512-1235-repair-crew-launch-projection-missing-carrier",
+    "number": 1235,
+    "title": "Repair crew launch projection missing carrier"
+  },
+  "decision": "completed_projection_descriptor_repair",
+  "changed_files": [
+    "tools/operator-surface-carriers/agent-launch-affordance-materializer.mjs",
+    "tools/operator-surface-carriers/agent-launch-affordance-materializer.test.mjs",
+    "tools/operator-surface-carriers/windows-glue/Start-CodexResumeOperatorSurfaces.descriptor.json",
+    ".ai/do-not-open/tasks/20260512-1235-repair-crew-launch-projection-missing-carrier.md",
+    ".narada/audit/task-1235-repair-crew-launch-projection-carrier-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "Get-Content tools\\operator-surface-carriers\\windows-glue\\Start-CodexResumeOperatorSurfaces.descriptor.json | ConvertFrom-Json",
+      "result": "json valid"
+    },
+    {
+      "command": "node --test tools/operator-surface-carriers/agent-launch-affordance-materializer.test.mjs",
+      "result": "4 tests passed"
+    }
+  ],
+  "terminal_claim": "Crew launch projections now point to an existing descriptor-only launch carrier artifact and do not claim live launch execution.",
+  "not_claimed": [
+    "PowerShell carrier script implementation",
+    "real Windows shortcut materialization",
+    "process launch",
+    "PC-locus window proof",
+    "runtime binding mutation",
+    "native shell fallback",
+    "operator-surface runtime copying"
+  ]
+}

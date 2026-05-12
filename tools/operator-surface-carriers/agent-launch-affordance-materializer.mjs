@@ -7,6 +7,7 @@ const RESULT_SCHEMA = 'narada.operator_surface.agent_launch_affordance_materiali
 const DEFAULT_AFFORDANCES = 'operator-surfaces/agent-launch-affordances.json';
 const DEFAULT_IDENTITIES = 'operator-surfaces/identities.json';
 const DEFAULT_OUTPUT_DIR = '.crew/agent-shortcuts';
+const LAUNCH_DESCRIPTOR_PATH = 'tools/operator-surface-carriers/windows-glue/Start-CodexResumeOperatorSurfaces.descriptor.json';
 
 function runMaterializer(options = {}) {
   const mode = options.mode ?? 'plan';
@@ -131,7 +132,9 @@ function projectionRecord(context, record) {
       runtime: record.runtime,
       projection_only: true,
       launch_command_intent: {
-        command: 'tools/operator-surface-carriers/windows-glue/Start-CodexResumeOperatorSurfaces.ps1',
+        posture: 'descriptor_only',
+        descriptor_path: LAUNCH_DESCRIPTOR_PATH,
+        execution_admitted: false,
         args: [
           '-IdentityResumePair',
           `${record.identity_name}=${record.identity_name}`,

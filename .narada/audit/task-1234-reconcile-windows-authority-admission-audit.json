@@ -1,0 +1,33 @@
+{
+  "schema": "narada.audit.task.v1",
+  "task": {
+    "id": "20260512-1234-reconcile-narada-proper-windows-authority-admission",
+    "number": 1234,
+    "title": "Reconcile Narada proper Windows authority admission"
+  },
+  "decision": "completed_authority_record_reconciliation",
+  "changed_files": [
+    ".ai/authority-clone.json",
+    ".narada/site.json",
+    ".ai/do-not-open/tasks/20260512-1234-reconcile-narada-proper-windows-authority-admission.md",
+    ".narada/audit/task-1234-reconcile-windows-authority-admission-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "Get-Content .narada\\site.json | ConvertFrom-Json",
+      "result": "json valid"
+    },
+    {
+      "command": "Get-Content .ai\\authority-clone.json | ConvertFrom-Json",
+      "result": "json valid"
+    }
+  ],
+  "terminal_claim": ".narada/site.json and .ai/authority-clone.json now record D:\\code\\narada as the operator-admitted Windows-native Narada proper authority root for governed Narada proper work.",
+  "not_claimed": [
+    "narada-andrey mutation authority over Narada proper",
+    "source Site runtime state import",
+    "raw WSL crossing as mutation authority",
+    "unrecorded native shell fallback"
+  ]
+}

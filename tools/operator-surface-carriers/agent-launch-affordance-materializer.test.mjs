@@ -77,6 +77,10 @@ test('apply is authority gated and writes only projection files', () => {
 
   const projection = JSON.parse(fs.readFileSync(applied.created_or_changed[0], 'utf8'));
   assert.equal(projection.projection_only, true);
+  assert.equal(projection.launch_command_intent.posture, 'descriptor_only');
+  assert.equal(projection.launch_command_intent.execution_admitted, false);
+  assert.ok(fs.existsSync(path.resolve(projection.launch_command_intent.descriptor_path)));
+  assert.equal('command' in projection.launch_command_intent, false);
   assert.ok(projection.not_admitted.includes('runtime_binding_mutation'));
 });
 

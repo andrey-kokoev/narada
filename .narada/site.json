@@ -14,10 +14,36 @@
     "source_commit": "93881ac1"
   },
   "authority_admission": {
-    "kind": "operator_explicit_temporary_path_admission",
+    "kind": "operator_admitted_windows_native_narada_proper_authority",
     "admitted_path": "D:\\code\\narada",
-    "canonical_authority_root": "/home/andrey/src/narada",
-    "reason": "The declared WSL authority root was unreachable from this carrier; the operator explicitly selected option B to admit D:\\code\\narada as temporary mutation authority for this seed only."
+    "canonical_authority_root": "D:\\code\\narada",
+    "previous_canonical_authority_root": "/home/andrey/src/narada",
+    "admitted_scope": "Narada proper repo, package, task, inbox, admission, capability, and .narada Site substrate mutations performed through governed Narada proper tasks and evidence.",
+    "reason": "The operator directed migration to a fully Windows-native Narada proper setup. Subsequent admitted Narada proper tasks established and exercised D:\\code\\narada as the Windows-native mutation authority root.",
+    "supersedes": {
+      "kind": "operator_explicit_temporary_path_admission",
+      "admitted_path": "D:\\code\\narada",
+      "canonical_authority_root": "/home/andrey/src/narada",
+      "scope": "seed_only"
+    },
+    "not_admitted": [
+      "narada-andrey mutation authority over Narada proper",
+      "source Site runtime state import",
+      "runtime DB/task/inbox/roster/checkpoint/operator-surface/PC/secrets state import",
+      "raw WSL crossing as mutation authority",
+      "unrecorded native shell fallback"
+    ],
+    "evidence_refs": [
+      "task:1228",
+      "task:1230",
+      "task:1231",
+      "task:1232",
+      "commit:6a176adc",
+      "commit:c35c29dd",
+      "commit:fb9f42cc",
+      "commit:c9f93d0c",
+      "commit:2f5bed2c"
+    ]
   },
   "admission_state": {
     "seed_decision": "admit_minimal_seed_substrate",

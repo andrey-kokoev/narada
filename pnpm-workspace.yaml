@@ -3,3 +3,4 @@ packages:
   - 'packages/layers/*'
   - 'packages/verticals/*'
   - 'packages/domains/*'
+  - 'packages/sites/*'
