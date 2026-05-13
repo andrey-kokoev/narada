@@ -264,6 +264,14 @@ function startupSequence() {
   ];
 }
 
+function startupCommand() {
+  return {
+    name: 'agent_context_hydrate_current',
+    arguments: {},
+    display: 'agent_context_hydrate_current({})',
+  };
+}
+
 function buildLaunchPlanFromArgs(args, options = {}) {
   const identity = args.identity;
   const runtime = args.runtime ?? 'codex';
@@ -306,6 +314,8 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     planned_environment: plannedEnvironment,
     launch_environment: launchEnvironment,
     required_environment: launchEnvironment ?? plannedEnvironment,
+    startup_command: startupCommand(),
+    startup_command_name: startupCommand().name,
     startup_sequence: startupSequence(),
     dry_run_notice: dryRun
       ? 'planned_environment is non-authoritative; no agent_start_events or carrier_sessions row was created.'

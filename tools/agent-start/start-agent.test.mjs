@@ -32,6 +32,12 @@ test('narada.architect real launch materializes carrier session env and discover
   assert.equal(result.launch_environment.NARADA_SITE_ROOT, siteRoot);
   assert.equal(result.launch_environment.NARADA_AGENT_CONTEXT_DB, result.agent_context_db_path);
   assert.ok(result.carrier_session_id.startsWith('carrier_session_'));
+  assert.equal(result.startup_command_name, 'agent_context_hydrate_current');
+  assert.deepEqual(result.startup_command, {
+    name: 'agent_context_hydrate_current',
+    arguments: {},
+    display: 'agent_context_hydrate_current({})',
+  });
   assert.deepEqual(result.startup_sequence, [
     {
       tool: 'agent_context_hydrate_current',
@@ -63,6 +69,7 @@ test('dry run reports planned non-authoritative env without durable event claim'
   assert.equal(result.launch_environment, null);
   assert.equal(result.planned_environment.NARADA_AGENT_START_EVENT_ID, result.agent_start_event);
   assert.equal(result.planned_environment.NARADA_CARRIER_SESSION_ID, result.carrier_session_id);
+  assert.equal(result.startup_command_name, 'agent_context_hydrate_current');
   assert.equal(result.startup_sequence[0].tool, 'agent_context_hydrate_current');
   assert.deepEqual(result.startup_sequence[0].arguments, {});
   assert.match(result.dry_run_notice, /non-authoritative/);
