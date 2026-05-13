@@ -67,20 +67,21 @@ function makeRoster(): AgentRoster {
   };
 }
 
-function setupRepo(tempDir: string, roster?: AgentRoster) {
+async function setupRepo(tempDir: string, roster?: AgentRoster) {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
   writeFileSync(
     join(tempDir, '.ai', 'agents', 'roster.json'),
     JSON.stringify(roster ?? makeRoster(), null, 2),
   );
+  await saveRoster(tempDir, roster ?? makeRoster());
 }
 
 describe('withRosterMutation', () => {
   let tempDir: string;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'narada-roster-lock-test-'));
-    setupRepo(tempDir);
+    await setupRepo(tempDir);
   });
 
   afterEach(() => {
@@ -235,9 +236,9 @@ describe('withRosterMutation', () => {
 describe('updateAgentRosterEntry (race-safe)', () => {
   let tempDir: string;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'narada-roster-update-test-'));
-    setupRepo(tempDir);
+    await setupRepo(tempDir);
   });
 
   afterEach(() => {

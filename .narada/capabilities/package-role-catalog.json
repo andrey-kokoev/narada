@@ -129,25 +129,25 @@
       "posture": "adapter_interface_only_no_sqlite_dependency"
     },
     {
-      "package": "@narada2/sites-cloudflare",
+      "package": "@narada2/cloudflare-site",
       "path": "packages/sites/cloudflare",
       "roles": ["platform_template"],
       "posture": "cloudflare_site_materialization_template"
     },
     {
-      "package": "@narada2/sites-linux",
+      "package": "@narada2/linux-site",
       "path": "packages/sites/linux",
       "roles": ["platform_template", "runtime_authority"],
       "posture": "linux_site_runtime"
     },
     {
-      "package": "@narada2/sites-macos",
+      "package": "@narada2/macos-site",
       "path": "packages/sites/macos",
       "roles": ["platform_template"],
       "posture": "macos_site_template"
     },
     {
-      "package": "@narada2/sites-windows",
+      "package": "@narada2/windows-site",
       "path": "packages/sites/windows",
       "roles": ["platform_template"],
       "posture": "windows_site_template"
