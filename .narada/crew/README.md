@@ -61,10 +61,6 @@ The preferred PowerShell command is:
 
 `.\narada.ps1 agent-start -Agent narada.architect -Runtime codex -Exec`
 
-The command-safe wrapper path is still available:
-
-`.\.crew\agent-shortcuts\narada-architect.cmd`
-
 The no-space shortcut alias is:
 
 `.crew/agent-shortcuts/narada-architect.lnk`

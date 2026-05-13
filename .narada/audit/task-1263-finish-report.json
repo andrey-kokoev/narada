@@ -1,0 +1,31 @@
+{
+  "summary": "Removed the legacy .crew/agent-shortcuts/narada-architect.cmd wrapper and updated current crew docs to use the repo-root PowerShell surface instead. Verified .\\narada.ps1 agent-start dry-run, verified shortcut readback, and confirmed the .cmd file and README reference are gone.",
+  "changed_files": [
+    ".crew/agent-shortcuts/narada-architect.cmd",
+    ".narada/crew/README.md",
+    ".narada/audit/task-1263-remove-legacy-cmd-wrapper-audit.json",
+    ".narada/audit/task-1263-finish-report.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": ".\\narada.ps1 agent-start -Agent narada.architect -Runtime codex -DryRun -Json",
+      "result": "passed"
+    },
+    {
+      "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/operator-surface-carriers/windows-glue/New-NaradaArchitectShortcut.ps1 -VerifyOnly",
+      "result": "passed"
+    },
+    {
+      "command": "Test-Path .crew/agent-shortcuts/narada-architect.cmd",
+      "result": "passed_false"
+    },
+    {
+      "command": "rg -n \"narada-architect\\.cmd|command-safe wrapper path\" .narada/crew/README.md",
+      "result": "passed_no_matches"
+    }
+  ],
+  "residuals": [
+    "Historical audit files still mention the retired .cmd wrapper as past evidence; current docs and ledger supersede it."
+  ]
+}

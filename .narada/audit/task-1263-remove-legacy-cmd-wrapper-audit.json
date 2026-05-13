@@ -1,0 +1,42 @@
+{
+  "schema": "narada.audit.task_execution.v0",
+  "task_id": "1263",
+  "task_title": "Remove legacy Narada architect cmd shortcut wrapper",
+  "site_id": "narada-proper",
+  "executed_by": "narada.architect",
+  "completed_at": "2026-05-13T05:16:00Z",
+  "changed_files": [
+    ".crew/agent-shortcuts/narada-architect.cmd",
+    ".narada/crew/README.md",
+    ".narada/audit/task-1263-remove-legacy-cmd-wrapper-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "retired_entrypoint": ".crew/agent-shortcuts/narada-architect.cmd",
+  "preferred_entrypoint": ".\\narada.ps1 agent-start -Agent narada.architect -Runtime codex -Exec",
+  "verification": [
+    {
+      "command": ".\\narada.ps1 agent-start -Agent narada.architect -Runtime codex -DryRun -Json",
+      "result": "passed"
+    },
+    {
+      "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/operator-surface-carriers/windows-glue/New-NaradaArchitectShortcut.ps1 -VerifyOnly",
+      "result": "passed"
+    },
+    {
+      "command": "Test-Path .crew/agent-shortcuts/narada-architect.cmd",
+      "result": "passed_false"
+    },
+    {
+      "command": "rg -n \"narada-architect\\.cmd|command-safe wrapper path\" .narada/crew/README.md",
+      "result": "passed_no_matches"
+    }
+  ],
+  "terminal_claim": "The legacy .cmd wrapper is removed; Narada proper uses the repo-root PowerShell agent-start surface and clickable .lnk aliases.",
+  "not_claimed": [
+    "Desktop shortcut placement",
+    "Start Menu shortcut placement",
+    "operator-surface runtime binding",
+    "source Site runtime state import"
+  ],
+  "rollback": "Restore .crew/agent-shortcuts/narada-architect.cmd from commit f3454a1c if a cmd compatibility wrapper is needed again."
+}

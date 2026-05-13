@@ -1,0 +1,15 @@
+{
+  "title": "Remove legacy Narada architect cmd shortcut wrapper",
+  "goal": "Retire the temporary .cmd launch wrapper now that Narada proper has a repo-root PowerShell agent-start surface.",
+  "context": "Task 1262 added the preferred command shape: .\\narada.ps1 agent-start -Agent narada.architect -Runtime codex -Exec. The older .crew/agent-shortcuts/narada-architect.cmd wrapper is now legacy and should not remain as a suggested or tracked entrypoint.",
+  "required_work": "Remove the tracked .crew/agent-shortcuts/narada-architect.cmd wrapper, update .narada/crew/README.md to name only narada.ps1 and the clickable .lnk aliases, verify narada.ps1 dry-run and shortcut readback, record audit/ledger evidence, and do not alter historical audit records except by superseding them.",
+  "chapter": "narada-proper-crew-launch-intent-sequences",
+  "depends_on": "1262",
+  "criteria": [
+    "The tracked .crew/agent-shortcuts/narada-architect.cmd file is removed.",
+    "Current README no longer presents .cmd as an entrypoint.",
+    "Preferred PowerShell invocation is verified.",
+    "Shortcut readback still verifies the .lnk aliases.",
+    "A superseding audit/ledger event records the legacy retirement."
+  ]
+}
