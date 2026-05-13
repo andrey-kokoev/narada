@@ -1,15 +1,16 @@
 ---
-status: in_review
-criteria_proved_by: builder
-criteria_proved_at: 2026-04-29T18:54:37.068Z
+status: closed
+criteria_proved_by: operator
+criteria_proved_at: 2026-05-13T00:17:05.566Z
 criteria_proof_verification:
   state: unbound
-  rationale: Final focused task-governance regression suite covers legacy checked-criteria evidence, legacy verification-only evidence, modern provenance enforcement, and SQLite-carried governed closure/report evidence; task recommendation now lists 403 and 1002 as available alternatives rather than dependency-blocked; pnpm verify passed all 8 gates.
-closed_at: 2026-04-29T18:47:47.413Z
-closed_by: a2
+  rationale: proof via task finish
+closed_at: 2026-05-13T00:17:21.660Z
+closed_by: operator
 closure_mode: peer_reviewed
 reopened_at: 2026-04-29T18:53:36.251Z
 reopened_by: builder
+governed_by: task_close:operator
 ---
 
 # Fix legacy pre-invariant dependency evidence compatibility
@@ -38,11 +39,28 @@ Make dependency checks handle pre-invariant closed tasks without forcing unsafe 
 
 ## Execution Notes
 
-<!-- Record what was done, decisions made, and files changed during execution. -->
+Evidence repair recorded 2026-05-13 after operator accepted review.
+
+Original implementation evidence exists in commit `ec0b4424` (`Fix legacy dependency evidence compatibility`):
+- `packages/task-governance/src/task-governance.ts`
+- `packages/task-governance/src/task-projection.ts`
+- `packages/task-governance/test/lib/task-governance.test.ts`
+- task lifecycle evidence for task 1086
+
+Original builder report evidence is present in `.ai/task-lifecycle-snapshot.json` as
+`wrr_5c8c38b4_20260429-1086-fix-legacy-pre-invariant-dependency-evidence-compatibility_builder`.
+Mutation evidence for the original report is preserved at
+`.ai/mutation-evidence/task_lifecycle/mev_315814992fe7fa49c0995acec3d30473.json`.
+
+This repair does not claim new implementation work. It records missing task evidence so the accepted
+operator review can close through governed task lifecycle admission.
 
 ## Verification
 
-<!-- Record commands run, results observed, and how correctness was checked. -->
+- `git show --stat --oneline ec0b4424` found the original implementation commit and changed files.
+- `Get-Content .ai\mutation-evidence\task_lifecycle\mev_315814992fe7fa49c0995acec3d30473.json` confirmed the original builder report mutation evidence.
+- `pnpm --filter @narada2/task-governance exec vitest run test/lib/task-governance.test.ts -t "pre-invariant closed dependencies" --pool=forks --no-file-parallelism --maxWorkers=1 --minWorkers=1 --testTimeout=120000 --hookTimeout=120000` passed: 2 compatibility tests, 63 skipped.
+- Full current `packages/task-governance/test/lib/task-governance.test.ts` run was checked but is not closure evidence for this repair: 58 passed and 7 unrelated roster mutation fixture tests failed.
 
 ## Acceptance Criteria
 

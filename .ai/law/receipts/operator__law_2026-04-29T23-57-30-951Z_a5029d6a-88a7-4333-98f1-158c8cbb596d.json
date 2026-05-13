@@ -1,0 +1,13 @@
+{
+  "schema": "https://narada.dev/schemas/law-receipt/v1",
+  "receipt_id": "law_receipt_2026-05-13T00-16-12-180Z_710d0376-88ab-4e6a-adc1-06ec9cef53d8",
+  "change_id": "law_2026-04-29T23-57-30-951Z_a5029d6a-88a7-4333-98f1-158c8cbb596d",
+  "agent_id": "operator",
+  "role": "reviewer",
+  "session_id": null,
+  "operator_surface_identity": null,
+  "status": "acknowledged",
+  "read_at": "2026-05-13T00:16:12.180Z",
+  "acknowledged_at": "2026-05-13T00:16:12.180Z",
+  "questions_or_blockers": []
+}
