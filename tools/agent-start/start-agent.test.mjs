@@ -6,6 +6,7 @@ import path from 'node:path';
 import {
   buildLaunchPlanFromArgs,
   readAgentStartEvent,
+  writeLaunchResult,
 } from './start-agent.mjs';
 
 function tempSite() {
@@ -66,4 +67,21 @@ test('dry run reports planned non-authoritative env without durable event claim'
   assert.deepEqual(result.startup_sequence[0].arguments, {});
   assert.match(result.dry_run_notice, /non-authoritative/);
   assert.equal(fs.existsSync(result.agent_context_db_path), false);
+});
+
+test('launch result file records its own authoritative path', () => {
+  const siteRoot = tempSite();
+  const { result } = buildLaunchPlanFromArgs({
+    identity: 'narada.architect',
+    runtime: 'codex',
+    exec: true,
+    dry_run: false,
+  }, { siteRoot, now: '2026-05-13T18:32:00.000Z' });
+
+  const launchResultPath = writeLaunchResult(result, siteRoot);
+  const persisted = JSON.parse(fs.readFileSync(launchResultPath, 'utf8'));
+
+  assert.equal(result.launch_result_path, launchResultPath);
+  assert.equal(persisted.launch_result_path, launchResultPath);
+  assert.equal(persisted.startup_sequence[0].tool, 'agent_context_hydrate_current');
 });

@@ -335,6 +335,7 @@ function writeLaunchResult(result, siteRoot = defaultRootDir) {
   const outDir = join(siteRoot, '.narada', 'crew', 'agent-start-results');
   mkdirSync(outDir, { recursive: true });
   const path = join(outDir, `${result.agent_start_event}.result.json`);
+  result.launch_result_path = path;
   writeFileSync(path, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
   return path;
 }
@@ -356,7 +357,7 @@ function writeJsonResult(result) {
 async function main(argv = process.argv.slice(2)) {
   const { result, launchEnvironment, runtimeArgs } = buildLaunchPlanFromArgs(parseArgs(argv));
 
-  result.launch_result_path = result.dry_run ? null : writeLaunchResult(result);
+  if (!result.dry_run) writeLaunchResult(result);
   await writeJsonResult(result);
   if (!result.exec || result.dry_run) return;
   await delay(750);
