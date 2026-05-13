@@ -57,6 +57,14 @@ The admitted repo-local clickable shortcut is:
 
 `.crew/agent-shortcuts/Narada Architect (codex).lnk`
 
+The command-safe PowerShell path is:
+
+`.\.crew\agent-shortcuts\narada-architect.cmd`
+
+The no-space shortcut alias is:
+
+`.crew/agent-shortcuts/narada-architect.lnk`
+
 It targets:
 
 `tools/operator-surface-carriers/windows-glue/Start-NaradaArchitect.ps1`

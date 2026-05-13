@@ -1,0 +1,57 @@
+{
+  "schema": "narada.audit.task_execution.v0",
+  "task_id": "1260",
+  "task_title": "Repair Narada architect shortcut invocation ergonomics",
+  "site_id": "narada-proper",
+  "executed_by": "narada.architect",
+  "completed_at": "2026-05-13T05:01:00Z",
+  "changed_files": [
+    ".crew/agent-shortcuts/narada-architect.cmd",
+    ".crew/agent-shortcuts/narada-architect.lnk",
+    "tools/operator-surface-carriers/windows-glue/New-NaradaArchitectShortcut.ps1",
+    ".narada/crew/README.md",
+    ".narada/crew/launch-executions/20260512T235917-narada-architect-launch-evidence.json",
+    ".narada/crew/launch-executions/20260513T000104-narada-architect-launch-evidence.json",
+    ".narada/audit/task-1260-shortcut-ergonomics-repair-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "operator_failure_repaired": "Unquoted PowerShell invocation of `.crew/agent-shortcuts/Narada Architect (codex).lnk` split at spaces and did not provide a command-safe path.",
+  "entrypoints": {
+    "command_safe": ".\\.crew\\agent-shortcuts\\narada-architect.cmd",
+    "no_launch_test": ".\\.crew\\agent-shortcuts\\narada-architect.cmd --no-codex",
+    "clickable_alias": ".crew/agent-shortcuts/narada-architect.lnk",
+    "legacy_clickable": ".crew/agent-shortcuts/Narada Architect (codex).lnk"
+  },
+  "verification": [
+    {
+      "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/operator-surface-carriers/windows-glue/New-NaradaArchitectShortcut.ps1",
+      "result": "passed",
+      "evidence": "Created and verified both the display-name shortcut and no-space alias shortcut."
+    },
+    {
+      "command": ".\\.crew\\agent-shortcuts\\narada-architect.cmd --no-codex",
+      "result": "passed",
+      "evidence": ".narada/crew/launch-executions/20260512T235917-narada-architect-launch-evidence.json"
+    },
+    {
+      "command": ".\\.crew\\agent-shortcuts\\narada-architect.cmd --no-codex",
+      "result": "passed",
+      "evidence": ".narada/crew/launch-executions/20260513T000104-narada-architect-launch-evidence.json"
+    },
+    {
+      "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/operator-surface-carriers/windows-glue/New-NaradaArchitectShortcut.ps1 -VerifyOnly",
+      "result": "passed",
+      "evidence": "Readback verified both shortcut targets, arguments, and working directories."
+    }
+  ],
+  "terminal_claim": "Narada proper now has a command-safe wrapper and no-space clickable shortcut alias for launching narada.architect.",
+  "not_claimed": [
+    "Desktop shortcut placement",
+    "Start Menu shortcut placement",
+    "operator-surface runtime binding",
+    "operator-surface runtime copying",
+    "source Site runtime state import",
+    "native shell fallback"
+  ],
+  "rollback": "Delete .crew/agent-shortcuts/narada-architect.cmd and .crew/agent-shortcuts/narada-architect.lnk, rerun shortcut materialization if the display-name shortcut needs to be restored, and append a superseding ledger event."
+}

@@ -1,0 +1,15 @@
+{
+  "title": "Repair Narada architect shortcut invocation ergonomics",
+  "goal": "Make the Narada architect launch shortcut easy to invoke from both Explorer and PowerShell without quoting a path with spaces.",
+  "context": "The real shortcut created in task 1259 works as a Windows shortcut but has a space-bearing filename. The operator attempted to run `.crew/agent-shortcuts/Narada Architect (codex).lnk` from PowerShell and hit path tokenization plus terminal launch friction. This repair should preserve the admitted launch carrier while adding ergonomic no-space entrypoints.",
+  "required_work": "Add a no-space PowerShell/cmd invocation wrapper under .crew/agent-shortcuts and update shortcut materialization to also create a no-space .lnk alias. Verify the wrapper preflights without launching Codex, verify both shortcuts target the admitted carrier, update docs/audit/ledger, and do not change Desktop/Start Menu placement or import source Site/runtime state.",
+  "chapter": "narada-proper-crew-launch-intent-sequences",
+  "depends_on": "1259",
+  "criteria": [
+    "A no-space command wrapper exists for PowerShell invocation.",
+    "A no-space .lnk alias exists for Explorer clicking.",
+    "Verification proves wrapper no-launch preflight and shortcut readback.",
+    "Documentation shows the exact command-safe path.",
+    "No Desktop/Start Menu mutation, source Site import, operator-surface runtime copying, or native shell fallback is introduced."
+  ]
+}
