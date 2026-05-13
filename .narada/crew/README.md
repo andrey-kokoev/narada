@@ -50,3 +50,15 @@ Verified sequences can be turned into carrier request artifacts with:
 `node tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.mjs --site-root D:\code\narada --mode apply --mutation-authorized`
 
 The request artifact is local evidence under `.narada/crew/launch-requests/` with status `awaiting_admitted_carrier`. It is not a launch command and does not grant focus/bind authority.
+
+## Clickable Architect Shortcut
+
+The admitted repo-local clickable shortcut is:
+
+`.crew/agent-shortcuts/Narada Architect (codex).lnk`
+
+It targets:
+
+`tools/operator-surface-carriers/windows-glue/Start-NaradaArchitect.ps1`
+
+The carrier verifies the launch intent sequence and launch request before starting `codex` in `D:\code\narada`. It does not place a shortcut on the Desktop or Start Menu, copy operator-surface runtime state, import source Site state, or provide a native shell fallback.

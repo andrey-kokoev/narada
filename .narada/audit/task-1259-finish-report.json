@@ -1,0 +1,30 @@
+{
+  "summary": "Materialized a real repo-local clickable Windows shortcut for Narada architect. The shortcut points to Start-NaradaArchitect.ps1, which verifies the crew launch intent sequence and durable launch request before starting Codex in D:\\code\\narada. Verification read back the .lnk target, arguments, and working directory; no Desktop/Start Menu placement, source Site import, operator-surface runtime copying, or native shell fallback was introduced.",
+  "changed_files": [
+    "tools/operator-surface-carriers/windows-glue/Start-NaradaArchitect.ps1",
+    "tools/operator-surface-carriers/windows-glue/New-NaradaArchitectShortcut.ps1",
+    ".crew/agent-shortcuts/Narada Architect (codex).lnk",
+    ".narada/crew/README.md",
+    ".narada/crew/launch-executions/20260512T235327-narada-architect-launch-evidence.json",
+    ".narada/audit/task-1259-real-architect-shortcut-audit.json",
+    ".narada/audit/task-1259-finish-report.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/operator-surface-carriers/windows-glue/Start-NaradaArchitect.ps1 -NoCodex",
+      "result": "passed"
+    },
+    {
+      "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/operator-surface-carriers/windows-glue/New-NaradaArchitectShortcut.ps1",
+      "result": "passed"
+    },
+    {
+      "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/operator-surface-carriers/windows-glue/New-NaradaArchitectShortcut.ps1 -VerifyOnly",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "Shortcut launches Codex but does not claim operator-surface runtime binding/focus proof. Desktop or Start Menu placement remains a separate user-facing convenience admission."
+  ]
+}
