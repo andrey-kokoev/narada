@@ -10,6 +10,30 @@ const defaultRootDir = join(__dirname, '..', '..');
 const require = createRequire(import.meta.url);
 const RESULT_SCHEMA = 'narada.agent_start.result.v0';
 const ADMITTED_AGENTS = new Set(['narada.architect']);
+const NARADA_PROPER_APPROVED_MCP_SERVERS = [
+  {
+    name: 'narada-andrey-agent-context',
+    provider_locus: 'user_site_mcp',
+    target_locus: 'narada_proper',
+    purpose: 'startup hydration and carrier identity/context verification',
+  },
+  {
+    name: 'narada-andrey-shell',
+    provider_locus: 'user_site_mcp',
+    target_locus: 'explicit_working_directory',
+    purpose: 'policy-aware command execution only against explicit allowed roots and command policy',
+  },
+];
+const NARADA_PROPER_WITHHELD_MCP_SERVERS = [
+  'narada-andrey-task-lifecycle',
+  'narada-andrey-inbox',
+  'narada-andrey-operator-surface',
+  'narada-andrey-site-lift-catalog',
+  'narada-andrey-adoptable-deltas',
+  'narada-andrey-filesystem',
+  'narada-andrey-test',
+  'narada-andrey-adr',
+];
 
 function parseArgs(argv) {
   const result = {};
@@ -250,35 +274,29 @@ function loadSqliteDriver() {
   }
 }
 
-function approvedMcpServers() {
-  return [
-    {
-      name: 'narada-andrey-agent-context',
-      provider_locus: 'user_site_mcp',
-      target_locus: 'narada_proper',
-      purpose: 'startup hydration and carrier identity/context verification',
-    },
-    {
-      name: 'narada-andrey-shell',
-      provider_locus: 'user_site_mcp',
-      target_locus: 'explicit_working_directory',
-      purpose: 'policy-aware command execution only against explicit allowed roots and command policy',
-    },
-  ];
+function codexMcpApprovalArgs(serverNames) {
+  return serverNames.flatMap((serverName) => [
+    '-c',
+    `mcp_servers."${serverName}".default_tools_approval_mode="approve"`,
+  ]);
 }
 
-function codexMcpApprovalArgs() {
-  return approvedMcpServers().flatMap((server) => [
-    '-c',
-    `mcp_servers."${server.name}".default_tools_approval_mode="approve"`,
-  ]);
+function mcpToolApprovalPacket({ approved, withheld, note }) {
+  return {
+    status: 'approved_by_launcher_config',
+    provider_locus: 'user_site_mcp',
+    target_locus: 'narada_proper',
+    approved_servers: approved,
+    explicitly_not_approved: withheld,
+    note,
+  };
 }
 
 function codexArgs() {
   return [
     '--ask-for-approval',
     'never',
-    ...codexMcpApprovalArgs(),
+    ...codexMcpApprovalArgs(NARADA_PROPER_APPROVED_MCP_SERVERS.map((server) => server.name)),
     '--disable',
     'shell_tool',
   ];
@@ -341,23 +359,11 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     dry_run: dryRun,
     runtime_args: runtimeArgs,
     exec_command: exec ? ['codex', ...runtimeArgs].join(' ') : null,
-    mcp_tool_approval: {
-      status: 'approved_by_launcher_config',
-      provider_locus: 'user_site_mcp',
-      target_locus: 'narada_proper',
-      approved_servers: approvedMcpServers(),
-      explicitly_not_approved: [
-        'narada-andrey-task-lifecycle',
-        'narada-andrey-inbox',
-        'narada-andrey-operator-surface',
-        'narada-andrey-site-lift-catalog',
-        'narada-andrey-adoptable-deltas',
-        'narada-andrey-filesystem',
-        'narada-andrey-test',
-        'narada-andrey-adr',
-      ],
+    mcp_tool_approval: mcpToolApprovalPacket({
+      approved: NARADA_PROPER_APPROVED_MCP_SERVERS,
+      withheld: NARADA_PROPER_WITHHELD_MCP_SERVERS,
       note: 'Approves only startup hydration and policy-aware shell MCP at the Codex carrier layer. Native Codex shell_tool remains disabled. User Site task/inbox/operator-surface MCP servers are not approved for this Narada proper carrier by default.',
-    },
+    }),
     planned_environment: plannedEnvironment,
     launch_environment: launchEnvironment,
     required_environment: launchEnvironment ?? plannedEnvironment,
