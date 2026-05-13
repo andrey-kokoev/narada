@@ -1,0 +1,46 @@
+{
+  "schema": "narada.site.capability_adoption.v0",
+  "site_id": "narada-proper",
+  "capability_id": "narada-proper.capability.source-site-import-migration.v0",
+  "capability_name": "Source Site import, migration, and lift posture",
+  "source_residual": ".narada/capabilities/missing-capabilities.md#source-site-import-migration",
+  "state": "adopted_as_refusal_policy",
+  "exposure_class": "none",
+  "authority_basis": "Narada proper Site creation and package adoption are greenfield template/catalog driven; source Sites may provide external evidence only.",
+  "normal_create_site_input_model": "greenfield_template_catalog",
+  "separate_command_family_required_for": [
+    "source Site import",
+    "source Site migration",
+    "source Site lift",
+    "cross-Site mutation"
+  ],
+  "not_admitted": [
+    "narada-andrey runtime DB import",
+    "any source Site task history import",
+    "any source Site inbox history import",
+    "roster import",
+    "checkpoint history import",
+    "operator-surface runtime copying",
+    "PC-locus state import",
+    "secret or credential import",
+    "identity-specific runtime state import",
+    "source history import as local truth"
+  ],
+  "allowed_evidence": [
+    "proposal documents",
+    "compact references",
+    "package design examples",
+    "neutral fixtures derived from patterns"
+  ],
+  "future_admission_requires": [
+    "separate migration/lift command design",
+    "governed crossing artifact",
+    "source/target authority separation",
+    "local admission/refusal ledger",
+    "replayable evidence",
+    "no-import proof for excluded runtime state"
+  ],
+  "task_refs": [
+    "task:1249"
+  ]
+}

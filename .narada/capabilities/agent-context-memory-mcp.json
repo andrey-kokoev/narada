@@ -1,0 +1,43 @@
+{
+  "schema": "narada.site.capability_adoption.v0",
+  "site_id": "narada-proper",
+  "capability_id": "narada-proper.capability.agent-context-memory-mcp.v0",
+  "capability_name": "Agent-context memory checkpoint and hydration MCP descriptor",
+  "package": "@narada2/agent-context-memory",
+  "source_residual": ".narada/capabilities/missing-capabilities.md#agent-context-live-hydration",
+  "state": "adopted_as_descriptor_candidate",
+  "exposure_class": "descriptor_only",
+  "authority_basis": ".narada/site.json declares D:\\code\\narada as Narada proper authority root; @narada2/agent-context-memory is a pure descriptor/contracts package.",
+  "candidate_tools": [
+    "agent_context_memory.plan_session_start",
+    "agent_context_memory.plan_checkpoint",
+    "agent_context_memory.plan_hydration",
+    "agent_context_memory.read_checkpoint_summary",
+    "agent_context_memory.prove_hydration_evidence"
+  ],
+  "identity_doctrine": {
+    "named_agent_identity_is_role_assignment": false,
+    "claimed_identity_is_authority": false,
+    "mechanical_verification_required": true,
+    "role_name_compatibility_identities_require_explicit_admission": true
+  },
+  "not_admitted": [
+    "live hydration execution",
+    "checkpoint history import",
+    "source agent-context database import",
+    "secret or credential import",
+    "operator-surface runtime copying",
+    "PC-locus state import",
+    "capability grants"
+  ],
+  "future_admission_requires": [
+    "target-local storage adapter",
+    "checkpoint write/readback evidence",
+    "hydration request/result contract",
+    "MCP smoke evidence",
+    "no-import verification"
+  ],
+  "task_refs": [
+    "task:1248"
+  ]
+}

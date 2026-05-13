@@ -1,0 +1,46 @@
+{
+  "schema": "narada.audit.v0",
+  "site_id": "narada-proper",
+  "task_refs": [
+    "task:1246",
+    "task:1247",
+    "task:1248",
+    "task:1249",
+    "task:1250"
+  ],
+  "recorded_at": "2026-05-13T01:42:00Z",
+  "decision": "completed_descriptor_and_policy_adoption",
+  "changed_files": [
+    ".narada/capabilities/task-lifecycle-expanded-mcp.json",
+    ".narada/capabilities/site-inbox-mcp.json",
+    ".narada/capabilities/agent-context-memory-mcp.json",
+    ".narada/capabilities/live-authority-grants.json",
+    ".narada/capabilities/source-site-import-migration.json",
+    ".narada/capabilities/mcp-surfaces.json",
+    ".narada/capabilities/missing-capabilities.md",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "terminal_claim": "Narada proper Site residual capabilities are adopted as explicit descriptor candidates or refusal/denied-by-default policies; no new live external mutation authority is claimed.",
+  "live_claims_preserved": [
+    "site_task_lifecycle.plan_init",
+    "site_task_lifecycle.admit_task",
+    "site_task_lifecycle.read_task"
+  ],
+  "not_claimed": [
+    "live richer task lifecycle MCP execution",
+    "live inbox MCP execution",
+    "live agent-context hydration/checkpoint MCP execution",
+    "native shell carrier",
+    "capability or credential grants",
+    "external Windows profile mutation",
+    "operator-surface runtime mutation",
+    "PC-locus mutation",
+    "source Site import or migration"
+  ],
+  "no_import_evidence": [
+    "No narada-andrey runtime DBs were copied.",
+    "No task, inbox, roster, checkpoint, operator-surface, PC-locus, secret, credential, or identity-specific runtime state was imported.",
+    "All new records are Narada proper Site-local descriptors or refusal policies."
+  ],
+  "rollback": "Remove the five added capability records and revert the mcp-surfaces/missing-capabilities/ledger updates."
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "narada.site.capability_adoption.v0",
+  "site_id": "narada-proper",
+  "capability_id": "narada-proper.capability.task-lifecycle-expanded-mcp.v0",
+  "capability_name": "Task lifecycle expanded MCP surface",
+  "source_residual": ".narada/capabilities/missing-capabilities.md#richer-task-lifecycle-mcp",
+  "state": "adopted_as_descriptor_candidate",
+  "exposure_class": "descriptor_only",
+  "authority_basis": ".narada/site.json declares D:\\code\\narada as Narada proper authority root; live task-lifecycle first slice is already admitted separately.",
+  "already_live_tools": [
+    "site_task_lifecycle.plan_init",
+    "site_task_lifecycle.admit_task",
+    "site_task_lifecycle.read_task"
+  ],
+  "candidate_tools": [
+    "site_task_lifecycle.claim_task",
+    "site_task_lifecycle.finish_task",
+    "site_task_lifecycle.review_task",
+    "site_task_lifecycle.close_task",
+    "site_task_lifecycle.work_next",
+    "site_task_lifecycle.list_tasks",
+    "site_task_lifecycle.query_tasks",
+    "site_task_lifecycle.transition_task"
+  ],
+  "not_admitted": [
+    "live exposure for candidate tools",
+    "arbitrary lifecycle state mutation",
+    "direct SQLite writes outside admitted adapters",
+    "source Site task database or history import",
+    "narada-andrey roster, task, inbox, checkpoint, operator-surface, PC, secret, or identity state import"
+  ],
+  "future_admission_requires": [
+    "specific tool request/result contracts",
+    "local-only authority gates",
+    "adapter-bound mutation implementation when mutating",
+    "readback and mutation evidence",
+    "rollback posture",
+    "MCP smoke evidence"
+  ],
+  "task_refs": [
+    "task:1246"
+  ]
+}

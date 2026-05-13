@@ -1,0 +1,42 @@
+{
+  "schema": "narada.site.capability_adoption.v0",
+  "site_id": "narada-proper",
+  "capability_id": "narada-proper.capability.live-authority-grants.v0",
+  "capability_name": "Live authority grants and external mutation powers",
+  "source_residual": ".narada/capabilities/missing-capabilities.md#live-authority-grants",
+  "state": "adopted_as_denied_by_default_policy",
+  "exposure_class": "none",
+  "authority_basis": ".narada/site.json agent_execution_policy denies shell-like and cross-site mutation by default.",
+  "denied_by_default": [
+    "native shell policy for Narada proper runtime work",
+    "capability grants",
+    "credential grants",
+    "external Windows profile mutation",
+    "operator-surface runtime mutation",
+    "PC-locus mutation",
+    "direct substrate shortcut execution",
+    "native shell fallback",
+    "raw WSL crossing as mutation authority"
+  ],
+  "not_admitted": [
+    "direct native shell execution as normal Site authority",
+    "unrecorded native shell fallback",
+    "secret or credential access",
+    "capability grant mutation",
+    "Windows profile mutation outside target-local admitted carrier",
+    "operator-surface runtime copying",
+    "PC-locus mutation"
+  ],
+  "future_admission_requires": [
+    "specific target authority locus",
+    "specific carrier or MCP surface",
+    "request/result contract",
+    "operator-visible consent or policy grant where applicable",
+    "audit evidence",
+    "rollback or recovery posture",
+    "verification that no source Site runtime state is imported"
+  ],
+  "task_refs": [
+    "task:1250"
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "schema": "narada.site.capability_adoption.v0",
+  "site_id": "narada-proper",
+  "capability_id": "narada-proper.capability.site-inbox-mcp.v0",
+  "capability_name": "Site-local inbox MCP descriptor",
+  "package": "@narada2/site-inbox",
+  "source_residual": ".narada/capabilities/missing-capabilities.md#inbox-admission-read-path-mcp",
+  "state": "adopted_as_descriptor_candidate",
+  "exposure_class": "descriptor_only",
+  "authority_basis": ".narada/site.json declares D:\\code\\narada as Narada proper authority root; @narada2/site-inbox is a descriptor/contracts package.",
+  "candidate_tools": [
+    "site_inbox.plan_admission",
+    "site_inbox.read_envelope",
+    "site_inbox.prove_envelope",
+    "site_inbox.project_to_task_candidate"
+  ],
+  "allowed_inputs": [
+    "target-local envelope descriptors",
+    "portable payload references",
+    "local admission decisions",
+    "neutral fixtures"
+  ],
+  "not_admitted": [
+    "live inbox DB mutation",
+    "source Site inbox DB import",
+    "source inbox history import",
+    "operator-surface runtime copying",
+    "PC-locus state import",
+    "secret or credential import",
+    "automatic task promotion"
+  ],
+  "future_admission_requires": [
+    "target-local inbox storage carrier",
+    "readback evidence",
+    "admission/refusal ledger event",
+    "MCP smoke evidence",
+    "no-import verification"
+  ],
+  "task_refs": [
+    "task:1247"
+  ]
+}

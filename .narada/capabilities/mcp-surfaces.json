@@ -31,12 +31,66 @@
       ],
       "live_smoke_evidence": ".narada/audit/task-0004-live-mcp-tool-binding-audit.json",
       "evidence": ".narada/admission/decisions/task-0002-live-carriers-surface-admission.md"
+    },
+    {
+      "surface_id": "narada-proper.surface.task-lifecycle-expanded-mcp-descriptor.v0",
+      "status": "descriptor_candidate_not_live",
+      "path": ".narada/capabilities/task-lifecycle-expanded-mcp.json",
+      "package": "@narada2/site-task-lifecycle",
+      "transport": "not_registered",
+      "mutation_posture": "not_admitted",
+      "tools": [
+        "site_task_lifecycle.claim_task",
+        "site_task_lifecycle.finish_task",
+        "site_task_lifecycle.review_task",
+        "site_task_lifecycle.close_task",
+        "site_task_lifecycle.work_next",
+        "site_task_lifecycle.list_tasks",
+        "site_task_lifecycle.query_tasks",
+        "site_task_lifecycle.transition_task"
+      ],
+      "registered_live_tools": [],
+      "evidence": ".narada/capabilities/task-lifecycle-expanded-mcp.json"
+    },
+    {
+      "surface_id": "narada-proper.surface.site-inbox-mcp-descriptor.v0",
+      "status": "descriptor_candidate_not_live",
+      "path": ".narada/capabilities/site-inbox-mcp.json",
+      "package": "@narada2/site-inbox",
+      "transport": "not_registered",
+      "mutation_posture": "not_admitted",
+      "tools": [
+        "site_inbox.plan_admission",
+        "site_inbox.read_envelope",
+        "site_inbox.prove_envelope",
+        "site_inbox.project_to_task_candidate"
+      ],
+      "registered_live_tools": [],
+      "evidence": ".narada/capabilities/site-inbox-mcp.json"
+    },
+    {
+      "surface_id": "narada-proper.surface.agent-context-memory-mcp-descriptor.v0",
+      "status": "descriptor_candidate_not_live",
+      "path": ".narada/capabilities/agent-context-memory-mcp.json",
+      "package": "@narada2/agent-context-memory",
+      "transport": "not_registered",
+      "mutation_posture": "not_admitted",
+      "tools": [
+        "agent_context_memory.plan_session_start",
+        "agent_context_memory.plan_checkpoint",
+        "agent_context_memory.plan_hydration",
+        "agent_context_memory.read_checkpoint_summary",
+        "agent_context_memory.prove_hydration_evidence"
+      ],
+      "registered_live_tools": [],
+      "evidence": ".narada/capabilities/agent-context-memory-mcp.json"
     }
   ],
   "missing_capabilities": [
-    "site-local inbox MCP",
-    "site-local agent context MCP",
-    "site-local checkpoint/hydration MCP"
+    "live site-local inbox MCP execution",
+    "live site-local agent context MCP execution",
+    "live site-local checkpoint/hydration MCP execution",
+    "live richer task-lifecycle MCP execution beyond plan_init/admit_task/read_task"
   ],
   "native_shell_policy": "denied_by_default_break_glass_operator_authorized_only",
   "native_shell_policy_source": ".narada/site.json#/agent_execution_policy",
