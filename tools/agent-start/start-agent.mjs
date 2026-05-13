@@ -250,8 +250,36 @@ function loadSqliteDriver() {
   }
 }
 
+function naradaMcpServerNames() {
+  return [
+    'narada-andrey-agent-context',
+    'narada-andrey-task-lifecycle',
+    'narada-andrey-inbox',
+    'narada-andrey-operator-surface',
+    'narada-andrey-site-lift-catalog',
+    'narada-andrey-adoptable-deltas',
+    'narada-andrey-filesystem',
+    'narada-andrey-test',
+    'narada-andrey-shell',
+    'narada-andrey-adr',
+  ];
+}
+
+function codexMcpApprovalArgs() {
+  return naradaMcpServerNames().flatMap((serverName) => [
+    '-c',
+    `mcp_servers."${serverName}".default_tools_approval_mode="approve"`,
+  ]);
+}
+
 function codexArgs() {
-  return ['--ask-for-approval', 'never', '--disable', 'shell_tool'];
+  return [
+    '--ask-for-approval',
+    'never',
+    ...codexMcpApprovalArgs(),
+    '--disable',
+    'shell_tool',
+  ];
 }
 
 function startupSequence() {
@@ -311,6 +339,11 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     dry_run: dryRun,
     runtime_args: runtimeArgs,
     exec_command: exec ? ['codex', ...runtimeArgs].join(' ') : null,
+    mcp_tool_approval: {
+      status: 'approved_by_launcher_config',
+      server_names: naradaMcpServerNames(),
+      note: 'Approves configured Narada MCP tool calls at the Codex carrier layer. Native Codex shell_tool remains disabled; shell execution still goes through the policy-aware Narada shell MCP.',
+    },
     planned_environment: plannedEnvironment,
     launch_environment: launchEnvironment,
     required_environment: launchEnvironment ?? plannedEnvironment,

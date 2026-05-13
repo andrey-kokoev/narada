@@ -33,6 +33,13 @@ test('narada.architect real launch materializes carrier session env and discover
   assert.equal(result.launch_environment.NARADA_AGENT_CONTEXT_DB, result.agent_context_db_path);
   assert.ok(result.carrier_session_id.startsWith('carrier_session_'));
   assert.equal(result.startup_command_name, 'agent_context_hydrate_current');
+  assert.ok(result.runtime_args.includes('mcp_servers."narada-andrey-agent-context".default_tools_approval_mode="approve"'));
+  assert.ok(result.runtime_args.includes('mcp_servers."narada-andrey-shell".default_tools_approval_mode="approve"'));
+  assert.ok(result.runtime_args.includes('--disable'));
+  assert.ok(result.runtime_args.includes('shell_tool'));
+  assert.equal(result.mcp_tool_approval.status, 'approved_by_launcher_config');
+  assert.ok(result.mcp_tool_approval.server_names.includes('narada-andrey-agent-context'));
+  assert.ok(result.mcp_tool_approval.server_names.includes('narada-andrey-shell'));
   assert.deepEqual(result.startup_command, {
     name: 'agent_context_hydrate_current',
     arguments: {},
@@ -70,6 +77,8 @@ test('dry run reports planned non-authoritative env without durable event claim'
   assert.equal(result.planned_environment.NARADA_AGENT_START_EVENT_ID, result.agent_start_event);
   assert.equal(result.planned_environment.NARADA_CARRIER_SESSION_ID, result.carrier_session_id);
   assert.equal(result.startup_command_name, 'agent_context_hydrate_current');
+  assert.ok(result.runtime_args.includes('mcp_servers."narada-andrey-agent-context".default_tools_approval_mode="approve"'));
+  assert.ok(result.runtime_args.includes('mcp_servers."narada-andrey-shell".default_tools_approval_mode="approve"'));
   assert.equal(result.startup_sequence[0].tool, 'agent_context_hydrate_current');
   assert.deepEqual(result.startup_sequence[0].arguments, {});
   assert.match(result.dry_run_notice, /non-authoritative/);
