@@ -5,6 +5,7 @@ import type {
   CrewStartupShortcutPlan,
   CrewStartupShortcutRefusal,
   CrewStartupShortcutRequest,
+  CrewStartupLaunchIntentSequence,
 } from './types.js';
 
 export function buildCrewStartupPlan(request: CrewStartupShortcutRequest): CrewStartupShortcutPlan | CrewStartupShortcutRefusal {
@@ -72,6 +73,48 @@ export function buildCrewStartupRefusal(
     missingMcpSurfaces: missingMcpSurfaces ?? [],
     requiredBehavior: 'stop_and_report_missing_mcp_capability',
     packageExecutedLaunch: false,
+    nativeShellFallbackAllowed: false,
+  };
+}
+
+export function buildCrewStartupLaunchIntentSequence(
+  request: CrewStartupShortcutRequest,
+): CrewStartupLaunchIntentSequence | CrewStartupShortcutRefusal {
+  const plan = buildCrewStartupPlan(request);
+  if (plan.status === 'refused') return plan;
+
+  return {
+    schema: 'narada.crew_startup_shortcut.launch_intent_sequence.v0',
+    requestId: request.requestId,
+    status: 'ready_for_admitted_carrier',
+    exposureClass: 'request_response',
+    targetLocus: request.targetLocus,
+    targetSiteId: request.targetSiteId,
+    mcpOnly: true,
+    sequenceSteps: [
+      { step: 'read_task_lifecycle_context', posture: 'read_only', requiredTool: 'site_task_lifecycle.read_task' },
+      { step: 'plan_agent_context_hydration', posture: 'descriptor_only', requiredTool: 'agent_context_memory.plan_hydration' },
+      { step: 'read_checkpoint_summary_if_available', posture: 'read_only', requiredTool: 'agent_context_memory.read_checkpoint_summary' },
+      { step: 'prepare_operator_surface_launch_handoff', posture: 'handoff_intent' },
+    ],
+    requiredMcpSurfaces: request.requiredMcpSurfaces,
+    launchHandoff: {
+      schema: 'narada.crew_startup_shortcut.launch_handoff.v0',
+      targetSiteId: request.targetSiteId,
+      roleNames: [...request.roleNames],
+      namedAgentIds: [...request.namedAgentIds],
+      requestedBy: request.requestedBy,
+      carrierRequired: 'operator_surface_launch_focus_bind',
+      executionAdmitted: false,
+    },
+    evidenceRefs: [
+      ...plan.evidenceRefs,
+      `crew_startup_request:${request.requestId}`,
+    ],
+    sourceImportFindings: [],
+    packageExecutedLaunch: false,
+    packageMutatedPcState: false,
+    operatorSurfaceRuntimeMutated: false,
     nativeShellFallbackAllowed: false,
   };
 }

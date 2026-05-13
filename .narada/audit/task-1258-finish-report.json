@@ -1,0 +1,29 @@
+{
+  "summary": "Implemented a read/write-gated crew launch focus bind request planner. It verifies the launch intent sequence, plans the carrier request, and in authorized apply mode writes only .narada/crew/launch-requests evidence with status awaiting_admitted_carrier. No launch, shortcut creation, PC-locus mutation, or operator-surface runtime mutation occurred.",
+  "changed_files": [
+    "tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.mjs",
+    "tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.test.mjs",
+    ".narada/crew/README.md",
+    ".narada/crew/launch-requests/narada-proper.crew.architect.startup-request.v0.launch-focus-bind-request.v0.json",
+    ".narada/audit/task-1258-crew-launch-focus-bind-request-planner-audit.json",
+    ".narada/audit/task-1258-finish-report.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "node --test tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.test.mjs",
+      "result": "passed"
+    },
+    {
+      "command": "node tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.mjs --site-root D:\\code\\narada --mode apply --mutation-authorized",
+      "result": "passed"
+    },
+    {
+      "command": "node tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.mjs --site-root D:\\code\\narada --mode verify",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "Actual launch/focus/bind execution remains outside this admitted chapter until an external carrier/supervisor with PC/operator-surface authority is admitted."
+  ]
+}

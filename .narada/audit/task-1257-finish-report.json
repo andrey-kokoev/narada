@@ -1,0 +1,28 @@
+{
+  "summary": "Defined descriptor-only carrier admission packet narada-proper.carrier.crew-launch-focus-bind.v0 for future crew launch/focus/bind execution. The packet names allowed future phases, required preflight verification, denied forms, evidence, rollback, and terminal criteria without executing launch.",
+  "changed_files": [
+    ".narada/admission/candidates/task-1257-crew-launch-focus-bind-carrier-admission-packet.md",
+    ".narada/capabilities/crew-launch-focus-bind-carrier.json",
+    ".narada/crew/README.md",
+    ".narada/audit/task-1257-crew-launch-focus-bind-carrier-audit.json",
+    ".narada/audit/task-1257-finish-report.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "Get-Content .narada/capabilities/crew-launch-focus-bind-carrier.json | ConvertFrom-Json",
+      "result": "passed"
+    },
+    {
+      "command": "rg -n \"direct substrate shortcut execution|native shell fallback|PC-locus mutation|operator-surface runtime copying|candidate_not_executed\" .narada/admission/candidates/task-1257-crew-launch-focus-bind-carrier-admission-packet.md .narada/capabilities/crew-launch-focus-bind-carrier.json .narada/crew/README.md",
+      "result": "passed"
+    },
+    {
+      "command": "node tools/operator-surface-carriers/crew-launch-intent-sequence-verifier.mjs --site-root D:\\code\\narada",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "Concrete operator-surface carrier/supervisor remains separately required before any launch/focus/bind execution can occur."
+  ]
+}

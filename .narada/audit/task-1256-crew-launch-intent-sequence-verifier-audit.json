@@ -1,0 +1,38 @@
+{
+  "schema": "narada.audit.task_execution.v0",
+  "task_id": "1256",
+  "task_title": "Add read-only crew launch intent sequence verifier",
+  "site_id": "narada-proper",
+  "executed_by": "narada.architect",
+  "completed_at": "2026-05-13T02:15:00Z",
+  "changed_files": [
+    "tools/operator-surface-carriers/crew-launch-intent-sequence-verifier.mjs",
+    "tools/operator-surface-carriers/crew-launch-intent-sequence-verifier.test.mjs",
+    ".narada/audit/task-1256-crew-launch-intent-sequence-verifier-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "node --test tools/operator-surface-carriers/crew-launch-intent-sequence-verifier.test.mjs",
+      "result": "passed",
+      "evidence": "3 tests passed; verifier accepts a read-only sequence and refuses direct launch execution plus missing required MCP tools."
+    },
+    {
+      "command": "node tools/operator-surface-carriers/crew-launch-intent-sequence-verifier.mjs --site-root D:\\\\code\\\\narada",
+      "result": "passed",
+      "evidence": "status=verified for .narada/crew/architect.launch-intent-sequence.json; launch_focus_bind_execution=blocked_without_separate_admitted_carrier."
+    }
+  ],
+  "terminal_claim": "Narada proper can verify crew launch intent sequences against live MCP capability declarations without executing launch, shortcut, focus, bind, shell, PC-locus, or operator-surface runtime mutation.",
+  "refused_actions": [
+    "Windows .lnk creation",
+    "process launch",
+    "direct substrate shortcut execution",
+    "native shell fallback",
+    "PC-locus mutation",
+    "operator-surface runtime mutation",
+    "operator-surface runtime copying"
+  ],
+  "rollback": "Remove the verifier/test files, remove this audit entry, and append a superseding ledger event if the verifier contract is withdrawn.",
+  "remaining_blocker": "Actual launch/focus/bind execution still requires a separate admitted carrier; this task is read-only verification only."
+}

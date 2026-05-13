@@ -73,3 +73,34 @@ export interface CrewStartupShortcutRefusal {
   packageExecutedLaunch: false;
   nativeShellFallbackAllowed: false;
 }
+
+export interface CrewStartupLaunchIntentSequence {
+  schema: 'narada.crew_startup_shortcut.launch_intent_sequence.v0';
+  requestId: string;
+  status: 'ready_for_admitted_carrier';
+  exposureClass: 'request_response';
+  targetLocus: CrewStartupTargetLocus;
+  targetSiteId: string;
+  mcpOnly: true;
+  sequenceSteps: Array<{
+    step: string;
+    posture: 'read_only' | 'descriptor_only' | 'handoff_intent';
+    requiredTool?: string;
+  }>;
+  requiredMcpSurfaces: CrewStartupMcpSurfaceRequirement[];
+  launchHandoff: {
+    schema: 'narada.crew_startup_shortcut.launch_handoff.v0';
+    targetSiteId: string;
+    roleNames: string[];
+    namedAgentIds: string[];
+    requestedBy: string;
+    carrierRequired: 'operator_surface_launch_focus_bind';
+    executionAdmitted: false;
+  };
+  evidenceRefs: string[];
+  sourceImportFindings: DeniedImportFinding[];
+  packageExecutedLaunch: false;
+  packageMutatedPcState: false;
+  operatorSurfaceRuntimeMutated: false;
+  nativeShellFallbackAllowed: false;
+}

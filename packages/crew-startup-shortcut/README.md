@@ -18,6 +18,12 @@ The package assumes the receiving Site owns local admission. Narada proper packa
 The first slice includes:
 
 - `buildCrewStartupPlan`
+- `buildCrewStartupLaunchIntentSequence`
 - `buildCrewStartupRefusal`
 - neutral fixtures for a valid MCP-only startup plan and refused native shortcut fallback
 - source-state import guards
+
+`buildCrewStartupLaunchIntentSequence` composes a startup request into a governed sequence:
+read task-lifecycle context, plan agent-context hydration, read a checkpoint summary if available,
+and prepare an operator-surface launch handoff. It still does not create `.lnk` files, launch
+processes, mutate PC-locus/operator-surface runtime state, or allow native shell fallback.

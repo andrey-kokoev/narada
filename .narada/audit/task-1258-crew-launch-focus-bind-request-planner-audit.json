@@ -1,0 +1,46 @@
+{
+  "schema": "narada.audit.task_execution.v0",
+  "task_id": "1258",
+  "task_title": "Implement crew launch focus bind request planner",
+  "site_id": "narada-proper",
+  "executed_by": "narada.architect",
+  "completed_at": "2026-05-13T02:24:00Z",
+  "changed_files": [
+    "tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.mjs",
+    "tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.test.mjs",
+    ".narada/crew/README.md",
+    ".narada/crew/launch-requests/narada-proper.crew.architect.startup-request.v0.launch-focus-bind-request.v0.json",
+    ".narada/audit/task-1258-crew-launch-focus-bind-request-planner-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "node --test tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.test.mjs",
+      "result": "passed",
+      "evidence": "4 tests passed: plan, authority-gated apply, direct side-effect refusal, and failed sequence verification refusal."
+    },
+    {
+      "command": "node tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.mjs --site-root D:\\code\\narada --mode apply --mutation-authorized",
+      "result": "passed",
+      "evidence": "Created .narada/crew/launch-requests/narada-proper.crew.architect.startup-request.v0.launch-focus-bind-request.v0.json with status awaiting_admitted_carrier."
+    },
+    {
+      "command": "node tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.mjs --site-root D:\\code\\narada --mode verify",
+      "result": "passed",
+      "evidence": "Verified the request artifact exists and preserves no-launch/no-runtime-mutation posture."
+    }
+  ],
+  "terminal_claim": "Narada proper has working launch intent sequences up to a durable carrier request artifact: sequence verification, request planning, and request evidence are operational.",
+  "not_claimed": [
+    "Windows .lnk creation",
+    "process launch",
+    "direct substrate shortcut execution",
+    "native shell fallback",
+    "PC-locus mutation",
+    "operator-surface runtime mutation",
+    "operator-surface runtime copying",
+    "actual launch/focus/bind execution"
+  ],
+  "rollback": "Remove the request planner/test, remove the generated launch request artifact, revert the README update, and append a superseding ledger event.",
+  "remaining_blocker": "Actual launch/focus/bind execution remains outside this admitted chapter until an external carrier/supervisor with PC/operator-surface authority is admitted."
+}

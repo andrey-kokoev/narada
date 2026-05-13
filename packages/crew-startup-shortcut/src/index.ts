@@ -6,12 +6,14 @@ export {
 export {
   buildCrewStartupPlan,
   buildCrewStartupRefusal,
+  buildCrewStartupLaunchIntentSequence,
 } from './contracts.js';
 export type {
   CrewStartupMcpSurfaceRequirement,
   CrewStartupShortcutPlan,
   CrewStartupShortcutRefusal,
   CrewStartupShortcutRequest,
+  CrewStartupLaunchIntentSequence,
   CrewStartupTargetLocus,
   CrewStartupTriggerKind,
   DeniedImportFinding,

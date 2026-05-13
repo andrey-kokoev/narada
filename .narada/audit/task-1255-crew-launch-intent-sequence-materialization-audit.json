@@ -1,0 +1,38 @@
+{
+  "schema": "narada.audit.v0",
+  "site_id": "narada-proper",
+  "task_refs": [
+    "task:1255"
+  ],
+  "recorded_at": "2026-05-13T02:11:00Z",
+  "decision": "materialized_crew_launch_intent_sequences",
+  "changed_files": [
+    ".narada/crew/architect.launch-intent-sequence.json",
+    ".narada/crew/templates/agent-launch-intent-sequence.template.json",
+    ".narada/crew/README.md",
+    ".narada/audit/task-1255-crew-launch-intent-sequence-materialization-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "PowerShell ConvertFrom-Json for architect.launch-intent-sequence.json",
+      "result": "passed"
+    },
+    {
+      "command": "PowerShell ConvertFrom-Json for templates/agent-launch-intent-sequence.template.json",
+      "result": "passed"
+    }
+  ],
+  "terminal_claim": "Narada proper has launch intent sequence artifacts for architect startup that compose live MCP readiness/readback and launch handoff intent.",
+  "not_claimed": [
+    "Windows .lnk creation",
+    "process launch",
+    "direct substrate shortcut execution",
+    "native shell fallback",
+    "PC-locus mutation",
+    "operator-surface runtime mutation",
+    "operator-surface runtime copying"
+  ],
+  "next_smallest_slice": "Add a read-only sequence verifier that checks required MCP tools and refuses if launch/focus/bind execution is requested without a carrier.",
+  "rollback": "Remove the launch intent sequence files and README/audit/ledger updates."
+}

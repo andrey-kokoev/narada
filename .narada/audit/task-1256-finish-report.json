@@ -1,0 +1,23 @@
+{
+  "summary": "Added read-only crew launch intent sequence verifier and tests. The verifier checks required MCP tools against .narada/capabilities/mcp-surfaces.json, proves direct launch remains blocked, and refuses missing tools or admitted launch side effects. Audit: .narada/audit/task-1256-crew-launch-intent-sequence-verifier-audit.json",
+  "changed_files": [
+    "tools/operator-surface-carriers/crew-launch-intent-sequence-verifier.mjs",
+    "tools/operator-surface-carriers/crew-launch-intent-sequence-verifier.test.mjs",
+    ".narada/audit/task-1256-crew-launch-intent-sequence-verifier-audit.json",
+    ".narada/audit/task-1256-finish-report.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "node --test tools/operator-surface-carriers/crew-launch-intent-sequence-verifier.test.mjs",
+      "result": "passed"
+    },
+    {
+      "command": "node tools/operator-surface-carriers/crew-launch-intent-sequence-verifier.mjs --site-root D:\\code\\narada",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "Actual launch/focus/bind execution still needs a separate admitted carrier; next task should define the launch/focus/bind carrier admission packet without executing it."
+  ]
+}
