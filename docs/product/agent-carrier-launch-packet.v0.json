@@ -1,0 +1,163 @@
+{
+  "schema": "narada.agent_carrier.launch_packet_contract.v0",
+  "contract_id": "agent_carrier.launch_packet.v0",
+  "concept_ref": "docs/concepts/agent-carrier.md",
+  "purpose": "Stable launch packet contract for carrier implementations that embody one durable Agent in one bounded Session.",
+  "carrier_kinds": [
+    {
+      "kind": "codex_carrier",
+      "substrate_relation": "wraps_codex_cli",
+      "native_execution_policy_requirement": "disable_native_shell_tool_when_mcp_only_policy_applies"
+    },
+    {
+      "kind": "kimi_carrier",
+      "substrate_relation": "wraps_kimi_cli",
+      "native_execution_policy_requirement": "project_same_policy_posture_through_kimi_tool_semantics"
+    },
+    {
+      "kind": "narada_native_carrier",
+      "substrate_relation": "narada_owned_harness_with_pluggable_model_or_executor_adapters",
+      "native_execution_policy_requirement": "policy_first_tool_mediation_without_third_party_cli_permission_drift"
+    },
+    {
+      "kind": "api_agent_carrier",
+      "substrate_relation": "wraps_api_conversation_or_remote_worker",
+      "native_execution_policy_requirement": "no_implicit_host_shell_or_script_authority"
+    }
+  ],
+  "required_fields": [
+    "agent_id",
+    "site_root",
+    "runtime_kind",
+    "carrier_session_id",
+    "agent_start_event_id",
+    "startup_command",
+    "required_environment",
+    "tool_approval_policy",
+    "native_execution_policy",
+    "launch_result_path",
+    "result_sentinel",
+    "not_claimed"
+  ],
+  "optional_fields": [
+    "pc_runtime_ref",
+    "operator_surface_ref",
+    "control_channel_ref",
+    "trace_refs",
+    "resume_ref"
+  ],
+  "field_contract": {
+    "agent_id": {
+      "type": "string",
+      "authority": "durable_agent_identity_authority",
+      "rule": "Must be mechanically bound before substrate handoff; carrier evidence is not identity authority."
+    },
+    "site_root": {
+      "type": "string",
+      "authority": "site_locus",
+      "rule": "Scopes Site law and runtime state; must not imply source Site state import."
+    },
+    "runtime_kind": {
+      "type": "string",
+      "authority": "carrier_launch_config",
+      "allowed": ["codex_carrier", "kimi_carrier", "narada_native_carrier", "api_agent_carrier"]
+    },
+    "carrier_session_id": {
+      "type": "string",
+      "authority": "carrier_session_authority",
+      "rule": "Correlates this bounded Session with runtime, restart, transcript, and PC/runtime evidence."
+    },
+    "agent_start_event_id": {
+      "type": "string",
+      "authority": "agent_context_start_session_or_carrier_start_event",
+      "rule": "Start event must exist before interactive substrate handoff."
+    },
+    "startup_command": {
+      "type": "object",
+      "required_shape": {
+        "name": "agent_context_hydrate_current",
+        "arguments": {}
+      },
+      "rule": "Startup is a named affordance, not a request for shell discovery."
+    },
+    "required_environment": {
+      "type": "object",
+      "required_keys": [
+        "NARADA_AGENT_ID",
+        "NARADA_AGENT_START_EVENT_ID",
+        "NARADA_CARRIER_SESSION_ID",
+        "NARADA_SITE_ROOT",
+        "NARADA_AGENT_CONTEXT_DB"
+      ],
+      "rule": "MCP children inherit these bindings from the carrier process environment."
+    },
+    "tool_approval_policy": {
+      "type": "object",
+      "required_keys": ["approved_servers", "withheld_servers", "rationale"],
+      "rule": "Approves only admitted MCP/tool surfaces; must distinguish startup hydration, task lifecycle, policy-aware shell MCP, and withheld surfaces."
+    },
+    "native_execution_policy": {
+      "type": "object",
+      "required_keys": ["native_shell", "native_scripts", "policy_aware_shell_mcp"],
+      "rule": "Native shell/script access and policy-aware Narada shell MCP are separate capabilities."
+    },
+    "launch_result_path": {
+      "type": "string",
+      "authority": "carrier_trace_evidence",
+      "rule": "Durable packet path is authoritative over terminal/TUI copy truncation."
+    },
+    "result_sentinel": {
+      "type": "string",
+      "rule": "Copy-safe marker proving the launch result packet ended."
+    },
+    "pc_runtime_ref": {
+      "type": "object",
+      "authority": "pc_site_runtime",
+      "rule": "Host process/window/restart facts remain PC-locus evidence, not Narada proper authority."
+    },
+    "not_claimed": {
+      "type": "array",
+      "required_items": [
+        "task_activation_authority",
+        "credential_access",
+        "source_site_runtime_state_import"
+      ],
+      "rule": "Launch packets must say what they do not prove."
+    }
+  },
+  "anti_collapse_rules": [
+    "carrier_is_not_agent",
+    "session_is_not_agent",
+    "substrate_is_not_agent",
+    "operator_surface_is_not_carrier",
+    "launch_packet_is_evidence_not_activation_authority",
+    "native_shell_access_is_not_policy_aware_shell_mcp",
+    "pc_runtime_materialization_is_not_narada_proper_authority"
+  ],
+  "locus_responsibilities": {
+    "narada_proper": [
+      "carrier_concept",
+      "launch_packet_contract",
+      "package_api",
+      "adapter_semantics",
+      "cross_carrier_tests"
+    ],
+    "user_site": [
+      "local_adoption_preferences",
+      "operator_friction_evidence",
+      "package_lift_proposals",
+      "temporary_compatibility_projections"
+    ],
+    "pc_site": [
+      "process_and_window_truth",
+      "carrier_session_runtime_records",
+      "desktop_shortcuts_or_launcher_materialization",
+      "restart_coordination",
+      "host_health_evidence"
+    ]
+  },
+  "version_compatibility": {
+    "version": 0,
+    "rule": "New optional fields may be added compatibly; required field changes require a new contract version."
+  }
+}
