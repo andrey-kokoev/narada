@@ -69,4 +69,8 @@ It targets:
 
 `tools/operator-surface-carriers/windows-glue/Start-NaradaArchitect.ps1`
 
-The carrier verifies the launch intent sequence and launch request before starting `codex` in `D:\code\narada`. It does not place a shortcut on the Desktop or Start Menu, copy operator-surface runtime state, import source Site state, or provide a native shell fallback.
+The carrier verifies the launch intent sequence and launch request, then delegates to the local Narada proper agent-start carrier:
+
+`node tools/agent-start/start-agent.mjs narada.architect --runtime codex --exec`
+
+That carrier materializes a local agent start event, sets `NARADA_AGENT_ID` and `NARADA_AGENT_START_EVENT_ID`, and starts Codex in `D:\code\narada`. It does not place a shortcut on the Desktop or Start Menu, copy operator-surface runtime state, import source Site state, or provide a native shell fallback.

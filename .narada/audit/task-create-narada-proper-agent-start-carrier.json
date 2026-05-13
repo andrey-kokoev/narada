@@ -1,0 +1,15 @@
+{
+  "title": "Adapt architect shortcut to Narada proper agent-start carrier",
+  "goal": "Replace direct Codex invocation with a Narada proper agent-start carrier modeled on the working narada-andrey command shape.",
+  "context": "The operator showed the working User Site launch shape: .\\narada-andrey.ps1 agent-start -Agent narada-andrey.Robin -Runtime codex -Exec. Narada proper should reuse the pattern, not copy User Site runtime state. Current shortcut carrier verifies launch intent sequence but invokes codex directly.",
+  "required_work": "Create a minimal Narada proper agent-start carrier that validates narada.architect, materializes a local agent start event, sets NARADA_AGENT_ID and NARADA_AGENT_START_EVENT_ID, and spawns Codex with stdio inheritance in exec mode. Update Start-NaradaArchitect.ps1 to call the carrier instead of invoking codex directly. Add dry-run/no-launch verification and audit evidence. Do not import narada-andrey runtime state, checkpoint history, rosters, operator-surface runtime state, PC state, secrets, or credentials.",
+  "chapter": "narada-proper-crew-launch-intent-sequences",
+  "depends_on": "1260",
+  "criteria": [
+    "Narada proper has a local tools/agent-start/start-agent.mjs carrier with dry-run JSON and exec mode.",
+    "Start-NaradaArchitect.ps1 invokes the local carrier with narada.architect --runtime codex rather than direct codex.",
+    "No-launch verification materializes or previews local start evidence without spawning Codex.",
+    "Shortcut readback still points at the Narada proper launch carrier.",
+    "No narada-andrey runtime state is imported."
+  ]
+}

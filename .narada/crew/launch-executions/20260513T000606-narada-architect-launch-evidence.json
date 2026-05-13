@@ -1,0 +1,23 @@
+﻿{
+    "schema":  "narada.crew_startup_shortcut.launch_execution_evidence.v0",
+    "status":  "verified_no_launch",
+    "carrier_id":  "narada-proper.carrier.crew-launch-focus-bind.v0",
+    "site_root":  "D:\\code\\narada",
+    "sequence_path":  "D:\\code\\narada\\.narada\\crew\\architect.launch-intent-sequence.json",
+    "request_path":  "D:\\code\\narada\\.narada\\crew\\launch-requests\\narada-proper.crew.architect.startup-request.v0.launch-focus-bind-request.v0.json",
+    "agent_start_carrier":  "D:\\code\\narada\\tools\\agent-start\\start-agent.mjs",
+    "agent_start_command":  "node D:\\code\\narada\\tools\\agent-start\\start-agent.mjs narada.architect --runtime codex --exec",
+    "started_at":  "2026-05-13T05:06:06.3787143Z",
+    "dry_run":  false,
+    "no_codex":  true,
+    "sequence_verification_status":  "verified",
+    "request_verification_status":  "verified",
+    "not_claimed":  [
+                        "operator-surface runtime binding",
+                        "operator-surface runtime copying",
+                        "Desktop shortcut placement",
+                        "Start Menu shortcut placement",
+                        "source Site runtime state import",
+                        "native shell fallback"
+                    ]
+}

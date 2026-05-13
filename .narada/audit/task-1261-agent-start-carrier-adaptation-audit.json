@@ -1,0 +1,57 @@
+{
+  "schema": "narada.audit.task_execution.v0",
+  "task_id": "1261",
+  "task_title": "Adapt architect shortcut to Narada proper agent-start carrier",
+  "site_id": "narada-proper",
+  "executed_by": "narada.architect",
+  "completed_at": "2026-05-13T05:08:00Z",
+  "changed_files": [
+    "tools/agent-start/start-agent.mjs",
+    "tools/operator-surface-carriers/windows-glue/Start-NaradaArchitect.ps1",
+    ".narada/crew/README.md",
+    ".narada/crew/launch-executions/20260513T000606-narada-architect-launch-evidence.json",
+    ".narada/crew/launch-executions/20260513T000802-narada-architect-launch-evidence.json",
+    ".narada/audit/task-1261-agent-start-carrier-adaptation-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "source_evidence": {
+    "kind": "external_orientation_only",
+    "reference": "C:\\Users\\Andrey\\Narada\\narada-andrey.ps1 agent-start -Agent narada-andrey.Robin -Runtime codex -Exec",
+    "imported_runtime_state": false
+  },
+  "verification": [
+    {
+      "command": "node --check tools/agent-start/start-agent.mjs",
+      "result": "passed"
+    },
+    {
+      "command": "node tools/agent-start/start-agent.mjs narada.architect --runtime codex --dry-run --json",
+      "result": "passed",
+      "evidence": "Returned schema narada.agent_start.result.v0 with NARADA_AGENT_ID and NARADA_AGENT_START_EVENT_ID."
+    },
+    {
+      "command": ".\\.crew\\agent-shortcuts\\narada-architect.cmd --no-codex",
+      "result": "passed",
+      "evidence": ".narada/crew/launch-executions/20260513T000606-narada-architect-launch-evidence.json"
+    },
+    {
+      "command": ".\\.crew\\agent-shortcuts\\narada-architect.cmd --no-codex",
+      "result": "passed",
+      "evidence": ".narada/crew/launch-executions/20260513T000802-narada-architect-launch-evidence.json"
+    },
+    {
+      "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/operator-surface-carriers/windows-glue/New-NaradaArchitectShortcut.ps1 -VerifyOnly",
+      "result": "passed"
+    }
+  ],
+  "terminal_claim": "Narada proper architect shortcut now uses a local agent-start carrier shaped like the working User Site pattern, rather than invoking Codex directly.",
+  "not_claimed": [
+    "exact Codex resume binding",
+    "operator-surface runtime binding",
+    "operator-surface runtime copying",
+    "source Site runtime state import",
+    "narada-andrey checkpoint/history/roster import",
+    "secret or credential access"
+  ],
+  "rollback": "Revert Start-NaradaArchitect.ps1 to direct Codex invocation or supersede tools/agent-start/start-agent.mjs with a fuller admitted carrier."
+}

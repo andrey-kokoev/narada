@@ -32,7 +32,8 @@ if ($LASTEXITCODE -ne 0) { throw "launch_request_verification_failed" }
 $requestVerify = $requestVerifyJson | ConvertFrom-Json
 if ($requestVerify.status -ne "verified") { throw "launch_request_not_verified:$($requestVerify.status)" }
 
-$codexCommand = Get-Command codex -ErrorAction Stop
+$agentStart = Join-Path $resolvedSiteRoot "tools\agent-start\start-agent.mjs"
+if (-not (Test-Path -LiteralPath $agentStart)) { throw "agent_start_carrier_missing:$agentStart" }
 $startedAt = (Get-Date).ToUniversalTime().ToString("o")
 $evidence = [ordered]@{
   schema = "narada.crew_startup_shortcut.launch_execution_evidence.v0"
@@ -41,7 +42,8 @@ $evidence = [ordered]@{
   site_root = $resolvedSiteRoot
   sequence_path = (Join-Path $resolvedSiteRoot ".narada\crew\architect.launch-intent-sequence.json")
   request_path = $requestPath
-  codex_command = $codexCommand.Source
+  agent_start_carrier = $agentStart
+  agent_start_command = "node $agentStart narada.architect --runtime codex --exec"
   started_at = $startedAt
   dry_run = [bool]$DryRun
   no_codex = [bool]$NoCodex
@@ -63,12 +65,14 @@ $evidencePath = Join-Path $evidenceDir "$stamp-narada-architect-launch-evidence.
 $evidence | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $evidencePath -Encoding UTF8
 
 if ($DryRun -or $NoCodex) {
-  Write-JsonLine @{ status = "verified_no_launch"; evidence_path = $evidencePath; codex_command = $codexCommand.Source }
+  $agentStartDryRun = & node $agentStart narada.architect --runtime codex --dry-run --json
+  if ($LASTEXITCODE -ne 0) { throw "agent_start_dry_run_failed" }
+  Write-JsonLine @{ status = "verified_no_launch"; evidence_path = $evidencePath; agent_start_dry_run = ($agentStartDryRun | ConvertFrom-Json) }
   exit 0
 }
 
 Set-Location -LiteralPath $resolvedSiteRoot
 Write-Host "Narada architect launch preflight verified."
 Write-Host "Evidence: $evidencePath"
-Write-Host "Starting Codex in $resolvedSiteRoot"
-& $codexCommand.Source
+Write-Host "Starting Narada proper agent-start carrier in $resolvedSiteRoot"
+& node $agentStart narada.architect --runtime codex --exec
