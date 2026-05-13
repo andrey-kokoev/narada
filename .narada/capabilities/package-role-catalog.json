@@ -1,0 +1,221 @@
+{
+  "schema": "narada.package_role_catalog.v0",
+  "site_id": "narada-proper",
+  "authority_source": ".narada/site.json",
+  "purpose": "Classify Narada repo packages by authority role so package behavior is not inferred ad hoc from names, docs, or convenience.",
+  "role_definitions": {
+    "descriptor_contract": {
+      "summary": "Reusable contracts, descriptors, plans, fixtures, and refusal guards. Does not own live mutation authority by package selection.",
+      "default_denials": [
+        "package_owned_sqlite_mutation",
+        "native_shell_execution",
+        "secret_or_credential_access",
+        "source_site_runtime_state_import",
+        "operator_surface_runtime_copying",
+        "pc_locus_mutation"
+      ]
+    },
+    "runtime_authority": {
+      "summary": "Runtime/control-plane implementation package. May own persistence, credentials, adapters, or effect execution only through its declared authority model."
+    },
+    "cli_exposure": {
+      "summary": "Command surface package. Exposes finite commands and governed operations; command availability is not itself authority to mutate outside declared loci."
+    },
+    "platform_template": {
+      "summary": "Platform/Site template package. Produces plans and local setup descriptors; live setup remains separately admitted."
+    },
+    "mcp_boundary": {
+      "summary": "MCP boundary, policy, supervisor, or test package. Describes or validates tool surfaces without granting unbounded shell/process authority."
+    },
+    "vertical": {
+      "summary": "Domain vertical package traveling through the Narada kernel model."
+    },
+    "domain_model": {
+      "summary": "Domain concepts, types, or charter model package."
+    },
+    "ops_fixture": {
+      "summary": "Operational fixtures and examples. Fixture data is not Site authority or live customer state."
+    }
+  },
+  "packages": [
+    {
+      "package": "@narada2/agent-context-memory",
+      "path": "packages/agent-context-memory",
+      "roles": ["descriptor_contract"],
+      "posture": "descriptor_only_no_live_storage_mutation"
+    },
+    {
+      "package": "@narada2/crew-startup-shortcut",
+      "path": "packages/crew-startup-shortcut",
+      "roles": ["descriptor_contract"],
+      "posture": "launch_intents_templates_only_no_process_start"
+    },
+    {
+      "package": "@narada2/charters",
+      "path": "packages/domains/charters",
+      "roles": ["domain_model"],
+      "posture": "domain_contracts"
+    },
+    {
+      "package": "@narada2/intent-zones",
+      "path": "packages/intent-zones",
+      "roles": ["domain_model", "descriptor_contract"],
+      "posture": "intent_admission_contracts"
+    },
+    {
+      "package": "@narada2/cli",
+      "path": "packages/layers/cli",
+      "roles": ["cli_exposure", "runtime_authority"],
+      "posture": "governed_command_surface"
+    },
+    {
+      "package": "@narada2/control-plane",
+      "path": "packages/layers/control-plane",
+      "roles": ["runtime_authority"],
+      "posture": "kernel_control_plane_runtime"
+    },
+    {
+      "package": "@narada2/daemon",
+      "path": "packages/layers/daemon",
+      "roles": ["runtime_authority"],
+      "posture": "runtime_daemon"
+    },
+    {
+      "package": "@narada2/mcp-shell-windows",
+      "path": "packages/mcp-shell-windows",
+      "roles": ["mcp_boundary", "descriptor_contract"],
+      "posture": "boundary_policy_no_shell_grant"
+    },
+    {
+      "package": "@narada2/mcp-surface-carrier-supervisor",
+      "path": "packages/mcp-surface-carrier-supervisor",
+      "roles": ["mcp_boundary", "descriptor_contract"],
+      "posture": "status_lifecycle_no_process_restart"
+    },
+    {
+      "package": "@narada2/mcp-test-windows",
+      "path": "packages/mcp-test-windows",
+      "roles": ["mcp_boundary", "descriptor_contract"],
+      "posture": "test_contract_no_source_result_import"
+    },
+    {
+      "package": "@narada2/ops-kit",
+      "path": "packages/ops-kit",
+      "roles": ["ops_fixture", "domain_model"],
+      "posture": "fixture_and_ops_model"
+    },
+    {
+      "package": "@narada2/site-config",
+      "path": "packages/site-config",
+      "roles": ["descriptor_contract"],
+      "posture": "site_config_descriptors_no_live_registry_mutation"
+    },
+    {
+      "package": "@narada2/site-inbox",
+      "path": "packages/site-inbox",
+      "roles": ["descriptor_contract"],
+      "posture": "inbox_contracts_no_source_inbox_import"
+    },
+    {
+      "package": "@narada2/site-lift",
+      "path": "packages/site-lift",
+      "roles": ["descriptor_contract"],
+      "posture": "adoption_metadata_no_file_copy_or_live_authority"
+    },
+    {
+      "package": "@narada2/site-task-lifecycle",
+      "path": "packages/site-task-lifecycle",
+      "roles": ["descriptor_contract"],
+      "posture": "adapter_interface_only_no_sqlite_dependency"
+    },
+    {
+      "package": "@narada2/sites-cloudflare",
+      "path": "packages/sites/cloudflare",
+      "roles": ["platform_template"],
+      "posture": "cloudflare_site_materialization_template"
+    },
+    {
+      "package": "@narada2/sites-linux",
+      "path": "packages/sites/linux",
+      "roles": ["platform_template", "runtime_authority"],
+      "posture": "linux_site_runtime"
+    },
+    {
+      "package": "@narada2/sites-macos",
+      "path": "packages/sites/macos",
+      "roles": ["platform_template"],
+      "posture": "macos_site_template"
+    },
+    {
+      "package": "@narada2/sites-windows",
+      "path": "packages/sites/windows",
+      "roles": ["platform_template"],
+      "posture": "windows_site_template"
+    },
+    {
+      "package": "@narada2/task-governance",
+      "path": "packages/task-governance",
+      "roles": ["runtime_authority", "domain_model"],
+      "posture": "task_governance_lifecycle_authority"
+    },
+    {
+      "package": "@narada2/mailbox",
+      "path": "packages/verticals/mailbox",
+      "roles": ["vertical"],
+      "posture": "mailbox_vertical"
+    },
+    {
+      "package": "@narada2/search",
+      "path": "packages/verticals/search",
+      "roles": ["vertical"],
+      "posture": "search_vertical"
+    },
+    {
+      "package": "@narada2/windows-komorebi-yasb-kit",
+      "path": "packages/windows-komorebi-yasb-kit",
+      "roles": ["platform_template", "descriptor_contract"],
+      "posture": "windows_desktop_template_no_pc_runtime_import"
+    },
+    {
+      "package": "@narada2/windows-machinery-capability-exchange",
+      "path": "packages/windows-machinery-capability-exchange",
+      "roles": ["descriptor_contract"],
+      "posture": "capability_exchange_descriptors_no_live_grants"
+    },
+    {
+      "package": "@narada2/windows-operator-surface",
+      "path": "packages/windows-operator-surface",
+      "roles": ["platform_template", "descriptor_contract"],
+      "posture": "operator_surface_contracts_no_runtime_copy"
+    },
+    {
+      "package": "@narada2/windows-osl",
+      "path": "packages/windows-osl",
+      "roles": ["platform_template", "descriptor_contract"],
+      "posture": "operator_surface_layout_descriptors"
+    },
+    {
+      "package": "@narada2/windows-pc-site-template",
+      "path": "packages/windows-pc-site-template",
+      "roles": ["platform_template", "descriptor_contract"],
+      "posture": "pc_site_template_no_pc_locus_import"
+    }
+  ],
+  "descriptor_package_guard": {
+    "applies_to_role": "descriptor_contract",
+    "must_not_add_without_role_change": [
+      "sqlite_dependency_ownership",
+      "native_shell_execution",
+      "arbitrary_sql_execution",
+      "secret_or_credential_access",
+      "source_site_runtime_state_import",
+      "operator_surface_runtime_copying",
+      "pc_locus_mutation",
+      "live_capability_grants"
+    ]
+  },
+  "verification": {
+    "created_by_task": "1242",
+    "source_review": ".narada/audit/task-1240-packages-doctrinal-review.md"
+  }
+}

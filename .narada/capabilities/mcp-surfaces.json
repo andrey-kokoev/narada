@@ -38,6 +38,15 @@
     "site-local agent context MCP",
     "site-local checkpoint/hydration MCP"
   ],
-  "native_shell_policy": "unknown_until_admitted",
+  "native_shell_policy": "denied_by_default_break_glass_operator_authorized_only",
+  "native_shell_policy_source": ".narada/site.json#/agent_execution_policy",
+  "native_shell_non_grants": [
+    "direct_native_shell",
+    "raw_wsl_crossing_as_mutation_authority",
+    "unrecorded_native_shell_fallback",
+    "pc_locus_mutation",
+    "operator_surface_runtime_copying",
+    "secret_or_credential_access"
+  ],
   "note": "Do not assume narada-andrey MCP surfaces apply to Narada proper."
 }
