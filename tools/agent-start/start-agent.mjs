@@ -250,25 +250,27 @@ function loadSqliteDriver() {
   }
 }
 
-function naradaMcpServerNames() {
+function approvedMcpServers() {
   return [
-    'narada-andrey-agent-context',
-    'narada-andrey-task-lifecycle',
-    'narada-andrey-inbox',
-    'narada-andrey-operator-surface',
-    'narada-andrey-site-lift-catalog',
-    'narada-andrey-adoptable-deltas',
-    'narada-andrey-filesystem',
-    'narada-andrey-test',
-    'narada-andrey-shell',
-    'narada-andrey-adr',
+    {
+      name: 'narada-andrey-agent-context',
+      provider_locus: 'user_site_mcp',
+      target_locus: 'narada_proper',
+      purpose: 'startup hydration and carrier identity/context verification',
+    },
+    {
+      name: 'narada-andrey-shell',
+      provider_locus: 'user_site_mcp',
+      target_locus: 'explicit_working_directory',
+      purpose: 'policy-aware command execution only against explicit allowed roots and command policy',
+    },
   ];
 }
 
 function codexMcpApprovalArgs() {
-  return naradaMcpServerNames().flatMap((serverName) => [
+  return approvedMcpServers().flatMap((server) => [
     '-c',
-    `mcp_servers."${serverName}".default_tools_approval_mode="approve"`,
+    `mcp_servers."${server.name}".default_tools_approval_mode="approve"`,
   ]);
 }
 
@@ -341,8 +343,20 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     exec_command: exec ? ['codex', ...runtimeArgs].join(' ') : null,
     mcp_tool_approval: {
       status: 'approved_by_launcher_config',
-      server_names: naradaMcpServerNames(),
-      note: 'Approves configured Narada MCP tool calls at the Codex carrier layer. Native Codex shell_tool remains disabled; shell execution still goes through the policy-aware Narada shell MCP.',
+      provider_locus: 'user_site_mcp',
+      target_locus: 'narada_proper',
+      approved_servers: approvedMcpServers(),
+      explicitly_not_approved: [
+        'narada-andrey-task-lifecycle',
+        'narada-andrey-inbox',
+        'narada-andrey-operator-surface',
+        'narada-andrey-site-lift-catalog',
+        'narada-andrey-adoptable-deltas',
+        'narada-andrey-filesystem',
+        'narada-andrey-test',
+        'narada-andrey-adr',
+      ],
+      note: 'Approves only startup hydration and policy-aware shell MCP at the Codex carrier layer. Native Codex shell_tool remains disabled. User Site task/inbox/operator-surface MCP servers are not approved for this Narada proper carrier by default.',
     },
     planned_environment: plannedEnvironment,
     launch_environment: launchEnvironment,

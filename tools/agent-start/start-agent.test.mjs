@@ -35,11 +35,17 @@ test('narada.architect real launch materializes carrier session env and discover
   assert.equal(result.startup_command_name, 'agent_context_hydrate_current');
   assert.ok(result.runtime_args.includes('mcp_servers."narada-andrey-agent-context".default_tools_approval_mode="approve"'));
   assert.ok(result.runtime_args.includes('mcp_servers."narada-andrey-shell".default_tools_approval_mode="approve"'));
+  assert.ok(!result.runtime_args.includes('mcp_servers."narada-andrey-task-lifecycle".default_tools_approval_mode="approve"'));
   assert.ok(result.runtime_args.includes('--disable'));
   assert.ok(result.runtime_args.includes('shell_tool'));
   assert.equal(result.mcp_tool_approval.status, 'approved_by_launcher_config');
-  assert.ok(result.mcp_tool_approval.server_names.includes('narada-andrey-agent-context'));
-  assert.ok(result.mcp_tool_approval.server_names.includes('narada-andrey-shell'));
+  assert.equal(result.mcp_tool_approval.provider_locus, 'user_site_mcp');
+  assert.equal(result.mcp_tool_approval.target_locus, 'narada_proper');
+  assert.deepEqual(result.mcp_tool_approval.approved_servers.map((server) => server.name), [
+    'narada-andrey-agent-context',
+    'narada-andrey-shell',
+  ]);
+  assert.ok(result.mcp_tool_approval.explicitly_not_approved.includes('narada-andrey-task-lifecycle'));
   assert.deepEqual(result.startup_command, {
     name: 'agent_context_hydrate_current',
     arguments: {},
@@ -79,6 +85,7 @@ test('dry run reports planned non-authoritative env without durable event claim'
   assert.equal(result.startup_command_name, 'agent_context_hydrate_current');
   assert.ok(result.runtime_args.includes('mcp_servers."narada-andrey-agent-context".default_tools_approval_mode="approve"'));
   assert.ok(result.runtime_args.includes('mcp_servers."narada-andrey-shell".default_tools_approval_mode="approve"'));
+  assert.ok(!result.runtime_args.includes('mcp_servers."narada-andrey-task-lifecycle".default_tools_approval_mode="approve"'));
   assert.equal(result.startup_sequence[0].tool, 'agent_context_hydrate_current');
   assert.deepEqual(result.startup_sequence[0].arguments, {});
   assert.match(result.dry_run_notice, /non-authoritative/);
