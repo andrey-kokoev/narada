@@ -3,7 +3,7 @@
   "site_id": "narada-proper",
   "capability_id": "narada-proper.capability.task-lifecycle-expanded-mcp.v0",
   "capability_name": "Task lifecycle expanded MCP surface",
-  "source_residual": ".narada/capabilities/missing-capabilities.md#richer-task-lifecycle-mcp",
+  "source_residual": ".narada/capabilities/missing-capabilities.md#adopted-descriptor-and-policy-postures-2026-05-13",
   "state": "adopted_as_descriptor_candidate",
   "exposure_class": "descriptor_only",
   "authority_basis": ".narada/site.json declares D:\\code\\narada as Narada proper authority root; live task-lifecycle first slice is already admitted separately.",

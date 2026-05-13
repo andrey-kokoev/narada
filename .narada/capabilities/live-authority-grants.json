@@ -3,7 +3,7 @@
   "site_id": "narada-proper",
   "capability_id": "narada-proper.capability.live-authority-grants.v0",
   "capability_name": "Live authority grants and external mutation powers",
-  "source_residual": ".narada/capabilities/missing-capabilities.md#live-authority-grants",
+  "source_residual": ".narada/capabilities/missing-capabilities.md#adopted-descriptor-and-policy-postures-2026-05-13",
   "state": "adopted_as_denied_by_default_policy",
   "exposure_class": "none",
   "authority_basis": ".narada/site.json agent_execution_policy denies shell-like and cross-site mutation by default.",

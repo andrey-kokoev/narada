@@ -31,7 +31,9 @@
       ],
       "live_smoke_evidence": ".narada/audit/task-0004-live-mcp-tool-binding-audit.json",
       "evidence": ".narada/admission/decisions/task-0002-live-carriers-surface-admission.md"
-    },
+    }
+  ],
+  "candidate_mcp_surfaces": [
     {
       "surface_id": "narada-proper.surface.task-lifecycle-expanded-mcp-descriptor.v0",
       "status": "descriptor_candidate_not_live",

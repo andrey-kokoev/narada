@@ -1,0 +1,37 @@
+{
+  "schema": "narada.audit.v0",
+  "site_id": "narada-proper",
+  "task_refs": [
+    "task:1251"
+  ],
+  "recorded_at": "2026-05-13T01:48:00Z",
+  "decision": "completed_review_finding_repair",
+  "changed_files": [
+    ".narada/capabilities/mcp-surfaces.json",
+    ".narada/capabilities/missing-capabilities.md",
+    ".narada/capabilities/task-lifecycle-expanded-mcp.json",
+    ".narada/capabilities/site-inbox-mcp.json",
+    ".narada/capabilities/agent-context-memory-mcp.json",
+    ".narada/capabilities/live-authority-grants.json",
+    ".narada/capabilities/source-site-import-migration.json",
+    ".narada/audit/task-1246-1250-site-capability-adoption-audit.json",
+    ".narada/audit/task-1251-capability-adoption-review-repair-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "repairs": [
+    "Moved non-live descriptor candidates from mcp_surfaces to candidate_mcp_surfaces.",
+    "Added stable headings to missing-capabilities.md and updated source_residual references.",
+    "Expanded task-1246-1250 audit changed_files to include task and mutation-evidence files.",
+    "Separated source Site import/migration/lift into a non-live design gap."
+  ],
+  "terminal_claim": "The Site capability registry now separates live MCP surfaces from non-runtime candidate surfaces.",
+  "not_claimed": [
+    "new live MCP tools",
+    "source Site import",
+    "native shell carrier",
+    "capability or credential grants",
+    "operator-surface runtime mutation",
+    "PC-locus mutation"
+  ],
+  "rollback": "Revert this repair commit; no runtime state or source Site state was changed."
+}

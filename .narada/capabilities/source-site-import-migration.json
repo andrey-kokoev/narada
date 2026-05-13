@@ -3,7 +3,7 @@
   "site_id": "narada-proper",
   "capability_id": "narada-proper.capability.source-site-import-migration.v0",
   "capability_name": "Source Site import, migration, and lift posture",
-  "source_residual": ".narada/capabilities/missing-capabilities.md#source-site-import-migration",
+  "source_residual": ".narada/capabilities/missing-capabilities.md#separate-non-live-design-gaps",
   "state": "adopted_as_refusal_policy",
   "exposure_class": "none",
   "authority_basis": "Narada proper Site creation and package adoption are greenfield template/catalog driven; source Sites may provide external evidence only.",
