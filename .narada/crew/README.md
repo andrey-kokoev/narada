@@ -57,7 +57,11 @@ The admitted repo-local clickable shortcut is:
 
 `.crew/agent-shortcuts/Narada Architect (codex).lnk`
 
-The command-safe PowerShell path is:
+The preferred PowerShell command is:
+
+`.\narada.ps1 agent-start -Agent narada.architect -Runtime codex -Exec`
+
+The command-safe wrapper path is still available:
 
 `.\.crew\agent-shortcuts\narada-architect.cmd`
 
@@ -69,8 +73,8 @@ It targets:
 
 `tools/operator-surface-carriers/windows-glue/Start-NaradaArchitect.ps1`
 
-The carrier verifies the launch intent sequence and launch request, then delegates to the local Narada proper agent-start carrier:
+The carrier verifies the launch intent sequence and launch request, then delegates to the local Narada proper PowerShell surface:
 
-`node tools/agent-start/start-agent.mjs narada.architect --runtime codex --exec`
+`.\narada.ps1 agent-start -Agent narada.architect -Runtime codex -Exec`
 
 That carrier materializes a local agent start event, sets `NARADA_AGENT_ID` and `NARADA_AGENT_START_EVENT_ID`, and starts Codex in `D:\code\narada`. It does not place a shortcut on the Desktop or Start Menu, copy operator-surface runtime state, import source Site state, or provide a native shell fallback.

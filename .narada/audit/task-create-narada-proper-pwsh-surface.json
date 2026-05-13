@@ -1,0 +1,15 @@
+{
+  "title": "Add Narada proper PowerShell agent-start surface",
+  "goal": "Provide a repo-root PowerShell surface matching the working narada-andrey.ps1 agent-start invocation style.",
+  "context": "The operator wants to avoid .cmd wrappers and use the same ergonomic shape as `.\narada-andrey.ps1 agent-start -Agent narada-andrey.Robin -Runtime codex -Exec`. Narada proper has a local tools/agent-start/start-agent.mjs carrier from task 1261 but no repo-root PowerShell wrapper.",
+  "required_work": "Add `narada.ps1` at the Narada proper repo root with an `agent-start` command that delegates to tools/agent-start/start-agent.mjs. Update Start-NaradaArchitect.ps1 and docs to use `.\narada.ps1 agent-start -Agent narada.architect -Runtime codex -Exec`. Verify dry-run/no-launch and command shape. Preserve no source Site import and no operator-surface runtime copying.",
+  "chapter": "narada-proper-crew-launch-intent-sequences",
+  "depends_on": "1261",
+  "criteria": [
+    "Repo root `narada.ps1` exists and supports `agent-start -Agent <id> -Runtime codex -Exec`.",
+    "`narada.ps1 agent-start -Agent narada.architect -Runtime codex -DryRun -Json` returns the local agent-start dry-run result.",
+    "Start-NaradaArchitect.ps1 delegates through narada.ps1 rather than node directly.",
+    "Documentation names the PowerShell invocation as the preferred command surface.",
+    "No narada-andrey runtime state, operator-surface runtime copying, or source Site import is introduced."
+  ]
+}

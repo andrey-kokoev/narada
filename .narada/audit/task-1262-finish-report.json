@@ -1,0 +1,29 @@
+{
+  "summary": "Added repo-root narada.ps1 with an agent-start command matching the working User Site invocation shape. Start-NaradaArchitect.ps1 now delegates through .\\narada.ps1 agent-start -Agent narada.architect -Runtime codex -Exec. Dry-run and shortcut no-launch verification passed.",
+  "changed_files": [
+    "narada.ps1",
+    "tools/operator-surface-carriers/windows-glue/Start-NaradaArchitect.ps1",
+    ".narada/crew/README.md",
+    ".narada/crew/launch-executions/20260513T001003-narada-architect-launch-evidence.json",
+    ".narada/audit/task-1262-powershell-agent-start-surface-audit.json",
+    ".narada/audit/task-1262-finish-report.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": ".\\narada.ps1 agent-start -Agent narada.architect -Runtime codex -DryRun -Json",
+      "result": "passed"
+    },
+    {
+      "command": ".\\.crew\\agent-shortcuts\\narada-architect.cmd --no-codex",
+      "result": "passed"
+    },
+    {
+      "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/operator-surface-carriers/windows-glue/New-NaradaArchitectShortcut.ps1 -VerifyOnly",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "The preferred manual launch command is now .\\narada.ps1 agent-start -Agent narada.architect -Runtime codex -Exec. Exact Codex resume binding remains separate."
+  ]
+}
