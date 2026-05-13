@@ -19,6 +19,12 @@ const NARADA_PROPER_APPROVED_MCP_SERVERS = [
     purpose: 'startup hydration and carrier identity/context verification',
   },
   {
+    name: 'narada-andrey-task-lifecycle',
+    provider_locus: 'user_site_mcp',
+    target_locus: 'user_site_task_lifecycle',
+    purpose: 'workboard and task lifecycle authority for operator-assigned User Site tasks',
+  },
+  {
     name: 'narada-andrey-shell',
     provider_locus: 'user_site_mcp',
     target_locus: 'explicit_working_directory',
@@ -26,7 +32,6 @@ const NARADA_PROPER_APPROVED_MCP_SERVERS = [
   },
 ];
 const NARADA_PROPER_WITHHELD_MCP_SERVERS = [
-  'narada-andrey-task-lifecycle',
   'narada-andrey-inbox',
   'narada-andrey-operator-surface',
   'narada-andrey-site-lift-catalog',
@@ -418,7 +423,7 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     mcp_tool_approval: mcpToolApprovalPacket({
       approved: NARADA_PROPER_APPROVED_MCP_SERVERS,
       withheld: NARADA_PROPER_WITHHELD_MCP_SERVERS,
-      note: 'Approves only startup hydration and policy-aware shell MCP at the Codex carrier layer. Native Codex shell_tool remains disabled. User Site task/inbox/operator-surface MCP servers are not approved for this Narada proper carrier by default.',
+      note: 'Approves startup hydration, User Site task lifecycle, and policy-aware shell MCP at the Codex carrier layer. Native Codex shell_tool remains disabled. User Site inbox/operator-surface and other nonessential MCP servers are not approved for this Narada proper carrier by default.',
     }),
     planned_environment: plannedEnvironment,
     launch_environment: launchEnvironment,
