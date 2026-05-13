@@ -18,6 +18,7 @@ This is an evidence boundary, not a product identity claim. Narada's core CLI an
 | --- | --- | --- |
 | `OperatorSurface` | Durable, addressable interface for inhabiting or observing a Site, role, workflow, or operational locus. | May present, focus, inspect, or request; never owns truth by itself. |
 | `AgentRuntime` | Concrete running agent/tool process, such as Codex, Kimi, an MCP client, daemon worker, or API conversation executor. | May reason or execute sanctioned commands; gains no authority from being live. |
+| `AgentCarrier` | Runtime harness that embodies one durable Agent in one bounded Session, such as Codex, Kimi, or a Narada-native carrier. | Binds policy, tools, startup affordances, evidence, and restart semantics; does not own Agent, task, inbox, capability, or publication authority. |
 | `ControlChannel` | Communication path into or out of an `AgentRuntime`: terminal stdin/stdout, API thread, MCP tool call, HTTP route, mailbox, file drop, or console event. | Transports requests/results; does not admit consequences by transport alone. |
 | `SessionBinding` | Durable continuity link binding a role, task, runtime, control channel, surface, and trace references for resume/recovery. | Preserves continuity; does not claim work or close evidence by existing. |
 
@@ -25,12 +26,15 @@ These concepts are related but must not collapse:
 
 ```text
 OperatorSurface presents inhabited work.
+AgentCarrier embodies one Agent in one Session.
 AgentRuntime performs reasoning or command execution.
 ControlChannel carries interaction.
 SessionBinding preserves continuity.
 Site authority admits consequence.
 Trace substrate records what happened.
 ```
+
+See [`Agent Carrier`](agent-carrier.md) for the carrier/session/substrate split and Narada-native carrier factorization.
 
 ## Minimal Field Grammar
 
