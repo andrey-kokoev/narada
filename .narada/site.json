@@ -98,6 +98,17 @@
           "site_task_lifecycle.admit_task",
           "site_task_lifecycle.read_task"
         ]
+      },
+      {
+        "surface_id": "narada-proper.surface.agent-context-memory.live-first-slice-mcp.v0",
+        "kind": "mcp_surface",
+        "package": "@narada2/agent-context-memory",
+        "transport": "narada-mcp_stdio",
+        "tools": [
+          "agent_context_memory.plan_hydration",
+          "agent_context_memory.record_checkpoint",
+          "agent_context_memory.read_checkpoint_summary"
+        ]
       }
     ],
     "shell_like_operations": {

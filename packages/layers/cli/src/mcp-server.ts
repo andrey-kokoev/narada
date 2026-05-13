@@ -2,6 +2,11 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
+import {
+  buildCheckpointDescriptor,
+  buildHydrationRequestDescriptor,
+  findDeniedSourceImports,
+} from '@narada2/agent-context-memory';
 import { cwd as processCwd, stdin as defaultStdin, stdout as defaultStdout } from 'node:process';
 import {
   inboxDoctorCommand,
@@ -128,6 +133,40 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
       task_id: { type: 'string', description: 'Local task id to read.' },
       target: targetSchema(),
     }, ['task_id']),
+  },
+  {
+    name: 'agent_context_memory.plan_hydration',
+    description: 'Plan local agent-context hydration from checkpoint refs without executing runtime hydration.',
+    inputSchema: objectSchema({
+      hydration_id: stringSchema('Hydration descriptor id; defaults to a deterministic local id.'),
+      named_agent_id: { type: 'string', description: 'Named agent identity to hydrate.' },
+      checkpoint_refs: arrayStringSchema('Local checkpoint ids or evidence refs to hydrate from.'),
+      requested_by: stringSchema('Requesting principal; defaults to mcp-client.'),
+      source_import_refs: arrayStringSchema('Optional source refs to check for denied runtime-state imports.'),
+      target: targetSchema(),
+    }, ['named_agent_id']),
+  },
+  {
+    name: 'agent_context_memory.record_checkpoint',
+    description: 'Record one local checkpoint summary in the target Site agent-context memory store.',
+    inputSchema: objectSchema({
+      checkpoint_id: { type: 'string', description: 'Local checkpoint id.' },
+      session_id: { type: 'string', description: 'Local session id.' },
+      named_agent_id: { type: 'string', description: 'Named agent identity for this checkpoint.' },
+      summary: { type: 'string', description: 'Compact checkpoint summary. Do not include secrets.' },
+      evidence_refs: arrayStringSchema('Local evidence refs supporting the checkpoint.'),
+      captured_at: stringSchema('ISO timestamp; defaults to now.'),
+      source_import_refs: arrayStringSchema('Optional source refs to check for denied runtime-state imports.'),
+      target: targetSchema(),
+    }, ['checkpoint_id', 'session_id', 'named_agent_id', 'summary']),
+  },
+  {
+    name: 'agent_context_memory.read_checkpoint_summary',
+    description: 'Read one local checkpoint summary without mutating runtime memory.',
+    inputSchema: objectSchema({
+      checkpoint_id: { type: 'string', description: 'Local checkpoint id.' },
+      target: targetSchema(),
+    }, ['checkpoint_id']),
   },
   {
     name: 'narada_inbox_doctor',
@@ -283,6 +322,7 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
     || (name === 'narada_inbox_work_next' && booleanField(args, 'claim') === true)
     || (name === 'narada_task_work_next' && booleanField(args, 'claim') === true)
     || name === 'site_task_lifecycle.admit_task'
+    || name === 'agent_context_memory.record_checkpoint'
     || name === 'narada_ee_run';
   const traversal = await resolveMcpTraversal({
     sourceSite: siteContext,
@@ -345,6 +385,33 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
       return jsonToolResult(attachTraversal(readTaskLifecycleTask({
         siteRoot: traversal.target_site.site_root,
         taskId: requiredString(args, 'task_id'),
+      }), traversal));
+    case 'agent_context_memory.plan_hydration':
+      return jsonToolResult(attachTraversal(planAgentContextHydration({
+        siteRoot: traversal.target_site.site_root,
+        siteId: traversal.target_site.site_id,
+        hydrationId: stringField(args, 'hydration_id'),
+        namedAgentId: requiredString(args, 'named_agent_id'),
+        checkpointRefs: stringArrayField(args, 'checkpoint_refs') ?? [],
+        requestedBy: stringField(args, 'requested_by') ?? 'mcp-client',
+        sourceImportRefs: stringArrayField(args, 'source_import_refs') ?? [],
+      }), traversal));
+    case 'agent_context_memory.record_checkpoint':
+      return jsonToolResult(attachTraversal(recordAgentContextCheckpoint({
+        siteRoot: traversal.target_site.site_root,
+        siteId: traversal.target_site.site_id,
+        checkpointId: requiredString(args, 'checkpoint_id'),
+        sessionId: requiredString(args, 'session_id'),
+        namedAgentId: requiredString(args, 'named_agent_id'),
+        summary: requiredString(args, 'summary'),
+        evidenceRefs: stringArrayField(args, 'evidence_refs') ?? [],
+        capturedAt: stringField(args, 'captured_at') ?? new Date().toISOString(),
+        sourceImportRefs: stringArrayField(args, 'source_import_refs') ?? [],
+      }), traversal));
+    case 'agent_context_memory.read_checkpoint_summary':
+      return jsonToolResult(attachTraversal(readAgentContextCheckpoint({
+        siteRoot: traversal.target_site.site_root,
+        checkpointId: requiredString(args, 'checkpoint_id'),
       }), traversal));
     case 'narada_inbox_doctor':
       return commandToolResult(await inboxDoctorCommand({
@@ -853,6 +920,230 @@ function readTaskLifecycleTask(args: { siteRoot: string; taskId: string }): Reco
     sourceStateImported: false,
     packageExecutedSqliteMutation: false,
   };
+}
+
+interface AgentContextMemoryStore {
+  schema: 'narada.agent_context_memory.local_store.v0';
+  site_id: string;
+  target_site_root: string;
+  carrier_id: 'agent_context_memory_local_storage';
+  package_name: '@narada2/agent-context-memory';
+  package_owns_sqlite_dependency: false;
+  source_state_imported: false;
+  named_agents: unknown[];
+  sessions: unknown[];
+  checkpoints: Array<Record<string, unknown> & { checkpointId?: string; checkpoint_id?: string }>;
+  hydration_events: Array<Record<string, unknown>>;
+}
+
+function planAgentContextHydration(args: {
+  siteRoot: string;
+  siteId: string;
+  hydrationId?: string;
+  namedAgentId: string;
+  checkpointRefs: string[];
+  requestedBy: string;
+  sourceImportRefs: string[];
+}): Record<string, unknown> {
+  const denied = findDeniedSourceImports(args.sourceImportRefs);
+  if (denied.length > 0) {
+    return {
+      status: 'error',
+      error: 'denied_source_import_ref',
+      deniedSourceImportFindings: denied,
+      mutationAttempted: false,
+      mutationExecuted: false,
+      runtimeHydrationExecuted: false,
+      sourceStateImported: false,
+      packageExecutedSqliteMutation: false,
+    };
+  }
+
+  const descriptor = buildHydrationRequestDescriptor({
+    hydrationId: args.hydrationId ?? `hydrate-${createHash('sha256').update(`${args.siteId}\n${args.namedAgentId}\n${args.checkpointRefs.join('\n')}`).digest('hex').slice(0, 16)}`,
+    namedAgentId: args.namedAgentId,
+    checkpointRefs: args.checkpointRefs,
+    requestedBy: args.requestedBy,
+    sourceImportRefs: args.sourceImportRefs,
+  });
+
+  return {
+    status: 'success',
+    schema: 'narada.agent_context_memory.mcp_plan_hydration_result.v0',
+    packageName: '@narada2/agent-context-memory',
+    siteId: args.siteId,
+    storePath: agentContextMemoryStorePath(args.siteRoot),
+    descriptor,
+    mutationAttempted: false,
+    mutationExecuted: false,
+    runtimeHydrationExecuted: false,
+    sourceStateImported: false,
+    packageExecutedSqliteMutation: false,
+  };
+}
+
+function recordAgentContextCheckpoint(args: {
+  siteRoot: string;
+  siteId: string;
+  checkpointId: string;
+  sessionId: string;
+  namedAgentId: string;
+  summary: string;
+  evidenceRefs: string[];
+  capturedAt: string;
+  sourceImportRefs: string[];
+}): Record<string, unknown> {
+  const denied = findDeniedSourceImports(args.sourceImportRefs);
+  if (denied.length > 0) {
+    return {
+      status: 'error',
+      error: 'denied_source_import_ref',
+      deniedSourceImportFindings: denied,
+      mutationAttempted: true,
+      mutationExecuted: false,
+      runtimeHydrationExecuted: false,
+      sourceStateImported: false,
+      packageExecutedSqliteMutation: false,
+    };
+  }
+
+  const descriptor = buildCheckpointDescriptor({
+    checkpointId: args.checkpointId,
+    sessionId: args.sessionId,
+    namedAgentId: args.namedAgentId,
+    summary: args.summary,
+    evidenceRefs: args.evidenceRefs,
+    capturedAt: args.capturedAt,
+    sourceImportRefs: args.sourceImportRefs,
+  });
+  const store = readAgentContextMemoryStore(args.siteRoot, args.siteId);
+  const existingIndex = store.checkpoints.findIndex((checkpoint) => {
+    const id = typeof checkpoint.checkpointId === 'string' ? checkpoint.checkpointId : checkpoint.checkpoint_id;
+    return id === args.checkpointId;
+  });
+  if (existingIndex >= 0) {
+    store.checkpoints[existingIndex] = descriptor as unknown as AgentContextMemoryStore['checkpoints'][number];
+  } else {
+    store.checkpoints.push(descriptor as unknown as AgentContextMemoryStore['checkpoints'][number]);
+  }
+  writeAgentContextMemoryStore(args.siteRoot, store);
+
+  const evidencePath = writeAgentContextMutationEvidence(args.siteRoot, {
+    siteId: args.siteId,
+    checkpointId: args.checkpointId,
+    sessionId: args.sessionId,
+    namedAgentId: args.namedAgentId,
+    recordedAt: new Date().toISOString(),
+    storePath: agentContextMemoryStorePath(args.siteRoot),
+  });
+
+  return {
+    status: 'success',
+    schema: 'narada.agent_context_memory.mcp_record_checkpoint_result.v0',
+    packageName: '@narada2/agent-context-memory',
+    checkpointId: args.checkpointId,
+    storePath: agentContextMemoryStorePath(args.siteRoot),
+    checkpoint: descriptor,
+    mutationAttempted: true,
+    mutationExecuted: true,
+    runtimeHydrationExecuted: false,
+    sourceStateImported: false,
+    packageOwnsSqliteDependency: false,
+    packageExecutedSqliteMutation: false,
+    mutationEvidencePath: evidencePath,
+  };
+}
+
+function readAgentContextCheckpoint(args: { siteRoot: string; checkpointId: string }): Record<string, unknown> {
+  const storePath = agentContextMemoryStorePath(args.siteRoot);
+  if (!existsSync(storePath)) {
+    return {
+      status: 'not_found',
+      checkpointId: args.checkpointId,
+      storePath,
+      mutationAttempted: false,
+      mutationExecuted: false,
+      runtimeHydrationExecuted: false,
+      sourceStateImported: false,
+      packageExecutedSqliteMutation: false,
+    };
+  }
+
+  const store = readAgentContextMemoryStore(args.siteRoot, 'unknown-site');
+  const checkpoint = store.checkpoints.find((entry) => {
+    const id = typeof entry.checkpointId === 'string' ? entry.checkpointId : entry.checkpoint_id;
+    return id === args.checkpointId;
+  });
+  if (!checkpoint) {
+    return {
+      status: 'not_found',
+      checkpointId: args.checkpointId,
+      storePath,
+      mutationAttempted: false,
+      mutationExecuted: false,
+      runtimeHydrationExecuted: false,
+      sourceStateImported: false,
+      packageExecutedSqliteMutation: false,
+    };
+  }
+
+  return {
+    status: 'success',
+    schema: 'narada.agent_context_memory.mcp_read_checkpoint_summary_result.v0',
+    checkpointId: args.checkpointId,
+    storePath,
+    checkpoint,
+    mutationAttempted: false,
+    mutationExecuted: false,
+    runtimeHydrationExecuted: false,
+    sourceStateImported: false,
+    packageExecutedSqliteMutation: false,
+  };
+}
+
+function agentContextMemoryStorePath(siteRoot: string): string {
+  return resolve(siteRoot, '.narada', 'agent-context-memory', 'memory-store.json');
+}
+
+function readAgentContextMemoryStore(siteRoot: string, siteId: string): AgentContextMemoryStore {
+  const storePath = agentContextMemoryStorePath(siteRoot);
+  const existing = readJsonObject(storePath);
+  return {
+    schema: 'narada.agent_context_memory.local_store.v0',
+    site_id: stringField(existing ?? {}, 'site_id') ?? siteId,
+    target_site_root: stringField(existing ?? {}, 'target_site_root') ?? resolve(siteRoot),
+    carrier_id: 'agent_context_memory_local_storage',
+    package_name: '@narada2/agent-context-memory',
+    package_owns_sqlite_dependency: false,
+    source_state_imported: false,
+    named_agents: Array.isArray(existing?.named_agents) ? existing.named_agents : [],
+    sessions: Array.isArray(existing?.sessions) ? existing.sessions : [],
+    checkpoints: Array.isArray(existing?.checkpoints) ? existing.checkpoints as AgentContextMemoryStore['checkpoints'] : [],
+    hydration_events: Array.isArray(existing?.hydration_events) ? existing.hydration_events as AgentContextMemoryStore['hydration_events'] : [],
+  };
+}
+
+function writeAgentContextMemoryStore(siteRoot: string, store: AgentContextMemoryStore): void {
+  const storePath = agentContextMemoryStorePath(siteRoot);
+  mkdirSync(resolve(siteRoot, '.narada', 'agent-context-memory'), { recursive: true });
+  writeFileSync(storePath, `${JSON.stringify(store, null, 2)}\n`, 'utf8');
+}
+
+function writeAgentContextMutationEvidence(siteRoot: string, evidence: Record<string, unknown>): string {
+  const digest = createHash('sha256').update(JSON.stringify(evidence)).digest('hex').slice(0, 16);
+  const evidenceDir = resolve(siteRoot, '.ai', 'mutation-evidence', 'agent_context_memory');
+  const evidencePath = resolve(evidenceDir, `mcp_${digest}.json`);
+  mkdirSync(evidenceDir, { recursive: true });
+  writeFileSync(evidencePath, `${JSON.stringify({
+    schema: 'narada.agent_context_memory.mcp_mutation_evidence.v0',
+    command: 'agent_context_memory.record_checkpoint',
+    authority_class: 'mcp_local_json_store_checkpoint_mutation',
+    runtimeHydrationExecuted: false,
+    packageExecutedSqliteMutation: false,
+    sourceStateImported: false,
+    ...evidence,
+  }, null, 2)}\n`, 'utf8');
+  return evidencePath;
 }
 
 const SITE_TASK_LIFECYCLE_SCHEMA = [

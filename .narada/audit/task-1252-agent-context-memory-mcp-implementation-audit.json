@@ -1,0 +1,44 @@
+{
+  "schema": "narada.audit.v0",
+  "site_id": "narada-proper",
+  "task_refs": [
+    "task:1252"
+  ],
+  "recorded_at": "2026-05-13T01:58:00Z",
+  "decision": "implemented_agent_context_memory_mcp_first_slice",
+  "admission_path": ".narada/admission/decisions/task-1252-agent-context-memory-live-first-slice-admission.md",
+  "changed_files": [
+    "packages/agent-context-memory/package.json",
+    "packages/layers/cli/package.json",
+    "packages/layers/cli/src/mcp-server.ts",
+    "packages/layers/cli/test/commands/mcp-server.test.ts"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/agent-context-memory typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli exec vitest run test/commands/mcp-server.test.ts",
+      "result": "passed: 25 tests"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli typecheck",
+      "result": "passed"
+    }
+  ],
+  "terminal_claim": "The CLI MCP server implements an agent-context-memory first slice for local descriptor hydration planning, local checkpoint recording, and checkpoint summary readback.",
+  "not_claimed": [
+    "runtime hydration execution",
+    "source Site checkpoint import",
+    "source agent-context DB import",
+    "package-owned SQLite dependency",
+    "cross-Site mutation"
+  ],
+  "no_import_evidence": [
+    "Implementation uses @narada2/agent-context-memory refusal guards.",
+    "Tests prove source checkpoint refs are refused before checkpoint mutation.",
+    "No source Site runtime DB or checkpoint file was copied."
+  ],
+  "rollback": "Revert the CLI MCP additions, dependency entry, package entrypoint fix, tests, and this admission/audit evidence."
+}

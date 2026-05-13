@@ -45,6 +45,9 @@ describe('Narada MCP facade', () => {
     expect(tools).toContain('site_task_lifecycle.plan_init');
     expect(tools).toContain('site_task_lifecycle.admit_task');
     expect(tools).toContain('site_task_lifecycle.read_task');
+    expect(tools).toContain('agent_context_memory.plan_hydration');
+    expect(tools).toContain('agent_context_memory.record_checkpoint');
+    expect(tools).toContain('agent_context_memory.read_checkpoint_summary');
     expect(tools).toContain('narada_inbox_doctor');
     expect(tools).toContain('narada_inbox_work_next');
     expect(tools).toContain('narada_task_work_next');
@@ -286,6 +289,127 @@ describe('Narada MCP facade', () => {
       mutationAttempted: false,
       mutationExecuted: false,
     });
+  });
+
+  it('plans agent-context hydration without executing runtime hydration', async () => {
+    const response = await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 211,
+      method: 'tools/call',
+      params: {
+        name: 'agent_context_memory.plan_hydration',
+        arguments: {
+          named_agent_id: 'site-alpha.agent.kevin',
+          checkpoint_refs: ['checkpoint-neutral-001'],
+          requested_by: 'site-alpha.architect',
+        },
+      },
+    }, { siteRoot: tempDir, siteId: 'site-alpha' });
+
+    const result = JSON.parse(((response?.result as { content: Array<{ text: string }> }).content[0].text));
+    expect(result).toMatchObject({
+      status: 'success',
+      schema: 'narada.agent_context_memory.mcp_plan_hydration_result.v0',
+      packageName: '@narada2/agent-context-memory',
+      mutationAttempted: false,
+      mutationExecuted: false,
+      runtimeHydrationExecuted: false,
+      sourceStateImported: false,
+      packageExecutedSqliteMutation: false,
+      descriptor: {
+        schema: 'narada.agent_context_memory.hydration_request_descriptor.v0',
+        namedAgentId: 'site-alpha.agent.kevin',
+        mode: 'descriptor_only',
+        executedByPackage: false,
+      },
+    });
+  });
+
+  it('records and reads a local agent-context checkpoint through MCP', async () => {
+    const record = await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 212,
+      method: 'tools/call',
+      params: {
+        name: 'agent_context_memory.record_checkpoint',
+        arguments: {
+          checkpoint_id: 'checkpoint-neutral-001',
+          session_id: 'session-neutral-001',
+          named_agent_id: 'site-alpha.agent.kevin',
+          summary: 'Neutral local checkpoint summary.',
+          evidence_refs: ['local:evidence:checkpoint'],
+          captured_at: '2026-05-13T01:00:00.000Z',
+        },
+      },
+    }, { siteRoot: tempDir, siteId: 'site-alpha' });
+
+    expect(record).not.toHaveProperty('error');
+    const recordResult = JSON.parse(((record?.result as { content: Array<{ text: string }> }).content[0].text));
+    expect(recordResult).toMatchObject({
+      status: 'success',
+      schema: 'narada.agent_context_memory.mcp_record_checkpoint_result.v0',
+      checkpointId: 'checkpoint-neutral-001',
+      mutationAttempted: true,
+      mutationExecuted: true,
+      runtimeHydrationExecuted: false,
+      sourceStateImported: false,
+      packageExecutedSqliteMutation: false,
+    });
+    expect(readdirSync(join(tempDir, '.ai', 'mutation-evidence', 'agent_context_memory'))).toHaveLength(1);
+
+    const read = await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 213,
+      method: 'tools/call',
+      params: {
+        name: 'agent_context_memory.read_checkpoint_summary',
+        arguments: { checkpoint_id: 'checkpoint-neutral-001' },
+      },
+    }, { siteRoot: tempDir, siteId: 'site-alpha' });
+
+    const readResult = JSON.parse(((read?.result as { content: Array<{ text: string }> }).content[0].text));
+    expect(readResult).toMatchObject({
+      status: 'success',
+      schema: 'narada.agent_context_memory.mcp_read_checkpoint_summary_result.v0',
+      checkpointId: 'checkpoint-neutral-001',
+      mutationAttempted: false,
+      mutationExecuted: false,
+      runtimeHydrationExecuted: false,
+      checkpoint: {
+        checkpointId: 'checkpoint-neutral-001',
+        summary: 'Neutral local checkpoint summary.',
+      },
+    });
+  });
+
+  it('refuses source checkpoint history before agent-context checkpoint mutation', async () => {
+    const response = await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 214,
+      method: 'tools/call',
+      params: {
+        name: 'agent_context_memory.record_checkpoint',
+        arguments: {
+          checkpoint_id: 'checkpoint-refused',
+          session_id: 'session-refused',
+          named_agent_id: 'site-alpha.agent.kevin',
+          summary: 'Should be refused.',
+          source_import_refs: ['C:\\Users\\Andrey\\Narada\\.narada\\checkpoints\\thread.md'],
+        },
+      },
+    }, { siteRoot: tempDir, siteId: 'site-alpha' });
+
+    const result = JSON.parse(((response?.result as { content: Array<{ text: string }> }).content[0].text));
+    expect(result).toMatchObject({
+      status: 'error',
+      error: 'denied_source_import_ref',
+      mutationAttempted: true,
+      mutationExecuted: false,
+      runtimeHydrationExecuted: false,
+      sourceStateImported: false,
+      packageExecutedSqliteMutation: false,
+    });
+    expect(() => readdirSync(join(tempDir, '.narada', 'agent-context-memory'))).toThrow();
   });
 
   it('calls task work-next discovery through the existing task command surface', async () => {

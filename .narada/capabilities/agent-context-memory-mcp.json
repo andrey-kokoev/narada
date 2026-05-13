@@ -5,15 +5,30 @@
   "capability_name": "Agent-context memory checkpoint and hydration MCP descriptor",
   "package": "@narada2/agent-context-memory",
   "source_residual": ".narada/capabilities/missing-capabilities.md#adopted-descriptor-and-policy-postures-2026-05-13",
-  "state": "adopted_as_descriptor_candidate",
-  "exposure_class": "descriptor_only",
+  "state": "admitted_live_first_slice",
+  "exposure_class": "mutating_guarded",
   "authority_basis": ".narada/site.json declares D:\\code\\narada as Narada proper authority root; @narada2/agent-context-memory is a pure descriptor/contracts package.",
   "candidate_tools": [
-    "agent_context_memory.plan_session_start",
-    "agent_context_memory.plan_checkpoint",
     "agent_context_memory.plan_hydration",
     "agent_context_memory.read_checkpoint_summary",
-    "agent_context_memory.prove_hydration_evidence"
+    "agent_context_memory.record_checkpoint"
+  ],
+  "registered_live_tools": [
+    "agent_context_memory.plan_hydration",
+    "agent_context_memory.record_checkpoint",
+    "agent_context_memory.read_checkpoint_summary"
+  ],
+  "mutation_boundary": {
+    "carrier_id": "narada-proper.carrier.agent-context-memory.local-json-store.v0",
+    "store_path": ".narada/agent-context-memory/memory-store.json",
+    "mutation_evidence_dir": ".ai/mutation-evidence/agent_context_memory",
+    "package_owns_sqlite_dependency": false,
+    "runtime_hydration_executed": false,
+    "source_state_imported": false
+  },
+  "live_smoke_evidence": [
+    ".narada/audit/task-1253-agent-context-memory-live-smoke-audit.json",
+    ".ai/mutation-evidence/agent_context_memory/mcp_29fed6a7e678dd53.json"
   ],
   "identity_doctrine": {
     "named_agent_identity_is_role_assignment": false,
@@ -38,6 +53,8 @@
     "no-import verification"
   ],
   "task_refs": [
-    "task:1248"
+    "task:1248",
+    "task:1252",
+    "task:1253"
   ]
 }

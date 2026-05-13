@@ -10,7 +10,7 @@ Narada proper now has admitted first-slice Site-local machinery for:
 
 - Richer task lifecycle MCP is represented by `.narada/capabilities/task-lifecycle-expanded-mcp.json` as a descriptor-only candidate. Only `site_task_lifecycle.plan_init`, `site_task_lifecycle.admit_task`, and `site_task_lifecycle.read_task` are live.
 - Site-local inbox MCP is represented by `.narada/capabilities/site-inbox-mcp.json` as a descriptor-only candidate. Live inbox DB mutation and source inbox import remain not admitted.
-- Agent-context checkpoint/hydration MCP is represented by `.narada/capabilities/agent-context-memory-mcp.json` as a descriptor-only candidate. Live hydration execution and checkpoint history import remain not admitted.
+- Agent-context checkpoint memory MCP is represented by `.narada/capabilities/agent-context-memory-mcp.json` as an admitted live first slice for descriptor hydration planning, local checkpoint recording, and checkpoint summary readback. Runtime hydration execution and checkpoint history import remain not admitted.
 - Live authority grants and external mutation powers are represented by `.narada/capabilities/live-authority-grants.json` as denied-by-default policy.
 - Source Site import/migration/lift is represented by `.narada/capabilities/source-site-import-migration.json` as a refusal policy distinct from greenfield template/catalog Site creation.
 
@@ -18,7 +18,7 @@ Narada proper now has admitted first-slice Site-local machinery for:
 
 - live richer task lifecycle MCP beyond the first slice, including claim, finish, review, close, work-next, list/query, and richer transitions;
 - live inbox admission/read-path MCP execution beyond descriptor posture;
-- live agent-context hydration execution and checkpoint/resume writes beyond descriptor posture;
+- live agent-context runtime hydration execution and checkpoint/resume behavior beyond local checkpoint summary recording;
 - admitted native shell carrier for Narada proper runtime work, if ever explicitly needed;
 - live capability grants, credential grants, external Windows profile mutation, operator-surface runtime mutation, and PC-locus mutation;
 

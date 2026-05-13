@@ -1,0 +1,54 @@
+{
+  "schema": "narada.audit.v0",
+  "site_id": "narada-proper",
+  "task_refs": [
+    "task:1253"
+  ],
+  "recorded_at": "2026-05-13T02:02:00Z",
+  "decision": "completed_agent_context_memory_live_first_slice_publication",
+  "changed_files": [
+    ".narada/site.json",
+    ".narada/capabilities/mcp-surfaces.json",
+    ".narada/capabilities/agent-context-memory-mcp.json",
+    ".narada/capabilities/missing-capabilities.md",
+    ".narada/agent-context-memory/memory-store.json",
+    ".narada/audit/task-1253-agent-context-memory-live-smoke-audit.json",
+    ".narada/admission/admission-ledger.jsonl"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/agent-context-memory build",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli build",
+      "result": "passed"
+    },
+    {
+      "command": "node_modules\\\\.bin\\\\narada-mcp.cmd --site-root D:\\\\code\\\\narada --site-id narada-proper tools/list via JSON-RPC stdin",
+      "result": "passed: tools/list includes agent_context_memory.plan_hydration, agent_context_memory.record_checkpoint, and agent_context_memory.read_checkpoint_summary"
+    },
+    {
+      "command": "node_modules\\\\.bin\\\\narada-mcp.cmd tools/call agent_context_memory.plan_hydration",
+      "result": "passed: returned descriptor_only hydration request with runtimeHydrationExecuted=false"
+    },
+    {
+      "command": "node_modules\\\\.bin\\\\narada-mcp.cmd tools/call agent_context_memory.record_checkpoint",
+      "result": "passed: wrote checkpoint-task-1253-smoke to .narada/agent-context-memory/memory-store.json and mutation evidence .ai/mutation-evidence/agent_context_memory/mcp_29fed6a7e678dd53.json"
+    },
+    {
+      "command": "node_modules\\\\.bin\\\\narada-mcp.cmd tools/call agent_context_memory.read_checkpoint_summary",
+      "result": "passed: read back checkpoint-task-1253-smoke without mutation"
+    }
+  ],
+  "terminal_claim": "Narada proper has a live first-slice agent-context memory MCP surface for descriptor hydration planning, local checkpoint recording, and checkpoint summary readback.",
+  "not_claimed": [
+    "runtime hydration execution",
+    "source Site checkpoint history import",
+    "source agent-context DB import",
+    "package-owned SQLite dependency",
+    "cross-Site mutation",
+    "secret or credential access"
+  ],
+  "rollback": "Remove the agent-context-memory live entry from .narada/site.json and .narada/capabilities/mcp-surfaces.json; restore agent-context-memory-mcp.json to descriptor candidate; remove the smoke checkpoint and mutation evidence if the smoke mutation is superseded."
+}

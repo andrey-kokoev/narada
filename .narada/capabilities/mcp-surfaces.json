@@ -31,6 +31,26 @@
       ],
       "live_smoke_evidence": ".narada/audit/task-0004-live-mcp-tool-binding-audit.json",
       "evidence": ".narada/admission/decisions/task-0002-live-carriers-surface-admission.md"
+    },
+    {
+      "surface_id": "narada-proper.surface.agent-context-memory.live-first-slice-mcp.v0",
+      "status": "local_json_store_first_slice_registered",
+      "path": ".narada/capabilities/agent-context-memory-mcp.json",
+      "package": "@narada2/agent-context-memory",
+      "transport": "narada-mcp_stdio",
+      "mutation_posture": "local_json_store_checkpoint_only",
+      "tools": [
+        "agent_context_memory.plan_hydration",
+        "agent_context_memory.record_checkpoint",
+        "agent_context_memory.read_checkpoint_summary"
+      ],
+      "registered_live_tools": [
+        "agent_context_memory.plan_hydration",
+        "agent_context_memory.record_checkpoint",
+        "agent_context_memory.read_checkpoint_summary"
+      ],
+      "live_smoke_evidence": ".narada/audit/task-1253-agent-context-memory-live-smoke-audit.json",
+      "evidence": ".narada/admission/decisions/task-1252-agent-context-memory-live-first-slice-admission.md"
     }
   ],
   "candidate_mcp_surfaces": [
@@ -69,29 +89,11 @@
       ],
       "registered_live_tools": [],
       "evidence": ".narada/capabilities/site-inbox-mcp.json"
-    },
-    {
-      "surface_id": "narada-proper.surface.agent-context-memory-mcp-descriptor.v0",
-      "status": "descriptor_candidate_not_live",
-      "path": ".narada/capabilities/agent-context-memory-mcp.json",
-      "package": "@narada2/agent-context-memory",
-      "transport": "not_registered",
-      "mutation_posture": "not_admitted",
-      "tools": [
-        "agent_context_memory.plan_session_start",
-        "agent_context_memory.plan_checkpoint",
-        "agent_context_memory.plan_hydration",
-        "agent_context_memory.read_checkpoint_summary",
-        "agent_context_memory.prove_hydration_evidence"
-      ],
-      "registered_live_tools": [],
-      "evidence": ".narada/capabilities/agent-context-memory-mcp.json"
     }
   ],
   "missing_capabilities": [
     "live site-local inbox MCP execution",
-    "live site-local agent context MCP execution",
-    "live site-local checkpoint/hydration MCP execution",
+    "live agent-context runtime hydration execution beyond descriptor planning",
     "live richer task-lifecycle MCP execution beyond plan_init/admit_task/read_task"
   ],
   "native_shell_policy": "denied_by_default_break_glass_operator_authorized_only",

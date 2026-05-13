@@ -8,6 +8,21 @@
   "source_state_imported": false,
   "named_agents": [],
   "sessions": [],
-  "checkpoints": [],
+  "checkpoints": [
+    {
+      "schema": "narada.agent_context_memory.checkpoint_descriptor.v0",
+      "checkpointId": "checkpoint-task-1253-smoke",
+      "sessionId": "session-task-1253",
+      "namedAgentId": "narada.architect",
+      "summary": "Smoke checkpoint for Narada proper agent-context memory MCP first slice.",
+      "evidenceRefs": [
+        "task:1253",
+        ".narada/audit/task-1253-agent-context-memory-live-smoke-audit.json"
+      ],
+      "capturedAt": "2026-05-13T01:59:00.000Z",
+      "persistedByPackage": false,
+      "sourceImportFindings": []
+    }
+  ],
   "hydration_events": []
 }
