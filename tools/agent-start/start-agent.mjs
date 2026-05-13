@@ -9,6 +9,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const defaultRootDir = join(__dirname, '..', '..');
 const require = createRequire(import.meta.url);
 const RESULT_SCHEMA = 'narada.agent_start.result.v0';
+const DEFAULT_PC_SITE_ROOT = process.env.NARADA_PC_SITE_ROOT ?? 'C:/ProgramData/Narada/sites/pc/desktop-sunroom-2';
 const ADMITTED_AGENTS = new Set(['narada.architect']);
 const NARADA_PROPER_APPROVED_MCP_SERVERS = [
   {
@@ -251,6 +252,57 @@ function materializeAgentContext({ event, session, cwd, siteRoot = defaultRootDi
   return dbPath;
 }
 
+function pcCarrierSessionRecord({ event, session, cwd, siteRoot = defaultRootDir, pcSiteRoot = DEFAULT_PC_SITE_ROOT }) {
+  return {
+    schema: 'narada.pc_runtime.carrier_session.v0',
+    carrier_session_id: session.carrier_session_id,
+    status: session.status === 'planned' ? 'planned' : 'registered',
+    declared_agent_identity: event.identity,
+    verified_agent_identity: event.identity,
+    verification_source: 'agent_start_event',
+    verification_state: 'verified',
+    agent_start_event_id: event.event_id,
+    substrate: event.runtime,
+    carrier_kind: event.runtime,
+    workspace: cwd,
+    launch_source: 'narada.ps1 agent-start',
+    user_site_root: siteRoot,
+    pc_site_root: pcSiteRoot,
+    started_at: session.created_at,
+    parent_process: {
+      pid: process.pid,
+      evidence_kind: 'launcher_process',
+    },
+    operator_surface_window_evidence: null,
+    restart_handle: {
+      class: 'operator_manual_only_with_handle',
+      handle: session.carrier_session_id,
+      authority_owner: 'pc_site_runtime',
+      semantics: 'Restart this launcher-bound carrier session through the operator-visible launch surface or explicit operator action.',
+    },
+    authority_basis: {
+      kind: 'agent_launch_path',
+      summary: 'Carrier session registration materialized by Narada proper agent-start before spawning the substrate child.',
+    },
+  };
+}
+
+function materializePcCarrierSession({ event, session, cwd, siteRoot = defaultRootDir, pcSiteRoot = DEFAULT_PC_SITE_ROOT, dryRun = false }) {
+  const record = pcCarrierSessionRecord({ event, session, cwd, siteRoot, pcSiteRoot });
+  const recordPath = join(pcSiteRoot, 'runtime', 'carrier-sessions', `${session.carrier_session_id}.json`);
+  if (!dryRun) {
+    mkdirSync(dirname(recordPath), { recursive: true });
+    writeFileSync(recordPath, `${JSON.stringify(record, null, 2)}\n`, 'utf8');
+  }
+  return {
+    schema: 'narada.pc_runtime.carrier_session.registration.v0',
+    status: dryRun ? 'planned' : 'registered',
+    carrier_session_id: session.carrier_session_id,
+    record_path: recordPath,
+    record,
+  };
+}
+
 function readAgentStartEvent(dbPath, eventId) {
   const Database = loadSqliteDriver(defaultRootDir);
   const db = new Database(dbPath, { readonly: true, fileMustExist: true });
@@ -330,11 +382,13 @@ function buildLaunchPlanFromArgs(args, options = {}) {
   if (runtime !== 'codex') throw new Error(`runtime_not_admitted:${runtime}`);
 
   const siteRoot = options.siteRoot ?? defaultRootDir;
+  const pcSiteRoot = options.pcSiteRoot ?? DEFAULT_PC_SITE_ROOT;
   const now = options.now ?? new Date().toISOString();
   const event = startEvent(identity, runtime, dryRun, now, siteRoot);
   const session = carrierSession(identity, runtime, event.event_id, dryRun, now, siteRoot);
   const eventPath = dryRun ? null : writeEvent(event, siteRoot);
   const dbPath = dryRun ? agentContextDbPath(siteRoot) : materializeAgentContext({ event, session, cwd: siteRoot, siteRoot });
+  const pcCarrierSession = materializePcCarrierSession({ event, session, cwd: siteRoot, siteRoot, pcSiteRoot, dryRun });
   const runtimeArgs = codexArgs();
   const plannedEnvironment = {
     NARADA_AGENT_ID: identity,
@@ -342,6 +396,7 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     NARADA_CARRIER_SESSION_ID: session.carrier_session_id,
     NARADA_SITE_ROOT: siteRoot,
     NARADA_AGENT_CONTEXT_DB: dbPath,
+    NARADA_PC_SITE_ROOT: pcSiteRoot,
   };
   const launchEnvironment = dryRun ? null : plannedEnvironment;
   const result = {
@@ -353,6 +408,7 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     carrier_session_id: session.carrier_session_id,
     event_path: eventPath,
     agent_context_db_path: dbPath,
+    pc_carrier_session: pcCarrierSession,
     agent_start_event_authoritative: !dryRun,
     carrier_session_authoritative: !dryRun,
     exec,
@@ -380,6 +436,7 @@ function buildLaunchPlanFromArgs(args, options = {}) {
         'NARADA_CARRIER_SESSION_ID',
         'NARADA_SITE_ROOT',
         'NARADA_AGENT_CONTEXT_DB',
+        'NARADA_PC_SITE_ROOT',
       ],
       mechanism: 'stdio_mcp_children_inherit_from_codex_carrier_process_environment',
     },
