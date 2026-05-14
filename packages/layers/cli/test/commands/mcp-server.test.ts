@@ -44,6 +44,7 @@ describe('Narada MCP facade', () => {
     expect(tools).toContain('narada_mcp_fabric_context');
     expect(tools).toContain('site_task_lifecycle.plan_init');
     expect(tools).toContain('site_task_lifecycle.admit_task');
+    expect(tools).toContain('site_task_lifecycle.open_admitted_task');
     expect(tools).toContain('site_task_lifecycle.read_task');
     expect(tools).toContain('agent_context_memory.plan_hydration');
     expect(tools).toContain('agent_context_memory.record_checkpoint');
@@ -56,6 +57,46 @@ describe('Narada MCP facade', () => {
     expect(tools).not.toContain('narada_ee_run');
   });
 
+
+  it('filters tools/list and rejects disallowed calls from inherited MCP tool policy', async () => {
+    const policy = {
+      schema: 'narada.mcp.tool_policy.v0',
+      policy_source: 'test-policy',
+      agent_id: 'narada.architect',
+      role: 'architect',
+      default_server: 'narada-proper',
+      servers: {
+        'narada-proper': { allowed_tools: ['narada_site_context'] },
+      },
+    };
+
+    const listed = await handleMcpRequest(
+      { jsonrpc: '2.0', id: 30, method: 'tools/list' },
+      { siteRoot: tempDir, mcpToolPolicy: policy },
+    );
+    const tools = ((listed?.result as { tools: Array<{ name: string }> }).tools).map((tool) => tool.name);
+    expect(tools).toEqual(['narada_site_context']);
+
+    const refused = await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 31,
+      method: 'tools/call',
+      params: { name: 'narada_mcp_fabric_context', arguments: {} },
+    }, { siteRoot: tempDir, mcpToolPolicy: policy });
+    const result = refused?.result as { content: Array<{ text: string }>; isError?: boolean };
+    const payload = JSON.parse(result.content[0].text);
+    expect(result.isError).toBe(true);
+    expect(payload).toMatchObject({
+      status: 'error',
+      error: 'tool_not_allowed',
+      agent_id: 'narada.architect',
+      role: 'architect',
+      server: 'narada-proper',
+      tool: 'narada_mcp_fabric_context',
+      policy_source: 'test-policy',
+      reason: 'tool_not_allowed',
+    });
+  });
   it('resolves Site context from Site config', () => {
     writeSiteConfig(tempDir, {
       site_id: 'mcp-project',
@@ -269,6 +310,160 @@ describe('Narada MCP facade', () => {
     });
     expect(result.evidenceRefs).toHaveLength(2);
     expect(result.admissionEvents).toHaveLength(1);
+  });
+
+  it('opens an admitted task candidate into claimable work and routes the source inbox envelope', async () => {
+    mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
+    mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
+    writeFileSync(join(tempDir, '.ai', 'agents', 'roster.json'), JSON.stringify({
+      version: 1,
+      updated_at: new Date().toISOString(),
+      agents: [{
+        agent_id: 'builder',
+        role: 'builder',
+        capabilities: ['claim', 'execute'],
+        first_seen_at: new Date().toISOString(),
+        last_active_at: new Date().toISOString(),
+        status: 'idle',
+        task: null,
+        last_done: null,
+        updated_at: new Date().toISOString(),
+      }],
+    }, null, 2));
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.upsertRosterEntry({
+        agent_id: 'builder',
+        role: 'builder',
+        capabilities_json: JSON.stringify(['claim', 'execute']),
+        first_seen_at: '2026-01-01T00:00:00Z',
+        last_active_at: '2026-01-01T00:00:00Z',
+        status: 'idle',
+        task_number: null,
+        last_done: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+    } finally {
+      store.db.close();
+    }
+
+    const sourceEnvelope = await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 201,
+      method: 'tools/call',
+      params: {
+        name: 'narada_inbox_submit_observation',
+        arguments: {
+          cwd: tempDir,
+          source_ref: 'test:open-admitted-source',
+          title: 'Open admitted source',
+          summary: 'Source envelope for admitted task opening.',
+          principal: 'site-alpha.architect',
+        },
+      },
+    }, { siteRoot: tempDir, siteId: 'site-alpha' });
+    const sourcePayload = JSON.parse(((sourceEnvelope?.result as { content: Array<{ text: string }> }).content[0].text));
+    const envelopeId = sourcePayload.envelope.envelope_id as string;
+
+    await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 202,
+      method: 'tools/call',
+      params: {
+        name: 'site_task_lifecycle.admit_task',
+        arguments: {
+          task_id: 'site-alpha.admitted-1',
+          title: 'Opened from admitted candidate',
+          source_ref: `inbox:${envelopeId}`,
+          summary: 'Admitted candidate waiting for explicit open crossing.',
+          admitted_by: 'site-alpha.architect',
+        },
+      },
+    }, { siteRoot: tempDir, siteId: 'site-alpha' });
+
+    const before = await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 203,
+      method: 'tools/call',
+      params: {
+        name: 'narada_task_work_next',
+        arguments: { cwd: tempDir, agent: 'builder' },
+      },
+    }, { siteRoot: tempDir, siteId: 'site-alpha' });
+    expect(JSON.parse(((before?.result as { content: Array<{ text: string }> }).content[0].text))).toMatchObject({
+      status: 'empty',
+      reason: 'no_admissible_task',
+    });
+
+    const opened = await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 204,
+      method: 'tools/call',
+      params: {
+        name: 'site_task_lifecycle.open_admitted_task',
+        arguments: {
+          task_id: 'site-alpha.admitted-1',
+          source_envelope_id: envelopeId,
+          opened_by: 'site-alpha.architect',
+          required_work: '1. Complete the opened work.',
+          acceptance_criteria: ['Opened work is visible to work-next.'],
+        },
+      },
+    }, { siteRoot: tempDir, siteId: 'site-alpha' });
+
+    const openedPayload = JSON.parse(((opened?.result as { content: Array<{ text: string }> }).content[0].text));
+    expect(openedPayload).toMatchObject({
+      status: 'success',
+      schema: 'narada.site_task_lifecycle.mcp_open_admitted_task_result.v0',
+      taskId: 'site-alpha.admitted-1',
+      taskNumber: 1,
+      mutationAttempted: true,
+      mutationExecuted: true,
+      inboxDisposition: {
+        status: 'success',
+        enactment_status: 'enacted',
+        target_mutation: false,
+      },
+      traversal: {
+        mutation_attempted: true,
+        cross_site: false,
+      },
+    });
+
+    const after = await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 205,
+      method: 'tools/call',
+      params: {
+        name: 'narada_task_work_next',
+        arguments: { cwd: tempDir, agent: 'builder' },
+      },
+    }, { siteRoot: tempDir, siteId: 'site-alpha' });
+    const afterPayload = JSON.parse(((after?.result as { content: Array<{ text: string }> }).content[0].text));
+    expect(afterPayload).toMatchObject({
+      status: 'ok',
+      primary: {
+        task_number: 1,
+        title: 'Opened from admitted candidate',
+      },
+    });
+
+    const envelopeReadback = await handleMcpRequest({
+      jsonrpc: '2.0',
+      id: 206,
+      method: 'tools/call',
+      params: {
+        name: 'narada_inbox_show',
+        arguments: { cwd: tempDir, envelope_id: envelopeId },
+      },
+    }, { siteRoot: tempDir, siteId: 'site-alpha' });
+    const envelopePayload = JSON.parse(((envelopeReadback?.result as { content: Array<{ text: string }> }).content[0].text));
+    expect(envelopePayload.envelope.status).toBe('promoted');
+    expect(envelopePayload.envelope.promotion).toMatchObject({
+      target_kind: 'task',
+      target_ref: 'task:1',
+      enactment_status: 'enacted',
+    });
   });
 
   it('returns not_found for missing task lifecycle readback', async () => {
