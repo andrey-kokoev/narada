@@ -1,17 +1,16 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 import {
   buildCheckpointDescriptor,
   buildHydrationRequestDescriptor,
   findDeniedSourceImports,
 } from '@narada2/agent-context-memory';
-import { cwd as processCwd, env as processEnv, stdin as defaultStdin, stdout as defaultStdout } from 'node:process';
+import { cwd as processCwd, stdin as defaultStdin, stdout as defaultStdout } from 'node:process';
 import {
   inboxDoctorCommand,
   inboxListCommand,
-  inboxPromoteCommand,
   inboxShowCommand,
   inboxSubmitObservationCommand,
   inboxWorkNextCommand,
@@ -24,8 +23,6 @@ import { grantEffectiveStatus, readCapabilityRegistry } from './lib/capability-c
 import { ExitCode } from './lib/exit-codes.js';
 import type { CommandSideEffectClass } from './lib/command-execution-intent.js';
 import { readRoutingRegistry, resolveRoute, type RouteAddressRecord } from './lib/routing-addressing-registry.js';
-import { allocateTaskNumber, serializeFrontMatter } from './lib/task-governance.js';
-import { openTaskLifecycleStore } from './lib/task-lifecycle-store.js';
 
 type JsonRpcId = string | number | null;
 
@@ -53,15 +50,6 @@ interface McpTarget {
   site_root?: string;
 }
 
-interface McpToolPolicy {
-  schema?: string;
-  policy_source?: string;
-  agent_id?: string;
-  role?: string;
-  default_server?: string;
-  servers?: Record<string, { allowed_tools?: string[] | '*' }>;
-}
-
 interface McpTraversalContext {
   source_site: McpSiteContext;
   target_site: McpSiteContext;
@@ -85,7 +73,6 @@ export interface McpServerOptions {
   siteRoot?: string;
   siteId?: string;
   siteKind?: string;
-  mcpToolPolicy?: McpToolPolicy;
 }
 
 export interface McpSiteContext {
@@ -138,18 +125,6 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
       evidence_refs: arrayStringSchema('Additional evidence refs.'),
       target: targetSchema(),
     }, ['task_id', 'title', 'source_ref']),
-  },
-  {
-    name: 'site_task_lifecycle.open_admitted_task',
-    description: 'Promote one admitted local task candidate into opened claimable work and route its source inbox envelope to the task.',
-    inputSchema: objectSchema({
-      task_id: { type: 'string', description: 'Admitted local task candidate id.' },
-      source_envelope_id: { type: 'string', description: 'Source inbox envelope id to mark as routed to the opened task.' },
-      opened_by: stringSchema('Principal opening the admitted candidate; defaults to mcp-client.'),
-      required_work: stringSchema('Optional concrete required work markdown for the opened task.'),
-      acceptance_criteria: arrayStringSchema('Optional acceptance criteria for the opened task.'),
-      target: targetSchema(),
-    }, ['task_id', 'source_envelope_id']),
   },
   {
     name: 'site_task_lifecycle.read_task',
@@ -280,8 +255,7 @@ export async function handleMcpRequest(
   if (!request.id && request.method.startsWith('notifications/')) return null;
   try {
     const siteContext = resolveMcpSiteContext(options);
-    const toolPolicy = resolveMcpToolPolicy(options);
-    const result = await dispatchMcpMethod(request.method, request.params, siteContext, toolPolicy);
+    const result = await dispatchMcpMethod(request.method, request.params, siteContext);
     return { jsonrpc: '2.0', id: request.id ?? null, result };
   } catch (error) {
     return {
@@ -317,7 +291,7 @@ export async function runMcpServer(options: McpServerOptions = {}): Promise<void
   }
 }
 
-async function dispatchMcpMethod(method: string, params: unknown, siteContext: McpSiteContext, toolPolicy?: McpToolPolicy): Promise<unknown> {
+async function dispatchMcpMethod(method: string, params: unknown, siteContext: McpSiteContext): Promise<unknown> {
   switch (method) {
     case 'initialize':
       return {
@@ -328,40 +302,26 @@ async function dispatchMcpMethod(method: string, params: unknown, siteContext: M
           version: '0.1.0',
           site: siteContext,
           authority_posture: 'facade_only',
-          mcp_tool_policy: summarizeToolPolicy(toolPolicy),
         },
       };
     case 'tools/list':
-      return { tools: filterToolsByPolicy(NARADA_MCP_TOOLS, toolPolicy), site: siteContext, authority_posture: 'facade_only', mcp_tool_policy: summarizeToolPolicy(toolPolicy) };
+      return { tools: NARADA_MCP_TOOLS, site: siteContext, authority_posture: 'facade_only' };
     case 'tools/call':
-      return callTool(params, siteContext, toolPolicy);
+      return callTool(params, siteContext);
     default:
       throw new Error(`Unsupported MCP method: ${method}`);
   }
 }
 
-async function callTool(params: unknown, siteContext: McpSiteContext, toolPolicy?: McpToolPolicy): Promise<McpToolResult> {
+async function callTool(params: unknown, siteContext: McpSiteContext): Promise<McpToolResult> {
   const record = asRecord(params);
   const name = stringField(record, 'name');
   const args = asRecord(record.arguments);
   if (!name) throw new Error('tools/call requires params.name');
-  if (!isToolAllowed(name, toolPolicy)) {
-    return jsonToolResult({
-      status: 'error',
-      error: 'tool_not_allowed',
-      agent_id: toolPolicy?.agent_id ?? null,
-      role: toolPolicy?.role ?? null,
-      server: toolPolicy?.default_server ?? 'narada-proper',
-      tool: name,
-      policy_source: toolPolicy?.policy_source ?? 'unspecified',
-      reason: 'tool_not_allowed',
-    }, true);
-  }
   const mutationAttempted = name === 'narada_inbox_submit_observation'
     || (name === 'narada_inbox_work_next' && booleanField(args, 'claim') === true)
     || (name === 'narada_task_work_next' && booleanField(args, 'claim') === true)
     || name === 'site_task_lifecycle.admit_task'
-    || name === 'site_task_lifecycle.open_admitted_task'
     || name === 'agent_context_memory.record_checkpoint'
     || name === 'narada_ee_run';
   const traversal = await resolveMcpTraversal({
@@ -420,16 +380,6 @@ async function callTool(params: unknown, siteContext: McpSiteContext, toolPolicy
         receivedAt: stringField(args, 'received_at') ?? new Date().toISOString(),
         admittedBy: stringField(args, 'admitted_by') ?? 'mcp-client',
         evidenceRefs: stringArrayField(args, 'evidence_refs') ?? [],
-      }), traversal));
-    case 'site_task_lifecycle.open_admitted_task':
-      return jsonToolResult(attachTraversal(await openAdmittedTaskLifecycleTask({
-        siteRoot: traversal.target_site.site_root,
-        siteId: traversal.target_site.site_id,
-        taskId: requiredString(args, 'task_id'),
-        sourceEnvelopeId: requiredString(args, 'source_envelope_id'),
-        openedBy: stringField(args, 'opened_by') ?? 'mcp-client',
-        requiredWork: stringField(args, 'required_work'),
-        acceptanceCriteria: stringArrayField(args, 'acceptance_criteria') ?? [],
       }), traversal));
     case 'site_task_lifecycle.read_task':
       return jsonToolResult(attachTraversal(readTaskLifecycleTask({
@@ -720,46 +670,6 @@ export function resolveMcpSiteContext(options: Pick<McpServerOptions, 'cwd' | 's
   };
 }
 
-function resolveMcpToolPolicy(options: Pick<McpServerOptions, 'mcpToolPolicy'> = {}): McpToolPolicy | undefined {
-  if (options.mcpToolPolicy) return options.mcpToolPolicy;
-  const raw = processEnv.NARADA_MCP_TOOL_POLICY;
-  if (!raw) return undefined;
-  try {
-    return asRecord(JSON.parse(raw)) as McpToolPolicy;
-  } catch {
-    throw new Error('invalid_narada_mcp_tool_policy');
-  }
-}
-
-function allowedToolsForPolicy(policy?: McpToolPolicy): string[] | '*' | undefined {
-  if (!policy) return undefined;
-  const serverName = policy.default_server ?? 'narada-proper';
-  const serverPolicy = policy.servers?.[serverName];
-  return serverPolicy?.allowed_tools;
-}
-
-function isToolAllowed(toolName: string, policy?: McpToolPolicy): boolean {
-  const allowedTools = allowedToolsForPolicy(policy);
-  if (!allowedTools) return true;
-  if (allowedTools === '*') return true;
-  return allowedTools.includes(toolName);
-}
-
-function filterToolsByPolicy(tools: McpTool[], policy?: McpToolPolicy): McpTool[] {
-  return tools.filter((tool) => isToolAllowed(tool.name, policy));
-}
-
-function summarizeToolPolicy(policy?: McpToolPolicy): Record<string, unknown> | null {
-  if (!policy) return null;
-  return {
-    schema: policy.schema ?? 'narada.mcp.tool_policy.v0',
-    policy_source: policy.policy_source ?? 'unspecified',
-    agent_id: policy.agent_id ?? null,
-    role: policy.role ?? null,
-    default_server: policy.default_server ?? 'narada-proper',
-    servers: policy.servers ?? {},
-  };
-}
 function jsonToolResult(value: unknown, isError = false): McpToolResult {
   return { content: [{ type: 'text', text: JSON.stringify(value, null, 2) }], ...(isError ? { isError: true } : {}) };
 }
@@ -965,242 +875,6 @@ function admitTaskLifecycleTask(args: {
     sourceStateImported: false,
     packageOwnsSqliteDependency: false,
     packageExecutedSqliteMutation: false,
-    readback,
-    mutationEvidencePath: evidencePath,
-  };
-}
-
-async function openAdmittedTaskLifecycleTask(args: {
-  siteRoot: string;
-  siteId: string;
-  taskId: string;
-  sourceEnvelopeId: string;
-  openedBy: string;
-  requiredWork?: string;
-  acceptanceCriteria: string[];
-}): Promise<Record<string, unknown>> {
-  const paths = planSiteTaskLifecyclePathsForMcp(args.siteRoot);
-  if (!existsSync(paths.taskDbPath)) {
-    return {
-      status: 'not_found',
-      error: 'task_lifecycle_db_not_found',
-      taskId: args.taskId,
-      taskDbPath: paths.taskDbPath,
-      mutationAttempted: true,
-      mutationExecuted: false,
-      sourceStateImported: false,
-      packageExecutedSqliteMutation: false,
-    };
-  }
-
-  const rows = sqliteJson(paths.taskDbPath, [
-    'SELECT task_id, title, source_site, source_ref, status, received_at, summary, created_at',
-    'FROM task_records',
-    `WHERE task_id = ${sqlLiteral(args.taskId)};`,
-  ].join(' ')) as Array<{
-    task_id: string;
-    title: string;
-    source_site: string;
-    source_ref: string;
-    status: string;
-    received_at: string;
-    summary: string;
-    created_at: string;
-  }>;
-  if (rows.length === 0) {
-    return {
-      status: 'not_found',
-      taskId: args.taskId,
-      taskDbPath: paths.taskDbPath,
-      mutationAttempted: true,
-      mutationExecuted: false,
-      sourceStateImported: false,
-      packageExecutedSqliteMutation: false,
-    };
-  }
-  const admitted = rows[0];
-  if (admitted.status !== 'admitted') {
-    return {
-      status: 'error',
-      error: 'task_candidate_not_admitted',
-      taskId: args.taskId,
-      currentStatus: admitted.status,
-      mutationAttempted: true,
-      mutationExecuted: false,
-      sourceStateImported: false,
-      packageExecutedSqliteMutation: false,
-    };
-  }
-
-  const openedAt = new Date().toISOString();
-  const taskNumber = await allocateTaskNumber(args.siteRoot);
-  const openedTaskId = `${openedAt.slice(0, 10).replace(/-/g, '')}-${taskNumber}-${slugifyTaskTitle(admitted.title)}`;
-  const openedTaskFileName = `${openedTaskId}.md`;
-  const openedTaskPath = resolve(paths.taskSpecDir, openedTaskFileName);
-  const acceptanceCriteria = args.acceptanceCriteria.length > 0
-    ? args.acceptanceCriteria
-    : [
-      `Admitted task candidate ${args.taskId} is handled through this opened Narada proper task.`,
-      `Source inbox envelope ${args.sourceEnvelopeId} is routed to this task with mutation evidence.`,
-      'Residual authority, lifecycle, or implementation blockers are reported explicitly.',
-    ];
-  const requiredWork = args.requiredWork ?? [
-    `Review admitted task candidate ${args.taskId} and source inbox envelope ${args.sourceEnvelopeId}.`,
-    'Execute the smallest Narada proper change or decision needed for the admitted candidate.',
-    'Preserve Narada proper/User Site/PC Site locus separation.',
-    'Verify the result with focused evidence before closure.',
-  ].map((line, index) => `${index + 1}. ${line}`).join('\n');
-
-  const body = [
-    `# ${admitted.title}`,
-    '',
-    '## Goal',
-    '',
-    admitted.title,
-    '',
-    '## Context',
-    '',
-    `Opened from admitted task candidate: ${args.taskId}`,
-    `Source ref: ${admitted.source_ref}`,
-    `Source inbox envelope: ${args.sourceEnvelopeId}`,
-    admitted.summary ? `Summary: ${admitted.summary}` : null,
-    '',
-    '## Required Work',
-    '',
-    requiredWork,
-    '',
-    '## Non-Goals',
-    '',
-    '- Do not auto-claim this task as part of opening it.',
-    '- Do not route this work through a connected-Site task lifecycle surface.',
-    '- Do not treat task admission as execution or closure evidence.',
-    '',
-    '## Acceptance Criteria',
-    '',
-    ...acceptanceCriteria.map((criterion) => `- [ ] ${criterion}`),
-  ].filter((line): line is string => line !== null).join('\n');
-
-  mkdirSync(paths.taskSpecDir, { recursive: true });
-  writeFileSync(openedTaskPath, serializeFrontMatter({
-    task_id: openedTaskId,
-    status: 'opened',
-  }, body), 'utf8');
-
-  const store = openTaskLifecycleStore(args.siteRoot);
-  try {
-    store.upsertLifecycle({
-      task_id: openedTaskId,
-      task_number: taskNumber,
-      status: 'opened',
-      governed_by: null,
-      closed_at: null,
-      closed_by: null,
-      reopened_at: null,
-      reopened_by: null,
-      continuation_packet_json: null,
-      updated_at: openedAt,
-    });
-    store.upsertTaskSpec({
-      task_id: openedTaskId,
-      task_number: taskNumber,
-      title: admitted.title,
-      chapter_markdown: 'Narada Proper Inbox Admissions',
-      goal_markdown: admitted.title,
-      context_markdown: [
-        `Opened from admitted task candidate: ${args.taskId}`,
-        `Source ref: ${admitted.source_ref}`,
-        `Source inbox envelope: ${args.sourceEnvelopeId}`,
-        admitted.summary,
-      ].filter(Boolean).join('\n\n'),
-      required_work_markdown: requiredWork,
-      non_goals_markdown: [
-        '- Do not auto-claim this task as part of opening it.',
-        '- Do not route this work through a connected-Site task lifecycle surface.',
-        '- Do not treat task admission as execution or closure evidence.',
-      ].join('\n'),
-      acceptance_criteria_json: JSON.stringify(acceptanceCriteria),
-      dependencies_json: JSON.stringify([]),
-      updated_at: openedAt,
-    });
-  } finally {
-    store.db.close();
-  }
-
-  sqlite(paths.taskDbPath, [
-    'UPDATE task_records',
-    `SET status = 'opened'`,
-    `WHERE task_id = ${sqlLiteral(args.taskId)};`,
-  ].join(' '));
-  const eventId = `mcp-task-opened-${createHash('sha256').update(`${args.taskId}\n${openedTaskId}\n${openedAt}\n${args.openedBy}`).digest('hex').slice(0, 16)}`;
-  sqlite(paths.taskDbPath, [
-    'INSERT OR IGNORE INTO task_admission_events (event_id, task_id, event_type, recorded_at, payload_json)',
-    `VALUES (${sqlLiteral(eventId)}, ${sqlLiteral(args.taskId)}, 'mcp_task_opened', ${sqlLiteral(openedAt)}, ${sqlLiteral(JSON.stringify({
-      openedBy: args.openedBy,
-      openedTaskId,
-      taskNumber,
-      sourceEnvelopeId: args.sourceEnvelopeId,
-    }))});`,
-  ].join(' '));
-
-  const inboxDisposition = await inboxPromoteCommand({
-    cwd: args.siteRoot,
-    envelopeId: args.sourceEnvelopeId,
-    targetKind: 'task',
-    targetRef: `task:${taskNumber}`,
-    by: args.openedBy,
-    format: 'json',
-  });
-  if (inboxDisposition.exitCode !== ExitCode.SUCCESS) {
-    return {
-      status: 'partial',
-      error: 'inbox_disposition_failed',
-      taskId: args.taskId,
-      openedTaskId,
-      taskNumber,
-      openedTaskPath,
-      inboxDisposition: inboxDisposition.result,
-      mutationAttempted: true,
-      mutationExecuted: true,
-      sourceStateImported: false,
-      packageExecutedSqliteMutation: false,
-    };
-  }
-
-  const readback = {
-    admittedTask: sqliteJson(paths.taskDbPath, `SELECT task_id, status, source_site, source_ref FROM task_records WHERE task_id = ${sqlLiteral(args.taskId)};`),
-    openedTask: sqliteJson(paths.taskDbPath, `SELECT task_id, task_number, status FROM task_lifecycle WHERE task_id = ${sqlLiteral(openedTaskId)};`),
-  };
-  const evidencePath = writeTaskLifecycleMutationEvidence(args.siteRoot, {
-    command: 'site_task_lifecycle.open_admitted_task',
-    taskId: args.taskId,
-    openedTaskId,
-    taskNumber,
-    siteId: args.siteId,
-    sourceEnvelopeId: args.sourceEnvelopeId,
-    eventId,
-    dbPath: paths.taskDbPath,
-    openedTaskPath,
-    recordedAt: openedAt,
-    openedBy: args.openedBy,
-    inboxDisposition: inboxDisposition.result,
-    readback,
-  });
-
-  return {
-    status: 'success',
-    schema: 'narada.site_task_lifecycle.mcp_open_admitted_task_result.v0',
-    taskId: args.taskId,
-    openedTaskId,
-    taskNumber,
-    openedTaskPath,
-    adapterId: 'narada-proper.adapter.task-0006.mcp-open-admitted-task.v0',
-    taskDbPath: paths.taskDbPath,
-    mutationAttempted: true,
-    mutationExecuted: true,
-    sourceStateImported: false,
-    packageOwnsSqliteDependency: false,
-    packageExecutedSqliteMutation: false,
-    inboxDisposition: inboxDisposition.result,
     readback,
     mutationEvidencePath: evidencePath,
   };
@@ -1517,15 +1191,6 @@ function sqliteJson(dbPath: string, sql: string): unknown[] {
 
 function sqlLiteral(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
-}
-
-function slugifyTaskTitle(title: string): string {
-  const slug = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 60);
-  return slug || 'admitted-task';
 }
 
 function writeTaskLifecycleMutationEvidence(siteRoot: string, evidence: Record<string, unknown>): string {

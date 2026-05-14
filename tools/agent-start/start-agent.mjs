@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
@@ -10,11 +10,28 @@ const defaultRootDir = join(__dirname, '..', '..');
 const require = createRequire(import.meta.url);
 const RESULT_SCHEMA = 'narada.agent_start.result.v0';
 const DEFAULT_PC_SITE_ROOT = process.env.NARADA_PC_SITE_ROOT ?? 'C:/ProgramData/Narada/sites/pc/desktop-sunroom-2';
-const NARADA_PROPER_MCP_SERVER_NAME = 'narada-proper';
+const ADMITTED_AGENTS = new Set(['narada.architect']);
+const NARADA_PROPER_APPROVED_MCP_SERVERS = [
+  {
+    name: 'narada-andrey-agent-context',
+    provider_locus: 'user_site_mcp',
+    target_locus: 'narada_proper',
+    purpose: 'startup hydration and carrier identity/context verification',
+  },
+  {
+    name: 'narada-andrey-task-lifecycle',
+    provider_locus: 'user_site_mcp',
+    target_locus: 'user_site_task_lifecycle',
+    purpose: 'workboard and task lifecycle authority for operator-assigned User Site tasks',
+  },
+  {
+    name: 'narada-andrey-shell',
+    provider_locus: 'user_site_mcp',
+    target_locus: 'explicit_working_directory',
+    purpose: 'policy-aware command execution only against explicit allowed roots and command policy',
+  },
+];
 const NARADA_PROPER_WITHHELD_MCP_SERVERS = [
-  'narada-andrey-agent-context',
-  'narada-andrey-task-lifecycle',
-  'narada-andrey-shell',
   'narada-andrey-inbox',
   'narada-andrey-operator-surface',
   'narada-andrey-site-lift-catalog',
@@ -23,6 +40,7 @@ const NARADA_PROPER_WITHHELD_MCP_SERVERS = [
   'narada-andrey-test',
   'narada-andrey-adr',
 ];
+
 function parseArgs(argv) {
   const result = {};
   let i = 0;
@@ -49,7 +67,7 @@ function identityToken(identity) {
   return identity.replace(/[^A-Za-z0-9]+/g, '_');
 }
 
-function startEvent(identity, runtime, dryRun, now = new Date().toISOString(), siteRoot = defaultRootDir, role = resolveAgentRole({ siteRoot, identity }).role) {
+function startEvent(identity, runtime, dryRun, now = new Date().toISOString(), siteRoot = defaultRootDir) {
   const eventId = `agent_start_${stableTimestampToken(now)}_${identityToken(identity)}`;
   return {
     schema: 'narada.agent_start.event.v0',
@@ -57,7 +75,7 @@ function startEvent(identity, runtime, dryRun, now = new Date().toISOString(), s
     site_id: 'narada-proper',
     site_root: siteRoot,
     identity,
-    role,
+    role: identity === 'narada.architect' ? 'architect' : 'unknown',
     runtime,
     status: dryRun ? 'planned' : 'materialized',
     materialized_at: now,
@@ -313,198 +331,17 @@ function loadSqliteDriver() {
   }
 }
 
-function asRecord(value) {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-}
-
-function stringArray(value) {
-  return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : null;
-}
-
-function readJsonFile(path) {
-  if (!existsSync(path)) return {};
-  return asRecord(JSON.parse(readFileSync(path, 'utf8')));
-}
-
-
-function readTrackedMcpPolicy(siteRoot = defaultRootDir) {
-  return readJsonFile(join(siteRoot, 'tools', 'agent-start', 'narada-proper.mcp-policy.json'));
-}
-
-function siteMcpConfig(siteRoot) {
-  const policyPath = join(siteRoot, 'tools', 'agent-start', 'narada-proper.mcp-policy.json');
-  const trackedPolicy = readTrackedMcpPolicy(siteRoot);
-  if (Object.keys(trackedPolicy).length === 0) throw new Error('mcp_policy_source_missing:' + policyPath);
-  return { config: trackedPolicy, source: policyPath };
-}
-
-function readRoster(siteRoot) {
-  return readJsonFile(join(siteRoot, '.ai', 'agents', 'roster.json'));
-}
-
-function resolveAgentRole({ siteRoot, identity }) {
-  const roster = readRoster(siteRoot);
-  const agents = Array.isArray(roster.agents) ? roster.agents : [];
-  const rosterEntry = agents.find((agent) => asRecord(agent).agent_id === identity);
-  if (rosterEntry && typeof asRecord(rosterEntry).role === 'string') {
-    return { role: asRecord(rosterEntry).role, source: join(siteRoot, '.ai', 'agents', 'roster.json') };
-  }
-  const trackedPolicy = siteMcpConfig(siteRoot).config;
-  const admitted = asRecord(trackedPolicy.admitted_agents);
-  const fallback = asRecord(admitted[identity]);
-  if (typeof fallback.role === 'string') {
-    return { role: fallback.role, source: join(siteRoot, 'tools', 'agent-start', 'narada-proper.mcp-policy.json#admitted_agents') };
-  }
-  throw new Error('agent_role_unresolved:' + identity);
-}
-
-function resolveTemplate(value, siteRoot) {
-  return String(value).replaceAll('${siteRoot}', siteRoot.replaceAll('\\', '/'));
-}
-
-function localNaradaMcpCommand(siteRoot) {
-  return join(siteRoot, 'node_modules', '.bin', process.platform === 'win32' ? 'narada-mcp.cmd' : 'narada-mcp');
-}
-
-function resolveServerCommand(serverConfig, siteRoot) {
-  const configured = typeof serverConfig.command === 'string'
-    ? resolveTemplate(serverConfig.command, siteRoot)
-    : localNaradaMcpCommand(siteRoot);
-  if (/^[A-Za-z]:[\\/]/.test(configured) || configured.startsWith('/') || configured.startsWith('\\')) return configured;
-  return join(siteRoot, configured);
-}
-
-function resolveServerArgs(serverConfig, siteRoot) {
-  const configured = stringArray(serverConfig.args) ?? ['--site-root', '${siteRoot}', '--site-id', 'narada-proper'];
-  return configured.map((arg) => resolveTemplate(arg, siteRoot));
-}
-
-function normalizeAllowedTools(serverName, allowedTools, knownTools) {
-  if (allowedTools === '*') return '*';
-  const tools = stringArray(allowedTools);
-  if (!tools) throw new Error(`mcp_policy_invalid_allowed_tools:${serverName}`);
-  if (serverName === NARADA_PROPER_MCP_SERVER_NAME) {
-    const knownToolList = stringArray(asRecord(knownTools)[serverName]);
-    if (!knownToolList) throw new Error(`mcp_policy_known_tools_missing:${serverName}`);
-    const known = new Set(knownToolList);
-    const unknown = tools.filter((tool) => !known.has(tool));
-    if (unknown.length > 0) throw new Error(`mcp_policy_unknown_tool:${serverName}:${unknown.join(',')}`);
-  }
-  return tools;
-}
-
-function resolveMcpLaunchPolicy({ siteRoot, identity, role }) {
-  const policySource = siteMcpConfig(siteRoot);
-  const config = policySource.config;
-  const catalog = asRecord(config.servers);
-  const rolePolicies = asRecord(config.role_policies ?? config.role_mcp_policies);
-  const knownTools = asRecord(config.known_tools);
-  const policy = asRecord(rolePolicies[identity] ?? rolePolicies[role]);
-  const policyServers = asRecord(policy.servers);
-  if (Object.keys(policyServers).length === 0) throw new Error(`mcp_policy_missing:${identity}:${role}`);
-
-  const resolvedServers = [];
-  const toolPolicyServers = {};
-  for (const [serverName, policyConfigValue] of Object.entries(policyServers)) {
-    const serverConfig = asRecord(catalog[serverName]);
-    if (Object.keys(serverConfig).length === 0) throw new Error(`mcp_policy_unknown_server:${serverName}`);
-    const policyConfig = asRecord(policyConfigValue);
-    const allowedTools = normalizeAllowedTools(serverName, policyConfig.allowed_tools, knownTools);
-    const resolved = {
-      name: serverName,
-      command: resolveServerCommand(serverConfig, siteRoot),
-      args: resolveServerArgs(serverConfig, siteRoot),
-      provider_locus: typeof serverConfig.provider_locus === 'string' ? serverConfig.provider_locus : 'target_site_mcp',
-      target_locus: typeof serverConfig.target_locus === 'string' ? serverConfig.target_locus : 'narada_proper',
-      purpose: typeof serverConfig.purpose === 'string' ? serverConfig.purpose : 'Site-declared MCP server',
-      allowed_tools: allowedTools,
-    };
-    resolvedServers.push(resolved);
-    toolPolicyServers[serverName] = { allowed_tools: allowedTools };
-  }
-
-  return {
-    schema: 'narada.site_mcp.launch_policy.v0',
-    policy_source: policySource.source,
-    agent_id: identity,
-    role,
-    servers: resolvedServers,
-    tool_policy: {
-      schema: 'narada.mcp.tool_policy.v0',
-      policy_source: `${policySource.source}#role_policies`,
-      agent_id: identity,
-      role,
-      default_server: NARADA_PROPER_MCP_SERVER_NAME,
-      servers: toolPolicyServers,
-    },
-  };
-}
-
-function codexConfigArg(key, value) {
-  return ['-c', `${key}=${value}`];
-}
-
-function codexString(value) {
-  return JSON.stringify(value);
-}
-
-function codexArrayArgs(key, values) {
-  return values.flatMap((value, index) => codexConfigArg(`${key}[${index}]`, codexString(value)));
-}
-
-function codexHomePath(siteRoot) {
-  return join(siteRoot, '.narada', 'crew', 'codex-home', 'narada-architect');
-}
-
-function codexConfigPath(siteRoot) {
-  return join(codexHomePath(siteRoot), 'config.toml');
-}
-
-function codexTomlString(value) {
-  return JSON.stringify(value).replaceAll('\\', '/');
-}
-
-function codexHomeConfigContent(siteRoot, launchPolicy = resolveMcpLaunchPolicy({ siteRoot, identity: 'narada.architect', role: 'architect' })) {
-  const lines = [
-    '# Generated by tools/agent-start/start-agent.mjs.',
-    '# Narada proper carriers must not inherit User Site MCP servers.',
-    '',
-  ];
-  for (const server of launchPolicy.servers) {
-    lines.push(
-      `[mcp_servers."${server.name}"]`,
-      `command = ${codexTomlString(server.command)}`,
-      `args = [${server.args.map(codexTomlString).join(', ')}]`,
-      'default_tools_approval_mode = "approve"',
-      '',
-    );
-  }
-  return lines.join('\n');
-}
-
-function materializeCodexHome(siteRoot, launchPolicy) {
-  const homePath = codexHomePath(siteRoot);
-  const configPath = codexConfigPath(siteRoot);
-  mkdirSync(homePath, { recursive: true });
-  writeFileSync(configPath, codexHomeConfigContent(siteRoot, launchPolicy), 'utf8');
-  return { homePath, configPath };
-}
-
-function codexMcpServerArgs({ launchPolicy }) {
-  return launchPolicy.servers.flatMap((server) => {
-    const prefix = `mcp_servers."${server.name}"`;
-    return [
-      ...codexConfigArg(`${prefix}.command`, codexString(server.command)),
-      ...codexArrayArgs(`${prefix}.args`, server.args),
-      ...codexConfigArg(`${prefix}.default_tools_approval_mode`, codexString('approve')),
-    ];
-  });
+function codexMcpApprovalArgs(serverNames) {
+  return serverNames.flatMap((serverName) => [
+    '-c',
+    `mcp_servers."${serverName}".default_tools_approval_mode="approve"`,
+  ]);
 }
 
 function mcpToolApprovalPacket({ approved, withheld, note }) {
   return {
     status: 'approved_by_launcher_config',
-    provider_locus: 'target_site_mcp',
+    provider_locus: 'user_site_mcp',
     target_locus: 'narada_proper',
     approved_servers: approved,
     explicitly_not_approved: withheld,
@@ -512,30 +349,31 @@ function mcpToolApprovalPacket({ approved, withheld, note }) {
   };
 }
 
-function codexArgs({ launchPolicy }) {
+function codexArgs() {
   return [
     '--ask-for-approval',
     'never',
-    ...codexMcpServerArgs({ launchPolicy }),
+    ...codexMcpApprovalArgs(NARADA_PROPER_APPROVED_MCP_SERVERS.map((server) => server.name)),
     '--disable',
     'shell_tool',
   ];
 }
+
 function startupSequence() {
   return [
     {
-      tool: 'narada_site_context',
+      tool: 'agent_context_hydrate_current',
       arguments: {},
-      purpose: 'verify the launched carrier is using the target-local Narada proper MCP facade',
+      purpose: 'hydrate the launched carrier session from inherited NARADA_* environment before operational work',
     },
   ];
 }
 
 function startupCommand() {
   return {
-    name: 'narada_site_context',
+    name: 'agent_context_hydrate_current',
     arguments: {},
-    display: 'narada_site_context({})',
+    display: 'agent_context_hydrate_current({})',
   };
 }
 
@@ -545,23 +383,18 @@ function buildLaunchPlanFromArgs(args, options = {}) {
   const dryRun = args.dry_run === true;
   const exec = args.exec === true;
   if (!identity) throw new Error('identity_required');
+  if (!ADMITTED_AGENTS.has(identity)) throw new Error(`agent_not_admitted:${identity}`);
   if (runtime !== 'codex') throw new Error(`runtime_not_admitted:${runtime}`);
 
   const siteRoot = options.siteRoot ?? defaultRootDir;
   const pcSiteRoot = options.pcSiteRoot ?? DEFAULT_PC_SITE_ROOT;
   const now = options.now ?? new Date().toISOString();
-  const roleResolution = resolveAgentRole({ siteRoot, identity });
-  const role = roleResolution.role;
-  const launchPolicy = resolveMcpLaunchPolicy({ siteRoot, identity, role });
-  const event = startEvent(identity, runtime, dryRun, now, siteRoot, role);
+  const event = startEvent(identity, runtime, dryRun, now, siteRoot);
   const session = carrierSession(identity, runtime, event.event_id, dryRun, now, siteRoot);
   const eventPath = dryRun ? null : writeEvent(event, siteRoot);
   const dbPath = dryRun ? agentContextDbPath(siteRoot) : materializeAgentContext({ event, session, cwd: siteRoot, siteRoot });
   const pcCarrierSession = materializePcCarrierSession({ event, session, cwd: siteRoot, siteRoot, pcSiteRoot, dryRun });
-  const codexHome = dryRun
-    ? { homePath: codexHomePath(siteRoot), configPath: codexConfigPath(siteRoot) }
-    : materializeCodexHome(siteRoot, launchPolicy);
-  const runtimeArgs = codexArgs({ launchPolicy });
+  const runtimeArgs = codexArgs();
   const plannedEnvironment = {
     NARADA_AGENT_ID: identity,
     NARADA_AGENT_START_EVENT_ID: event.event_id,
@@ -569,8 +402,6 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     NARADA_SITE_ROOT: siteRoot,
     NARADA_AGENT_CONTEXT_DB: dbPath,
     NARADA_PC_SITE_ROOT: pcSiteRoot,
-    CODEX_HOME: codexHome.homePath,
-    NARADA_MCP_TOOL_POLICY: JSON.stringify(launchPolicy.tool_policy),
   };
   const launchEnvironment = dryRun ? null : plannedEnvironment;
   const result = {
@@ -582,9 +413,6 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     carrier_session_id: session.carrier_session_id,
     event_path: eventPath,
     agent_context_db_path: dbPath,
-    codex_home_path: codexHome.homePath,
-    codex_config_path: codexHome.configPath,
-    codex_config_authoritative: !dryRun,
     pc_carrier_session: pcCarrierSession,
     agent_start_event_authoritative: !dryRun,
     carrier_session_authoritative: !dryRun,
@@ -593,30 +421,16 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     runtime_args: runtimeArgs,
     exec_command: exec ? ['codex', ...runtimeArgs].join(' ') : null,
     mcp_tool_approval: mcpToolApprovalPacket({
-      approved: launchPolicy.servers.map(({ name, provider_locus, target_locus, purpose, allowed_tools }) => ({ name, provider_locus, target_locus, purpose, allowed_tools })),
+      approved: NARADA_PROPER_APPROVED_MCP_SERVERS,
       withheld: NARADA_PROPER_WITHHELD_MCP_SERVERS,
-      note: 'Approves only the Narada proper target-local MCP server bound to this launch site root. Native Codex shell_tool remains disabled. narada-andrey User Site MCP servers are explicitly not approved for this Narada proper carrier.',
+      note: 'Approves startup hydration, User Site task lifecycle, and policy-aware shell MCP at the Codex carrier layer. Native Codex shell_tool remains disabled. User Site inbox/operator-surface and other nonessential MCP servers are not approved for this Narada proper carrier by default.',
     }),
-    mcp_config_isolation: {
-      status: dryRun ? 'planned' : 'materialized',
-      mechanism: 'CODEX_HOME',
-      codex_home_path: codexHome.homePath,
-      codex_config_path: codexHome.configPath,
-      allowed_servers: launchPolicy.servers.map((server) => server.name),
-      denied_inherited_servers: NARADA_PROPER_WITHHELD_MCP_SERVERS,
-      rule: 'Spawned Codex must load the target-local config home so global/User Site MCP servers are not present.',
-    },
-    agent_role_source: roleResolution.source,
-    mcp_policy_source: launchPolicy.policy_source,
-    resolved_mcp_servers: launchPolicy.servers,
-    resolved_tool_policy: launchPolicy.tool_policy,
-    mcp_policy_enforcement: { launch: 'hard_fail', runtime: 'mcp_server' },
     planned_environment: plannedEnvironment,
     launch_environment: launchEnvironment,
     required_environment: launchEnvironment ?? plannedEnvironment,
-    startup_command: startupCommand({ identity }),
-    startup_command_name: startupCommand({ identity }).name,
-    startup_sequence: startupSequence({ identity }),
+    startup_command: startupCommand(),
+    startup_command_name: startupCommand().name,
+    startup_sequence: startupSequence(),
     dry_run_notice: dryRun
       ? 'planned_environment is non-authoritative; no agent_start_events or carrier_sessions row was created.'
       : null,
@@ -628,8 +442,6 @@ function buildLaunchPlanFromArgs(args, options = {}) {
         'NARADA_SITE_ROOT',
         'NARADA_AGENT_CONTEXT_DB',
         'NARADA_PC_SITE_ROOT',
-        'CODEX_HOME',
-        'NARADA_MCP_TOOL_POLICY',
       ],
       mechanism: 'stdio_mcp_children_inherit_from_codex_carrier_process_environment',
     },
@@ -706,14 +518,8 @@ export {
   agentContextDbPath,
   buildLaunchPlanFromArgs,
   carrierSession,
-  codexConfigPath,
-  codexHomeConfigContent,
-  codexHomePath,
   ensureAgentContextSchema,
   loadSqliteDriver,
-  materializeCodexHome,
-  resolveAgentRole,
-  resolveMcpLaunchPolicy,
   materializeAgentContext,
   readAgentStartEvent,
   startEvent,
