@@ -26,3 +26,13 @@ config.json
 packages/layers/cli/.ai/inbox.db
 packages/layers/cli/.ai/inbox.db-*
 packages/layers/cli/.ai/mutation-evidence/
+
+# Narada local runtime artifacts
+.ai/state/
+.ai/tmp/
+.ai/inbox-envelopes/
+.ai/mutation-evidence/
+.ai/do-not-open/tasks/
+.narada/crew/agent-start-events/
+.narada/crew/agent-start-results/
+.narada/crew/codex-home/
