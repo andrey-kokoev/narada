@@ -256,6 +256,7 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
     .command('workboard')
     .description('Show bounded current work, review handoff, inbox, and concurrency posture')
     .option('--limit <n>', 'Maximum rows per section', '20')
+    .option('--agent <id>', 'Agent ID for personal review-obligation projection')
     .option('--view <view>', 'Workboard view: full or compact', 'full')
     .option('--include-guidance', 'Include stable guidance arrays in compact output', false)
     .option('--format <fmt>', 'Output format: json or human', 'human')
@@ -267,6 +268,7 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
       invocation: (opts) => taskWorkboardCommand({
         cwd: opts.cwd as string | undefined,
         limit: opts.limit ? Number(opts.limit) : undefined,
+        agent: opts.agent as string | undefined,
         view: opts.view as string | undefined,
         includeGuidance: opts.includeGuidance as boolean | undefined,
         format: outputFormat(opts.format),

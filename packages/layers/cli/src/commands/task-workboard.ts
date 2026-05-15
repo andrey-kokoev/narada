@@ -11,6 +11,7 @@ export interface TaskWorkboardOptions {
   limit?: number;
   view?: string;
   includeGuidance?: boolean;
+  agent?: string;
 }
 
 type WorkboardTask = {
@@ -21,6 +22,18 @@ type WorkboardTask = {
   chapter: string | null;
   assigned_agent: string | null;
   handoff_actionability: TaskHandoffActionability;
+};
+
+type WorkboardReviewObligation = {
+  obligation_id: string;
+  task_number: number | null;
+  task_id: string | null;
+  title: string | null;
+  report_id: string | null;
+  source_agent_id: string | null;
+  target_agent_id: string | null;
+  target_role: string | null;
+  command: string | null;
 };
 
 export interface TaskWorkboard {
@@ -36,6 +49,7 @@ export interface TaskWorkboard {
     task_numbers: number[];
   }>;
   pending_reviews: WorkboardTask[];
+  my_review_obligations: WorkboardReviewObligation[];
   in_progress: WorkboardTask[];
   local_followups: WorkboardTask[];
   deferred: WorkboardTask[];
@@ -70,6 +84,7 @@ export async function taskWorkboardCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const cwd = resolve(options.cwd ?? process.cwd());
   const limit = Math.max(1, Math.min(options.limit ?? 20, 50));
+  const agentId = options.agent ?? process.env.NARADA_AGENT_ID ?? undefined;
   const store = openTaskLifecycleStore(cwd);
   try {
     const lifecycles = store.getAllLifecycle();
@@ -85,6 +100,7 @@ export async function taskWorkboardCommand(
       limit,
       active_chapters: summarizeChapters([...activeTasks, ...deferredTasks]).slice(0, limit),
       pending_reviews: activeTasks.filter((task) => task.status === 'in_review').slice(0, limit),
+      my_review_obligations: agentId ? listMyReviewObligations(store, agentId, limit) : [],
       in_progress: activeTasks.filter((task) => task.status === 'claimed' || task.status === 'needs_continuation').slice(0, limit),
       local_followups: tasks.filter((task) => task.status === 'opened' || task.status === 'needs_continuation').slice(0, limit),
       deferred: deferredTasks.slice(0, limit),
@@ -121,7 +137,9 @@ export async function taskWorkboardCommand(
         'Do not simultaneously mutate the same task lifecycle row, exported envelope, or lifecycle snapshot without serialized sanctioned commands.',
         'Publication should stage declared governance/evidence paths separately from Builder implementation paths.',
       ],
-      recommended_compact_command: 'narada task workboard --view compact --format json',
+      recommended_compact_command: agentId
+        ? `narada task workboard --agent ${agentId} --view compact --format json`
+        : 'narada task workboard --view compact --format json',
     };
     const output = compactWorkboard(result, Boolean(options.includeGuidance), options.view);
 
@@ -132,6 +150,49 @@ export async function taskWorkboardCommand(
   } finally {
     store.db.close();
   }
+}
+
+function listMyReviewObligations(
+  store: ReturnType<typeof openTaskLifecycleStore>,
+  agentId: string,
+  limit: number,
+): WorkboardReviewObligation[] {
+  const role = store.getRosterEntry(agentId)?.role ?? null;
+  return store.listDirectedObligationsForTarget(agentId, role, 'open')
+    .filter((obligation) => obligation.kind === 'review_request')
+    .slice(0, limit)
+    .map((obligation) => {
+      const spec = obligation.task_number === null ? undefined : store.getTaskSpecByNumber(obligation.task_number);
+      const consumptionRule = parseJsonObject(obligation.consumption_rule_json);
+      return {
+        obligation_id: obligation.obligation_id,
+        task_number: obligation.task_number,
+        task_id: obligation.task_id,
+        title: spec ? titleForSpec(spec, obligation.task_id ?? obligation.obligation_id) : null,
+        report_id: typeof consumptionRule.report_id === 'string' ? consumptionRule.report_id : reportIdFromSourceRef(obligation.source_ref),
+        source_agent_id: obligation.source_agent_id,
+        target_agent_id: obligation.target_agent_id,
+        target_role: obligation.target_role,
+        command: typeof consumptionRule.review_command === 'string'
+          ? consumptionRule.review_command
+          : obligation.task_number === null
+            ? null
+            : `narada task review ${obligation.task_number} --agent ${agentId} --verdict accepted`,
+      };
+    });
+}
+
+function parseJsonObject(value: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function reportIdFromSourceRef(sourceRef: string): string | null {
+  return sourceRef.startsWith('report:') ? sourceRef.slice('report:'.length) : null;
 }
 
 function workboardTaskFromRow(
@@ -216,6 +277,7 @@ function compactWorkboard(workboard: TaskWorkboard, includeGuidance: boolean, vi
     counts: {
       active_chapters: workboard.active_chapters.length,
       pending_reviews: workboard.pending_reviews.length,
+      my_review_obligations: workboard.my_review_obligations.length,
       in_progress: workboard.in_progress.length,
       local_followups: workboard.local_followups.length,
       deferred: workboard.deferred.length,
@@ -224,6 +286,7 @@ function compactWorkboard(workboard: TaskWorkboard, includeGuidance: boolean, vi
     },
     active_chapters: workboard.active_chapters,
     pending_reviews: workboard.pending_reviews,
+    my_review_obligations: workboard.my_review_obligations,
     in_progress: workboard.in_progress,
     local_followups: workboard.local_followups,
     deferred: workboard.deferred,
@@ -248,6 +311,7 @@ function highPriorityDiagnostics(workboard: TaskWorkboard): string[] {
     .map((task) => task.task_number);
   if (underspecified.length > 0) diagnostics.push(`underspecified_handoffs:${underspecified.join(',')}`);
   if (workboard.pending_reviews.length > 0) diagnostics.push(`pending_reviews:${workboard.pending_reviews.map((task) => task.task_number).join(',')}`);
+  if (workboard.my_review_obligations.length > 0) diagnostics.push(`my_review_obligations:${workboard.my_review_obligations.map((obligation) => obligation.task_number ?? obligation.obligation_id).join(',')}`);
   if (workboard.upstream_publications.length > 0) diagnostics.push(`prepared_publications:${workboard.upstream_publications.map((publication) => publication.publication_id).join(',')}`);
   return diagnostics;
 }
@@ -259,6 +323,7 @@ function renderHuman(workboard: TaskWorkboard | Record<string, unknown>): string
       'Current Workboard (compact)',
       `Generated: ${String(workboard.generated_at)}`,
       `Pending reviews: ${counts.pending_reviews ?? 0}`,
+      `My review obligations: ${counts.my_review_obligations ?? 0}`,
       `In progress: ${counts.in_progress ?? 0}`,
       `Deferred: ${counts.deferred ?? 0}`,
       `Local followups: ${counts.local_followups ?? 0}`,
@@ -272,6 +337,7 @@ function renderHuman(workboard: TaskWorkboard | Record<string, unknown>): string
     `Generated: ${full.generated_at}`,
     `Active chapters: ${full.active_chapters.length}`,
     `Pending reviews: ${full.pending_reviews.length}`,
+    `My review obligations: ${full.my_review_obligations.length}`,
     `In progress: ${full.in_progress.length}`,
     `Deferred: ${full.deferred.length}`,
     `Local followups: ${full.local_followups.length}`,
@@ -280,6 +346,9 @@ function renderHuman(workboard: TaskWorkboard | Record<string, unknown>): string
     '',
     'Pending Reviews:',
     ...renderTaskLines(full.pending_reviews),
+    '',
+    'My Review Obligations:',
+    ...renderReviewObligationLines(full.my_review_obligations),
     '',
     'In Progress:',
     ...renderTaskLines(full.in_progress),
@@ -291,6 +360,15 @@ function renderHuman(workboard: TaskWorkboard | Record<string, unknown>): string
     ...full.concurrency_boundaries.map((line) => `  - ${line}`),
   ];
   return lines;
+}
+
+function renderReviewObligationLines(obligations: WorkboardReviewObligation[]): string[] {
+  if (obligations.length === 0) return ['  none'];
+  return obligations.map((obligation) => {
+    const task = obligation.task_number === null ? 'unknown' : String(obligation.task_number);
+    const target = obligation.target_agent_id ?? obligation.target_role ?? 'unassigned';
+    return `  ${task} review_request ${target} - ${obligation.title ?? obligation.task_id ?? obligation.obligation_id}`;
+  });
 }
 
 function renderTaskLines(tasks: WorkboardTask[]): string[] {
