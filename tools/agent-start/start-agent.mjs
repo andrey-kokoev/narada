@@ -11,6 +11,7 @@ const require = createRequire(import.meta.url);
 const RESULT_SCHEMA = 'narada.agent_start.result.v0';
 const DEFAULT_PC_SITE_ROOT = process.env.NARADA_PC_SITE_ROOT ?? 'C:/ProgramData/Narada/sites/pc/desktop-sunroom-2';
 const ADMITTED_AGENTS = new Set(['narada.architect', 'narada.builder']);
+const ADMITTED_RUNTIMES = new Set(['codex', 'claude-code', 'narada-native']);
 const NARADA_PROPER_MCP_SERVER_NAME = 'narada-proper';
 const NARADA_PROPER_APPROVED_MCP_SERVERS = [
   {
@@ -412,6 +413,41 @@ function codexArgs({ siteRoot, startupEvidence, enableNativeShell = false }) {
   return args;
 }
 
+function claudeCodeArgs() {
+  return [];
+}
+
+function naradaNativeArgs() {
+  return [];
+}
+
+function runtimeArgsFor({ runtime, siteRoot, startupEvidence, enableNativeShell = false }) {
+  if (runtime === 'codex') {
+    return codexArgs({ siteRoot, startupEvidence, enableNativeShell });
+  }
+  if (runtime === 'claude-code') {
+    return claudeCodeArgs();
+  }
+  if (runtime === 'narada-native') {
+    return naradaNativeArgs();
+  }
+  throw new Error(`runtime_not_admitted:${runtime}`);
+}
+
+function runtimeCommand(runtime) {
+  if (runtime === 'codex') return 'codex';
+  if (runtime === 'claude-code') return 'claude';
+  if (runtime === 'narada-native') return 'narada-native-carrier';
+  throw new Error(`runtime_not_admitted:${runtime}`);
+}
+
+function runtimeKind(runtime) {
+  if (runtime === 'codex') return 'codex_carrier';
+  if (runtime === 'claude-code') return 'claude_code_carrier';
+  if (runtime === 'narada-native') return 'narada_native_carrier';
+  throw new Error(`runtime_not_admitted:${runtime}`);
+}
+
 function nativeShellExceptionStatus({ enableNativeShell = false, identity, siteRoot }) {
   if (!enableNativeShell) {
     return {
@@ -435,6 +471,57 @@ function nativeShellExceptionStatus({ enableNativeShell = false, identity, siteR
   };
 }
 
+function nativeExecutionPolicy({ runtime, enableNativeShell = false, identity, siteRoot }) {
+  if (runtime === 'codex') {
+    return {
+      native_shell: nativeShellExceptionStatus({ enableNativeShell, identity, siteRoot }),
+      native_scripts: {
+        status: enableNativeShell ? 'not_separately_admitted' : 'disabled',
+        reason: 'Native script execution is not granted by carrier launch alone.',
+      },
+      policy_aware_shell_mcp: {
+        status: 'withheld',
+        reason: 'Narada policy-aware shell MCP is a separate capability and is not mounted by this carrier launch.',
+      },
+    };
+  }
+  if (runtime === 'claude-code') {
+    return {
+      native_shell: {
+        status: 'not_admitted_for_runtime_slice',
+        runtime,
+        reason: 'This first Claude Code carrier slice represents the Carrier Session and startup context without granting Claude Code native shell/tool execution.',
+      },
+      native_scripts: {
+        status: 'not_admitted_for_runtime_slice',
+        reason: 'No Claude Code native script execution policy is admitted in this slice.',
+      },
+      policy_aware_shell_mcp: {
+        status: 'withheld',
+        reason: 'Narada policy-aware shell MCP remains a separate capability and is not mounted by this carrier launch.',
+      },
+    };
+  }
+  if (runtime === 'narada-native') {
+    return {
+      native_shell: {
+        status: 'not_admitted_for_runtime_slice',
+        runtime,
+        reason: 'The first Narada-native carrier slice plans Narada-owned session lifecycle and policy mediation without granting native shell execution.',
+      },
+      native_scripts: {
+        status: 'not_admitted_for_runtime_slice',
+        reason: 'Narada-native script/process execution requires a separate admitted execution carrier and command policy.',
+      },
+      policy_aware_shell_mcp: {
+        status: 'withheld',
+        reason: 'Policy-aware shell MCP remains a separate capability; the native carrier does not gain it by existing.',
+      },
+    };
+  }
+  throw new Error(`runtime_not_admitted:${runtime}`);
+}
+
 function startupSequence() {
   return [
     {
@@ -453,6 +540,34 @@ function startupCommand() {
   };
 }
 
+function mcpToolApprovalNote(runtime, enableNativeShell) {
+  if (runtime === 'codex') {
+    return enableNativeShell
+      ? 'Approves only the Narada proper target-local MCP server bound to this launch site root. Native Codex shell_tool was explicitly left enabled by break-glass launcher flag. narada-andrey User Site MCP servers are not approved for this Narada proper carrier.'
+      : 'Approves only the Narada proper target-local MCP server bound to this launch site root. Native Codex shell_tool remains disabled. narada-andrey User Site MCP servers are not approved for this Narada proper carrier.';
+  }
+  if (runtime === 'claude-code') {
+    return 'Approves only the Narada proper target-local MCP server bound to this launch site root for startup/context hydration. Claude Code native execution and tool permissions are not admitted by this first carrier representation slice. narada-andrey User Site MCP servers are not approved for this Narada proper carrier.';
+  }
+  if (runtime === 'narada-native') {
+    return 'Approves only the Narada proper target-local MCP server bound to this launch site root for startup/context hydration. Narada-native effect execution, shell, inbox, outbox, task lifecycle mutation, and publication authority remain withheld unless separately admitted.';
+  }
+  throw new Error(`runtime_not_admitted:${runtime}`);
+}
+
+function nativeCarrierLifecyclePlan() {
+  return {
+    schema: 'narada.agent_start.narada_native_carrier.lifecycle_plan.v0',
+    minimum_vertical: [
+      { phase: 'start', status: 'planned', evidence: 'agent_start_event_id' },
+      { phase: 'hydrate', status: 'planned', affordance: startupCommand() },
+      { phase: 'project_capabilities', status: 'planned', posture: 'facade_only' },
+      { phase: 'record_evidence', status: 'planned', evidence: 'launch_result_packet' },
+      { phase: 'close', status: 'planned', posture: 'closeout_evidence_required_before_terminal_claim' },
+    ],
+  };
+}
+
 function buildLaunchPlanFromArgs(args, options = {}) {
   const identity = args.identity;
   const runtime = args.runtime ?? 'codex';
@@ -461,7 +576,9 @@ function buildLaunchPlanFromArgs(args, options = {}) {
   const enableNativeShell = args.enable_native_shell === true;
   if (!identity) throw new Error('identity_required');
   if (!ADMITTED_AGENTS.has(identity)) throw new Error(`agent_not_admitted:${identity}`);
-  if (runtime !== 'codex') throw new Error(`runtime_not_admitted:${runtime}`);
+  if (!ADMITTED_RUNTIMES.has(runtime)) throw new Error(`runtime_not_admitted:${runtime}`);
+  if (runtime === 'claude-code' && exec) throw new Error('runtime_exec_not_admitted:claude-code');
+  if (runtime === 'narada-native' && exec) throw new Error('runtime_exec_not_admitted:narada-native');
 
   const siteRoot = options.siteRoot ?? defaultRootDir;
   const pcSiteRoot = options.pcSiteRoot ?? DEFAULT_PC_SITE_ROOT;
@@ -478,8 +595,10 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     carrierSessionId: session.carrier_session_id,
     agentContextDb: dbPath,
   };
-  const runtimeArgs = codexArgs({ siteRoot, startupEvidence, enableNativeShell });
-  const codexConfig = dryRun ? codexConfigPath(siteRoot, identity) : writeCodexHomeConfig(siteRoot, identity, startupEvidence);
+  const runtimeArgs = runtimeArgsFor({ runtime, siteRoot, startupEvidence, enableNativeShell });
+  const codexConfig = runtime === 'codex'
+    ? (dryRun ? codexConfigPath(siteRoot, identity) : writeCodexHomeConfig(siteRoot, identity, startupEvidence))
+    : null;
   const plannedEnvironment = {
     NARADA_AGENT_ID: identity,
     NARADA_AGENT_START_EVENT_ID: event.event_id,
@@ -487,7 +606,7 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     NARADA_SITE_ROOT: siteRoot,
     NARADA_AGENT_CONTEXT_DB: dbPath,
     NARADA_PC_SITE_ROOT: pcSiteRoot,
-    CODEX_HOME: codexHomePath(siteRoot, identity),
+    ...(runtime === 'codex' ? { CODEX_HOME: codexHomePath(siteRoot, identity) } : {}),
   };
   const launchEnvironment = dryRun ? null : plannedEnvironment;
   const result = {
@@ -504,6 +623,8 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     carrier_session_authoritative: !dryRun,
     exec,
     dry_run: dryRun,
+    result_sentinel: `agent_start_result_end: ${event.event_id}`,
+    runtime_kind: runtimeKind(runtime),
     runtime_args: runtimeArgs,
     mcp_runtime: {
       schema: 'narada.agent_start.mcp_runtime.v0',
@@ -517,15 +638,63 @@ function buildLaunchPlanFromArgs(args, options = {}) {
       depends_on_cli_dist: false,
       source_site_runtime_imported: false,
     },
-    codex_config_path: codexConfig,
-    exec_command: exec ? ['codex', ...runtimeArgs].join(' ') : null,
-    native_shell_exception: nativeShellExceptionStatus({ enableNativeShell, identity, siteRoot }),
+    codex_config_path: runtime === 'codex' ? codexConfig : null,
+    claude_code_launch: runtime === 'claude-code'
+      ? {
+          schema: 'narada.agent_start.claude_code_carrier.v0',
+          status: 'represented_not_executed',
+          command: runtimeCommand(runtime),
+          carrier_relation: 'wraps_claude_code_cli',
+          startup_hydration: startupCommand(),
+          execution_admitted: false,
+          execution_blocker: 'runtime_exec_not_admitted:claude-code',
+      }
+      : null,
+    narada_native_launch: runtime === 'narada-native'
+      ? {
+          schema: 'narada.agent_start.narada_native_carrier.v0',
+          status: 'planned_not_executed',
+          command: runtimeCommand(runtime),
+          carrier_relation: 'narada_owned_harness_with_pluggable_model_or_executor_adapters',
+          session_identity_model: {
+            agent_id: identity,
+            carrier_session_id: session.carrier_session_id,
+            agent_start_event_id: event.event_id,
+            identity_mutable_after_start: false,
+          },
+          startup_hydration: startupCommand(),
+          capability_posture: {
+            status: 'facade_only',
+            approved_mcp_servers: NARADA_PROPER_APPROVED_MCP_SERVERS.map((server) => server.name),
+            withheld_capabilities: [
+              'task_lifecycle_mutation_authority',
+              'inbox_admission_authority',
+              'outbox_transport_authority',
+              'repository_publication_authority',
+              'native_shell_execution',
+              'credential_access',
+            ],
+          },
+          readiness: {
+            status: 'ready_for_planned_carrier_session',
+            runtime_execution_attempted: false,
+            direct_sqlite_inspection_required: false,
+            readback_surface: 'agent-start dry-run result packet',
+          },
+          lifecycle_plan: nativeCarrierLifecyclePlan(),
+          execution_admitted: false,
+          execution_blocker: 'runtime_exec_not_admitted:narada-native',
+        }
+      : null,
+    exec_command: exec ? [runtimeCommand(runtime), ...runtimeArgs].join(' ') : null,
+    native_shell_exception: runtime === 'codex'
+      ? nativeShellExceptionStatus({ enableNativeShell, identity, siteRoot })
+      : nativeExecutionPolicy({ runtime, enableNativeShell, identity, siteRoot }).native_shell,
+    native_execution_policy: nativeExecutionPolicy({ runtime, enableNativeShell, identity, siteRoot }),
     mcp_tool_approval: mcpToolApprovalPacket({
       approved: NARADA_PROPER_APPROVED_MCP_SERVERS,
       withheld: NARADA_PROPER_WITHHELD_MCP_SERVERS,
-      note: enableNativeShell
-        ? 'Approves only the Narada proper target-local MCP server bound to this launch site root. Native Codex shell_tool was explicitly left enabled by break-glass launcher flag. narada-andrey User Site MCP servers are not approved for this Narada proper carrier.'
-        : 'Approves only the Narada proper target-local MCP server bound to this launch site root. Native Codex shell_tool remains disabled. narada-andrey User Site MCP servers are not approved for this Narada proper carrier.',
+      note: mcpToolApprovalNote(runtime, enableNativeShell),
     }),
     planned_environment: plannedEnvironment,
     launch_environment: launchEnvironment,
@@ -552,6 +721,10 @@ function buildLaunchPlanFromArgs(args, options = {}) {
       mechanism: 'explicit_narada_proper_mcp_arguments_with_carrier_environment_fallback',
     },
     not_claimed: [
+      'task_activation_authority',
+      'inbox_authority',
+      'outbox_authority',
+      'repository_publication_authority',
       'exact Codex resume binding',
       'operator-surface runtime binding',
       'operator-surface runtime copying',
@@ -600,7 +773,7 @@ async function main(argv = process.argv.slice(2)) {
   if (!result.exec || result.dry_run) return;
   await delay(750);
 
-  const child = spawn('codex', runtimeArgs, {
+  const child = spawn(runtimeCommand(result.runtime), runtimeArgs, {
     stdio: 'inherit',
     cwd: defaultRootDir,
     shell: process.platform === 'win32',

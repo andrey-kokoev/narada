@@ -1,0 +1,25 @@
+{
+  "schema": "https://narada.dev/schemas/audit-note/v1",
+  "task_number": 1274,
+  "created_at": "2026-05-15T15:25:00.000Z",
+  "created_by": "narada.architect",
+  "target_locus": "Narada proper",
+  "summary": "Retargeted the task 1274 review request from a concrete operator identity to an unbound builder-role obligation.",
+  "reason": "Task reports must not encode operator or concrete reviewer identity by default when the governed review duty is role-targeted builder review.",
+  "before": {
+    "target_agent_id": "operator",
+    "target_role": "reviewer",
+    "target_ref": "operator"
+  },
+  "after": {
+    "target_agent_id": null,
+    "target_role": "builder",
+    "target_ref": null
+  },
+  "evidence": {
+    "report_id": "wrr_f7227416_20260515-1274-recurring-capa-make-assignment-of-non-registered-agents-to-t_narada.architect",
+    "previous_obligation_id": "obl_review_20260515-1274-recurring-capa-make-assignment-of-non-registered-agents-to-t_wrr_f7227416_20260515-1274-recurring-capa-make-assignment-of-non-registered-agents-to-t_narada.architect_operator",
+    "obligation_id": "obl_review_20260515-1274-recurring-capa-make-assignment-of-non-registered-agents-to-t_wrr_f7227416_20260515-1274-recurring-capa-make-assignment-of-non-registered-agents-to-t_narada.architect_role_builder",
+    "structural_invariant": "Pure role target is represented as target_agent_id=null, target_role=builder, target_ref=null."
+  }
+}

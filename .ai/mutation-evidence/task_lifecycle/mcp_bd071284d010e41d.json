@@ -1,0 +1,22 @@
+{
+  "schema": "narada.site_task_lifecycle.mcp_mutation_evidence.v0",
+  "command": "site_task_lifecycle.admit_task",
+  "authority_class": "mcp_adapter_bound_task_lifecycle_mutation",
+  "packageExecutedSqliteMutation": false,
+  "sourceStateImported": false,
+  "taskId": "20260515-capa-nonregistered-agent-assignment-validation",
+  "siteId": "narada-proper",
+  "sourceRef": "inbox:env_d60d85cc-ce6f-44ad-bb3d-b1b1ac480040",
+  "eventId": "mcp-task-admission-ea3f10385dfa7b11",
+  "dbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+  "recordedAt": "2026-05-15T13:18:35.628Z",
+  "admittedBy": "Andrey",
+  "readback": [
+    {
+      "task_id": "20260515-capa-nonregistered-agent-assignment-validation",
+      "status": "admitted",
+      "source_site": "narada-proper",
+      "source_ref": "inbox:env_d60d85cc-ce6f-44ad-bb3d-b1b1ac480040"
+    }
+  ]
+}

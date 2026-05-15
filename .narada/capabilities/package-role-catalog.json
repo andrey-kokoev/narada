@@ -99,6 +99,12 @@
       "posture": "test_contract_no_source_result_import"
     },
     {
+      "package": "@narada2/narada-proper-mcp",
+      "path": "packages/narada-proper-mcp",
+      "roles": ["mcp_boundary", "runtime_authority"],
+      "posture": "target_local_agent_facing_mcp_surface"
+    },
+    {
       "package": "@narada2/ops-kit",
       "path": "packages/ops-kit",
       "roles": ["ops_fixture", "domain_model"],

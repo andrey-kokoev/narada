@@ -111,6 +111,7 @@ describe('narada proper MCP surface', () => {
     const list = JSON.parse(output.lines[0]);
     expect(list.result.tools.map((tool: { name: string }) => tool.name)).toContain('agent_context_hydrate_current');
     expect(list.result.tools.map((tool: { name: string }) => tool.name)).toContain('site_task_lifecycle.read_task');
+    expect(list.result.tools.map((tool: { name: string }) => tool.name)).toContain('site_task_lifecycle.materialize_task');
     const admitTaskTool = list.result.tools.find((tool: { name: string }) => tool.name === 'site_task_lifecycle.admit_task');
     expect(admitTaskTool.description).toContain('inert local task-admission row');
     expect(admitTaskTool.description).toContain('does not materialize a canonical governed task');

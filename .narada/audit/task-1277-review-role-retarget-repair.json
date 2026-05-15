@@ -1,0 +1,23 @@
+{
+  "schema": "https://narada.dev/schemas/audit-note/v1",
+  "task_number": 1277,
+  "created_at": "2026-05-15T15:49:45.000Z",
+  "created_by": "narada.architect",
+  "target_locus": "Narada proper",
+  "summary": "Retargeted the task 1277 generated review obligation from concrete operator identity to unbound builder-role review.",
+  "before": {
+    "target_agent_id": "operator",
+    "target_role": "reviewer",
+    "target_ref": "operator"
+  },
+  "after": {
+    "target_agent_id": null,
+    "target_role": "builder",
+    "target_ref": null
+  },
+  "evidence": {
+    "report_id": "wrr_a7f65da9_20260515-1277-review-narada-proper-mcp-surface-rebuild_narada.architect",
+    "obligation_id": "obl_review_20260515-1277-review-narada-proper-mcp-surface-rebuild_wrr_a7f65da9_20260515-1277-review-narada-proper-mcp-surface-rebuild_narada.architect_role_builder",
+    "structural_invariant": "Pure role target is represented as target_agent_id=null, target_role=builder, target_ref=null."
+  }
+}

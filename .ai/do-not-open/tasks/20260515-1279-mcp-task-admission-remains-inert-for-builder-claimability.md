@@ -1,5 +1,10 @@
 ---
 status: in_review
+criteria_proved_by: narada.builder
+criteria_proved_at: 2026-05-15T16:12:22.501Z
+criteria_proof_verification:
+  state: unbound
+  rationale: proof via task finish
 ---
 
 # MCP task admission remains inert for Builder claimability

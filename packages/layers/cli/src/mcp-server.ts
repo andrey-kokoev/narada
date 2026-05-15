@@ -7,7 +7,7 @@ import {
   buildHydrationRequestDescriptor,
   findDeniedSourceImports,
 } from '@narada2/agent-context-memory';
-import { cwd as processCwd, stdin as defaultStdin, stdout as defaultStdout } from 'node:process';
+import { cwd as processCwd, env as processEnv, stdin as defaultStdin, stdout as defaultStdout } from 'node:process';
 import {
   inboxDoctorCommand,
   inboxListCommand,
@@ -73,6 +73,11 @@ export interface McpServerOptions {
   siteRoot?: string;
   siteId?: string;
   siteKind?: string;
+  agentId?: string;
+  agentRole?: string;
+  agentStartEventId?: string;
+  carrierSessionId?: string;
+  agentContextDb?: string;
 }
 
 export interface McpSiteContext {
@@ -82,6 +87,7 @@ export interface McpSiteContext {
   workspace_root?: string;
   authority_locus: string;
   source: 'config' | 'options' | 'cwd';
+  startup_evidence?: { agent_id?: string; role?: string; start_event_id?: string; carrier_session_id?: string; agent_context_db?: string };
 }
 
 const PROTOCOL_VERSION = '2024-11-05';
@@ -92,6 +98,13 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
   {
     name: 'narada_site_context',
     description: 'Inspect the Site context that scopes this MCP facade.',
+    inputSchema: objectSchema({
+      target: targetSchema(),
+    }),
+  },
+  {
+    name: 'agent_context_hydrate_current',
+    description: 'Hydrate the current agent session from launcher-provided Narada environment evidence without mutating.',
     inputSchema: objectSchema({
       target: targetSchema(),
     }),
@@ -350,6 +363,8 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
         authority_posture: 'facade_only',
         traversal,
       });
+    case 'agent_context_hydrate_current':
+      return jsonToolResult(attachTraversal(buildAgentContextHydrateCurrent(traversal.target_site, siteContext), traversal));
     case 'narada_mcp_fabric_context':
       return jsonToolResult({
         status: 'success',
@@ -487,6 +502,39 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
     default:
       throw new Error(`Unknown Narada MCP tool: ${name}`);
   }
+}
+
+function buildAgentContextHydrateCurrent(siteContext: McpSiteContext, sourceContext: McpSiteContext): Record<string, unknown> {
+  const startup = startupEvidence(sourceContext);
+  const agentId = startup.agent_id;
+  return {
+    status: agentId ? 'success' : 'error',
+    schema: 'narada.agent_context.current_hydration_result.v0',
+    agent_id: agentId,
+    role: startup.role,
+    start_event_id: startup.start_event_id,
+    carrier_session_id: startup.carrier_session_id,
+    site: siteContext,
+    agent_context_db: startup.agent_context_db,
+    authority_posture: 'facade_only',
+    mutation_attempted: false,
+    runtime_hydration_attempted: false,
+    source: startup.source,
+    ...(agentId ? {} : { error: 'missing_NARADA_AGENT_ID' }),
+  };
+}
+
+function startupEvidence(siteContext: McpSiteContext): { agent_id: string | null; role: string | null; start_event_id: string | null; carrier_session_id: string | null; agent_context_db: string | null; source: string } {
+  const explicit = asRecord((siteContext as unknown as Record<string, unknown>).startup_evidence);
+  const agentId = stringField(explicit, 'agent_id') ?? processEnv.NARADA_AGENT_ID ?? null;
+  return {
+    agent_id: agentId,
+    role: stringField(explicit, 'role') ?? processEnv.NARADA_AGENT_ROLE ?? null,
+    start_event_id: stringField(explicit, 'start_event_id') ?? processEnv.NARADA_AGENT_START_EVENT_ID ?? null,
+    carrier_session_id: stringField(explicit, 'carrier_session_id') ?? processEnv.NARADA_CARRIER_SESSION_ID ?? null,
+    agent_context_db: stringField(explicit, 'agent_context_db') ?? processEnv.NARADA_AGENT_CONTEXT_DB ?? null,
+    source: Object.keys(explicit).length > 0 ? 'launcher_arguments' : 'launcher_environment',
+  };
 }
 
 interface WslWindowsEeMcpConfig {
@@ -648,7 +696,7 @@ function parseTarget(args: Record<string, unknown>): McpTarget | null {
   return { kind: 'site', ...(ref ? { ref } : {}), ...(siteRoot ? { site_root: siteRoot } : {}) };
 }
 
-export function resolveMcpSiteContext(options: Pick<McpServerOptions, 'cwd' | 'siteRoot' | 'siteId' | 'siteKind'> = {}): McpSiteContext {
+export function resolveMcpSiteContext(options: Pick<McpServerOptions, 'cwd' | 'siteRoot' | 'siteId' | 'siteKind' | 'agentId' | 'agentRole' | 'agentStartEventId' | 'carrierSessionId' | 'agentContextDb'> = {}): McpSiteContext {
   const root = resolve(options.siteRoot ?? options.cwd ?? processCwd());
   const configPath = resolve(root, 'config.json');
   const config = readJsonObject(configPath);
@@ -660,7 +708,7 @@ export function resolveMcpSiteContext(options: Pick<McpServerOptions, 'cwd' | 's
   const authorityLocus = stringField(locus, 'authority_locus') ?? siteKind;
   const workspaceRoot = stringField(config ?? {}, 'workspace_root');
 
-  return {
+  const context: McpSiteContext = {
     site_id: siteId,
     site_kind: siteKind,
     site_root: siteRoot,
@@ -668,6 +716,19 @@ export function resolveMcpSiteContext(options: Pick<McpServerOptions, 'cwd' | 's
     authority_locus: authorityLocus,
     source: config ? 'config' : (options.siteId || options.siteKind || options.siteRoot ? 'options' : 'cwd'),
   };
+  if (options.agentId || options.agentRole || options.agentStartEventId || options.carrierSessionId || options.agentContextDb) {
+    Object.defineProperty(context, 'startup_evidence', {
+      enumerable: false,
+      value: {
+        agent_id: options.agentId,
+        role: options.agentRole,
+        start_event_id: options.agentStartEventId,
+        carrier_session_id: options.carrierSessionId,
+        agent_context_db: options.agentContextDb,
+      },
+    });
+  }
+  return context;
 }
 
 function jsonToolResult(value: unknown, isError = false): McpToolResult {

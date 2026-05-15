@@ -303,7 +303,7 @@ export interface DirectedObligationRow {
   source_agent_id: string | null;
   target_agent_id: string | null;
   target_role: string | null;
-  target_ref: string;
+  target_ref: string | null;
   kind: DirectedObligationKind;
   status: DirectedObligationStatus;
   task_id: string | null;
@@ -682,7 +682,7 @@ function rowToDirectedObligation(row: Record<string, unknown>): DirectedObligati
     source_agent_id: row.source_agent_id ? String(row.source_agent_id) : null,
     target_agent_id: row.target_agent_id ? String(row.target_agent_id) : null,
     target_role: row.target_role ? String(row.target_role) : null,
-    target_ref: String(row.target_ref),
+    target_ref: row.target_ref ? String(row.target_ref) : null,
     kind: String(row.kind) as DirectedObligationKind,
     status: String(row.status) as DirectedObligationStatus,
     task_id: row.task_id ? String(row.task_id) : null,
@@ -697,6 +697,95 @@ function rowToDirectedObligation(row: Record<string, unknown>): DirectedObligati
     consumed_by: row.consumed_by ? String(row.consumed_by) : null,
     consumption_ref: row.consumption_ref ? String(row.consumption_ref) : null,
   };
+}
+
+function normalizeDirectedObligation(entry: DirectedObligationRow): DirectedObligationRow {
+  const duplicateRoleRef = entry.target_role ? `role:${entry.target_role}` : null;
+  if (entry.target_agent_id === null && duplicateRoleRef && entry.target_ref === duplicateRoleRef) {
+    return { ...entry, target_ref: null };
+  }
+  return entry;
+}
+
+function ensureDirectedObligationTargetRefShape(db: Db): void {
+  const table = db
+    .prepare("select sql from sqlite_master where type = 'table' and name = 'directed_obligations'")
+    .get() as { sql?: string } | undefined;
+  const columns = db
+    .prepare('pragma table_info(directed_obligations)')
+    .all() as Array<{ name?: string; notnull?: number }>;
+  const targetRef = columns.find((column) => column.name === 'target_ref');
+  const current = targetRef && targetRef.notnull !== 1 && table?.sql?.includes('directed_obligations_no_role_ref_dup');
+  if (current) {
+    db.prepare(`
+      update directed_obligations
+      set target_ref = null
+      where target_agent_id is null
+        and target_role is not null
+        and target_ref = ('role:' || target_role)
+    `).run();
+    return;
+  }
+
+  db.exec(`
+    begin;
+
+    create table directed_obligations_next (
+      obligation_id text primary key,
+      source_kind text not null,
+      source_ref text not null,
+      source_agent_id text,
+      target_agent_id text,
+      target_role text,
+      target_ref text,
+      kind text not null,
+      status text not null,
+      task_id text,
+      task_number integer,
+      evidence_json text not null,
+      consumption_rule_json text not null,
+      created_at text not null,
+      updated_at text not null,
+      consumed_at text,
+      consumed_by text,
+      consumption_ref text,
+      constraint directed_obligations_no_role_ref_dup
+        check (target_role is null or target_ref is null or target_ref <> ('role:' || target_role)),
+      foreign key (task_id) references task_lifecycle(task_id)
+    );
+
+    insert into directed_obligations_next (
+      obligation_id, source_kind, source_ref, source_agent_id,
+      target_agent_id, target_role, target_ref, kind, status, task_id,
+      task_number, evidence_json, consumption_rule_json, created_at,
+      updated_at, consumed_at, consumed_by, consumption_ref
+    )
+    select
+      obligation_id, source_kind, source_ref, source_agent_id,
+      target_agent_id, target_role,
+      case
+        when target_agent_id is null
+          and target_role is not null
+          and target_ref = ('role:' || target_role)
+        then null
+        else target_ref
+      end,
+      kind, status, task_id, task_number, evidence_json,
+      consumption_rule_json, created_at, updated_at, consumed_at,
+      consumed_by, consumption_ref
+    from directed_obligations;
+
+    drop table directed_obligations;
+    alter table directed_obligations_next rename to directed_obligations;
+
+    create index if not exists idx_directed_obligations_target
+      on directed_obligations(target_agent_id, target_role, status, created_at);
+
+    create index if not exists idx_directed_obligations_task
+      on directed_obligations(task_id, status);
+
+    commit;
+  `);
 }
 
 function rowToCriteriaProof(row: Record<string, unknown>): CriteriaProofRow {
@@ -756,7 +845,16 @@ function hasCurrentLifecycleSchema(db: Db): boolean {
   const lifecycleColumns = db
     .prepare('pragma table_info(task_lifecycle)')
     .all() as Array<{ name?: string }>;
-  return lifecycleColumns.some((column) => column.name === 'closure_mode');
+  if (!lifecycleColumns.some((column) => column.name === 'closure_mode')) return false;
+  const directedColumns = db
+    .prepare('pragma table_info(directed_obligations)')
+    .all() as Array<{ name?: string; notnull?: number }>;
+  const targetRef = directedColumns.find((column) => column.name === 'target_ref');
+  if (!targetRef || targetRef.notnull === 1) return false;
+  const directedSql = db
+    .prepare("select sql from sqlite_master where type = 'table' and name = 'directed_obligations'")
+    .get() as { sql?: string } | undefined;
+  return Boolean(directedSql?.sql?.includes('directed_obligations_no_role_ref_dup'));
 }
 
 export function openTaskLifecycleStore(cwd: string): SqliteTaskLifecycleStore {
@@ -1184,7 +1282,7 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
         source_agent_id text,
         target_agent_id text,
         target_role text,
-        target_ref text not null,
+        target_ref text,
         kind text not null,
         status text not null,
         task_id text,
@@ -1196,6 +1294,8 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
         consumed_at text,
         consumed_by text,
         consumption_ref text,
+        constraint directed_obligations_no_role_ref_dup
+          check (target_role is null or target_ref is null or target_ref <> ('role:' || target_role)),
         foreign key (task_id) references task_lifecycle(task_id)
       );
 
@@ -1253,6 +1353,7 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
     if (!lifecycleColumns.some((column) => column.name === 'closure_mode')) {
       this.db.exec('alter table task_lifecycle add column closure_mode text;');
     }
+    ensureDirectedObligationTargetRefShape(this.db);
   }
 
   upsertLifecycle(row: TaskLifecycleRow): void {
@@ -2383,6 +2484,7 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
   }
 
   upsertDirectedObligation(entry: DirectedObligationRow): void {
+    const normalized = normalizeDirectedObligation(entry);
     const stmt = this.db.prepare(`
       insert into directed_obligations (
         obligation_id, source_kind, source_ref, source_agent_id,
@@ -2409,24 +2511,24 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
         consumption_ref = excluded.consumption_ref
     `);
     stmt.run(
-      entry.obligation_id,
-      entry.source_kind,
-      entry.source_ref,
-      entry.source_agent_id,
-      entry.target_agent_id,
-      entry.target_role,
-      entry.target_ref,
-      entry.kind,
-      entry.status,
-      entry.task_id,
-      entry.task_number,
-      entry.evidence_json,
-      entry.consumption_rule_json,
-      entry.created_at,
-      entry.updated_at,
-      entry.consumed_at,
-      entry.consumed_by,
-      entry.consumption_ref,
+      normalized.obligation_id,
+      normalized.source_kind,
+      normalized.source_ref,
+      normalized.source_agent_id,
+      normalized.target_agent_id,
+      normalized.target_role,
+      normalized.target_ref,
+      normalized.kind,
+      normalized.status,
+      normalized.task_id,
+      normalized.task_number,
+      normalized.evidence_json,
+      normalized.consumption_rule_json,
+      normalized.created_at,
+      normalized.updated_at,
+      normalized.consumed_at,
+      normalized.consumed_by,
+      normalized.consumption_ref,
     );
   }
 

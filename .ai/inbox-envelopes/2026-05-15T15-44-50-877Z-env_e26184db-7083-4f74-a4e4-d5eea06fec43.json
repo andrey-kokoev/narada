@@ -1,0 +1,20 @@
+{
+  "envelope_id": "env_e26184db-7083-4f74-a4e4-d5eea06fec43",
+  "received_at": "2026-05-15T15:44:50.877Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "commit:2f6446b1"
+  },
+  "target_locus": "narada-proper",
+  "kind": "observation",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "operator"
+  },
+  "payload": {
+    "title": "Review",
+    "summary": "Operator",
+    "recommendation": "narada.architect"
+  },
+  "status": "received"
+}

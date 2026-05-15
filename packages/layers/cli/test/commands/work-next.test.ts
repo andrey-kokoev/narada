@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { inboxSubmitCommand } from '../../src/commands/inbox.js';
+import { lawChangeAddCommand } from '../../src/commands/law.js';
 import { workAvailableCommand, workNextCommand } from '../../src/commands/work-next.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
@@ -173,6 +174,36 @@ describe('work-next unified next action', () => {
       checked: [{ zone: 'task_work', status: 'blocked', reason: 'expired' }],
     });
     expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-test.md'), 'utf8')).toContain('status: opened');
+  });
+
+  it('does not turn unread law receipts into work admission blockers', async () => {
+    const added = await lawChangeAddCommand({
+      cwd: tempDir,
+      issuer: 'operator',
+      summary: 'Architect advisory law',
+      requiredRoles: 'architect',
+      changeId: 'law_work_next_advisory_fixture',
+      format: 'json',
+    });
+    expect(added.exitCode).toBe(ExitCode.SUCCESS);
+    const changePath = join(tempDir, '.ai', 'law', 'changes', 'law_work_next_advisory_fixture.json');
+    const change = JSON.parse(readFileSync(changePath, 'utf8')) as Record<string, unknown>;
+    change.issued_at = '2026-01-01T00:00:00.000Z';
+    writeFileSync(changePath, `${JSON.stringify(change, null, 2)}\n`);
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-101-law-advisory.md'),
+      '---\ntask_id: 101\nstatus: opened\n---\n\n# Task 101\n\n## Goal\nDo task work.\n\n## Acceptance Criteria\n- [ ] Do task work.\n',
+    );
+
+    const result = await workNextCommand({ agent: 'architect', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      action_kind: 'task_work',
+      primary: { task_number: 101 },
+    });
+    expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-101-law-advisory.md'), 'utf8')).toContain('status: claimed');
   });
 
   it('peeks current task before claimable future work', async () => {

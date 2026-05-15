@@ -1,0 +1,42 @@
+{
+  "schema": "narada.lifecycle_identity_repair.v0",
+  "repair_id": "repair_20260515_task_1268_1269_carrier_identity",
+  "recorded_at": "2026-05-15T14:34:00.000Z",
+  "target_locus": "narada-proper",
+  "target_root": "D:/code/narada",
+  "operator_request": "repair",
+  "problem": {
+    "kind": "carrier_identity_misattribution",
+    "actual_carrier_identity": "narada.architect",
+    "actual_agent_start_event_id": "agent_start_20260515_134718099_narada_architect",
+    "actual_carrier_session_id": "carrier_session_20260515_134718099_narada_architect",
+    "incorrect_identity_recorded": "narada.builder",
+    "affected_tasks": [
+      1268,
+      1269
+    ]
+  },
+  "repair_scope": {
+    "database": ".ai/task-lifecycle.db",
+    "tables": [
+      "task_assignments",
+      "assignment_intents",
+      "task_report_records",
+      "directed_obligations"
+    ],
+    "file_residue_removed": [
+      ".ai/law/receipts/narada.builder__law_2026-04-29T23-57-30-951Z_a5029d6a-88a7-4333-98f1-158c8cbb596d.json"
+    ],
+    "non_goals": [
+      "Do not self-accept review",
+      "Do not rewrite unrelated narada.builder historical records",
+      "Do not mutate PC-locus runtime state"
+    ]
+  },
+  "expected_after": {
+    "tasks_1268_1269_assignment_agent": "narada.architect",
+    "tasks_1268_1269_report_agent": "narada.architect",
+    "review_obligation_source_agent": "narada.architect",
+    "review_status": "still_pending_unrouted"
+  }
+}

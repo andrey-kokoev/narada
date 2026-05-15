@@ -19,10 +19,15 @@ config.json
 .ai/inbox.db-*
 .ai/task-lifecycle.db
 .ai/task-lifecycle.db-*
+.ai/state/
+.ai/tmp/
 .ai/runtime/
 .ai/mcp/
 .ai/operator-surface-send-queue/
 .crew/agent-shortcuts/
+.narada/crew/agent-start-events/
+.narada/crew/agent-start-results/
+.narada/crew/codex-home/
 packages/layers/cli/.ai/inbox.db
 packages/layers/cli/.ai/inbox.db-*
 packages/layers/cli/.ai/mutation-evidence/

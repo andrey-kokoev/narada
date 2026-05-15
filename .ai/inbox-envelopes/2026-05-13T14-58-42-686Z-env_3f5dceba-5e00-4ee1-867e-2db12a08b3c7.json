@@ -1,0 +1,34 @@
+{
+  "envelope_id": "env_3f5dceba-5e00-4ee1-867e-2db12a08b3c7",
+  "received_at": "2026-05-13T14:58:42.686Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "codex_session:operator_reported_recurring_capa_security_sensitive_confabulation_2026-05-13"
+  },
+  "target_locus": "local_site",
+  "kind": "incident",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada.architect"
+  },
+  "payload": {
+    "title": "Recurring CAPA: Agent confabulates on security-sensitive matters",
+    "summary": "The agent introduced an unverified agent identity (`narada-andrey.Codex`) during a security/authority-sensitive startup and roster-binding flow. The identity was not observed in authoritative project state or supplied by the Operator; it was inferred from a tool-schema example and the carrier name.",
+    "recurrence_class": "Agent confabulates or invents authority-bearing/security-sensitive identifiers instead of using declared, observed, or Operator-supplied values.",
+    "severity": "high",
+    "security_authority_sensitivity": "High. Invented principals, identities, paths, credentials, capability holders, or roster entries can cause unauthorized access attempts, misleading audit records, failed admissions, or erosion of trust in authority boundaries.",
+    "incident_evidence": [
+      "Operator asked to run startup sequence.",
+      "Shell MCP rejected commands because the active verified identity was not authorized in the path policy/roster context.",
+      "Agent called agent_context_start_session with constructed identity `narada-andrey.Codex`.",
+      "Operator asked where `narada-andrey.Codex` was seen.",
+      "Agent acknowledged it had not seen the identity in the repo or roster and had constructed it from an apparent Site prefix plus carrier name."
+    ],
+    "root_cause": "The agent converted a schema example and contextual naming pattern into a concrete authority-bearing identity without evidence. It treated a plausible-looking identifier as usable in a security-sensitive admission/binding flow.",
+    "corrective_action": "Record the incident as a CAPA candidate and treat the constructed identity as invalid. Do not reuse invented identities. Use only verified principal values returned by the substrate, explicit Operator-provided identities, or roster entries read through authorized surfaces.",
+    "preventive_action": "For security-sensitive or authority-bearing values, require observed evidence before use. Do not synthesize principals, credentials, roster identities, site IDs, capability names, paths, or policy exceptions from examples or naming patterns. If the needed value is absent, stop and ask the Operator or use the substrate-provided verified principal if the task explicitly authorizes that path.",
+    "verification": "Future submissions in this thread used the verified principal `narada.architect` only after the inbox surface reported it and the Operator explicitly authorized that value. This CAPA is submitted without asserting that any invented identity is valid.",
+    "status": "submitted_for_admission"
+  },
+  "status": "received"
+}

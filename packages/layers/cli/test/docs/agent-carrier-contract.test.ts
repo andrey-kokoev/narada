@@ -23,13 +23,14 @@ describe('agent carrier concept and launch packet contract', () => {
     expect(doctrineIndex).toContain('agent-carrier.md');
   });
 
-  it('defines a carrier launch packet contract across Codex, Kimi, and Narada-native carriers', () => {
+  it('defines a carrier launch packet contract across Codex, Claude Code, Kimi, and Narada-native carriers', () => {
     const contract = JSON.parse(readFileSync(join(root, 'docs/product/agent-carrier-launch-packet.v0.json'), 'utf8'));
 
     expect(contract.schema).toBe('narada.agent_carrier.launch_packet_contract.v0');
     expect(contract.concept_ref).toBe('docs/concepts/agent-carrier.md');
     expect(contract.carrier_kinds.map((carrier: { kind: string }) => carrier.kind)).toEqual([
       'codex_carrier',
+      'claude_code_carrier',
       'kimi_carrier',
       'narada_native_carrier',
       'api_agent_carrier',

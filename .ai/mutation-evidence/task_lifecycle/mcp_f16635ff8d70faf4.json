@@ -1,0 +1,22 @@
+{
+  "schema": "narada.site_task_lifecycle.mcp_mutation_evidence.v0",
+  "command": "site_task_lifecycle.admit_task",
+  "authority_class": "mcp_adapter_bound_task_lifecycle_mutation",
+  "packageExecutedSqliteMutation": false,
+  "sourceStateImported": false,
+  "taskId": "20260515-001-agent-carrier-claude-code",
+  "siteId": "narada-proper",
+  "sourceRef": "user_chat:2026-05-15-add-claude-code-agent-carrier-chapter",
+  "eventId": "mcp-task-admission-d2bb10107e18dcbf",
+  "dbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+  "recordedAt": "2026-05-15T04:26:49.611Z",
+  "admittedBy": "narada.architect",
+  "readback": [
+    {
+      "task_id": "20260515-001-agent-carrier-claude-code",
+      "status": "admitted",
+      "source_site": "narada-proper",
+      "source_ref": "user_chat:2026-05-15-add-claude-code-agent-carrier-chapter"
+    }
+  ]
+}

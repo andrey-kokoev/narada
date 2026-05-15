@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import {
   buildCheckpointDescriptor,
@@ -19,6 +19,7 @@ import {
   taskPeekNextCommand,
   taskWorkNextCommand,
 } from './commands/task-next.js';
+import { runNaradaJson, type CommandEnvelope } from './commands/process.js';
 import { grantEffectiveStatus, readCapabilityRegistry } from './lib/capability-consent-registry.js';
 import { ExitCode } from './lib/exit-codes.js';
 import type { CommandSideEffectClass } from './lib/command-execution-intent.js';
@@ -138,6 +139,16 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
       evidence_refs: arrayStringSchema('Additional evidence refs.'),
       target: targetSchema(),
     }, ['task_id', 'title', 'source_ref']),
+  },
+  {
+    name: 'site_task_lifecycle.materialize_task',
+    description: 'Materialize one previously admitted inert task row into the governed Narada task lifecycle through the local task create surface; optionally claim it for an agent.',
+    inputSchema: objectSchema({
+      task_id: { type: 'string', description: 'Previously admitted local task id to materialize.' },
+      materialized_by: stringSchema('Principal materializing the candidate; defaults to mcp-client.'),
+      claim_for: stringSchema('Optional agent id to claim the materialized task after creation.'),
+      target: targetSchema(),
+    }, ['task_id']),
   },
   {
     name: 'site_task_lifecycle.read_task',
@@ -335,6 +346,7 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
     || (name === 'narada_inbox_work_next' && booleanField(args, 'claim') === true)
     || (name === 'narada_task_work_next' && booleanField(args, 'claim') === true)
     || name === 'site_task_lifecycle.admit_task'
+    || name === 'site_task_lifecycle.materialize_task'
     || name === 'agent_context_memory.record_checkpoint'
     || name === 'narada_ee_run';
   const traversal = await resolveMcpTraversal({
@@ -395,6 +407,14 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
         receivedAt: stringField(args, 'received_at') ?? new Date().toISOString(),
         admittedBy: stringField(args, 'admitted_by') ?? 'mcp-client',
         evidenceRefs: stringArrayField(args, 'evidence_refs') ?? [],
+      }), traversal));
+    case 'site_task_lifecycle.materialize_task':
+      return jsonToolResult(attachTraversal(materializeTaskLifecycleTask({
+        siteRoot: traversal.target_site.site_root,
+        siteId: traversal.target_site.site_id,
+        taskId: requiredString(args, 'task_id'),
+        materializedBy: stringField(args, 'materialized_by') ?? 'mcp-client',
+        claimFor: stringField(args, 'claim_for'),
       }), traversal));
     case 'site_task_lifecycle.read_task':
       return jsonToolResult(attachTraversal(readTaskLifecycleTask({
@@ -985,6 +1005,170 @@ function readTaskLifecycleTask(args: { siteRoot: string; taskId: string }): Reco
     mutationExecuted: false,
     sourceStateImported: false,
     packageExecutedSqliteMutation: false,
+  };
+}
+
+function materializeTaskLifecycleTask(args: {
+  siteRoot: string;
+  siteId: string;
+  taskId: string;
+  materializedBy: string;
+  claimFor?: string;
+}): Record<string, unknown> {
+  const paths = planSiteTaskLifecyclePathsForMcp(args.siteRoot);
+  if (!existsSync(paths.taskDbPath)) {
+    return {
+      status: 'not_found',
+      taskId: args.taskId,
+      taskDbPath: paths.taskDbPath,
+      mutationAttempted: true,
+      mutationExecuted: false,
+      sourceStateImported: false,
+      packageExecutedSqliteMutation: false,
+    };
+  }
+
+  const taskRows = sqliteJson(paths.taskDbPath, `SELECT task_id, title, source_site, source_ref, status, received_at, summary FROM task_records WHERE task_id = ${sqlLiteral(args.taskId)};`);
+  if (taskRows.length === 0) {
+    return {
+      status: 'not_found',
+      taskId: args.taskId,
+      taskDbPath: paths.taskDbPath,
+      mutationAttempted: true,
+      mutationExecuted: false,
+      sourceStateImported: false,
+      packageExecutedSqliteMutation: false,
+    };
+  }
+
+  const task = asRecord(taskRows[0]);
+  if (task.status === 'materialized') {
+    return {
+      status: 'already_materialized',
+      taskId: args.taskId,
+      taskDbPath: paths.taskDbPath,
+      mutationAttempted: true,
+      mutationExecuted: false,
+      sourceStateImported: false,
+      packageExecutedSqliteMutation: false,
+    };
+  }
+
+  const evidenceRefs = sqliteJson(paths.taskDbPath, `SELECT evidence_ref FROM task_evidence_refs WHERE task_id = ${sqlLiteral(args.taskId)} ORDER BY evidence_ref;`)
+    .map((row) => asRecord(row).evidence_ref)
+    .filter((ref): ref is string => typeof ref === 'string' && ref.trim().length > 0);
+  const title = typeof task.title === 'string' && task.title.trim().length > 0 ? task.title : args.taskId;
+  const summary = typeof task.summary === 'string' ? task.summary : '';
+  const sourceSite = typeof task.source_site === 'string' ? task.source_site : args.siteId;
+  const sourceRef = typeof task.source_ref === 'string' ? task.source_ref : args.taskId;
+  const receivedAt = typeof task.received_at === 'string' ? task.received_at : null;
+  const inputRelPath = `.ai/tmp/mcp-materialize-${createHash('sha256').update(args.taskId).digest('hex').slice(0, 16)}.json`;
+  const inputPath = resolve(args.siteRoot, inputRelPath);
+  mkdirSync(resolve(args.siteRoot, '.ai', 'tmp'), { recursive: true });
+  writeFileSync(inputPath, `${JSON.stringify({
+    title,
+    goal: title,
+    chapter: 'MCP Materialized Admissions',
+    context: [
+      `Materialized from MCP-admitted task candidate ${args.taskId}.`,
+      `Source Site: ${sourceSite}`,
+      `Source ref: ${sourceRef}`,
+      receivedAt ? `Received at: ${receivedAt}` : null,
+      summary ? `Summary:\n${summary}` : null,
+      evidenceRefs.length > 0 ? `Evidence refs:\n${evidenceRefs.map((ref) => `- ${ref}`).join('\n')}` : null,
+    ].filter(Boolean).join('\n\n'),
+    required_work: [
+      `1. Preserve MCP admission context from candidate ${args.taskId}.`,
+      '2. Execute the work described by the materialized title and summary under the governed Narada task lifecycle.',
+      '3. Verify the result with focused evidence appropriate to the changed surface.',
+      '4. Report residuals explicitly before closure.',
+    ].join('\n'),
+    acceptance_criteria: [
+      `MCP admission ${args.taskId} is represented as a governed Narada task.`,
+      'The materialized task is visible through canonical task lifecycle/work-next surfaces.',
+    ],
+  }, null, 2)}\n`, 'utf8');
+
+  let createEnvelope;
+  try {
+    createEnvelope = runNaradaJson(['task', 'create', '--input-json', inputRelPath], args.siteRoot);
+  } finally {
+    try {
+      unlinkSync(inputPath);
+    } catch {
+      // Best-effort cleanup; the governed task create result is the authority-bearing artifact.
+    }
+  }
+
+  if (createEnvelope.exitCode !== ExitCode.SUCCESS) {
+    return {
+      status: 'error',
+      error: 'task_create_failed',
+      taskId: args.taskId,
+      taskDbPath: paths.taskDbPath,
+      createResult: createEnvelope.result,
+      mutationAttempted: true,
+      mutationExecuted: false,
+      sourceStateImported: false,
+      packageExecutedSqliteMutation: false,
+    };
+  }
+
+  const createResult = asRecord(createEnvelope.result);
+  const materializedTaskNumber = typeof createResult.task_number === 'number' ? createResult.task_number : null;
+  let claimEnvelope: CommandEnvelope | null = null;
+  if (args.claimFor && materializedTaskNumber !== null) {
+    claimEnvelope = runNaradaJson(['task', 'claim', String(materializedTaskNumber), '--agent', args.claimFor], args.siteRoot);
+  }
+
+  const recordedAt = new Date().toISOString();
+  const eventId = `mcp-task-materialized-${createHash('sha256').update(`${args.taskId}\n${recordedAt}\n${args.materializedBy}`).digest('hex').slice(0, 16)}`;
+  sqlite(paths.taskDbPath, `UPDATE task_records SET status = 'materialized' WHERE task_id = ${sqlLiteral(args.taskId)};`);
+  sqlite(paths.taskDbPath, [
+    'INSERT OR IGNORE INTO task_admission_events (event_id, task_id, event_type, recorded_at, payload_json)',
+    `VALUES (${sqlLiteral(eventId)}, ${sqlLiteral(args.taskId)}, 'mcp_task_materialized', ${sqlLiteral(recordedAt)}, ${sqlLiteral(JSON.stringify({
+      materializedBy: args.materializedBy,
+      materializedTaskId: createResult.task_id ?? null,
+      materializedTaskNumber,
+      claimFor: args.claimFor ?? null,
+    }))});`,
+  ].join(' '));
+
+  const readback = sqliteJson(paths.taskDbPath, `SELECT task_id, status, source_site, source_ref FROM task_records WHERE task_id = ${sqlLiteral(args.taskId)};`);
+  const evidencePath = writeTaskLifecycleMutationEvidence(args.siteRoot, {
+    command: 'site_task_lifecycle.materialize_task',
+    taskId: args.taskId,
+    siteId: args.siteId,
+    sourceRef,
+    eventId,
+    dbPath: paths.taskDbPath,
+    recordedAt,
+    materializedBy: args.materializedBy,
+    materializedTaskId: createResult.task_id ?? null,
+    materializedTaskNumber,
+    claimFor: args.claimFor ?? null,
+    readback,
+  });
+
+  return {
+    status: claimEnvelope && claimEnvelope.exitCode !== ExitCode.SUCCESS ? 'materialized_claim_failed' : 'success',
+    schema: 'narada.site_task_lifecycle.mcp_materialize_task_result.v0',
+    taskId: args.taskId,
+    taskDbPath: paths.taskDbPath,
+    admissionPosture: 'materialized_through_governed_task_create',
+    canonicalTaskMaterialized: true,
+    workNextVisible: true,
+    workNextClaimable: !args.claimFor,
+    materializedTaskId: createResult.task_id ?? null,
+    materializedTaskNumber,
+    materializedTaskFile: createResult.file_path ?? null,
+    claimResult: claimEnvelope?.result ?? null,
+    mutationAttempted: true,
+    mutationExecuted: true,
+    sourceStateImported: false,
+    packageExecutedSqliteMutation: false,
+    readback,
+    mutationEvidencePath: evidencePath,
   };
 }
 

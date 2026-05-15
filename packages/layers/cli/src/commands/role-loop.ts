@@ -321,9 +321,8 @@ export async function roleLoopNextCommand(options: RoleLoopNextOptions): Promise
     absorb_command: `narada law ack ${change.change_id} --agent ${agent}${lawAdmission.role ? ` --role ${lawAdmission.role}` : ''} --status absorbed`,
     blocker_command: `narada law ack ${change.change_id} --agent ${agent}${lawAdmission.role ? ` --role ${lawAdmission.role}` : ''} --status blocked --questions-or-blockers <reason>`,
   }));
-  const lawBlocks = pendingLawNotices.length > 0;
   const dutyLoopState = deriveDutyLoopState({
-    lawBlocked: lawBlocks,
+    lawBlocked: false,
     next: compactNext,
     workboard: compactBoard,
     dirty,
@@ -340,7 +339,7 @@ export async function roleLoopNextCommand(options: RoleLoopNextOptions): Promise
       mode: 'peek_compact',
       duty_loop_state: dutyLoopState,
       duty_loop_transition_basis: {
-        law_blocked: lawBlocks,
+        law_blocked: false,
         qualification_state: compactNext.qualification_state,
         active_task: compactNext.task_number,
         pending_reviews_count: compactNext.pending_reviews_count,
@@ -352,10 +351,8 @@ export async function roleLoopNextCommand(options: RoleLoopNextOptions): Promise
       dirty_ownership: dirty,
       pending_law_notices: pendingLawNotices,
       qualification: compactNext.qualification,
-      recommended_action: lawBlocks ? 'law_receipt_required' : compactNext.action_kind ?? 'inspect',
-      recommended_command: lawBlocks
-        ? `narada law unread --agent ${agent}${lawAdmission.role ? ` --role ${lawAdmission.role}` : ''} --format json`
-        : compactNext.next_step ?? compactBoard.recommended_command ?? `narada work-next --agent ${agent} --peek --format json`,
+      recommended_action: compactNext.action_kind ?? 'inspect',
+      recommended_command: compactNext.next_step ?? compactBoard.recommended_command ?? `narada work-next --agent ${agent} --peek --format json`,
       role_loop_contract: 'Operator nudge `next` means inspect current role duties, continue claimed work first, surface blockers/reviews/inbox next, and avoid full payload echo by default.',
     },
   };

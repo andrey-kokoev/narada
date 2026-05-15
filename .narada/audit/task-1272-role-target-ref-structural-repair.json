@@ -1,0 +1,28 @@
+{
+  "schema": "https://narada.dev/schemas/audit-note/v1",
+  "task_number": 1272,
+  "created_at": "2026-05-15T15:02:00.000Z",
+  "created_by": "narada.architect",
+  "target_locus": "Narada proper",
+  "summary": "Made pure role-targeted directed obligations structurally non-duplicative.",
+  "invariant": {
+    "role_target": {
+      "target_agent_id": null,
+      "target_role": "<role>",
+      "target_ref": null
+    },
+    "forbidden_shape": {
+      "target_role": "<role>",
+      "target_ref": "role:<role>"
+    }
+  },
+  "evidence": {
+    "schema_constraint": "directed_obligations_no_role_ref_dup",
+    "live_obligation_probe": "Open review obligations for tasks 1267, 1268, 1269, 1270, and 1271 now show target_role=builder and target_ref=null.",
+    "work_next_probe": "narada work-next --agent narada.builder --peek --format json still selects the role-targeted directed obligation."
+  },
+  "changed_surfaces": [
+    "packages/task-governance/src/task-lifecycle-store.ts",
+    "packages/layers/cli/test/commands/task-report.test.ts"
+  ]
+}

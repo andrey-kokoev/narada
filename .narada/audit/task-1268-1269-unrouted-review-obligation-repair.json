@@ -1,0 +1,29 @@
+{
+  "schema": "narada.review_obligation_repair.v0",
+  "repair_id": "repair_20260515_task_1268_1269_unrouted_review_obligations",
+  "recorded_at": "2026-05-15T14:41:00.000Z",
+  "target_locus": "narada-proper",
+  "reason": "After task-report was changed to reject unrouted review obligations, the two legacy open obligations created before the change still had target_ref=unrouted.",
+  "affected_tasks": [
+    1268,
+    1269
+  ],
+  "repair": {
+    "from": {
+      "target_agent_id": null,
+      "target_role": null,
+      "target_ref": "unrouted"
+    },
+    "to": {
+      "target_agent_id": "operator",
+      "target_role": "reviewer",
+      "target_ref": "repair_routed:operator"
+    },
+    "reviewer_basis": "agent_roster contains operator role=reviewer capabilities=[review]"
+  },
+  "non_goals": [
+    "Do not self-review tasks 1268 or 1269",
+    "Do not close either task",
+    "Do not mutate unrelated review obligations"
+  ]
+}

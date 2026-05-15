@@ -1,5 +1,38 @@
 # Agent Carrier
 
+## Canonical Definition
+
+An **Agent Carrier** is the runtime embodiment that carries one durable Agent through one bounded Carrier Session by projecting contextual capabilities, mediating governed crossings, preserving singular authority, and emitting reconstructable session evidence.
+
+The word **harness** may be used as explanatory shorthand, but it is not the primitive. A carrier is not an amorphous wrapper around a model and it is not a bundle of executors. It is defined by the obligations below.
+
+## Carrier Obligations
+
+An Agent Carrier must:
+
+- bind exactly one durable Agent identity into one bounded Carrier Session;
+- hydrate the session with the applicable law, role, launch packet, context, and startup evidence;
+- project only the capabilities admitted for that session and posture;
+- mediate effectful crossings, including shell, MCP, HTTP, filesystem, UI, and process execution surfaces when present;
+- preserve the distinction between capability availability, operator consent, execution attempt, and confirmed effect;
+- emit reconstructable evidence for launch, hydration, capability projection, approvals, tool calls, outputs, interruptions, handoffs, and closeout;
+- support bounded lifecycle operations such as start, resume, interrupt, handoff, close, and reconstruction;
+- remain an embodiment of authority-bearing work, not the authority locus itself.
+
+Shell, MCP, HTTP, browser, filesystem, and UI access are **capability channels** or **tool surfaces** projected by a carrier. They do not define the carrier. A carrier may expose any subset of them, and Narada-native carriers may expose additional governed capability families, but the carrier identity comes from session embodiment, crossing mediation, and evidence obligations.
+
+## Authority Boundary
+
+An Agent Carrier must not collapse embodiment into authority. Codex, Kimi, a Narada-native carrier, a daemon, a terminal, or a UI may present work and assist with effects, but governed mutation must still resolve to the declared authority locus for the Site, Operation Specification, task lifecycle, inbox, outbox, repository publication, or other affected substrate.
+
+This keeps **Plural Embodiment, Singular Authority** intact: many carrier implementations and operator surfaces may exist, but they do not create parallel authority.
+
+## Terminology Posture
+
+Prefer **Agent Carrier**, **carrier runtime**, **runtime embodiment**, and **Carrier Session** in normative text.
+
+Use **harness** only in informal explanatory prose, and only where the surrounding text immediately constrains it with the carrier obligations above.
+
 An **Agent Carrier** is the governed runtime harness that embodies one durable Agent in one bounded Session.
 
 It answers:
@@ -8,7 +41,7 @@ It answers:
 What runtime machinery is carrying this Agent right now, and what Narada authority, policy, tools, evidence, and restart semantics are bound into that embodiment?
 ```
 
-Codex CLI and Kimi CLI are current carrier implementations. A future Narada-native mechanism is a **Narada-native carrier**, not a new kind of Agent.
+Codex CLI, Claude Code CLI, Kimi CLI, and Narada-native are carrier implementation families. A Narada-native carrier is not a new kind of Agent; it is a Narada-owned carrier runtime posture for one bounded Carrier Session.
 
 ## Split
 
@@ -87,11 +120,12 @@ Carrier implementations can be grouped as:
 | Carrier | Substrate relation | Notes |
 | --- | --- | --- |
 | `codex_carrier` | Wraps Codex CLI. | Uses Codex flags/config for approvals and disables native `shell_tool` when MCP-only policy applies. |
+| `claude_code_carrier` | Wraps Claude Code CLI. | First slice may represent the Carrier Session, startup hydration, Narada proper MCP posture, and non-claims before any Claude Code native tool execution is admitted. |
 | `kimi_carrier` | Wraps Kimi CLI. | Must project the same Agent/Session/Carrier contract through Kimi-specific launch and tool semantics. |
-| `narada_native_carrier` | Narada-owned harness with pluggable model/substrate adapters. | Should make startup, permission, evidence, and restart semantics first-class rather than adapter-specific patches. |
+| `narada_native_carrier` | Narada-owned harness with pluggable model/substrate adapters. | First slice plans start, hydration, capability projection, evidence recording, and closeout with facade-only capability posture until execution carriers are admitted. |
 | `api_agent_carrier` | Wraps an API conversation or remote worker. | Needs explicit control-channel, transcript, and capability-envelope evidence because no terminal process may exist. |
 
-The carrier interface should be stable enough that Codex, Kimi, and Narada-native carriers all produce comparable launch packets and readiness evidence.
+The carrier interface should be stable enough that Codex, Claude Code, Kimi, and Narada-native carriers all produce comparable launch packets and readiness evidence.
 
 ## Launch Packet Contract
 
@@ -147,4 +181,3 @@ Do not implement a Narada-native carrier as a User Site preference first. User S
 - [`Runtime-Invariant Adapter Contract`](runtime-invariant-adapter-contract.md) governs stable adapter contracts across runtime substrates; Agent Carrier is the agent-session adapter family.
 - [`Command Execution Intent Zone`](command-execution-intent-zone.md) governs command execution requests; Agent Carrier must route command execution through admitted surfaces rather than letting substrate convenience become authority.
 - [`Plural Embodiment, Singular Authority`](plural-embodiment-singular-authority.md) explains why multiple carriers/surfaces can embody one Site or role without multiplying mutation authority.
-

@@ -22,6 +22,22 @@
       "capturedAt": "2026-05-13T01:59:00.000Z",
       "persistedByPackage": false,
       "sourceImportFindings": []
+    },
+    {
+      "schema": "narada.agent_context_memory.checkpoint_descriptor.v0",
+      "checkpointId": "20260515-agent-carrier-execution-blocked-no-local-inspection",
+      "sessionId": "carrier_session_20260515_041358014_narada_architect",
+      "namedAgentId": "narada.architect",
+      "summary": "Operator explicitly authorized execution despite Architect role. Claimed task 20260514-1267-review-and-repair-agent-carrier-factorization-handoff-from-n. Execution is blocked in this session because no local shell/file-read/search tool is exposed, and connected GitHub repository search/list returns no Narada repository. Cannot review commits 4744f0de and bf12b0f7 or inspect Codex/Kimi carrier materialization without guessing. Added Builder-ready chapters for Claude Code and Narada-native carriers earlier, admitted as tasks 20260515-001-agent-carrier-claude-code and 20260515-002-agent-carrier-narada-native.",
+      "evidenceRefs": [
+        "user_chat:2026-05-15-proceed-execute-even-though-architect",
+        "task:20260514-1267-review-and-repair-agent-carrier-factorization-handoff-from-n",
+        "task:20260515-001-agent-carrier-claude-code",
+        "task:20260515-002-agent-carrier-narada-native"
+      ],
+      "capturedAt": "2026-05-15T04:28:55.974Z",
+      "persistedByPackage": false,
+      "sourceImportFindings": []
     }
   ],
   "hydration_events": []

@@ -10,6 +10,11 @@
       "native_execution_policy_requirement": "disable_native_shell_tool_when_mcp_only_policy_applies"
     },
     {
+      "kind": "claude_code_carrier",
+      "substrate_relation": "wraps_claude_code_cli",
+      "native_execution_policy_requirement": "represent_session_and_startup_context_without_native_tool_execution_until_policy_is_admitted"
+    },
+    {
       "kind": "kimi_carrier",
       "substrate_relation": "wraps_kimi_cli",
       "native_execution_policy_requirement": "project_same_policy_posture_through_kimi_tool_semantics"
@@ -60,7 +65,7 @@
     "runtime_kind": {
       "type": "string",
       "authority": "carrier_launch_config",
-      "allowed": ["codex_carrier", "kimi_carrier", "narada_native_carrier", "api_agent_carrier"]
+      "allowed": ["codex_carrier", "claude_code_carrier", "kimi_carrier", "narada_native_carrier", "api_agent_carrier"]
     },
     "carrier_session_id": {
       "type": "string",

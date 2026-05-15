@@ -1,0 +1,22 @@
+{
+  "schema": "narada.site_task_lifecycle.mcp_mutation_evidence.v0",
+  "command": "site_task_lifecycle.admit_task",
+  "authority_class": "mcp_adapter_bound_task_lifecycle_mutation",
+  "packageExecutedSqliteMutation": false,
+  "sourceStateImported": false,
+  "taskId": "20260514-002-capa-security-sensitive-confabulation",
+  "siteId": "narada-proper",
+  "sourceRef": "inbox:env_3f5dceba-5e00-4ee1-867e-2db12a08b3c7",
+  "eventId": "mcp-task-admission-1499bff4775b0480",
+  "dbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+  "recordedAt": "2026-05-14T21:12:33.372Z",
+  "admittedBy": "narada.architect",
+  "readback": [
+    {
+      "task_id": "20260514-002-capa-security-sensitive-confabulation",
+      "status": "admitted",
+      "source_site": "narada-proper",
+      "source_ref": "inbox:env_3f5dceba-5e00-4ee1-867e-2db12a08b3c7"
+    }
+  ]
+}

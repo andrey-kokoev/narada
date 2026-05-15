@@ -1,0 +1,26 @@
+{
+  "envelope_id": "env_0ff460cd-336f-410d-88e6-cf3b223531d9",
+  "received_at": "2026-05-15T15:22:31.271Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "codex_session:2026-05-15:mcp-narada-shim-lookup-enoent"
+  },
+  "target_locus": "narada_proper",
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada.builder"
+  },
+  "payload": {
+    "title": "MCP subprocess lookup cannot resolve PowerShell narada shim",
+    "summary": "MCP subprocess lookup still cannot resolve the PowerShell narada shim, though the interactive shell can.",
+    "evidence": [
+      "MCP narada_task_work_next and narada_inbox_work_next returned spawnSync narada ENOENT; interactive PowerShell Get-Command narada resolved C:\\Users\\Andrey\\.local\\bin\\narada.ps1."
+    ],
+    "proposal": [
+      "Repair MCP adapter PATH or command resolution so it uses the declared narada shim without hardcoded Node, NVM, WSL, or package-manager paths."
+    ],
+    "recommendation": "Route as MCP facade/runtime embodiment repair."
+  },
+  "status": "received"
+}

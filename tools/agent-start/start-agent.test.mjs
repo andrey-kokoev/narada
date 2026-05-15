@@ -135,6 +135,103 @@ test('builder launch binds codex home and config path to builder identity', () =
   assert.doesNotMatch(result.planned_environment.CODEX_HOME, /narada-architect/);
 });
 
+test('claude-code dry run represents a carrier session without native execution authority', () => {
+  const siteRoot = tempSite();
+  const pcSiteRoot = tempPcSite();
+  const { result } = buildLaunchPlanFromArgs({
+    identity: 'narada.builder',
+    runtime: 'claude-code',
+    exec: false,
+    dry_run: true,
+  }, { siteRoot, pcSiteRoot, now: '2026-05-15T15:30:00.000Z' });
+
+  assert.equal(result.status, 'planned');
+  assert.equal(result.runtime, 'claude-code');
+  assert.equal(result.runtime_kind, 'claude_code_carrier');
+  assert.equal(result.agent_start_event_authoritative, false);
+  assert.equal(result.carrier_session_authoritative, false);
+  assert.equal(result.claude_code_launch.schema, 'narada.agent_start.claude_code_carrier.v0');
+  assert.equal(result.claude_code_launch.status, 'represented_not_executed');
+  assert.equal(result.claude_code_launch.execution_admitted, false);
+  assert.equal(result.claude_code_launch.startup_hydration.name, 'agent_context_hydrate_current');
+  assert.equal(result.codex_config_path, null);
+  assert.equal(result.planned_environment.CODEX_HOME, undefined);
+  assert.equal(result.planned_environment.NARADA_AGENT_ID, 'narada.builder');
+  assert.equal(result.planned_environment.NARADA_AGENT_START_EVENT_ID, result.agent_start_event);
+  assert.equal(result.planned_environment.NARADA_CARRIER_SESSION_ID, result.carrier_session_id);
+  assert.equal(result.mcp_tool_approval.status, 'approved_by_launcher_config');
+  assert.match(result.mcp_tool_approval.note, /Claude Code native execution and tool permissions are not admitted/);
+  assert.equal(result.native_execution_policy.native_shell.status, 'not_admitted_for_runtime_slice');
+  assert.equal(result.native_execution_policy.policy_aware_shell_mcp.status, 'withheld');
+  assert.ok(result.not_claimed.includes('task_activation_authority'));
+  assert.ok(result.not_claimed.includes('inbox_authority'));
+  assert.ok(result.not_claimed.includes('outbox_authority'));
+  assert.ok(result.not_claimed.includes('repository_publication_authority'));
+});
+
+test('claude-code exec is refused until runtime tool policy is admitted', () => {
+  assert.throws(
+    () => buildLaunchPlanFromArgs({
+      identity: 'narada.builder',
+      runtime: 'claude-code',
+      exec: true,
+      dry_run: false,
+    }, { siteRoot: tempSite(), pcSiteRoot: tempPcSite(), now: '2026-05-15T15:31:00.000Z' }),
+    /runtime_exec_not_admitted:claude-code/,
+  );
+});
+
+test('narada-native dry run plans the minimum native carrier lifecycle without authority collapse', () => {
+  const siteRoot = tempSite();
+  const pcSiteRoot = tempPcSite();
+  const { result } = buildLaunchPlanFromArgs({
+    identity: 'narada.builder',
+    runtime: 'narada-native',
+    exec: false,
+    dry_run: true,
+  }, { siteRoot, pcSiteRoot, now: '2026-05-15T15:32:00.000Z' });
+
+  assert.equal(result.status, 'planned');
+  assert.equal(result.runtime, 'narada-native');
+  assert.equal(result.runtime_kind, 'narada_native_carrier');
+  assert.equal(result.narada_native_launch.schema, 'narada.agent_start.narada_native_carrier.v0');
+  assert.equal(result.narada_native_launch.status, 'planned_not_executed');
+  assert.equal(result.narada_native_launch.session_identity_model.agent_id, 'narada.builder');
+  assert.equal(result.narada_native_launch.session_identity_model.carrier_session_id, result.carrier_session_id);
+  assert.equal(result.narada_native_launch.session_identity_model.identity_mutable_after_start, false);
+  assert.equal(result.narada_native_launch.startup_hydration.name, 'agent_context_hydrate_current');
+  assert.equal(result.narada_native_launch.capability_posture.status, 'facade_only');
+  assert.ok(result.narada_native_launch.capability_posture.withheld_capabilities.includes('task_lifecycle_mutation_authority'));
+  assert.ok(result.narada_native_launch.capability_posture.withheld_capabilities.includes('repository_publication_authority'));
+  assert.equal(result.narada_native_launch.readiness.direct_sqlite_inspection_required, false);
+  assert.deepEqual(result.narada_native_launch.lifecycle_plan.minimum_vertical.map((step) => step.phase), [
+    'start',
+    'hydrate',
+    'project_capabilities',
+    'record_evidence',
+    'close',
+  ]);
+  assert.equal(result.native_execution_policy.native_shell.status, 'not_admitted_for_runtime_slice');
+  assert.equal(result.planned_environment.NARADA_AGENT_ID, 'narada.builder');
+  assert.match(result.result_sentinel, /agent_start_result_end:/);
+  assert.ok(result.not_claimed.includes('task_activation_authority'));
+  assert.ok(result.not_claimed.includes('inbox_authority'));
+  assert.ok(result.not_claimed.includes('outbox_authority'));
+  assert.ok(result.not_claimed.includes('repository_publication_authority'));
+});
+
+test('narada-native exec is refused until an execution carrier is admitted', () => {
+  assert.throws(
+    () => buildLaunchPlanFromArgs({
+      identity: 'narada.builder',
+      runtime: 'narada-native',
+      exec: true,
+      dry_run: false,
+    }, { siteRoot: tempSite(), pcSiteRoot: tempPcSite(), now: '2026-05-15T15:33:00.000Z' }),
+    /runtime_exec_not_admitted:narada-native/,
+  );
+});
+
 test('break-glass native shell flag leaves codex shell_tool enabled with authority ref evidence', () => {
   const siteRoot = tempSite();
   const pcSiteRoot = tempPcSite();

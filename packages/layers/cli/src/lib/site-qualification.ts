@@ -216,7 +216,7 @@ export function evaluateSiteQualification(args: {
     commands,
   };
 
-  const unread = args.lawAdmission?.unread ?? [];
+  const unread = args.lawAdmission?.status === 'blocked' ? args.lawAdmission.unread : [];
   if (unread.length > 0) {
     const first = unread[0];
     return {

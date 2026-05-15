@@ -1,0 +1,57 @@
+{
+  "schema": "narada.agent_carrier_factorization_review.v0",
+  "task_number": 1267,
+  "recorded_at": "2026-05-15T14:43:00.000Z",
+  "reviewer": "narada.architect",
+  "reviewed_commits": [
+    {
+      "commit": "4744f0de",
+      "subject": "Define agent carrier factorization",
+      "decision": "accepted_with_followups",
+      "notes": [
+        "Concept separates Agent, Session, Carrier, Substrate, Operator Surface, Control Channel, and Trace substrate.",
+        "Locus factorization preserves Narada proper, User Site, and PC Site authority separation.",
+        "Anti-collapse rules correctly prevent carrier/runtime/surface convenience from becoming identity or task authority."
+      ]
+    },
+    {
+      "commit": "bf12b0f7",
+      "subject": "Complete agent carrier factorization chapter",
+      "decision": "accepted_with_followups",
+      "notes": [
+        "Launch packet contract includes required identity, session, startup, environment, approval, native execution, evidence, and non-claim fields.",
+        "Focused regression test covers concept anchors, required launch packet fields, and authority boundary language.",
+        "Large task-lifecycle snapshot churn is evidence-heavy but not conceptually blocking for acceptance."
+      ]
+    }
+  ],
+  "verification": [
+    {
+      "command": "pnpm --filter @narada2/cli exec vitest run test/docs/agent-carrier-contract.test.ts",
+      "result": "passed: 2 tests"
+    },
+    {
+      "command": "git show --stat --oneline 4744f0de",
+      "result": "reviewed"
+    },
+    {
+      "command": "git show --stat --oneline bf12b0f7",
+      "result": "reviewed"
+    }
+  ],
+  "identity_authority_trace": {
+    "status": "recorded",
+    "finding": "The handoff came from narada-andrey.Kevin and must not be represented as work performed by narada.architect.",
+    "repair": "Task 1267 records the review/admission decision in Narada proper while preserving source ref inbox:env_7d3e1971-d6f1-499f-8089-860c35bcb029 and the upstream handoff provenance."
+  },
+  "launch_affordance_followups": [
+    ".ai/do-not-open/tasks/20260515-001-agent-carrier-claude-code.md",
+    ".ai/do-not-open/tasks/20260515-002-agent-carrier-narada-native.md"
+  ],
+  "accidental_inbox_claim_residual": {
+    "envelope_id": "env_ec8a89e4-5dbf-4cb6-aa31-a3002e7ef747",
+    "handling": "promoted_to_task_1267_with_trace",
+    "command": "narada inbox pending env_ec8a89e4-5dbf-4cb6-aa31-a3002e7ef747 --to task:1267 --by narada.architect --format json"
+  },
+  "decision": "accept_agent_carrier_factorization_with_followups"
+}

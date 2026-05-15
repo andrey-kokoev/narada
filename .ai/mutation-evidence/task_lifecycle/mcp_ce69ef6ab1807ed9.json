@@ -1,0 +1,22 @@
+{
+  "schema": "narada.site_task_lifecycle.mcp_mutation_evidence.v0",
+  "command": "site_task_lifecycle.admit_task",
+  "authority_class": "mcp_adapter_bound_task_lifecycle_mutation",
+  "packageExecutedSqliteMutation": false,
+  "sourceStateImported": false,
+  "taskId": "20260515-build-agent-carrier-type-claude-code",
+  "siteId": "narada-proper",
+  "sourceRef": "operator_chat:2026-05-15:missing-agent-carrier-type-buildout-tasks; inbox:env_7d3e1971-d6f1-499f-8089-860c35bcb029; promoted-task:1267",
+  "eventId": "mcp-task-admission-587ed927bcaed4e3",
+  "dbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+  "recordedAt": "2026-05-15T14:51:47.942Z",
+  "admittedBy": "narada.builder",
+  "readback": [
+    {
+      "task_id": "20260515-build-agent-carrier-type-claude-code",
+      "status": "admitted",
+      "source_site": "narada-proper",
+      "source_ref": "operator_chat:2026-05-15:missing-agent-carrier-type-buildout-tasks; inbox:env_7d3e1971-d6f1-499f-8089-860c35bcb029; promoted-task:1267"
+    }
+  ]
+}

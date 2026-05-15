@@ -42,6 +42,7 @@ describe('Narada MCP facade', () => {
 
     expect(tools).toContain('narada_site_context');
     expect(tools).toContain('narada_mcp_fabric_context');
+    expect(tools).toContain('agent_context_hydrate_current');
     expect(tools).toContain('site_task_lifecycle.plan_init');
     expect(tools).toContain('site_task_lifecycle.admit_task');
     expect(tools).toContain('site_task_lifecycle.read_task');
@@ -106,6 +107,37 @@ describe('Narada MCP facade', () => {
       authority_posture: 'facade_only',
       site: { site_id: 'mcp-client', site_root: tempDir },
     });
+  });
+
+  it('hydrates current agent context from launcher environment', async () => {
+    const response = await handleMcpRequest({
+        jsonrpc: '2.0',
+        id: 8,
+        method: 'tools/call',
+        params: { name: 'agent_context_hydrate_current', arguments: {} },
+      }, {
+        siteRoot: tempDir,
+        siteId: 'narada-proper',
+        agentId: 'narada.architect',
+        agentStartEventId: 'start-event-test',
+        carrierSessionId: 'carrier-test',
+        agentContextDb: 'agent-context.sqlite',
+      });
+
+    const result = JSON.parse(((response?.result as { content: Array<{ text: string }> }).content[0].text));
+      expect(result).toMatchObject({
+        status: 'success',
+        schema: 'narada.agent_context.current_hydration_result.v0',
+        agent_id: 'narada.architect',
+        start_event_id: 'start-event-test',
+        carrier_session_id: 'carrier-test',
+        mutation_attempted: false,
+        runtime_hydration_attempted: false,
+        source: 'launcher_arguments',
+        agent_context_db: 'agent-context.sqlite',
+        site: { site_id: 'narada-proper', site_root: tempDir },
+        traversal: { mutation_attempted: false, cross_site: false },
+      });
   });
 
   it('calls inbox work-next through the existing command surface', async () => {
@@ -954,5 +986,13 @@ class CaptureStream extends Writable {
     return new Promise((resolve) => {
       this.waiter = resolve;
     });
+  }
+}
+
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = value;
   }
 }

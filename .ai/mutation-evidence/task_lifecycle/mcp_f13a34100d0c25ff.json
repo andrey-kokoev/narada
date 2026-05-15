@@ -1,0 +1,22 @@
+{
+  "schema": "narada.site_task_lifecycle.mcp_mutation_evidence.v0",
+  "command": "site_task_lifecycle.admit_task",
+  "authority_class": "mcp_adapter_bound_task_lifecycle_mutation",
+  "packageExecutedSqliteMutation": false,
+  "sourceStateImported": false,
+  "taskId": "20260514-004-capa-mutation-without-closeout-authority",
+  "siteId": "narada-proper",
+  "sourceRef": "inbox:env_ec8a89e4-5dbf-4cb6-aa31-a3002e7ef747",
+  "eventId": "mcp-task-admission-29a6b75e47887281",
+  "dbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+  "recordedAt": "2026-05-14T21:13:06.771Z",
+  "admittedBy": "narada.architect",
+  "readback": [
+    {
+      "task_id": "20260514-004-capa-mutation-without-closeout-authority",
+      "status": "admitted",
+      "source_site": "narada-proper",
+      "source_ref": "inbox:env_ec8a89e4-5dbf-4cb6-aa31-a3002e7ef747"
+    }
+  ]
+}

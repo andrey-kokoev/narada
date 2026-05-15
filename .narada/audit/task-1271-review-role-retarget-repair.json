@@ -1,0 +1,17 @@
+{
+  "schema": "https://narada.dev/schemas/audit-note/v1",
+  "created_at": "2026-05-15T14:54:00.000Z",
+  "created_by": "narada.architect",
+  "target_locus": "Narada proper",
+  "task_number": 1271,
+  "summary": "Retargeted the task 1271 review obligation from a concrete operator identity to the builder role without identity binding.",
+  "reason": "Operator instruction: change reviewer to builder role without identity specifying.",
+  "mutation": {
+    "table": "directed_obligations",
+    "task_number": 1271,
+    "target_agent_id": null,
+    "target_role": "builder",
+    "target_ref": "role:builder",
+    "consumption_review_command": "narada task review 1271 --agent <builder-agent> --verdict accepted --report wrr_2114a476_20260515-1271-remove-law-receipt-work-admission-blocking-in-narada-proper_narada.architect"
+  }
+}

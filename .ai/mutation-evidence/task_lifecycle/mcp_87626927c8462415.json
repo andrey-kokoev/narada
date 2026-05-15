@@ -1,0 +1,22 @@
+{
+  "schema": "narada.site_task_lifecycle.mcp_mutation_evidence.v0",
+  "command": "site_task_lifecycle.admit_task",
+  "authority_class": "mcp_adapter_bound_task_lifecycle_mutation",
+  "packageExecutedSqliteMutation": false,
+  "sourceStateImported": false,
+  "taskId": "20260513-agent-carrier-factorization-handoff-review",
+  "siteId": "narada",
+  "sourceRef": "inbox:env_7d3e1971-d6f1-499f-8089-860c35bcb029",
+  "eventId": "mcp-task-admission-ee2ae78a894c0150",
+  "dbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+  "recordedAt": "2026-05-14T02:57:17.512Z",
+  "admittedBy": "narada.architect",
+  "readback": [
+    {
+      "task_id": "20260513-agent-carrier-factorization-handoff-review",
+      "status": "admitted",
+      "source_site": "narada",
+      "source_ref": "inbox:env_7d3e1971-d6f1-499f-8089-860c35bcb029"
+    }
+  ]
+}

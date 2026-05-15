@@ -1,0 +1,28 @@
+{
+  "schema": "https://narada.dev/schemas/audit-note/v1",
+  "task_number": 1274,
+  "created_at": "2026-05-15T15:22:00.000Z",
+  "created_by": "narada.architect",
+  "target_locus": "Narada proper",
+  "summary": "Hardened inbox task assignment boundaries so non-roster carrier/runtime labels cannot be auto-admitted as task assignees.",
+  "source_envelope": "env_d60d85cc-ce6f-44ad-bb3d-b1b1ac480040",
+  "corrective_audit": {
+    "bad_task_assignments": [],
+    "bad_directed_obligations": [],
+    "note": "Live audit joined task_assignments and concrete directed_obligations against the SQLite roster and found no current non-roster concrete assignment targets."
+  },
+  "preventive_change": {
+    "surfaces": [
+      "inbox task --assign",
+      "inbox architect-process --builder"
+    ],
+    "behavior": "Resolve assignment target against existing active roster before task creation or promotion. Do not auto-create roster identities during inbox promotion.",
+    "carrier_runtime_warning": "narada.claude-code and narada.native style labels are reported as carrier/runtime labels, not admitted task identities."
+  },
+  "verification": [
+    "Focused inbox tests for non-roster assignment and existing assigned flows passed.",
+    "pnpm --filter @narada2/cli build passed.",
+    "Live preflight probe with assign=narada.claude-code returned agent_not_in_roster and left task count unchanged.",
+    "Direct task claim with narada.claude-code failed with a rejected assignment_intent_id."
+  ]
+}

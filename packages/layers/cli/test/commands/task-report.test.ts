@@ -100,6 +100,15 @@ function listDirectedObligations(tempDir: string, targetAgent: string, targetRol
   }
 }
 
+function listOpenTaskObligations(tempDir: string) {
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    return store.listDirectedObligationsForTask('20260420-999-test-task', 'open');
+  } finally {
+    store.db.close();
+  }
+}
+
 function getAssignmentRecord(tempDir: string): TaskAssignmentRecord {
   const store = openTaskLifecycleStore(tempDir);
   try {
@@ -167,6 +176,10 @@ describe('task report operator', () => {
     // Authoritative report record created
     const reportRecords = listReportRecords(tempDir);
     expect(reportRecords).toHaveLength(1);
+    const obligations = listOpenTaskObligations(tempDir);
+    expect(obligations).toHaveLength(1);
+    expect(obligations[0]!.target_ref).not.toBe('unrouted');
+    expect(obligations[0]!.target_agent_id).toBe('reviewer-1');
 
     const report = JSON.parse(reportRecords[0]!.report_json);
     expect(report.task_id).toBe('20260420-999-test-task');
@@ -237,6 +250,62 @@ describe('task report operator', () => {
     expect(JSON.parse(obligations[0]!.consumption_rule_json)).toMatchObject({
       consume_on: expect.arrayContaining(['task_review', 'task_defer', 'delegation', 'rejection', 'completion']),
     });
+  });
+
+  it('normalizes role-targeted directed obligations to a null target_ref and rejects duplicated role refs at the schema boundary', async () => {
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.upsertDirectedObligation({
+        obligation_id: 'obl_role_builder',
+        source_kind: 'task_report',
+        source_ref: 'wrr_role_builder',
+        source_agent_id: 'test-agent',
+        target_agent_id: null,
+        target_role: 'builder',
+        target_ref: 'role:builder',
+        kind: 'review_request',
+        status: 'open',
+        task_id: null,
+        task_number: null,
+        evidence_json: '{}',
+        consumption_rule_json: '{}',
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        consumed_at: null,
+        consumed_by: null,
+        consumption_ref: null,
+      });
+      expect(store.getDirectedObligation('obl_role_builder')?.target_ref).toBeNull();
+      expect(() => store.db.prepare(`
+        insert into directed_obligations (
+          obligation_id, source_kind, source_ref, source_agent_id,
+          target_agent_id, target_role, target_ref, kind, status, task_id,
+          task_number, evidence_json, consumption_rule_json, created_at,
+          updated_at, consumed_at, consumed_by, consumption_ref
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        'obl_role_builder_raw',
+        'task_report',
+        'wrr_role_builder_raw',
+        'test-agent',
+        null,
+        'builder',
+        'role:builder',
+        'review_request',
+        'open',
+        null,
+        null,
+        '{}',
+        '{}',
+        '2026-01-01T00:00:00Z',
+        '2026-01-01T00:00:00Z',
+        null,
+        null,
+        null,
+      )).toThrow();
+    } finally {
+      store.db.close();
+    }
   });
 
   it('submits a report from a JSON report file', async () => {
@@ -381,6 +450,48 @@ describe('task report operator', () => {
     });
     expect((result.result as { error: string }).error).toContain('task review would refuse');
     expect(listDirectedObligations(tempDir, 'other-agent', 'implementer')).toHaveLength(0);
+  });
+
+  it('refuses report instead of creating an unrouted review obligation when no reviewer resolves', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'agents', 'roster.json'),
+      JSON.stringify({
+        version: 1,
+        updated_at: '2026-01-01T00:00:00Z',
+        agents: [
+          { agent_id: 'test-agent', role: 'implementer', capabilities: ['claim'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
+        ],
+      }, null, 2),
+    );
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.db.exec("DELETE FROM agent_roster WHERE agent_id <> 'test-agent'");
+    } finally {
+      store.db.close();
+    }
+
+    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
+
+    const result = await taskReportCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      summary: 'Should fail without routed review',
+      verification: JSON.stringify([{ command: 'pnpm test', result: 'passed' }]),
+      residuals: JSON.stringify([]),
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      review_authority_repair: {
+        reason: 'missing_reviewer_identity',
+      },
+    });
+    expect((result.result as { error: string }).error).toContain('Unrouted review obligations are not admitted');
+    expect(listReportRecords(tempDir)).toHaveLength(0);
+    expect(listOpenTaskObligations(tempDir)).toHaveLength(0);
   });
 
   it('does not create a post-hoc review request for a target task review would refuse', async () => {

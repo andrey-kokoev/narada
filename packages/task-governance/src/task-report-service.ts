@@ -221,6 +221,99 @@ function safeIdPart(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'unknown';
 }
 
+function resolveMandatoryReviewTarget(args: {
+  roster: Awaited<ReturnType<typeof loadRoster>>;
+  requested?: string;
+  reporterAgentId: string;
+  cwd: string;
+  taskNumber: string;
+}): ReportTaskServiceResponse | { ok: true; value: ResolvedReviewTarget } {
+  const explicit = resolveReviewTargetFromRoster(args.roster, args.requested, { taskNumber: args.taskNumber });
+  if (explicit && !explicit.ok) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        status: 'error',
+        error: explicit.error,
+        review_authority_repair: explicit.review_authority_repair,
+      },
+    };
+  }
+  if (explicit?.ok) {
+    if (explicit.target_agent_id === args.reporterAgentId) {
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: {
+          status: 'error',
+          error: `Review target ${explicit.target_agent_id} is the reporting agent; self-review is not admitted.`,
+          review_authority_repair: {
+            reason: 'missing_reviewer_identity',
+            commands: [
+              `narada task report ${args.taskNumber} --agent ${args.reporterAgentId} --reviewer <distinct-reviewer> ...`,
+              `narada task roster add <distinct-reviewer> --role reviewer --capability review`,
+            ],
+            no_workaround: 'Do not create an unrouted review request or self-review the report.',
+          },
+        },
+      };
+    }
+    return { ok: true, value: explicit };
+  }
+
+  const defaultRole = readSiteConfigDefaultReviewerRole(args.cwd);
+  if (defaultRole) {
+    const resolved = resolveDefaultReviewerFromRoster(args.roster, defaultRole);
+    if (resolved.ok && resolved.target_agent_id !== args.reporterAgentId) {
+      return { ok: true, value: { ...resolved, requested: `default_routed:${defaultRole}` } };
+    }
+    if (resolved.ok && resolved.target_agent_id === args.reporterAgentId) {
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: {
+          status: 'error',
+          error: `Configured default reviewer role '${defaultRole}' resolves to the reporting agent ${args.reporterAgentId}; self-review is not admitted.`,
+          review_authority_repair: {
+            reason: 'missing_reviewer_identity',
+            commands: [
+              `narada task roster add <distinct-reviewer> --role ${defaultRole} --capability review`,
+              `narada task report ${args.taskNumber} --agent ${args.reporterAgentId} --reviewer <distinct-reviewer> ...`,
+            ],
+            no_workaround: 'Do not create an unrouted review request or self-review the report.',
+          },
+        },
+      };
+    }
+  }
+
+  const distinctReviewers = args.roster.agents.filter((entry) =>
+    entry.agent_id !== args.reporterAgentId
+    && resolveReviewTargetFromRoster(args.roster, entry.agent_id, { taskNumber: args.taskNumber })?.ok === true
+    && entry.role === 'reviewer'
+  );
+  if (distinctReviewers.length === 1) {
+    const resolved = resolveReviewTargetFromRoster(args.roster, distinctReviewers[0]!.agent_id, { taskNumber: args.taskNumber });
+    if (resolved?.ok) return { ok: true, value: { ...resolved, requested: 'auto_routed:unique_reviewer' } };
+  }
+
+  return {
+    exitCode: ExitCode.GENERAL_ERROR,
+    result: {
+      status: 'error',
+      error: distinctReviewers.length > 1
+        ? `Review routing is ambiguous: multiple distinct reviewer-role agents exist (${distinctReviewers.map((entry) => entry.agent_id).join(', ')}); pass --reviewer.`
+        : 'Review routing failed: no distinct admitted reviewer could be resolved. Unrouted review obligations are not admitted.',
+      review_authority_repair: {
+        reason: 'missing_reviewer_identity',
+        commands: [
+          `narada task report ${args.taskNumber} --agent ${args.reporterAgentId} --reviewer <distinct-reviewer> ...`,
+          'narada task roster add <distinct-reviewer> --role reviewer --capability review',
+        ],
+        no_workaround: 'Do not create an unrouted review request; report-time review routing must resolve to a distinct admitted reviewer.',
+      },
+    },
+  };
+}
+
 export async function reportTaskService(
   options: ReportTaskServiceOptions,
 ): Promise<ReportTaskServiceResponse> {
@@ -268,17 +361,15 @@ export async function reportTaskService(
       result: { status: 'error', error: `Agent not found in roster: ${agentId}` },
     };
   }
-  const reviewTarget = resolveReviewTargetFromRoster(roster, options.reviewer, { taskNumber });
-  if (reviewTarget && !reviewTarget.ok) {
-    return {
-      exitCode: ExitCode.INVALID_CONFIG,
-      result: {
-        status: 'error',
-        error: reviewTarget.error,
-        review_authority_repair: reviewTarget.review_authority_repair,
-      },
-    };
-  }
+  const reviewTargetResult = resolveMandatoryReviewTarget({
+    roster,
+    requested: options.reviewer,
+    reporterAgentId: agentId,
+    cwd,
+    taskNumber,
+  });
+  if (!('ok' in reviewTargetResult)) return reviewTargetResult;
+  const reviewTarget = reviewTargetResult.value;
 
   let taskFile;
   try {
@@ -414,9 +505,7 @@ export async function reportTaskService(
 
   const now = new Date().toISOString();
   const reportId = createReportId(taskFile.taskId, agentId, assignmentId);
-  const obligationSuffix = reviewTarget?.ok
-    ? safeIdPart(reviewTarget.target_agent_id)
-    : 'unrouted';
+  const obligationSuffix = safeIdPart(reviewTarget.target_agent_id);
   const obligationId = `obl_review_${safeIdPart(taskFile.taskId)}_${safeIdPart(reportId)}_${obligationSuffix}`;
   const report: WorkResultReport = {
     report_id: reportId,
@@ -446,8 +535,6 @@ export async function reportTaskService(
     body = body.trimEnd() + '\n\n' + missingSections.join('\n');
   }
 
-  let routedTarget: ResolvedReviewTarget | null = null;
-
   if (isContinuation) {
     activeContinuation!.completed_at = now;
     await saveAssignment(cwd, assignmentRecord);
@@ -472,15 +559,14 @@ export async function reportTaskService(
     try {
       store.updateStatus(taskFile.taskId, 'in_review', agentId);
 
-      const initialTarget = reviewTarget?.ok ? reviewTarget : null;
       store.upsertDirectedObligation({
         obligation_id: obligationId,
         source_kind: 'task_report',
         source_ref: reportId,
         source_agent_id: agentId,
-        target_agent_id: initialTarget?.target_agent_id ?? null,
-        target_role: initialTarget?.target_role ?? null,
-        target_ref: initialTarget?.requested ?? 'unrouted',
+        target_agent_id: reviewTarget.target_agent_id,
+        target_role: reviewTarget.target_role,
+        target_ref: reviewTarget.requested,
         kind: 'review_request',
         status: 'open',
         task_id: taskFile.taskId,
@@ -489,14 +575,12 @@ export async function reportTaskService(
           report_id: reportId,
           assignment_id: assignmentId,
           task_number: Number(taskNumber),
-          requested_target: initialTarget?.requested ?? null,
-          target_resolution: initialTarget?.resolution ?? null,
+          requested_target: reviewTarget.requested,
+          target_resolution: reviewTarget.resolution,
         }),
         consumption_rule_json: JSON.stringify({
           consume_on: ['task_review', 'task_defer', 'delegation', 'rejection', 'completion'],
-          review_command: initialTarget?.ok
-            ? `narada task review ${taskNumber} --agent ${initialTarget.target_agent_id} --verdict accepted --report ${reportId}`
-            : null,
+          review_command: `narada task review ${taskNumber} --agent ${reviewTarget.target_agent_id} --verdict accepted --report ${reportId}`,
         }),
         created_at: now,
         updated_at: now,
@@ -504,48 +588,6 @@ export async function reportTaskService(
         consumed_by: null,
         consumption_ref: null,
       });
-
-      // Route un-targeted obligations to the site default reviewer
-      if (!initialTarget) {
-        const defaultRole = readSiteConfigDefaultReviewerRole(cwd);
-        if (defaultRole) {
-          const resolved = resolveDefaultReviewerFromRoster(roster, defaultRole);
-          if (resolved.ok) {
-            routedTarget = resolved;
-            const routedNow = new Date().toISOString();
-            store.upsertDirectedObligation({
-              obligation_id: obligationId,
-              source_kind: 'task_report',
-              source_ref: reportId,
-              source_agent_id: agentId,
-              target_agent_id: resolved.target_agent_id,
-              target_role: resolved.target_role,
-              target_ref: `default_routed:${defaultRole}`,
-              kind: 'review_request',
-              status: 'open',
-              task_id: taskFile.taskId,
-              task_number: Number(taskNumber),
-              evidence_json: JSON.stringify({
-                report_id: reportId,
-                assignment_id: assignmentId,
-                task_number: Number(taskNumber),
-                requested_target: `default_routed:${defaultRole}`,
-                target_resolution: resolved.resolution,
-                routing: `default_reviewer_role:${defaultRole}`,
-              }),
-              consumption_rule_json: JSON.stringify({
-                consume_on: ['task_review', 'task_defer', 'delegation', 'rejection', 'completion'],
-                review_command: `narada task review ${taskNumber} --agent ${resolved.target_agent_id} --verdict accepted --report ${reportId}`,
-              }),
-              created_at: now,
-              updated_at: routedNow,
-              consumed_at: null,
-              consumed_by: null,
-              consumption_ref: null,
-            });
-          }
-        }
-      }
 
       closeOwnStore();
     } catch {
@@ -559,7 +601,6 @@ export async function reportTaskService(
     last_done: Number(taskNumber) || null,
   });
 
-  const effectiveReviewTarget = reviewTarget?.ok ? reviewTarget : routedTarget;
   return {
     exitCode: ExitCode.SUCCESS,
     result: {
@@ -570,13 +611,13 @@ export async function reportTaskService(
       new_status: 'in_review',
       assignment_id: assignmentId,
       obligation_id: obligationId,
-      review_target: effectiveReviewTarget?.ok
+      review_target: reviewTarget
         ? {
-            requested: effectiveReviewTarget.requested,
-            target_agent_id: effectiveReviewTarget.target_agent_id,
-            target_role: effectiveReviewTarget.target_role,
-            resolution: effectiveReviewTarget.resolution,
-            review_authority: effectiveReviewTarget.review_authority,
+            requested: reviewTarget.requested,
+            target_agent_id: reviewTarget.target_agent_id,
+            target_role: reviewTarget.target_role,
+            resolution: reviewTarget.resolution,
+            review_authority: reviewTarget.review_authority,
           }
         : undefined,
     },

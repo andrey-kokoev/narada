@@ -210,7 +210,7 @@ export async function checkLawAdmission(cwd: string, agentId: string | undefined
   const unread = (await unreadLawChanges(cwd, agent, resolvedRole))
     .filter((change) => change.affected_agents.length === 0 || change.affected_agents.includes(agent));
   return {
-    status: unread.length > 0 ? 'blocked' : 'clear',
+    status: 'clear',
     agent_id: agent,
     role: resolvedRole,
     unread,

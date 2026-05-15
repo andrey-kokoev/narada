@@ -33,6 +33,7 @@ import {
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { taskReadCommand } from '../../src/commands/task-read.js';
 import { taskWorkboardCommand } from '../../src/commands/task-workboard.js';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 
 describe('Canonical Inbox CLI commands', () => {
   let tempDir: string;
@@ -1080,6 +1081,42 @@ describe('Canonical Inbox CLI commands', () => {
     expect((processed.result as { error: string }).error).toContain('cannot be processed into Builder task handoff');
   });
 
+  it('architect-process refuses non-roster builder identities before task creation', async () => {
+    setupRepo(tempDir);
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'agent_report',
+      sourceRef: 'architect:carrier-runtime',
+      kind: 'task_candidate',
+      authorityLevel: 'operator_confirmed',
+      principal: 'architect',
+      payload: JSON.stringify({
+        title: 'Build runtime-specific carrier',
+        summary: 'Should not auto-admit runtime label as Builder.',
+      }),
+    });
+    const envelopeId = (submitted.result as { envelope: { envelope_id: string } }).envelope.envelope_id;
+    const beforeTasks = readdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks')).length;
+
+    const processed = await inboxArchitectProcessCommand({
+      cwd: tempDir,
+      envelopeId,
+      by: 'architect',
+      builder: 'narada.native',
+      format: 'json',
+    });
+
+    expect(processed.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(processed.result).toMatchObject({
+      status: 'error',
+      reason: 'agent_not_in_roster',
+      requested_agent: 'narada.native',
+      carrier_runtime_label_warning: expect.stringContaining('carrier/runtime type label'),
+    });
+    expect(readdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks')).length).toBe(beforeTasks);
+  });
+
   it('creates assigned tasks directly from observation envelopes with source-linked context', async () => {
     setupRepo(tempDir);
     const submitted = await inboxSubmitCommand({
@@ -1119,6 +1156,47 @@ describe('Canonical Inbox CLI commands', () => {
     expect(taskContent).toContain('Runtime drift was observed');
     expect(taskContent).toContain('Recommendation addressed or explicitly rejected');
     expect(taskContent).not.toContain('TBD');
+  });
+
+  it('refuses inbox task assignment to non-roster carrier labels before creating a task', async () => {
+    setupRepo(tempDir);
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'agent_report',
+      sourceRef: 'carrier:runtime-label',
+      kind: 'observation',
+      authorityLevel: 'agent_reported',
+      payload: JSON.stringify({
+        title: 'Build carrier runtime task',
+        summary: 'This should not be assigned to a runtime label.',
+      }),
+    });
+    const envelopeId = (submitted.result as { envelope: { envelope_id: string } }).envelope.envelope_id;
+    const beforeTasks = readdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks')).length;
+
+    const promoted = await inboxTaskCommand({
+      cwd: tempDir,
+      envelopeId,
+      by: 'architect',
+      assign: 'narada.claude-code',
+      format: 'json',
+    });
+
+    expect(promoted.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(promoted.result).toMatchObject({
+      status: 'error',
+      reason: 'agent_not_in_roster',
+      requested_agent: 'narada.claude-code',
+      carrier_runtime_label_warning: expect.stringContaining('carrier/runtime type label'),
+      no_workaround: expect.stringContaining('Do not auto-create roster identities'),
+    });
+    expect(readdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks')).length).toBe(beforeTasks);
+    const shown = await inboxShowCommand({ cwd: tempDir, envelopeId, format: 'json' });
+    expect((shown.result as { envelope: { status: string; promotion?: unknown } }).envelope).toMatchObject({
+      status: 'received',
+    });
+    expect((shown.result as { envelope: { promotion?: unknown } }).envelope.promotion).toBeUndefined();
   });
 
   it('promotes incident envelopes into assigned tasks with source consumption and recurrence severity', async () => {
@@ -1885,6 +1963,22 @@ function setupRepo(tempDir: string): void {
       },
     ],
   }, null, 2));
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    store.upsertRosterEntry({
+      agent_id: 'builder',
+      role: 'builder',
+      capabilities_json: JSON.stringify(['derive', 'propose', 'claim', 'execute', 'resolve', 'confirm']),
+      first_seen_at: '2026-04-20T00:00:00.000Z',
+      last_active_at: '2026-04-20T00:00:00.000Z',
+      status: 'idle',
+      task_number: null,
+      last_done: null,
+      updated_at: '2026-04-20T00:00:00.000Z',
+    });
+  } finally {
+    store.db.close();
+  }
 }
 
 function setupGitRepo(tempDir: string): void {

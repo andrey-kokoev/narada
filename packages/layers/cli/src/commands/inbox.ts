@@ -16,9 +16,9 @@ import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { taskCreateCommand } from './task-create.js';
 import { taskClaimCommand } from './task-claim.js';
-import { taskRosterAddCommand } from './task-roster.js';
 import { taskLifecycleExportCommand } from './task-lifecycle-snapshot.js';
-import { findTaskFile, parseFrontMatter } from '../lib/task-governance.js';
+import { findTaskFile, loadRoster, parseFrontMatter } from '../lib/task-governance.js';
+import { agentAddressResolutionPublic, resolveAgentAddress } from '../lib/agent-address.js';
 import {
   inboxEnvelopeToEvidenceState,
   writeInboxMutationEvidence,
@@ -49,6 +49,12 @@ interface InboxRoutingTransition {
   command: string;
   evidence_artifact: string | null;
   allowed: boolean;
+}
+
+interface AssignableAgentResolution {
+  requested: string;
+  resolved: string;
+  resolution: Record<string, unknown>;
 }
 
 const INBOX_ROUTING_ALLOWED_TRANSITIONS = new Set([
@@ -1272,22 +1278,19 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
           );
         }
         const recurrence = inspectInboxRecurrence(store, existing);
+        const assignTarget = options.assign
+          ? await resolveAssignableAgent(cwd, options.assign, 'inbox task --assign')
+          : null;
+        if (assignTarget && 'error' in assignTarget) return assignTarget.error;
         const taskResult = await createTaskFromEnvelope(existing, options, recurrence);
         if (taskResult.exitCode !== ExitCode.SUCCESS) return taskResult;
         const task = taskResult.result as { task_number: number; task_id: string };
         const preparedNudge = preparedTaskNudge(existing, task, options);
         let assignment: unknown = null;
-        if (options.assign) {
-          const rosterAdd = await taskRosterAddCommand({
-            cwd,
-            agent: options.assign,
-            role: options.assign === 'builder' ? 'builder' : 'implementer',
-            format: 'json',
-          });
-          if (rosterAdd.exitCode !== ExitCode.SUCCESS) return rosterAdd;
+        if (assignTarget && !('error' in assignTarget)) {
           const claim = await taskClaimCommand({
             taskNumber: String(task.task_number),
-            agent: options.assign,
+            agent: assignTarget.resolved,
             reason: `Inbox task creation from ${existing.envelope_id}`,
             cwd,
             format: 'json',
@@ -1305,6 +1308,7 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
           target_result: {
             task: taskResult.result,
             assignment,
+            assignment_target_resolution: assignTarget?.resolution ?? null,
             prepared_nudge: preparedNudge,
             source_envelope: sourceEnvelopeLink(existing),
             recurrence,
@@ -1555,21 +1559,16 @@ export async function inboxArchitectProcessCommand(options: InboxArchitectProces
     }
 
     const before = inboxEnvelopeToEvidenceState(existing);
+    const builderTarget = await resolveAssignableAgent(cwd, builder, 'inbox architect-process --builder');
+    if ('error' in builderTarget) return builderTarget.error;
     const taskSpec = taskSpecFromEnvelope(existing, options);
     const taskResult = await taskCreateFromInboxSpec(cwd, taskSpec);
     if (taskResult.exitCode !== ExitCode.SUCCESS) return taskResult;
 
     const task = taskResult.result as { task_number: number; task_id: string; file_path: string };
-    const rosterAdd = await taskRosterAddCommand({
-      cwd,
-      agent: builder,
-      role: 'builder',
-      format: 'json',
-    });
-    if (rosterAdd.exitCode !== ExitCode.SUCCESS) return rosterAdd;
     const claimResult = await taskClaimCommand({
       taskNumber: String(task.task_number),
-      agent: builder,
+      agent: builderTarget.resolved,
       reason: `Architect inbox handoff from ${existing.envelope_id}`,
       cwd,
       format: 'json',
@@ -1586,7 +1585,8 @@ export async function inboxArchitectProcessCommand(options: InboxArchitectProces
       target_result: {
         task,
         assignment: claimResult.result,
-        builder,
+        builder: builderTarget.resolved,
+        assignment_target_resolution: builderTarget.resolution,
         execution_performed: false,
       },
     });
@@ -1597,7 +1597,7 @@ export async function inboxArchitectProcessCommand(options: InboxArchitectProces
       authorityClass: 'resolve',
       before,
       after: inboxEnvelopeToEvidenceState(store.get(envelope.envelope_id)),
-      result: { status: 'success', target_mutation: true, envelope, task, builder, execution_performed: false },
+      result: { status: 'success', target_mutation: true, envelope, task, builder: builderTarget.resolved, execution_performed: false },
     });
     const inboxArtifactFiles = await exportInboxEnvelopeArtifacts([envelope], resolve(cwd, '.ai', 'inbox-envelopes'));
     const lifecycleExport = await taskLifecycleExportCommand({
@@ -1611,7 +1611,9 @@ export async function inboxArchitectProcessCommand(options: InboxArchitectProces
         status: 'success',
         envelope_id: envelope.envelope_id,
         task,
-        builder,
+        builder: builderTarget.resolved,
+        requested_builder: builder,
+        assignment_target_resolution: builderTarget.resolution,
         assignment: claimResult.result,
         promotion: envelope.promotion,
         exported_artifacts: {
@@ -1620,12 +1622,12 @@ export async function inboxArchitectProcessCommand(options: InboxArchitectProces
         },
         execution_performed: false,
         forbidden_actions: ['implementation', 'task report', 'task close', 'self-review'],
-        next_step: `Builder ${builder} should execute task ${task.task_number}; Architect process stops at handoff.`,
+        next_step: `Builder ${builderTarget.resolved} should execute task ${task.task_number}; Architect process stops at handoff.`,
       },
       [
         `Architect processed inbox envelope: ${envelope.envelope_id}`,
         `Created task: ${task.task_number}`,
-        `Assigned Builder: ${builder}`,
+        `Assigned Builder: ${builderTarget.resolved}`,
         'Execution performed: no',
       ],
       options.format,
@@ -2040,6 +2042,48 @@ function preparedTaskNudge(
     command_args: ['task', 'claim', String(task.task_number), '--agent', target],
     reason: `Prepared handoff nudge from inbox envelope ${envelope.envelope_id}; no assignment mutation was requested.`,
   };
+}
+
+async function resolveAssignableAgent(cwd: string, requested: string, surface: string): Promise<AssignableAgentResolution | { error: { exitCode: ExitCode; result: unknown } }> {
+  let roster;
+  try {
+    roster = await loadRoster(cwd);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { error: errorResult(`Failed to load agent roster before ${surface}: ${message}`) };
+  }
+  const resolution = resolveAgentAddress(roster, requested);
+  if (resolution.status === 'exact' || resolution.status === 'role_exact_one') {
+    return {
+      requested,
+      resolved: resolution.resolved_agent,
+      resolution: agentAddressResolutionPublic(resolution),
+    };
+  }
+  return {
+    error: {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        status: 'error',
+        reason: resolution.status === 'multi_match' ? 'agent_address_ambiguous' : 'agent_not_in_roster',
+        error: `${surface} requires an assignment target that resolves to an active roster agent before task creation or promotion.`,
+        requested_agent: requested,
+        resolved_agent: null,
+        agent_address_resolution: agentAddressResolutionPublic(resolution),
+        carrier_runtime_label_warning: carrierRuntimeLabelWarning(requested),
+        repair_command: resolution.repair_command,
+        no_workaround: 'Do not auto-create roster identities during inbox promotion or task assignment. Admit a real agent identity through the roster boundary first.',
+      },
+    },
+  };
+}
+
+function carrierRuntimeLabelWarning(requested: string): string | null {
+  const value = requested.toLowerCase();
+  if (value.includes('claude-code') || value.endsWith('.native') || value.includes('narada-native')) {
+    return 'This looks like a carrier/runtime type label, not an admitted agent identity. Carrier type is not task assignment authority unless a concrete roster agent has been admitted.';
+  }
+  return null;
 }
 
 async function createTaskFromEnvelope(

@@ -1,0 +1,34 @@
+{
+  "schema": "narada.review_obligation_role_retarget_repair.v0",
+  "repair_id": "repair_20260515_task_1267_1270_review_role_retarget",
+  "recorded_at": "2026-05-15T14:46:00.000Z",
+  "target_locus": "narada-proper",
+  "operator_request": "change reviewer to builder role without identity specifying",
+  "affected_tasks": [
+    1267,
+    1268,
+    1269,
+    1270
+  ],
+  "repair": {
+    "from": {
+      "target_agent_id": "operator",
+      "target_role": "reviewer"
+    },
+    "to": {
+      "target_agent_id": null,
+      "target_role": "builder",
+      "target_ref": "role:builder"
+    }
+  },
+  "posture": {
+    "identity_specific_reviewer": false,
+    "role_targeted_obligation": true,
+    "review_execution_still_requires_admitted_reviewer_authority": true
+  },
+  "non_goals": [
+    "Do not close tasks 1267, 1268, 1269, or 1270",
+    "Do not self-review as narada.architect",
+    "Do not grant new capabilities as part of retargeting"
+  ]
+}
