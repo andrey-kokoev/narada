@@ -1,5 +1,5 @@
 ---
-status: claimed
+status: in_review
 ---
 
 # Review Narada proper MCP surface rebuild
@@ -45,12 +45,20 @@ Prior related envelopes: env_e26184db-7083-4f74-a4e4-d5eea06fec43
 
 ## Execution Notes
 
-<!-- Record what was done, decisions made, and files changed during execution. -->
+- Promoted source inbox envelope `env_2ccb1628-a612-487b-851d-9844a59b6524` into this governed Architect review task.
+- Reviewed commit `2f6446b1` and follow-up recommendation `45294baf`.
+- Inspected the new `packages/narada-proper-mcp` package, launcher changes in `tools/agent-start/start-agent.mjs`, MCP capability metadata, and related tests.
+- Recorded review findings in `.narada/audit/task-1277-mcp-surface-rebuild-review.md`.
+- Disposition: `needs_repair`. The rebuild is directionally aligned but should not be admitted as settled Narada proper MCP posture while live tools still depend on CLI dist/ad hoc lifecycle substrates.
 
 ## Verification
 
-<!-- Record commands run, results observed, and how correctness was checked. -->
+- `git show --stat --oneline --find-renames 2f6446b1`: reviewed change scope for MCP package, launcher, capability metadata, and task evidence.
+- `git show --stat --oneline --find-renames 45294baf`: reviewed follow-up review recommendation.
+- `pnpm --filter @narada2/narada-proper-mcp test`: passed, 5 tests.
+- `pnpm --filter @narada2/narada-proper-mcp build`: passed.
+- Source inspection found package-boundary and authority defects recorded in `.narada/audit/task-1277-mcp-surface-rebuild-review.md`.
 
 ## Acceptance Criteria
 
-- [ ] Recommendation addressed or explicitly rejected: narada.architect should review commit 2f6446b1 for package boundary, launch config, tool vocabulary, break-glass posture, builder admission, and absence of User/PC runtime state import.
+- [x] Recommendation addressed or explicitly rejected: narada.architect should review commit 2f6446b1 for package boundary, launch config, tool vocabulary, break-glass posture, builder admission, and absence of User/PC runtime state import.
