@@ -66,6 +66,16 @@
       "received_at": "2026-05-15T13:51:37Z",
       "status": "pending_review",
       "summary": "Operator-originating directive to replace Narada proper MCP infrastructure: decouple agent-facing MCP runtime from the monolithic /packages CLI build path, retire/quarantine the coupled facade, and repopulate the MCP-related package/lift with a clean target-local implementation."
+    },
+    {
+      "source_site": "operator",
+      "source_ref": ".narada/inbox/external-handoffs/20260515-mcp-infrastructure-change-review-recommendation.md",
+      "captured_by": "narada-andrey.Kevin",
+      "received_at": "2026-05-15T15:04:20Z",
+      "status": "pending_architect_review",
+      "target_principal": "narada.architect",
+      "related_commit": "2f6446b1",
+      "summary": "Review recommendation for narada.architect: inspect the committed Narada proper MCP infrastructure rebuild and decide whether to admit it, admit with followups, or request repair."
     }
   ]
 }
