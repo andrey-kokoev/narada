@@ -1,0 +1,30 @@
+{
+  "schema": "narada.mcp_adapter_repair_audit.v0",
+  "recorded_at": "2026-05-15T15:48:00Z",
+  "target_locus": "narada-proper",
+  "related_inbox_envelopes": [
+    "env_0ff460cd-336f-410d-88e6-cf3b223531d9",
+    "env_e26184db-7083-4f74-a4e4-d5eea06fec43",
+    "env_2ccb1628-a612-487b-851d-9844a59b6524"
+  ],
+  "problem": "The Narada proper MCP package delegated read adapters to a bare narada executable. In Codex/MCP child process context on Windows, that executable was not resolvable. A first repair using shell execution of the .CMD shim reached the CLI but split arguments with spaces, producing a truncated inbox envelope.",
+  "repair": {
+    "file": "packages/narada-proper-mcp/src/commands/process.ts",
+    "summary": "Resolve the local Narada CLI through an explicit workspace invocation. On Windows, execute process.execPath with packages/layers/cli/dist/main.js so argv is preserved without shell splitting. Keep workspace node_modules/.bin prepended to PATH for package resolution.",
+    "bad_envelope_archived": "env_e26184db-7083-4f74-a4e4-d5eea06fec43",
+    "correct_envelope": "env_2ccb1628-a612-487b-851d-9844a59b6524",
+    "review_task_created_by_narada": "task:1277"
+  },
+  "verification": [
+    "pnpm --filter @narada2/narada-proper-mcp test",
+    "pnpm --filter @narada2/narada-proper-mcp typecheck",
+    "narada-proper MCP narada_inbox_submit_observation created env_2ccb1628-a612-487b-851d-9844a59b6524 with full payload",
+    "narada-proper MCP narada_inbox_show env_2ccb1628-a612-487b-851d-9844a59b6524 returned full title, summary, and recommendation",
+    "narada-proper MCP narada_inbox_work_next no longer reports spawnSync narada ENOENT"
+  ],
+  "not_claimed": [
+    "review completion for task 1277",
+    "global Narada shim installation",
+    "publishing or pushing commits"
+  ]
+}

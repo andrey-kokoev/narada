@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PassThrough, Writable } from 'node:stream';
 import { parseNaradaProperMcpArgs, runNaradaProperMcp, NARADA_PROPER_MCP_SURFACE } from '../src/index.js';
+import { localNaradaCliEnvironment, localNaradaCliInvocation } from '../src/commands/process.js';
 
 describe('narada proper MCP surface', () => {
   it('parses target-local startup identity arguments', () => {
@@ -30,6 +31,15 @@ describe('narada proper MCP surface', () => {
       compatibility_facade_replaced: 'narada-mcp',
       source_site_runtime_imported: false,
     });
+  });
+
+  it('resolves the Narada CLI from the target workspace bin directory', () => {
+    const env = localNaradaCliEnvironment('D:/code/narada', { PATH: 'C:/Windows/System32' });
+    const invocation = localNaradaCliInvocation('D:/code/narada');
+
+    expect(invocation.command).toBe(process.execPath);
+    expect(invocation.args).toEqual(['D:\\code\\narada\\packages\\layers\\cli\\dist\\main.js']);
+    expect(env.PATH).toBe('D:\\code\\narada\\node_modules\\.bin;C:/Windows/System32');
   });
 
   it('lists tools and hydrates current launch evidence over stdio', async () => {

@@ -1,0 +1,20 @@
+{
+  "envelope_id": "env_2ccb1628-a612-487b-851d-9844a59b6524",
+  "received_at": "2026-05-15T15:46:42.349Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "commit:2f6446b1"
+  },
+  "target_locus": "narada-proper",
+  "kind": "observation",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "operator"
+  },
+  "payload": {
+    "title": "Review Narada proper MCP surface rebuild",
+    "summary": "Operator requests narada.architect review the committed MCP infrastructure rebuild before treating it as settled site posture. Review commit 2f6446b1 and the follow-up review recommendation 45294baf.",
+    "recommendation": "narada.architect should review commit 2f6446b1 for package boundary, launch config, tool vocabulary, break-glass posture, builder admission, and absence of User/PC runtime state import."
+  },
+  "status": "received"
+}
