@@ -23,5 +23,14 @@
   },
   "engines": {
     "node": ">=18.0.0"
-  }
+  },
+  "bin": {
+    "narada-shell-mcp": "./server.mjs"
+  },
+  "files": [
+    "dist/",
+    "server.mjs",
+    "support/",
+    "README.md"
+  ]
 }
