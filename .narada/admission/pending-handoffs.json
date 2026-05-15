@@ -58,6 +58,14 @@
       "inbound_envelope": "env_62d32705-0386-4820-8013-47a70cfbc8dd",
       "task_surface": ".narada/tasks/task-0027-windows-machinery-package-set-adoption.md",
       "implementation_audit": ".narada/audit/task-0027-windows-machinery-package-set-adoption-audit.json"
+    },
+    {
+      "source_site": "operator",
+      "source_ref": ".narada/inbox/external-handoffs/20260515-operator-directive-mcp-infrastructure-rebuild.md",
+      "captured_by": "narada-andrey.Kevin",
+      "received_at": "2026-05-15T13:51:37Z",
+      "status": "pending_review",
+      "summary": "Operator-originating directive to replace Narada proper MCP infrastructure: decouple agent-facing MCP runtime from the monolithic /packages CLI build path, retire/quarantine the coupled facade, and repopulate the MCP-related package/lift with a clean target-local implementation."
     }
   ]
 }

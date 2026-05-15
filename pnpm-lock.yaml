@@ -250,6 +250,22 @@ importers:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@20.19.39)
 
+  packages/narada-proper-mcp:
+    dependencies:
+      '@narada2/agent-context-memory':
+        specifier: workspace:*
+        version: link:../agent-context-memory
+    devDependencies:
+      '@types/node':
+        specifier: ^20.10.0
+        version: 20.19.39
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+      vitest:
+        specifier: ^1.0.0
+        version: 1.6.1(@types/node@20.19.39)
+
   packages/ops-kit:
     dependencies:
       '@narada2/charters':

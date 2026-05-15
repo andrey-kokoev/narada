@@ -3,6 +3,58 @@
   "site_id": "narada-proper",
   "mcp_surfaces": [
     {
+      "surface_id": "narada-proper.surface.agent-facing-mcp.v1",
+      "status": "live_agent_facing_target_local",
+      "path": "packages/narada-proper-mcp/src/main.ts",
+      "package": "@narada2/narada-proper-mcp",
+      "transport": "stdio",
+      "mutation_posture": "target_local_tools_only_with_tool_level_admission",
+      "command": "node --import tsx packages/narada-proper-mcp/src/main.ts",
+      "replaces": [
+        "narada-mcp",
+        "packages/layers/cli/dist/mcp-main.js"
+      ],
+      "depends_on_cli_dist": false,
+      "source_site_runtime_imported": false,
+      "tools": [
+        "narada_site_context",
+        "agent_context_hydrate_current",
+        "narada_mcp_fabric_context",
+        "site_task_lifecycle.plan_init",
+        "site_task_lifecycle.admit_task",
+        "site_task_lifecycle.read_task",
+        "agent_context_memory.plan_hydration",
+        "agent_context_memory.record_checkpoint",
+        "agent_context_memory.read_checkpoint_summary",
+        "narada_inbox_doctor",
+        "narada_inbox_work_next",
+        "narada_task_work_next",
+        "narada_inbox_list",
+        "narada_inbox_show",
+        "narada_inbox_submit_observation",
+        "narada_ee_mcp_doctor"
+      ],
+      "registered_live_tools": [
+        "narada_site_context",
+        "agent_context_hydrate_current",
+        "narada_mcp_fabric_context",
+        "site_task_lifecycle.plan_init",
+        "site_task_lifecycle.admit_task",
+        "site_task_lifecycle.read_task",
+        "agent_context_memory.plan_hydration",
+        "agent_context_memory.record_checkpoint",
+        "agent_context_memory.read_checkpoint_summary",
+        "narada_inbox_doctor",
+        "narada_inbox_work_next",
+        "narada_task_work_next",
+        "narada_inbox_list",
+        "narada_inbox_show",
+        "narada_inbox_submit_observation",
+        "narada_ee_mcp_doctor"
+      ],
+      "evidence": ".narada/audit/task-1268-mcp-infrastructure-rebuild-audit.json"
+    },
+    {
       "surface_id": "narada-proper.surface.task-0001.live-task-lifecycle-mcp-registration.v0",
       "status": "mutating_first_slice_registered",
       "path": ".narada/surfaces/task-0001-live-task-lifecycle-mcp-registration-surface.md",
@@ -54,6 +106,20 @@
     }
   ],
   "candidate_mcp_surfaces": [
+    {
+      "surface_id": "narada-proper.surface.cli-narada-mcp-compatibility.v0",
+      "status": "compatibility_candidate_not_agent_facing",
+      "path": "packages/layers/cli/src/mcp-main.ts",
+      "package": "@narada2/cli",
+      "transport": "stdio",
+      "mutation_posture": "compatibility_only_not_launcher_authoritative",
+      "tools": [
+        "legacy narada-mcp facade"
+      ],
+      "registered_live_tools": [],
+      "replacement": "packages/narada-proper-mcp/src/main.ts",
+      "evidence": ".narada/audit/task-1268-mcp-infrastructure-rebuild-audit.json"
+    },
     {
       "surface_id": "narada-proper.surface.task-lifecycle-expanded-mcp-descriptor.v0",
       "status": "descriptor_candidate_not_live",

@@ -8,7 +8,8 @@ param(
   [string]$Runtime = "codex",
   [switch]$Exec,
   [switch]$DryRun,
-  [switch]$Json
+  [switch]$Json,
+  [switch]$EnableNativeShell
 )
 
 $ErrorActionPreference = "Stop"
@@ -25,6 +26,7 @@ if ($Command -eq "agent-start") {
   if ($Exec) { $flags += "--exec" }
   if ($DryRun) { $flags += "--dry-run" }
   if ($Json) { $flags += "--json" }
+  if ($EnableNativeShell) { $flags += "--enable-native-shell" }
   $env:NARADA_AGENT_ID = $Agent
   & node $agentStart @flags
   exit $LASTEXITCODE
