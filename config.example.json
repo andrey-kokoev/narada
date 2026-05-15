@@ -1,0 +1,98 @@
+{
+  "site_id": "narada-proper",
+  "site_kind": "project",
+  "locus": {
+    "authority_locus": "narada_proper"
+  },
+  "mcp": {
+    "servers": {
+      "narada-proper": {
+        "command": "${siteRoot}/node_modules/.bin/narada-mcp.cmd",
+        "args": [
+          "--site-root",
+          "${siteRoot}",
+          "--site-id",
+          "narada-proper"
+        ],
+        "provider_locus": "target_site_mcp",
+        "target_locus": "narada_proper",
+        "purpose": "target-local Narada proper MCP facade"
+      },
+      "narada-shell": {
+        "command": "node",
+        "args": [
+          "${siteRoot}/packages/mcp-shell-windows/server.mjs",
+          "--site-root",
+          "${siteRoot}"
+        ],
+        "provider_locus": "target_site_packaged_shell_mcp",
+        "target_locus": "narada_proper",
+        "purpose": "repo-scoped packaged Shell MCP for narada.architect normal operation",
+        "native_shell": false,
+        "scope": {
+          "allowed_roots": [
+            "${siteRoot}"
+          ],
+          "forbidden_actions": [
+            "destructive git",
+            "force push",
+            "recursive delete",
+            "credentials",
+            "external publication"
+          ]
+        }
+      }
+    },
+    "role_policies": {
+      "architect": {
+        "servers": {
+          "narada-proper": {
+            "allowed_tools": [
+              "narada_site_context",
+              "narada_mcp_fabric_context",
+              "site_task_lifecycle.plan_init",
+              "site_task_lifecycle.admit_task",
+              "site_task_lifecycle.open_admitted_task",
+              "site_task_lifecycle.read_task",
+              "agent_context_memory.plan_hydration",
+              "agent_context_memory.record_checkpoint",
+              "agent_context_memory.read_checkpoint_summary",
+              "narada_inbox_doctor",
+              "narada_inbox_work_next",
+              "narada_task_work_next",
+              "narada_inbox_list",
+              "narada_inbox_show",
+              "narada_inbox_submit_observation",
+              "narada_ee_mcp_doctor"
+            ]
+          },
+          "narada-shell": {
+            "allowed_tools": [
+              "mcp_payload_create",
+              "mcp_payload_show",
+              "mcp_payload_derive",
+              "mcp_payload_validate",
+              "mcp_output_show",
+              "execute_command",
+              "git_stage_paths",
+              "git_commit",
+              "git_push_current",
+              "git_commit_and_push_increment",
+              "git_closeout_preflight"
+            ],
+            "normal_operation": true,
+            "scope": {
+              "allowed_roots": [
+                "${siteRoot}"
+              ],
+              "shell_access": "mcp_only",
+              "native_shell": "forbidden"
+            }
+          }
+        }
+      }
+    }
+  },
+  "schema": "narada.site_config.example.v0",
+  "example_note": "Tracked example for Narada proper local Site config. Copy to ignored config.json for machine-local operation."
+}
