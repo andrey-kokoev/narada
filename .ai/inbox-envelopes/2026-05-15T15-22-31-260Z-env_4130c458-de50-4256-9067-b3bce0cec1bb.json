@@ -1,0 +1,26 @@
+{
+  "envelope_id": "env_4130c458-de50-4256-9067-b3bce0cec1bb",
+  "received_at": "2026-05-15T15:22:31.260Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "codex_session:2026-05-15:mcp-task-admission-inert-claimability"
+  },
+  "target_locus": "narada_proper",
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada.builder"
+  },
+  "payload": {
+    "title": "MCP task admission remains inert for Builder claimability",
+    "summary": "MCP site_task_lifecycle.admit_task is still an inert admission surface; claimability currently requires governed task materialization.",
+    "evidence": [
+      "Task 1273 materialized MCP-admitted carrier rows into canonical tasks 1275 and 1276 through governed task create surfaces before Builder peek-next could see them."
+    ],
+    "proposal": [
+      "Add or expose a governed route/materialize/assign transition for MCP-admitted task rows, or document admission as intentionally inert until task materialization."
+    ],
+    "recommendation": "Route as lifecycle/work-next scheduler capability follow-up."
+  },
+  "status": "received"
+}
