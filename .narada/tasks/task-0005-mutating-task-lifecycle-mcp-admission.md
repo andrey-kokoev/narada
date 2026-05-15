@@ -28,6 +28,8 @@ DB path: `.ai/task-lifecycle.db`
 
 The MCP server executes SQLite mutation as the live adapter surface. `@narada2/site-task-lifecycle` remains adapter-interface-only, owns no SQLite dependency, and executes no SQLite mutation.
 
+The row written by `site_task_lifecycle.admit_task` is an inert admission record. It does not create a canonical governed task markdown file, SQLite lifecycle assignment, or `work-next` claimability. A separate governed materialization/promotion step must turn the admitted candidate into canonical task lifecycle work before Builder or Architect queues can claim it.
+
 ## Rollback
 
 Rollback for the smoke task is bounded to rows created by `site_task_lifecycle.admit_task` and the matching mutation evidence artifact.
@@ -42,6 +44,6 @@ Rollback for the smoke task is bounded to rows created by `site_task_lifecycle.a
 
 ## Closeout
 
-The mutating MCP first slice is claimable for exactly one tool: `site_task_lifecycle.admit_task`.
+The mutating MCP first slice is live for exactly one tool: `site_task_lifecycle.admit_task`.
 
 Additional mutating task lifecycle tools remain out of scope.

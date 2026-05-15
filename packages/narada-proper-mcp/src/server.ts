@@ -126,7 +126,7 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
   },
   {
     name: 'site_task_lifecycle.admit_task',
-    description: 'Admit one local task candidate into the Site task-lifecycle DB through the MCP adapter boundary.',
+    description: 'Record one inert local task-admission row through the MCP adapter boundary. This does not materialize a canonical governed task file, assignment, or work-next claimability.',
     inputSchema: objectSchema({
       task_id: { type: 'string', description: 'Local task id to admit.' },
       title: { type: 'string', description: 'Task title.' },
@@ -931,6 +931,11 @@ function admitTaskLifecycleTask(args: {
     taskId: args.taskId,
     adapterId: 'narada-proper.adapter.task-0005.mcp-sqlite3-cli.v0',
     taskDbPath: paths.taskDbPath,
+    admissionPosture: 'inert_until_governed_materialization',
+    canonicalTaskMaterialized: false,
+    workNextClaimable: false,
+    materializationRequired: true,
+    materializationGuidance: 'Promote or materialize the admitted candidate through the governed task lifecycle surface before expecting task work-next claimability.',
     mutationAttempted: true,
     mutationExecuted: true,
     sourceStateImported: false,

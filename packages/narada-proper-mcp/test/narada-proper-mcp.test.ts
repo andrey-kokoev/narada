@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { PassThrough, Writable } from 'node:stream';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { parseNaradaProperMcpArgs, runNaradaProperMcp, NARADA_PROPER_MCP_SURFACE } from '../src/index.js';
 import { localNaradaCliEnvironment, localNaradaCliInvocation } from '../src/commands/process.js';
 
@@ -33,13 +36,54 @@ describe('narada proper MCP surface', () => {
     });
   });
 
-  it('resolves the Narada CLI from the target workspace bin directory', () => {
-    const env = localNaradaCliEnvironment('D:/code/narada', { PATH: 'C:/Windows/System32' });
-    const invocation = localNaradaCliInvocation('D:/code/narada');
+  it('projects the target workspace bin directory onto the Narada CLI PATH', () => {
+    const env = localNaradaCliEnvironment('D:/code/narada', { PATH: 'C:/Windows/System32' }, 'win32');
 
-    expect(invocation.command).toBe(process.execPath);
-    expect(invocation.args).toEqual(['D:\\code\\narada\\packages\\layers\\cli\\dist\\main.js']);
     expect(env.PATH).toBe('D:\\code\\narada\\node_modules\\.bin;C:/Windows/System32');
+  });
+
+  it('resolves a PowerShell Narada shim through PATH on Windows', () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'narada-mcp-workspace-'));
+    const shimDir = mkdtempSync(join(tmpdir(), 'narada-mcp-shim-'));
+    try {
+      writeFileSync(join(shimDir, 'narada.ps1'), 'exit 0\n');
+
+      const invocation = localNaradaCliInvocation(workspace, { PATH: shimDir }, 'win32');
+
+      expect(invocation.command).toBe('powershell.exe');
+      expect(invocation.args).toEqual([
+        '-NoLogo',
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        join(shimDir, 'narada.ps1'),
+      ]);
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+      rmSync(shimDir, { recursive: true, force: true });
+    }
+  });
+
+  it('prefers the target workspace Narada shim over later PATH entries', () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'narada-mcp-workspace-'));
+    const laterPath = mkdtempSync(join(tmpdir(), 'narada-mcp-later-'));
+    try {
+      const workspaceBin = join(workspace, 'node_modules', '.bin');
+      mkdirSync(workspaceBin, { recursive: true });
+      writeFileSync(join(workspaceBin, 'narada.cmd'), '@echo off\r\n');
+      writeFileSync(join(laterPath, 'narada.cmd'), '@echo off\r\n');
+
+      const invocation = localNaradaCliInvocation(workspace, { PATH: laterPath, ComSpec: 'cmd.exe' }, 'win32');
+
+      expect(invocation).toEqual({
+        command: 'cmd.exe',
+        args: ['/d', '/s', '/c', join(workspaceBin, 'narada.cmd')],
+      });
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+      rmSync(laterPath, { recursive: true, force: true });
+    }
   });
 
   it('lists tools and hydrates current launch evidence over stdio', async () => {
@@ -67,6 +111,9 @@ describe('narada proper MCP surface', () => {
     const list = JSON.parse(output.lines[0]);
     expect(list.result.tools.map((tool: { name: string }) => tool.name)).toContain('agent_context_hydrate_current');
     expect(list.result.tools.map((tool: { name: string }) => tool.name)).toContain('site_task_lifecycle.read_task');
+    const admitTaskTool = list.result.tools.find((tool: { name: string }) => tool.name === 'site_task_lifecycle.admit_task');
+    expect(admitTaskTool.description).toContain('inert local task-admission row');
+    expect(admitTaskTool.description).toContain('does not materialize a canonical governed task');
 
     const hydrated = JSON.parse(JSON.parse(output.lines[1]).result.content[0].text);
     expect(hydrated).toMatchObject({

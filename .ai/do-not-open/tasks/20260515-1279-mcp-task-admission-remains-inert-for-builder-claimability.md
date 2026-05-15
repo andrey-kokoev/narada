@@ -1,5 +1,5 @@
 ---
-status: opened
+status: in_review
 ---
 
 # MCP task admission remains inert for Builder claimability
@@ -47,13 +47,19 @@ Recommendation: Route as lifecycle/work-next scheduler capability follow-up.
 
 ## Execution Notes
 
-<!-- Record what was done, decisions made, and files changed during execution. -->
+- Claimed task for `narada.builder` through `task work-next`.
+- Chose the bounded documentation/contract path from the proposal rather than building a new materialization pipeline in this slice.
+- Updated `packages/narada-proper-mcp/src/server.ts` so `site_task_lifecycle.admit_task` is described as an inert admission-row write and returns explicit `canonicalTaskMaterialized: false`, `workNextClaimable: false`, and materialization guidance.
+- Updated `.narada/capabilities/mcp-surfaces.json` and `.narada/tasks/task-0005-mutating-task-lifecycle-mcp-admission.md` to record the same posture.
+- Added test coverage that `tools/list` advertises the inert/non-materializing contract.
 
 ## Verification
 
-<!-- Record commands run, results observed, and how correctness was checked. -->
+- `pnpm --filter @narada2/narada-proper-mcp test` passed.
+- `pnpm --filter @narada2/narada-proper-mcp typecheck` passed.
+- `node --test tools/agent-start/start-agent.test.mjs` passed before this slice and was not affected by the task-admission wording change.
 
 ## Acceptance Criteria
 
-- [ ] Proposal handled: Add or expose a governed route/materialize/assign transition for MCP-admitted task rows, or document admission as intentionally inert until task materialization.
-- [ ] Recommendation addressed or explicitly rejected: Route as lifecycle/work-next scheduler capability follow-up.
+- [x] Proposal handled: Add or expose a governed route/materialize/assign transition for MCP-admitted task rows, or document admission as intentionally inert until task materialization.
+- [x] Recommendation addressed or explicitly rejected: Route as lifecycle/work-next scheduler capability follow-up.

@@ -1,0 +1,30 @@
+{
+  "schema": "narada.task_1279.inert_mcp_task_admission_contract.v0",
+  "recorded_at": "2026-05-15T16:10:00Z",
+  "task_number": 1279,
+  "source_envelope": "env_4130c458-de50-4256-9067-b3bce0cec1bb",
+  "decision": "documented_inert_until_governed_materialization",
+  "changed_files": [
+    "packages/narada-proper-mcp/src/server.ts",
+    "packages/narada-proper-mcp/test/narada-proper-mcp.test.ts",
+    ".narada/capabilities/mcp-surfaces.json",
+    ".narada/tasks/task-0005-mutating-task-lifecycle-mcp-admission.md",
+    ".ai/do-not-open/tasks/20260515-1279-mcp-task-admission-remains-inert-for-builder-claimability.md"
+  ],
+  "contract": {
+    "tool": "site_task_lifecycle.admit_task",
+    "admission_posture": "inert_until_governed_materialization",
+    "canonical_task_materialized": false,
+    "work_next_claimable": false,
+    "materialization_required": true
+  },
+  "not_claimed": [
+    "new governed materialize/route command",
+    "canonical task lifecycle DB migration",
+    "automatic work-next claimability for MCP-admitted rows"
+  ],
+  "verification": [
+    "pnpm --filter @narada2/narada-proper-mcp test",
+    "pnpm --filter @narada2/narada-proper-mcp typecheck"
+  ]
+}

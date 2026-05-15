@@ -9,6 +9,7 @@
       "package": "@narada2/narada-proper-mcp",
       "transport": "stdio",
       "mutation_posture": "target_local_tools_only_with_tool_level_admission",
+      "task_lifecycle_admission_posture": "site_task_lifecycle.admit_task records inert admission rows only; canonical governed task materialization is required before work-next claimability.",
       "command": "node --import tsx packages/narada-proper-mcp/src/main.ts",
       "replaces": [
         "narada-mcp",
@@ -61,6 +62,7 @@
       "package": "@narada2/site-task-lifecycle",
       "transport": "narada-mcp_stdio",
       "mutation_posture": "adapter_bound_local_task_admission_only",
+      "task_lifecycle_admission_posture": "admit_task is an adapter-bound inert admission row write, not canonical governed task creation or assignment.",
       "requires_before_live_mutation": [
         "narada-proper.carrier.task-0001.initializer-execution.v0",
         "narada-proper.carrier.task-0001.concrete-adapter.v0",
