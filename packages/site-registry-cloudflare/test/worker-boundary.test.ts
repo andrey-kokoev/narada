@@ -348,7 +348,14 @@ describe("@narada2/site-registry-cloudflare scaffold", () => {
 
     expect(root.status).toBe(200);
     expect(text).toContain("fetch(\"/api/sites\"");
-    expect(text).toContain("Registry Summary");
+    expect(text).toContain("site-grid");
+    expect(text).toContain("site-tile");
+    expect(text).toContain("Active agents");
+    expect(text).toContain("Open tasks");
+    expect(text).toContain("Operator attention");
+    expect(text).toContain("Critical action");
+    expect(text).toContain("not projected");
+    expect(text).toContain("projection only");
     expect(text).not.toContain("publish-token");
     expect(text).not.toContain("read-token");
     expect(text).not.toContain("payload_summary");

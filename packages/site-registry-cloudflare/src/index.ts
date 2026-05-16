@@ -181,32 +181,353 @@ export function humanShell(): string {
   const readableRoutes = routePosture()
     .filter((route) => route.method === "GET")
     .map((route) => `${route.method} ${route.path}`);
-  const routeItems = readableRoutes.map((route: string) => `<li>${escapeHtml(route)}</li>`).join("");
+  const routeItems = readableRoutes
+    .map((route: string) => {
+      const [, path = "/"] = route.split(" ");
+      return `<a href="${escapeHtml(path)}">${escapeHtml(route)}</a>`;
+    })
+    .join("");
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Narada Site Registry</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fb;
+      --panel: #ffffff;
+      --text: #172026;
+      --muted: #5d6975;
+      --line: #d9dee6;
+      --fresh: #16803f;
+      --missing: #8a6a00;
+      --failing: #b42318;
+      --unknown: #687282;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }
+
+    main {
+      width: min(1180px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 28px 0 40px;
+    }
+
+    header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 22px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.1;
+      font-weight: 680;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 7px 0 0;
+      color: var(--muted);
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(86px, 1fr));
+      gap: 8px;
+      min-width: min(520px, 100%);
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 10px 12px;
+      min-height: 66px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 22px;
+      line-height: 1;
+      margin-bottom: 7px;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .site-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 14px;
+      align-items: stretch;
+      margin-top: 14px;
+    }
+
+    .site-tile {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      min-height: 360px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 14px;
+    }
+
+    .tile-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .site-id {
+      font-size: 18px;
+      font-weight: 680;
+      overflow-wrap: anywhere;
+    }
+
+    .badge {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 12px;
+      font-weight: 650;
+      white-space: nowrap;
+      color: var(--unknown);
+      background: #f8fafc;
+    }
+
+    .badge.fresh {
+      color: var(--fresh);
+      background: #effaf3;
+      border-color: #b9e4c8;
+    }
+
+    .badge.missing,
+    .badge.stale {
+      color: var(--missing);
+      background: #fff8e1;
+      border-color: #ead58b;
+    }
+
+    .badge.failing {
+      color: var(--failing);
+      background: #fff1f0;
+      border-color: #f2b8b5;
+    }
+
+    .tile-section {
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+    }
+
+    .row-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .signal {
+      min-height: 66px;
+      border: 1px solid #e4e8ef;
+      border-radius: 8px;
+      padding: 10px;
+      background: #fbfcfe;
+    }
+
+    .signal label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 5px;
+    }
+
+    .signal span {
+      display: block;
+      font-weight: 640;
+      overflow-wrap: anywhere;
+    }
+
+    .tile-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .routes {
+      margin-top: 24px;
+      border-top: 1px solid var(--line);
+      padding-top: 18px;
+    }
+
+    .route-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .route-list a {
+      color: #23527c;
+      background: #eef3f8;
+      border: 1px solid #d5e0ea;
+      border-radius: 8px;
+      padding: 7px 9px;
+      text-decoration: none;
+      font-size: 12px;
+    }
+
+    .empty-state,
+    .error-state {
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      color: var(--muted);
+      background: var(--panel);
+    }
+
+    @media (max-width: 760px) {
+      header {
+        display: block;
+      }
+
+      .summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        margin-top: 18px;
+      }
+
+      .row-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
 <body>
   <main>
-    <h1>Narada Site Registry</h1>
-    <p>Projection-only hosted registry.</p>
-    <ul>${routeItems}</ul>
+    <header>
+      <div>
+        <h1>Narada Site Registry</h1>
+        <p>Projection-only hosted registry.</p>
+      </div>
+      <section class="summary" aria-label="Registry summary">
+        <div class="metric"><strong id="metric-sites">-</strong><span>Sites</span></div>
+        <div class="metric"><strong id="metric-fresh">-</strong><span>Fresh</span></div>
+        <div class="metric"><strong id="metric-stale">-</strong><span>Stale</span></div>
+        <div class="metric"><strong id="metric-missing">-</strong><span>Missing</span></div>
+        <div class="metric"><strong id="metric-failing">-</strong><span>Failing</span></div>
+      </section>
+    </header>
     <section aria-live="polite">
-      <h2>Registry Summary</h2>
-      <pre id="registry-summary">Loading...</pre>
+      <h2>Sites</h2>
+      <div id="site-grid" class="site-grid">
+        <div class="empty-state">Loading Site projections...</div>
+      </div>
+    </section>
+    <section class="routes">
+      <h2>Read API</h2>
+      <nav class="route-list" aria-label="Read API routes">${routeItems}</nav>
     </section>
   </main>
   <script>
+    const notProjected = "not projected";
+    const text = (value) => value === undefined || value === null || value === "" ? notProjected : String(value);
+    const escapeText = (value) => text(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;");
+    const metric = (id, value) => {
+      const element = document.getElementById(id);
+      if (element) element.textContent = String(value ?? 0);
+    };
+    const compactEvent = (eventId) => {
+      const value = text(eventId);
+      return value.length > 22 ? value.slice(0, 19) + "..." : value;
+    };
+    const signal = (label, value) => \`
+      <div class="signal">
+        <label>\${escapeText(label)}</label>
+        <span>\${escapeText(value)}</span>
+      </div>\`;
+    const siteTile = (site) => {
+      const freshness = text(site.freshness);
+      return \`
+        <article class="site-tile">
+          <div class="tile-head">
+            <div>
+              <div class="site-id">\${escapeText(site.site_id)}</div>
+              <p>Projected Site awareness.</p>
+            </div>
+            <span class="badge \${escapeText(freshness)}">\${escapeText(freshness)}</span>
+          </div>
+          <div class="row-grid">
+            \${signal("Health", site.latest_health_status)}
+            \${signal("Observed", site.latest_health_observed_at)}
+            \${signal("Latest event", compactEvent(site.latest_event_id))}
+            \${signal("Provenance", site.provenance_count)}
+          </div>
+          <div class="tile-section">
+            <div class="row-grid">
+              \${signal("Active agents", site.active_agent_count)}
+              \${signal("Open tasks", site.open_task_count)}
+              \${signal("Operator attention", site.operator_attention)}
+              \${signal("Critical action", site.critical_action)}
+              \${signal("Inbox posture", site.inbox_posture)}
+              \${signal("Publication edge", site.publication_edge)}
+            </div>
+          </div>
+          <div class="tile-foot">
+            <span>projection only</span>
+            <span>no local admission</span>
+          </div>
+        </article>\`;
+    };
+
     fetch("/api/sites", { headers: { "accept": "application/json" } })
       .then((response) => response.json())
       .then((body) => {
-        document.getElementById("registry-summary").textContent = JSON.stringify(body.summary, null, 2);
+        metric("metric-sites", body.summary?.site_count);
+        metric("metric-fresh", body.summary?.fresh_count);
+        metric("metric-stale", body.summary?.stale_count);
+        metric("metric-missing", body.summary?.missing_count);
+        metric("metric-failing", body.summary?.failing_count);
+        const sites = Array.isArray(body.sites) ? body.sites : [];
+        document.getElementById("site-grid").innerHTML = sites.length
+          ? sites.map(siteTile).join("")
+          : '<div class="empty-state">No Site projections available.</div>';
       })
       .catch(() => {
-        document.getElementById("registry-summary").textContent = "summary_unavailable";
+        document.getElementById("site-grid").innerHTML = '<div class="error-state">Site projections unavailable.</div>';
       });
   </script>
 </body>
