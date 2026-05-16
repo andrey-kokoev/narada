@@ -21,7 +21,7 @@
   ],
   "vars": {
     "NARADA_SITE_REGISTRY_MODE": "projection_only",
-    "NARADA_SITE_REGISTRY_KNOWN_SITE_IDS": "narada-proper,user-site",
+    "NARADA_SITE_REGISTRY_KNOWN_SITE_IDS": "narada-proper",
     "NARADA_SITE_REGISTRY_MAX_PAYLOAD_BYTES": "65536",
     "NARADA_SITE_REGISTRY_EVENT_CAPABILITY_REF": "capability:site_registry.event_publish"
   },
