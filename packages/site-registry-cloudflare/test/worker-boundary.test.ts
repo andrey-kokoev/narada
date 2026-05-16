@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import worker, {
   HOSTED_SITE_REGISTRY_AUTHORITY_LIMITS,
   SITE_REGISTRY_CLOUDFLARE_BINDINGS,
+  getSiteRegistryRelation,
   healthPayload,
+  listSiteRegistryRelationEvents,
+  recordSiteRegistryRelationTransition,
   routePosture,
   type SiteRegistryCloudflareEnv,
 } from "../src/index.js";
@@ -23,12 +26,56 @@ class FakeD1 {
   readonly rows: unknown[][] = [];
   readonly messages = new Map<string, Record<string, unknown>>();
   readonly events: Record<string, unknown>[] = [];
+  readonly relations = new Map<string, Record<string, unknown>>();
+  readonly relationEvents: Record<string, unknown>[] = [];
 
   prepare(sql: string) {
     return {
       bind: (...values: unknown[]) => ({
         run: async () => {
           this.rows.push(values);
+          if (sql.includes("insert into site_registry_relations")) {
+            const [relation_id, registry_id, site_id, subject_site_id, relation_kind, state, visibility, created_at, updated_at, retired_at, withdrawn_at, suppressed_at, evidence_event_id, relation_json] = values;
+            const existing = this.relations.get(String(relation_id));
+            this.relations.set(String(relation_id), {
+              ...(existing ?? {}),
+              relation_id,
+              registry_id,
+              site_id,
+              subject_site_id,
+              relation_kind,
+              state,
+              visibility,
+              created_at: existing?.created_at ?? created_at,
+              updated_at,
+              retired_at,
+              withdrawn_at,
+              suppressed_at,
+              evidence_event_id,
+              relation_json,
+            });
+          }
+          if (sql.includes("insert into site_registry_relation_events")) {
+            const [event_id, relation_id, registry_id, site_id, relation_kind, transition, from_state, to_state, from_visibility, to_visibility, actor_site_id, actor_kind, capability_ref, idempotency_key, occurred_at, event_json] = values;
+            this.relationEvents.push({
+              event_id,
+              relation_id,
+              registry_id,
+              site_id,
+              relation_kind,
+              transition,
+              from_state,
+              to_state,
+              from_visibility,
+              to_visibility,
+              actor_site_id,
+              actor_kind,
+              capability_ref,
+              idempotency_key,
+              occurred_at,
+              event_json,
+            });
+          }
           if (sql.includes("insert into site_registry_remote_messages")) {
             const [message_id, source_ref, idempotency_key, target_site_id, status, retry_count, received_at, message_json, receipt_json] = values;
             this.messages.set(String(message_id), {
@@ -64,6 +111,15 @@ class FakeD1 {
           return { success: true };
         },
         first: async () => {
+          if (sql.includes("select relation_json from site_registry_relations where relation_id = ?")) {
+            const row = this.relations.get(String(values[0]));
+            return row ? { relation_json: row.relation_json } : null;
+          }
+          if (sql.includes("select event_json from site_registry_relation_events where relation_id = ? and idempotency_key = ?")) {
+            const row = this.relationEvents.find((candidate) =>
+              candidate.relation_id === values[0] && candidate.idempotency_key === values[1]);
+            return row ? { event_json: row.event_json } : null;
+          }
           if (sql.includes("where message_id = ?")) {
             const row = this.messages.get(String(values[0]));
             return row ? { message_json: row.message_json } : null;
@@ -76,6 +132,20 @@ class FakeD1 {
           return null;
         },
         all: async () => {
+          if (sql.includes("select relation_json from site_registry_relations where relation_kind = ?")) {
+            return {
+              results: [...this.relations.values()]
+                .filter((row) => row.relation_kind === values[0])
+                .map((row) => ({ relation_json: row.relation_json })),
+            };
+          }
+          if (sql.includes("select event_json from site_registry_relation_events where relation_id = ?")) {
+            return {
+              results: this.relationEvents
+                .filter((row) => row.relation_id === values[0])
+                .map((row) => ({ event_json: row.event_json })),
+            };
+          }
           if (sql.includes("where status = ?")) {
             return {
               results: [...this.messages.values()]
@@ -123,6 +193,8 @@ function env(): SiteRegistryCloudflareEnv {
     NARADA_SITE_REGISTRY_MESSAGE_TOKEN: "message-token",
     NARADA_SITE_REGISTRY_POLL_TOKEN: "poll-token",
     NARADA_SITE_REGISTRY_LOCAL_ADMISSION_TOKEN: "finalize-token",
+    NARADA_SITE_REGISTRY_RELATION_WITHDRAW_TOKEN: "withdraw-token",
+    NARADA_SITE_REGISTRY_RELATION_ADMIN_TOKEN: "relation-admin-token",
     NARADA_SITE_REGISTRY_KNOWN_SITE_IDS: "site-a,site-b",
   };
 }
@@ -146,6 +218,8 @@ describe("@narada2/site-registry-cloudflare scaffold", () => {
       pollToken: "NARADA_SITE_REGISTRY_POLL_TOKEN",
       localAdmissionToken: "NARADA_SITE_REGISTRY_LOCAL_ADMISSION_TOKEN",
       adminToken: "NARADA_SITE_REGISTRY_ADMIN_TOKEN",
+      relationWithdrawToken: "NARADA_SITE_REGISTRY_RELATION_WITHDRAW_TOKEN",
+      relationAdminToken: "NARADA_SITE_REGISTRY_RELATION_ADMIN_TOKEN",
     });
   });
 
@@ -318,6 +392,103 @@ describe("@narada2/site-registry-cloudflare scaffold", () => {
     expect(freshnessText).not.toContain("payload_summary");
   });
 
+  it("filters public Site APIs by active visible relation lifecycle while retaining projection evidence", async () => {
+    const runtime = env();
+    const d1 = runtime.NARADA_SITE_REGISTRY_D1 as unknown as FakeD1;
+    await worker.fetch(webhookRequest(event()), runtime);
+
+    const withdrawal = await worker.fetch(new Request("https://registry.example/api/relations/transition", {
+      method: "POST",
+      headers: { authorization: "Bearer withdraw-token" },
+      body: JSON.stringify({
+        event_id: "rel-event-withdraw-filter",
+        idempotency_key: "rel-idem-withdraw-filter",
+        registry_id: "registry-a",
+        relation_id: "rel_site-a_registry",
+        site_id: "site-a",
+        relation_kind: "publishes_to",
+        transition: "withdraw",
+        to_state: "withdrawn",
+        to_visibility: "private",
+        actor: { kind: "site", site_id: "site-a" },
+        capability_ref: "capability:site_registry.relation.withdraw.site-a",
+        occurred_at: "2026-05-16T23:40:00.000Z",
+        reason_codes: ["site_requested_registry_forget_public_projection"],
+        evidence_refs: ["test:relation:withdraw-filter"],
+      }),
+    }), runtime);
+    expect(withdrawal.status).toBe(202);
+
+    const sites = await worker.fetch(new Request("https://registry.example/api/sites"), runtime);
+    const freshness = await worker.fetch(new Request("https://registry.example/api/freshness"), runtime);
+    const retainedProjection = await worker.fetch(new Request("https://registry.example/api/projections/site-a", {
+      headers: { authorization: "Bearer read-token" },
+    }), runtime);
+    const sitesBody = await sites.json() as {
+      summary: { site_count: number; fresh_count: number; missing_count: number };
+      sites: Array<{ site_id: string; relation?: { state: string; visibility: string } }>;
+    };
+    const freshnessText = JSON.stringify(await freshness.json());
+    const retainedBody = await retainedProjection.json() as { status: string; projection: { site_id: string } };
+
+    expect(sitesBody.summary.site_count).toBe(1);
+    expect(sitesBody.summary.fresh_count).toBe(0);
+    expect(sitesBody.summary.missing_count).toBe(1);
+    expect(sitesBody.sites.map((site) => site.site_id)).toEqual(["site-b"]);
+    expect(sitesBody.sites[0]?.relation).toMatchObject({ state: "active", visibility: "public" });
+    expect(freshnessText).not.toContain("site-a");
+    expect(retainedProjection.status).toBe(200);
+    expect(retainedBody.projection.site_id).toBe("site-a");
+    expect(d1.relationEvents).toHaveLength(1);
+  });
+
+  it("keeps retired and suppressed relations out of public tiles", async () => {
+    const runtime = env();
+    runtime.NARADA_SITE_REGISTRY_KNOWN_SITE_IDS = "site-a,site-b,site-c";
+    const d1 = runtime.NARADA_SITE_REGISTRY_D1 as unknown as D1Database;
+    await recordSiteRegistryRelationTransition(d1, {
+      event_id: "rel-event-suppress-site-b",
+      idempotency_key: "rel-idem-suppress-site-b",
+      registry_id: "registry-a",
+      relation_id: "rel_site-b_registry",
+      site_id: "site-b",
+      relation_kind: "publishes_to",
+      transition: "suppress",
+      to_state: "active",
+      to_visibility: "suppressed",
+      actor: { kind: "registry_owner", site_id: "registry-a" },
+      capability_ref: "capability:site_registry.relation.admin.suppress",
+      occurred_at: "2026-05-16T23:41:00.000Z",
+      reason_codes: ["operator_attention_required"],
+      evidence_refs: ["test:relation:suppress"],
+    });
+    await recordSiteRegistryRelationTransition(d1, {
+      event_id: "rel-event-retire-site-c",
+      idempotency_key: "rel-idem-retire-site-c",
+      registry_id: "registry-a",
+      relation_id: "rel_site-c_registry",
+      site_id: "site-c",
+      relation_kind: "publishes_to",
+      transition: "retire",
+      to_state: "retired",
+      to_visibility: "private",
+      actor: { kind: "registry_owner", site_id: "registry-a" },
+      capability_ref: "capability:site_registry.relation.admin.retire",
+      occurred_at: "2026-05-16T23:42:00.000Z",
+      reason_codes: ["site_retired"],
+      evidence_refs: ["test:relation:retire"],
+    });
+
+    const response = await worker.fetch(new Request("https://registry.example/api/sites"), runtime);
+    const body = await response.json() as {
+      summary: { site_count: number };
+      sites: Array<{ site_id: string }>;
+    };
+
+    expect(body.summary.site_count).toBe(1);
+    expect(body.sites.map((site) => site.site_id)).toEqual(["site-a"]);
+  });
+
   it("requires read capability for per-Site projection details and redacts bearer values", async () => {
     const runtime = env();
     await worker.fetch(webhookRequest(event()), runtime);
@@ -342,6 +513,251 @@ describe("@narada2/site-registry-cloudflare scaffold", () => {
     expect(authorizedBody.projection.latest_health.status).toBe("ok");
   });
 
+  it("records relation lifecycle transitions as D1 current state plus retained event evidence", async () => {
+    const runtime = env();
+    const d1 = runtime.NARADA_SITE_REGISTRY_D1 as D1Database;
+    const activate = await recordSiteRegistryRelationTransition(d1, {
+      event_id: "rel-event-1",
+      idempotency_key: "site-a:activate:1",
+      registry_id: "site-registry:test",
+      relation_id: "rel_site-a_registry",
+      site_id: "site-a",
+      relation_kind: "publishes_to",
+      transition: "activate",
+      to_state: "active",
+      to_visibility: "public",
+      actor: { kind: "registry_owner", site_id: "registry-site", principal: "test" },
+      capability_ref: "capability:site_registry.relation.activate",
+      occurred_at: "2026-05-16T23:30:00.000Z",
+      reason_codes: ["fixture_active_relation"],
+      evidence_refs: ["test:relation:activate"],
+    });
+    const withdraw = await recordSiteRegistryRelationTransition(d1, {
+      event_id: "rel-event-2",
+      idempotency_key: "site-a:withdraw:1",
+      registry_id: "site-registry:test",
+      relation_id: "rel_site-a_registry",
+      site_id: "site-a",
+      relation_kind: "publishes_to",
+      transition: "withdraw",
+      from_state: "active",
+      to_state: "withdrawn",
+      from_visibility: "public",
+      to_visibility: "private",
+      actor: { kind: "site", site_id: "site-a", principal: "site-a.operator" },
+      capability_ref: "capability:site_registry.relation.withdraw.site-a",
+      occurred_at: "2026-05-16T23:31:00.000Z",
+      reason_codes: ["site_requested_not_counted"],
+      evidence_refs: ["test:relation:withdraw"],
+    });
+    const relation = await getSiteRegistryRelation(d1, "rel_site-a_registry");
+    const events = await listSiteRegistryRelationEvents(d1, "rel_site-a_registry");
+
+    expect(activate.status).toBe("applied");
+    expect(withdraw.status).toBe("applied");
+    expect(relation?.state).toBe("withdrawn");
+    expect(relation?.visibility).toBe("private");
+    expect(relation?.created_at).toBe("2026-05-16T23:30:00.000Z");
+    expect(events.map((entry) => entry.transition)).toEqual(["activate", "withdraw"]);
+    expect(JSON.stringify(events)).not.toContain("publish-token");
+    expect(JSON.stringify(events)).not.toContain("read-token");
+  });
+
+  it("deduplicates relation lifecycle transitions by relation id and idempotency key", async () => {
+    const runtime = env();
+    const d1 = runtime.NARADA_SITE_REGISTRY_D1 as D1Database;
+    const input = {
+      event_id: "rel-event-1",
+      idempotency_key: "site-a:activate:1",
+      registry_id: "site-registry:test",
+      relation_id: "rel_site-a_registry",
+      site_id: "site-a",
+      relation_kind: "publishes_to",
+      transition: "activate" as const,
+      to_state: "active" as const,
+      to_visibility: "public" as const,
+      actor: { kind: "registry_owner" as const, site_id: "registry-site", principal: "test" },
+      capability_ref: "capability:site_registry.relation.activate",
+      occurred_at: "2026-05-16T23:30:00.000Z",
+      reason_codes: ["fixture_active_relation"],
+      evidence_refs: ["test:relation:activate"],
+    };
+    const first = await recordSiteRegistryRelationTransition(d1, input);
+    const second = await recordSiteRegistryRelationTransition(d1, {
+      ...input,
+      event_id: "rel-event-retry",
+      occurred_at: "2026-05-16T23:35:00.000Z",
+    });
+    const events = await listSiteRegistryRelationEvents(d1, "rel_site-a_registry");
+
+    expect(first.status).toBe("applied");
+    expect(second.status).toBe("duplicate");
+    expect(second.event.event_id).toBe("rel-event-1");
+    expect(events).toHaveLength(1);
+  });
+
+  it("accepts protected relation withdrawal and returns bounded cloud receipt only", async () => {
+    const runtime = env();
+    const response = await worker.fetch(new Request("https://registry.example/api/relations/transition", {
+      method: "POST",
+      headers: { authorization: "Bearer withdraw-token" },
+      body: JSON.stringify({
+        event_id: "rel-event-withdraw",
+        idempotency_key: "site-a:withdraw:api",
+        registry_id: "site-registry:test",
+        relation_id: "rel_site-a_registry",
+        site_id: "site-a",
+        relation_kind: "publishes_to",
+        transition: "withdraw",
+        to_state: "withdrawn",
+        to_visibility: "private",
+        actor: { kind: "site", site_id: "site-a", principal: "site-a.operator" },
+        capability_ref: "capability:site_registry.relation.withdraw.site-a",
+        occurred_at: "2026-05-16T23:40:00.000Z",
+        reason_codes: ["site_requested_not_counted"],
+        evidence_refs: ["test:withdraw"],
+      }),
+    }), runtime);
+    const body = await response.json() as {
+      status: string;
+      cloud_receipt_only: boolean;
+      local_inbox_mutated: boolean;
+      mutates_site_authority: boolean;
+      relation: { state: string; visibility: string };
+    };
+    const d1 = runtime.NARADA_SITE_REGISTRY_D1 as unknown as FakeD1;
+
+    expect(response.status).toBe(202);
+    expect(body.status).toBe("applied");
+    expect(body.cloud_receipt_only).toBe(true);
+    expect(body.local_inbox_mutated).toBe(false);
+    expect(body.mutates_site_authority).toBe(false);
+    expect(body.relation.state).toBe("withdrawn");
+    expect(body.relation.visibility).toBe("private");
+    expect(d1.relationEvents).toHaveLength(1);
+    expect(JSON.stringify(body)).not.toContain("withdraw-token");
+  });
+
+  it("accepts registry-owner relation suppression with separate admin capability", async () => {
+    const runtime = env();
+    const response = await worker.fetch(new Request("https://registry.example/api/relations/transition", {
+      method: "POST",
+      headers: { authorization: "Bearer relation-admin-token" },
+      body: JSON.stringify({
+        event_id: "rel-event-suppress",
+        idempotency_key: "site-a:suppress:api",
+        registry_id: "site-registry:test",
+        relation_id: "rel_site-a_registry",
+        site_id: "site-a",
+        relation_kind: "publishes_to",
+        transition: "suppress",
+        to_state: "active",
+        to_visibility: "suppressed",
+        actor: { kind: "registry_owner", site_id: "registry-site", principal: "operator" },
+        capability_ref: "capability:site_registry.relation.admin.suppress",
+        occurred_at: "2026-05-16T23:41:00.000Z",
+        reason_codes: ["registry_owner_suppressed_public_projection"],
+        evidence_refs: ["test:suppress"],
+      }),
+    }), runtime);
+    const body = await response.json() as { relation: { state: string; visibility: string } };
+
+    expect(response.status).toBe(202);
+    expect(body.relation.state).toBe("active");
+    expect(body.relation.visibility).toBe("suppressed");
+  });
+
+  it("refuses unauthorized or invalid relation transitions without writing state", async () => {
+    const runtime = env();
+    const invalidToken = await worker.fetch(new Request("https://registry.example/api/relations/transition", {
+      method: "POST",
+      headers: { authorization: "Bearer wrong-token" },
+      body: JSON.stringify({
+        event_id: "rel-event-withdraw",
+        idempotency_key: "site-a:withdraw:bad-token",
+        registry_id: "site-registry:test",
+        relation_id: "rel_site-a_registry",
+        site_id: "site-a",
+        relation_kind: "publishes_to",
+        transition: "withdraw",
+        to_state: "withdrawn",
+        to_visibility: "private",
+        actor: { kind: "site", site_id: "site-a" },
+        capability_ref: "capability:site_registry.relation.withdraw.site-a",
+        occurred_at: "2026-05-16T23:42:00.000Z",
+        reason_codes: ["site_requested_not_counted"],
+        evidence_refs: ["test:withdraw"],
+      }),
+    }), runtime);
+    const purge = await worker.fetch(new Request("https://registry.example/api/relations/transition", {
+      method: "POST",
+      headers: { authorization: "Bearer relation-admin-token" },
+      body: JSON.stringify({
+        event_id: "rel-event-purge",
+        idempotency_key: "site-a:purge:api",
+        registry_id: "site-registry:test",
+        relation_id: "rel_site-a_registry",
+        site_id: "site-a",
+        relation_kind: "publishes_to",
+        transition: "purge",
+        to_state: "retired",
+        to_visibility: "private",
+        actor: { kind: "registry_owner", site_id: "registry-site" },
+        capability_ref: "capability:site_registry.relation.admin.purge",
+        occurred_at: "2026-05-16T23:43:00.000Z",
+        reason_codes: ["operator_requested_purge"],
+        evidence_refs: ["test:purge"],
+      }),
+    }), runtime);
+    const invalidText = JSON.stringify(await invalidToken.json());
+    const purgeBody = await purge.json() as { refusal_reasons: string[] };
+    const d1 = runtime.NARADA_SITE_REGISTRY_D1 as unknown as FakeD1;
+
+    expect(invalidToken.status).toBe(401);
+    expect(invalidText).not.toContain("wrong-token");
+    expect(purge.status).toBe(400);
+    expect(purgeBody.refusal_reasons).toContain("site_registry_relation_purge_not_supported");
+    expect(d1.relationEvents).toHaveLength(0);
+  });
+
+  it("deduplicates relation transition API retries", async () => {
+    const runtime = env();
+    const payload = {
+      event_id: "rel-event-withdraw",
+      idempotency_key: "site-a:withdraw:api",
+      registry_id: "site-registry:test",
+      relation_id: "rel_site-a_registry",
+      site_id: "site-a",
+      relation_kind: "publishes_to",
+      transition: "withdraw",
+      to_state: "withdrawn",
+      to_visibility: "private",
+      actor: { kind: "site", site_id: "site-a" },
+      capability_ref: "capability:site_registry.relation.withdraw.site-a",
+      occurred_at: "2026-05-16T23:44:00.000Z",
+      reason_codes: ["site_requested_not_counted"],
+      evidence_refs: ["test:withdraw"],
+    };
+    const first = await worker.fetch(new Request("https://registry.example/api/relations/transition", {
+      method: "POST",
+      headers: { authorization: "Bearer withdraw-token" },
+      body: JSON.stringify(payload),
+    }), runtime);
+    const second = await worker.fetch(new Request("https://registry.example/api/relations/transition", {
+      method: "POST",
+      headers: { authorization: "Bearer withdraw-token" },
+      body: JSON.stringify({ ...payload, event_id: "rel-event-withdraw-retry" }),
+    }), runtime);
+    const firstBody = await first.json() as { status: string };
+    const secondBody = await second.json() as { status: string; event: { event_id: string } };
+    const d1 = runtime.NARADA_SITE_REGISTRY_D1 as unknown as FakeD1;
+
+    expect(firstBody.status).toBe("applied");
+    expect(secondBody.status).toBe("duplicate");
+    expect(secondBody.event.event_id).toBe("rel-event-withdraw");
+    expect(d1.relationEvents).toHaveLength(1);
+  });
+
   it("serves a human peek page that loads summary API without embedding evidence payloads or tokens", async () => {
     const root = await worker.fetch(new Request("https://registry.example/"), env());
     const text = await root.text();
@@ -354,8 +770,17 @@ describe("@narada2/site-registry-cloudflare scaffold", () => {
     expect(text).toContain("Open tasks");
     expect(text).toContain("Operator attention");
     expect(text).toContain("Critical action");
+    expect(text).toContain("Relation lifecycle posture");
+    expect(text).toContain("state:");
+    expect(text).toContain("visibility:");
+    expect(text).toContain("No active public Site relations.");
+    expect(text).toContain("Withdrawn, retired, suppressed, or private relations are withheld");
     expect(text).toContain("not projected");
     expect(text).toContain("projection only");
+    expect(text).not.toContain("relation-admin-token");
+    expect(text).not.toContain("withdraw-token");
+    expect(text).not.toContain("method=\"POST\"");
+    expect(text).not.toContain("/api/relations/transition\"");
     expect(text).not.toContain("publish-token");
     expect(text).not.toContain("read-token");
     expect(text).not.toContain("payload_summary");

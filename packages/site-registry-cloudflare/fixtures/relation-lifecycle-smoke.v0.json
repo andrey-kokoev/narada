@@ -1,0 +1,140 @@
+{
+  "schema": "narada.site_registry.relation_lifecycle_smoke_fixture.v0",
+  "description": "Non-secret fixture for local Site Registry relation lifecycle smoke proof.",
+  "site_event": {
+    "schema": "narada.site_event.envelope.v0",
+    "event_id": "evt-relation-smoke-health",
+    "idempotency_key": "site-a:evt-relation-smoke-health",
+    "source_site_id": "site-a",
+    "subject_site_id": "site-a",
+    "family": "site_health",
+    "type": "site.health.observed",
+    "observed_at": "2026-05-16T23:50:00.000Z",
+    "sent_at": "2026-05-16T23:50:01.000Z",
+    "auth": {
+      "kind": "bearer_capability_ref",
+      "capability_ref": "capability:site_registry.event_publish",
+      "authenticated": false
+    },
+    "payload_bounds": {
+      "max_bytes": 128,
+      "raw_values_excluded": true
+    },
+    "payload_summary": {
+      "status": "ok"
+    },
+    "authority_limits": [
+      "fixture_event_is_projection_input"
+    ]
+  },
+  "active_relation": {
+    "event_id": "rel-smoke-activate-site-a",
+    "idempotency_key": "rel-smoke-activate-site-a",
+    "registry_id": "registry-smoke",
+    "relation_id": "rel_site-a_registry_smoke",
+    "site_id": "site-a",
+    "relation_kind": "publishes_to",
+    "transition": "activate",
+    "to_state": "active",
+    "to_visibility": "public",
+    "actor": {
+      "kind": "registry_owner",
+      "site_id": "registry-smoke"
+    },
+    "capability_ref": "capability:site_registry.relation.admin.activate",
+    "occurred_at": "2026-05-16T23:51:00.000Z",
+    "reason_codes": [
+      "fixture_activate_public_relation"
+    ],
+    "evidence_refs": [
+      "fixture:relation-smoke:activate"
+    ]
+  },
+  "site_withdrawal": {
+    "event_id": "rel-smoke-withdraw-site-a",
+    "idempotency_key": "rel-smoke-withdraw-site-a",
+    "registry_id": "registry-smoke",
+    "relation_id": "rel_site-a_registry_smoke",
+    "site_id": "site-a",
+    "relation_kind": "publishes_to",
+    "transition": "withdraw",
+    "to_state": "withdrawn",
+    "to_visibility": "private",
+    "actor": {
+      "kind": "site",
+      "site_id": "site-a"
+    },
+    "capability_ref": "capability:site_registry.relation.withdraw.site-a",
+    "occurred_at": "2026-05-16T23:52:00.000Z",
+    "reason_codes": [
+      "fixture_site_requested_public_withdrawal"
+    ],
+    "evidence_refs": [
+      "fixture:relation-smoke:withdraw"
+    ]
+  },
+  "registry_suppression": {
+    "event_id": "rel-smoke-suppress-site-a",
+    "idempotency_key": "rel-smoke-suppress-site-a",
+    "registry_id": "registry-smoke",
+    "relation_id": "rel_site-a_registry_smoke",
+    "site_id": "site-a",
+    "relation_kind": "publishes_to",
+    "transition": "suppress",
+    "to_state": "active",
+    "to_visibility": "suppressed",
+    "actor": {
+      "kind": "registry_owner",
+      "site_id": "registry-smoke"
+    },
+    "capability_ref": "capability:site_registry.relation.admin.suppress",
+    "occurred_at": "2026-05-16T23:53:00.000Z",
+    "reason_codes": [
+      "fixture_registry_owner_suppression"
+    ],
+    "evidence_refs": [
+      "fixture:relation-smoke:suppress"
+    ]
+  },
+  "invalid_transition": {
+    "event_id": "rel-smoke-invalid-purge-site-a",
+    "idempotency_key": "rel-smoke-invalid-purge-site-a",
+    "registry_id": "registry-smoke",
+    "relation_id": "rel_site-a_registry_smoke",
+    "site_id": "site-a",
+    "relation_kind": "publishes_to",
+    "transition": "purge",
+    "to_state": "retired",
+    "to_visibility": "private",
+    "actor": {
+      "kind": "registry_owner",
+      "site_id": "registry-smoke"
+    },
+    "capability_ref": "capability:site_registry.relation.admin.purge",
+    "occurred_at": "2026-05-16T23:54:00.000Z",
+    "reason_codes": [
+      "fixture_invalid_purge_refusal"
+    ],
+    "evidence_refs": [
+      "fixture:relation-smoke:invalid"
+    ]
+  },
+  "expected_public_summaries": {
+    "before_withdrawal": {
+      "site_count": 1,
+      "fresh_count": 1,
+      "missing_count": 0
+    },
+    "after_withdrawal": {
+      "site_count": 0,
+      "fresh_count": 0,
+      "missing_count": 0
+    }
+  },
+  "live_safety": {
+    "default_live_mode": "route_shape_and_refusal_only",
+    "mutation_gate_env": "NARADA_SITE_REGISTRY_LIVE_RELATION_MUTATION",
+    "mutation_gate_required_value": "1",
+    "raw_secret_values_recorded": false
+  }
+}

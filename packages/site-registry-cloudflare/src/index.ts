@@ -25,6 +25,8 @@ export interface SiteRegistryCloudflareEnv {
   NARADA_SITE_REGISTRY_POLL_TOKEN?: string;
   NARADA_SITE_REGISTRY_LOCAL_ADMISSION_TOKEN?: string;
   NARADA_SITE_REGISTRY_ADMIN_TOKEN?: string;
+  NARADA_SITE_REGISTRY_RELATION_WITHDRAW_TOKEN?: string;
+  NARADA_SITE_REGISTRY_RELATION_ADMIN_TOKEN?: string;
   NARADA_SITE_REGISTRY_MODE?: string;
   NARADA_SITE_REGISTRY_KNOWN_SITE_IDS?: string;
   NARADA_SITE_REGISTRY_MAX_PAYLOAD_BYTES?: string;
@@ -49,6 +51,8 @@ export const SITE_REGISTRY_CLOUDFLARE_BINDINGS = Object.freeze({
   pollToken: "NARADA_SITE_REGISTRY_POLL_TOKEN",
   localAdmissionToken: "NARADA_SITE_REGISTRY_LOCAL_ADMISSION_TOKEN",
   adminToken: "NARADA_SITE_REGISTRY_ADMIN_TOKEN",
+  relationWithdrawToken: "NARADA_SITE_REGISTRY_RELATION_WITHDRAW_TOKEN",
+  relationAdminToken: "NARADA_SITE_REGISTRY_RELATION_ADMIN_TOKEN",
 } as const);
 
 export interface RoutePosture {
@@ -65,6 +69,106 @@ interface ProjectionSummary {
   latest_health_observed_at?: string;
   latest_event_id?: string;
   provenance_count: number;
+  relation: {
+    relation_id: string;
+    relation_kind: string;
+    state: SiteRegistryRelationState;
+    visibility: SiteRegistryRelationVisibility;
+    source: "d1_lifecycle" | "known_site_configuration";
+    updated_at?: string;
+  };
+}
+
+export type SiteRegistryRelationState =
+  | "candidate"
+  | "active"
+  | "withdrawn"
+  | "retired"
+  | "rejected"
+  | "superseded";
+
+export type SiteRegistryRelationVisibility = "public" | "private" | "suppressed";
+
+export type SiteRegistryRelationTransition =
+  | "activate"
+  | "withdraw"
+  | "retire"
+  | "suppress"
+  | "unsuppress"
+  | "reject"
+  | "reactivate";
+
+export interface SiteRegistryRelationRecord {
+  schema: "narada.site_registry.relation.v0";
+  relation_id: string;
+  registry_id: string;
+  site_id: string;
+  subject_site_id: string;
+  relation_kind: string;
+  state: SiteRegistryRelationState;
+  visibility: SiteRegistryRelationVisibility;
+  created_at: string;
+  updated_at: string;
+  retired_at?: string;
+  withdrawn_at?: string;
+  suppressed_at?: string;
+  evidence_event_id?: string;
+  projection_only: true;
+  mutates_site_authority: false;
+}
+
+export interface SiteRegistryRelationTransitionInput {
+  event_id: string;
+  idempotency_key: string;
+  registry_id: string;
+  relation_id: string;
+  site_id: string;
+  subject_site_id?: string;
+  relation_kind: string;
+  transition: SiteRegistryRelationTransition;
+  to_state: SiteRegistryRelationState;
+  to_visibility: SiteRegistryRelationVisibility;
+  actor: {
+    kind: "site" | "registry_owner" | "operator" | "system";
+    site_id?: string;
+    principal?: string;
+  };
+  capability_ref: string;
+  occurred_at: string;
+  reason_codes: string[];
+  evidence_refs: string[];
+  from_state?: SiteRegistryRelationState;
+  from_visibility?: SiteRegistryRelationVisibility;
+}
+
+export interface SiteRegistryRelationTransitionRecord {
+  schema: "narada.site_registry.relation_transition.v0";
+  event_id: string;
+  idempotency_key: string;
+  registry_id: string;
+  relation_id: string;
+  site_id: string;
+  subject_site_id: string;
+  relation_kind: string;
+  transition: SiteRegistryRelationTransition;
+  from_state?: SiteRegistryRelationState;
+  to_state: SiteRegistryRelationState;
+  from_visibility?: SiteRegistryRelationVisibility;
+  to_visibility: SiteRegistryRelationVisibility;
+  actor: SiteRegistryRelationTransitionInput["actor"];
+  capability_ref: string;
+  occurred_at: string;
+  reason_codes: string[];
+  evidence_refs: string[];
+  raw_secret_values_recorded: false;
+  authority_limits: string[];
+}
+
+export interface SiteRegistryRelationTransitionResult {
+  status: "applied" | "duplicate";
+  relation: SiteRegistryRelationRecord;
+  event: SiteRegistryRelationTransitionRecord;
+  raw_secret_values_recorded: false;
 }
 
 export function routePosture(): RoutePosture[] {
@@ -80,6 +184,7 @@ export function routePosture(): RoutePosture[] {
     { method: "GET", path: "/api/messages/:message_id", status: "live", authority: "projection_only" },
     { method: "GET", path: "/api/messages/:message_id/receipt", status: "live", authority: "projection_only" },
     { method: "POST", path: "/api/messages/:message_id/finalize", status: "live", authority: "projection_only" },
+    { method: "POST", path: "/api/relations/transition", status: "live", authority: "projection_only" },
   ];
 }
 
@@ -131,6 +236,8 @@ export function healthPayload(env: SiteRegistryCloudflareEnv = {}) {
       poll_token_configured: Boolean(env.NARADA_SITE_REGISTRY_POLL_TOKEN),
       local_admission_token_configured: Boolean(env.NARADA_SITE_REGISTRY_LOCAL_ADMISSION_TOKEN),
       admin_token_configured: Boolean(env.NARADA_SITE_REGISTRY_ADMIN_TOKEN),
+      relation_withdraw_token_configured: Boolean(env.NARADA_SITE_REGISTRY_RELATION_WITHDRAW_TOKEN),
+      relation_admin_token_configured: Boolean(env.NARADA_SITE_REGISTRY_RELATION_ADMIN_TOKEN),
     },
     known_site_count: knownSiteIds(env).length,
     routes: routePosture(),
@@ -344,6 +451,30 @@ export function humanShell(): string {
       border-color: #f2b8b5;
     }
 
+    .lifecycle-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .relation-badge {
+      border: 1px solid #d5e0ea;
+      border-radius: 999px;
+      padding: 5px 9px;
+      font-size: 12px;
+      font-weight: 650;
+      color: #23527c;
+      background: #eef3f8;
+      white-space: nowrap;
+    }
+
+    .relation-badge.public {
+      color: var(--fresh);
+      background: #effaf3;
+      border-color: #b9e4c8;
+    }
+
     .tile-section {
       border-top: 1px solid var(--line);
       padding-top: 12px;
@@ -481,6 +612,9 @@ export function humanShell(): string {
       </div>\`;
     const siteTile = (site) => {
       const freshness = text(site.freshness);
+      const relation = site.relation || {};
+      const relationState = text(relation.state);
+      const relationVisibility = text(relation.visibility);
       return \`
         <article class="site-tile">
           <div class="tile-head">
@@ -490,11 +624,17 @@ export function humanShell(): string {
             </div>
             <span class="badge \${escapeText(freshness)}">\${escapeText(freshness)}</span>
           </div>
+          <div class="lifecycle-strip" aria-label="Relation lifecycle posture">
+            <span class="relation-badge">state: \${escapeText(relationState)}</span>
+            <span class="relation-badge \${escapeText(relationVisibility)}">visibility: \${escapeText(relationVisibility)}</span>
+          </div>
           <div class="row-grid">
             \${signal("Health", site.latest_health_status)}
             \${signal("Observed", site.latest_health_observed_at)}
             \${signal("Latest event", compactEvent(site.latest_event_id))}
             \${signal("Provenance", site.provenance_count)}
+            \${signal("Relation source", relation.source)}
+            \${signal("Relation updated", relation.updated_at)}
           </div>
           <div class="tile-section">
             <div class="row-grid">
@@ -507,7 +647,7 @@ export function humanShell(): string {
             </div>
           </div>
           <div class="tile-foot">
-            <span>projection only</span>
+            <span>\${escapeText(relation.source || "projection only")}</span>
             <span>no local admission</span>
           </div>
         </article>\`;
@@ -524,7 +664,7 @@ export function humanShell(): string {
         const sites = Array.isArray(body.sites) ? body.sites : [];
         document.getElementById("site-grid").innerHTML = sites.length
           ? sites.map(siteTile).join("")
-          : '<div class="empty-state">No Site projections available.</div>';
+          : '<div class="empty-state"><strong>No active public Site relations.</strong><p>Withdrawn, retired, suppressed, or private relations are withheld from this projection-only grid.</p></div>';
       })
       .catch(() => {
         document.getElementById("site-grid").innerHTML = '<div class="error-state">Site projections unavailable.</div>';
@@ -555,6 +695,9 @@ export async function handleRequest(request: Request, env: SiteRegistryCloudflar
   }
   if (request.method === "POST" && url.pathname === "/api/messages") {
     return submitRemoteMessage(request, env);
+  }
+  if (request.method === "POST" && url.pathname === "/api/relations/transition") {
+    return transitionSiteRegistryRelation(request, env);
   }
   if (request.method === "GET" && url.pathname === "/api/messages/pending") {
     return listPendingRemoteMessages(request, env);
@@ -774,6 +917,50 @@ async function finalizeRemoteMessage(request: Request, env: SiteRegistryCloudfla
     local_inbox_mutated: false,
     ...noAuthorityFields(),
   });
+}
+
+async function transitionSiteRegistryRelation(request: Request, env: SiteRegistryCloudflareEnv): Promise<Response> {
+  if (!env.NARADA_SITE_REGISTRY_D1) return refusal(["site_registry_relation_d1_not_configured"], 503);
+  const parsed = await parseJsonBody<Partial<SiteRegistryRelationTransitionInput> & { transition?: string; to_state?: string; to_visibility?: string }>(request);
+  if (!parsed.ok) return refusal([parsed.reason], 400);
+  const validation = validateRelationTransitionPayload(parsed.value);
+  if (!validation.ok) return refusal(validation.refusals, 400);
+
+  const capability = capabilityForRelationTransition(request, validation.value, env);
+  if (!capability.ok) return refusal([capability.reason], capability.status);
+
+  const result = await recordSiteRegistryRelationTransition(env.NARADA_SITE_REGISTRY_D1, validation.value);
+  return json({
+    schema: "narada.site_registry.relation_transition_response.v0",
+    status: result.status,
+    cloud_receipt_only: true,
+    remote_surface_authority: "registry_projection_lifecycle",
+    local_site_admission_required: false,
+    local_inbox_mutated: false,
+    mutates_site_authority: false,
+    relation: {
+      relation_id: result.relation.relation_id,
+      registry_id: result.relation.registry_id,
+      site_id: result.relation.site_id,
+      relation_kind: result.relation.relation_kind,
+      state: result.relation.state,
+      visibility: result.relation.visibility,
+      updated_at: result.relation.updated_at,
+      evidence_event_id: result.relation.evidence_event_id,
+    },
+    event: {
+      event_id: result.event.event_id,
+      idempotency_key: result.event.idempotency_key,
+      transition: result.event.transition,
+      from_state: result.event.from_state,
+      to_state: result.event.to_state,
+      from_visibility: result.event.from_visibility,
+      to_visibility: result.event.to_visibility,
+      occurred_at: result.event.occurred_at,
+    },
+    raw_secret_values_recorded: false,
+    ...noAuthorityFields(),
+  }, result.status === "duplicate" ? 200 : 202);
 }
 
 async function sitesSummary(env: SiteRegistryCloudflareEnv): Promise<Response> {
@@ -1030,6 +1217,95 @@ function validateSubmitPayload(payload: RemoteMessageSubmitPayload): string[] {
   return refusals;
 }
 
+function validateRelationTransitionPayload(
+  payload: Partial<SiteRegistryRelationTransitionInput> & { transition?: string; to_state?: string; to_visibility?: string },
+): { ok: true; value: SiteRegistryRelationTransitionInput } | { ok: false; refusals: string[] } {
+  const refusals: string[] = [];
+  const transition = payload.transition;
+  const transitionValue = String(transition ?? "missing");
+  const toState = payload.to_state;
+  const toVisibility = payload.to_visibility;
+  const actor = payload.actor;
+  const transitionAllowed = ["activate", "withdraw", "retire", "suppress", "unsuppress", "reject", "reactivate"].includes(transitionValue);
+  const stateAllowed = ["candidate", "active", "withdrawn", "retired", "rejected", "superseded"].includes(String(toState));
+  const visibilityAllowed = ["public", "private", "suppressed"].includes(String(toVisibility));
+
+  if (!payload.event_id) refusals.push("site_registry_relation_event_id_required");
+  if (!payload.idempotency_key) refusals.push("site_registry_relation_idempotency_key_required");
+  if (!payload.registry_id) refusals.push("site_registry_relation_registry_id_required");
+  if (!payload.relation_id) refusals.push("site_registry_relation_id_required");
+  if (!payload.site_id) refusals.push("site_registry_relation_site_id_required");
+  if (!payload.relation_kind) refusals.push("site_registry_relation_kind_required");
+  if (!transitionAllowed) refusals.push(`site_registry_relation_transition_unsupported:${transitionValue}`);
+  if (transitionValue === "purge" || transitionValue === "delete") refusals.push("site_registry_relation_purge_not_supported");
+  if (!stateAllowed) refusals.push(`site_registry_relation_to_state_invalid:${String(toState ?? "missing")}`);
+  if (!visibilityAllowed) refusals.push(`site_registry_relation_to_visibility_invalid:${String(toVisibility ?? "missing")}`);
+  if (!actor || typeof actor !== "object") refusals.push("site_registry_relation_actor_required");
+  if (actor && !["site", "registry_owner", "operator", "system"].includes(String(actor.kind))) {
+    refusals.push(`site_registry_relation_actor_kind_invalid:${String(actor.kind ?? "missing")}`);
+  }
+  if (!payload.capability_ref) refusals.push("site_registry_relation_capability_ref_required");
+  if (!payload.occurred_at) refusals.push("site_registry_relation_occurred_at_required");
+  if (!Array.isArray(payload.reason_codes) || payload.reason_codes.length === 0) {
+    refusals.push("site_registry_relation_reason_codes_required");
+  }
+  if (!Array.isArray(payload.evidence_refs) || payload.evidence_refs.length === 0) {
+    refusals.push("site_registry_relation_evidence_refs_required");
+  }
+  if (containsRawSecretMarker(payload.reason_codes) || containsRawSecretMarker(payload.evidence_refs)) {
+    refusals.push("site_registry_relation_payload_contains_raw_secret_marker");
+  }
+  if (transition === "withdraw" && (actor?.kind !== "site" || actor.site_id !== payload.site_id)) {
+    refusals.push("site_registry_relation_withdraw_requires_matching_site_actor");
+  }
+  if (["activate", "retire", "suppress", "unsuppress", "reject", "reactivate"].includes(String(transition))
+    && !["registry_owner", "operator"].includes(String(actor?.kind))) {
+    refusals.push("site_registry_relation_admin_transition_requires_registry_owner_actor");
+  }
+
+  if (refusals.length > 0) return { ok: false, refusals };
+  return { ok: true, value: payload as SiteRegistryRelationTransitionInput };
+}
+
+function capabilityForRelationTransition(
+  request: Request,
+  payload: SiteRegistryRelationTransitionInput,
+  env: SiteRegistryCloudflareEnv,
+): { ok: true } | { ok: false; reason: string; status: number } {
+  if (payload.transition === "withdraw") {
+    return capabilityTokenMatches(
+      request,
+      env.NARADA_SITE_REGISTRY_RELATION_WITHDRAW_TOKEN,
+      payload.capability_ref,
+      "site_registry_relation_withdraw_token",
+      "capability:site_registry.relation.withdraw",
+    );
+  }
+  return capabilityTokenMatches(
+    request,
+    env.NARADA_SITE_REGISTRY_RELATION_ADMIN_TOKEN,
+    payload.capability_ref,
+    "site_registry_relation_admin_token",
+    "capability:site_registry.relation.admin",
+  );
+}
+
+function capabilityTokenMatches(
+  request: Request,
+  expectedToken: string | undefined,
+  capabilityRef: string,
+  reasonPrefix: string,
+  expectedCapabilityPrefix: string,
+): { ok: true } | { ok: false; reason: string; status: number } {
+  if (!expectedToken) return { ok: false, reason: `${reasonPrefix}_not_configured`, status: 503 };
+  const bearer = bearerToken(request.headers.get("authorization"));
+  if (bearer !== expectedToken) return { ok: false, reason: `${reasonPrefix}_invalid`, status: 401 };
+  if (capabilityRef !== expectedCapabilityPrefix && !capabilityRef.startsWith(`${expectedCapabilityPrefix}.`)) {
+    return { ok: false, reason: `${reasonPrefix}_capability_ref_invalid`, status: 403 };
+  }
+  return { ok: true };
+}
+
 function remoteCandidateReplayKey(payload: RemoteMessageSubmitPayload): string {
   return payload.replay_key ?? payload.idempotency_key ?? "";
 }
@@ -1265,14 +1541,15 @@ async function readSiteEvents(kv: KVNamespace, siteId: string): Promise<SiteEven
 
 async function readKnownProjectionSummaries(env: SiteRegistryCloudflareEnv): Promise<ProjectionSummary[]> {
   const kv = env.NARADA_SITE_REGISTRY_KV;
-  const siteIds = knownSiteIds(env);
+  const publicRelations = await readPublicSiteRegistryRelations(env);
   if (!kv) {
-    return siteIds.map((siteId) => missingProjectionSummary(siteId));
+    return publicRelations.map((relation) => missingProjectionSummary(relation.site_id, relation));
   }
 
-  return Promise.all(siteIds.map(async (siteId) => {
+  return Promise.all(publicRelations.map(async (relation) => {
+    const siteId = relation.site_id;
     const raw = await kv.get(siteProjectionKey(siteId));
-    if (!raw) return missingProjectionSummary(siteId);
+    if (!raw) return missingProjectionSummary(siteId, relation);
     try {
       const projection = JSON.parse(raw) as {
         site_id: string;
@@ -1286,6 +1563,7 @@ async function readKnownProjectionSummaries(env: SiteRegistryCloudflareEnv): Pro
         latest_health_observed_at: projection.latest_health?.observed_at,
         latest_event_id: projection.latest_health?.event_id,
         provenance_count: projection.event_provenance?.length ?? 0,
+        relation: publicRelationSummary(relation),
       };
     } catch {
       return {
@@ -1293,9 +1571,73 @@ async function readKnownProjectionSummaries(env: SiteRegistryCloudflareEnv): Pro
         freshness: "unknown",
         latest_health_status: "projection_unreadable",
         provenance_count: 0,
+        relation: publicRelationSummary(relation),
       };
     }
   }));
+}
+
+async function readPublicSiteRegistryRelations(env: SiteRegistryCloudflareEnv): Promise<SiteRegistryRelationRecord[]> {
+  const knownRelations = knownSiteIds(env).map(implicitActivePublicRelation);
+  const d1 = env.NARADA_SITE_REGISTRY_D1;
+  if (!d1) return knownRelations;
+
+  const explicitRelations = await listSiteRegistryRelations(d1);
+  const bySiteId = new Map<string, SiteRegistryRelationRecord>();
+  for (const relation of knownRelations) bySiteId.set(relation.site_id, relation);
+  for (const relation of explicitRelations) {
+    if (relation.relation_kind !== "publishes_to") continue;
+    if (relation.state === "active" && relation.visibility === "public") {
+      bySiteId.set(relation.site_id, relation);
+    } else {
+      bySiteId.delete(relation.site_id);
+    }
+  }
+
+  return [...bySiteId.values()]
+    .filter((relation) => relation.state === "active" && relation.visibility === "public")
+    .sort((left, right) => left.site_id.localeCompare(right.site_id));
+}
+
+async function listSiteRegistryRelations(d1: D1Database): Promise<SiteRegistryRelationRecord[]> {
+  const result = await d1.prepare("select relation_json from site_registry_relations where relation_kind = ? order by site_id asc")
+    .bind("publishes_to")
+    .all<{ relation_json: string }>();
+  return (result.results ?? []).flatMap((row) => {
+    try {
+      return [JSON.parse(row.relation_json) as SiteRegistryRelationRecord];
+    } catch {
+      return [];
+    }
+  });
+}
+
+function implicitActivePublicRelation(siteId: string): SiteRegistryRelationRecord {
+  return {
+    schema: "narada.site_registry.relation.v0",
+    relation_id: `implicit-known-site:${siteId}:publishes_to`,
+    registry_id: "cloudflare-hosted-site-registry",
+    site_id: siteId,
+    subject_site_id: siteId,
+    relation_kind: "publishes_to",
+    state: "active",
+    visibility: "public",
+    created_at: "implicit",
+    updated_at: "implicit",
+    projection_only: true,
+    mutates_site_authority: false,
+  };
+}
+
+function publicRelationSummary(relation: SiteRegistryRelationRecord): ProjectionSummary["relation"] {
+  return {
+    relation_id: relation.relation_id,
+    relation_kind: relation.relation_kind,
+    state: relation.state,
+    visibility: relation.visibility,
+    source: relation.updated_at === "implicit" ? "known_site_configuration" : "d1_lifecycle",
+    ...(relation.updated_at !== "implicit" ? { updated_at: relation.updated_at } : {}),
+  };
 }
 
 async function requireRemoteMessage(
@@ -1380,12 +1722,186 @@ async function insertMessageEvent(
   ).bind(messageId, eventType, JSON.stringify(refusalReasons)).run();
 }
 
-function missingProjectionSummary(siteId: string): ProjectionSummary {
+export async function recordSiteRegistryRelationTransition(
+  d1: D1Database,
+  input: SiteRegistryRelationTransitionInput,
+): Promise<SiteRegistryRelationTransitionResult> {
+  if (containsRawSecretMarker(input.reason_codes) || containsRawSecretMarker(input.evidence_refs)) {
+    throw new Error("site_registry_relation_transition_contains_raw_secret_marker");
+  }
+  const existingEvent = await getRelationEventByIdempotency(d1, input.relation_id, input.idempotency_key);
+  if (existingEvent) {
+    const relation = await getRelationById(d1, input.relation_id);
+    if (!relation) throw new Error("site_registry_relation_event_without_relation_state");
+    return {
+      status: "duplicate",
+      relation,
+      event: existingEvent,
+      raw_secret_values_recorded: false,
+    };
+  }
+
+  const previous = await getRelationById(d1, input.relation_id);
+  const now = input.occurred_at;
+  const event: SiteRegistryRelationTransitionRecord = {
+    schema: "narada.site_registry.relation_transition.v0",
+    event_id: input.event_id,
+    idempotency_key: input.idempotency_key,
+    registry_id: input.registry_id,
+    relation_id: input.relation_id,
+    site_id: input.site_id,
+    subject_site_id: input.subject_site_id ?? input.site_id,
+    relation_kind: input.relation_kind,
+    transition: input.transition,
+    ...(input.from_state ?? previous?.state ? { from_state: input.from_state ?? previous?.state } : {}),
+    to_state: input.to_state,
+    ...(input.from_visibility ?? previous?.visibility ? { from_visibility: input.from_visibility ?? previous?.visibility } : {}),
+    to_visibility: input.to_visibility,
+    actor: input.actor,
+    capability_ref: input.capability_ref,
+    occurred_at: input.occurred_at,
+    reason_codes: input.reason_codes,
+    evidence_refs: input.evidence_refs,
+    raw_secret_values_recorded: false,
+    authority_limits: [
+      "relation_transition_is_registry_projection_state",
+      "transition_does_not_mutate_site_authority",
+      "transition_does_not_delete_provenance",
+      "cloud_receipt_is_not_local_site_admission",
+    ],
+  };
+  const relation: SiteRegistryRelationRecord = {
+    schema: "narada.site_registry.relation.v0",
+    relation_id: input.relation_id,
+    registry_id: input.registry_id,
+    site_id: input.site_id,
+    subject_site_id: input.subject_site_id ?? input.site_id,
+    relation_kind: input.relation_kind,
+    state: input.to_state,
+    visibility: input.to_visibility,
+    created_at: previous?.created_at ?? now,
+    updated_at: now,
+    ...(input.to_state === "retired" ? { retired_at: now } : previous?.retired_at ? { retired_at: previous.retired_at } : {}),
+    ...(input.to_state === "withdrawn" ? { withdrawn_at: now } : previous?.withdrawn_at ? { withdrawn_at: previous.withdrawn_at } : {}),
+    ...(input.to_visibility === "suppressed" ? { suppressed_at: now } : previous?.suppressed_at ? { suppressed_at: previous.suppressed_at } : {}),
+    evidence_event_id: input.event_id,
+    projection_only: true,
+    mutates_site_authority: false,
+  };
+
+  await upsertRelation(d1, relation);
+  await insertRelationEvent(d1, event);
+
+  return {
+    status: "applied",
+    relation,
+    event,
+    raw_secret_values_recorded: false,
+  };
+}
+
+export async function getSiteRegistryRelation(
+  d1: D1Database,
+  relationId: string,
+): Promise<SiteRegistryRelationRecord | null> {
+  return getRelationById(d1, relationId);
+}
+
+export async function listSiteRegistryRelationEvents(
+  d1: D1Database,
+  relationId: string,
+): Promise<SiteRegistryRelationTransitionRecord[]> {
+  const result = await d1.prepare(
+    "select event_json from site_registry_relation_events where relation_id = ? order by occurred_at asc",
+  ).bind(relationId).all<{ event_json: string }>();
+  return (result.results ?? []).map((row) => JSON.parse(row.event_json) as SiteRegistryRelationTransitionRecord);
+}
+
+async function getRelationById(
+  d1: D1Database,
+  relationId: string,
+): Promise<SiteRegistryRelationRecord | null> {
+  const row = await d1.prepare("select relation_json from site_registry_relations where relation_id = ?")
+    .bind(relationId)
+    .first<{ relation_json: string }>();
+  return row ? JSON.parse(row.relation_json) as SiteRegistryRelationRecord : null;
+}
+
+async function getRelationEventByIdempotency(
+  d1: D1Database,
+  relationId: string,
+  idempotencyKeyValue: string,
+): Promise<SiteRegistryRelationTransitionRecord | null> {
+  const row = await d1.prepare("select event_json from site_registry_relation_events where relation_id = ? and idempotency_key = ?")
+    .bind(relationId, idempotencyKeyValue)
+    .first<{ event_json: string }>();
+  return row ? JSON.parse(row.event_json) as SiteRegistryRelationTransitionRecord : null;
+}
+
+async function upsertRelation(d1: D1Database, relation: SiteRegistryRelationRecord): Promise<void> {
+  await d1.prepare(
+    `insert into site_registry_relations
+      (relation_id, registry_id, site_id, subject_site_id, relation_kind, state, visibility, created_at, updated_at, retired_at, withdrawn_at, suppressed_at, evidence_event_id, relation_json)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      on conflict(relation_id) do update set
+        state = excluded.state,
+        visibility = excluded.visibility,
+        updated_at = excluded.updated_at,
+        retired_at = excluded.retired_at,
+        withdrawn_at = excluded.withdrawn_at,
+        suppressed_at = excluded.suppressed_at,
+        evidence_event_id = excluded.evidence_event_id,
+        relation_json = excluded.relation_json`,
+  ).bind(
+    relation.relation_id,
+    relation.registry_id,
+    relation.site_id,
+    relation.subject_site_id,
+    relation.relation_kind,
+    relation.state,
+    relation.visibility,
+    relation.created_at,
+    relation.updated_at,
+    relation.retired_at ?? null,
+    relation.withdrawn_at ?? null,
+    relation.suppressed_at ?? null,
+    relation.evidence_event_id ?? null,
+    JSON.stringify(relation),
+  ).run();
+}
+
+async function insertRelationEvent(d1: D1Database, event: SiteRegistryRelationTransitionRecord): Promise<void> {
+  await d1.prepare(
+    `insert into site_registry_relation_events
+      (event_id, relation_id, registry_id, site_id, relation_kind, transition, from_state, to_state, from_visibility, to_visibility, actor_site_id, actor_kind, capability_ref, idempotency_key, occurred_at, event_json)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    event.event_id,
+    event.relation_id,
+    event.registry_id,
+    event.site_id,
+    event.relation_kind,
+    event.transition,
+    event.from_state ?? null,
+    event.to_state,
+    event.from_visibility ?? null,
+    event.to_visibility,
+    event.actor.site_id ?? null,
+    event.actor.kind,
+    event.capability_ref,
+    event.idempotency_key,
+    event.occurred_at,
+    JSON.stringify(event),
+  ).run();
+}
+
+function missingProjectionSummary(siteId: string, relation: SiteRegistryRelationRecord): ProjectionSummary {
   return {
     site_id: siteId,
     freshness: "missing",
     latest_health_status: "missing",
     provenance_count: 0,
+    relation: publicRelationSummary(relation),
   };
 }
 

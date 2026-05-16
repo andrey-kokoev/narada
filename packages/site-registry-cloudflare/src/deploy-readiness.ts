@@ -47,6 +47,8 @@ const REQUIRED_SECRET_REFS = [
   "NARADA_SITE_REGISTRY_POLL_TOKEN",
   "NARADA_SITE_REGISTRY_LOCAL_ADMISSION_TOKEN",
   "NARADA_SITE_REGISTRY_ADMIN_TOKEN",
+  "NARADA_SITE_REGISTRY_RELATION_WITHDRAW_TOKEN",
+  "NARADA_SITE_REGISTRY_RELATION_ADMIN_TOKEN",
 ];
 
 export function planHostedTelemetryDeployPreflight(input: HostedTelemetryDeployPreflightInput): HostedTelemetryDeployPreflight {

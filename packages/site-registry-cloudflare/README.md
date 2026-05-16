@@ -43,6 +43,7 @@ KV ids, and secret names are not imported.
 | `GET` | `/api/messages/:message_id` | poll-token protected message detail |
 | `GET` | `/api/messages/:message_id/receipt` | poll-token protected receipt detail |
 | `POST` | `/api/messages/:message_id/finalize` | finalize-token protected receipt update |
+| `POST` | `/api/relations/transition` | relation-token protected lifecycle transition |
 
 ## Cloudflare Bindings
 
@@ -74,6 +75,24 @@ messages remain remote pending candidates in D1 until a local Site reports
 admitted, rejected, or error finalization evidence. Cloud receipts are not local
 canonical inbox admission, and finalized admitted receipts reference local
 admission evidence instead of performing admission in the Worker.
+
+## Relation Lifecycle
+
+`POST /api/relations/transition` records bounded registry relation lifecycle
+transitions in D1. Site-originated withdrawal uses
+`NARADA_SITE_REGISTRY_RELATION_WITHDRAW_TOKEN`; registry-owner lifecycle actions
+such as suppress, retire, activate, reject, or reactivate use
+`NARADA_SITE_REGISTRY_RELATION_ADMIN_TOKEN`. Responses are cloud receipts over
+registry projection state only; they do not mutate represented Site authority or
+delete provenance. Purge/delete transitions are refused in this slice.
+
+The non-live smoke fixture at `fixtures/relation-lifecycle-smoke.v0.json`
+contains only capability references and expected summaries, not bearer tokens.
+`pnpm --filter @narada2/site-registry-cloudflare smoke:fixture` proves the local
+active-to-withdrawn flow with fake KV/D1, plus suppression, invalid transition,
+and unauthorized refusal posture. Live smoke must remain route-shape/refusal-only
+unless `NARADA_SITE_REGISTRY_LIVE_RELATION_MUTATION=1` is explicitly set by the
+operator for a controlled relation mutation.
 
 ## Client Helpers
 
