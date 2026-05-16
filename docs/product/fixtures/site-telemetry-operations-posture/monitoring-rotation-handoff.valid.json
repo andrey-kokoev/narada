@@ -1,0 +1,77 @@
+{
+  "schema": "narada.site_telemetry.operations_posture.v0",
+  "surface_id": "surface_user-site-telemetry_awareness",
+  "owning_site_id": "narada-andrey",
+  "generated_at": "2026-05-16T20:36:00.000Z",
+  "ownership": {
+    "monitoring_owner": {
+      "site_id": "narada-andrey",
+      "principal": "operator",
+      "responsibilities": ["route_health", "freshness", "alert_triage"]
+    },
+    "publisher_sites": [
+      {
+        "site_id": "narada-proper",
+        "responsibilities": ["publication_edge", "bounded_event_payloads", "publish_schedule"]
+      }
+    ],
+    "cloudflare_dashboard_authority": {
+      "authority_locus": "cloudflare_dashboard",
+      "responsibilities": ["worker_deploy", "d1_kv_binding", "worker_secret_binding", "rollback_execution"],
+      "narada_site_authority": false
+    }
+  },
+  "monitoring_check": {
+    "schema": "narada.site_telemetry.monitoring_check.v0",
+    "check_id": "mon_surface_user_site_telemetry_20260516",
+    "checked_at": "2026-05-16T20:36:00.000Z",
+    "route_health": [
+      { "route": "GET /health", "status": "not_live_deployed", "raw_body_recorded": false },
+      { "route": "POST /webhook", "status": "requires_post_deploy_smoke", "raw_body_recorded": false }
+    ],
+    "freshness": {
+      "latest_event_age_ms": null,
+      "stale_threshold_ms": 900000,
+      "posture": "not_live_deployed"
+    },
+    "storage_health": {
+      "d1_binding": "declared_not_verified",
+      "kv_binding": "declared_not_verified"
+    },
+    "alert_posture": "blocked_until_live_deploy_evidence",
+    "raw_secret_values_recorded": false
+  },
+  "secret_rotation_evidence": [
+    {
+      "schema": "narada.site_telemetry.secret_rotation_evidence.v0",
+      "evidence_id": "rot_surface_user_site_telemetry_publish_20260516",
+      "credential_ref": "cloudflare-worker-secret:NARADA_SITE_REGISTRY_PUBLISH_TOKEN",
+      "capability_kind": "publish",
+      "authority_locus": "cloudflare_dashboard",
+      "store_kind": "cloudflare_worker_secret",
+      "operation_kind": "bind_existing_secret",
+      "remote_secret_mutation_requested": false,
+      "remote_secret_mutation_approved": false,
+      "last_verified_at": null,
+      "next_rotation_due_at": "2026-06-16T00:00:00.000Z",
+      "status": "missing",
+      "raw_secret_values_recorded": false,
+      "evidence_refs": ["docs/deployment/cloudflare-hosted-site-registry.md"]
+    }
+  ],
+  "rollback_posture": {
+    "schema": "narada.site_telemetry.rollback_plan.v0",
+    "rollback_owner": "narada-andrey:operator",
+    "preserve_d1_kv_forensics": true,
+    "destructive_cleanup_requires_explicit_approval": true,
+    "publisher_pause_required": true,
+    "post_rollback_smoke_required": true
+  },
+  "authority_limits": [
+    "monitoring_posture_does_not_deploy_or_rotate_secrets",
+    "cloudflare_dashboard_access_is_not_narada_site_authority",
+    "user_site_awareness_does_not_mutate_publisher_or_receiver_sites",
+    "secret_rotation_evidence_contains_refs_only_not_raw_values",
+    "rollback_preserves_forensics_unless_destructive_cleanup_is_explicitly_granted"
+  ]
+}

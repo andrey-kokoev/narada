@@ -1,0 +1,39 @@
+{
+  "schema": "narada.site_projection.read_model.v0",
+  "site_id": "narada-proper",
+  "latest_health": {
+    "status": "healthy",
+    "freshness": "fresh",
+    "event_id": "evt_local_fixture_health",
+    "observed_at": "2026-05-16T20:05:00.000Z"
+  },
+  "inbox_availability": {
+    "status": "missing",
+    "freshness": "missing"
+  },
+  "agent_session_posture": {
+    "status": "missing",
+    "freshness": "missing"
+  },
+  "task_work_posture": {
+    "status": "missing",
+    "freshness": "missing"
+  },
+  "attention_summary": {
+    "status": "missing",
+    "freshness": "missing"
+  },
+  "report_summary": {
+    "status": "missing",
+    "freshness": "missing"
+  },
+  "event_provenance": [
+    {
+      "event_id": "evt_local_fixture_health",
+      "source_site_id": "narada-proper",
+      "family": "site_health",
+      "observed_at": "2026-05-16T20:05:00.000Z"
+    }
+  ],
+  "projection_is_authority": false
+}

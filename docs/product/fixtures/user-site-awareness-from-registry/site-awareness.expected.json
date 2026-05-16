@@ -1,0 +1,72 @@
+{
+  "schema": "narada.user_site.awareness_from_registry.v0",
+  "user_site_id": "narada-andrey",
+  "source_registry_id": "site-registry:narada-andrey:awareness",
+  "generated_at": "2026-05-16T20:20:00.000Z",
+  "entries": [
+    {
+      "site_id": "narada-proper",
+      "locus_type": "project",
+      "relation_posture": "repo_site",
+      "awareness_posture": "current",
+      "route_candidates": {
+        "telemetry_endpoints": ["surface_user-site-telemetry_awareness"],
+        "inbox_message_endpoints": []
+      },
+      "capabilities_visible": ["route", "propose"],
+      "denied_authority": [
+        "mutation_not_granted_by_registry_projection",
+        "awareness_projection_does_not_grant_mutation",
+        "remote_registry_does_not_transfer_ownership"
+      ],
+      "provenance": [{ "event_id": "evt_repo_health", "family": "site_health" }],
+      "conflicts": [],
+      "advisory_authority_limits": [
+        "user_site_awareness_is_advisory",
+        "awareness_entry_cannot_mutate_target_site",
+        "awareness_entry_cannot_import_remote_ownership",
+        "target_site_authority_surface_required_for_mutation"
+      ]
+    },
+    {
+      "site_id": "staccato-client-service",
+      "locus_type": "client_service",
+      "relation_posture": "client_service_site",
+      "awareness_posture": "conflicted",
+      "route_candidates": {
+        "telemetry_endpoints": ["surface_staccato_telemetry"],
+        "inbox_message_endpoints": ["surface_staccato_inbox"]
+      },
+      "capabilities_visible": ["route", "propose"],
+      "denied_authority": [
+        "mutation_not_granted_by_registry_projection",
+        "awareness_projection_does_not_grant_mutation",
+        "remote_registry_does_not_transfer_ownership"
+      ],
+      "provenance": [{ "event_id": "evt_staccato_health", "family": "site_health" }],
+      "conflicts": [
+        {
+          "field": "relation",
+          "values": ["client_service_site", "project_site"],
+          "event_ids": ["evt_staccato_health", "evt_staccato_relation"]
+        }
+      ],
+      "advisory_authority_limits": [
+        "user_site_awareness_is_advisory",
+        "awareness_entry_cannot_mutate_target_site",
+        "awareness_entry_cannot_import_remote_ownership",
+        "target_site_authority_surface_required_for_mutation"
+      ]
+    }
+  ],
+  "source_event_refs": ["evt_repo_health", "evt_staccato_health", "evt_staccato_relation"],
+  "advisory_only": true,
+  "mutates_known_sites": false,
+  "imports_remote_ownership": false,
+  "authority_limits": [
+    "user_site_may_know_route_propose_subscribe_and_navigate",
+    "user_site_awareness_does_not_mutate_known_sites",
+    "remote_registry_output_is_not_local_mutation_truth",
+    "target_site_authority_surface_required_for_effects"
+  ]
+}

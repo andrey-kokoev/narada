@@ -1,0 +1,37 @@
+{
+  "schema": "narada.site_telemetry.scheduler_doctor_summary.v0",
+  "site_id": "narada-proper",
+  "observed_at": "2026-05-16T21:00:00.000Z",
+  "source_posture_refs": [
+    "docs/product/fixtures/site-telemetry-scheduler-posture/scheduler-posture.disabled.json",
+    "docs/product/fixtures/site-telemetry-scheduler-posture/scheduler-posture.due.json",
+    "docs/product/fixtures/site-telemetry-scheduler-posture/scheduler-posture.blocked-capability.json",
+    "docs/product/fixtures/site-telemetry-scheduler-posture/scheduler-posture.successful-dry-run.json"
+  ],
+  "configured_loops": 6,
+  "enabled_loops": 4,
+  "due_loops": 2,
+  "blocked_loops": 1,
+  "freshness": {
+    "status": "stale",
+    "basis": "one_enabled_pull_loop_has_stale_last_success"
+  },
+  "failures": [
+    {
+      "loop_id": "telemetry-pull-default",
+      "code": "credential_ref_stale",
+      "summary": "Poll capability reference is stale; transport was not attempted.",
+      "raw_secret_values_recorded": false
+    }
+  ],
+  "live_scheduled_task_created": false,
+  "transport_attempted": false,
+  "local_inbox_mutated": false,
+  "remote_finalized": false,
+  "next_action": "refresh_or_revoke_poll_capability_before_enabling_import_preview",
+  "authority_limits": [
+    "doctor_summary_is_read_only",
+    "stale_summary_does_not_authorize_repair",
+    "capability_reference_failure_blocks_transport"
+  ]
+}

@@ -50,6 +50,116 @@
     "first_memory_status": "external_orientation_pending_admission",
     "runtime_state_imported": false
   },
+  "site_telemetry": {
+    "schema": "narada.site_config.telemetry.v0",
+    "enable_telemetry": true,
+    "telemetry_destinations": [
+      {
+        "id": "narada-proper-site-telemetry-publication-v0",
+        "kind": "cloudflare_worker",
+        "enabled": true,
+        "scope": "narada-proper bounded Site telemetry publication and remote candidate exchange",
+        "accepted_event_families": [
+          "site_health",
+          "site_inbox",
+          "agent_session",
+          "task_work",
+          "attention",
+          "report",
+          "site_registry"
+        ],
+        "redaction_bounds": [
+          "raw_secret_values_excluded",
+          "raw_logs_excluded",
+          "raw_db_rows_excluded",
+          "raw_transcripts_excluded"
+        ],
+        "output_bounds": {
+          "max_bytes": 65536,
+          "raw_values_excluded": true
+        },
+        "retention_posture": "cloudflare_projection_store_with_bounded_audit_rows",
+        "freshness_posture": "projection_freshness_only_not_site_authority",
+        "transport": {
+          "kind": "bearer_https_post",
+          "capability_ref": "capability:site_telemetry.publish.narada-proper",
+          "url": "https://narada-site-registry.andrei-kokoev.workers.dev/webhook",
+          "health_url": "https://narada-site-registry.andrei-kokoev.workers.dev/health"
+        },
+        "storage_posture": "Cloudflare D1/KV projection and candidate substrate; not canonical inbox, task lifecycle, Site config, lineage, or capability authority.",
+        "authority_limits": [
+          "site_telemetry_surface_is_projection_only",
+          "site_registry_is_read_model_not_site_authority",
+          "cloud_receipt_is_not_local_admission",
+          "d1_kv_projection_is_not_site_truth",
+          "secret_refs_are_not_raw_secret_values"
+        ]
+      }
+    ],
+    "publication_edge": {
+      "schema": "narada.site_telemetry.publication_edge.v0",
+      "edge_id": "pubedge_narada-proper_to_narada-proper_site-telemetry",
+      "publisher_site_id": "narada-proper",
+      "owning_site_id": "narada-proper",
+      "surface_id": "narada-proper-site-telemetry-publication-v0",
+      "surface_endpoint": {
+        "kind": "https",
+        "url": "https://narada-site-registry.andrei-kokoev.workers.dev/webhook",
+        "health_url": "https://narada-site-registry.andrei-kokoev.workers.dev/health"
+      },
+      "accepted_event_families": [
+        "site_health",
+        "site_inbox",
+        "agent_session",
+        "task_work",
+        "attention",
+        "report",
+        "site_registry"
+      ],
+      "capability_refs": {
+        "publish": "capability:site_telemetry.publish.narada-proper",
+        "read": "capability:site_telemetry.read.narada-proper",
+        "message_submit": "capability:site_telemetry.message_submit.narada-proper",
+        "poll": "capability:site_telemetry.poll.narada-proper",
+        "finalize": "capability:site_telemetry.finalize.narada-proper",
+        "admin": "capability:site_telemetry.admin.narada-proper"
+      },
+      "secret_resolver_policy": {
+        "resolver_ref": "cloudflare_worker_secrets:narada-site-registry",
+        "stores_raw_secret_values": false,
+        "edge_record_contains_raw_secret_values": false
+      },
+      "trust_posture": {
+        "status": "smoke_verified",
+        "basis": ".ai/decisions/2026-05-16-site-telemetry-live-deployment-evidence.md"
+      },
+      "revocation_posture": {
+        "status": "not_revoked",
+        "revoked_at": null,
+        "revoked_by": null
+      },
+      "rotation_posture": {
+        "credential_ref_status": "fresh",
+        "rotation_owner": "operator",
+        "last_rotated_at": "2026-05-16T22:45:00Z",
+        "next_review_due_at": "2026-06-16T22:45:00Z"
+      },
+      "lifecycle_state": "active",
+      "preflight_requirements": [
+        "operator_capability_grant",
+        "non_placeholder_wrangler_config",
+        "post_deploy_smoke_evidence"
+      ],
+      "authority_limits": [
+        "publication_edge_does_not_move_site_authority",
+        "cloud_receipt_is_not_local_admission",
+        "secret_refs_are_not_raw_secret_values"
+      ],
+      "evidence_refs": [
+        ".ai/decisions/2026-05-16-site-telemetry-live-deployment-evidence.md"
+      ]
+    }
+  },
   "agent_execution_policy": {
     "schema": "narada.agent_execution_policy.v0",
     "default_posture": "mcp_only",

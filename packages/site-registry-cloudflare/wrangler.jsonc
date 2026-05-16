@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "narada-site-registry",
+  "account_id": "aa93aee1fd6a15f4efc9832219ceea2c",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-16",
+  "workers_dev": true,
+  "kv_namespaces": [
+    {
+      "binding": "NARADA_SITE_REGISTRY_KV",
+      "id": "ef880946a3b24d28b95a280a6b72ecc2"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "NARADA_SITE_REGISTRY_D1",
+      "database_name": "narada-site-registry",
+      "database_id": "ef40bbb6-9f1e-4005-a2e4-b14636cd81b8",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "NARADA_SITE_REGISTRY_MODE": "projection_only",
+    "NARADA_SITE_REGISTRY_KNOWN_SITE_IDS": "narada-proper,user-site",
+    "NARADA_SITE_REGISTRY_MAX_PAYLOAD_BYTES": "65536",
+    "NARADA_SITE_REGISTRY_EVENT_CAPABILITY_REF": "capability:site_registry.event_publish"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

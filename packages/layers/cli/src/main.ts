@@ -47,6 +47,7 @@ import { registerOperatorCommands } from './commands/operator-register.js';
 import { registerLawCommands } from './commands/law-register.js';
 import { registerKbCommands } from './commands/kb-register.js';
 import { registerQualificationCommands } from './commands/qualification-register.js';
+import { registerSiteTelemetryCommands } from './commands/site-telemetry-register.js';
 
 loadEnvFile('./.env');
 
@@ -94,6 +95,7 @@ registerWorkNextCommands(program);
 registerRoleLoopCommands(program);
 registerPrincipalCommands(program);
 registerQualificationCommands(program);
+registerSiteTelemetryCommands(program);
 
 const taskCmd = program
   .command('task')

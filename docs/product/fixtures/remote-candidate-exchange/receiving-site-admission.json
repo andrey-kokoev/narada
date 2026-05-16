@@ -1,0 +1,197 @@
+{
+  "schema": "narada.remote_candidate.receiving_site_admission_fixture.v0",
+  "receiving_site_id": "narada-proper",
+  "surface_id": "surface_user-site-telemetry_awareness",
+  "generated_at": "2026-05-16T20:25:00.000Z",
+  "cases": [
+    {
+      "case_id": "accept_candidate",
+      "candidate": {
+        "schema": "narada.remote_candidate.message.v0",
+        "candidate_id": "remote_msg_accept",
+        "surface_id": "surface_user-site-telemetry_awareness",
+        "status": "pending",
+        "target_site_id": "narada-proper",
+        "target_authority": "canonical_inbox",
+        "source": { "kind": "cloudflare_worker", "ref": "remote-surface", "site": "remote-site", "principal": "remote.operator" },
+        "replay_key": "remote-site:accept:1",
+        "idempotency_key": "remote-site:accept:1",
+        "kind": "task_candidate",
+        "subject": "Create follow-up task",
+        "body": "Please create a follow-up task from this bounded candidate.",
+        "payload": { "evidence_ref": "remote:evidence:accept" },
+        "payload_bounds": { "max_bytes": 512, "raw_values_excluded": true },
+        "submitted_at": "2026-05-16T20:19:50.000Z",
+        "received_at": "2026-05-16T20:20:00.000Z",
+        "evidence_refs": ["remote:evidence:accept"],
+        "crossing": {
+          "scale": "site",
+          "authority_scope": "narada-proper",
+          "from_locus": "remote-site",
+          "to_locus": "narada-proper",
+          "owning_site": "narada-proper",
+          "target_authority": "canonical_inbox",
+          "requested_crossing": "admission_request",
+          "admission_state": "received"
+        },
+        "admission_posture": {
+          "remote_surface_authority": "candidate_only",
+          "local_admission_required": true
+        },
+        "authority_limits": ["remote_candidate_is_not_local_inbox_admission"]
+      },
+      "local_admission": {
+        "envelope_id": "env_remote_accept",
+        "received_at": "2026-05-16T20:21:00.000Z",
+        "finalize": {
+          "status": "admitted",
+          "local_site_id": "narada-proper",
+          "local_admission_id": "env_remote_accept",
+          "local_kind": "task_candidate",
+          "local_admitted_at": "2026-05-16T20:21:00.000Z"
+        }
+      }
+    },
+    {
+      "case_id": "reject_candidate",
+      "candidate": {
+        "schema": "narada.remote_candidate.message.v0",
+        "candidate_id": "remote_msg_reject",
+        "surface_id": "surface_user-site-telemetry_awareness",
+        "status": "pending",
+        "target_site_id": "narada-proper",
+        "target_authority": "canonical_inbox",
+        "source": { "kind": "cloudflare_worker", "ref": "remote-surface", "site": "remote-site" },
+        "replay_key": "remote-site:reject:1",
+        "idempotency_key": "remote-site:reject:1",
+        "kind": "proposal",
+        "body": "Import the remote inbox database directly.",
+        "payload": { "requested_effect": "source_db_import" },
+        "payload_bounds": { "max_bytes": 512, "raw_values_excluded": true },
+        "submitted_at": "2026-05-16T20:20:05.000Z",
+        "received_at": "2026-05-16T20:20:10.000Z",
+        "evidence_refs": ["remote:evidence:reject"],
+        "crossing": {
+          "scale": "site",
+          "authority_scope": "narada-proper",
+          "from_locus": "remote-site",
+          "to_locus": "narada-proper",
+          "owning_site": "narada-proper",
+          "target_authority": "canonical_inbox",
+          "requested_crossing": "admission_request",
+          "admission_state": "received"
+        },
+        "admission_posture": {
+          "remote_surface_authority": "candidate_only",
+          "local_admission_required": true
+        },
+        "authority_limits": ["remote_candidate_is_not_local_inbox_admission"]
+      },
+      "local_admission": {
+        "envelope_id": "env_remote_reject",
+        "received_at": "2026-05-16T20:21:10.000Z",
+        "finalize": {
+          "status": "rejected",
+          "rejected_reason": "source_db_import_refused"
+        }
+      }
+    },
+    {
+      "case_id": "defer_candidate",
+      "candidate": {
+        "schema": "narada.remote_candidate.message.v0",
+        "candidate_id": "remote_msg_defer",
+        "surface_id": "surface_user-site-telemetry_awareness",
+        "status": "pending",
+        "target_site_id": "narada-proper",
+        "target_authority": "canonical_inbox",
+        "source": { "kind": "cloudflare_worker", "ref": "remote-surface", "site": "remote-site" },
+        "replay_key": "remote-site:defer:1",
+        "idempotency_key": "remote-site:defer:1",
+        "kind": "observation",
+        "body": "This candidate needs operator review before local admission.",
+        "payload": { "evidence_ref": "remote:evidence:defer" },
+        "payload_bounds": { "max_bytes": 512, "raw_values_excluded": true },
+        "submitted_at": "2026-05-16T20:20:15.000Z",
+        "received_at": "2026-05-16T20:20:20.000Z",
+        "evidence_refs": ["remote:evidence:defer"],
+        "crossing": {
+          "scale": "site",
+          "authority_scope": "narada-proper",
+          "from_locus": "remote-site",
+          "to_locus": "narada-proper",
+          "owning_site": "narada-proper",
+          "target_authority": "canonical_inbox",
+          "requested_crossing": "admission_request",
+          "admission_state": "received"
+        },
+        "admission_posture": {
+          "remote_surface_authority": "candidate_only",
+          "local_admission_required": true
+        },
+        "authority_limits": ["remote_candidate_is_not_local_inbox_admission"]
+      },
+      "local_admission": {
+        "envelope_id": "env_remote_defer",
+        "received_at": "2026-05-16T20:21:20.000Z",
+        "finalize": {
+          "status": "error",
+          "error": {
+            "code": "local_admission_deferred",
+            "message": "operator review required before admission",
+            "retryable": true
+          }
+        }
+      }
+    },
+    {
+      "case_id": "duplicate_replay",
+      "duplicate_of": "accept_candidate",
+      "candidate": {
+        "schema": "narada.remote_candidate.message.v0",
+        "candidate_id": "remote_msg_accept_replay",
+        "surface_id": "surface_user-site-telemetry_awareness",
+        "status": "pending",
+        "target_site_id": "narada-proper",
+        "target_authority": "canonical_inbox",
+        "source": { "kind": "cloudflare_worker", "ref": "remote-surface", "site": "remote-site", "principal": "remote.operator" },
+        "replay_key": "remote-site:accept:1",
+        "idempotency_key": "remote-site:accept:1",
+        "kind": "task_candidate",
+        "subject": "Create follow-up task",
+        "body": "Replay of the accepted candidate.",
+        "payload": { "evidence_ref": "remote:evidence:accept" },
+        "payload_bounds": { "max_bytes": 512, "raw_values_excluded": true },
+        "submitted_at": "2026-05-16T20:20:25.000Z",
+        "received_at": "2026-05-16T20:20:30.000Z",
+        "evidence_refs": ["remote:evidence:accept"],
+        "crossing": {
+          "scale": "site",
+          "authority_scope": "narada-proper",
+          "from_locus": "remote-site",
+          "to_locus": "narada-proper",
+          "owning_site": "narada-proper",
+          "target_authority": "canonical_inbox",
+          "requested_crossing": "admission_request",
+          "admission_state": "received"
+        },
+        "admission_posture": {
+          "remote_surface_authority": "candidate_only",
+          "local_admission_required": true
+        },
+        "authority_limits": ["remote_candidate_is_not_local_inbox_admission"]
+      },
+      "expected_replay_posture": {
+        "status": "duplicate",
+        "cloud_receipt_only": true,
+        "local_admission_replayed": false
+      }
+    }
+  ],
+  "authority_limits": [
+    "cloud_receipt_is_not_local_admission",
+    "remote_candidate_arrival_does_not_mutate_receiving_site",
+    "local_admission_requires_receiving_site_authority",
+    "duplicate_replay_does_not_reapply_local_admission"
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "schema": "narada.site_telemetry.publication_edge_preflight.v0",
+  "edge_id": "pubedge_incomplete_fixture",
+  "status": "fail",
+  "checked_at": "2026-05-16T19:55:00.000Z",
+  "checks": [
+    {
+      "name": "endpoint_present",
+      "status": "fail",
+      "failure": "publication_edge_endpoint_missing"
+    },
+    {
+      "name": "publish_capability_ref_present",
+      "status": "fail",
+      "failure": "publication_edge_publish_capability_missing"
+    },
+    {
+      "name": "credential_ref_fresh",
+      "status": "fail",
+      "failure": "publication_edge_credential_ref_stale"
+    },
+    {
+      "name": "surface_identity_matches",
+      "status": "fail",
+      "failure": "publication_edge_surface_mismatch"
+    }
+  ],
+  "publish_allowed": false,
+  "network_publish_performed": false,
+  "raw_secret_values_recorded": false,
+  "authority_granted": false
+}

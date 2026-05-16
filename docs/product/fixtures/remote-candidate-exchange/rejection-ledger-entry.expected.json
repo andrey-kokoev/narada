@@ -1,0 +1,25 @@
+{
+  "schema": "narada.admission_rejection_ledger.entry.v0",
+  "decision_id": "decision_rcand_bad_20260516_001",
+  "candidate_id": "rcand_bad_20260516_001",
+  "source_kind": "remote_candidate_exchange",
+  "source_ref": "surface_user-site-telemetry_awareness:rcand_bad_20260516_001",
+  "candidate_kind": "remote_candidate",
+  "decision": "rejected",
+  "reason_codes": [
+    "remote_candidate_payload_contains_raw_secret_marker",
+    "remote_candidate_untrusted_source"
+  ],
+  "evidence_refs": [
+    "remote-receipt:surface_user-site-telemetry_awareness:rcand_bad_20260516_001",
+    "redacted-validator-output:remote_candidate_contract"
+  ],
+  "decided_by": "narada-proper:canonical-inbox-admission",
+  "system_rule": "remote_candidate_exchange_v0_local_admission",
+  "authority_level": "system_observed",
+  "resulting_envelope_id": null,
+  "supersedes": [],
+  "retry_of": null,
+  "observed_at": "2026-05-16T20:09:00.000Z",
+  "decided_at": "2026-05-16T20:09:05.000Z"
+}

@@ -1,0 +1,68 @@
+{
+  "schema": "narada.remote_candidate.message.v0",
+  "candidate_id": "rcand_task_20260516_001",
+  "surface_id": "surface_user-site-telemetry_awareness",
+  "exchange_id": "remote-candidate-exchange:narada-andrey",
+  "status": "pending",
+  "target_site_id": "narada-proper",
+  "target_authority": "canonical_inbox",
+  "source": {
+    "kind": "user_site_surface",
+    "ref": "narada-andrey:operator-message:20260516-001",
+    "principal": "andrey",
+    "site": "narada-andrey"
+  },
+  "kind": "task_candidate",
+  "subject": "Review Site telemetry freshness projection",
+  "body": "Please consider a follow-up task for stale freshness projections.",
+  "payload": {
+    "title": "Review Site telemetry freshness projection",
+    "summary": "A remote Site observed stale freshness projection data and requests local triage.",
+    "evidence_refs": [
+      "remote-surface:surface_user-site-telemetry_awareness:projection:narada-proper"
+    ]
+  },
+  "payload_bounds": {
+    "max_bytes": 2048,
+    "raw_values_excluded": true
+  },
+  "replay_key": "narada-andrey:narada-proper:task_candidate:site-telemetry-freshness:20260516",
+  "idempotency_key": "narada-andrey:operator-message:20260516-001",
+  "submitted_at": "2026-05-16T20:05:00.000Z",
+  "received_at": "2026-05-16T20:05:03.000Z",
+  "expires_at": "2026-05-23T20:05:03.000Z",
+  "freshness": {
+    "status": "fresh",
+    "stale_after_ms": 604800000
+  },
+  "evidence_refs": [
+    "chat:2026-05-16-site-telemetry-freshness-request"
+  ],
+  "capability": {
+    "capability_requirements": [],
+    "capability_claims": [],
+    "capability_references": []
+  },
+  "crossing": {
+    "scale": "site",
+    "authority_scope": "narada-proper",
+    "from_locus": "site:narada-andrey",
+    "to_locus": "site:narada-proper",
+    "owning_site": "narada-proper",
+    "target_authority": "canonical_inbox",
+    "requested_crossing": "admission_request",
+    "admission_state": "received"
+  },
+  "admission_posture": {
+    "remote_surface_authority": "candidate_only",
+    "local_site_admission_required": true,
+    "cloud_receipt_is_local_admission": false,
+    "descriptor_only_until_local_admission": true
+  },
+  "authority_limits": [
+    "remote_candidate_is_not_local_inbox_admission",
+    "remote_candidate_does_not_mutate_task_lifecycle",
+    "remote_candidate_does_not_grant_capability",
+    "remote_candidate_excludes_raw_logs_db_rows_runtime_state_and_secrets"
+  ]
+}

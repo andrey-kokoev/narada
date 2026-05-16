@@ -1,0 +1,29 @@
+{
+  "schema": "narada.site_event.envelope.v0",
+  "event_id": "evt_local_fixture_health",
+  "idempotency_key": "narada-proper:local-fixture:health",
+  "source_site_id": "narada-proper",
+  "subject_site_id": "narada-proper",
+  "family": "site_health",
+  "type": "narada.site.health.snapshot.v0",
+  "observed_at": "2026-05-16T20:05:00.000Z",
+  "sent_at": "2026-05-16T20:05:01.000Z",
+  "auth": {
+    "kind": "bearer_capability_ref",
+    "capability_ref": "capability:local_fixture.site_telemetry.publish",
+    "authenticated": true
+  },
+  "payload_bounds": {
+    "max_bytes": 512,
+    "raw_values_excluded": true
+  },
+  "payload_summary": {
+    "status": "healthy",
+    "readiness": "fixture_replay"
+  },
+  "authority_limits": [
+    "local_fixture_event_is_projection_input_only",
+    "local_fixture_event_does_not_mutate_site_authority",
+    "local_fixture_event_does_not_use_network_transport"
+  ]
+}

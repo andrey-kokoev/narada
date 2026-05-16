@@ -1,0 +1,46 @@
+{
+  "schema": "narada.site_telemetry.surface_realization.v0",
+  "surface_id": "surface_user-site-telemetry_awareness",
+  "owning_site_id": "narada-andrey",
+  "realization_kind": "cloudflare_worker_kv_d1",
+  "surface_role": "user_site_awareness_surface",
+  "package_ref": "@narada2/site-registry-cloudflare",
+  "routes": [
+    { "method": "GET", "path": "/health", "purpose": "readiness" },
+    { "method": "POST", "path": "/webhook", "purpose": "telemetry_event_receive" },
+    { "method": "GET", "path": "/api/sites", "purpose": "site_registry_read_model" },
+    { "method": "GET", "path": "/api/projections/:site_id", "purpose": "projection_detail" },
+    { "method": "POST", "path": "/api/messages", "purpose": "remote_candidate_submit" },
+    { "method": "GET", "path": "/api/messages/pending", "purpose": "remote_candidate_poll" },
+    { "method": "POST", "path": "/api/messages/:message_id/finalize", "purpose": "remote_candidate_finalize" }
+  ],
+  "storage_bindings": {
+    "latest_projection": { "kind": "kv", "binding": "NARADA_SITE_REGISTRY_KV" },
+    "audit_and_messages": { "kind": "d1", "binding": "NARADA_SITE_REGISTRY_D1" }
+  },
+  "config_coordinates": {
+    "wrangler_example": "packages/site-registry-cloudflare/wrangler.example.jsonc",
+    "deployment_runbook": "docs/deployment/cloudflare-hosted-site-registry.md"
+  },
+  "capability_refs": {
+    "publish": "capability:site_telemetry.publish.narada-proper",
+    "read": "capability:site_telemetry.read.narada-proper",
+    "message_submit": "capability:site_telemetry.message_submit.narada-proper",
+    "poll": "capability:site_telemetry.poll.narada-proper",
+    "finalize": "capability:site_telemetry.finalize.narada-proper",
+    "admin": "capability:site_telemetry.admin.narada-proper"
+  },
+  "readiness_evidence_refs": [
+    "pnpm --filter @narada2/site-registry-cloudflare test",
+    "pnpm --filter @narada2/site-registry-cloudflare build"
+  ],
+  "projection_models": [
+    "site_registry_read_model.v0"
+  ],
+  "authority_limits": [
+    "surface_realization_is_interface_not_site_authority",
+    "worker_name_route_domain_d1_kv_are_deployment_coordinates",
+    "surface_projection_does_not_mutate_publisher_or_receiver_site",
+    "site_registry_is_read_model_inside_surface"
+  ]
+}

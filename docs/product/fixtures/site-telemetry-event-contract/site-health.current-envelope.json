@@ -1,0 +1,31 @@
+{
+  "schema": "narada.site_event.envelope.v0",
+  "event_id": "evt_site_health_20260516T194700Z",
+  "idempotency_key": "narada-proper:site_health:2026-05-16T19:47:00.000Z",
+  "source_site_id": "narada-proper",
+  "subject_site_id": "narada-proper",
+  "family": "site_health",
+  "type": "narada.site.health.snapshot.v0",
+  "observed_at": "2026-05-16T19:47:00.000Z",
+  "sent_at": "2026-05-16T19:47:05.000Z",
+  "auth": {
+    "kind": "bearer_capability_ref",
+    "capability_ref": "capability:site_telemetry.publish.narada-proper",
+    "authenticated": false
+  },
+  "payload_bounds": {
+    "max_bytes": 512,
+    "raw_values_excluded": true
+  },
+  "payload_summary": {
+    "status": "healthy",
+    "readiness": "locally_validated",
+    "open_task_count": 25
+  },
+  "authority_limits": [
+    "site_event_is_projection_input_not_site_authority",
+    "site_event_does_not_mutate_receiver",
+    "site_event_does_not_grant_capability",
+    "site_event_does_not_include_raw_logs_db_rows_or_secrets"
+  ]
+}

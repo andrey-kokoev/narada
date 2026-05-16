@@ -117,6 +117,12 @@ importers:
       '@narada2/search':
         specifier: workspace:*
         version: link:../../verticals/search
+      '@narada2/site-config':
+        specifier: workspace:*
+        version: link:../../site-config
+      '@narada2/site-registry-cloudflare':
+        specifier: workspace:*
+        version: link:../../site-registry-cloudflare
       '@narada2/task-governance':
         specifier: workspace:*
         version: link:../../task-governance
@@ -320,6 +326,25 @@ importers:
       '@types/node':
         specifier: ^20.10.0
         version: 20.19.39
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+      vitest:
+        specifier: ^1.0.0
+        version: 1.6.1(@types/node@20.19.39)
+
+  packages/site-registry-cloudflare:
+    dependencies:
+      '@narada2/site-config':
+        specifier: workspace:*
+        version: link:../site-config
+      '@narada2/site-inbox':
+        specifier: workspace:*
+        version: link:../site-inbox
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20260421.1
+        version: 4.20260421.1
       typescript:
         specifier: ^5.3.0
         version: 5.9.3

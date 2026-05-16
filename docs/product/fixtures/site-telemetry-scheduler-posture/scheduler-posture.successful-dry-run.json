@@ -1,0 +1,126 @@
+{
+  "schema": "narada.site_telemetry.scheduler_posture.v0",
+  "posture_id": "schedpost_narada-proper_20260516T211500Z_successful_dry_run",
+  "site_id": "narada-proper",
+  "observed_at": "2026-05-16T21:15:00.000Z",
+  "scheduler_surface": {
+    "kind": "local_site_scheduler_projection",
+    "live_scheduled_task_created": false,
+    "source": "fixture"
+  },
+  "loops": [
+    {
+      "loop_id": "telemetry-publish-default",
+      "kind": "publish",
+      "state": "last_run_succeeded",
+      "enabled": true,
+      "cadence": {
+        "interval": "PT15M",
+        "last_tick_at": "2026-05-16T21:15:00.000Z",
+        "last_success_at": "2026-05-16T21:15:00.000Z",
+        "next_due_at": "2026-05-16T21:30:00.000Z",
+        "freshness_threshold": "PT20M"
+      },
+      "command": {
+        "family": "narada site-telemetry publish plan",
+        "mode": "dry_run",
+        "args_by_ref": {
+          "edge_file_ref": "docs/product/fixtures/site-telemetry-publication-edge/publication-edge.valid.json",
+          "event_file_ref": "docs/product/fixtures/site-telemetry-event-contract/site-health.future-contract.json"
+        }
+      },
+      "capability_posture": {
+        "required_refs": ["capability-consent-registry:site-telemetry:publish"],
+        "status": "present_not_resolved_dry_run",
+        "blocking_reasons": []
+      },
+      "transport_posture": "dry_run_only",
+      "local_mutation_posture": "none",
+      "intent_evidence": {
+        "intent_id": "intent_sched_telemetry_publish_default_20260516T211500Z",
+        "idempotency_key": "narada-proper:telemetry-publish-default:dry-run:20260516T211500Z",
+        "evidence_refs": ["fixture:scheduler-posture.successful-dry-run:intent"]
+      },
+      "last_result": {
+        "status": "dry_run",
+        "result_schema": "narada.site_telemetry.publish_plan.v0",
+        "transport_attempted": false,
+        "local_inbox_mutated": false,
+        "raw_secret_values_recorded": false,
+        "result_evidence_refs": ["fixture:scheduler-posture.successful-dry-run:result"]
+      },
+      "residuals": []
+    },
+    {
+      "loop_id": "telemetry-pull-default",
+      "kind": "pull",
+      "state": "last_run_succeeded",
+      "enabled": true,
+      "cadence": {
+        "interval": "PT15M",
+        "last_tick_at": "2026-05-16T21:15:00.000Z",
+        "last_success_at": "2026-05-16T21:15:00.000Z",
+        "next_due_at": "2026-05-16T21:30:00.000Z",
+        "freshness_threshold": "PT20M"
+      },
+      "command": {
+        "family": "narada site-telemetry pull plan",
+        "mode": "dry_run",
+        "args_by_ref": {
+          "registry_url_ref": "surface_user-site-telemetry_awareness",
+          "poll_capability_ref": "capability-consent-registry:site-telemetry:poll",
+          "finalize_capability_ref": "capability-consent-registry:site-telemetry:finalize"
+        }
+      },
+      "capability_posture": {
+        "required_refs": [
+          "capability-consent-registry:site-telemetry:poll",
+          "capability-consent-registry:site-telemetry:finalize"
+        ],
+        "status": "present_not_resolved_dry_run",
+        "blocking_reasons": []
+      },
+      "transport_posture": "dry_run_only",
+      "local_mutation_posture": "plan_only",
+      "intent_evidence": {
+        "intent_id": "intent_sched_telemetry_pull_default_20260516T211500Z",
+        "idempotency_key": "narada-proper:telemetry-pull-default:dry-run:20260516T211500Z",
+        "evidence_refs": ["fixture:scheduler-posture.successful-dry-run:intent"]
+      },
+      "last_result": {
+        "status": "dry_run",
+        "result_schema": "narada.site_telemetry.pull_plan.v0",
+        "transport_attempted": false,
+        "local_inbox_mutated": false,
+        "remote_finalized": false,
+        "raw_secret_values_recorded": false,
+        "raw_candidate_payloads_recorded": false,
+        "result_evidence_refs": ["fixture:scheduler-posture.successful-dry-run:result"]
+      },
+      "residuals": []
+    }
+  ],
+  "doctor_projection": {
+    "freshness": {
+      "status": "fresh",
+      "basis": "last_success_at_within_threshold"
+    },
+    "configured_loops": 2,
+    "enabled_loops": 2,
+    "due_loops": 0,
+    "blocked_loops": 0,
+    "last_success_at": "2026-05-16T21:15:00.000Z",
+    "last_failure_at": null,
+    "failures": [],
+    "next_action": "wait_until_next_due_tick"
+  },
+  "authority_limits": [
+    "dry_run_evidence_is_not_transport_success",
+    "scheduler_result_does_not_admit_remote_truth",
+    "doctor_projection_must_not_mutate_scheduler_state"
+  ],
+  "evidence_refs": [
+    "docs/product/site-telemetry-scheduler-posture.v0.md",
+    "docs/product/site-telemetry-local-tools.v0.md"
+  ]
+}

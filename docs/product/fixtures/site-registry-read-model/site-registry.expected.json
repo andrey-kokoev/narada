@@ -1,0 +1,71 @@
+{
+  "schema": "narada.site_registry.read_model.v0",
+  "registry_id": "site-registry:narada-andrey:awareness",
+  "owning_site_id": "narada-andrey",
+  "generated_at": "2026-05-16T20:07:00.000Z",
+  "sites": [
+    {
+      "site_id": "narada-proper",
+      "locus_type": "project",
+      "relation_posture": "repo_site",
+      "authority_boundaries": [
+        "registry_read_model_cannot_mutate_narada_proper",
+        "narada_proper_remains_task_lifecycle_authority"
+      ],
+      "advertised_surfaces": ["surface_local_fixture_site-telemetry", "surface_user-site-telemetry_awareness"],
+      "telemetry_endpoints": ["surface_user-site-telemetry_awareness"],
+      "inbox_message_endpoints": [],
+      "pubsub_posture": "not_declared",
+      "freshness": { "status": "fresh", "latest_event_id": "evt_repo_health" },
+      "health": { "status": "healthy", "observed_at": "2026-05-16T20:06:00.000Z" },
+      "capabilities_summary": [],
+      "capability_denials": ["mutation_not_granted_by_registry_projection"],
+      "provenance": [{ "event_id": "evt_repo_health", "family": "site_health" }],
+      "conflicts": [],
+      "read_model_authority_limits": [
+        "read_model_is_not_site_authority",
+        "read_model_cannot_grant_capability",
+        "read_model_cannot_admit_inbox_or_task_state"
+      ]
+    },
+    {
+      "site_id": "narada-andrey",
+      "locus_type": "user_site",
+      "relation_posture": "owning_awareness_locus",
+      "authority_boundaries": [
+        "user_site_awareness_does_not_mutate_known_sites"
+      ],
+      "advertised_surfaces": ["surface_user-site-telemetry_awareness"],
+      "telemetry_endpoints": ["surface_user-site-telemetry_awareness"],
+      "inbox_message_endpoints": [],
+      "pubsub_posture": "awareness_subscriber_candidate",
+      "freshness": { "status": "fresh", "latest_event_id": "evt_user_awareness" },
+      "health": { "status": "observing", "observed_at": "2026-05-16T20:06:30.000Z" },
+      "capabilities_summary": ["know", "route", "propose", "subscribe"],
+      "capability_denials": ["target_site_mutation_not_granted"],
+      "provenance": [{ "event_id": "evt_user_awareness", "family": "site_registry" }],
+      "conflicts": [],
+      "read_model_authority_limits": [
+        "awareness_registry_is_projection_not_authority",
+        "read_model_cannot_transfer_site_ownership"
+      ]
+    }
+  ],
+  "source_event_refs": ["evt_repo_health", "evt_user_awareness"],
+  "authority_limits": [
+    "site_registry_read_model_is_projection_only",
+    "membership_does_not_transfer_mutation_authority",
+    "future_authority_substrate_must_be_separately_admitted"
+  ],
+  "future_authority_substrate": {
+    "status": "not_admitted",
+    "required_before_authority": [
+      "declared_owner",
+      "mutation_commands",
+      "membership_change_evidence",
+      "conflict_resolution_rules",
+      "capability_grant_revocation_rules",
+      "replay_rebuild_rules"
+    ]
+  }
+}

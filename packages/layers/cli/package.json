@@ -55,6 +55,8 @@
     "@narada2/charters": "workspace:*",
     "@narada2/ops-kit": "workspace:*",
     "@narada2/search": "workspace:*",
+    "@narada2/site-config": "workspace:*",
+    "@narada2/site-registry-cloudflare": "workspace:*",
     "@narada2/windows-site": "workspace:*",
     "@narada2/macos-site": "workspace:*",
     "@narada2/linux-site": "workspace:*",

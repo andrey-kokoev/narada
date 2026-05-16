@@ -1,0 +1,65 @@
+{
+  "schema": "narada.site_registry.read_model.v0",
+  "registry_id": "site-registry:narada-andrey:awareness",
+  "owning_site_id": "narada-andrey",
+  "generated_at": "2026-05-16T20:20:00.000Z",
+  "sites": [
+    {
+      "site_id": "narada-proper",
+      "locus_type": "project",
+      "relation_posture": "repo_site",
+      "authority_boundaries": ["registry_read_model_cannot_mutate_narada_proper"],
+      "advertised_surfaces": ["surface_user-site-telemetry_awareness"],
+      "telemetry_endpoints": ["surface_user-site-telemetry_awareness"],
+      "inbox_message_endpoints": [],
+      "pubsub_posture": "not_declared",
+      "freshness": { "status": "fresh", "latest_event_id": "evt_repo_health" },
+      "health": { "status": "healthy", "observed_at": "2026-05-16T20:18:00.000Z" },
+      "capabilities_summary": ["route", "propose"],
+      "capability_denials": ["mutation_not_granted_by_registry_projection"],
+      "provenance": [{ "event_id": "evt_repo_health", "family": "site_health" }],
+      "conflicts": [],
+      "read_model_authority_limits": ["read_model_is_not_site_authority"]
+    },
+    {
+      "site_id": "staccato-client-service",
+      "locus_type": "client_service",
+      "relation_posture": "client_service_site",
+      "authority_boundaries": ["registry_read_model_cannot_mutate_client_service"],
+      "advertised_surfaces": ["surface_staccato_telemetry"],
+      "telemetry_endpoints": ["surface_staccato_telemetry"],
+      "inbox_message_endpoints": ["surface_staccato_inbox"],
+      "pubsub_posture": "not_declared",
+      "freshness": { "status": "stale", "latest_event_id": "evt_staccato_health" },
+      "health": { "status": "degraded", "observed_at": "2026-05-16T19:40:00.000Z" },
+      "capabilities_summary": ["route", "propose"],
+      "capability_denials": ["mutation_not_granted_by_registry_projection"],
+      "provenance": [{ "event_id": "evt_staccato_health", "family": "site_health" }],
+      "conflicts": [
+        {
+          "field": "relation",
+          "values": ["client_service_site", "project_site"],
+          "event_ids": ["evt_staccato_health", "evt_staccato_relation"]
+        }
+      ],
+      "read_model_authority_limits": ["read_model_is_not_site_authority"]
+    }
+  ],
+  "source_event_refs": ["evt_repo_health", "evt_staccato_health", "evt_staccato_relation"],
+  "authority_limits": [
+    "site_registry_read_model_is_projection_only",
+    "membership_does_not_transfer_mutation_authority",
+    "future_authority_substrate_must_be_separately_admitted"
+  ],
+  "future_authority_substrate": {
+    "status": "not_admitted",
+    "required_before_authority": [
+      "declared_owner",
+      "mutation_commands",
+      "membership_change_evidence",
+      "conflict_resolution_rules",
+      "capability_grant_revocation_rules",
+      "replay_rebuild_rules"
+    ]
+  }
+}

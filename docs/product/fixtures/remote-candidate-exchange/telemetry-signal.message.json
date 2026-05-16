@@ -1,0 +1,64 @@
+{
+  "schema": "narada.remote_candidate.message.v0",
+  "candidate_id": "rcand_signal_20260516_001",
+  "surface_id": "surface_user-site-telemetry_awareness",
+  "exchange_id": "pubedge_narada-proper_to_narada-andrey_site-telemetry",
+  "status": "pending",
+  "target_site_id": "narada-andrey",
+  "target_authority": "canonical_inbox",
+  "source": {
+    "kind": "site_telemetry_publication",
+    "ref": "evt_site_inbox_attention_20260516T200600Z",
+    "principal": "narada.builder2",
+    "site": "narada-proper"
+  },
+  "kind": "telemetry_signal",
+  "subject": "Narada proper has an attention signal",
+  "body": "Bounded telemetry indicates a candidate attention item for local review.",
+  "payload": {
+    "telemetry_event_ref": "evt_site_inbox_attention_20260516T200600Z",
+    "telemetry_family": "attention",
+    "projection_ref": "surface_user-site-telemetry_awareness:latest:narada-proper",
+    "summary": {
+      "attention_count": 1,
+      "oldest_observed_at": "2026-05-16T20:06:00.000Z"
+    }
+  },
+  "payload_bounds": {
+    "max_bytes": 1024,
+    "raw_values_excluded": true
+  },
+  "replay_key": "narada-proper:narada-andrey:attention:evt_site_inbox_attention_20260516T200600Z",
+  "idempotency_key": "evt_site_inbox_attention_20260516T200600Z",
+  "submitted_at": "2026-05-16T20:06:02.000Z",
+  "received_at": "2026-05-16T20:06:04.000Z",
+  "freshness": {
+    "status": "fresh",
+    "stale_after_ms": 900000
+  },
+  "evidence_refs": [
+    "docs/product/fixtures/site-telemetry-event-contract/site-health.future-contract.json"
+  ],
+  "crossing": {
+    "scale": "site",
+    "authority_scope": "narada-andrey",
+    "from_locus": "site:narada-proper",
+    "to_locus": "site:narada-andrey",
+    "owning_site": "narada-andrey",
+    "target_authority": "canonical_inbox",
+    "requested_crossing": "admission_request",
+    "admission_state": "received"
+  },
+  "admission_posture": {
+    "remote_surface_authority": "candidate_only",
+    "local_site_admission_required": true,
+    "cloud_receipt_is_local_admission": false,
+    "descriptor_only_until_local_admission": true
+  },
+  "authority_limits": [
+    "telemetry_candidate_is_one_remote_candidate_kind_not_the_generic_contract_owner",
+    "telemetry_candidate_does_not_admit_local_inbox_task_or_knowledge",
+    "telemetry_candidate_does_not_transfer_site_authority",
+    "telemetry_candidate_does_not_grant_capability"
+  ]
+}

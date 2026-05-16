@@ -1,0 +1,42 @@
+{
+  "schema": "narada.site_telemetry.compatibility_map.v0",
+  "source_schema": "narada.site_event.envelope.v0",
+  "target_schema": "narada.site_telemetry.event.v0",
+  "runtime_status": "specification_only",
+  "direct_fields": [
+    "schema",
+    "event_id",
+    "idempotency_key",
+    "source_site_id",
+    "subject_site_id",
+    "target_site_id",
+    "family",
+    "type",
+    "observed_at",
+    "sent_at",
+    "auth",
+    "payload_bounds",
+    "payload_summary",
+    "authority_limits"
+  ],
+  "computed_or_optional_fields": [
+    {
+      "field": "freshness",
+      "source": "computed from observed_at, sent_at, and receiver clock until runtime supplies explicit freshness"
+    }
+  ],
+  "future_fields_not_inferred": [
+    "publication_edge_id",
+    "surface_id",
+    "evidence_refs",
+    "provenance"
+  ],
+  "compatibility_rules": [
+    "Existing envelopes remain valid current runtime artifacts.",
+    "Receivers may compute freshness for read models but must not rewrite event identity.",
+    "Publication edge and surface coordinates must come from explicit runtime/package fields or config, not route names or memory.",
+    "Payload summaries remain bounded and raw-value-free.",
+    "Authority limits remain required and non-empty."
+  ],
+  "silent_widening_forbidden": true
+}

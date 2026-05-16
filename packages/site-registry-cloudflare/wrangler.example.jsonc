@@ -1,0 +1,38 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "narada-site-registry",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-16",
+  "kv_namespaces": [
+    {
+      "binding": "NARADA_SITE_REGISTRY_KV",
+      "id": "<kv_namespace_id>"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "NARADA_SITE_REGISTRY_D1",
+      "database_name": "narada-site-registry",
+      "database_id": "<d1_database_id>",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "NARADA_SITE_REGISTRY_MODE": "projection_only",
+    // Compatibility binding names for the hosted Site Telemetry Surface.
+    // SiteRegistry is the read-model route family, not the authority object.
+    "NARADA_SITE_REGISTRY_KNOWN_SITE_IDS": "narada-proper,user-site",
+    "NARADA_SITE_REGISTRY_MAX_PAYLOAD_BYTES": "65536",
+    "NARADA_SITE_REGISTRY_EVENT_CAPABILITY_REF": "capability:site_registry.event_publish"
+  },
+  // Configure these as Cloudflare Worker secrets, not vars:
+  // - NARADA_SITE_REGISTRY_READ_TOKEN
+  // - NARADA_SITE_REGISTRY_PUBLISH_TOKEN
+  // - NARADA_SITE_REGISTRY_MESSAGE_TOKEN
+  // - NARADA_SITE_REGISTRY_POLL_TOKEN
+  // - NARADA_SITE_REGISTRY_LOCAL_ADMISSION_TOKEN
+  // - NARADA_SITE_REGISTRY_ADMIN_TOKEN
+  "observability": {
+    "enabled": true
+  }
+}

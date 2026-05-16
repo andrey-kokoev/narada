@@ -1,0 +1,43 @@
+{
+  "name": "@narada2/site-registry-cloudflare",
+  "version": "0.1.0",
+  "description": "Cloudflare Worker realization of a Narada Site Telemetry Surface serving SiteRegistry read models",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
+    },
+    "./deploy-readiness": {
+      "types": "./dist/deploy-readiness.d.ts",
+      "import": "./dist/deploy-readiness.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "smoke:fixture": "vitest run test/smoke-fixture.test.ts",
+    "deploy:preflight": "pnpm build && node scripts/hosted-telemetry-surface.mjs preflight --config wrangler.jsonc",
+    "deploy:verify": "pnpm build && node scripts/hosted-telemetry-surface.mjs verify",
+    "deploy:live": "pnpm build && node scripts/hosted-telemetry-surface.mjs deploy --live --config wrangler.jsonc"
+  },
+  "dependencies": {
+    "@narada2/site-config": "workspace:*",
+    "@narada2/site-inbox": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260421.1",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

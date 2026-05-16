@@ -1,0 +1,34 @@
+{
+  "schema": "narada.site_telemetry.surface_realization.v0",
+  "surface_id": "surface_local_fixture_site-telemetry",
+  "owning_site_id": "narada-proper",
+  "realization_kind": "local_filesystem",
+  "surface_role": "local_fixture_surface",
+  "package_ref": "docs/product/fixtures/site-telemetry-surface-realization",
+  "routes": [
+    { "method": "FILE_WRITE", "path": "events/*.json", "purpose": "telemetry_event_receive" },
+    { "method": "FILE_READ", "path": "projections/*.json", "purpose": "projection_read" }
+  ],
+  "storage_bindings": {
+    "event_log": { "kind": "local_filesystem", "path": "events/" },
+    "latest_projection": { "kind": "local_filesystem", "path": "projections/" }
+  },
+  "config_coordinates": {
+    "fixture_root": "docs/product/fixtures/site-telemetry-surface-realization"
+  },
+  "capability_refs": {
+    "publish": "capability:local_fixture.site_telemetry.publish",
+    "read": "capability:local_fixture.site_telemetry.read"
+  },
+  "readiness_evidence_refs": [
+    "docs/product/site-telemetry-surface-realization.v0.md"
+  ],
+  "projection_models": [
+    "site_registry_read_model.v0"
+  ],
+  "authority_limits": [
+    "local_fixture_surface_is_not_runtime_site_authority",
+    "file_paths_are_fixture_coordinates",
+    "fixture_projection_does_not_admit_inbox_or_task_state"
+  ]
+}

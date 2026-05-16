@@ -1,0 +1,64 @@
+{
+  "schema": "narada.site_telemetry.inquiry_doctrine_feedback.v0",
+  "artifact_id": "stidf_site-telemetry-publication_branch_20260516",
+  "origin": {
+    "chapter": "Site Telemetry Publication / Inquiry Doctrine Feedback",
+    "task_numbers": [1393, 1415],
+    "source_refs": [
+      "chat:2026-05-16-site-telemetry-publication-inquiry-branch",
+      "docs/product/site-telemetry-publication-outcome-shapes.md"
+    ],
+    "authoring_agent": "narada.architect"
+  },
+  "target_locus": "inquiry_space",
+  "target_inquiry_space_ref": null,
+  "artifact_family": "inquiry_branch_candidate.v0",
+  "question": "What structure did Site Telemetry Publication expose beyond a SiteRegistry deployment surface?",
+  "branch_topology": {
+    "branch_point": "site_registry_vs_site_telemetry_publication",
+    "open_branches": [
+      {
+        "branch_id": "site_telemetry_publication_uber_chapter",
+        "status": "open",
+        "question": "Is Site Telemetry Publication the missing named chapter that contains SiteRegistry, publication edges, local tools, scheduler posture, hosted surfaces, and inquiry feedback?"
+      },
+      {
+        "branch_id": "site_registry_runtime_shape",
+        "status": "open",
+        "question": "Which runtime and hosted surfaces constitute a Site Registry without collapsing it into one Site?"
+      }
+    ],
+    "closed_branches": [],
+    "residuals": [
+      "Inquiry Space storage is not currently available in this Narada proper surface."
+    ],
+    "traversal_posture": "preserve_frontier_until_inquiry_space_available"
+  },
+  "candidate": null,
+  "evidence_refs": [
+    "docs/concepts/inquiry-topology.md",
+    "docs/product/site-telemetry-publication-outcome-shapes.md",
+    ".ai/inbox-envelopes"
+  ],
+  "non_data_lift": {
+    "private_inquiry_space_data_included": false,
+    "allowed_material": ["schema", "command_shape", "fixtures", "doctrine_references"]
+  },
+  "fallback_posture": {
+    "state": "inbox_fallback_only",
+    "limitation": "not_queryable_inquiry_topology",
+    "source_envelope_refs": [
+      "env_e8ba4bff-6e59-40aa-b586-845c24af25eb"
+    ]
+  },
+  "closure_expectations": [
+    "submitted_to_inquiry_space",
+    "recorded_as_inbox_fallback",
+    "residualized"
+  ],
+  "authority_limits": [
+    "inquiry_branch_is_not_task",
+    "canonical_inbox_fallback_is_not_inquiry_space_storage",
+    "agent_memory_is_not_durable_inquiry_authority"
+  ]
+}

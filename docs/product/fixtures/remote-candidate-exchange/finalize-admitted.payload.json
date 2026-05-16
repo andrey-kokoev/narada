@@ -1,0 +1,20 @@
+{
+  "schema": "narada.remote_candidate.finalize.v0",
+  "candidate_id": "rcand_task_20260516_001",
+  "surface_id": "surface_user-site-telemetry_awareness",
+  "status": "admitted",
+  "local_site_id": "narada-proper",
+  "local_decision_ref": "admission-ledger:narada-proper:decision_rcand_task_20260516_001",
+  "local_admission": {
+    "authority": "canonical_inbox",
+    "artifact_id": "env_rcand_task_20260516_001",
+    "artifact_kind": "task_candidate",
+    "admitted_at": "2026-05-16T20:08:00.000Z"
+  },
+  "evidence_refs": [
+    ".ai/inbox-envelopes/2026-05-16T20-08-00-000Z-env_rcand_task_20260516_001.json",
+    ".ai/admission-rejection-ledger.json#decision_rcand_task_20260516_001"
+  ],
+  "cloud_receipt_is_local_admission": false,
+  "local_admission_is_reference_only_for_remote_surface": true
+}

@@ -1,0 +1,71 @@
+{
+  "schema": "narada.site_inbox.remote_local_admission_plan.v0",
+  "remote_candidate_contract": "narada.remote_candidate.message.v0",
+  "remote_message_id": "rcand_task_20260516_001",
+  "target_site_id": "narada-proper",
+  "status": "local_admission_required",
+  "request": {
+    "schema": "narada.site_inbox.envelope_admission_request.v0",
+    "envelope_id": "env_rcand_task_20260516_001",
+    "received_at": "2026-05-16T20:07:00.000Z",
+    "source": {
+      "kind": "remote_candidate_exchange",
+      "ref": "rcand_task_20260516_001",
+      "site": "narada-andrey"
+    },
+    "target_locus": "narada-proper",
+    "kind": "task_candidate",
+    "authority": {
+      "level": "external_evidence",
+      "principal": "andrey"
+    },
+    "payload": {
+      "schema": "narada.remote_candidate.local_payload.v0",
+      "title": "Review Site telemetry freshness projection",
+      "body": "Please consider a follow-up task for stale freshness projections.",
+      "remote_candidate": {
+        "candidate_id": "rcand_task_20260516_001",
+        "surface_id": "surface_user-site-telemetry_awareness",
+        "source": {
+          "kind": "user_site_surface",
+          "ref": "narada-andrey:operator-message:20260516-001",
+          "principal": "andrey",
+          "site": "narada-andrey"
+        },
+        "replay_key": "narada-andrey:narada-proper:task_candidate:site-telemetry-freshness:20260516",
+        "received_at": "2026-05-16T20:05:03.000Z"
+      },
+      "payload": {
+        "title": "Review Site telemetry freshness projection",
+        "summary": "A remote Site observed stale freshness projection data and requests local triage.",
+        "evidence_refs": [
+          "remote-surface:surface_user-site-telemetry_awareness:projection:narada-proper"
+        ]
+      }
+    },
+    "crossing": {
+      "scale": "site",
+      "authority_scope": "narada-proper",
+      "from_locus": "site:narada-andrey",
+      "to_locus": "site:narada-proper",
+      "owning_site": "narada-proper",
+      "target_authority": "canonical_inbox",
+      "requested_crossing": "admission_request",
+      "admission_state": "received"
+    }
+  },
+  "decision": {
+    "schema": "narada.site_inbox.admission_decision.v0",
+    "status": "admissible_descriptor",
+    "refusals": [],
+    "warnings": [],
+    "descriptor_only": true,
+    "envelope_written": false,
+    "db_mutated": false,
+    "source_state_imported": false
+  },
+  "remote_surface_authority": "candidate_only",
+  "local_site_admission_required": true,
+  "db_mutated": false,
+  "envelope_written": false
+}

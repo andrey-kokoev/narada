@@ -1,0 +1,79 @@
+{
+  "schema": "narada.site_telemetry.inquiry_doctrine_feedback.v0",
+  "artifact_id": "stidf_doctrine_lift_site_telemetry_publication_20260516",
+  "origin": {
+    "chapter": "Site Telemetry Publication / Inquiry Doctrine Feedback",
+    "task_numbers": [1393, 1415],
+    "source_refs": [
+      "chat:2026-05-16-site-telemetry-publication-inquiry-branch",
+      "docs/product/site-telemetry-publication-outcome-shapes.md"
+    ],
+    "authoring_agent": "narada.architect"
+  },
+  "target_locus": "doctrine_review",
+  "target_inquiry_space_ref": null,
+  "artifact_family": "doctrine_lift_candidate.v0",
+  "question": "Should Site Telemetry Publication become a named doctrine or product chapter rather than remaining an accidental bundle of Cloudflare, local tool, and registry tasks?",
+  "branch_topology": {
+    "branch_point": "telemetry_publication_naming_pressure",
+    "open_branches": [
+      {
+        "branch_id": "chapter_lift",
+        "status": "open",
+        "question": "What outcome families belong under the Site Telemetry Publication chapter?"
+      }
+    ],
+    "closed_branches": [
+      {
+        "branch_id": "cloudflare_project_name_only",
+        "status": "closed",
+        "closure_reason": "Naming a Cloudflare project does not supply the missing structure."
+      }
+    ],
+    "residuals": [
+      "Hosted registry naming still needs one deployed surface proof."
+    ],
+    "traversal_posture": "doctrine_candidate_after_reinstantiation"
+  },
+  "candidate": {
+    "proposed_name": "Site Telemetry Publication",
+    "status": "candidate_not_canonical",
+    "relation_to_existing_doctrine": [
+      "Governed Crossing",
+      "Site Pub/Sub Signal Exchange",
+      "Canonical Inbox",
+      "Site Factorization"
+    ],
+    "lift_criteria": [
+      "Can explain local publish and pull tooling without Cloudflare-specific language.",
+      "Can explain hosted registry materialization without naming one Site as the whole registry.",
+      "Can route uncertainty into Inquiry Space without premature taskification."
+    ],
+    "reinstantiation_cases": [
+      "narada-proper hosted telemetry registry",
+      "narada-andrey user Site receiving telemetry from multiple project Sites"
+    ]
+  },
+  "evidence_refs": [
+    "docs/product/site-telemetry-local-tools.v0.md",
+    "docs/product/site-telemetry-scheduler-posture.v0.md",
+    "docs/deployment/cloudflare-hosted-site-registry.md"
+  ],
+  "non_data_lift": {
+    "private_inquiry_space_data_included": false,
+    "allowed_material": ["doctrine_candidate", "reinstantiation_cases", "evidence_refs"]
+  },
+  "fallback_posture": {
+    "state": "task_evidence_only",
+    "limitation": "not_canonical_doctrine"
+  },
+  "closure_expectations": [
+    "promoted_to_doctrine_candidate",
+    "residualized"
+  ],
+  "authority_limits": [
+    "doctrine_candidate_is_not_canonical",
+    "product_chapter_name_is_not_runtime_authority",
+    "implementation_pressure_does_not_authorize_build"
+  ]
+}

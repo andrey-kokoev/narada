@@ -1,0 +1,68 @@
+{
+  "schema": "narada.site_telemetry.publication_edge.v0",
+  "edge_id": "pubedge_narada-proper_to_narada-andrey_site-telemetry",
+  "publisher_site_id": "narada-proper",
+  "owning_site_id": "narada-andrey",
+  "surface_id": "surface_user-site-telemetry_awareness",
+  "surface_endpoint": {
+    "kind": "https",
+    "url": "https://telemetry.example/webhook",
+    "health_url": "https://telemetry.example/health"
+  },
+  "accepted_event_families": [
+    "site_health",
+    "site_inbox",
+    "agent_session",
+    "task_work",
+    "attention",
+    "report",
+    "site_registry"
+  ],
+  "capability_refs": {
+    "publish": "capability:site_telemetry.publish.narada-proper",
+    "read": "capability:site_telemetry.read.narada-proper",
+    "message_submit": "capability:site_telemetry.message_submit.narada-proper",
+    "poll": "capability:site_telemetry.poll.narada-proper",
+    "finalize": "capability:site_telemetry.finalize.narada-proper",
+    "admin": "capability:site_telemetry.admin.narada-proper"
+  },
+  "secret_resolver_policy": {
+    "resolver_ref": "capability-consent-registry:site-telemetry",
+    "stores_raw_secret_values": false,
+    "edge_record_contains_raw_secret_values": false
+  },
+  "trust_posture": {
+    "status": "operator_declared",
+    "basis": "publication_edge_config"
+  },
+  "revocation_posture": {
+    "status": "not_revoked",
+    "revoked_at": null,
+    "revoked_by": null
+  },
+  "rotation_posture": {
+    "credential_ref_status": "fresh",
+    "rotation_owner": "narada-andrey",
+    "last_rotated_at": "2026-05-16T19:55:00.000Z",
+    "next_review_due_at": "2026-06-16T19:55:00.000Z"
+  },
+  "lifecycle_state": "configured",
+  "preflight_requirements": [
+    "endpoint_present",
+    "surface_identity_matches",
+    "accepted_event_families_declared",
+    "publish_capability_ref_present",
+    "credential_ref_fresh",
+    "authority_limits_present",
+    "raw_secret_values_absent"
+  ],
+  "authority_limits": [
+    "publication_edge_is_influence_not_mutation_authority",
+    "publication_edge_does_not_admit_receiver_consequences",
+    "publication_edge_does_not_grant_capability",
+    "publication_edge_contains_capability_refs_not_raw_secret_values"
+  ],
+  "evidence_refs": [
+    "docs/product/site-telemetry-publication-edge.v0.md"
+  ]
+}

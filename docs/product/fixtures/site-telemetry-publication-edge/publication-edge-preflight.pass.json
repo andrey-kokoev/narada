@@ -1,0 +1,19 @@
+{
+  "schema": "narada.site_telemetry.publication_edge_preflight.v0",
+  "edge_id": "pubedge_narada-proper_to_narada-andrey_site-telemetry",
+  "status": "pass",
+  "checked_at": "2026-05-16T19:55:00.000Z",
+  "checks": [
+    { "name": "endpoint_present", "status": "pass" },
+    { "name": "surface_identity_matches", "status": "pass" },
+    { "name": "accepted_event_families_declared", "status": "pass" },
+    { "name": "publish_capability_ref_present", "status": "pass" },
+    { "name": "credential_ref_fresh", "status": "pass" },
+    { "name": "raw_secret_values_absent", "status": "pass" },
+    { "name": "authority_limits_present", "status": "pass" }
+  ],
+  "publish_allowed": true,
+  "network_publish_performed": false,
+  "raw_secret_values_recorded": false,
+  "authority_granted": false
+}

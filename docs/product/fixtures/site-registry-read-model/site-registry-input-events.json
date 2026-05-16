@@ -1,0 +1,32 @@
+{
+  "schema": "narada.site_registry.input_events_fixture.v0",
+  "events": [
+    {
+      "event_id": "evt_repo_health",
+      "family": "site_health",
+      "source_site_id": "narada-proper",
+      "subject_site_id": "narada-proper",
+      "observed_at": "2026-05-16T20:06:00.000Z",
+      "payload_summary": {
+        "status": "healthy",
+        "locus_type": "project",
+        "relation": "repo_site",
+        "telemetry_surfaces": ["surface_local_fixture_site-telemetry", "surface_user-site-telemetry_awareness"]
+      }
+    },
+    {
+      "event_id": "evt_user_awareness",
+      "family": "site_registry",
+      "source_site_id": "narada-andrey",
+      "subject_site_id": "narada-andrey",
+      "observed_at": "2026-05-16T20:06:30.000Z",
+      "payload_summary": {
+        "status": "observing",
+        "locus_type": "user_site",
+        "relation": "owning_awareness_locus",
+        "telemetry_surfaces": ["surface_user-site-telemetry_awareness"],
+        "known_sites": ["narada-proper"]
+      }
+    }
+  ]
+}

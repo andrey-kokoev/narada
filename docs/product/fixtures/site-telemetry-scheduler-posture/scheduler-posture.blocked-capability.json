@@ -1,0 +1,98 @@
+{
+  "schema": "narada.site_telemetry.scheduler_posture.v0",
+  "posture_id": "schedpost_narada-proper_20260516T210000Z_blocked_capability",
+  "site_id": "narada-proper",
+  "observed_at": "2026-05-16T21:00:00.000Z",
+  "scheduler_surface": {
+    "kind": "local_site_scheduler_projection",
+    "live_scheduled_task_created": false,
+    "source": "fixture"
+  },
+  "loops": [
+    {
+      "loop_id": "telemetry-pull-default",
+      "kind": "pull",
+      "state": "blocked",
+      "enabled": true,
+      "cadence": {
+        "interval": "PT15M",
+        "last_tick_at": "2026-05-16T21:00:00.000Z",
+        "last_success_at": "2026-05-16T20:15:00.000Z",
+        "next_due_at": "2026-05-16T20:30:00.000Z",
+        "freshness_threshold": "PT20M"
+      },
+      "command": {
+        "family": "narada site-telemetry pull run",
+        "mode": "import_preview",
+        "args_by_ref": {
+          "registry_url_ref": "surface_user-site-telemetry_awareness",
+          "poll_capability_ref": "capability-consent-registry:site-telemetry:poll",
+          "finalize_capability_ref": "capability-consent-registry:site-telemetry:finalize"
+        }
+      },
+      "capability_posture": {
+        "required_refs": [
+          "capability-consent-registry:site-telemetry:poll",
+          "capability-consent-registry:site-telemetry:finalize"
+        ],
+        "status": "blocked",
+        "blocking_reasons": [
+          {
+            "code": "credential_ref_stale",
+            "capability_ref": "capability-consent-registry:site-telemetry:poll",
+            "raw_secret_values_recorded": false
+          }
+        ]
+      },
+      "transport_posture": "disabled",
+      "local_mutation_posture": "plan_only",
+      "intent_evidence": {
+        "intent_id": "intent_sched_telemetry_pull_default_blocked_20260516T210000Z",
+        "idempotency_key": "narada-proper:telemetry-pull-default:blocked:20260516T210000Z",
+        "evidence_refs": ["fixture:scheduler-posture.blocked-capability"]
+      },
+      "last_result": {
+        "status": "blocked",
+        "reason": "poll_capability_stale",
+        "transport_attempted": false,
+        "local_inbox_mutated": false,
+        "remote_finalized": false,
+        "raw_secret_values_recorded": false,
+        "raw_candidate_payloads_recorded": false
+      },
+      "residuals": [
+        "refresh_or_revoke_poll_capability_before_import_preview"
+      ]
+    }
+  ],
+  "doctor_projection": {
+    "freshness": {
+      "status": "stale",
+      "basis": "last_success_at_exceeds_threshold"
+    },
+    "configured_loops": 1,
+    "enabled_loops": 1,
+    "due_loops": 1,
+    "blocked_loops": 1,
+    "last_success_at": "2026-05-16T20:15:00.000Z",
+    "last_failure_at": "2026-05-16T21:00:00.000Z",
+    "failures": [
+      {
+        "loop_id": "telemetry-pull-default",
+        "code": "credential_ref_stale",
+        "summary": "Poll capability reference is stale; transport was not attempted.",
+        "raw_secret_values_recorded": false
+      }
+    ],
+    "next_action": "refresh_or_revoke_poll_capability"
+  },
+  "authority_limits": [
+    "capability_reference_failure_blocks_transport",
+    "raw_secret_values_must_not_be_recorded",
+    "pull_transport_success_would_not_imply_local_admission"
+  ],
+  "evidence_refs": [
+    "docs/product/site-telemetry-scheduler-posture.v0.md",
+    "docs/product/site-telemetry-publication-edge.v0.md"
+  ]
+}

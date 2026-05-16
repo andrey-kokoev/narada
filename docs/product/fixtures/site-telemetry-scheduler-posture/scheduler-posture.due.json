@@ -1,0 +1,75 @@
+{
+  "schema": "narada.site_telemetry.scheduler_posture.v0",
+  "posture_id": "schedpost_narada-proper_20260516T204500Z_due",
+  "site_id": "narada-proper",
+  "observed_at": "2026-05-16T20:45:00.000Z",
+  "scheduler_surface": {
+    "kind": "local_site_scheduler_projection",
+    "live_scheduled_task_created": false,
+    "source": "fixture"
+  },
+  "loops": [
+    {
+      "loop_id": "telemetry-publish-default",
+      "kind": "publish",
+      "state": "due",
+      "enabled": true,
+      "cadence": {
+        "interval": "PT15M",
+        "last_tick_at": "2026-05-16T20:45:00.000Z",
+        "last_success_at": "2026-05-16T20:29:55.000Z",
+        "next_due_at": "2026-05-16T20:44:55.000Z",
+        "freshness_threshold": "PT20M"
+      },
+      "command": {
+        "family": "narada site-telemetry publish plan",
+        "mode": "dry_run",
+        "args_by_ref": {
+          "edge_file_ref": "docs/product/fixtures/site-telemetry-publication-edge/publication-edge.valid.json",
+          "event_file_ref": "docs/product/fixtures/site-telemetry-event-contract/site-health.future-contract.json"
+        }
+      },
+      "capability_posture": {
+        "required_refs": ["capability-consent-registry:site-telemetry:publish"],
+        "status": "present_not_resolved_dry_run",
+        "blocking_reasons": []
+      },
+      "transport_posture": "dry_run_only",
+      "local_mutation_posture": "none",
+      "intent_evidence": {
+        "intent_id": "intent_sched_telemetry_publish_default_20260516T204500Z",
+        "idempotency_key": "narada-proper:telemetry-publish-default:dry-run:20260516T204500Z",
+        "evidence_refs": ["fixture:scheduler-posture.due"]
+      },
+      "last_result": {
+        "status": "pending",
+        "reason": "due_not_yet_invoked_by_fixture",
+        "raw_secret_values_recorded": false
+      },
+      "residuals": []
+    }
+  ],
+  "doctor_projection": {
+    "freshness": {
+      "status": "fresh",
+      "basis": "last_success_at_within_threshold"
+    },
+    "configured_loops": 1,
+    "enabled_loops": 1,
+    "due_loops": 1,
+    "blocked_loops": 0,
+    "last_success_at": "2026-05-16T20:29:55.000Z",
+    "last_failure_at": null,
+    "failures": [],
+    "next_action": "invoke_dry_run_publish_and_record_result_evidence"
+  },
+  "authority_limits": [
+    "due_timer_tick_is_not_transport_authority",
+    "dry_run_must_not_resolve_secret_or_contact_remote",
+    "publish_transport_success_would_not_admit_remote_truth"
+  ],
+  "evidence_refs": [
+    "docs/product/site-telemetry-scheduler-posture.v0.md",
+    "docs/product/site-telemetry-local-tools.v0.md"
+  ]
+}

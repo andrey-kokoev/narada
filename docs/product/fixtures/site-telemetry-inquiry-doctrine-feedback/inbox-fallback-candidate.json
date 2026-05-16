@@ -1,0 +1,81 @@
+{
+  "schema": "narada.site_telemetry.inquiry_doctrine_feedback.v0",
+  "artifact_id": "stidf_inbox_fallback_inquiry_space_lift_20260516",
+  "origin": {
+    "chapter": "Site Telemetry Publication / Inquiry Doctrine Feedback",
+    "task_numbers": [1415, 1416, 1417],
+    "source_refs": [
+      "chat:2026-05-16-request-mcp-doctrine-grounding-lift"
+    ],
+    "authoring_agent": "narada.architect"
+  },
+  "target_locus": "canonical_inbox_fallback",
+  "target_inquiry_space_ref": null,
+  "artifact_family": "concept_lifecycle_candidate.v0",
+  "question": "How should Narada preserve an Inquiry Space machinery lift request when the target MCP doctrine grounding command is unavailable?",
+  "branch_topology": {
+    "branch_point": "inquiry_space_machinery_unavailable",
+    "open_branches": [
+      {
+        "branch_id": "mcp_lift_package",
+        "status": "open",
+        "question": "What MCP command shape and fixtures are needed to ground doctrine inquiries without private data?"
+      },
+      {
+        "branch_id": "branch_replay",
+        "status": "blocked",
+        "question": "Replay Site Telemetry Publication into Inquiry Space after lift machinery exists.",
+        "blocked_by": "mcp_lift_package"
+      }
+    ],
+    "closed_branches": [],
+    "residuals": [
+      "Canonical Inbox can hold the request but cannot answer Inquiry Topology queries."
+    ],
+    "traversal_posture": "blocked_until_lift_available"
+  },
+  "candidate": {
+    "proposed_name": "Inquiry Doctrine Feedback",
+    "status": "fallback_record_only",
+    "relation_to_existing_doctrine": [
+      "Inquiry Topology",
+      "Canonical Inbox",
+      "Narada MCP Facade"
+    ],
+    "lift_criteria": [
+      "Tool discovery exposes the doctrine grounding command.",
+      "Unavailable behavior is explicit and non-mutating.",
+      "Fixtures prove non-data lift behavior."
+    ],
+    "reinstantiation_cases": [
+      "Site Telemetry Publication inquiry branch",
+      "request for narada-andrey Inquiry Space machinery lift"
+    ]
+  },
+  "evidence_refs": [
+    "docs/concepts/inquiry-topology.md",
+    "docs/concepts/canonical-inbox.md",
+    "docs/concepts/narada-mcp-facade.md"
+  ],
+  "non_data_lift": {
+    "private_inquiry_space_data_included": false,
+    "allowed_material": ["tool_contract", "fixtures", "blocked_behavior"]
+  },
+  "fallback_posture": {
+    "state": "inbox_fallback_only",
+    "limitation": "not_queryable_inquiry_topology",
+    "source_envelope_refs": [
+      "env_5bbe80dc-3de8-48f2-ad60-f917ecf177f3"
+    ]
+  },
+  "closure_expectations": [
+    "recorded_as_inbox_fallback",
+    "promoted_to_task",
+    "submitted_to_inquiry_space"
+  ],
+  "authority_limits": [
+    "fallback_envelope_is_not_inquiry_space_storage",
+    "non_data_lift_must_not_copy_private_inquiry_content",
+    "concept_lifecycle_candidate_is_not_lifecycle_authority"
+  ]
+}
