@@ -16,5 +16,13 @@
     "summary": "Operator",
     "recommendation": "narada.architect"
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "operator_action",
+    "target_ref": "narada.architect",
+    "promoted_at": "2026-05-15T15:47:35.221Z",
+    "promoted_by": "narada.builder",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'operator_action' is not implemented yet."
+  }
 }

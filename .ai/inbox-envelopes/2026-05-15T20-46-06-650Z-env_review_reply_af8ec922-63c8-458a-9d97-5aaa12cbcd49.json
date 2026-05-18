@@ -1,0 +1,40 @@
+{
+  "envelope_id": "env_review_reply_af8ec922-63c8-458a-9d97-5aaa12cbcd49",
+  "received_at": "2026-05-15T20:46:06.650Z",
+  "source": {
+    "kind": "system_observation",
+    "ref": "task-review:review-20260515-1278-repair-mcp-narada-shim-command-resolution-1778877966466"
+  },
+  "target_locus": "narada.builder",
+  "kind": "observation",
+  "authority": {
+    "level": "system_observed",
+    "principal": "narada.architect"
+  },
+  "payload": {
+    "title": "Review result for task 1278",
+    "message_type": "review_result",
+    "obligation_id": "review_reply_review-20260515-1278-repair-mcp-narada-shim-command-resolution-1778877966466",
+    "source_envelope_id": "env_0ff460cd-336f-410d-88e6-cf3b223531d9",
+    "task_number": 1278,
+    "task_id": "20260515-1278-repair-mcp-narada-shim-command-resolution",
+    "verdict": "accepted",
+    "review_id": "review-20260515-1278-repair-mcp-narada-shim-command-resolution-1778877966466",
+    "evidence_id": "ear_1278_1778877966573_px5h41",
+    "blocking_findings": [],
+    "residual_notes": [
+      "Facade/prototype/spike/design-only task requires linked continuation task evidence or --no-continuation-needed rationale before closure",
+      "Facade/prototype/spike/design-only task requires linked continuation task evidence or --no-continuation-needed rationale before closure"
+    ],
+    "next_expected_action": "continue evidence repair and resubmit completion evidence"
+  },
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_review_reply_af8ec922-63c8-458a-9d97-5aaa12cbcd49",
+    "promoted_at": "2026-05-15T21:23:46.461Z",
+    "promoted_by": "narada.architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
+}

@@ -22,5 +22,44 @@
     ],
     "recommendation": "Route as lifecycle/work-next scheduler capability follow-up."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1279",
+    "promoted_at": "2026-05-15T16:05:38.115Z",
+    "promoted_by": "narada.builder",
+    "enactment_status": "enacted",
+    "target_command": "task create",
+    "target_result": {
+      "task": {
+        "status": "success",
+        "task_id": "20260515-1279-mcp-task-admission-remains-inert-for-builder-claimability",
+        "task_number": 1279,
+        "file_name": "20260515-1279-mcp-task-admission-remains-inert-for-builder-claimability.md",
+        "file_path": "D:\\code\\narada\\.ai\\do-not-open\\tasks\\20260515-1279-mcp-task-admission-remains-inert-for-builder-claimability.md",
+        "title": "MCP task admission remains inert for Builder claimability",
+        "handoff_actionability": {
+          "status": "actionable",
+          "reason": null,
+          "repair_command": null,
+          "required_work_excerpt": "0. Source summary: MCP site_task_lifecycle.admit_task is still an inert admission surface; claimability currently requires governed task materialization.\n1. Read source inbox envelope env_4130c458-de50-4256-9067-b3bce0cec1bb and preserve its authority context.\n2. Identify the owning Narada authority boundary before mutating any target state."
+        }
+      },
+      "assignment": null,
+      "assignment_target_resolution": null,
+      "prepared_nudge": null,
+      "source_envelope": {
+        "envelope_id": "env_4130c458-de50-4256-9067-b3bce0cec1bb",
+        "envelope_kind": "observation",
+        "source_kind": "agent_report",
+        "source_ref": "codex_session:2026-05-15:mcp-task-admission-inert-claimability"
+      },
+      "recurrence": {
+        "key": "observation:agent_report:codex_session:2026-05-15:mcp-task-admission-inert-claimability",
+        "severity": "none",
+        "previous_count": 0,
+        "related_envelope_ids": []
+      }
+    }
+  }
 }

@@ -28,5 +28,49 @@
     ],
     "recommendation": "Promote to a Narada proper task or repair item for lifecycle/work-next scheduler integration, then route the two admitted Agent Carrier buildout tasks."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1273",
+    "promoted_at": "2026-05-15T15:16:12.042Z",
+    "promoted_by": "narada.builder",
+    "enactment_status": "enacted",
+    "target_command": "task create",
+    "target_result": {
+      "task": {
+        "status": "success",
+        "task_id": "20260515-1273-repair-lifecycle-scheduler-claimability-for-admitted-tasks",
+        "task_number": 1273,
+        "file_name": "20260515-1273-repair-lifecycle-scheduler-claimability-for-admitted-tasks.md",
+        "file_path": "D:\\code\\narada\\.ai\\do-not-open\\tasks\\20260515-1273-repair-lifecycle-scheduler-claimability-for-admitted-tasks.md",
+        "title": "Repair lifecycle scheduler claimability for admitted tasks",
+        "handoff_actionability": {
+          "status": "actionable",
+          "reason": null,
+          "repair_command": null,
+          "required_work_excerpt": "0. Source summary: Operator expected concrete buildout tasks for Claude Code and Narada native Agent Carrier types. Two lifecycle rows were admitted and read back successfully, but narada_task_work_next for narada.builder still reports no_admissible_task. Current MCP facade exposes admission/read/work-next, but no route/assign/allocate surface to make admitted rows scheduler-claimable.\n1. Read source inbox envelope env_e49203fc-f25f-4108-a024-ce051fb01f38 and preserve its authority context.\n2. Identify the owning Narada authority boundary before mutating any target state."
+        }
+      },
+      "assignment": {
+        "status": "success",
+        "task_id": "20260515-1273-repair-lifecycle-scheduler-claimability-for-admitted-tasks",
+        "agent_id": "narada.builder",
+        "claimed_at": "2026-05-15T15:16:11.254Z",
+        "assignment_intent_id": "air_claim_1273_narada.builder_1778858171115_udv1y9"
+      },
+      "prepared_nudge": null,
+      "source_envelope": {
+        "envelope_id": "env_e49203fc-f25f-4108-a024-ce051fb01f38",
+        "envelope_kind": "observation",
+        "source_kind": "agent_report",
+        "source_ref": "codex_session:2026-05-15:agent-carrier-buildout-tasks-admitted-not-claimable"
+      },
+      "recurrence": {
+        "key": "observation:agent_report:codex_session:2026-05-15:agent-carrier-buildout-tasks-admitted-not-claimable",
+        "severity": "none",
+        "previous_count": 0,
+        "related_envelope_ids": []
+      }
+    }
+  }
 }

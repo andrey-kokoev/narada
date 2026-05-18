@@ -1,0 +1,37 @@
+{
+  "envelope_id": "env_review_reply_b2313403-074c-41cd-a032-78d96ca8cb03",
+  "received_at": "2026-05-17T21:52:38.141Z",
+  "source": {
+    "kind": "system_observation",
+    "ref": "task-review:review-20260517-1487-crystallize-agent-identity-object-and-schema-1779054757925"
+  },
+  "target_locus": "narada.builder",
+  "kind": "observation",
+  "authority": {
+    "level": "system_observed",
+    "principal": "narada.builder2"
+  },
+  "payload": {
+    "title": "Review result for task 1487",
+    "message_type": "review_result",
+    "obligation_id": "review_reply_review-20260517-1487-crystallize-agent-identity-object-and-schema-1779054757925",
+    "source_envelope_id": "env_e709666a-903b-4eaf-9b3c-3c25820ee3b8",
+    "task_number": 1487,
+    "task_id": "20260517-1487-crystallize-agent-identity-object-and-schema",
+    "verdict": "accepted",
+    "review_id": "review-20260517-1487-crystallize-agent-identity-object-and-schema-1779054757925",
+    "evidence_id": "ear_1487_1779054758031_oi99gp",
+    "blocking_findings": [],
+    "residual_notes": [],
+    "next_expected_action": "no further action required for this task"
+  },
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_review_reply_b2313403-074c-41cd-a032-78d96ca8cb03",
+    "promoted_at": "2026-05-17T21:52:53.269Z",
+    "promoted_by": "narada.architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
+}

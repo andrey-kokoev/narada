@@ -1,0 +1,38 @@
+{
+  "envelope_id": "env_882292d1-44f3-42f2-a30c-ba8697a25ec7",
+  "received_at": "2026-05-15T23:52:32.882Z",
+  "source": {
+    "kind": "system_observation",
+    "ref": "coherence-scan:authority-inversion-resume-tool-process-authority"
+  },
+  "kind": "observation",
+  "authority": {
+    "level": "system_observed",
+    "principal": "coherence-scan"
+  },
+  "payload": {
+    "title": "Authority inversion risk: resume-tool-process-authority",
+    "module": "authority_inversion",
+    "summary": "No executed hydration crossing exists yet; future execution must not bypass CEIZ or output admission.",
+    "severity": "info",
+    "confidence": "medium",
+    "locus": "resume_work_next",
+    "evidence": [
+      "visible_artifact=narada resume --with codex advisory command",
+      "hidden_authority=Resume continuity is read-only trace recovery; launching or hydrating a tool is command execution and belongs in CEIZ.",
+      "current_guard=narada resume is read-only and --with codex is advisory only.",
+      "candidate_tasks=998,999,1000"
+    ],
+    "proposed_action": "Enrich resume brief, then route explicit hydration execution through CEIZ.",
+    "cooldown_key": "authority-inversion:resume-tool-process-authority"
+  },
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_882292d1-44f3-42f2-a30c-ba8697a25ec7",
+    "promoted_at": "2026-05-16T00:30:15.345Z",
+    "promoted_by": "narada.architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
+}

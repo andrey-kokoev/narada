@@ -32,5 +32,29 @@
     "summary": "Operator requested direct delivery to Narada. This packet documents the narada-andrey pattern for portable crew/agent shortcut intent, local materialization into `.lnk` files, and proof-before-bind safety requirements.",
     "title": "Crew shortcut setup packet from narada-andrey"
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1231",
+    "promoted_at": "2026-05-12T20:58:20.868Z",
+    "promoted_by": "narada.architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1231,
+      "task_id": "20260512-1231-admit-crew-launch-affordance-intent-and-projection-carrier",
+      "source_envelope": {
+        "envelope_id": "env_50302706-98d2-4076-9916-c8d82aba4820",
+        "envelope_kind": "knowledge_candidate",
+        "source_kind": "agent_report",
+        "source_ref": "operator:2026-05-12:send-narada-crew-shortcut-setup"
+      },
+      "recurrence": {
+        "key": "knowledge_candidate:agent_report:operator:2026-05-12:send-narada-crew-shortcut-setup",
+        "severity": "none",
+        "previous_count": 0,
+        "related_envelope_ids": []
+      }
+    }
+  }
 }

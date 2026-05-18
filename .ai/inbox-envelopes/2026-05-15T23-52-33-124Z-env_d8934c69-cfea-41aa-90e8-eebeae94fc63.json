@@ -1,0 +1,71 @@
+{
+  "envelope_id": "env_d8934c69-cfea-41aa-90e8-eebeae94fc63",
+  "received_at": "2026-05-15T23:52:33.124Z",
+  "source": {
+    "kind": "system_observation",
+    "ref": "coherence-scan:authority-inversion-cli-output-artifact-authority"
+  },
+  "kind": "task_candidate",
+  "authority": {
+    "level": "system_observed",
+    "principal": "coherence-scan"
+  },
+  "payload": {
+    "title": "Authority inversion risk: cli-output-artifact-authority",
+    "module": "authority_inversion",
+    "summary": "Command authors can still add surfaces that produce unbounded output or bypass formatter/admission helpers.",
+    "severity": "warning",
+    "confidence": "medium",
+    "locus": "cli_output_admission",
+    "evidence": [
+      "visible_artifact=Large CLI stdout/stderr transcripts",
+      "hidden_authority=CLI output must pass bounded output admission; long transcripts are artifacts to store or summarize, not automatically admitted chat evidence.",
+      "current_guard=CLI output admission guard and finite/interactive/long-lived output helpers.",
+      "candidate_tasks=992,993"
+    ],
+    "proposed_action": "Add coherence checks for commands that bypass CLI output admission or expose unbounded JSON by default.",
+    "cooldown_key": "authority-inversion:cli-output-artifact-authority"
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1316",
+    "promoted_at": "2026-05-16T00:29:54.712Z",
+    "promoted_by": "narada.architect",
+    "enactment_status": "enacted",
+    "target_command": "task create",
+    "target_result": {
+      "task": {
+        "status": "success",
+        "task_id": "20260516-1316-authority-inversion-risk-cli-output-artifact-authority",
+        "task_number": 1316,
+        "file_name": "20260516-1316-authority-inversion-risk-cli-output-artifact-authority.md",
+        "file_path": "D:\\code\\narada\\.ai\\do-not-open\\tasks\\20260516-1316-authority-inversion-risk-cli-output-artifact-authority.md",
+        "title": "Authority inversion risk: cli-output-artifact-authority",
+        "handoff_actionability": {
+          "status": "actionable",
+          "reason": null,
+          "repair_command": null,
+          "required_work_excerpt": "0. Source summary: Command authors can still add surfaces that produce unbounded output or bypass formatter/admission helpers.\n1. Read source inbox envelope env_d8934c69-cfea-41aa-90e8-eebeae94fc63 and preserve its authority context.\n2. Identify the owning Narada authority boundary before mutating any target state."
+        }
+      },
+      "assignment": null,
+      "assignment_target_resolution": null,
+      "prepared_nudge": null,
+      "source_envelope": {
+        "envelope_id": "env_d8934c69-cfea-41aa-90e8-eebeae94fc63",
+        "envelope_kind": "task_candidate",
+        "source_kind": "system_observation",
+        "source_ref": "coherence-scan:authority-inversion-cli-output-artifact-authority"
+      },
+      "recurrence": {
+        "key": "task_candidate:system_observation:coherence-scan:authority-inversion-cli-output-artifact-authority",
+        "severity": "medium",
+        "previous_count": 1,
+        "related_envelope_ids": [
+          "env_aceb1d91-ab00-40fd-bafc-5c1bbe0f94d0"
+        ]
+      }
+    }
+  }
+}

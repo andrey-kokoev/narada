@@ -31,5 +31,13 @@
     "verification": "Agent continues without prohibited tool calls until Operator explicitly authorizes them; this submission used only calls explicitly authorized by the Operator after the prohibition.",
     "status": "submitted_for_admission"
   },
-  "status": "received"
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_16a0543d-7b73-4345-abe3-cbf85b1c0108",
+    "promoted_at": "2026-05-16T20:47:39.840Z",
+    "promoted_by": "narada.architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
 }

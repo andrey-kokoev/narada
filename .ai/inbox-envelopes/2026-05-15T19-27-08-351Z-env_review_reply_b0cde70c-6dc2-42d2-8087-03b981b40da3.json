@@ -1,0 +1,46 @@
+{
+  "envelope_id": "env_review_reply_b0cde70c-6dc2-42d2-8087-03b981b40da3",
+  "received_at": "2026-05-15T19:27:08.351Z",
+  "source": {
+    "kind": "system_observation",
+    "ref": "task-review:review-20260515-1278-repair-mcp-narada-shim-command-resolution-1778873228228"
+  },
+  "target_locus": "narada.builder",
+  "kind": "observation",
+  "authority": {
+    "level": "system_observed",
+    "principal": "narada.architect"
+  },
+  "payload": {
+    "title": "Review result for task 1278",
+    "message_type": "review_result",
+    "obligation_id": "review_reply_review-20260515-1278-repair-mcp-narada-shim-command-resolution-1778873228228",
+    "source_envelope_id": "env_0ff460cd-336f-410d-88e6-cf3b223531d9",
+    "task_number": 1278,
+    "task_id": "20260515-1278-repair-mcp-narada-shim-command-resolution",
+    "verdict": "rejected",
+    "review_id": "review-20260515-1278-repair-mcp-narada-shim-command-resolution-1778873228228",
+    "evidence_id": "ear_1278_1778873228326_gfo3c4",
+    "blocking_findings": [
+      {
+        "severity": "blocking",
+        "description": "Task evidence remains scaffolded despite submitted review report. Task 1278 has checked acceptance criteria and a report, but Execution Notes still contain the scaffold placeholder. Replace scaffolded Execution Notes with material implementation notes and rerun evidence inspection before resubmitting review.",
+        "location": ".ai/do-not-open/tasks/20260515-1278-repair-mcp-narada-shim-command-resolution.md"
+      }
+    ],
+    "residual_notes": [
+      "The report claims MCP stdio smoke success, but the task projection does not record the implementation and verification evidence needed for closure. The repair should preserve the changed files, commands, smoke outcomes, and residuals in the task evidence before review.",
+      "Scope may be complete, but facade/prototype/spike/design-only language requires continuation evidence or a no-continuation-needed rationale before capability-complete closure."
+    ],
+    "next_expected_action": "address blocking findings, report completion, and request review again"
+  },
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_review_reply_b0cde70c-6dc2-42d2-8087-03b981b40da3",
+    "promoted_at": "2026-05-15T21:24:21.244Z",
+    "promoted_by": "narada.architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
+}

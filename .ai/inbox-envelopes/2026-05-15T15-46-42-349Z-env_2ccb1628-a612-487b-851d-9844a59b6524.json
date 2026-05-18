@@ -16,5 +16,61 @@
     "summary": "Operator requests narada.architect review the committed MCP infrastructure rebuild before treating it as settled site posture. Review commit 2f6446b1 and the follow-up review recommendation 45294baf.",
     "recommendation": "narada.architect should review commit 2f6446b1 for package boundary, launch config, tool vocabulary, break-glass posture, builder admission, and absence of User/PC runtime state import."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1277",
+    "promoted_at": "2026-05-15T15:46:56.862Z",
+    "promoted_by": "narada.architect",
+    "enactment_status": "enacted",
+    "target_command": "task create",
+    "target_result": {
+      "task": {
+        "status": "success",
+        "task_id": "20260515-1277-review-narada-proper-mcp-surface-rebuild",
+        "task_number": 1277,
+        "file_name": "20260515-1277-review-narada-proper-mcp-surface-rebuild.md",
+        "file_path": "D:\\code\\narada\\.ai\\do-not-open\\tasks\\20260515-1277-review-narada-proper-mcp-surface-rebuild.md",
+        "title": "Review Narada proper MCP surface rebuild",
+        "handoff_actionability": {
+          "status": "actionable",
+          "reason": null,
+          "repair_command": null,
+          "required_work_excerpt": "0. Source summary: Operator requests narada.architect review the committed MCP infrastructure rebuild before treating it as settled site posture. Review commit 2f6446b1 and the follow-up review recommendation 45294baf.\n1. Read source inbox envelope env_2ccb1628-a612-487b-851d-9844a59b6524 and preserve its authority context.\n2. Identify the owning Narada authority boundary before mutating any target state."
+        }
+      },
+      "assignment": {
+        "status": "success",
+        "task_id": "20260515-1277-review-narada-proper-mcp-surface-rebuild",
+        "agent_id": "narada.architect",
+        "claimed_at": "2026-05-15T15:46:56.063Z",
+        "assignment_intent_id": "air_claim_1277_narada.architect_1778860015896_q4ehjt"
+      },
+      "assignment_target_resolution": {
+        "status": "exact",
+        "requested_agent": "narada.architect",
+        "resolved_agent": "narada.architect",
+        "role": "implementer",
+        "site_prefix": "narada",
+        "candidates": [
+          "narada.architect"
+        ]
+      },
+      "prepared_nudge": null,
+      "source_envelope": {
+        "envelope_id": "env_2ccb1628-a612-487b-851d-9844a59b6524",
+        "envelope_kind": "observation",
+        "source_kind": "user_chat",
+        "source_ref": "commit:2f6446b1"
+      },
+      "recurrence": {
+        "key": "observation:user_chat:commit:2f6446b1",
+        "severity": "medium",
+        "previous_count": 1,
+        "related_envelope_ids": [
+          "env_e26184db-7083-4f74-a4e4-d5eea06fec43"
+        ]
+      }
+    }
+  }
 }

@@ -1,0 +1,96 @@
+{
+  "envelope_id": "env_65f00690-4a89-4d25-97d6-36dc0c414584",
+  "received_at": "2026-05-15T17:07:25.284Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "codex_session:2026-05-15:duty-loop-premature-stop-task-1268"
+  },
+  "target_locus": "narada-proper",
+  "kind": "incident",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "Andrey"
+  },
+  "payload": {
+    "title": "CAPA: Builder stopped after intermediate review step instead of completing next governed action",
+    "severity": "recurring_process_failure",
+    "summary": "During the Builder duty loop for task 1268, the agent stopped after reading task evidence, then again after recording the accepted review, even though the governed surfaces had returned concrete next actions. The operator had to prompt twice to continue: first to run the expected task review, then to close the task after the review output returned a closure command.",
+    "observed_at": "2026-05-15T17:05:44.336Z",
+    "target_locus": "narada-proper",
+    "incident": {
+      "task": "20260515-1268-rebuild-narada-proper-mcp-infrastructure",
+      "first_missed_action": "narada task review 1268 --agent narada.builder --verdict accepted --report wrr_279d6c8a_20260515-1268-rebuild-narada-proper-mcp-infrastructure_narada.architect",
+      "second_missed_action": "narada task close 1268 --by narada.builder --mode peer_reviewed --no-continuation-needed <rationale>",
+      "operator_prompts": [
+        "so, why did you not do something about the review?",
+        "and why did you stop?"
+      ]
+    },
+    "root_cause": [
+      "The agent treated an observation/read result as sufficient progress instead of continuing the already discovered directed obligation.",
+      "The agent treated review acceptance as terminal even though the review command returned a closure blocker and a concrete next command.",
+      "The duty-loop execution lacked a mechanical guard requiring the agent to consume explicit next_command/remediation fields before stopping."
+    ],
+    "containment": [
+      "The task review was retried after review authority was repaired and was accepted by narada.builder.",
+      "The directed review obligation was consumed by the review completion.",
+      "Task 1268 was closed through peer-reviewed closure with a no-continuation-needed rationale."
+    ],
+    "corrective_action": [
+      "Add a duty-loop rule or checklist for Builder next-action handling: when a Narada command returns next_command, remediation, directed obligation, or closure blocker fields, the agent must either execute the admissible next command or explicitly record the blocker.",
+      "Update agent-facing guidance or local task-loop tooling so task read is treated as evidence gathering, not as completion of a directed obligation.",
+      "Ensure review completion handling continues into closure posture checks when the review command reports close_action, closure_posture, or next_command."
+    ],
+    "preventive_action": [
+      "Add a bounded regression or scripted fixture for a task review flow where work-next returns a review obligation, task review succeeds, and closure is blocked until a no-continuation-needed rationale is supplied.",
+      "Make work-next or task review output more explicit for agents by surfacing whether the current duty-loop action is terminal or requires immediate continuation.",
+      "Require final answers after duty-loop commands to state any remaining next_command from the last Narada output, and avoid stopping when that next_command is admissible and low-risk."
+    ],
+    "verification": [
+      "A future Builder duty-loop run with a review obligation proceeds through task read, task review, and closure when all commands are admissible.",
+      "If review authority or closure gates block progress, the agent reports the exact blocker and does not present the intermediate step as done.",
+      "Task 1268 remains closed and the review obligation remains consumed."
+    ],
+    "recommendation": "Promote this incident into a Narada proper CAPA task for Builder duty-loop continuation hardening."
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1280",
+    "promoted_at": "2026-05-15T17:07:34.516Z",
+    "promoted_by": "narada.builder",
+    "enactment_status": "enacted",
+    "target_command": "task create",
+    "target_result": {
+      "task": {
+        "status": "success",
+        "task_id": "20260515-1280-capa-builder-duty-loop-stopped-before-governed-next-action",
+        "task_number": 1280,
+        "file_name": "20260515-1280-capa-builder-duty-loop-stopped-before-governed-next-action.md",
+        "file_path": "D:\\code\\narada\\.ai\\do-not-open\\tasks\\20260515-1280-capa-builder-duty-loop-stopped-before-governed-next-action.md",
+        "title": "CAPA: Builder duty loop stopped before governed next action",
+        "handoff_actionability": {
+          "status": "actionable",
+          "reason": null,
+          "repair_command": null,
+          "required_work_excerpt": "0. Source summary: During the Builder duty loop for task 1268, the agent stopped after reading task evidence, then again after recording the accepted review, even though the governed surfaces had returned concrete next actions. The operator had to prompt twice to continue: first to run the expected task review, then to close the task after the review output returned a closure command.\n1. Read source inbox envelope env_65f00690-4a89-4d25-97d6-36dc0c414584 and preserve its authority context.\n2. Identify the owning Narada authority boundary before mutating any target state."
+        }
+      },
+      "assignment": null,
+      "assignment_target_resolution": null,
+      "prepared_nudge": null,
+      "source_envelope": {
+        "envelope_id": "env_65f00690-4a89-4d25-97d6-36dc0c414584",
+        "envelope_kind": "incident",
+        "source_kind": "user_chat",
+        "source_ref": "codex_session:2026-05-15:duty-loop-premature-stop-task-1268"
+      },
+      "recurrence": {
+        "key": "incident:user_chat:codex_session:2026-05-15:duty-loop-premature-stop-task-1268",
+        "severity": "none",
+        "previous_count": 0,
+        "related_envelope_ids": []
+      }
+    }
+  }
+}

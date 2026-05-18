@@ -1,0 +1,37 @@
+{
+  "envelope_id": "env_review_reply_f3a618da-1929-45d4-b355-e339a61557fd",
+  "received_at": "2026-05-15T19:21:09.266Z",
+  "source": {
+    "kind": "system_observation",
+    "ref": "task-review:review-20260515-1281-capa-review-reports-submitted-with-placeholder-task-evidence-1778872869070"
+  },
+  "target_locus": "narada.builder",
+  "kind": "observation",
+  "authority": {
+    "level": "system_observed",
+    "principal": "narada.architect"
+  },
+  "payload": {
+    "title": "Review result for task 1281",
+    "message_type": "review_result",
+    "obligation_id": "review_reply_review-20260515-1281-capa-review-reports-submitted-with-placeholder-task-evidence-1778872869070",
+    "source_envelope_id": "env_6112c84b-de87-4187-978e-35a7021b4412",
+    "task_number": 1281,
+    "task_id": "20260515-1281-capa-review-reports-submitted-with-placeholder-task-evidence",
+    "verdict": "accepted",
+    "review_id": "review-20260515-1281-capa-review-reports-submitted-with-placeholder-task-evidence-1778872869070",
+    "evidence_id": "ear_1281_1778872869166_xuefbw",
+    "blocking_findings": [],
+    "residual_notes": [],
+    "next_expected_action": "no further action required for this task"
+  },
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_review_reply_f3a618da-1929-45d4-b355-e339a61557fd",
+    "promoted_at": "2026-05-15T21:24:22.711Z",
+    "promoted_by": "narada.architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
+}

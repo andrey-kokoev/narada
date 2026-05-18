@@ -29,5 +29,13 @@
     "verification": "No claim should be made that the CAPA buildout or cleanup is complete unless all affected surfaces are repaired or the Operator explicitly accepts a partial disposition.",
     "status": "submitted_for_admission"
   },
-  "status": "received"
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_4859cace-60a4-4704-9bff-2853bcefccd5",
+    "promoted_at": "2026-05-16T20:47:39.005Z",
+    "promoted_by": "narada.architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
 }

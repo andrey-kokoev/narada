@@ -28,5 +28,49 @@
     ],
     "recommendation": "Admit as recurring CAPA candidate and route to Architect for assignment-boundary validation hardening."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1274",
+    "promoted_at": "2026-05-15T15:16:39.267Z",
+    "promoted_by": "narada.architect",
+    "enactment_status": "enacted",
+    "target_command": "task create",
+    "target_result": {
+      "task": {
+        "status": "success",
+        "task_id": "20260515-1274-recurring-capa-make-assignment-of-non-registered-agents-to-t",
+        "task_number": 1274,
+        "file_name": "20260515-1274-recurring-capa-make-assignment-of-non-registered-agents-to-t.md",
+        "file_path": "D:\\code\\narada\\.ai\\do-not-open\\tasks\\20260515-1274-recurring-capa-make-assignment-of-non-registered-agents-to-t.md",
+        "title": "Recurring CAPA: Make assignment of non-registered agents to tasks impossible",
+        "handoff_actionability": {
+          "status": "actionable",
+          "reason": null,
+          "repair_command": null,
+          "required_work_excerpt": "0. Source summary: Operator identified a recurrence risk: tasks or work references can be assigned/probed against non-registered agent identities such as narada.claude-code and narada.native, allowing carrier/runtime labels to be confused with roster principals. Narada should make assignment of non-registered agents to tasks impossible at admission/assignment time, not merely fail later at work-next resolution.\n1. Read source inbox envelope env_d60d85cc-ce6f-44ad-bb3d-b1b1ac480040 and preserve its authority context.\n2. Identify the owning Narada authority boundary before mutating any target state."
+        }
+      },
+      "assignment": {
+        "status": "success",
+        "task_id": "20260515-1274-recurring-capa-make-assignment-of-non-registered-agents-to-t",
+        "agent_id": "narada.architect",
+        "claimed_at": "2026-05-15T15:16:38.476Z",
+        "assignment_intent_id": "air_claim_1274_narada.architect_1778858198325_4v6vf8"
+      },
+      "prepared_nudge": null,
+      "source_envelope": {
+        "envelope_id": "env_d60d85cc-ce6f-44ad-bb3d-b1b1ac480040",
+        "envelope_kind": "observation",
+        "source_kind": "user_chat",
+        "source_ref": "codex_session:operator_requested_recurring_capa_non_registered_agent_assignment_2026-05-15"
+      },
+      "recurrence": {
+        "key": "observation:user_chat:codex_session:operator_requested_recurring_capa_non_registered_agent_assignment_2026-05-15",
+        "severity": "none",
+        "previous_count": 0,
+        "related_envelope_ids": []
+      }
+    }
+  }
 }

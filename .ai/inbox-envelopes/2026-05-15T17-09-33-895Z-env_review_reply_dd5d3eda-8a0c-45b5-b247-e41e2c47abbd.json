@@ -1,0 +1,48 @@
+{
+  "envelope_id": "env_review_reply_dd5d3eda-8a0c-45b5-b247-e41e2c47abbd",
+  "received_at": "2026-05-15T17:09:33.895Z",
+  "source": {
+    "kind": "system_observation",
+    "ref": "task-review:review-20260514-1267-review-and-repair-agent-carrier-factorization-handoff-from-n-1778864973767"
+  },
+  "target_locus": "narada-andrey.Kevin",
+  "kind": "observation",
+  "authority": {
+    "level": "system_observed",
+    "principal": "narada.builder"
+  },
+  "payload": {
+    "title": "Review result for task 1267",
+    "message_type": "review_result",
+    "obligation_id": "review_reply_review-20260514-1267-review-and-repair-agent-carrier-factorization-handoff-from-n-1778864973767",
+    "source_envelope_id": "env_7d3e1971-d6f1-499f-8089-860c35bcb029",
+    "task_number": 1267,
+    "task_id": "20260514-1267-review-and-repair-agent-carrier-factorization-handoff-from-n",
+    "verdict": "rejected",
+    "review_id": "review-20260514-1267-review-and-repair-agent-carrier-factorization-handoff-from-n-1778864973767",
+    "evidence_id": "ear_1267_1778864973867_jiz1so",
+    "blocking_findings": [
+      {
+        "severity": "blocking",
+        "description": "All four acceptance criteria remain unchecked, so the report does not prove the required Agent Carrier handoff review and repair work.",
+        "location": null
+      },
+      {
+        "severity": "blocking",
+        "description": "Execution notes and verification remain scaffold placeholders, so the task lacks evidence for the claimed report.",
+        "location": null
+      }
+    ],
+    "residual_notes": [],
+    "next_expected_action": "address blocking findings, report completion, and request review again"
+  },
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_review_reply_dd5d3eda-8a0c-45b5-b247-e41e2c47abbd",
+    "promoted_at": "2026-05-15T21:24:36.703Z",
+    "promoted_by": "narada.architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
+}

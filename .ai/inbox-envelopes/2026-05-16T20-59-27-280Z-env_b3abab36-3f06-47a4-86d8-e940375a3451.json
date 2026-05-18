@@ -1,0 +1,78 @@
+{
+  "envelope_id": "env_b3abab36-3f06-47a4-86d8-e940375a3451",
+  "received_at": "2026-05-16T20:59:27.280Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "chat:2026-05-16-request-narada-andrey-inquiry-space-d3-graph-generator"
+  },
+  "target_locus": "narada-andrey",
+  "kind": "command_request",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "operator"
+  },
+  "payload": {
+    "schema": "narada.outbound_request_candidate.v0",
+    "title": "Request narada-andrey Inquiry Space D3 graph HTML generator lift",
+    "summary": "Narada proper requests the implemented Inquiry Space D3 graph HTML generator from narada-andrey for evaluation and possible inclusion in Narada proper packages.",
+    "target_site_id": "narada-andrey",
+    "requested_artifact": {
+      "name": "Inquiry Space D3 graph HTML generator",
+      "expected_material": [
+        "source files or package path for the implemented generator",
+        "fixture or sample input/output used to prove graph rendering",
+        "tests or smoke commands",
+        "README or usage notes",
+        "dependency and browser/runtime assumptions"
+      ]
+    },
+    "non_data_lift_constraint": {
+      "private_inquiry_space_data_requested": false,
+      "requested_material_only": [
+        "implementation machinery",
+        "contracts",
+        "tests",
+        "fixtures with synthetic or non-private data",
+        "documentation"
+      ],
+      "excluded_material": [
+        "private Inquiry Space records",
+        "personal/operator memory",
+        "runtime database contents",
+        "secrets",
+        "credentials",
+        "private graph data"
+      ]
+    },
+    "intended_receiving_locus": {
+      "site_id": "narada-proper",
+      "candidate_destination": "packages",
+      "posture": "candidate_import_after_review",
+      "authority_limits": [
+        "request_does_not_import_narada_andrey_runtime_state",
+        "received_material_requires_narada_proper_admission_before_package_inclusion",
+        "private_inquiry_space_data_must_not_cross"
+      ]
+    },
+    "reason": "Operator requested the implemented generator from narada-andrey so Narada proper can include the reusable machinery under packages without copying private Inquiry Space data.",
+    "requested_response": {
+      "preferred_form": "patch, archive, branch, or inbox/package handoff containing implementation-only material",
+      "include_provenance": true,
+      "include_license_or_reuse_constraints": true
+    },
+    "source_refs": [
+      "chat:2026-05-16-request-narada-andrey-inquiry-space-d3-graph-generator",
+      "docs/concepts/inquiry-topology.md",
+      "docs/product/site-telemetry-inquiry-doctrine-feedback.v0.md"
+    ]
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "operator_action",
+    "target_ref": "narada-andrey-inquiry-space-d3-graph-generator-handoff",
+    "promoted_at": "2026-05-17T00:52:22.747Z",
+    "promoted_by": "narada.builder2",
+    "enactment_status": "pending",
+    "note": "recorded_pending_crossing: executable promotion for target kind 'operator_action' is not implemented yet."
+  }
+}

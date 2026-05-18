@@ -1,0 +1,92 @@
+{
+  "envelope_id": "env_6112c84b-de87-4187-978e-35a7021b4412",
+  "received_at": "2026-05-15T18:10:46.629Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "codex_session:2026-05-15:stale-review-report-evidence"
+  },
+  "target_locus": "narada-proper",
+  "kind": "incident",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada.builder"
+  },
+  "payload": {
+    "title": "CAPA: Review reports submitted with placeholder task evidence",
+    "severity": "recurring_process_failure",
+    "summary": "Builder review encountered repeated in-review tasks whose reports existed but task evidence remained incomplete: acceptance criteria unchecked and execution notes or verification still scaffold placeholders.",
+    "observed_at": "2026-05-15T17:09:50.838Z",
+    "target_locus": "narada-proper",
+    "incident": {
+      "rejected_tasks": [
+        "20260515-1270-forbid-unrouted-task-report-review-obligations",
+        "20260514-1267-review-and-repair-agent-carrier-factorization-handoff-from-n",
+        "20260515-1271-remove-law-receipt-work-admission-blocking-in-narada-proper"
+      ],
+      "common_failure": "task report/review obligations were present while required task evidence remained unchecked or placeholder"
+    },
+    "root_cause_hypothesis": [
+      "Task report admission may allow reports to be submitted before acceptance criteria and execution evidence are complete.",
+      "Review obligation creation may not surface evidence completeness strongly enough before placing work on a reviewer.",
+      "Existing validation distinguishes report presence from proof that task evidence satisfies the required work."
+    ],
+    "containment": [
+      "Builder rejected the incomplete reports with blocking findings.",
+      "The affected tasks were reopened for repair rather than closed."
+    ],
+    "corrective_action": [
+      "Audit task report admission for evidence completeness checks before creating review obligations.",
+      "Decide whether unchecked criteria and scaffold placeholders should block report submission or be surfaced as explicit report warnings.",
+      "Repair affected tasks by completing evidence or withdrawing/replacing the reports."
+    ],
+    "preventive_action": [
+      "Add regression coverage for attempted task report submission with unchecked criteria and scaffold execution notes.",
+      "Make reviewer work-next or task read clearly distinguish complete reports from evidence-incomplete reports."
+    ],
+    "verification": [
+      "A task with scaffold execution notes and unchecked criteria cannot silently produce a clean review obligation.",
+      "Tasks 1270, 1267, and 1271 remain open until repaired evidence is supplied and a new review is requested."
+    ],
+    "recommendation": "Promote to a Narada proper CAPA task for report-admission evidence completeness hardening."
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1281",
+    "promoted_at": "2026-05-15T18:10:55.262Z",
+    "promoted_by": "narada.builder",
+    "enactment_status": "enacted",
+    "target_command": "task create",
+    "target_result": {
+      "task": {
+        "status": "success",
+        "task_id": "20260515-1281-capa-review-reports-submitted-with-placeholder-task-evidence",
+        "task_number": 1281,
+        "file_name": "20260515-1281-capa-review-reports-submitted-with-placeholder-task-evidence.md",
+        "file_path": "D:\\code\\narada\\.ai\\do-not-open\\tasks\\20260515-1281-capa-review-reports-submitted-with-placeholder-task-evidence.md",
+        "title": "CAPA: Review reports submitted with placeholder task evidence",
+        "handoff_actionability": {
+          "status": "actionable",
+          "reason": null,
+          "repair_command": null,
+          "required_work_excerpt": "0. Source summary: Builder review encountered repeated in-review tasks whose reports existed but task evidence remained incomplete: acceptance criteria unchecked and execution notes or verification still scaffold placeholders.\n1. Read source inbox envelope env_6112c84b-de87-4187-978e-35a7021b4412 and preserve its authority context.\n2. Identify the owning Narada authority boundary before mutating any target state."
+        }
+      },
+      "assignment": null,
+      "assignment_target_resolution": null,
+      "prepared_nudge": null,
+      "source_envelope": {
+        "envelope_id": "env_6112c84b-de87-4187-978e-35a7021b4412",
+        "envelope_kind": "incident",
+        "source_kind": "agent_report",
+        "source_ref": "codex_session:2026-05-15:stale-review-report-evidence"
+      },
+      "recurrence": {
+        "key": "incident:agent_report:codex_session:2026-05-15:stale-review-report-evidence",
+        "severity": "none",
+        "previous_count": 0,
+        "related_envelope_ids": []
+      }
+    }
+  }
+}

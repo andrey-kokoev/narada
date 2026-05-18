@@ -1,0 +1,37 @@
+{
+  "envelope_id": "env_review_reply_e7d162e3-4090-45a5-8819-9fad48f7fc19",
+  "received_at": "2026-05-15T19:28:14.743Z",
+  "source": {
+    "kind": "system_observation",
+    "ref": "task-review:review-20260515-1279-mcp-task-admission-remains-inert-for-builder-claimability-1778873294519"
+  },
+  "target_locus": "narada.builder",
+  "kind": "observation",
+  "authority": {
+    "level": "system_observed",
+    "principal": "narada.architect"
+  },
+  "payload": {
+    "title": "Review result for task 1279",
+    "message_type": "review_result",
+    "obligation_id": "review_reply_review-20260515-1279-mcp-task-admission-remains-inert-for-builder-claimability-1778873294519",
+    "source_envelope_id": "env_4130c458-de50-4256-9067-b3bce0cec1bb",
+    "task_number": 1279,
+    "task_id": "20260515-1279-mcp-task-admission-remains-inert-for-builder-claimability",
+    "verdict": "accepted",
+    "review_id": "review-20260515-1279-mcp-task-admission-remains-inert-for-builder-claimability-1778873294519",
+    "evidence_id": "ear_1279_1778873294635_rq83od",
+    "blocking_findings": [],
+    "residual_notes": [],
+    "next_expected_action": "no further action required for this task"
+  },
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_review_reply_e7d162e3-4090-45a5-8819-9fad48f7fc19",
+    "promoted_at": "2026-05-15T21:24:20.515Z",
+    "promoted_by": "narada.architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
+}

@@ -22,5 +22,59 @@
     ],
     "recommendation": "Route as MCP facade/runtime embodiment repair."
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1278",
+    "promoted_at": "2026-05-15T15:47:57.150Z",
+    "promoted_by": "narada.builder",
+    "enactment_status": "enacted",
+    "target_command": "task create",
+    "target_result": {
+      "task": {
+        "status": "success",
+        "task_id": "20260515-1278-repair-mcp-narada-shim-command-resolution",
+        "task_number": 1278,
+        "file_name": "20260515-1278-repair-mcp-narada-shim-command-resolution.md",
+        "file_path": "D:\\code\\narada\\.ai\\do-not-open\\tasks\\20260515-1278-repair-mcp-narada-shim-command-resolution.md",
+        "title": "Repair MCP Narada shim command resolution",
+        "handoff_actionability": {
+          "status": "actionable",
+          "reason": null,
+          "repair_command": null,
+          "required_work_excerpt": "0. Source summary: MCP subprocess lookup still cannot resolve the PowerShell narada shim, though the interactive shell can.\n1. Read source inbox envelope env_0ff460cd-336f-410d-88e6-cf3b223531d9 and preserve its authority context.\n2. Identify the owning Narada authority boundary before mutating any target state."
+        }
+      },
+      "assignment": {
+        "status": "success",
+        "task_id": "20260515-1278-repair-mcp-narada-shim-command-resolution",
+        "agent_id": "narada.builder",
+        "claimed_at": "2026-05-15T15:47:56.435Z",
+        "assignment_intent_id": "air_claim_1278_narada.builder_1778860076295_01qnhw"
+      },
+      "assignment_target_resolution": {
+        "status": "exact",
+        "requested_agent": "narada.builder",
+        "resolved_agent": "narada.builder",
+        "role": "implementer",
+        "site_prefix": "narada",
+        "candidates": [
+          "narada.builder"
+        ]
+      },
+      "prepared_nudge": null,
+      "source_envelope": {
+        "envelope_id": "env_0ff460cd-336f-410d-88e6-cf3b223531d9",
+        "envelope_kind": "observation",
+        "source_kind": "agent_report",
+        "source_ref": "codex_session:2026-05-15:mcp-narada-shim-lookup-enoent"
+      },
+      "recurrence": {
+        "key": "observation:agent_report:codex_session:2026-05-15:mcp-narada-shim-lookup-enoent",
+        "severity": "none",
+        "previous_count": 0,
+        "related_envelope_ids": []
+      }
+    }
+  }
 }

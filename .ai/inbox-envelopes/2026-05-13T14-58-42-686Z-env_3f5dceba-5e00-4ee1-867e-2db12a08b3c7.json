@@ -30,5 +30,13 @@
     "verification": "Future submissions in this thread used the verified principal `narada.architect` only after the inbox surface reported it and the Operator explicitly authorized that value. This CAPA is submitted without asserting that any invented identity is valid.",
     "status": "submitted_for_admission"
   },
-  "status": "received"
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_3f5dceba-5e00-4ee1-867e-2db12a08b3c7",
+    "promoted_at": "2026-05-16T20:47:39.648Z",
+    "promoted_by": "narada.architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
 }

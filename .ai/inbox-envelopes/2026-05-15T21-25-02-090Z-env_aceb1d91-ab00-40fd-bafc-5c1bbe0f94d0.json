@@ -1,0 +1,54 @@
+{
+  "envelope_id": "env_aceb1d91-ab00-40fd-bafc-5c1bbe0f94d0",
+  "received_at": "2026-05-15T21:25:02.090Z",
+  "source": {
+    "kind": "system_observation",
+    "ref": "coherence-scan:authority-inversion-cli-output-artifact-authority"
+  },
+  "kind": "task_candidate",
+  "authority": {
+    "level": "system_observed",
+    "principal": "coherence-scan"
+  },
+  "payload": {
+    "title": "Authority inversion risk: cli-output-artifact-authority",
+    "module": "authority_inversion",
+    "summary": "Command authors can still add surfaces that produce unbounded output or bypass formatter/admission helpers.",
+    "severity": "warning",
+    "confidence": "medium",
+    "locus": "cli_output_admission",
+    "evidence": [
+      "visible_artifact=Large CLI stdout/stderr transcripts",
+      "hidden_authority=CLI output must pass bounded output admission; long transcripts are artifacts to store or summarize, not automatically admitted chat evidence.",
+      "current_guard=CLI output admission guard and finite/interactive/long-lived output helpers.",
+      "candidate_tasks=992,993"
+    ],
+    "proposed_action": "Add coherence checks for commands that bypass CLI output admission or expose unbounded JSON by default.",
+    "cooldown_key": "authority-inversion:cli-output-artifact-authority"
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:992",
+    "promoted_at": "2026-05-15T21:25:54.785Z",
+    "promoted_by": "narada.architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 992,
+      "task_id": "20260427-992-add-authority-inversion-coherence-scanner",
+      "source_envelope": {
+        "envelope_id": "env_aceb1d91-ab00-40fd-bafc-5c1bbe0f94d0",
+        "envelope_kind": "task_candidate",
+        "source_kind": "system_observation",
+        "source_ref": "coherence-scan:authority-inversion-cli-output-artifact-authority"
+      },
+      "recurrence": {
+        "key": "task_candidate:system_observation:coherence-scan:authority-inversion-cli-output-artifact-authority",
+        "severity": "none",
+        "previous_count": 0,
+        "related_envelope_ids": []
+      }
+    }
+  }
+}

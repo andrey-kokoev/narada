@@ -1,0 +1,37 @@
+{
+  "envelope_id": "env_review_reply_0b2f3a2c-f2dc-41b2-8cd2-e35cb35ff4f5",
+  "received_at": "2026-05-15T20:45:41.774Z",
+  "source": {
+    "kind": "system_observation",
+    "ref": "task-review:review-20260515-1273-repair-lifecycle-scheduler-claimability-for-admitted-tasks-1778877941592"
+  },
+  "target_locus": "narada.builder",
+  "kind": "observation",
+  "authority": {
+    "level": "system_observed",
+    "principal": "narada.architect"
+  },
+  "payload": {
+    "title": "Review result for task 1273",
+    "message_type": "review_result",
+    "obligation_id": "review_reply_review-20260515-1273-repair-lifecycle-scheduler-claimability-for-admitted-tasks-1778877941592",
+    "source_envelope_id": "env_e49203fc-f25f-4108-a024-ce051fb01f38",
+    "task_number": 1273,
+    "task_id": "20260515-1273-repair-lifecycle-scheduler-claimability-for-admitted-tasks",
+    "verdict": "accepted",
+    "review_id": "review-20260515-1273-repair-lifecycle-scheduler-claimability-for-admitted-tasks-1778877941592",
+    "evidence_id": "ear_1273_1778877941678_jtbe5w",
+    "blocking_findings": [],
+    "residual_notes": [],
+    "next_expected_action": "no further action required for this task"
+  },
+  "status": "archived",
+  "promotion": {
+    "target_kind": "archive",
+    "target_ref": "archive:env_review_reply_0b2f3a2c-f2dc-41b2-8cd2-e35cb35ff4f5",
+    "promoted_at": "2026-05-15T21:24:19.708Z",
+    "promoted_by": "narada.architect",
+    "enactment_status": "recorded",
+    "note": "Envelope archived; no target-zone mutation was performed."
+  }
+}

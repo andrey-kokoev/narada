@@ -1,0 +1,64 @@
+{
+  "envelope_id": "env_5bbe80dc-3de8-48f2-ad60-f917ecf177f3",
+  "received_at": "2026-05-16T19:20:07.605Z",
+  "source": {
+    "kind": "user_chat",
+    "ref": "chat:2026-05-16-request-mcp-doctrine-grounding-lift"
+  },
+  "target_locus": "narada.architect",
+  "kind": "task_candidate",
+  "authority": {
+    "level": "operator_confirmed",
+    "principal": "operator"
+  },
+  "payload": {
+    "schema": "narada.task_candidate.v0",
+    "title": "Lift MCP doctrine grounding command package",
+    "summary": "Operator observed that the available Narada proper MCP grounding tools do not include the right doctrine-grounding command for design questions such as Site Registry ownership and hosted projection authority. Request a lift package from narada.architect to specify and implement a doctrine-grounding MCP command/package.",
+    "problem": "Current MCP tools can report site/fabric context, but they do not retrieve or synthesize relevant doctrine grounding from SEMANTICS.md and docs/concepts/product docs for a question. This led to weak grounding when discussing whether a Cloudflare-hosted Site Registry should be owned by narada-proper, narada-andrey/User Site, or another locus.",
+    "requested_work": [
+      "Specify the doctrine-grounding MCP affordance: input question/topic, optional target Site/locus, doctrine corpus selection, and bounded output contract.",
+      "Ground the command in existing Narada doctrine docs rather than creating a second authority source.",
+      "Implement through Narada proper MCP facade as read-only/facade-only unless explicitly admitted otherwise.",
+      "Include tests proving it returns doctrine refs/summaries without mutating Site/task/inbox state and without overclaiming authority.",
+      "Document when to use the command for architecture/design grounding and how it differs from site_context/fabric_context."
+    ],
+    "acceptance_criteria": [
+      "MCP command exists for doctrine grounding or a clear lift package specifies why not yet implementable.",
+      "Output includes doctrine references and bounded synthesis, not free-floating model opinion.",
+      "Tests prove read-only posture and relevant doctrine selection.",
+      "The original Site Registry ownership question can be re-run through the command as a proof case."
+    ],
+    "authority_posture": {
+      "target_locus": "narada-proper",
+      "requested_owner": "narada.architect",
+      "mutation_type": "inbox task candidate",
+      "implementation_not_performed_now": true
+    }
+  },
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1416",
+    "promoted_at": "2026-05-16T20:44:22.861Z",
+    "promoted_by": "narada.architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1416,
+      "task_id": "20260516-1416-implement-doctrine-grounding-mcp-lift-package-for-telemetry-",
+      "source_envelope": {
+        "envelope_id": "env_5bbe80dc-3de8-48f2-ad60-f917ecf177f3",
+        "envelope_kind": "task_candidate",
+        "source_kind": "user_chat",
+        "source_ref": "chat:2026-05-16-request-mcp-doctrine-grounding-lift"
+      },
+      "recurrence": {
+        "key": "task_candidate:user_chat:chat:2026-05-16-request-mcp-doctrine-grounding-lift",
+        "severity": "none",
+        "previous_count": 0,
+        "related_envelope_ids": []
+      }
+    }
+  }
+}

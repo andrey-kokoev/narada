@@ -105,5 +105,29 @@
     "target_review_principal": "narada.architect",
     "title": "Review and repair Agent Carrier factorization handoff from narada-andrey.Kevin"
   },
-  "status": "received"
+  "status": "promoted",
+  "promotion": {
+    "target_kind": "task",
+    "target_ref": "task:1267",
+    "promoted_at": "2026-05-14T03:12:15.145Z",
+    "promoted_by": "narada.architect",
+    "enactment_status": "enacted",
+    "target_command": "task route",
+    "target_result": {
+      "task_number": 1267,
+      "task_id": "20260514-1267-review-and-repair-agent-carrier-factorization-handoff-from-n",
+      "source_envelope": {
+        "envelope_id": "env_7d3e1971-d6f1-499f-8089-860c35bcb029",
+        "envelope_kind": "upstream_task_candidate",
+        "source_kind": "agent_report",
+        "source_ref": "narada-andrey.Kevin:agent-carrier-factorization-handoff:2026-05-13"
+      },
+      "recurrence": {
+        "key": "upstream_task_candidate:agent_report:narada-andrey.kevin:agent-carrier-factorization-handoff:2026-05-13",
+        "severity": "none",
+        "previous_count": 0,
+        "related_envelope_ids": []
+      }
+    }
+  }
 }
