@@ -1,6 +1,7 @@
 import type { ExchangeFsSyncConfig, ScopeConfig } from "./types.js";
 import { loadGraphEnv } from "./env.js";
 import {
+  AzureCliTokenProvider,
   ClientCredentialsTokenProvider,
   StaticBearerTokenProvider,
   type GraphTokenProvider,
@@ -44,7 +45,5 @@ export function buildGraphTokenProvider(
     });
   }
 
-  throw new Error(
-    "No Graph auth configuration found. Provide GRAPH_ACCESS_TOKEN or tenant/client/client_secret via env or config.",
-  );
+  return new AzureCliTokenProvider({ tenantId });
 }

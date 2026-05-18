@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { AzureCliTokenProvider } from "../../../src/adapter/graph/auth.js";
 import { buildGraphTokenProvider } from "../../../src/config/token-provider.js";
 import type { ExchangeFsSyncConfig } from "../../../src/config/types.js";
 
@@ -76,11 +77,29 @@ describe("buildGraphTokenProvider", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
-  it("throws when no auth mechanism is available", () => {
-    expect(() =>
-      buildGraphTokenProvider({
-        config: baseConfig,
+  it("falls back to delegated Azure CLI auth when no secret auth is configured", async () => {
+    expect(buildGraphTokenProvider({ config: baseConfig })).toBeInstanceOf(AzureCliTokenProvider);
+
+    const provider = new AzureCliTokenProvider({
+      execFileImpl: vi.fn(async () => ({
+        stdout: JSON.stringify({
+          accessToken: "az-token",
+          expiresOn: "2099-01-01 00:00:00.000000",
+        }),
+        stderr: "",
+      })),
+    });
+
+    await expect(provider.getAccessToken()).resolves.toBe("az-token");
+  });
+
+  it("classifies broken delegated Azure CLI auth as interactive login repair", async () => {
+    const provider = new AzureCliTokenProvider({
+      execFileImpl: vi.fn(async () => {
+        throw new Error("az login required");
       }),
-    ).toThrow(/No Graph auth configuration found/);
+    });
+
+    await expect(provider.getAccessToken()).rejects.toThrow(/Graph delegated Microsoft login unavailable/);
   });
 });

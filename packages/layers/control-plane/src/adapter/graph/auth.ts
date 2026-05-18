@@ -1,3 +1,8 @@
+import { execFile as execFileCallback } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFile = promisify(execFileCallback);
+
 export interface GraphTokenProvider {
   getAccessToken(): Promise<string>;
   /** Invalidate any cached token so the next call fetches a fresh one. */
@@ -136,4 +141,112 @@ export class ClientCredentialsTokenProvider implements GraphTokenProvider {
   invalidateAccessToken(): void {
     this.cached = undefined;
   }
+}
+
+export interface AzureCliTokenProviderOptions {
+  tenantId?: string;
+  timeoutMs?: number;
+  execFileImpl?: typeof execFile;
+}
+
+export class AzureCliTokenProvider implements GraphTokenProvider {
+  private readonly tenantId?: string;
+  private readonly timeoutMs: number;
+  private readonly execFileImpl: typeof execFile;
+  private cached?: CachedToken;
+
+  constructor(opts: AzureCliTokenProviderOptions = {}) {
+    this.tenantId = opts.tenantId;
+    this.timeoutMs = opts.timeoutMs ?? 15_000;
+    this.execFileImpl = opts.execFileImpl ?? execFile;
+  }
+
+  private isCacheUsable(): boolean {
+    if (!this.cached) {
+      return false;
+    }
+
+    const now = Date.now();
+    const refreshSkewMs = 60_000;
+
+    return this.cached.expiresAtEpochMs - refreshSkewMs > now;
+  }
+
+  async getAccessToken(): Promise<string> {
+    if (this.isCacheUsable()) {
+      return this.cached!.accessToken;
+    }
+
+    const args = [
+      "account",
+      "get-access-token",
+      "--resource",
+      "https://graph.microsoft.com",
+      "--output",
+      "json",
+    ];
+
+    if (this.tenantId) {
+      args.push("--tenant", this.tenantId);
+    }
+
+    let stdout: string;
+    try {
+      const result = await this.execFileImpl(azureCliCommand(), args, {
+        timeout: this.timeoutMs,
+        shell: process.platform === "win32",
+        windowsHide: true,
+        maxBuffer: 1024 * 1024,
+      });
+      stdout = result.stdout;
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Graph delegated Microsoft login unavailable: Azure CLI could not issue a Graph token. Run az login${this.tenantId ? ` --tenant ${this.tenantId}` : ""} or repair Azure CLI login state. Detail: ${detail}`,
+      );
+    }
+
+    let json: { accessToken?: string; expiresOn?: string; expires_on?: number };
+    try {
+      json = JSON.parse(stdout) as { accessToken?: string; expiresOn?: string; expires_on?: number };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(`Graph delegated Microsoft login unavailable: Azure CLI returned invalid token JSON. Detail: ${detail}`);
+    }
+
+    const accessToken = json.accessToken?.trim();
+    if (!accessToken) {
+      throw new Error("Graph delegated Microsoft login unavailable: Azure CLI token response missing accessToken");
+    }
+
+    this.cached = {
+      accessToken,
+      expiresAtEpochMs: parseAzureCliExpiry(json) ?? Date.now() + 3600 * 1000,
+    };
+
+    return accessToken;
+  }
+
+  invalidateAccessToken(): void {
+    this.cached = undefined;
+  }
+}
+
+function azureCliCommand(): string {
+  return "az";
+}
+
+function parseAzureCliExpiry(json: { expiresOn?: string; expires_on?: number }): number | undefined {
+  if (typeof json.expires_on === "number" && Number.isFinite(json.expires_on)) {
+    return json.expires_on * 1000;
+  }
+
+  if (json.expiresOn) {
+    const parsed = Date.parse(json.expiresOn);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return undefined;
 }
