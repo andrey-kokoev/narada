@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
-import { basename, resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { basename, dirname, relative, resolve } from 'node:path';
 import {
   buildCheckpointDescriptor,
   buildHydrationRequestDescriptor,
@@ -13,17 +13,21 @@ import {
   inboxListCommand,
   inboxShowCommand,
   inboxSubmitObservationCommand,
+  inboxSubmitTypedEnvelopeCommand,
   inboxWorkNextCommand,
 } from './commands/inbox.js';
 import {
   taskPeekNextCommand,
+  taskReadCommand,
   taskWorkNextCommand,
 } from './commands/task-next.js';
+import { reconcileLocalMcpRolePolicy } from './config-policy-reconciler.js';
 import { runNaradaJson, type CommandEnvelope } from './commands/process.js';
 import { grantEffectiveStatus, readCapabilityRegistry } from './lib/capability-consent-registry.js';
 import { ExitCode } from './lib/exit-codes.js';
 import type { CommandSideEffectClass } from './lib/command-execution-intent.js';
 import { readRoutingRegistry, resolveRouteSelection, type RouteAddressRecord } from './lib/routing-addressing-registry.js';
+import { readMcpPayloadRef } from './payload-output.js';
 
 type JsonRpcId = string | number | null;
 
@@ -43,6 +47,22 @@ interface McpTool {
 interface McpToolResult {
   content: Array<{ type: 'text'; text: string }>;
   isError?: boolean;
+}
+
+type DirectiveSourceKind = 'operator' | 'agent' | 'system';
+type DirectiveTargetKind = 'agent' | 'carrier' | 'site' | 'role' | 'task' | 'session' | 'workspace';
+type DirectiveContentKind = 'instruction' | 'constraint' | 'routing' | 'delivery' | 'context';
+
+interface McpDirective {
+  schema: 'narada.directive.v1';
+  directive_id: string;
+  created_at: string;
+  source: { kind: DirectiveSourceKind; id: string; label?: string };
+  authority: { locus: string; basis: string };
+  target: { kind: DirectiveTargetKind; id: string };
+  content: { kind: DirectiveContentKind; text: string };
+  ordering: { priority: number; sequence: number; not_before?: string; expires_at?: string };
+  admission: { status: 'admitted' | 'refused' | 'delivered' | 'candidate'; decided_at?: string; decided_by?: string; reason?: string };
 }
 
 interface McpTarget {
@@ -79,6 +99,7 @@ export interface McpServerOptions {
   agentStartEventId?: string;
   carrierSessionId?: string;
   agentContextDb?: string;
+  doctrineCorpusRoot?: string;
 }
 
 export interface McpSiteContext {
@@ -94,6 +115,10 @@ export interface McpSiteContext {
 const PROTOCOL_VERSION = '2024-11-05';
 const WSL_WINDOWS_EE_MCP_ADAPTER_ID = 'ee-mcp.windows-powershell-from-wsl';
 const WSL_WINDOWS_COMMAND_ID_PATTERN = /^windows-pwsh\.readonly\.[a-z0-9][a-z0-9._-]{0,80}$/;
+const CROSS_SITE_INBOX_CAPABILITY_KIND = 'canonical_inbox_cross_site_submission';
+const INBOX_SUBMIT_OBSERVATION_TOOLS = new Set(['narada_inbox_submit_observation', 'inbox_submit_observation']);
+const INBOX_SUBMIT_TYPED_TOOLS = new Set(['narada_inbox_submit_typed_envelope', 'inbox_submit_typed_envelope']);
+const INBOX_STAGE_SUBMISSION_TOOLS = new Set(['narada_inbox_stage_submission_workflow', 'inbox_stage_submission_workflow']);
 
 export const NARADA_MCP_TOOLS: McpTool[] = [
   {
@@ -111,11 +136,81 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
     }),
   },
   {
+    name: 'agent_context_startup_sequence',
+    description: 'Run the canonical startup sequence: launcher/site identity hydration plus advisory checkpoint continuity.',
+    inputSchema: objectSchema({
+      target: targetSchema(),
+    }),
+  },
+  {
+    name: 'narada_directive_create',
+    description: 'Create and admit a first-class directive in the target Site directive store. This records durable directive events but does not create a task or execute authority.',
+    inputSchema: objectSchema({
+      source_kind: { type: 'string', enum: ['operator', 'agent', 'system'], description: 'Directive source kind.' },
+      source_id: { type: 'string', description: 'Source principal or subsystem id.' },
+      source_label: stringSchema('Optional source label.'),
+      authority_locus: { type: 'string', description: 'Authority locus for the directive.' },
+      authority_basis: { type: 'string', description: 'Authority basis for the directive.' },
+      target_kind: { type: 'string', enum: ['agent', 'carrier', 'site', 'role', 'task', 'session', 'workspace'], description: 'Directive target kind.' },
+      target_id: { type: 'string', description: 'Directive target id.' },
+      content_kind: { type: 'string', enum: ['instruction', 'constraint', 'routing', 'delivery', 'context'], description: 'Directive content kind.' },
+      text: { type: 'string', description: 'Directive text to render or deliver.' },
+      priority: numberSchema('Ordering priority; higher sorts first.'),
+      sequence: numberSchema('Ordering sequence; lower sorts first after priority.'),
+      not_before: stringSchema('Optional ISO not-before time.'),
+      expires_at: stringSchema('Optional ISO expiry time.'),
+      admitted_by: stringSchema('Admitting principal; defaults to current agent or mcp-client.'),
+      reason: stringSchema('Admission reason.'),
+      target: targetSchema(),
+    }, ['source_kind', 'source_id', 'authority_locus', 'authority_basis', 'target_kind', 'target_id', 'content_kind', 'text']),
+  },
+  {
+    name: 'narada_directive_list',
+    description: 'List first-class directives from the target Site directive store without mutating.',
+    inputSchema: objectSchema({
+      target_kind: stringSchema('Optional target kind filter.'),
+      target_id: stringSchema('Optional target id filter.'),
+      active_only: booleanSchema('When true, return active admitted directives only.'),
+      target: targetSchema(),
+    }),
+  },
+  {
+    name: 'narada_directive_render_context',
+    description: 'Render active admitted directives as substrate-neutral prompt context for a target.',
+    inputSchema: objectSchema({
+      target_kind: stringSchema('Optional target kind filter.'),
+      target_id: stringSchema('Optional target id filter.'),
+      target: targetSchema(),
+    }),
+  },
+  {
     name: 'narada_mcp_fabric_context',
     description: 'Inspect the governed MCP fabric posture and optional target Site resolution without mutating.',
     inputSchema: objectSchema({
       target: targetSchema(),
     }),
+  },
+  {
+    name: 'site_registry_relation_plan_transition',
+    description: 'Plan a Site Registry relation transition without network transport, secret resolution, or hosted mutation.',
+    inputSchema: objectSchema({
+      cwd: stringSchema('Working directory; defaults to target Site root.'),
+      payload_file: { type: 'string', description: 'Relation transition payload JSON file.' },
+      registry_url: stringSchema('Hosted registry URL override.'),
+      credential_ref: stringSchema('Credential reference override; raw secret values are refused.'),
+      target: targetSchema(),
+    }, ['payload_file']),
+  },
+  {
+    name: 'agent_context_doctrinal_grounding',
+    description: 'Return read-only agent-context doctrine grounding for the current Site/session posture.',
+    inputSchema: objectSchema({
+      mode: { type: 'string', enum: ['reground'], description: 'Grounding mode; only reground is admitted in v1.' },
+      doctrine_ids: arrayStringSchema('Optional doctrine ids to include. When omitted, returns the default grounding catalog.'),
+      question: stringSchema('Optional bounded question used only to select supplemental proof-case refs.'),
+      require_inquiry_space_data: booleanSchema('Set true only when private Inquiry Space records are required; this returns blocked.'),
+      target: targetSchema(),
+    }, ['mode']),
   },
   {
     name: 'site_task_lifecycle.plan_init',
@@ -224,6 +319,15 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
     }, ['agent']),
   },
   {
+    name: 'narada_task_read',
+    description: 'Read one governed Narada proper task through the canonical task read command without mutating.',
+    inputSchema: objectSchema({
+      cwd: stringSchema('Working directory; defaults to current process cwd.'),
+      task_number: numberSchema('Task number to read.'),
+      target: targetSchema(),
+    }, ['task_number']),
+  },
+  {
     name: 'narada_inbox_list',
     description: 'List Canonical Inbox envelopes.',
     inputSchema: objectSchema({
@@ -262,6 +366,98 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
     }, ['source_ref', 'title']),
   },
   {
+    name: 'inbox_submit_observation',
+    description: 'Alias for narada_inbox_submit_observation. Submit a small/simple observation envelope to the local or capability-admitted target Site inbox.',
+    inputSchema: objectSchema({
+      cwd: stringSchema('Working directory; defaults to current process cwd.'),
+      source_ref: { type: 'string', description: 'Source reference for the observation.' },
+      title: { type: 'string', description: 'Observation title.' },
+      summary: stringSchema('Observation summary.'),
+      source_kind: stringSchema('Source kind; defaults to user_chat.'),
+      authority_level: stringSchema('Authority level; defaults to agent_reported.'),
+      principal: stringSchema('Principal associated with authority.'),
+      target_locus: stringSchema('Message routing authority target locus; defaults to local_site.'),
+      evidence: arrayStringSchema('Evidence lines.'),
+      proposal: arrayStringSchema('Proposal lines.'),
+      recommendation: stringSchema('Recommended handling.'),
+      target: targetSchema(),
+    }, ['source_ref', 'title']),
+  },
+  {
+    name: 'narada_inbox_submit_typed_envelope',
+    description: 'Submit a typed Canonical Inbox envelope to the local or capability-admitted target Site inbox.',
+    inputSchema: objectSchema({
+      cwd: stringSchema('Working directory; defaults to current process cwd.'),
+      source_ref: { type: 'string', description: 'Source reference for the envelope.' },
+      kind: stringSchema('Envelope kind; defaults to observation.'),
+      payload: { type: 'object', additionalProperties: true, description: 'Typed envelope payload object.' },
+      payload_file: stringSchema('Existing JSON payload file in the target Site workspace.'),
+      payload_ref: stringSchema('Optional immutable mcp_payload ref from this Site.'),
+      source_kind: stringSchema('Source kind; defaults to agent_report.'),
+      authority_level: stringSchema('Authority level; defaults to agent_reported.'),
+      principal: stringSchema('Principal associated with authority.'),
+      target_locus: stringSchema('Message routing authority target locus; defaults to local_site.'),
+      allow_empty_payload: booleanSchema('Allow empty object payload for kinds that normally require content.'),
+      target: targetSchema(),
+    }, ['source_ref']),
+  },
+  {
+    name: 'inbox_submit_typed_envelope',
+    description: 'Alias for narada_inbox_submit_typed_envelope.',
+    inputSchema: objectSchema({
+      cwd: stringSchema('Working directory; defaults to current process cwd.'),
+      source_ref: { type: 'string', description: 'Source reference for the envelope.' },
+      kind: stringSchema('Envelope kind; defaults to observation.'),
+      payload: { type: 'object', additionalProperties: true, description: 'Typed envelope payload object.' },
+      payload_file: stringSchema('Existing JSON payload file in the target Site workspace.'),
+      payload_ref: stringSchema('Optional immutable mcp_payload ref from this Site.'),
+      source_kind: stringSchema('Source kind; defaults to agent_report.'),
+      authority_level: stringSchema('Authority level; defaults to agent_reported.'),
+      principal: stringSchema('Principal associated with authority.'),
+      target_locus: stringSchema('Message routing authority target locus; defaults to local_site.'),
+      allow_empty_payload: booleanSchema('Allow empty object payload for kinds that normally require content.'),
+      target: targetSchema(),
+    }, ['source_ref']),
+  },
+  {
+    name: 'inbox_stage_submission_workflow',
+    description: 'Narada proper staged cross-Site inbox submission helper. submit=false previews; submit=true delegates to inbox_submit_typed_envelope under the same capability guards.',
+    inputSchema: objectSchema({
+      cwd: stringSchema('Working directory; defaults to current process cwd.'),
+      workflow_ref: stringSchema('Optional workflow/session ref.'),
+      source_ref: { type: 'string', description: 'Source reference for the envelope.' },
+      kind: stringSchema('Envelope kind; defaults to observation.'),
+      payload: { type: 'object', additionalProperties: true, description: 'Typed envelope payload object.' },
+      payload_file: stringSchema('Existing JSON payload file in the target Site workspace.'),
+      payload_ref: stringSchema('Optional immutable mcp_payload ref from this Site.'),
+      source_kind: stringSchema('Source kind; defaults to agent_report.'),
+      authority_level: stringSchema('Authority level; defaults to agent_reported.'),
+      principal: stringSchema('Principal associated with authority.'),
+      target_locus: stringSchema('Message routing authority target locus; defaults to local_site.'),
+      submit: booleanSchema('When true, submit through canonical inbox admission. Defaults to false.'),
+      target: targetSchema(),
+    }, ['source_ref']),
+  },
+  {
+    name: 'narada_inbox_stage_submission_workflow',
+    description: 'Alias for inbox_stage_submission_workflow.',
+    inputSchema: objectSchema({
+      cwd: stringSchema('Working directory; defaults to current process cwd.'),
+      workflow_ref: stringSchema('Optional workflow/session ref.'),
+      source_ref: { type: 'string', description: 'Source reference for the envelope.' },
+      kind: stringSchema('Envelope kind; defaults to observation.'),
+      payload: { type: 'object', additionalProperties: true, description: 'Typed envelope payload object.' },
+      payload_file: stringSchema('Existing JSON payload file in the target Site workspace.'),
+      payload_ref: stringSchema('Optional immutable mcp_payload ref from this Site.'),
+      source_kind: stringSchema('Source kind; defaults to agent_report.'),
+      authority_level: stringSchema('Authority level; defaults to agent_reported.'),
+      principal: stringSchema('Principal associated with authority.'),
+      target_locus: stringSchema('Message routing authority target locus; defaults to local_site.'),
+      submit: booleanSchema('When true, submit through canonical inbox admission. Defaults to false.'),
+      target: targetSchema(),
+    }, ['source_ref']),
+  },
+  {
     name: 'narada_ee_mcp_doctor',
     description: 'Inspect superseded WSL-to-Windows EE-MCP posture without executing Windows commands.',
     inputSchema: objectSchema({
@@ -279,7 +475,7 @@ export async function handleMcpRequest(
   if (!request.id && request.method.startsWith('notifications/')) return null;
   try {
     const siteContext = resolveMcpSiteContext(options);
-    const result = await dispatchMcpMethod(request.method, request.params, siteContext);
+    const result = await dispatchMcpMethod(request.method, request.params, siteContext, options);
     return { jsonrpc: '2.0', id: request.id ?? null, result };
   } catch (error) {
     return {
@@ -315,7 +511,7 @@ export async function runMcpServer(options: McpServerOptions = {}): Promise<void
   }
 }
 
-async function dispatchMcpMethod(method: string, params: unknown, siteContext: McpSiteContext): Promise<unknown> {
+async function dispatchMcpMethod(method: string, params: unknown, siteContext: McpSiteContext, options: McpServerOptions): Promise<unknown> {
   switch (method) {
     case 'initialize':
       return {
@@ -331,23 +527,26 @@ async function dispatchMcpMethod(method: string, params: unknown, siteContext: M
     case 'tools/list':
       return { tools: NARADA_MCP_TOOLS, site: siteContext, authority_posture: 'facade_only' };
     case 'tools/call':
-      return callTool(params, siteContext);
+      return callTool(params, siteContext, options);
     default:
       throw new Error(`Unsupported MCP method: ${method}`);
   }
 }
 
-async function callTool(params: unknown, siteContext: McpSiteContext): Promise<McpToolResult> {
+async function callTool(params: unknown, siteContext: McpSiteContext, options: McpServerOptions): Promise<McpToolResult> {
   const record = asRecord(params);
   const name = stringField(record, 'name');
   const args = asRecord(record.arguments);
   if (!name) throw new Error('tools/call requires params.name');
-  const mutationAttempted = name === 'narada_inbox_submit_observation'
+  const mutationAttempted = INBOX_SUBMIT_OBSERVATION_TOOLS.has(name)
+    || INBOX_SUBMIT_TYPED_TOOLS.has(name)
+    || (INBOX_STAGE_SUBMISSION_TOOLS.has(name) && booleanField(args, 'submit') === true)
     || (name === 'narada_inbox_work_next' && booleanField(args, 'claim') === true)
     || (name === 'narada_task_work_next' && booleanField(args, 'claim') === true)
     || name === 'site_task_lifecycle.admit_task'
     || name === 'site_task_lifecycle.materialize_task'
     || name === 'agent_context_memory.record_checkpoint'
+    || name === 'narada_directive_create'
     || name === 'narada_ee_run';
   const traversal = await resolveMcpTraversal({
     sourceSite: siteContext,
@@ -357,12 +556,12 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
   });
   const scopedCwd = stringField(args, 'cwd') ?? traversal.target_site.site_root;
 
-  if (mutationAttempted && traversal.cross_site) {
+  if (mutationAttempted && traversal.cross_site && !isCapabilityAdmittedCrossSiteInboxMutation(name, traversal)) {
     return jsonToolResult({
       status: 'error',
-      error: 'Cross-Site MCP mutation is not admitted in v1 fabric proof.',
+      error: 'Cross-Site MCP mutation is not admitted for this tool/target.',
       traversal,
-      required_next_step: 'Use the target Site authority surface directly or add a capability-governed cross-Site mutation path.',
+      required_next_step: `Use the target Site authority surface directly or add an active ${CROSS_SITE_INBOX_CAPABILITY_KIND} grant for this target Site and action.`,
     }, true);
   }
 
@@ -377,13 +576,72 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
       });
     case 'agent_context_hydrate_current':
       return jsonToolResult(attachTraversal(buildAgentContextHydrateCurrent(traversal.target_site, siteContext), traversal));
+    case 'agent_context_startup_sequence':
+      return jsonToolResult(attachTraversal(buildAgentContextStartupSequence(traversal.target_site, siteContext), traversal));
     case 'narada_mcp_fabric_context':
       return jsonToolResult({
         status: 'success',
         fabric_posture: 'governed_traversal_facade',
         rule: 'MCP fabric may route typed requests; target Site authority admits consequence.',
+        mcp_policy_reconciliation: buildMcpPolicyReconciliationPosture(traversal.target_site.site_root),
         traversal,
       });
+    case 'narada_directive_create':
+      return jsonToolResult(attachTraversal(createMcpDirective({
+        siteRoot: traversal.target_site.site_root,
+        siteId: traversal.target_site.site_id,
+        sourceKind: requiredEnum(args, 'source_kind', ['operator', 'agent', 'system']) as DirectiveSourceKind,
+        sourceId: requiredString(args, 'source_id'),
+        sourceLabel: stringField(args, 'source_label'),
+        authorityLocus: requiredString(args, 'authority_locus'),
+        authorityBasis: requiredString(args, 'authority_basis'),
+        targetKind: requiredEnum(args, 'target_kind', ['agent', 'carrier', 'site', 'role', 'task', 'session', 'workspace']) as DirectiveTargetKind,
+        targetId: requiredString(args, 'target_id'),
+        contentKind: requiredEnum(args, 'content_kind', ['instruction', 'constraint', 'routing', 'delivery', 'context']) as DirectiveContentKind,
+        text: requiredString(args, 'text'),
+        priority: numberField(args, 'priority') ?? 0,
+        sequence: numberField(args, 'sequence') ?? 0,
+        notBefore: stringField(args, 'not_before'),
+        expiresAt: stringField(args, 'expires_at'),
+        admittedBy: stringField(args, 'admitted_by') ?? siteContext.startup_evidence?.agent_id ?? 'mcp-client',
+        reason: stringField(args, 'reason') ?? 'mcp_directive_create',
+      }), traversal));
+    case 'narada_directive_list':
+      return jsonToolResult(attachTraversal(listMcpDirectives({
+        siteRoot: traversal.target_site.site_root,
+        targetKind: enumField(args, 'target_kind', ['agent', 'carrier', 'site', 'role', 'task', 'session', 'workspace']) as DirectiveTargetKind | undefined,
+        targetId: stringField(args, 'target_id'),
+        activeOnly: booleanField(args, 'active_only') === true,
+      }), traversal));
+    case 'narada_directive_render_context':
+      return jsonToolResult(attachTraversal(renderMcpDirectiveContext({
+        siteRoot: traversal.target_site.site_root,
+        targetKind: enumField(args, 'target_kind', ['agent', 'carrier', 'site', 'role', 'task', 'session', 'workspace']) as DirectiveTargetKind | undefined,
+        targetId: stringField(args, 'target_id'),
+      }), traversal));
+    case 'site_registry_relation_plan_transition': {
+      const commandArgs = [
+        'site-registry',
+        'relation',
+        'plan-transition',
+        '--payload-file',
+        requiredString(args, 'payload_file'),
+      ];
+      const registryUrl = stringField(args, 'registry_url');
+      const credentialRef = stringField(args, 'credential_ref');
+      if (registryUrl) commandArgs.push('--registry-url', registryUrl);
+      if (credentialRef) commandArgs.push('--credential-ref', credentialRef);
+      return commandToolResult(runNaradaJson(commandArgs, scopedCwd), traversal);
+    }
+    case 'agent_context_doctrinal_grounding':
+      return jsonToolResult(attachTraversal(buildAgentContextDoctrinalGrounding({
+        mode: requiredString(args, 'mode'),
+        doctrineIds: stringArrayField(args, 'doctrine_ids'),
+        question: stringField(args, 'question'),
+        requireInquirySpaceData: booleanField(args, 'require_inquiry_space_data') === true,
+        siteRoot: traversal.target_site.site_root,
+        doctrineCorpusRoot: options.doctrineCorpusRoot,
+      }), traversal));
     case 'site_task_lifecycle.plan_init':
       return jsonToolResult(attachTraversal({
         status: 'success',
@@ -476,6 +734,12 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
         agent: requiredString(args, 'agent'),
         format: 'json',
       }), traversal);
+    case 'narada_task_read':
+      return commandToolResult(await taskReadCommand({
+        cwd: scopedCwd,
+        taskNumber: requiredNumber(args, 'task_number'),
+        format: 'json',
+      }), traversal);
     case 'narada_inbox_list':
       return commandToolResult(await inboxListCommand({
         cwd: scopedCwd,
@@ -491,6 +755,7 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
         format: 'json',
       }), traversal);
     case 'narada_inbox_submit_observation':
+    case 'inbox_submit_observation':
       return commandToolResult(await inboxSubmitObservationCommand({
         cwd: scopedCwd,
         sourceRef: requiredString(args, 'source_ref'),
@@ -505,6 +770,57 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
         recommendation: stringField(args, 'recommendation'),
         format: 'json',
       }), traversal);
+    case 'narada_inbox_submit_typed_envelope':
+    case 'inbox_submit_typed_envelope':
+      return commandToolResult(await inboxSubmitTypedEnvelopeCommand({
+        cwd: scopedCwd,
+        sourceRef: requiredString(args, 'source_ref'),
+        kind: stringField(args, 'kind') ?? 'observation',
+        payload: resolvePayloadArgument(args, traversal.source_site.site_root),
+        payloadFile: stringField(args, 'payload_file'),
+        sourceKind: stringField(args, 'source_kind') ?? 'agent_report',
+        authorityLevel: stringField(args, 'authority_level') ?? 'agent_reported',
+        principal: stringField(args, 'principal'),
+        targetLocus: stringField(args, 'target_locus') ?? 'local_site',
+        allowEmptyPayload: booleanField(args, 'allow_empty_payload'),
+        format: 'json',
+      }), traversal);
+    case 'inbox_stage_submission_workflow':
+    case 'narada_inbox_stage_submission_workflow': {
+      if (booleanField(args, 'submit') !== true) {
+        return jsonToolResult(attachTraversal({
+          status: 'dry_run',
+          schema: 'narada.inbox.stage_submission_workflow_preview.v0',
+          workflow_ref: stringField(args, 'workflow_ref') ?? `inbox_workflow:${createHash('sha256').update(JSON.stringify(args)).digest('hex').slice(0, 16)}`,
+          canonical_submit_tool: 'inbox_submit_typed_envelope',
+          submit_required_for_mutation: true,
+          target_site: traversal.target_site,
+          source_ref: requiredString(args, 'source_ref'),
+          kind: stringField(args, 'kind') ?? 'observation',
+          payload_preview: previewPayloadArgument(args, traversal.source_site.site_root),
+          cross_site_capability: traversal.cross_site ? {
+            required_capability_kind: CROSS_SITE_INBOX_CAPABILITY_KIND,
+            capability_status: traversal.capability_status,
+            capability_grant_id: traversal.capability_grant_id,
+          } : null,
+          mutationAttempted: false,
+          mutationExecuted: false,
+        }, traversal));
+      }
+      return commandToolResult(await inboxSubmitTypedEnvelopeCommand({
+        cwd: scopedCwd,
+        sourceRef: requiredString(args, 'source_ref'),
+        kind: stringField(args, 'kind') ?? 'observation',
+        payload: resolvePayloadArgument(args, traversal.source_site.site_root),
+        payloadFile: stringField(args, 'payload_file'),
+        sourceKind: stringField(args, 'source_kind') ?? 'agent_report',
+        authorityLevel: stringField(args, 'authority_level') ?? 'agent_reported',
+        principal: stringField(args, 'principal'),
+        targetLocus: stringField(args, 'target_locus') ?? 'local_site',
+        allowEmptyPayload: booleanField(args, 'allow_empty_payload'),
+        format: 'json',
+      }), traversal);
+    }
     case 'narada_ee_mcp_doctor':
       return jsonToolResult(attachTraversal(inspectWslWindowsEeMcp({
         cwd: scopedCwd,
@@ -544,6 +860,677 @@ function buildAgentContextHydrateCurrent(siteContext: McpSiteContext, sourceCont
   };
 }
 
+function createMcpDirective(args: {
+  siteRoot: string;
+  siteId: string;
+  sourceKind: DirectiveSourceKind;
+  sourceId: string;
+  sourceLabel?: string;
+  authorityLocus: string;
+  authorityBasis: string;
+  targetKind: DirectiveTargetKind;
+  targetId: string;
+  contentKind: DirectiveContentKind;
+  text: string;
+  priority: number;
+  sequence: number;
+  notBefore?: string;
+  expiresAt?: string;
+  admittedBy: string;
+  reason: string;
+}): Record<string, unknown> {
+  const store = new McpDirectiveStore(args.siteRoot);
+  const now = new Date().toISOString();
+  const draft = {
+    schema: 'narada.directive.v1' as const,
+    created_at: now,
+    source: { kind: args.sourceKind, id: args.sourceId, label: args.sourceLabel },
+    authority: { locus: args.authorityLocus, basis: args.authorityBasis },
+    target: { kind: args.targetKind, id: args.targetId },
+    content: { kind: args.contentKind, text: args.text },
+    ordering: {
+      priority: args.priority,
+      sequence: args.sequence,
+      not_before: args.notBefore,
+      expires_at: args.expiresAt,
+    },
+  };
+  const directive: McpDirective = {
+    ...draft,
+    directive_id: `dir_${hashStable(draft).slice(0, 32)}`,
+    admission: {
+      status: 'admitted',
+      decided_at: now,
+      decided_by: args.admittedBy,
+      reason: args.reason,
+    },
+  };
+  store.upsert(directive, [
+    directiveEventRecord(directive, 'directive.created', now, args.admittedBy),
+    directiveEventRecord(directive, 'directive.admitted', now, args.admittedBy, args.reason),
+  ]);
+
+  return {
+    status: 'success',
+    schema: 'narada.directive.mcp_create_result.v1',
+    siteId: args.siteId,
+    directive,
+    directiveStorePath: store.paths.storePath,
+    directiveEventLogPath: store.paths.eventLogPath,
+    mutationAttempted: true,
+    mutationExecuted: true,
+    taskCreated: false,
+    executableAuthorityGranted: false,
+  };
+}
+
+function listMcpDirectives(args: {
+  siteRoot: string;
+  targetKind?: DirectiveTargetKind;
+  targetId?: string;
+  activeOnly: boolean;
+}): Record<string, unknown> {
+  const store = new McpDirectiveStore(args.siteRoot);
+  const target = {
+    kind: args.targetKind,
+    id: args.targetId,
+  };
+  const directives = args.activeOnly ? store.active(target) : store.list()
+    .filter((directive) => !args.targetKind || directive.target.kind === args.targetKind)
+    .filter((directive) => !args.targetId || directive.target.id === args.targetId);
+
+  return {
+    status: 'success',
+    schema: 'narada.directive.mcp_list_result.v1',
+    directives,
+    directiveStorePath: store.paths.storePath,
+    mutationAttempted: false,
+    mutationExecuted: false,
+  };
+}
+
+function renderMcpDirectiveContext(args: {
+  siteRoot: string;
+  targetKind?: DirectiveTargetKind;
+  targetId?: string;
+}): Record<string, unknown> {
+  const store = new McpDirectiveStore(args.siteRoot);
+  const directives = store.active({ kind: args.targetKind, id: args.targetId });
+  const rendered = renderMcpDirectives(directives);
+
+  return {
+    status: 'success',
+    schema: 'narada.directive.mcp_render_context_result.v1',
+    rendered,
+    directiveCount: directives.length,
+    directiveStorePath: store.paths.storePath,
+    mutationAttempted: false,
+    mutationExecuted: false,
+  };
+}
+
+function renderMcpDirectives(directives: McpDirective[]): string {
+  return directives
+    .map((directive) => `[${directive.content.kind}:${directive.directive_id}]\n${directive.content.text}`)
+    .join('\n\n');
+}
+
+class McpDirectiveStore {
+  readonly storePath: string;
+  readonly eventLogPath: string;
+
+  constructor(siteRoot: string) {
+    const root = resolve(siteRoot, '.narada', 'directives');
+    this.storePath = resolve(root, 'directives.json');
+    this.eventLogPath = resolve(root, 'events.jsonl');
+  }
+
+  get paths(): { storePath: string; eventLogPath: string } {
+    return { storePath: this.storePath, eventLogPath: this.eventLogPath };
+  }
+
+  list(): McpDirective[] {
+    const existing = readJsonObject(this.storePath);
+    return Array.isArray(existing?.directives) ? existing.directives as McpDirective[] : [];
+  }
+
+  active(target: { kind?: DirectiveTargetKind; id?: string } = {}, nowIso = new Date().toISOString()): McpDirective[] {
+    return this.list()
+      .filter((directive) => directive.admission.status === 'admitted')
+      .filter((directive) => !target.kind || directive.target.kind === target.kind)
+      .filter((directive) => !target.id || directive.target.id === target.id)
+      .filter((directive) => !directive.ordering.not_before || directive.ordering.not_before <= nowIso)
+      .filter((directive) => !directive.ordering.expires_at || directive.ordering.expires_at > nowIso)
+      .sort(compareMcpDirectives);
+  }
+
+  renderPromptContext(target: { kind?: DirectiveTargetKind; id?: string } = {}): string {
+    return renderMcpDirectives(this.active(target));
+  }
+
+  upsert(directive: McpDirective, events: Record<string, unknown>[]): void {
+    const directives = this.list();
+    const index = directives.findIndex((entry) => entry.directive_id === directive.directive_id);
+    if (index >= 0) directives[index] = directive;
+    else directives.push(directive);
+    mkdirSync(dirname(this.storePath), { recursive: true });
+    writeFileSync(this.storePath, `${JSON.stringify({
+      schema: 'narada.directive-store.snapshot.v1',
+      directives,
+    }, null, 2)}\n`, 'utf8');
+    mkdirSync(dirname(this.eventLogPath), { recursive: true });
+    for (const event of events) {
+      writeFileSync(this.eventLogPath, `${JSON.stringify(event)}\n`, { encoding: 'utf8', flag: 'a' });
+    }
+  }
+}
+
+function compareMcpDirectives(left: McpDirective, right: McpDirective): number {
+  return (
+    right.ordering.priority - left.ordering.priority ||
+    left.ordering.sequence - right.ordering.sequence ||
+    left.created_at.localeCompare(right.created_at) ||
+    left.directive_id.localeCompare(right.directive_id)
+  );
+}
+
+function directiveEventRecord(directive: McpDirective, kind: string, occurredAt: string, actor: string, reason?: string): Record<string, unknown> {
+  const event = {
+    schema: 'narada.directive-event.v1',
+    directive_id: directive.directive_id,
+    kind,
+    occurred_at: occurredAt,
+    actor,
+    reason,
+  };
+  return {
+    ...event,
+    event_id: `direvt_${hashStable(event).slice(0, 32)}`,
+  };
+}
+
+function hashStable(value: unknown): string {
+  return createHash('sha256').update(stableStringify(value)).digest('hex');
+}
+
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => stableStringify(item)).join(',')}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record)
+    .filter((key) => record[key] !== undefined)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
+    .join(',')}}`;
+}
+
+function buildAgentContextDoctrinalGrounding(input: {
+  mode: string;
+  doctrineIds?: string[];
+  question?: string;
+  requireInquirySpaceData: boolean;
+  siteRoot: string;
+  doctrineCorpusRoot?: string;
+}): Record<string, unknown> {
+  if (input.mode !== 'reground') {
+    return {
+      status: 'error',
+      schema: 'narada.agent_context.doctrinal_grounding.v0',
+      error: 'unsupported_doctrinal_grounding_mode',
+      supported_modes: ['reground'],
+      requested_mode: input.mode,
+      mutation_attempted: false,
+      runtime_authority_imported: false,
+      private_inquiry_space_data_imported: false,
+    };
+  }
+
+  const topic = normalizeDoctrineTopic(undefined, input.question ?? '');
+  const requestedIds = input.doctrineIds ?? [];
+  const corpus = readThoughtsDoctrineCorpus({
+    siteRoot: input.siteRoot,
+    doctrineCorpusRoot: input.doctrineCorpusRoot,
+  });
+  const fullCatalog = buildDoctrineCatalog(topic, corpus.entries);
+  const catalog = filterDoctrineCatalog(fullCatalog, requestedIds);
+  const base = {
+    schema: 'narada.agent_context.doctrinal_grounding.v0',
+    mode: 'reground',
+    mutation_attempted: false,
+    private_inquiry_space_data_imported: false,
+    runtime_authority_imported: false,
+    raw_private_data_recorded: false,
+    advisory_only: true,
+    posture_summary: {
+      target_locus_required_before_mutation: true,
+      tool_preference: [
+        'MCP-specific Narada command',
+        'MCP shell only when no specific command exists',
+        'native shell fallback',
+      ],
+      direct_sqlite_reads: 'diagnostic_only',
+      doctrine_grounding_is_not_authority_mutation: true,
+    },
+    doctrine_catalog: catalog,
+    doctrine_filter: {
+      requested_doctrine_ids: requestedIds,
+      missing_doctrine_ids: requestedIds.filter((id) => !fullCatalog.some((entry) => entry.doctrine_id === id || entry.ref === id)),
+    },
+    doctrine_source: {
+      primary_corpus: corpus.root ?? null,
+      primary_corpus_kind: 'external_thoughts_concepts',
+      primary_corpus_available: corpus.available,
+      primary_corpus_ref_authority: false,
+      local_supplement_refs_are_authority: false,
+      unavailable_reason: corpus.available ? null : corpus.unavailableReason,
+      missing_index_refs: corpus.missingIndexRefs,
+    },
+    ccc_coordinates: {
+      canonical_mutation_evidence: 'SQLite is local runtime substrate; Git-visible mutation evidence/snapshots carry portable reconciliation posture.',
+      canonical_inbox: 'Inbound pressure enters as typed inert envelopes before admission or promotion.',
+      canonical_outbox: 'Outbound effects require composed intent before transport.',
+    },
+    ias_mapping: {
+      intelligence: 'Agent analysis, recommendation, and doctrine grounding are advisory.',
+      authority: 'Narada proper command surfaces own task/inbox/lifecycle mutation admission.',
+      separation_rule: 'Grounding output may inform a decision but does not itself admit, execute, confirm, or publish.',
+    },
+    review_protocol: {
+      review_stance: 'Find bugs, authority collapses, missing evidence, and overclaims first.',
+      task_closure: 'Use governed task report/review/evidence/close/confirm surfaces.',
+      private_data_rule: 'Do not import private Inquiry Space data through doctrine grounding output.',
+    },
+    authority_limits: [
+      'agent_context_doctrinal_grounding_is_read_only',
+      'doctrine_grounding_output_is_advisory',
+      'public_doctrine_catalog_does_not_admit_inquiry_branch',
+      'private_inquiry_space_data_must_not_be_copied_into_mcp_output',
+      'runtime_or_source_site_authority_is_not_imported',
+    ],
+  };
+
+  if (input.requireInquirySpaceData) {
+    return {
+      ...base,
+      status: 'blocked',
+      reason: 'private_inquiry_space_data_unavailable_to_narada_proper_mcp',
+      required_next_step: 'Route an inquiry_branch_candidate or doctrine_lift_candidate through Canonical Inbox / Inquiry Space authority; do not copy private Inquiry Space records through MCP.',
+    };
+  }
+
+  return {
+    ...base,
+    status: 'success',
+    proof_case: topic === 'site_telemetry_ownership'
+      ? {
+          question: 'Who owns a hosted Site Telemetry surface and its monitoring/rotation posture?',
+          answer_posture: 'The owning Site governs surface policy and monitoring assignment; Cloudflare owns deployment coordinates; publisher and receiving Sites keep their own truth/admission authority.',
+          refs: [
+            'docs/product/site-telemetry-operations-posture.v0.md',
+            'docs/product/site-telemetry-readiness.v0.md',
+            'docs/concepts/capability-governed-secret-management.md',
+          ],
+        }
+      : null,
+    residuals: [
+      'Private Inquiry Space replay remains unavailable until task 1415 intake and later replay machinery are admitted.',
+    ],
+  };
+}
+
+function normalizeDoctrineTopic(topic: string | undefined, question: string): string {
+  if (topic && topic.trim().length > 0) return topic.trim();
+  const text = question.toLowerCase();
+  if (text.includes('telemetry') && (text.includes('owner') || text.includes('ownership') || text.includes('rotation') || text.includes('monitor'))) {
+    return 'site_telemetry_ownership';
+  }
+  return 'general_doctrine_grounding';
+}
+
+interface DoctrineRef {
+  doctrine_id?: string;
+  ref: string;
+  title: string;
+  reason: string;
+  source?: string;
+}
+
+function doctrineRefsForTopic(topic: string, thoughtsCorpusRefs: DoctrineRef[]): DoctrineRef[] {
+  const common = [
+    {
+      ref: 'AGENTS.md',
+      title: 'Narada root agent instructions',
+      reason: 'Target locus, authority posture, and duty-loop constraints.',
+    },
+    {
+      ref: 'docs/concepts/governed-crossing.md',
+      title: 'Governed Crossing',
+      reason: 'Separates arrival, admission, execution, and truth across authority boundaries.',
+    },
+    {
+      ref: 'docs/concepts/canonical-inbox.md',
+      title: 'Canonical Inbox',
+      reason: 'Fallback intake surface for bounded inquiry or doctrine candidates.',
+    },
+    {
+      ref: 'docs/concepts/capability-governed-secret-management.md',
+      title: 'Capability-Governed Secret Management',
+      reason: 'Secrets and credential references are authority-bearing capabilities, not ordinary data.',
+    },
+  ];
+  const refs = [
+    ...thoughtsCorpusRefs,
+    ...common,
+  ];
+  if (topic === 'site_telemetry_ownership') {
+    return [
+      {
+        ref: 'docs/product/site-telemetry-operations-posture.v0.md',
+        title: 'Site Telemetry Operations Posture v0',
+        reason: 'Defines monitoring owner, rotation owner, Cloudflare dashboard authority, rollback posture, and handoff boundaries.',
+      },
+      {
+        ref: 'docs/product/site-telemetry-readiness.v0.md',
+        title: 'Site Telemetry Readiness v0',
+        reason: 'Defines readiness states and separates deployed, receiving, publishing, and monitoring evidence.',
+      },
+      {
+        ref: 'docs/product/site-telemetry-publication-outcome-shapes.md',
+        title: 'Site Telemetry Publication Outcome Shapes',
+        reason: 'Places inquiry doctrine feedback and readiness/operations in the telemetry publication chapter.',
+      },
+      ...refs,
+    ];
+  }
+  return refs;
+}
+
+interface DoctrineCatalogEntry {
+  doctrine_id: string;
+  title: string;
+  ref: string;
+  reason: string;
+  source?: string;
+}
+
+function buildDoctrineCatalog(topic: string, thoughtsCorpusRefs: DoctrineRef[]): DoctrineCatalogEntry[] {
+  const seen = new Set<string>();
+  return doctrineRefsForTopic(topic, thoughtsCorpusRefs).flatMap((ref) => {
+    const entry = {
+      doctrine_id: ref.doctrine_id ?? doctrineIdForRef(ref.ref),
+      title: ref.title,
+      ref: ref.ref,
+      reason: ref.reason,
+      ...(ref.source ? { source: ref.source } : {}),
+    };
+    const key = `${entry.doctrine_id}\n${entry.ref}`;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [entry];
+  });
+}
+
+function filterDoctrineCatalog(catalog: DoctrineCatalogEntry[], doctrineIds: string[]): DoctrineCatalogEntry[] {
+  if (doctrineIds.length === 0) return catalog;
+  const requested = new Set(doctrineIds);
+  return catalog.filter((entry) => requested.has(entry.doctrine_id) || requested.has(entry.ref));
+}
+
+interface ThoughtsDoctrineCorpus {
+  root?: string;
+  available: boolean;
+  unavailableReason?: string;
+  entries: DoctrineRef[];
+  missingIndexRefs: string[];
+}
+
+function readThoughtsDoctrineCorpus(args: { siteRoot: string; doctrineCorpusRoot?: string }): ThoughtsDoctrineCorpus {
+  const root = resolveThoughtsDoctrineCorpusRoot(args);
+  if (!root) {
+    return {
+      available: false,
+      unavailableReason: 'thoughts_content_concepts_root_not_found',
+      entries: [],
+      missingIndexRefs: [],
+    };
+  }
+
+  const files = listMarkdownFiles(root)
+    .filter((path) => relative(root, path).replace(/\\/g, '/') !== 'index.md')
+    .sort((a, b) => a.localeCompare(b));
+  const availableRefs = new Set(files.map((path) => conceptRouteForPath(root, path)));
+  const missingIndexRefs = readThoughtsConceptIndexRefs(root)
+    .filter((route) => !availableRefs.has(route))
+    .sort((a, b) => a.localeCompare(b));
+
+  return {
+    root,
+    available: true,
+    entries: files.map((path) => {
+      const rel = relative(root, path).replace(/\\/g, '/');
+      const markdown = readFileSync(path, 'utf8');
+      const description = frontmatterField(markdown, 'description');
+      return {
+        doctrine_id: doctrineIdForThoughtsRelativePath(rel),
+        title: frontmatterField(markdown, 'title') ?? firstMarkdownHeading(markdown) ?? titleFromPath(rel),
+        ref: path.replace(/\\/g, '/'),
+        reason: description ?? 'External thoughts concept corpus doctrine reference.',
+        source: 'thoughts:content/concepts',
+      };
+    }),
+    missingIndexRefs,
+  };
+}
+
+function resolveThoughtsDoctrineCorpusRoot(args: { siteRoot: string; doctrineCorpusRoot?: string }): string | undefined {
+  const candidates = [
+    args.doctrineCorpusRoot,
+    processEnv.NARADA_DOCTRINE_CORPUS_ROOT,
+    resolve(dirname(resolve(args.siteRoot)), 'thoughts', 'content', 'concepts'),
+    resolve('D:/code/thoughts/content/concepts'),
+  ].filter((candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0);
+
+  for (const candidate of candidates) {
+    const root = resolve(candidate);
+    if (existsSync(root) && statSync(root).isDirectory()) return root;
+  }
+  return undefined;
+}
+
+function listMarkdownFiles(root: string): string[] {
+  return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
+    const path = resolve(root, entry.name);
+    if (entry.isDirectory()) return listMarkdownFiles(path);
+    return entry.isFile() && entry.name.endsWith('.md') ? [path] : [];
+  });
+}
+
+function readThoughtsConceptIndexRefs(root: string): string[] {
+  const indexPath = resolve(root, 'index.md');
+  if (!existsSync(indexPath)) return [];
+  const markdown = readFileSync(indexPath, 'utf8');
+  const refs = new Set<string>();
+  for (const match of markdown.matchAll(/\]\(\/concepts\/([^)#]+)(?:#[^)]+)?\)/g)) {
+    refs.add(`/concepts/${match[1].replace(/\/$/, '')}`);
+  }
+  return [...refs];
+}
+
+function conceptRouteForPath(root: string, path: string): string {
+  const rel = relative(root, path).replace(/\\/g, '/').replace(/\.md$/, '');
+  if (rel.endsWith('/index')) return `/concepts/${rel.slice(0, -'/index'.length)}`;
+  if (rel.endsWith('/core')) return `/concepts/${rel.slice(0, -'/core'.length)}`;
+  return `/concepts/${rel}`;
+}
+
+function doctrineIdForThoughtsRelativePath(rel: string): string {
+  const normalized = rel
+    .replace(/\\/g, '/')
+    .replace(/\.md$/, '')
+    .replace(/\/(index|core)$/, '');
+  return normalized
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase();
+}
+
+function frontmatterField(markdown: string, key: string): string | undefined {
+  const match = markdown.match(new RegExp(`^${key}:\\s*["']?([^"'\\r\\n]+)["']?\\s*$`, 'm'));
+  return match?.[1]?.trim();
+}
+
+function firstMarkdownHeading(markdown: string): string | undefined {
+  const match = markdown.match(/^#\s+(.+)$/m);
+  return match?.[1]?.trim();
+}
+
+function titleFromPath(rel: string): string {
+  const base = rel
+    .replace(/\\/g, '/')
+    .replace(/\.md$/, '')
+    .split('/')
+    .filter((part) => part !== 'index' && part !== 'core')
+    .at(-1) ?? rel;
+  return base
+    .split(/[-_]+/g)
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(' ');
+}
+
+function doctrineIdForRef(ref: string): string {
+  return ref
+    .replace(/\.[^.]+$/, '')
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase();
+}
+
+function buildAgentContextStartupSequence(siteContext: McpSiteContext, sourceContext: McpSiteContext): Record<string, unknown> {
+  const hydrateCurrent = buildAgentContextHydrateCurrent(siteContext, sourceContext);
+  const mcpPolicyReconciliation = buildMcpPolicyReconciliationPosture(siteContext.site_root);
+  const agentId = typeof hydrateCurrent.agent_id === 'string' ? hydrateCurrent.agent_id : null;
+  if (!agentId) {
+    return {
+      status: 'error',
+      schema: 'narada.agent_context.startup_sequence_result.v0',
+      error: 'missing_NARADA_AGENT_ID',
+      hydrate_current: hydrateCurrent,
+      memory_plan: null,
+      checkpoint_summary: null,
+      mcp_policy_reconciliation: mcpPolicyReconciliation,
+      startupSequenceExecuted: false,
+      checkpointSummaryLoaded: false,
+      advisoryOnly: true,
+      mutationAttempted: false,
+      mutationExecuted: false,
+      runtimeHydrationExecuted: false,
+      sourceStateImported: false,
+      packageExecutedSqliteMutation: false,
+    };
+  }
+
+  const memoryPlan = planAgentContextHydration({
+    siteRoot: siteContext.site_root,
+    siteId: siteContext.site_id,
+    namedAgentId: agentId,
+    checkpointRefs: [],
+    requestedBy: 'startup-sequence',
+    sourceImportRefs: [],
+  });
+  const selectedCheckpoint = asRecord(memoryPlan.selectedCheckpoint);
+  const checkpointId = stringField(selectedCheckpoint, 'checkpointId');
+  const checkpointSummary = checkpointId
+    ? readAgentContextCheckpoint({ siteRoot: siteContext.site_root, checkpointId })
+    : null;
+  const directiveContext = buildStartupDirectiveContext(siteContext, hydrateCurrent);
+
+  return {
+    status: 'success',
+    schema: 'narada.agent_context.startup_sequence_result.v0',
+    hydrate_current: hydrateCurrent,
+    memory_plan: memoryPlan,
+    checkpoint_summary: checkpointSummary,
+    directive_context: directiveContext,
+    mcp_policy_reconciliation: mcpPolicyReconciliation,
+    startupSequenceExecuted: true,
+    checkpointSummaryLoaded: asRecord(checkpointSummary).status === 'success',
+    advisoryOnly: true,
+    mutationAttempted: false,
+    mutationExecuted: false,
+    runtimeHydrationExecuted: false,
+    sourceStateImported: false,
+    packageExecutedSqliteMutation: false,
+  };
+}
+
+function buildStartupDirectiveContext(siteContext: McpSiteContext, hydrateCurrent: Record<string, unknown>): Record<string, unknown> {
+  const store = new McpDirectiveStore(siteContext.site_root);
+  const targets = startupDirectiveTargets(siteContext, hydrateCurrent);
+  const directivesById = new Map<string, McpDirective>();
+  for (const target of targets) {
+    for (const directive of store.active(target)) {
+      directivesById.set(directive.directive_id, directive);
+    }
+  }
+  const directives = [...directivesById.values()].sort(compareMcpDirectives);
+  return {
+    schema: 'narada.agent_context.directive_context.v1',
+    status: 'success',
+    targets,
+    rendered: renderMcpDirectives(directives),
+    directive_count: directives.length,
+    directive_ids: directives.map((directive) => directive.directive_id),
+    directive_store_path: store.paths.storePath,
+    advisory_only: true,
+    mutation_attempted: false,
+    mutation_executed: false,
+  };
+}
+
+function startupDirectiveTargets(siteContext: McpSiteContext, hydrateCurrent: Record<string, unknown>): Array<{ kind: DirectiveTargetKind; id: string }> {
+  const targets: Array<{ kind: DirectiveTargetKind; id: string }> = [];
+  const add = (kind: DirectiveTargetKind, id: unknown): void => {
+    if (typeof id !== 'string' || id.trim().length === 0) return;
+    const target = { kind, id };
+    if (!targets.some((entry) => entry.kind === target.kind && entry.id === target.id)) targets.push(target);
+  };
+  add('site', siteContext.site_id);
+  add('workspace', siteContext.site_root);
+  add('agent', hydrateCurrent.agent_id);
+  add('role', hydrateCurrent.role);
+  add('carrier', hydrateCurrent.carrier_session_id);
+  add('session', hydrateCurrent.carrier_session_id);
+  return targets;
+}
+
+function buildMcpPolicyReconciliationPosture(siteRoot: string): Record<string, unknown> {
+  const result = reconcileLocalMcpRolePolicy({ siteRoot });
+  const repairArgv = ['narada-proper-mcp', '--site-root', siteRoot, '--reconcile-mcp-policy', '--apply'];
+  return {
+    schema: 'narada.mcp_policy_reconciliation_startup_posture.v0',
+    status: result.status === 'ok' ? 'aligned' : result.status,
+    advisory_only: true,
+    mutation_attempted: false,
+    mutation_performed: false,
+    auto_repair_performed: false,
+    authority_posture: 'read_only_drift_detection',
+    source_result: result,
+    additions: result.additions,
+    removals: result.removals,
+    validation_errors: result.validation_errors,
+    error: result.error ?? null,
+    repair_command: buildMcpPolicyRepairCommand(repairArgv),
+  };
+}
+
+function buildMcpPolicyRepairCommand(argv: string[]): Record<string, unknown> {
+  return {
+    command: argv.join(' '),
+    argv,
+    posture: 'explicit_reconciler_apply_required',
+  };
+}
+
 function startupEvidence(siteContext: McpSiteContext): { agent_id: string | null; role: string | null; start_event_id: string | null; carrier_session_id: string | null; agent_context_db: string | null; source: string } {
   const explicit = asRecord((siteContext as unknown as Record<string, unknown>).startup_evidence);
   const agentId = stringField(explicit, 'agent_id') ?? processEnv.NARADA_AGENT_ID ?? null;
@@ -554,6 +1541,40 @@ function startupEvidence(siteContext: McpSiteContext): { agent_id: string | null
     carrier_session_id: stringField(explicit, 'carrier_session_id') ?? processEnv.NARADA_CARRIER_SESSION_ID ?? null,
     agent_context_db: stringField(explicit, 'agent_context_db') ?? processEnv.NARADA_AGENT_CONTEXT_DB ?? null,
     source: Object.keys(explicit).length > 0 ? 'launcher_arguments' : 'launcher_environment',
+  };
+}
+
+function resolvePayloadArgument(args: Record<string, unknown>, sourceSiteRoot: string): string | undefined {
+  const payloadRef = stringField(args, 'payload_ref');
+  if (payloadRef) return JSON.stringify(readMcpPayloadRef({ siteRoot: sourceSiteRoot }, payloadRef));
+  if (Object.prototype.hasOwnProperty.call(args, 'payload')) {
+    return JSON.stringify(args.payload ?? {});
+  }
+  return undefined;
+}
+
+function previewPayloadArgument(args: Record<string, unknown>, sourceSiteRoot: string): Record<string, unknown> {
+  const payloadFile = stringField(args, 'payload_file');
+  const payloadRef = stringField(args, 'payload_ref');
+  if (payloadFile) {
+    return {
+      source: 'payload_file',
+      payload_file: payloadFile,
+      inline_payload_available: false,
+    };
+  }
+  if (payloadRef) {
+    const payload = readMcpPayloadRef({ siteRoot: sourceSiteRoot }, payloadRef);
+    return {
+      source: 'payload_ref',
+      payload_ref: payloadRef,
+      payload_digest: createHash('sha256').update(JSON.stringify(payload)).digest('hex'),
+    };
+  }
+  const payload = Object.prototype.hasOwnProperty.call(args, 'payload') ? args.payload : {};
+  return {
+    source: 'payload',
+    payload_digest: createHash('sha256').update(JSON.stringify(payload ?? {})).digest('hex'),
   };
 }
 
@@ -664,7 +1685,7 @@ async function resolveMcpTraversal(args: {
     resolution = 'routing_registry';
   }
 
-  const requiredCapabilityKind = args.mutationAttempted && route?.capability_kind ? route.capability_kind : null;
+  const requiredCapabilityKind = requiredCapabilityKindForTraversal(args.tool, args.mutationAttempted, targetSite, args.sourceSite, route);
   const grant = requiredCapabilityKind
     ? await findActiveCapabilityGrant(args.sourceSite.site_root, {
       siteId: targetSite.site_id,
@@ -720,13 +1741,16 @@ export function resolveMcpSiteContext(options: Pick<McpServerOptions, 'cwd' | 's
   const root = resolve(options.siteRoot ?? options.cwd ?? processCwd());
   const configPath = resolve(root, 'config.json');
   const config = readJsonObject(configPath);
-  const locus = asRecord(config?.locus);
-  const configuredSiteRoot = stringField(config ?? {}, 'site_root');
+  const configRecord = asRecord(config);
+  const staticConfig = asRecord(configRecord.static_config);
+  const locus = asRecord(configRecord.locus);
+  const staticLocus = asRecord(staticConfig.locus);
+  const configuredSiteRoot = stringField(configRecord, 'site_root') ?? stringField(staticConfig, 'site_root');
   const siteRoot = resolve(configuredSiteRoot ?? root);
-  const siteId = options.siteId ?? stringField(config ?? {}, 'site_id') ?? basename(siteRoot) ?? 'unknown-site';
-  const siteKind = options.siteKind ?? stringField(config ?? {}, 'site_kind') ?? 'unspecified';
-  const authorityLocus = stringField(locus, 'authority_locus') ?? siteKind;
-  const workspaceRoot = stringField(config ?? {}, 'workspace_root');
+  const siteId = options.siteId ?? stringField(configRecord, 'site_id') ?? stringField(staticConfig, 'site_id') ?? basename(siteRoot) ?? 'unknown-site';
+  const siteKind = options.siteKind ?? stringField(configRecord, 'site_kind') ?? stringField(staticConfig, 'site_kind') ?? 'unspecified';
+  const authorityLocus = stringField(locus, 'authority_locus') ?? stringField(staticLocus, 'authority_locus') ?? siteKind;
+  const workspaceRoot = stringField(configRecord, 'workspace_root') ?? stringField(staticConfig, 'workspace_root');
 
   const context: McpSiteContext = {
     site_id: siteId,
@@ -1008,6 +2032,33 @@ function readTaskLifecycleTask(args: { siteRoot: string; taskId: string }): Reco
   };
 }
 
+function requiredCapabilityKindForTraversal(
+  tool: string,
+  mutationAttempted: boolean,
+  targetSite: McpSiteContext,
+  sourceSite: McpSiteContext,
+  route: RouteAddressRecord | null,
+): string | null {
+  if (!mutationAttempted) return null;
+  if (route?.capability_kind) return route.capability_kind;
+  if (targetSite.site_root !== sourceSite.site_root && isInboxSubmissionTool(tool)) {
+    return CROSS_SITE_INBOX_CAPABILITY_KIND;
+  }
+  return null;
+}
+
+function isInboxSubmissionTool(name: string): boolean {
+  return INBOX_SUBMIT_OBSERVATION_TOOLS.has(name)
+    || INBOX_SUBMIT_TYPED_TOOLS.has(name)
+    || INBOX_STAGE_SUBMISSION_TOOLS.has(name);
+}
+
+function isCapabilityAdmittedCrossSiteInboxMutation(name: string, traversal: McpTraversalContext): boolean {
+  return isInboxSubmissionTool(name)
+    && traversal.required_capability_kind === CROSS_SITE_INBOX_CAPABILITY_KIND
+    && traversal.capability_status === 'active';
+}
+
 function materializeTaskLifecycleTask(args: {
   siteRoot: string;
   siteId: string;
@@ -1209,10 +2260,27 @@ function planAgentContextHydration(args: {
     };
   }
 
+  const store = readAgentContextMemoryStore(args.siteRoot, args.siteId);
+  const requestedRefs = new Set(args.checkpointRefs);
+  const eligibleCheckpoints = store.checkpoints
+    .filter((checkpoint) => {
+      const namedAgentId = typeof checkpoint.namedAgentId === 'string' ? checkpoint.namedAgentId : checkpoint.named_agent_id;
+      if (namedAgentId !== args.namedAgentId) return false;
+      if (requestedRefs.size === 0) return true;
+      const checkpointId = checkpointIdOf(checkpoint);
+      return checkpointId ? requestedRefs.has(checkpointId) : false;
+    })
+    .map((checkpoint) => checkpointCandidate(checkpoint))
+    .filter((candidate) => candidate.checkpointId !== null)
+    .sort((a, b) => String(b.capturedAt ?? '').localeCompare(String(a.capturedAt ?? '')));
+  const selectedCheckpoint = eligibleCheckpoints[0] ?? null;
+
   const descriptor = buildHydrationRequestDescriptor({
     hydrationId: args.hydrationId ?? `hydrate-${createHash('sha256').update(`${args.siteId}\n${args.namedAgentId}\n${args.checkpointRefs.join('\n')}`).digest('hex').slice(0, 16)}`,
     namedAgentId: args.namedAgentId,
-    checkpointRefs: args.checkpointRefs,
+    checkpointRefs: args.checkpointRefs.length > 0
+      ? args.checkpointRefs
+      : selectedCheckpoint?.checkpointId ? [selectedCheckpoint.checkpointId] : [],
     requestedBy: args.requestedBy,
     sourceImportRefs: args.sourceImportRefs,
   });
@@ -1224,11 +2292,33 @@ function planAgentContextHydration(args: {
     siteId: args.siteId,
     storePath: agentContextMemoryStorePath(args.siteRoot),
     descriptor,
+    checkpointHydrationPlanned: true,
+    checkpointSummaryLoaded: false,
+    selectedCheckpoint,
+    eligibleCheckpoints,
+    advisoryOnly: true,
     mutationAttempted: false,
     mutationExecuted: false,
     runtimeHydrationExecuted: false,
     sourceStateImported: false,
     packageExecutedSqliteMutation: false,
+  };
+}
+
+function checkpointIdOf(checkpoint: Record<string, unknown> & { checkpointId?: string; checkpoint_id?: string }): string | null {
+  if (typeof checkpoint.checkpointId === 'string') return checkpoint.checkpointId;
+  if (typeof checkpoint.checkpoint_id === 'string') return checkpoint.checkpoint_id;
+  return null;
+}
+
+function checkpointCandidate(checkpoint: Record<string, unknown> & { checkpointId?: string; checkpoint_id?: string }): Record<string, unknown> & { checkpointId: string | null; capturedAt: unknown } {
+  return {
+    checkpointId: checkpointIdOf(checkpoint),
+    sessionId: typeof checkpoint.sessionId === 'string' ? checkpoint.sessionId : checkpoint.session_id ?? null,
+    namedAgentId: typeof checkpoint.namedAgentId === 'string' ? checkpoint.namedAgentId : checkpoint.named_agent_id ?? null,
+    capturedAt: typeof checkpoint.capturedAt === 'string' ? checkpoint.capturedAt : checkpoint.captured_at ?? null,
+    evidenceRefs: Array.isArray(checkpoint.evidenceRefs) ? checkpoint.evidenceRefs : checkpoint.evidence_refs ?? [],
+    summaryAvailable: typeof checkpoint.summary === 'string' && checkpoint.summary.length > 0,
   };
 }
 
@@ -1490,6 +2580,19 @@ function requiredString(record: Record<string, unknown>, key: string): string {
   return value;
 }
 
+function enumField(record: Record<string, unknown>, key: string, values: readonly string[]): string | undefined {
+  const value = stringField(record, key);
+  if (!value) return undefined;
+  if (!values.includes(value)) throw new Error(`Invalid tool argument ${key}: ${value}`);
+  return value;
+}
+
+function requiredEnum(record: Record<string, unknown>, key: string, values: readonly string[]): string {
+  const value = enumField(record, key, values);
+  if (!value) throw new Error(`Missing required tool argument: ${key}`);
+  return value;
+}
+
 function numberField(record: Record<string, unknown>, key: string): number | undefined {
   const value = record[key];
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -1498,6 +2601,12 @@ function numberField(record: Record<string, unknown>, key: string): number | und
     return Number.isFinite(parsed) ? parsed : undefined;
   }
   return undefined;
+}
+
+function requiredNumber(record: Record<string, unknown>, key: string): number {
+  const value = numberField(record, key);
+  if (value === undefined) throw new Error(`Missing required tool argument: ${key}`);
+  return value;
 }
 
 function booleanField(record: Record<string, unknown>, key: string): boolean | undefined {

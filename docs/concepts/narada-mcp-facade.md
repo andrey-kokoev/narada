@@ -252,6 +252,10 @@ This is configuration of a `ControlChannel`, not authority movement. The MCP fac
 
 Mutating inbox tools also delegate to the same message routing authority decision as CLI. `narada_inbox_submit_observation` accepts `target_locus`; when Site policy refuses `principal + target_locus + envelope_kind + authority_level`, MCP returns the same bounded refusal and writes no envelope.
 
+For the shared CLI/MCP routing law, including local compatibility and
+capability-gated cross-Site submission, see
+[`Message Routing Authority Posture`](../product/message-routing-authority-posture.md).
+
 ## Site Scoping
 
 Every Narada Site may expose its own MCP facade, but that facade is not a new authority owner.
@@ -269,6 +273,25 @@ Site-scoped MCP means:
 5. Mutating tools still delegate to the canonical command/service implementation and produce the same evidence as the CLI path.
 
 This allows a User Site, PC Site, Project Site, Client Service Site, or future Site kind to publish an agent-facing protocol surface while preserving the Site's existing authority grammar.
+
+## Role Policy Reconciliation
+
+Narada proper MCP role policy is derived from the MCP surface registry and role-policy projection. Site-local `config.json` is runtime posture: it tells a carrier which tools it may expose for a role, but it is not the implementation source of truth and should not be regenerated wholesale from package state.
+
+Startup and fabric posture surfaces should run read-only MCP policy reconciliation. The check compares:
+
+- expected `mcp.role_policies.architect.servers["narada-proper"].allowed_tools` from the projection;
+- configured `allowed_tools` in Site-local `config.json`.
+
+The posture is advisory. It may report `aligned`, `drift`, or `error`, plus exact additions, removals, validation errors, and a repair command. It must not mutate `config.json` during startup or doctor-style inspection.
+
+The repair path is the reconciler, not hand editing or full config generation:
+
+```powershell
+narada-proper-mcp --site-root D:\code\narada --reconcile-mcp-policy --apply
+```
+
+Apply mode is explicit because it crosses from read-only posture into Site-local runtime config mutation. The reconciler patches only the allowed-tools subtree and records mutation evidence under `.ai/mutation-evidence/mcp_policy/`.
 
 ## Capability Announcement
 

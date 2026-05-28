@@ -1,11 +1,28 @@
 {
   "mcpServers": {
     "narada-proper": {
-      "command": "narada-mcp",
+      "command": "node",
       "args": [
+        "--import",
+        "tsx",
+        "{site_root}/packages/narada-proper-mcp/src/main.ts",
         "--site-root",
-        "/home/andrey/src/narada"
-      ]
+        "{site_root}",
+        "--site-id",
+        "narada-proper"
+      ],
+      "env_vars": [
+        "NARADA_AGENT_ID",
+        "NARADA_AGENT_ROLE",
+        "NARADA_AGENT_START_EVENT_ID",
+        "NARADA_CARRIER_SESSION_ID",
+        "NARADA_AGENT_CONTEXT_DB",
+        "NARADA_SITE_ROOT",
+        "NARADA_WORKSPACE_ROOT",
+        "NARADA_PC_SITE_ROOT"
+      ],
+      "surface_id": "narada-proper.surface.agent-facing-mcp.v1",
+      "authority_posture": "target_local_agent_facing_mcp"
     }
   }
 }

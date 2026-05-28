@@ -84,6 +84,14 @@ When describing higher-order architecture, deployment, or design:
 - If an operator constraint appears ambiguous, ask instead of inferring a narrower allowable path.
 - Do not repair Narada CLI invocation by hardcoding Node, NVM, WSL, or package-manager paths from memory. Use the declared delegated CLI embodiment, the installed `narada` shim, or report the exact `narada inbox doctor` / `narada doctor` repair command.
 
+## Tool Preference Hierarchy
+
+- Prefer MCP-exposed specific commands for the intended operation.
+- If no specific MCP command exists, prefer shell execution through an MCP-governed shell surface.
+- Use native shell only when neither an MCP-specific command nor an MCP-governed shell surface is available, or when the Operator explicitly requests native shell.
+- Do not default to native shell merely because it is available.
+- If falling back to native shell for an authority-affecting operation, state why the MCP-specific or MCP-shell path was unavailable.
+
 ## Target Locus Before Mutation
 
 - Before mutating task, chapter, inbox, roster, lifecycle, dispatch, evidence, or publication state, identify the target locus and path.
@@ -103,7 +111,7 @@ When describing higher-order architecture, deployment, or design:
 ## Role Duty Loop Nudges
 
 - If the agent is inhabiting an Operator Surface, first attempt self-binding with `narada operator-surface bind-focused --as self`. If Narada proper returns a runtime-locus deferral, route the deferred binding to the owning User/PC/runtime Site; do not guess volatile handles, window ids, or session ids.
-- Treat `run startup`, `run startup sequence`, and equivalent startup nudges as requests to use the launch packet's `startup_command_name` / `startup_command` affordance. The current startup command name is `agent_context_hydrate_current` with empty arguments. This is an MCP startup affordance, not a request to discover repository files, inspect operator surfaces, or run shell commands. If the named MCP tool is unavailable, report the missing startup MCP capability instead of falling back to shell discovery.
+- Treat `run startup`, `run startup sequence`, and equivalent startup nudges as requests to use the launch packet's `startup_command_name` / `startup_command` affordance. The current startup command name is `agent_context_startup_sequence` with empty arguments. This is an MCP startup affordance that performs launcher/site identity hydration plus advisory checkpoint continuity; it is not a request to discover repository files, inspect operator surfaces, or run shell commands. If the named MCP tool is unavailable, report the missing startup MCP capability instead of falling back to shell discovery.
 - Treat `next`, `continue`, `go on`, and equivalent short Operator nudges as instructions to perform the current role's normal duty loop.
 - A duty-loop nudge is not a new authority grant. It does not override target locus, role boundary, lifecycle, capability, verification, publication, or active Operator constraints.
 - Architect duty loop: inspect inbox/work-next/workboard/handoffs/coherence/publication state, then route, specify, review, commit, or push only when Architect-admissible.
@@ -160,6 +168,7 @@ When describing higher-order architecture, deployment, or design:
 | [narada-mcp-facade.md](docs/concepts/narada-mcp-facade.md) | Narada MCP Facade — typed agent-facing protocol surface over canonical application services | Need to expose Narada operations to agents without creating a second authority implementation |
 | [operator-surface.md](docs/concepts/operator-surface.md) | Operator Surface — durable addressable interface for inhabiting or observing Site/role/workflow work without becoming authority | Need to reason about stable windows, consoles, MCP/API channels, agent runtimes, session bindings, or resume focus |
 | [agent-carrier.md](docs/concepts/agent-carrier.md) | Agent Carrier — runtime harness that embodies one durable Agent in one bounded Session without owning authority | Need to factor Codex, Kimi, Narada-native carriers, startup packets, MCP approval, launch results, or carrier-session evidence |
+| [agent-identity.v0.md](docs/product/agent-identity.v0.md) | Agent Identity Object — Site-scoped durable Agent identity with role, law, capability, qualification, and session trace refs | Need to distinguish `agent_id`, `principal_id`, `role_id`, `carrier_session_id`, runtime ids, and identity records |
 | [contextual-capability-projection.md](docs/concepts/contextual-capability-projection.md) | Contextual Capability Projection — operator controls as contextual projections of canonical capability families with operator-visible invariant tests | Need to prevent adjacent button decomposition or overpromising UI labels |
 | External: [Scale-Relative Operation Topology](../thoughts/content/concepts/scale-relative-operation-topology.md) | Operation as scale-relative governed topology; Sites and Realms as recursive zone-like participants connected by governed crossings | Need to reason about MCP fabric, Site Worlds, Realms, or Operation recursion without flattening authority |
 | [site-immune-sensing.md](docs/concepts/site-immune-sensing.md) | Site Immune Sensing — read-only tamper-suspected authority-zone detection without autonomous repair | Need to detect illicit crossings, stale evidence, malformed authority records, or anti-autoimmune boundaries |

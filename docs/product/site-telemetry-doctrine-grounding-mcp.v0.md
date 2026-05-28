@@ -1,7 +1,7 @@
 # Site Telemetry Doctrine Grounding MCP v0
 
-`narada_doctrine_grounding_refs` is a read-only Narada proper MCP tool for
-grounding bounded telemetry design questions in public Narada doctrine.
+`agent_context_doctrinal_grounding` is a read-only Narada proper MCP tool for
+regrounding the current agent context in public Narada doctrine.
 
 The tool is liftable machinery for inquiry pressure. It does not copy private
 Inquiry Space data, admit inquiry branches, mutate task state, or decide
@@ -10,27 +10,31 @@ returns `blocked` with a routing instruction.
 
 ## Tool
 
-MCP tool name: `narada_doctrine_grounding_refs`
+MCP tool name: `agent_context_doctrinal_grounding`
 
 Input:
 
-- `question`: bounded design question;
-- `topic`: optional topic hint, such as `site_telemetry_ownership`;
+- `mode`: currently `reground`;
+- `doctrine_ids`: optional doctrine ids or refs to filter the catalog;
+- `question`: optional bounded design question used to select proof cases;
 - `require_inquiry_space_data`: boolean; when true, the tool refuses private
   data import and reports the required governed route.
 
-Output schema: `narada.doctrine_grounding_refs.v0`
+Output schema: `narada.agent_context.doctrinal_grounding.v0`
 
 Output fields:
 
 - `status`: `success` or `blocked`;
-- `question`;
-- `topic`;
-- `doctrine_refs`: public doctrine and product docs with reasons;
+- `mode`;
+- `posture_summary`;
+- `doctrine_catalog`: public doctrine and product docs with ids and reasons;
+- `ccc_coordinates`: Canonical Inbox / Outbox / mutation evidence coordinates;
+- `ias_mapping`: Intelligence-Authority Separation mapping;
+- `review_protocol`: review and closure protocol reminders;
 - `proof_case`: populated for the telemetry ownership question;
 - `mutation_attempted: false`;
 - `private_inquiry_space_data_imported: false`;
-- `source_runtime_authority_imported: false`;
+- `runtime_authority_imported: false`;
 - `raw_private_data_recorded: false`;
 - `authority_limits`;
 - `required_next_step` when blocked.

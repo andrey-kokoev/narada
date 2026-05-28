@@ -1,5 +1,48 @@
 import { fileURLToPath } from 'node:url';
+import { cwd as processCwd } from 'node:process';
+import { reconcileLocalMcpRolePolicy } from './config-policy-reconciler.js';
 import { runMcpServer, type McpServerOptions } from './server.js';
+export {
+  reconcileLocalMcpRolePolicy,
+  type LocalMcpPolicyReconcileResult,
+} from './config-policy-reconciler.js';
+export {
+  buildNaradaProperArchitectRolePolicyProjection,
+  NARADA_PROPER_MCP_SURFACE_REGISTRY,
+  validateNaradaProperArchitectAllowedTools,
+  validateNaradaProperMcpSurfaceRegistry,
+  type NaradaProperMcpSurfaceRecord,
+  type NaradaProperMcpRolePolicyProjection,
+  type RolePolicyValidationResult,
+} from './surface-registry.js';
+export {
+  MCP_OUTPUT_INLINE_LIMIT_BYTES,
+  MCP_PAYLOAD_MAX_INLINE_BYTES,
+  boundedMcpOutput,
+  readMcpOutputRef,
+  readMcpPayloadRef,
+  writeMcpOutputRef,
+  writeMcpPayloadRef,
+  type McpStoredRef,
+} from './payload-output.js';
+export {
+  NARADA_PROPER_EXECUTION_SURFACE_CONTRACTS,
+  validateExecutionSurfaceContracts,
+  type ExecutionSurfaceContract,
+} from './execution-contracts.js';
+export {
+  buildAdvisoryLiftPacket,
+  observeSiteIdentity,
+  planReadOnlySiteProbe,
+  type AdvisoryLiftPacket,
+  type SiteIdentityPosture,
+  type SiteProbePlan,
+} from './site-awareness-contracts.js';
+export {
+  LEGACY_CLI_MCP_FACADE_POSTURE,
+  generateCarrierMcpConfig,
+  type CarrierMcpConfigResult,
+} from './carrier-config.js';
 
 export interface NaradaProperMcpArgs {
   cwd?: string;
@@ -11,6 +54,8 @@ export interface NaradaProperMcpArgs {
   agentStartEventId?: string;
   carrierSessionId?: string;
   agentContextDb?: string;
+  reconcileMcpPolicy?: boolean;
+  apply?: boolean;
   help?: boolean;
 }
 
@@ -56,6 +101,10 @@ export function parseNaradaProperMcpArgs(args: string[]): NaradaProperMcpArgs {
     } else if (arg === '--agent-context-db' && next) {
       options.agentContextDb = next;
       i += 1;
+    } else if (arg === '--reconcile-mcp-policy') {
+      options.reconcileMcpPolicy = true;
+    } else if (arg === '--apply') {
+      options.apply = true;
     } else if (arg === '--help' || arg === '-h') {
       options.help = true;
     } else {
@@ -70,6 +119,7 @@ export function usage(): string {
     'Usage: narada-proper-mcp [--site-root <path>] [--site-id <id>] [--site-kind <kind>] [--cwd <path>]',
     '                         [--agent-id <id>] [--agent-role <role>] [--agent-start-event-id <id>]',
     '                         [--carrier-session-id <id>] [--agent-context-db <path>]',
+    '                         [--reconcile-mcp-policy [--apply]]',
   ].join('\n');
 }
 
@@ -81,6 +131,16 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   const parsed = parseNaradaProperMcpArgs(argv);
   if (parsed.help) {
     process.stdout.write(`${usage()}\n`);
+    return;
+  }
+  if (parsed.reconcileMcpPolicy) {
+    const result = reconcileLocalMcpRolePolicy({
+      siteRoot: parsed.siteRoot ?? parsed.cwd ?? processCwd(),
+      apply: parsed.apply,
+      by: parsed.agentId,
+    });
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    process.exitCode = result.exit_code;
     return;
   }
   await runNaradaProperMcp(parsed);

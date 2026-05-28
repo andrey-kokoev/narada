@@ -6,6 +6,16 @@ export interface TaskNextOptions {
   format?: string;
 }
 
+export interface TaskReadOptions {
+  cwd: string;
+  taskNumber: number;
+  format?: string;
+}
+
+export async function taskReadCommand(options: TaskReadOptions): Promise<CommandEnvelope> {
+  return runNaradaJson(['task', 'read', String(options.taskNumber)], options.cwd);
+}
+
 export async function taskPeekNextCommand(options: TaskNextOptions): Promise<CommandEnvelope> {
   return runNaradaJson(['task', 'peek-next', '--agent', options.agent], options.cwd);
 }

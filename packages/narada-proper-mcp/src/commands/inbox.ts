@@ -10,6 +10,10 @@ export interface InboxCommandOptions {
   by?: string;
   envelopeId?: string;
   sourceRef?: string;
+  payload?: string;
+  payloadFile?: string;
+  payloadStdin?: boolean;
+  allowEmptyPayload?: boolean;
   title?: string;
   summary?: string;
   sourceKind?: string;
@@ -65,6 +69,25 @@ export async function inboxSubmitObservationCommand(options: InboxCommandOptions
     ...repeat('--evidence', options.evidence),
     ...repeat('--proposal', options.proposal),
     ...optional('--recommendation', options.recommendation),
+  ], options.cwd);
+}
+
+export async function inboxSubmitTypedEnvelopeCommand(options: InboxCommandOptions): Promise<CommandEnvelope> {
+  return runNaradaJson([
+    'inbox',
+    'submit',
+    ...optional('--source-kind', options.sourceKind),
+    ...optional('--source-ref', options.sourceRef),
+    ...optional('--kind', options.kind),
+    ...optional('--authority-level', options.authorityLevel),
+    ...optional('--principal', options.principal),
+    ...optional('--payload', options.payload),
+    ...optional('--payload-file', options.payloadFile),
+    ...(options.payloadStdin ? ['--payload-stdin'] : []),
+    ...(options.allowEmptyPayload ? ['--allow-empty-payload'] : []),
+    ...optional('--target-locus', options.targetLocus),
+    '--output',
+    'full',
   ], options.cwd);
 }
 
