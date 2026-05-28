@@ -1,0 +1,37 @@
+{
+  "schema": "narada.agent_start.claude_code_execution_policy.v0",
+  "carrier_kind": "claude_code_carrier",
+  "target_locus": "narada_proper",
+  "process_launch_admitted": true,
+  "authority_basis": "task:1282",
+  "admission_scope": {
+    "admits": [
+      "claude_code_runtime_process_launch"
+    ],
+    "does_not_admit": [
+      "task_lifecycle_mutation_authority",
+      "inbox_mutation_authority",
+      "outbox_transport_authority",
+      "repository_publication_authority",
+      "site_mutation_authority",
+      "credential_access",
+      "native_shell_authority",
+      "external_site_authority"
+    ]
+  },
+  "withheld_authorities": [
+    "task_lifecycle_mutation_authority",
+    "inbox_mutation_authority",
+    "outbox_transport_authority",
+    "repository_publication_authority",
+    "site_mutation_authority",
+    "credential_access",
+    "native_shell_authority",
+    "external_site_authority"
+  ],
+  "notes": [
+    "This policy is target-local to Narada proper.",
+    "It admits Claude Code carrier process launch only.",
+    "Claude Code remains a carrier runtime, not an Agent identity or authority owner."
+  ]
+}

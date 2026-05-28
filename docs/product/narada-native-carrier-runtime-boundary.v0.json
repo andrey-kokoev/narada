@@ -1,0 +1,114 @@
+{
+  "schema": "narada.narada_native_carrier.runtime_boundary.v0",
+  "boundary_id": "narada_native_carrier.runtime_boundary.v0",
+  "concept_ref": "docs/concepts/agent-carrier.md",
+  "purpose": "Executable Narada-native carrier boundary for one bounded Carrier Session without moving Narada authority into the carrier.",
+  "runtime_harness": {
+    "inputs": [
+      "agent_id",
+      "agent_start_event_id",
+      "carrier_session_id",
+      "site_root",
+      "startup_command",
+      "capability_projection",
+      "model_adapter_ref",
+      "executor_adapter_ref"
+    ],
+    "outputs": [
+      "carrier_session_evidence",
+      "startup_hydration_result",
+      "capability_projection_readback",
+      "adapter_result_packet",
+      "closeout_evidence"
+    ],
+    "evidence_records": [
+      "agent_start_event",
+      "carrier_session_record",
+      "native_carrier_lifecycle_event",
+      "adapter_invocation_record",
+      "proposed_action_packet",
+      "closeout_record"
+    ]
+  },
+  "lifecycle_states": [
+    {
+      "state": "planned",
+      "meaning": "Launch packet and carrier session intent exist; no runtime has materialized."
+    },
+    {
+      "state": "materialized",
+      "meaning": "Carrier session evidence exists and startup hydration has been attempted."
+    },
+    {
+      "state": "running",
+      "meaning": "The carrier loop is alive and may produce inert proposals or readback."
+    },
+    {
+      "state": "stopped",
+      "meaning": "The carrier loop ended with closeout evidence."
+    },
+    {
+      "state": "refused",
+      "meaning": "Admission, startup, capability, or adapter preconditions failed closed."
+    }
+  ],
+  "canonical_authority_owners": {
+    "task_lifecycle": "task_governance_service",
+    "inbox": "canonical_inbox_service",
+    "outbox": "canonical_outbox_service",
+    "command_execution": "command_execution_intent_service",
+    "repository_publication": "repository_publication_intent_service",
+    "law": "law_receipt_service",
+    "roster": "agent_roster_service",
+    "capability_consent": "canonical_capability_consent_registry"
+  },
+  "adapter_boundary": {
+    "model_adapter": {
+      "role": "replaceable cognition substrate",
+      "authority_owner": "none",
+      "may_emit": [
+        "text_output",
+        "refusal_output",
+        "proposed_action_packet"
+      ],
+      "must_not_mutate": [
+        "task_lifecycle",
+        "inbox",
+        "outbox",
+        "repository_publication",
+        "site_state",
+        "credential_store"
+      ]
+    },
+    "executor_adapter": {
+      "role": "replaceable local execution substrate for admitted carrier internals",
+      "authority_owner": "none",
+      "may_emit": [
+        "execution_observation",
+        "failure_observation",
+        "proposed_command_intent"
+      ],
+      "must_not_execute_without": "canonical command execution intent admission"
+    }
+  },
+  "readback_vocabulary": {
+    "direct_sqlite_inspection_required": false,
+    "states": [
+      "planned",
+      "materialized",
+      "running",
+      "stopped",
+      "refused"
+    ],
+    "authority_posture": "carrier_subordinate_to_canonical_services",
+    "capability_posture": "projected_capabilities_are_not_grants"
+  },
+  "authority_non_ownership_assertions": [
+    "carrier_is_not_agent",
+    "carrier_session_is_not_task_activation",
+    "model_adapter_is_not_authority_owner",
+    "executor_adapter_is_not_command_authority",
+    "capability_projection_is_not_capability_consent",
+    "readback_is_not_state_mutation"
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "schema": "narada.agent_identity.v0",
+  "agent_identity_id": "agent:narada:narada.builder",
+  "site_id": "narada",
+  "agent_id": "narada.builder",
+  "principal_id": "builder",
+  "display_name": "Narada Builder",
+  "status": "active",
+  "role_bindings": [
+    {
+      "role_id": "builder",
+      "role_class": "builder",
+      "status": "active",
+      "authority_posture": "construction",
+      "source_ref": "roster:narada.builder"
+    }
+  ],
+  "law_receipt_posture": {
+    "state": "current",
+    "receipt_refs": [
+      "law_receipt:narada.builder:AGENTS.md",
+      "law_receipt:narada.builder:.ai/task-contracts/agent-task-execution.md"
+    ]
+  },
+  "capability_posture": {
+    "registry_ref": ".ai/capability-consent-registry.json",
+    "grant_refs": [
+      "capability_grant:narada.builder:filesystem.write:site-root"
+    ],
+    "rule": "Capability grants remain separate authority records; this identity only references them."
+  },
+  "qualification_posture": {
+    "registry_ref": ".ai/site-qualification.json",
+    "qualification_refs": [
+      "qual_builder_narada_task_construction_20260501"
+    ],
+    "rule": "Qualification records remain separate authority records; this identity only references them."
+  },
+  "session_trace_refs": [
+    {
+      "carrier_session_id": "carrier_session_codex_20260517_builder_001",
+      "carrier_kind": "codex_carrier",
+      "agent_start_event_id": "agent_start_20260517_builder_001",
+      "runtime_ref": "pc_runtime:windows-terminal:builder",
+      "operator_surface_ref": "operator_surface:narada-builder",
+      "control_channel_ref": "terminal:windows-terminal:narada-builder",
+      "trace_refs": [
+        "transcript:codex-session:builder-20260517",
+        "launch_result:.narada/agent-carriers/codex/launch-result-builder-20260517.json"
+      ],
+      "authority_limits": [
+        "session_trace_is_not_identity_authority",
+        "runtime_ref_is_not_site_authority",
+        "operator_surface_ref_is_not_capability_grant"
+      ]
+    }
+  ],
+  "authority_limits": [
+    "agent_identity_is_not_session",
+    "agent_identity_is_not_carrier",
+    "agent_identity_is_not_substrate",
+    "agent_identity_is_not_operator_surface",
+    "agent_identity_is_not_control_channel",
+    "agent_identity_is_not_capability_grant",
+    "agent_identity_is_not_qualification",
+    "agent_identity_is_not_task_assignment"
+  ]
+}
