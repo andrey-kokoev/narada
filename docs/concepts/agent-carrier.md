@@ -75,7 +75,7 @@ At minimum, a carrier should:
 - bind exactly one `agent_id` for the Session;
 - materialize an agent start event and carrier session record;
 - set required `NARADA_*` environment for child MCP surfaces;
-- expose the startup command affordance, currently `agent_context_hydrate_current({})`;
+- expose the startup command affordance, currently `agent_context_startup_sequence({})`;
 - disable or refuse non-admitted native execution paths when policy requires MCP-only execution;
 - mount only admitted MCP/tool surfaces with explicit approval posture;
 - record a durable launch result packet before handoff to the interactive substrate;
@@ -127,6 +127,14 @@ Carrier implementations can be grouped as:
 
 The carrier interface should be stable enough that Codex, Claude Code, Kimi, and Narada-native carriers all produce comparable launch packets and readiness evidence.
 
+## Native Shell Flag Scope
+
+`EnableNativeShell` is a Codex-carrier break-glass flag, not a general carrier permission.
+
+For Codex, the flag means the launcher does not pass `--disable shell_tool`. It does not itself grant task, inbox, publication, filesystem, credential, or external-effect authority.
+
+For `agent-cli`, `pi`, `kimi`, `claude-code`, and Narada-native carriers, command execution must be represented through the carrier's own admitted tool/capability channel. These carriers must not interpret `EnableNativeShell` as a standing native shell grant merely because the launcher surface accepts the flag for compatibility.
+
 ## Launch Packet Contract
 
 A v0 carrier launch packet should include:
@@ -177,6 +185,9 @@ Do not implement a Narada-native carrier as a User Site preference first. User S
 ## Relationship To Existing Concepts
 
 - [`Runtime Identity Binding`](runtime-identity-binding.md) binds volatile runtime handles to durable identity evidence; Agent Carrier defines the harness that may produce such handles.
+- [`Narada Agent Runtime Server`](narada-agent-runtime-server.md) defines the machine-addressable, multi-turn carrier posture for automation-driven local intelligence sessions.
+- [`Carrier Action Admission Boundary`](carrier-action-admission-boundary.md) defines the carrier-to-authority conversion boundary for requested tool calls, commands, sends, publications, and other effectful work.
+- [`Agent Identity Object`](../product/agent-identity.v0.md) defines the Site-scoped durable Agent identity record that a carrier embodies through a bounded Carrier Session.
 - [`Operator Surface`](operator-surface.md) presents or reaches inhabited work; Agent Carrier runs the Session being presented.
 - [`Runtime-Invariant Adapter Contract`](runtime-invariant-adapter-contract.md) governs stable adapter contracts across runtime substrates; Agent Carrier is the agent-session adapter family.
 - [`Command Execution Intent Zone`](command-execution-intent-zone.md) governs command execution requests; Agent Carrier must route command execution through admitted surfaces rather than letting substrate convenience become authority.

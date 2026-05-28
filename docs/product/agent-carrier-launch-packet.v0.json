@@ -45,6 +45,8 @@
     "not_claimed"
   ],
   "optional_fields": [
+    "startup_sequence",
+    "startup_first_work_orientation",
     "pc_runtime_ref",
     "operator_surface_ref",
     "control_channel_ref",
@@ -80,10 +82,64 @@
     "startup_command": {
       "type": "object",
       "required_shape": {
-        "name": "agent_context_hydrate_current",
+        "name": "agent_context_startup_sequence",
         "arguments": {}
       },
-      "rule": "Startup is a named affordance, not a request for shell discovery."
+      "rule": "Startup is a named MCP affordance that performs launcher/site identity hydration plus advisory checkpoint continuity; it is not a request for shell discovery."
+    },
+    "startup_sequence": {
+      "type": "array",
+      "required_first_steps": [
+        {
+          "tool": "agent_context_hydrate_current",
+          "arguments": {},
+          "rule": "Hydrate launcher, Site, and identity evidence only."
+        },
+        {
+          "tool": "agent_context_memory.plan_hydration",
+          "arguments": {
+            "named_agent_id": {
+              "from_step": "agent_context_hydrate_current",
+              "field": "agent_id"
+            },
+            "requested_by": "startup-sequence"
+          },
+          "optional_next": {
+            "tool": "agent_context_memory.read_checkpoint_summary",
+            "arguments": {
+              "checkpoint_id": {
+                "from_step": "agent_context_memory.plan_hydration",
+                "field": "selectedCheckpoint.checkpointId"
+              }
+            },
+            "rule": "Read only when a local checkpoint candidate is selected; the summary is advisory continuity."
+          },
+          "rule": "Plan local checkpoint continuity from the verified hydrate-current agent_id without mutating runtime."
+        }
+      ],
+      "optional_after_continuity": {
+        "tool": "narada_task_read_or_narada_task_work_next",
+        "rule": "Builder and other role launches may append first-work orientation after continuity hydration. Explicit task handoffs use narada_task_read with a concrete task_number. Generic orientation uses narada_task_work_next with claim=false. Startup orientation is advisory and must not silently claim work."
+      },
+      "rule": "Checkpoint continuity is an explicit advisory phase after launcher evidence hydration; summaries remain checkpoint memory, not task, inbox, operator-surface, or live runtime authority. First-work orientation, when present, is a read/peek affordance over governed task surfaces and is not task activation authority."
+    },
+    "startup_first_work_orientation": {
+      "type": "object",
+      "schema": "narada.agent_start.first_work_orientation.v0",
+      "authority": "carrier_launch_packet_advisory_context",
+      "allowed_modes": ["explicit_task_handoff", "work_next_peek"],
+      "required_keys": [
+        "target_locus",
+        "agent_id",
+        "role",
+        "mode",
+        "read_tool",
+        "claim_guidance",
+        "mutation_attempted",
+        "claim_attempted",
+        "publish_or_deploy_authority_admitted"
+      ],
+      "rule": "Provides startup onboarding without chat dependence. It may point to narada_task_read for an explicit handoff target or narada_task_work_next with claim=false for role-local discovery. It does not claim tasks, publish, deploy, grant credentials, or import another Site's authority."
     },
     "required_environment": {
       "type": "object",

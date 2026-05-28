@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
@@ -10,8 +10,8 @@ const defaultRootDir = join(__dirname, '..', '..');
 const require = createRequire(import.meta.url);
 const RESULT_SCHEMA = 'narada.agent_start.result.v0';
 const DEFAULT_PC_SITE_ROOT = process.env.NARADA_PC_SITE_ROOT ?? 'C:/ProgramData/Narada/sites/pc/desktop-sunroom-2';
-const ADMITTED_AGENTS = new Set(['narada.architect', 'narada.builder']);
-const ADMITTED_RUNTIMES = new Set(['codex', 'claude-code', 'narada-native']);
+const ADMITTED_AGENTS = new Set(['narada.architect', 'narada.builder', 'narada.builder2']);
+const ADMITTED_RUNTIMES = new Set(['codex', 'agent-cli', 'claude-code', 'narada-native', 'nars']);
 const NARADA_PROPER_MCP_SERVER_NAME = 'narada-proper';
 const NARADA_PROPER_APPROVED_MCP_SERVERS = [
   {
@@ -33,6 +33,17 @@ const NARADA_PROPER_WITHHELD_MCP_SERVERS = [
   'narada-andrey-test',
   'narada-andrey-adr',
 ];
+const CLAUDE_CODE_EXECUTION_POLICY_RELATIVE_PATH = join('.narada', 'agent-carriers', 'claude-code-execution-policy.v0.json');
+const CLAUDE_CODE_WITHHELD_AUTHORITIES = [
+  'task_lifecycle_mutation_authority',
+  'inbox_mutation_authority',
+  'outbox_transport_authority',
+  'repository_publication_authority',
+  'site_mutation_authority',
+  'credential_access',
+  'native_shell_authority',
+  'external_site_authority',
+];
 
 function parseArgs(argv) {
   const result = {};
@@ -48,9 +59,17 @@ function parseArgs(argv) {
     else if (arg === '--dry-run') result.dry_run = true;
     else if (arg === '--exec') result.exec = true;
     else if (arg === '--enable-native-shell') result.enable_native_shell = true;
+    else if (arg === '--startup-task') result.startup_task_number = parsePositiveInteger(argv[++i], '--startup-task');
     else throw new Error(`unsupported_argument:${arg}`);
   }
   return result;
+}
+
+function parsePositiveInteger(value, flagName) {
+  if (value === undefined) throw new Error(`missing_value:${flagName}`);
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) throw new Error(`invalid_positive_integer:${flagName}`);
+  return parsed;
 }
 
 function stableTimestampToken(now) {
@@ -61,6 +80,12 @@ function identityToken(identity) {
   return identity.replace(/[^A-Za-z0-9]+/g, '_');
 }
 
+function identityRole(identity) {
+  if (identity === 'narada.architect') return 'architect';
+  if (identity === 'narada.builder' || identity === 'narada.builder2') return 'builder';
+  return 'unknown';
+}
+
 function startEvent(identity, runtime, dryRun, now = new Date().toISOString(), siteRoot = defaultRootDir) {
   const eventId = `agent_start_${stableTimestampToken(now)}_${identityToken(identity)}`;
   return {
@@ -69,7 +94,7 @@ function startEvent(identity, runtime, dryRun, now = new Date().toISOString(), s
     site_id: 'narada-proper',
     site_root: siteRoot,
     identity,
-    role: identity === 'narada.architect' ? 'architect' : identity === 'narada.builder' ? 'builder' : 'unknown',
+    role: identityRole(identity),
     runtime,
     status: dryRun ? 'planned' : 'materialized',
     materialized_at: now,
@@ -421,6 +446,31 @@ function naradaNativeArgs() {
   return [];
 }
 
+function narsSessionDir(siteRoot, carrierSessionId) {
+  return join(siteRoot, '.narada', 'crew', 'nars-sessions', carrierSessionId);
+}
+
+function narsEntrypoint(siteRoot) {
+  return join(siteRoot, 'tools', 'agent-cli', 'agent-cli.mjs');
+}
+
+function narsArgs({ siteRoot, startupEvidence }) {
+  return [
+    narsEntrypoint(siteRoot),
+    '--server',
+    '--identity', startupEvidence.agentId,
+    '--session', startupEvidence.carrierSessionId,
+  ];
+}
+
+function agentCliArgs({ siteRoot, startupEvidence }) {
+  return [
+    narsEntrypoint(siteRoot),
+    '--identity', startupEvidence.agentId,
+    '--session', startupEvidence.carrierSessionId,
+  ];
+}
+
 function runtimeArgsFor({ runtime, siteRoot, startupEvidence, enableNativeShell = false }) {
   if (runtime === 'codex') {
     return codexArgs({ siteRoot, startupEvidence, enableNativeShell });
@@ -431,6 +481,12 @@ function runtimeArgsFor({ runtime, siteRoot, startupEvidence, enableNativeShell 
   if (runtime === 'narada-native') {
     return naradaNativeArgs();
   }
+  if (runtime === 'agent-cli') {
+    return agentCliArgs({ siteRoot, startupEvidence });
+  }
+  if (runtime === 'nars') {
+    return narsArgs({ siteRoot, startupEvidence });
+  }
   throw new Error(`runtime_not_admitted:${runtime}`);
 }
 
@@ -438,6 +494,8 @@ function runtimeCommand(runtime) {
   if (runtime === 'codex') return 'codex';
   if (runtime === 'claude-code') return 'claude';
   if (runtime === 'narada-native') return 'narada-native-carrier';
+  if (runtime === 'agent-cli') return process.execPath;
+  if (runtime === 'nars') return process.execPath;
   throw new Error(`runtime_not_admitted:${runtime}`);
 }
 
@@ -445,6 +503,8 @@ function runtimeKind(runtime) {
   if (runtime === 'codex') return 'codex_carrier';
   if (runtime === 'claude-code') return 'claude_code_carrier';
   if (runtime === 'narada-native') return 'narada_native_carrier';
+  if (runtime === 'agent-cli') return 'agent_cli_carrier';
+  if (runtime === 'nars') return 'nars';
   throw new Error(`runtime_not_admitted:${runtime}`);
 }
 
@@ -519,24 +579,257 @@ function nativeExecutionPolicy({ runtime, enableNativeShell = false, identity, s
       },
     };
   }
+  if (runtime === 'agent-cli') {
+    return {
+      native_shell: {
+        status: 'not_admitted_for_runtime_slice',
+        runtime,
+        reason: 'Interactive agent-cli mediates local tools through Site MCP fabric and does not grant native shell execution.',
+      },
+      native_scripts: {
+        status: 'not_admitted_for_runtime_slice',
+        reason: 'Interactive agent-cli process launch does not admit arbitrary script execution.',
+      },
+      policy_aware_shell_mcp: {
+        status: 'site_fabric_only',
+        reason: 'Interactive agent-cli reads only the target Site .ai/mcp fabric; shell MCP must be declared and admitted there to be visible.',
+      },
+    };
+  }
+  if (runtime === 'nars') {
+    return {
+      native_shell: {
+        status: 'not_admitted_for_runtime_slice',
+        runtime,
+        reason: 'NARS first slice mediates local tools through Site MCP fabric and does not grant native shell execution.',
+      },
+      native_scripts: {
+        status: 'not_admitted_for_runtime_slice',
+        reason: 'NARS process launch does not admit arbitrary script execution.',
+      },
+      policy_aware_shell_mcp: {
+        status: 'site_fabric_only',
+        reason: 'NARS reads only the target Site .ai/mcp fabric; shell MCP must be declared and admitted there to be visible.',
+      },
+    };
+  }
   throw new Error(`runtime_not_admitted:${runtime}`);
 }
 
-function startupSequence() {
-  return [
+function claudeCodeExecutionPolicyPath(siteRoot = defaultRootDir) {
+  return join(siteRoot, CLAUDE_CODE_EXECUTION_POLICY_RELATIVE_PATH);
+}
+
+function readClaudeCodeExecutionPolicy(siteRoot = defaultRootDir) {
+  const path = claudeCodeExecutionPolicyPath(siteRoot);
+  if (!existsSync(path)) {
+    return {
+      path,
+      admitted: false,
+      reason: 'policy_file_missing',
+      repair: `Create ${CLAUDE_CODE_EXECUTION_POLICY_RELATIVE_PATH} with schema narada.agent_start.claude_code_execution_policy.v0 and process_launch_admitted=true.`,
+      record: null,
+    };
+  }
+
+  let record;
+  try {
+    record = JSON.parse(readFileSync(path, 'utf8'));
+  } catch (error) {
+    return {
+      path,
+      admitted: false,
+      reason: 'policy_file_unreadable',
+      repair: error instanceof Error ? error.message : String(error),
+      record: null,
+    };
+  }
+
+  const withheld = Array.isArray(record.withheld_authorities) ? record.withheld_authorities : [];
+  const missingWithheld = CLAUDE_CODE_WITHHELD_AUTHORITIES.filter((authority) => !withheld.includes(authority));
+  const admitted = record.schema === 'narada.agent_start.claude_code_execution_policy.v0'
+    && record.carrier_kind === 'claude_code_carrier'
+    && record.target_locus === 'narada_proper'
+    && record.process_launch_admitted === true
+    && missingWithheld.length === 0;
+
+  return {
+    path,
+    admitted,
+    reason: admitted ? 'process_launch_policy_admitted' : 'policy_file_not_admitted',
+    repair: admitted
+      ? null
+      : 'Policy must be target-local to narada_proper, name claude_code_carrier, admit only process launch, and list every withheld authority.',
+    missing_withheld_authorities: missingWithheld,
+    record,
+  };
+}
+
+function claudeCodeExecutionPolicyReadback(policy) {
+  return {
+    schema: 'narada.agent_start.claude_code_execution_policy.readback.v0',
+    policy_path: policy.path,
+    target_locus: policy.record?.target_locus ?? 'narada_proper',
+    process_launch: {
+      admitted: policy.admitted,
+      reason: policy.reason,
+    },
+    effectful_narada_authority: {
+      admitted: false,
+      withheld_authorities: CLAUDE_CODE_WITHHELD_AUTHORITIES,
+      rule: 'Claude Code process launch admission does not admit task, inbox, outbox, publication, Site mutation, credential, native shell, or external Site authority.',
+    },
+    source_site_runtime_imported: false,
+    pc_runtime_authority_imported: false,
+    repair: policy.repair,
+    missing_withheld_authorities: policy.missing_withheld_authorities ?? [],
+  };
+}
+
+function firstWorkOrientation({ identity, role, startupTaskNumber = null }) {
+  const base = {
+    schema: 'narada.agent_start.first_work_orientation.v0',
+    target_locus: 'narada_proper',
+    agent_id: identity,
+    role,
+    advisory_only: true,
+    mutation_attempted: false,
+    claim_attempted: false,
+    publish_or_deploy_authority_admitted: false,
+    authority_limits: [
+      'startup_orientation_does_not_claim_task',
+      'startup_orientation_does_not_publish_or_deploy',
+      'startup_orientation_does_not_grant_credential_access',
+    ],
+  };
+
+  if (startupTaskNumber !== null && startupTaskNumber !== undefined) {
+    return {
+      ...base,
+      mode: 'explicit_task_handoff',
+      task_number: startupTaskNumber,
+      read_tool: {
+        name: 'narada_task_read',
+        arguments: {
+          task_number: startupTaskNumber,
+        },
+      },
+      claim_guidance: {
+        command: `narada task claim ${startupTaskNumber} --agent ${identity} --reason "startup explicit handoff"`,
+        rule: 'Claim only after reading the task and confirming it is still the intended governed work.',
+      },
+    };
+  }
+
+  return {
+    ...base,
+    mode: 'work_next_peek',
+    read_tool: {
+      name: 'narada_task_work_next',
+      arguments: {
+        agent: identity,
+        claim: false,
+      },
+    },
+    claim_guidance: {
+      command: `narada task work-next --agent ${identity} --claim`,
+      rule: 'Use only when the peeked governed next work remains appropriate for this role and no explicit handoff target was provided.',
+    },
+  };
+}
+
+function startupFirstWorkStep({ identity, role, startupTaskNumber = null }) {
+  const orientation = firstWorkOrientation({ identity, role, startupTaskNumber });
+  if (orientation.mode === 'explicit_task_handoff') {
+    return {
+      tool: 'narada_task_read',
+      arguments: {
+        task_number: startupTaskNumber,
+      },
+      purpose: 'read explicit startup task handoff for launched agent',
+      depends_on: 'agent_context_memory.plan_hydration',
+      output_key: 'first_work_orientation',
+      first_work_orientation: orientation,
+      explicit_handoff_target: true,
+      mutation_attempted: false,
+      claim_attempted: false,
+      advisory_only: true,
+    };
+  }
+
+  return {
+    tool: 'narada_task_work_next',
+    arguments: {
+      agent: {
+        from_step: 'hydrate_current',
+        field: 'agent_id',
+        rule: 'use verified agent_id returned by agent_context_hydrate_current',
+      },
+      claim: false,
+    },
+    purpose: 'peek governed next work for launched agent without claiming',
+    depends_on: 'agent_context_memory.plan_hydration',
+    output_key: 'first_work_orientation',
+    first_work_orientation: orientation,
+    explicit_handoff_target: false,
+    mutation_attempted: false,
+    claim_attempted: false,
+    advisory_only: true,
+  };
+}
+
+function startupSequence({ identity, role, startupTaskNumber = null } = {}) {
+  const sequence = [
     {
       tool: 'agent_context_hydrate_current',
       arguments: {},
-      purpose: 'hydrate the launched carrier session from inherited NARADA_* environment before operational work',
+      purpose: 'hydrate launcher/site/identity evidence',
+      output_key: 'hydrate_current',
+      authority_posture: 'launcher_evidence_only',
+      runtime_hydration_attempted: false,
+    },
+    {
+      tool: 'agent_context_memory.plan_hydration',
+      arguments: {
+        named_agent_id: {
+          from_step: 'hydrate_current',
+          field: 'agent_id',
+          rule: 'use verified agent_id returned by agent_context_hydrate_current',
+        },
+        requested_by: 'startup-sequence',
+      },
+      purpose: 'plan checkpoint continuity without mutating runtime',
+      depends_on: 'hydrate_current',
+      checkpoint_hydration_planned: true,
+      checkpoint_summary_loaded: false,
+      runtime_hydration_attempted: false,
+      advisory_only: true,
+      optional_next: {
+        tool: 'agent_context_memory.read_checkpoint_summary',
+        arguments: {
+          checkpoint_id: {
+            from_step: 'agent_context_memory.plan_hydration',
+            field: 'selectedCheckpoint.checkpointId',
+            rule: 'read only when a local checkpoint candidate is selected',
+          },
+        },
+        purpose: 'load compact advisory continuity summary',
+        advisory_only: true,
+        runtime_hydration_attempted: false,
+      },
     },
   ];
+  if (identity && role) {
+    sequence.push(startupFirstWorkStep({ identity, role, startupTaskNumber }));
+  }
+  return sequence;
 }
 
 function startupCommand() {
   return {
-    name: 'agent_context_hydrate_current',
+    name: 'agent_context_startup_sequence',
     arguments: {},
-    display: 'agent_context_hydrate_current({})',
+    display: 'agent_context_startup_sequence({})',
   };
 }
 
@@ -547,10 +840,16 @@ function mcpToolApprovalNote(runtime, enableNativeShell) {
       : 'Approves only the Narada proper target-local MCP server bound to this launch site root. Native Codex shell_tool remains disabled. narada-andrey User Site MCP servers are not approved for this Narada proper carrier.';
   }
   if (runtime === 'claude-code') {
-    return 'Approves only the Narada proper target-local MCP server bound to this launch site root for startup/context hydration. Claude Code native execution and tool permissions are not admitted by this first carrier representation slice. narada-andrey User Site MCP servers are not approved for this Narada proper carrier.';
+    return 'Approves only the Narada proper target-local MCP server bound to this launch site root for startup/context continuity. Claude Code native execution and tool permissions are not admitted by this first carrier representation slice. narada-andrey User Site MCP servers are not approved for this Narada proper carrier.';
   }
   if (runtime === 'narada-native') {
-    return 'Approves only the Narada proper target-local MCP server bound to this launch site root for startup/context hydration. Narada-native effect execution, shell, inbox, outbox, task lifecycle mutation, and publication authority remain withheld unless separately admitted.';
+    return 'Approves only the Narada proper target-local MCP server bound to this launch site root for startup/context continuity. Narada-native effect execution, shell, inbox, outbox, task lifecycle mutation, and publication authority remain withheld unless separately admitted.';
+  }
+  if (runtime === 'agent-cli') {
+    return 'Interactive agent-cli reads only the target Site .ai/mcp fabric through its own MCP client. User Site MCP servers are not injected, and model-selected tool calls remain requests rather than authority.';
+  }
+  if (runtime === 'nars') {
+    return 'NARS reads only the target Site .ai/mcp fabric through its own MCP client. User Site MCP servers are not injected, and model-selected tool calls remain requests rather than authority.';
   }
   throw new Error(`runtime_not_admitted:${runtime}`);
 }
@@ -568,19 +867,112 @@ function nativeCarrierLifecyclePlan() {
   };
 }
 
+function claudeCodeProcessAttemptPath(result, siteRoot = defaultRootDir) {
+  return join(siteRoot, '.narada', 'crew', 'agent-process-attempts', `${result.agent_start_event}.claude-code.process-attempt.json`);
+}
+
+function latestJsonPath(dir, suffix) {
+  if (!existsSync(dir)) return null;
+  const candidates = readdirSync(dir)
+    .filter((name) => name.endsWith(suffix))
+    .map((name) => {
+      const path = join(dir, name);
+      return { path, mtimeMs: statSync(path).mtimeMs };
+    })
+    .sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return candidates[0]?.path ?? null;
+}
+
+function claudeCodeProcessAttempt({ result, runtimeArgs, launchEnvironment, siteRoot = defaultRootDir }) {
+  const environment = launchEnvironment ?? result.required_environment;
+  const naradaEnvironment = Object.fromEntries(
+    Object.entries(environment).filter(([key]) => key.startsWith('NARADA_')),
+  );
+  return {
+    schema: 'narada.agent_start.claude_code_process_attempt.v0',
+    status: result.dry_run ? 'planned_not_spawned' : 'ready_to_spawn',
+    agent_start_event_id: result.agent_start_event,
+    carrier_session_id: result.carrier_session_id,
+    runtime: result.runtime,
+    runtime_kind: result.runtime_kind,
+    command: runtimeCommand(result.runtime),
+    argv: runtimeArgs,
+    cwd: siteRoot,
+    policy_path: result.claude_code_launch.execution_policy.policy_path,
+    process_launch_admitted: result.claude_code_launch.execution_policy.process_launch.admitted,
+    startup_command: result.startup_command,
+    mcp_runtime: result.mcp_runtime,
+    environment_projection: {
+      recorded_keys: Object.keys(naradaEnvironment),
+      values: naradaEnvironment,
+      raw_secret_values_recorded: false,
+      non_narada_environment_inherited_at_spawn: true,
+      inherited_environment_not_authority: true,
+    },
+    withheld_authorities: result.claude_code_launch.execution_policy.effectful_narada_authority.withheld_authorities,
+    authority_non_claims: result.not_claimed,
+  };
+}
+
+function writeClaudeCodeProcessAttempt(result, siteRoot = defaultRootDir) {
+  if (result.runtime !== 'claude-code' || !result.exec) return null;
+  const path = claudeCodeProcessAttemptPath(result, siteRoot);
+  mkdirSync(dirname(path), { recursive: true });
+  const attempt = {
+    ...result.claude_code_process_attempt,
+    status: 'recorded_before_spawn',
+    recorded_at: new Date().toISOString(),
+    launch_result_path: result.launch_result_path ?? null,
+  };
+  writeFileSync(path, `${JSON.stringify(attempt, null, 2)}\n`, 'utf8');
+  result.claude_code_process_attempt = attempt;
+  result.claude_code_process_attempt_path = path;
+  return path;
+}
+
+function claudeCodeReadiness({ result, siteRoot = defaultRootDir }) {
+  const latestLaunchResultPath = latestJsonPath(join(siteRoot, '.narada', 'crew', 'agent-start-results'), '.result.json');
+  const latestProcessAttemptPath = latestJsonPath(join(siteRoot, '.narada', 'crew', 'agent-process-attempts'), '.claude-code.process-attempt.json');
+  const executionPolicy = result.claude_code_launch.execution_policy;
+  return {
+    schema: 'narada.agent_start.claude_code_readiness.v0',
+    readiness_state: executionPolicy.process_launch.admitted
+      ? 'process_launch_policy_admitted'
+      : 'represented_only',
+    direct_sqlite_inspection_required: false,
+    policy_posture: executionPolicy,
+    latest_launch_evidence_path: latestLaunchResultPath,
+    latest_process_attempt_evidence_path: latestProcessAttemptPath,
+    current_launch_result_path: result.launch_result_path ?? null,
+    current_process_attempt_path: result.claude_code_process_attempt_path ?? null,
+    smoke_proof_commands: [
+      'node --test tools\\agent-start\\start-agent.test.mjs',
+      'node tools\\agent-start\\start-agent.mjs narada.builder --runtime claude-code --dry-run --json',
+      'node tools\\agent-start\\start-agent.mjs narada.builder --runtime claude-code --exec --dry-run --json',
+    ],
+    withheld_authorities: executionPolicy.effectful_narada_authority.withheld_authorities,
+    process_launch_is_not_authority: 'Process launch readiness does not admit task, inbox, outbox, publication, Site mutation, credential, native shell, or external Site authority.',
+  };
+}
+
 function buildLaunchPlanFromArgs(args, options = {}) {
   const identity = args.identity;
   const runtime = args.runtime ?? 'codex';
   const dryRun = args.dry_run === true;
   const exec = args.exec === true;
   const enableNativeShell = args.enable_native_shell === true;
+  const startupTaskNumber = args.startup_task_number ?? null;
   if (!identity) throw new Error('identity_required');
   if (!ADMITTED_AGENTS.has(identity)) throw new Error(`agent_not_admitted:${identity}`);
   if (!ADMITTED_RUNTIMES.has(runtime)) throw new Error(`runtime_not_admitted:${runtime}`);
-  if (runtime === 'claude-code' && exec) throw new Error('runtime_exec_not_admitted:claude-code');
+  if (startupTaskNumber !== null && (!Number.isInteger(startupTaskNumber) || startupTaskNumber <= 0)) {
+    throw new Error('startup_task_number_invalid');
+  }
+  const siteRoot = options.siteRoot ?? defaultRootDir;
+  const claudeCodePolicy = runtime === 'claude-code' ? readClaudeCodeExecutionPolicy(siteRoot) : null;
+  if (runtime === 'claude-code' && exec && !claudeCodePolicy?.admitted) throw new Error('runtime_exec_not_admitted:claude-code');
   if (runtime === 'narada-native' && exec) throw new Error('runtime_exec_not_admitted:narada-native');
 
-  const siteRoot = options.siteRoot ?? defaultRootDir;
   const pcSiteRoot = options.pcSiteRoot ?? DEFAULT_PC_SITE_ROOT;
   const now = options.now ?? new Date().toISOString();
   const event = startEvent(identity, runtime, dryRun, now, siteRoot);
@@ -604,8 +996,10 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     NARADA_AGENT_START_EVENT_ID: event.event_id,
     NARADA_CARRIER_SESSION_ID: session.carrier_session_id,
     NARADA_SITE_ROOT: siteRoot,
+    NARADA_WORKSPACE_ROOT: siteRoot,
     NARADA_AGENT_CONTEXT_DB: dbPath,
     NARADA_PC_SITE_ROOT: pcSiteRoot,
+    ...(runtime === 'nars' ? { NARADA_NARS_SESSION_DIR: narsSessionDir(siteRoot, session.carrier_session_id) } : {}),
     ...(runtime === 'codex' ? { CODEX_HOME: codexHomePath(siteRoot, identity) } : {}),
   };
   const launchEnvironment = dryRun ? null : plannedEnvironment;
@@ -625,7 +1019,11 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     dry_run: dryRun,
     result_sentinel: `agent_start_result_end: ${event.event_id}`,
     runtime_kind: runtimeKind(runtime),
+    runtime_substrate_kind: runtime,
     runtime_args: runtimeArgs,
+    transport: runtime === 'nars' ? 'jsonl_stdio' : null,
+    agent_cli_session_dir: runtime === 'agent-cli' ? narsSessionDir(siteRoot, session.carrier_session_id) : null,
+    nars_session_dir: runtime === 'nars' ? narsSessionDir(siteRoot, session.carrier_session_id) : null,
     mcp_runtime: {
       schema: 'narada.agent_start.mcp_runtime.v0',
       server_name: NARADA_PROPER_MCP_SERVER_NAME,
@@ -642,12 +1040,13 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     claude_code_launch: runtime === 'claude-code'
       ? {
           schema: 'narada.agent_start.claude_code_carrier.v0',
-          status: 'represented_not_executed',
+          status: claudeCodePolicy?.admitted ? 'process_launch_policy_admitted' : 'represented_not_executed',
           command: runtimeCommand(runtime),
           carrier_relation: 'wraps_claude_code_cli',
           startup_hydration: startupCommand(),
-          execution_admitted: false,
-          execution_blocker: 'runtime_exec_not_admitted:claude-code',
+          execution_admitted: claudeCodePolicy?.admitted === true,
+          execution_blocker: claudeCodePolicy?.admitted ? null : 'runtime_exec_not_admitted:claude-code',
+          execution_policy: claudeCodeExecutionPolicyReadback(claudeCodePolicy),
       }
       : null,
     narada_native_launch: runtime === 'narada-native'
@@ -686,6 +1085,40 @@ function buildLaunchPlanFromArgs(args, options = {}) {
           execution_blocker: 'runtime_exec_not_admitted:narada-native',
         }
       : null,
+    agent_cli_launch: runtime === 'agent-cli'
+      ? {
+          schema: 'narada.agent_start.agent_cli.v0',
+          status: exec && !dryRun ? 'ready_to_spawn' : 'planned',
+          command: runtimeCommand(runtime),
+          argv: runtimeArgs,
+          transport: 'interactive_stdio',
+          carrier_relation: 'interactive_agent_cli',
+          session_dir: narsSessionDir(siteRoot, session.carrier_session_id),
+          session_path: join(narsSessionDir(siteRoot, session.carrier_session_id), 'session.jsonl'),
+          site_mcp_fabric: join(siteRoot, '.ai', 'mcp'),
+          reads_only_target_site_mcp_fabric: true,
+          user_site_mcp_injected: false,
+          native_shell_authority_admitted: false,
+        }
+      : null,
+    nars_launch: runtime === 'nars'
+      ? {
+          schema: 'narada.agent_start.nars.v0',
+          status: exec && !dryRun ? 'ready_to_spawn' : 'planned',
+          command: runtimeCommand(runtime),
+          argv: runtimeArgs,
+          transport: 'jsonl_stdio',
+          exec_stdout_contract: 'nars_protocol_only',
+          launch_packet_stream_when_exec: 'stderr',
+          session_dir: narsSessionDir(siteRoot, session.carrier_session_id),
+          session_path: join(narsSessionDir(siteRoot, session.carrier_session_id), 'session.jsonl'),
+          events_path: join(narsSessionDir(siteRoot, session.carrier_session_id), 'events.jsonl'),
+          site_mcp_fabric: join(siteRoot, '.ai', 'mcp'),
+          reads_only_target_site_mcp_fabric: true,
+          user_site_mcp_injected: false,
+          native_shell_authority_admitted: false,
+        }
+      : null,
     exec_command: exec ? [runtimeCommand(runtime), ...runtimeArgs].join(' ') : null,
     native_shell_exception: runtime === 'codex'
       ? nativeShellExceptionStatus({ enableNativeShell, identity, siteRoot })
@@ -701,7 +1134,8 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     required_environment: launchEnvironment ?? plannedEnvironment,
     startup_command: startupCommand(),
     startup_command_name: startupCommand().name,
-    startup_sequence: startupSequence(),
+    startup_sequence: startupSequence({ identity, role: event.role, startupTaskNumber }),
+    startup_first_work_orientation: firstWorkOrientation({ identity, role: event.role, startupTaskNumber }),
     dry_run_notice: dryRun
       ? 'planned_environment is non-authoritative; no agent_start_events or carrier_sessions row was created.'
       : null,
@@ -722,6 +1156,7 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     },
     not_claimed: [
       'task_activation_authority',
+      'startup_sequence_claim_authority',
       'inbox_authority',
       'outbox_authority',
       'repository_publication_authority',
@@ -732,6 +1167,23 @@ function buildLaunchPlanFromArgs(args, options = {}) {
       'secret or credential access',
     ],
   };
+  if (runtime === 'claude-code') {
+    result.claude_code_process_adapter = {
+      schema: 'narada.agent_start.claude_code_process_adapter.v0',
+      status: claudeCodePolicy?.admitted ? 'ready' : 'blocked_by_policy',
+      command: runtimeCommand(runtime),
+      argv: runtimeArgs,
+      environment_source: 'canonical_launch_packet_required_environment',
+      startup_affordance: startupCommand(),
+      admits_only: 'claude_code_runtime_process_launch',
+      effectful_narada_authority_admitted: false,
+    };
+    result.claude_code_process_attempt_path = exec ? claudeCodeProcessAttemptPath(result, siteRoot) : null;
+    result.claude_code_process_attempt = exec
+      ? claudeCodeProcessAttempt({ result, runtimeArgs, launchEnvironment, siteRoot })
+      : null;
+    result.claude_code_readiness = claudeCodeReadiness({ result, siteRoot });
+  }
   return { args, event, session, runtimeArgs, result, launchEnvironment };
 }
 
@@ -755,10 +1207,29 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function writeJsonResult(result) {
+function writeJsonResult(result, output = process.stdout) {
   const payload = `${JSON.stringify(result, null, 2)}\nagent_start_result_end: ${result.agent_start_event}\n\n\n`;
   return new Promise((resolve, reject) => {
-    process.stdout.write(payload, (error) => {
+    output.write(payload, (error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+}
+
+function compactLaunchSummary(result) {
+  return [
+    `agent-start: ${result.identity} (${result.runtime})`,
+    `carrier_session: ${result.carrier_session_id}`,
+    `mcp: ${result.mcp_tool_approval?.approved_servers?.length ?? 0} approved server(s)`,
+    `launch_result: ${result.launch_result_path ?? 'not_written'}`,
+    '',
+  ].join('\n');
+}
+
+function writeCompactResult(result, output = process.stdout) {
+  return new Promise((resolve, reject) => {
+    output.write(compactLaunchSummary(result), (error) => {
       if (error) reject(error);
       else resolve();
     });
@@ -766,11 +1237,23 @@ function writeJsonResult(result) {
 }
 
 async function main(argv = process.argv.slice(2)) {
-  const { result, launchEnvironment, runtimeArgs } = buildLaunchPlanFromArgs(parseArgs(argv));
+  const parsedArgs = parseArgs(argv);
+  const { result, launchEnvironment, runtimeArgs } = buildLaunchPlanFromArgs(parsedArgs);
 
   if (!result.dry_run) writeLaunchResult(result);
-  await writeJsonResult(result);
+  const jsonOutput = !!parsedArgs.json || result.dry_run || !result.exec;
+  if (jsonOutput) {
+    const launchPacketOutput = result.runtime === 'nars' && result.exec && !result.dry_run
+      ? process.stderr
+      : process.stdout;
+    await writeJsonResult(result, launchPacketOutput);
+  } else if (result.runtime === 'nars') {
+    await writeJsonResult(result, process.stderr);
+  } else {
+    await writeCompactResult(result, process.stdout);
+  }
   if (!result.exec || result.dry_run) return;
+  if (result.runtime === 'claude-code') writeClaudeCodeProcessAttempt(result);
   await delay(750);
 
   const child = spawn(runtimeCommand(result.runtime), runtimeArgs, {
@@ -808,10 +1291,14 @@ export {
   loadSqliteDriver,
   materializeAgentContext,
   readAgentStartEvent,
+  readClaudeCodeExecutionPolicy,
   startEvent,
   startupSequence,
+  compactLaunchSummary,
   naradaProperMcpEntrypoint,
   naradaProperMcpCommand,
+  writeClaudeCodeProcessAttempt,
+  writeCompactResult,
   writeLaunchResult,
   writeJsonResult,
 };
