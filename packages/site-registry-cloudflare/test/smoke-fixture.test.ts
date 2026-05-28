@@ -159,10 +159,15 @@ describe("hosted Site Registry non-live smoke fixture", () => {
       mutation_gate_required_value: "1",
     });
 
+    const observedAt = new Date().toISOString();
     const eventResponse = await worker.fetch(new Request("https://registry.example/webhook", {
       method: "POST",
       headers: { authorization: "Bearer publish-token" },
-      body: JSON.stringify(relationFixture.site_event),
+      body: JSON.stringify({
+        ...relationFixture.site_event,
+        observed_at: observedAt,
+        sent_at: observedAt,
+      }),
     }), runtime);
     expect(eventResponse.status).toBe(202);
 

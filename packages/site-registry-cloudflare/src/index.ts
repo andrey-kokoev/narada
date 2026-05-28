@@ -16,6 +16,8 @@ import {
   type SiteInboxEnvelopeKind,
 } from "@narada2/site-inbox";
 
+export * from "./site-scope-chat.js";
+
 export interface SiteRegistryCloudflareEnv {
   NARADA_SITE_REGISTRY_KV?: KVNamespace;
   NARADA_SITE_REGISTRY_D1?: D1Database;
@@ -171,6 +173,104 @@ export interface SiteRegistryRelationTransitionResult {
   raw_secret_values_recorded: false;
 }
 
+export type SiteRegistryRelationCapabilityVerifierStatus = "active" | "revoked" | "rotating" | "expired" | "superseded";
+
+export interface SiteRegistryRelationCapabilityVerifierRecord {
+  schema: "narada.site_registry.relation_capability_verifier.v0";
+  verifier_id: string;
+  relation_id: string;
+  registry_id: string;
+  site_id: string;
+  subject_site_id: string;
+  relation_kind: string;
+  owner_site_id: string;
+  capability_ref: string;
+  capability_family: "site_registry.relation.withdraw" | string;
+  algorithm: {
+    name: "pbkdf2-sha256.v0";
+    hash: "SHA-256";
+    iterations: number;
+    salt_bytes: number;
+    derived_key_bytes: number;
+    posture: "transitional_worker_compatible_not_password_vault";
+  };
+  salt: string;
+  verifier_hash: string;
+  status: SiteRegistryRelationCapabilityVerifierStatus;
+  created_at: string;
+  rotated_at?: string;
+  revoked_at?: string;
+  evidence_refs: string[];
+  raw_secret_values_recorded: false;
+  public_relation_row_mutated: false;
+  authority_limits: string[];
+}
+
+export interface CreateRelationCapabilityVerifierInput {
+  verifier_id: string;
+  relation_id: string;
+  registry_id: string;
+  site_id: string;
+  subject_site_id?: string;
+  relation_kind: string;
+  owner_site_id: string;
+  capability_ref: string;
+  capability_family: "site_registry.relation.withdraw" | string;
+  raw_verifier_secret: string;
+  created_at: string;
+  evidence_refs: string[];
+  salt?: string;
+  iterations?: number;
+}
+
+export interface RelationCapabilityVerifierEnrollmentPlanInput {
+  relation_id: string;
+  registry_id: string;
+  site_id: string;
+  subject_site_id?: string;
+  relation_kind: string;
+  owner_site_id: string;
+  actor: { kind: "registry_owner" | "operator" | "site" | "system"; site_id?: string; principal?: string };
+  capability_ref: string;
+  credential_ref: string;
+  capability_family: string;
+  evidence_refs: string[];
+  execute?: boolean;
+  admin_approved?: boolean;
+}
+
+export interface RelationCapabilityVerifierEnrollmentPlan {
+  schema: "narada.site_registry.relation_capability_verifier_enrollment_plan.v0";
+  status: "dry_run" | "ready" | "blocked";
+  operation: "enroll_first_verifier_or_rotate";
+  relation_ref: {
+    relation_id: string;
+    registry_id: string;
+    site_id: string;
+    subject_site_id: string;
+    relation_kind: string;
+  };
+  actor: RelationCapabilityVerifierEnrollmentPlanInput["actor"];
+  capability_ref: string;
+  credential_ref: string;
+  capability_family: string;
+  live_d1_mutation_planned: boolean;
+  remote_secret_mutation_planned: false;
+  raw_secret_values_recorded: false;
+  refusal_reasons: string[];
+  evidence_refs: string[];
+  authority_limits: string[];
+}
+
+const RELATION_VERIFIER_ALGORITHM = {
+  name: "pbkdf2-sha256.v0",
+  hash: "SHA-256",
+  iterations: 100000,
+  salt_bytes: 16,
+  derived_key_bytes: 32,
+  posture: "transitional_worker_compatible_not_password_vault",
+} as const;
+
 export function routePosture(): RoutePosture[] {
   return [
     { method: "GET", path: "/", status: "live_scaffold", authority: "projection_only" },
@@ -185,6 +285,9 @@ export function routePosture(): RoutePosture[] {
     { method: "GET", path: "/api/messages/:message_id/receipt", status: "live", authority: "projection_only" },
     { method: "POST", path: "/api/messages/:message_id/finalize", status: "live", authority: "projection_only" },
     { method: "POST", path: "/api/relations/transition", status: "live", authority: "projection_only" },
+    { method: "POST", path: "/api/site-communications/send", status: "live", authority: "projection_only" },
+    { method: "GET", path: "/api/site-communications/:communication_id", status: "live", authority: "projection_only" },
+    { method: "GET", path: "/api/site-communications/:communication_id/receipt", status: "live", authority: "projection_only" },
   ];
 }
 
@@ -516,6 +619,162 @@ export function humanShell(): string {
       font-size: 12px;
     }
 
+    .tile-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    button {
+      appearance: none;
+      border: 1px solid #1f5f8f;
+      border-radius: 8px;
+      background: #23527c;
+      color: #ffffff;
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 650;
+      min-height: 34px;
+      padding: 7px 11px;
+    }
+
+    button.secondary {
+      background: #ffffff;
+      color: #23527c;
+      border-color: #b9ccdc;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.58;
+    }
+
+    .composer[hidden] {
+      display: none;
+    }
+
+    .composer {
+      display: grid;
+      gap: 10px;
+    }
+
+    .chat-panel[hidden] {
+      display: none;
+    }
+
+    .chat-panel {
+      display: grid;
+      gap: 10px;
+    }
+
+    .composer-target {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .composer-warning,
+    .chat-scope,
+    .chat-answer,
+    .chat-draft,
+    .composer-result {
+      border: 1px solid #ead58b;
+      border-radius: 8px;
+      background: #fff8e1;
+      color: #6f5300;
+      padding: 9px 10px;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .chat-answer,
+    .chat-draft {
+      border-color: #d5e0ea;
+      background: #eef3f8;
+      color: #23527c;
+    }
+
+    .composer-result.accepted,
+    .composer-result.duplicate {
+      border-color: #b9e4c8;
+      background: #effaf3;
+      color: var(--fresh);
+    }
+
+    .composer-result.refused,
+    .composer-result.error {
+      border-color: #f2b8b5;
+      background: #fff1f0;
+      color: var(--failing);
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .field {
+      display: grid;
+      gap: 5px;
+    }
+
+    .field.full {
+      grid-column: 1 / -1;
+    }
+
+    .field label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .field input,
+    .field textarea,
+    .field select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      color: var(--text);
+      font: inherit;
+      min-height: 34px;
+      padding: 7px 9px;
+    }
+
+    .field textarea {
+      min-height: 76px;
+      resize: vertical;
+    }
+
+    .receipt-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .receipt-state {
+      border: 1px solid #e4e8ef;
+      border-radius: 8px;
+      background: #fbfcfe;
+      padding: 9px;
+      min-height: 58px;
+    }
+
+    .receipt-state label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .receipt-state span {
+      display: block;
+      font-weight: 650;
+      overflow-wrap: anywhere;
+    }
+
     .routes {
       margin-top: 24px;
       border-top: 1px solid var(--line);
@@ -558,6 +817,11 @@ export function humanShell(): string {
       }
 
       .row-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .field-grid,
+      .receipt-grid {
         grid-template-columns: 1fr;
       }
     }
@@ -605,16 +869,279 @@ export function humanShell(): string {
       const value = text(eventId);
       return value.length > 22 ? value.slice(0, 19) + "..." : value;
     };
+    const safeId = (value) => text(value).replace(/[^a-zA-Z0-9_-]/g, "-");
     const signal = (label, value) => \`
       <div class="signal">
         <label>\${escapeText(label)}</label>
         <span>\${escapeText(value)}</span>
       </div>\`;
+    const receiptState = (label, value) => \`
+      <div class="receipt-state">
+        <label>\${escapeText(label)}</label>
+        <span>\${escapeText(value)}</span>
+      </div>\`;
+    const composerResult = (status, deliveryStatus, admissionStatus, reasons = []) => {
+      const resultClass = status === "accepted" || status === "duplicate"
+        ? status
+        : status === "refused"
+          ? "refused"
+          : "error";
+      const reasonText = Array.isArray(reasons) && reasons.length ? reasons.join(", ") : text(status);
+      return \`
+        <div class="composer-result \${escapeText(resultClass)}" role="status">
+          <strong>\${escapeText(status)}</strong>
+          <div class="receipt-grid">
+            \${receiptState("Delivery receipt", deliveryStatus)}
+            \${receiptState("Admission receipt", admissionStatus)}
+          </div>
+          <p>\${escapeText(reasonText)}</p>
+        </div>\`;
+    };
+    const openComposer = (siteId) => {
+      const panel = document.getElementById("composer-" + safeId(siteId));
+      if (!panel) return;
+      panel.hidden = !panel.hidden;
+      if (!panel.hidden) {
+        const subject = panel.querySelector('[name="subject"]');
+        if (subject) subject.focus();
+      }
+    };
+    const openChat = (siteId) => {
+      const panel = document.getElementById("chat-" + safeId(siteId));
+      if (!panel) return;
+      panel.hidden = !panel.hidden;
+      if (!panel.hidden) {
+        const prompt = panel.querySelector('[name="operator_prompt"]');
+        if (prompt) prompt.focus();
+      }
+    };
+    const projectionAnswer = (site) => {
+      const relation = site.relation || {};
+      return [
+        "Projection " + "site-registry:" + text(site.site_id) + ":projection:latest",
+        "Health " + text(site.latest_health_status) + "; freshness " + text(site.freshness),
+        "Relation " + text(relation.state) + " / " + text(relation.visibility),
+        "Dashboard open tasks " + text(site.open_task_count) + "; inbox " + text(site.inbox_posture),
+        "Chat scope is this selected Site projection only."
+      ].join(". ");
+    };
+    const draftChatMessage = (event, siteId) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const site = JSON.parse(form.elements.namedItem("site_snapshot")?.value ?? "{}");
+      const prompt = form.elements.namedItem("operator_prompt")?.value?.trim() ?? "";
+      const answer = form.querySelector("[data-chat-answer]");
+      const draft = form.querySelector("[data-chat-draft]");
+      const draftSubject = "Follow-up from Site projection chat";
+      const draftBody = prompt || "Please review the selected Site projection.";
+      if (answer) {
+        answer.innerHTML = \`
+          <div class="chat-answer" role="status">
+            <strong>Answer</strong>
+            <p>\${escapeText(projectionAnswer(site))}</p>
+            <p>Source basis: \${escapeText("site-registry:" + siteId + ":projection:latest")}</p>
+          </div>\`;
+      }
+      if (draft) {
+        draft.innerHTML = \`
+          <div class="chat-draft">
+            <strong>Draft message</strong>
+            <p>\${escapeText(draftBody)}</p>
+            <p>Draft requires explicit send confirmation.</p>
+            <div class="field-grid">
+              <div class="field">
+                <label>Send token</label>
+                <input name="chat_token" type="password" autocomplete="off" required>
+              </div>
+              <div class="field">
+                <label>Kind</label>
+                <select name="chat_kind">
+                  <option value="operator_message">operator_message</option>
+                  <option value="question">question</option>
+                  <option value="proposal">proposal</option>
+                </select>
+              </div>
+              <div class="field full">
+                <label>Delivery endpoint</label>
+                <input name="chat_delivery_endpoint_url" type="url" inputmode="url" placeholder="https://site.example/inbox" required>
+              </div>
+              <div class="field full">
+                <label>Capability ref</label>
+                <input name="chat_capability_ref" autocomplete="off" placeholder="capability:site.inbox.submit" required>
+              </div>
+              <div class="field full">
+                <label>Subject</label>
+                <input name="chat_subject" maxlength="180" value="\${escapeText(draftSubject)}" required>
+              </div>
+              <div class="field full">
+                <label>Body</label>
+                <textarea name="chat_body" maxlength="12000" required>\${escapeText(draftBody)}</textarea>
+              </div>
+            </div>
+            <div class="tile-actions">
+              <button type="button" onclick="submitChatDraft(event, \${JSON.stringify(siteId).replaceAll('"', "&quot;")})">Send draft</button>
+            </div>
+            <div data-chat-send-result>
+              \${composerResult("pending", "not submitted", "not admitted", ["draft not sent"])}
+            </div>
+          </div>\`;
+      }
+    };
+    const submitChatDraft = async (event, siteId) => {
+      const form = event.currentTarget.closest("form");
+      if (!form) return;
+      const result = form.querySelector("[data-chat-send-result]");
+      const token = form.elements.namedItem("chat_token")?.value?.trim() ?? "";
+      const endpointUrl = form.elements.namedItem("chat_delivery_endpoint_url")?.value?.trim() ?? "";
+      const capabilityRef = form.elements.namedItem("chat_capability_ref")?.value?.trim() ?? "";
+      const subject = form.elements.namedItem("chat_subject")?.value?.trim() ?? "";
+      const body = form.elements.namedItem("chat_body")?.value?.trim() ?? "";
+      const kind = form.elements.namedItem("chat_kind")?.value ?? "operator_message";
+      if (result) result.innerHTML = composerResult("pending", "not submitted", "not admitted", ["send requested"]);
+      try {
+        const response = await fetch("/api/site-communications/send", {
+          method: "POST",
+          headers: {
+            "accept": "application/json",
+            "authorization": "Bearer " + token,
+            "content-type": "application/json"
+          },
+          body: JSON.stringify({
+            schema: "narada.site_registry.outbound_communication.send.v0",
+            target_site_id: siteId,
+            source: {
+              kind: "site_scope_projected_chat",
+              ref: "site-scope-chat-ui:" + siteId
+            },
+            idempotency_key: "site-scope-chat-ui:" + siteId + ":" + crypto.randomUUID(),
+            envelope: {
+              schema: "narada.site_inbox.typed_envelope.v0",
+              kind,
+              subject,
+              body,
+              payload: {
+                schema: "narada.site_communication.operator_message_payload.v0",
+                related_projection_ref: "site-registry:" + siteId + ":projection:latest",
+                composed_by: {
+                  kind: "site_scope_projected_chat",
+                  site_id: siteId,
+                  projection_ref: "site-registry:" + siteId + ":projection:latest",
+                  human_confirmed_send: true
+                }
+              },
+              evidence_refs: ["site-scope-chat-ui:" + siteId],
+              authority_limits: ["target_site_admission_required", "chat_can_only_compose_or_send_this_candidate", "registry_delivery_is_not_local_admission"]
+            },
+            delivery_endpoint: {
+              kind: "site_inbox_http",
+              url: endpointUrl,
+              capability_ref: capabilityRef
+            },
+            evidence_refs: ["site-scope-chat-ui:" + siteId]
+          })
+        });
+        const bodyJson = await response.json();
+        const deliveryStatus = bodyJson.delivery_receipt?.status ?? "not delivered";
+        const admissionStatus = bodyJson.admission_receipt?.status ?? "not admitted";
+        const status = bodyJson.status ?? (response.ok ? "accepted" : "refused");
+        const reasons = bodyJson.refusal_reasons ?? [
+          "delivery_is_admission: " + text(bodyJson.delivery_is_admission),
+          "target_site_mutated: " + text(bodyJson.target_site_mutated)
+        ];
+        if (result) result.innerHTML = composerResult(status, deliveryStatus, admissionStatus, reasons);
+      } catch {
+        if (result) result.innerHTML = composerResult("error", "not delivered", "not admitted", ["site_communication_request_failed"]);
+      } finally {
+        if (form.elements.namedItem("chat_token")) form.elements.namedItem("chat_token").value = "";
+      }
+    };
+    const submitMessage = async (event, siteId, relationState, relationVisibility) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const result = form.querySelector("[data-composer-result]");
+      const button = form.querySelector("button[type='submit']");
+      const token = form.elements.namedItem("token")?.value?.trim() ?? "";
+      const endpointUrl = form.elements.namedItem("delivery_endpoint_url")?.value?.trim() ?? "";
+      const capabilityRef = form.elements.namedItem("capability_ref")?.value?.trim() ?? "";
+      const subject = form.elements.namedItem("subject")?.value?.trim() ?? "";
+      const body = form.elements.namedItem("body")?.value?.trim() ?? "";
+      const kind = form.elements.namedItem("kind")?.value ?? "operator_message";
+      if (result) result.innerHTML = composerResult("pending", "not submitted", "not admitted", ["send requested"]);
+      if (button) button.disabled = true;
+      try {
+        const response = await fetch("/api/site-communications/send", {
+          method: "POST",
+          headers: {
+            "accept": "application/json",
+            "authorization": "Bearer " + token,
+            "content-type": "application/json"
+          },
+          body: JSON.stringify({
+            schema: "narada.site_registry.outbound_communication.send.v0",
+            target_site_id: siteId,
+            source: {
+              kind: "operator_ui",
+              ref: "site-registry-ui:" + siteId,
+              principal: "operator"
+            },
+            idempotency_key: "site-registry-ui:" + siteId + ":" + crypto.randomUUID(),
+            envelope: {
+              schema: "narada.site_inbox.typed_envelope.v0",
+              kind,
+              subject,
+              body,
+              payload: {
+                schema: "narada.site_communication.operator_message_payload.v0",
+                related_projection_ref: "site-registry:" + siteId + ":projection:latest",
+                relation_state: relationState,
+                relation_visibility: relationVisibility
+              },
+              evidence_refs: ["site-registry-ui:" + siteId],
+              authority_limits: ["target_site_admission_required", "registry_delivery_is_not_local_admission"]
+            },
+            delivery_endpoint: {
+              kind: "site_inbox_http",
+              url: endpointUrl,
+              capability_ref: capabilityRef
+            },
+            evidence_refs: ["site-registry-ui:" + siteId]
+          })
+        });
+        const bodyJson = await response.json();
+        const deliveryStatus = bodyJson.delivery_receipt?.status ?? "not delivered";
+        const admissionStatus = bodyJson.admission_receipt?.status ?? "not admitted";
+        const status = bodyJson.status ?? (response.ok ? "accepted" : "refused");
+        const reasons = bodyJson.refusal_reasons ?? [
+          "delivery_is_admission: " + text(bodyJson.delivery_is_admission),
+          "target_site_mutated: " + text(bodyJson.target_site_mutated)
+        ];
+        if (result) result.innerHTML = composerResult(status, deliveryStatus, admissionStatus, reasons);
+      } catch {
+        if (result) result.innerHTML = composerResult("error", "not delivered", "not admitted", ["site_communication_request_failed"]);
+      } finally {
+        if (button) button.disabled = false;
+        if (form.elements.namedItem("token")) form.elements.namedItem("token").value = "";
+      }
+    };
     const siteTile = (site) => {
       const freshness = text(site.freshness);
       const relation = site.relation || {};
       const relationState = text(relation.state);
       const relationVisibility = text(relation.visibility);
+      const tileId = safeId(site.site_id);
+      const eligible = relationState === "active" && relationVisibility === "public";
+      const siteArg = JSON.stringify(text(site.site_id)).replaceAll('"', "&quot;");
+      const relationStateArg = JSON.stringify(relationState).replaceAll('"', "&quot;");
+      const relationVisibilityArg = JSON.stringify(relationVisibility).replaceAll('"', "&quot;");
+      const siteSnapshot = JSON.stringify({
+        site_id: text(site.site_id),
+        freshness,
+        latest_health_status: text(site.latest_health_status),
+        latest_health_observed_at: text(site.latest_health_observed_at),
+        relation: { state: relationState, visibility: relationVisibility, source: text(relation.source), updated_at: text(relation.updated_at) },
+        open_task_count: text(site.open_task_count),
+        inbox_posture: text(site.inbox_posture)
+      }).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
       return \`
         <article class="site-tile">
           <div class="tile-head">
@@ -627,6 +1154,10 @@ export function humanShell(): string {
           <div class="lifecycle-strip" aria-label="Relation lifecycle posture">
             <span class="relation-badge">state: \${escapeText(relationState)}</span>
             <span class="relation-badge \${escapeText(relationVisibility)}">visibility: \${escapeText(relationVisibility)}</span>
+          </div>
+          <div class="tile-actions">
+            <button type="button" class="secondary" onclick="openComposer(\${siteArg})" \${eligible ? "" : "disabled"}>Message</button>
+            <button type="button" class="secondary" onclick="openChat(\${siteArg})" \${eligible ? "" : "disabled"}>Chat</button>
           </div>
           <div class="row-grid">
             \${signal("Health", site.latest_health_status)}
@@ -645,6 +1176,70 @@ export function humanShell(): string {
               \${signal("Inbox posture", site.inbox_posture)}
               \${signal("Publication edge", site.publication_edge)}
             </div>
+          </div>
+          <div id="composer-\${escapeText(tileId)}" class="tile-section composer" hidden>
+            <div class="composer-target">Target Site: \${escapeText(site.site_id)}</div>
+            <div class="composer-warning">
+              Relation \${escapeText(relationState)} / \${escapeText(relationVisibility)}. Delivery receipt is separate from target Site admission.
+            </div>
+            <form onsubmit="submitMessage(event, \${siteArg}, \${relationStateArg}, \${relationVisibilityArg})">
+              <div class="field-grid">
+                <div class="field">
+                  <label>Send token</label>
+                  <input name="token" type="password" autocomplete="off" required>
+                </div>
+                <div class="field">
+                  <label>Kind</label>
+                  <select name="kind">
+                    <option value="operator_message">operator_message</option>
+                    <option value="question">question</option>
+                    <option value="proposal">proposal</option>
+                    <option value="incident">incident</option>
+                    <option value="task_candidate">task_candidate</option>
+                  </select>
+                </div>
+                <div class="field full">
+                  <label>Delivery endpoint</label>
+                  <input name="delivery_endpoint_url" type="url" inputmode="url" placeholder="https://site.example/inbox" required>
+                </div>
+                <div class="field full">
+                  <label>Capability ref</label>
+                  <input name="capability_ref" autocomplete="off" placeholder="capability:site.inbox.submit" required>
+                </div>
+                <div class="field full">
+                  <label>Subject</label>
+                  <input name="subject" maxlength="180" required>
+                </div>
+                <div class="field full">
+                  <label>Body</label>
+                  <textarea name="body" maxlength="12000" required></textarea>
+                </div>
+              </div>
+              <div class="tile-actions">
+                <button type="submit">Send</button>
+              </div>
+              <div data-composer-result>
+                \${composerResult("pending", "not submitted", "not admitted", ["message not sent"])}
+              </div>
+            </form>
+          </div>
+          <div id="chat-\${escapeText(tileId)}" class="tile-section chat-panel" hidden>
+            <div class="chat-scope">
+              <strong>Chatting about \${escapeText(site.site_id)}</strong>
+              <p>Freshness: \${escapeText(freshness)}. Source basis: \${escapeText("site-registry:" + text(site.site_id) + ":projection:latest")}.</p>
+            </div>
+            <form onsubmit="draftChatMessage(event, \${siteArg})">
+              <input type="hidden" name="site_snapshot" value="\${siteSnapshot}">
+              <div class="field full">
+                <label>Prompt</label>
+                <textarea name="operator_prompt" maxlength="2000" required></textarea>
+              </div>
+              <div class="tile-actions">
+                <button type="submit">Ask</button>
+              </div>
+              <div data-chat-answer></div>
+              <div data-chat-draft></div>
+            </form>
           </div>
           <div class="tile-foot">
             <span>\${escapeText(relation.source || "projection only")}</span>
@@ -698,6 +1293,17 @@ export async function handleRequest(request: Request, env: SiteRegistryCloudflar
   }
   if (request.method === "POST" && url.pathname === "/api/relations/transition") {
     return transitionSiteRegistryRelation(request, env);
+  }
+  if (request.method === "POST" && url.pathname === "/api/site-communications/send") {
+    return sendSiteCommunication(request, env);
+  }
+  const communicationReceiptMatch = /^\/api\/site-communications\/([^/]+)\/receipt$/.exec(url.pathname);
+  if (request.method === "GET" && communicationReceiptMatch) {
+    return siteCommunicationReceipt(request, env, decodeURIComponent(communicationReceiptMatch[1] ?? ""));
+  }
+  const communicationDetailMatch = /^\/api\/site-communications\/([^/]+)$/.exec(url.pathname);
+  if (request.method === "GET" && communicationDetailMatch) {
+    return siteCommunicationDetail(request, env, decodeURIComponent(communicationDetailMatch[1] ?? ""));
   }
   if (request.method === "GET" && url.pathname === "/api/messages/pending") {
     return listPendingRemoteMessages(request, env);
@@ -767,6 +1373,228 @@ interface RemoteCandidateMetadata {
 type StoredRemoteMessage = RemoteSiteInboxMessage & {
   remote_candidate?: RemoteCandidateMetadata;
 };
+
+export interface SiteCommunicationSendPayload {
+  schema?: "narada.site_registry.outbound_communication.send.v0";
+  target_site_id: string;
+  source: { kind: string; ref: string; principal?: string; site?: string };
+  idempotency_key: string;
+  envelope: {
+    schema?: string;
+    kind: SiteInboxEnvelopeKind | string;
+    subject?: string;
+    body?: string;
+    payload?: Record<string, unknown>;
+    evidence_refs?: string[];
+    authority_limits?: string[];
+  };
+  delivery_endpoint: {
+    kind: "site_inbox_http" | "canonical_inbox_endpoint" | string;
+    url?: string;
+    capability_ref?: string;
+  };
+  evidence_refs?: string[];
+}
+
+export interface SiteCommunicationRecord {
+  schema: "narada.site_registry.outbound_communication.v0";
+  communication_id: string;
+  source: SiteCommunicationSendPayload["source"];
+  idempotency_key: string;
+  target_site_id: string;
+  envelope: SiteCommunicationSendPayload["envelope"];
+  delivery_endpoint: SiteCommunicationSendPayload["delivery_endpoint"];
+  delivery_receipt: {
+    schema: "narada.site_registry.outbound_delivery_receipt.v0";
+    status: "recorded_not_delivered" | "delivered" | "failed";
+    cloud_record_created: true;
+    live_network_attempted: false;
+    target_site_mutated: false;
+    attempted_at: string;
+    evidence_refs: string[];
+  };
+  admission_receipt: {
+    schema: "narada.site_registry.target_admission_receipt.v0";
+    status: "pending_target_site_admission" | "admitted" | "rejected" | "error";
+    target_site_admission_required: true;
+    cloud_delivery_is_not_admission: true;
+    local_admission_ref: string | null;
+  };
+  status: "queued_for_delivery" | "delivery_recorded" | "admission_reported";
+  created_at: string;
+  updated_at: string;
+  raw_secret_values_recorded: false;
+  authority_limits: string[];
+}
+
+async function sendSiteCommunication(request: Request, env: SiteRegistryCloudflareEnv): Promise<Response> {
+  const auth = requireCapability(request, env.NARADA_SITE_REGISTRY_MESSAGE_TOKEN, "site_registry_message_send_token");
+  if (!auth.ok) return refusal([auth.reason], auth.status);
+  if (!env.NARADA_SITE_REGISTRY_D1) return refusal(["site_registry_communication_d1_not_configured"], 503);
+
+  const parsed = await parseJsonBody<SiteCommunicationSendPayload>(request);
+  if (!parsed.ok) return refusal([parsed.reason], 400);
+  const payload = parsed.value;
+  const validation = validateSiteCommunicationSendPayload(payload);
+  if (validation.length) return refusal(validation, 400);
+
+  const existing = await getSiteCommunicationBySourceIdempotency(env.NARADA_SITE_REGISTRY_D1, payload.source.ref, payload.idempotency_key);
+  if (existing) {
+    return json(siteCommunicationResponse(existing, "duplicate"));
+  }
+
+  const eligibility = await validateCommunicationTargetEligibility(env, payload.target_site_id);
+  if (!eligibility.ok) return refusal([eligibility.reason], 400);
+
+  const now = new Date().toISOString();
+  const communication: SiteCommunicationRecord = {
+    schema: "narada.site_registry.outbound_communication.v0",
+    communication_id: `site_comm_${crypto.randomUUID()}`,
+    source: payload.source,
+    idempotency_key: payload.idempotency_key,
+    target_site_id: payload.target_site_id,
+    envelope: boundedCommunicationEnvelope(payload.envelope),
+    delivery_endpoint: {
+      kind: payload.delivery_endpoint.kind,
+      url: payload.delivery_endpoint.url,
+      capability_ref: payload.delivery_endpoint.capability_ref,
+    },
+    delivery_receipt: {
+      schema: "narada.site_registry.outbound_delivery_receipt.v0",
+      status: "recorded_not_delivered",
+      cloud_record_created: true,
+      live_network_attempted: false,
+      target_site_mutated: false,
+      attempted_at: now,
+      evidence_refs: payload.evidence_refs ?? [],
+    },
+    admission_receipt: {
+      schema: "narada.site_registry.target_admission_receipt.v0",
+      status: "pending_target_site_admission",
+      target_site_admission_required: true,
+      cloud_delivery_is_not_admission: true,
+      local_admission_ref: null,
+    },
+    status: "queued_for_delivery",
+    created_at: now,
+    updated_at: now,
+    raw_secret_values_recorded: false,
+    authority_limits: [
+      "site_registry_communication_record_is_not_target_site_admission",
+      "delivery_receipt_is_distinct_from_admission_receipt",
+      "worker_does_not_mutate_target_site_inbox",
+      "cloud_receipt_is_not_local_site_truth",
+    ],
+  };
+  await insertSiteCommunication(env.NARADA_SITE_REGISTRY_D1, communication);
+  await insertSiteCommunicationAttempt(env.NARADA_SITE_REGISTRY_D1, communication);
+  return json(siteCommunicationResponse(communication, "accepted"), 202);
+}
+
+async function siteCommunicationDetail(request: Request, env: SiteRegistryCloudflareEnv, communicationId: string): Promise<Response> {
+  const auth = requireCapability(request, env.NARADA_SITE_REGISTRY_READ_TOKEN, "site_registry_communication_read_token");
+  if (!auth.ok) return refusal([auth.reason], auth.status);
+  if (!env.NARADA_SITE_REGISTRY_D1) return refusal(["site_registry_communication_d1_not_configured"], 503);
+  const communication = await getSiteCommunicationById(env.NARADA_SITE_REGISTRY_D1, communicationId);
+  if (!communication) return refusal(["site_registry_communication_not_found"], 404);
+  return json(siteCommunicationResponse(communication, "found"));
+}
+
+async function siteCommunicationReceipt(request: Request, env: SiteRegistryCloudflareEnv, communicationId: string): Promise<Response> {
+  const auth = requireCapability(request, env.NARADA_SITE_REGISTRY_READ_TOKEN, "site_registry_communication_read_token");
+  if (!auth.ok) return refusal([auth.reason], auth.status);
+  if (!env.NARADA_SITE_REGISTRY_D1) return refusal(["site_registry_communication_d1_not_configured"], 503);
+  const communication = await getSiteCommunicationById(env.NARADA_SITE_REGISTRY_D1, communicationId);
+  if (!communication) return refusal(["site_registry_communication_not_found"], 404);
+  return json({
+    schema: "narada.site_registry.outbound_communication_receipt_response.v0",
+    status: "found",
+    communication_id: communication.communication_id,
+    delivery_receipt: communication.delivery_receipt,
+    admission_receipt: communication.admission_receipt,
+    delivery_is_admission: false,
+    ...noAuthorityFields(),
+  });
+}
+
+function validateSiteCommunicationSendPayload(payload: SiteCommunicationSendPayload): string[] {
+  const refusals: string[] = [];
+  if (!payload.target_site_id) refusals.push("site_communication_target_site_id_required");
+  if (!payload.source?.ref) refusals.push("site_communication_source_ref_required");
+  if (!payload.idempotency_key) refusals.push("site_communication_idempotency_key_required");
+  if (!payload.envelope?.kind) refusals.push("site_communication_envelope_kind_required");
+  if (!payload.delivery_endpoint?.kind) refusals.push("site_communication_delivery_endpoint_kind_required");
+  if (!payload.delivery_endpoint?.url) refusals.push("site_communication_delivery_endpoint_url_required");
+  if (!payload.delivery_endpoint?.capability_ref) refusals.push("site_communication_delivery_capability_ref_required");
+  if (payload.delivery_endpoint?.url && !/^https:\/\//.test(payload.delivery_endpoint.url)) {
+    refusals.push("site_communication_delivery_endpoint_https_required");
+  }
+  if (containsRawSecretMarker(payload.envelope?.payload ?? {}) || containsRawSecretMarker(payload.envelope?.evidence_refs ?? [])) {
+    refusals.push("site_communication_envelope_contains_raw_secret_marker");
+  }
+  const body = typeof payload.envelope?.body === "string" ? payload.envelope.body.toLowerCase() : "";
+  if (body.includes("secret=") || body.includes("password=") || body.includes("bearer ")) {
+    refusals.push("site_communication_body_contains_raw_secret_marker");
+  }
+  if (containsRawSecretMarker(payload.delivery_endpoint)) {
+    refusals.push("site_communication_delivery_endpoint_contains_raw_secret_marker");
+  }
+  return refusals;
+}
+
+async function validateCommunicationTargetEligibility(
+  env: SiteRegistryCloudflareEnv,
+  targetSiteId: string,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const publicRelations = await readPublicSiteRegistryRelations(env);
+  const eligible = publicRelations.some((relation) =>
+    relation.site_id === targetSiteId
+    && relation.state === "active"
+    && relation.visibility === "public");
+  return eligible ? { ok: true } : { ok: false, reason: "site_communication_target_not_active_public_relation" };
+}
+
+function boundedCommunicationEnvelope(envelope: SiteCommunicationSendPayload["envelope"]): SiteCommunicationSendPayload["envelope"] {
+  return {
+    schema: envelope.schema ?? "narada.site_inbox.typed_envelope.v0",
+    kind: envelope.kind,
+    subject: envelope.subject,
+    body: envelope.body,
+    payload: envelope.payload,
+    evidence_refs: envelope.evidence_refs ?? [],
+    authority_limits: [
+      ...(envelope.authority_limits ?? []),
+      "outbound_envelope_is_candidate_until_target_site_admission",
+    ],
+  };
+}
+
+function siteCommunicationResponse(communication: SiteCommunicationRecord, status: "accepted" | "duplicate" | "found") {
+  return {
+    schema: "narada.site_registry.outbound_communication_response.v0",
+    status,
+    communication: boundedSiteCommunication(communication),
+    delivery_receipt: communication.delivery_receipt,
+    admission_receipt: communication.admission_receipt,
+    delivery_is_admission: false,
+    target_site_mutated: false,
+    registry_relation_mutated: false,
+    ...noAuthorityFields(),
+  };
+}
+
+function boundedSiteCommunication(communication: SiteCommunicationRecord) {
+  return {
+    communication_id: communication.communication_id,
+    target_site_id: communication.target_site_id,
+    status: communication.status,
+    delivery_status: communication.delivery_receipt.status,
+    admission_status: communication.admission_receipt.status,
+    created_at: communication.created_at,
+    updated_at: communication.updated_at,
+    authority_limits: communication.authority_limits,
+  };
+}
 
 async function submitRemoteMessage(request: Request, env: SiteRegistryCloudflareEnv): Promise<Response> {
   const auth = requireCapability(request, env.NARADA_SITE_REGISTRY_MESSAGE_TOKEN, "site_registry_message_submit_token");
@@ -923,7 +1751,7 @@ async function transitionSiteRegistryRelation(request: Request, env: SiteRegistr
   if (!env.NARADA_SITE_REGISTRY_D1) return refusal(["site_registry_relation_d1_not_configured"], 503);
   const parsed = await parseJsonBody<Partial<SiteRegistryRelationTransitionInput> & { transition?: string; to_state?: string; to_visibility?: string }>(request);
   if (!parsed.ok) return refusal([parsed.reason], 400);
-  const validation = validateRelationTransitionPayload(parsed.value);
+  const validation = validateSiteRegistryRelationTransitionPayload(parsed.value);
   if (!validation.ok) return refusal(validation.refusals, 400);
 
   const capability = capabilityForRelationTransition(request, validation.value, env);
@@ -1217,7 +2045,7 @@ function validateSubmitPayload(payload: RemoteMessageSubmitPayload): string[] {
   return refusals;
 }
 
-function validateRelationTransitionPayload(
+export function validateSiteRegistryRelationTransitionPayload(
   payload: Partial<SiteRegistryRelationTransitionInput> & { transition?: string; to_state?: string; to_visibility?: string },
 ): { ok: true; value: SiteRegistryRelationTransitionInput } | { ok: false; refusals: string[] } {
   const refusals: string[] = [];
@@ -1675,6 +2503,59 @@ async function listMessagesByStatus(d1: D1Database, status: string): Promise<Rem
   return (result.results ?? []).map((row) => JSON.parse(row.message_json) as RemoteSiteInboxMessage);
 }
 
+async function getSiteCommunicationById(d1: D1Database, communicationId: string): Promise<SiteCommunicationRecord | null> {
+  const row = await d1.prepare("select envelope_json from site_registry_outbound_communications where communication_id = ?")
+    .bind(communicationId)
+    .first<{ envelope_json: string }>();
+  return row ? JSON.parse(row.envelope_json) as SiteCommunicationRecord : null;
+}
+
+async function getSiteCommunicationBySourceIdempotency(
+  d1: D1Database,
+  sourceRef: string,
+  idempotencyKeyValue: string,
+): Promise<SiteCommunicationRecord | null> {
+  const row = await d1.prepare("select envelope_json from site_registry_outbound_communications where source_ref = ? and idempotency_key = ?")
+    .bind(sourceRef, idempotencyKeyValue)
+    .first<{ envelope_json: string }>();
+  return row ? JSON.parse(row.envelope_json) as SiteCommunicationRecord : null;
+}
+
+async function insertSiteCommunication(d1: D1Database, communication: SiteCommunicationRecord): Promise<void> {
+  await d1.prepare(
+    `insert into site_registry_outbound_communications
+      (communication_id, source_ref, idempotency_key, target_site_id, delivery_status, admission_status, created_at, updated_at, envelope_json, delivery_receipt_json, admission_receipt_json)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    communication.communication_id,
+    communication.source.ref,
+    communication.idempotency_key,
+    communication.target_site_id,
+    communication.delivery_receipt.status,
+    communication.admission_receipt.status,
+    communication.created_at,
+    communication.updated_at,
+    JSON.stringify(communication),
+    JSON.stringify(communication.delivery_receipt),
+    JSON.stringify(communication.admission_receipt),
+  ).run();
+}
+
+async function insertSiteCommunicationAttempt(d1: D1Database, communication: SiteCommunicationRecord): Promise<void> {
+  await d1.prepare(
+    `insert into site_registry_outbound_delivery_attempts
+      (attempt_id, communication_id, status, attempted_at, delivery_endpoint_json, receipt_json)
+      values (?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    `site_comm_attempt_${crypto.randomUUID()}`,
+    communication.communication_id,
+    communication.delivery_receipt.status,
+    communication.delivery_receipt.attempted_at,
+    JSON.stringify(communication.delivery_endpoint),
+    JSON.stringify(communication.delivery_receipt),
+  ).run();
+}
+
 async function insertRemoteMessage(d1: D1Database, message: RemoteSiteInboxMessage): Promise<void> {
   await d1.prepare(
     `insert into site_registry_remote_messages
@@ -1817,6 +2698,173 @@ export async function listSiteRegistryRelationEvents(
   return (result.results ?? []).map((row) => JSON.parse(row.event_json) as SiteRegistryRelationTransitionRecord);
 }
 
+export async function createSiteRegistryRelationCapabilityVerifier(
+  d1: D1Database,
+  input: CreateRelationCapabilityVerifierInput,
+): Promise<SiteRegistryRelationCapabilityVerifierRecord> {
+  if (!input.raw_verifier_secret) throw new Error("site_registry_relation_verifier_secret_required");
+  if (containsRawSecretMarker(input.evidence_refs)) throw new Error("site_registry_relation_verifier_evidence_contains_raw_secret_marker");
+  const algorithm = {
+    ...RELATION_VERIFIER_ALGORITHM,
+    iterations: input.iterations ?? RELATION_VERIFIER_ALGORITHM.iterations,
+  };
+  const salt = input.salt ?? randomBase64Url(algorithm.salt_bytes);
+  const verifierHash = await deriveRelationVerifierHash(input.raw_verifier_secret, salt, algorithm.iterations);
+  const record: SiteRegistryRelationCapabilityVerifierRecord = {
+    schema: "narada.site_registry.relation_capability_verifier.v0",
+    verifier_id: input.verifier_id,
+    relation_id: input.relation_id,
+    registry_id: input.registry_id,
+    site_id: input.site_id,
+    subject_site_id: input.subject_site_id ?? input.site_id,
+    relation_kind: input.relation_kind,
+    owner_site_id: input.owner_site_id,
+    capability_ref: input.capability_ref,
+    capability_family: input.capability_family,
+    algorithm,
+    salt,
+    verifier_hash: verifierHash,
+    status: "active",
+    created_at: input.created_at,
+    evidence_refs: input.evidence_refs,
+    raw_secret_values_recorded: false,
+    public_relation_row_mutated: false,
+    authority_limits: [
+      "relation_verifier_is_private_registry_storage",
+      "verifier_hash_is_not_raw_secret",
+      "capability_ref_is_not_capability_grant",
+      "verifier_record_does_not_mutate_public_relation_row",
+    ],
+  };
+  await upsertRelationCapabilityVerifier(d1, record);
+  return record;
+}
+
+export async function getActiveSiteRegistryRelationCapabilityVerifier(
+  d1: D1Database,
+  relationId: string,
+  siteId: string,
+  capabilityFamily: string,
+): Promise<SiteRegistryRelationCapabilityVerifierRecord | null> {
+  const row = await d1.prepare(
+    "select verifier_json from site_registry_relation_capability_verifiers where relation_id = ? and site_id = ? and capability_family = ? and status = ?",
+  ).bind(relationId, siteId, capabilityFamily, "active").first<{ verifier_json: string }>();
+  return row ? JSON.parse(row.verifier_json) as SiteRegistryRelationCapabilityVerifierRecord : null;
+}
+
+export async function getSiteRegistryRelationCapabilityVerifierById(
+  d1: D1Database,
+  verifierId: string,
+): Promise<SiteRegistryRelationCapabilityVerifierRecord | null> {
+  const row = await d1.prepare("select verifier_json from site_registry_relation_capability_verifiers where verifier_id = ?")
+    .bind(verifierId)
+    .first<{ verifier_json: string }>();
+  return row ? JSON.parse(row.verifier_json) as SiteRegistryRelationCapabilityVerifierRecord : null;
+}
+
+export async function revokeSiteRegistryRelationCapabilityVerifier(
+  d1: D1Database,
+  verifierId: string,
+  revokedAt: string,
+  evidenceRefs: string[],
+): Promise<SiteRegistryRelationCapabilityVerifierRecord | null> {
+  if (containsRawSecretMarker(evidenceRefs)) throw new Error("site_registry_relation_verifier_revocation_evidence_contains_raw_secret_marker");
+  const existing = await getSiteRegistryRelationCapabilityVerifierById(d1, verifierId);
+  if (!existing) return null;
+  const revoked: SiteRegistryRelationCapabilityVerifierRecord = {
+    ...existing,
+    status: "revoked",
+    revoked_at: revokedAt,
+    evidence_refs: [...existing.evidence_refs, ...evidenceRefs],
+    raw_secret_values_recorded: false,
+    public_relation_row_mutated: false,
+  };
+  await upsertRelationCapabilityVerifier(d1, revoked);
+  return revoked;
+}
+
+export async function rotateSiteRegistryRelationCapabilityVerifier(
+  d1: D1Database,
+  existingVerifierId: string,
+  replacement: CreateRelationCapabilityVerifierInput,
+  rotatedAt: string,
+  evidenceRefs: string[],
+): Promise<{ old_verifier: SiteRegistryRelationCapabilityVerifierRecord; new_verifier: SiteRegistryRelationCapabilityVerifierRecord; raw_secret_values_recorded: false } | null> {
+  if (containsRawSecretMarker(evidenceRefs)) throw new Error("site_registry_relation_verifier_rotation_evidence_contains_raw_secret_marker");
+  const existing = await getSiteRegistryRelationCapabilityVerifierById(d1, existingVerifierId);
+  if (!existing) return null;
+  const superseded: SiteRegistryRelationCapabilityVerifierRecord = {
+    ...existing,
+    status: "superseded",
+    rotated_at: rotatedAt,
+    evidence_refs: [...existing.evidence_refs, ...evidenceRefs],
+    raw_secret_values_recorded: false,
+    public_relation_row_mutated: false,
+  };
+  await upsertRelationCapabilityVerifier(d1, superseded);
+  const newVerifier = await createSiteRegistryRelationCapabilityVerifier(d1, {
+    ...replacement,
+    evidence_refs: [...replacement.evidence_refs, ...evidenceRefs],
+  });
+  return {
+    old_verifier: superseded,
+    new_verifier: newVerifier,
+    raw_secret_values_recorded: false,
+  };
+}
+
+export function planRelationCapabilityVerifierEnrollment(
+  input: RelationCapabilityVerifierEnrollmentPlanInput,
+): RelationCapabilityVerifierEnrollmentPlan {
+  const refusalReasons: string[] = [];
+  if (!["registry_owner", "operator"].includes(input.actor.kind)) {
+    refusalReasons.push("relation_enrollment_requires_registry_owner");
+  }
+  if (!input.capability_ref.startsWith("capability:site_registry.relation.")) {
+    refusalReasons.push("relation_capability_ref_mismatch");
+  }
+  if (!input.credential_ref || input.credential_ref.includes("Bearer ") || input.credential_ref.includes("token=")) {
+    refusalReasons.push("relation_credential_ref_invalid_or_secret_like");
+  }
+  if (!Array.isArray(input.evidence_refs) || input.evidence_refs.length === 0) {
+    refusalReasons.push("relation_enrollment_evidence_required");
+  }
+  if (containsRawSecretMarker(input.evidence_refs)) {
+    refusalReasons.push("relation_enrollment_evidence_contains_raw_secret_marker");
+  }
+  if (input.execute === true && input.admin_approved !== true) {
+    refusalReasons.push("relation_enrollment_live_mutation_requires_admin_approval");
+  }
+
+  return {
+    schema: "narada.site_registry.relation_capability_verifier_enrollment_plan.v0",
+    status: refusalReasons.length > 0 ? "blocked" : input.execute ? "ready" : "dry_run",
+    operation: "enroll_first_verifier_or_rotate",
+    relation_ref: {
+      relation_id: input.relation_id,
+      registry_id: input.registry_id,
+      site_id: input.site_id,
+      subject_site_id: input.subject_site_id ?? input.site_id,
+      relation_kind: input.relation_kind,
+    },
+    actor: input.actor,
+    capability_ref: input.capability_ref,
+    credential_ref: input.credential_ref,
+    capability_family: input.capability_family,
+    live_d1_mutation_planned: input.execute === true && refusalReasons.length === 0,
+    remote_secret_mutation_planned: false,
+    raw_secret_values_recorded: false,
+    refusal_reasons: refusalReasons,
+    evidence_refs: input.evidence_refs,
+    authority_limits: [
+      "enrollment_plan_does_not_create_or_rotate_remote_secret_material",
+      "registry_owner_or_operator_required_for_v0_enrollment",
+      "credential_ref_is_not_raw_secret_value",
+      "live_d1_mutation_requires_explicit_execute_and_admin_approval",
+    ],
+  };
+}
+
 async function getRelationById(
   d1: D1Database,
   relationId: string,
@@ -1893,6 +2941,86 @@ async function insertRelationEvent(d1: D1Database, event: SiteRegistryRelationTr
     event.occurred_at,
     JSON.stringify(event),
   ).run();
+}
+
+async function upsertRelationCapabilityVerifier(
+  d1: D1Database,
+  record: SiteRegistryRelationCapabilityVerifierRecord,
+): Promise<void> {
+  await d1.prepare(
+    `insert into site_registry_relation_capability_verifiers
+      (verifier_id, relation_id, registry_id, site_id, subject_site_id, relation_kind, owner_site_id, capability_ref, capability_family, algorithm, salt, verifier_hash, status, created_at, rotated_at, revoked_at, evidence_refs_json, verifier_json)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      on conflict(verifier_id) do update set
+        relation_id = excluded.relation_id,
+        registry_id = excluded.registry_id,
+        site_id = excluded.site_id,
+        subject_site_id = excluded.subject_site_id,
+        relation_kind = excluded.relation_kind,
+        owner_site_id = excluded.owner_site_id,
+        capability_ref = excluded.capability_ref,
+        capability_family = excluded.capability_family,
+        algorithm = excluded.algorithm,
+        salt = excluded.salt,
+        verifier_hash = excluded.verifier_hash,
+        status = excluded.status,
+        rotated_at = excluded.rotated_at,
+        revoked_at = excluded.revoked_at,
+        evidence_refs_json = excluded.evidence_refs_json,
+        verifier_json = excluded.verifier_json`,
+  ).bind(
+    record.verifier_id,
+    record.relation_id,
+    record.registry_id,
+    record.site_id,
+    record.subject_site_id,
+    record.relation_kind,
+    record.owner_site_id,
+    record.capability_ref,
+    record.capability_family,
+    JSON.stringify(record.algorithm),
+    record.salt,
+    record.verifier_hash,
+    record.status,
+    record.created_at,
+    record.rotated_at ?? null,
+    record.revoked_at ?? null,
+    JSON.stringify(record.evidence_refs),
+    JSON.stringify(record),
+  ).run();
+}
+
+async function deriveRelationVerifierHash(secret: string, salt: string, iterations: number): Promise<string> {
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: new TextEncoder().encode(salt),
+      iterations,
+    },
+    keyMaterial,
+    RELATION_VERIFIER_ALGORITHM.derived_key_bytes * 8,
+  );
+  return `pbkdf2-sha256.v0:${base64Url(new Uint8Array(bits))}`;
+}
+
+function randomBase64Url(bytes: number): string {
+  const value = new Uint8Array(bytes);
+  crypto.getRandomValues(value);
+  return base64Url(value);
+}
+
+function base64Url(value: Uint8Array): string {
+  let binary = "";
+  for (const byte of value) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 function missingProjectionSummary(siteId: string, relation: SiteRegistryRelationRecord): ProjectionSummary {

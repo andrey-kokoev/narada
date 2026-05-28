@@ -1,0 +1,33 @@
+{
+  "schema": "narada.site_communication.chat_request.v0",
+  "chat_scope": "site_projection",
+  "site_id": "narada-proper",
+  "projection_ref": "site-registry:narada-proper:projection:latest",
+  "operator_prompt": "What needs attention on this Site?",
+  "allowed_context_refs": [
+    "site-registry:narada-proper:site-record",
+    "site-registry:narada-proper:freshness",
+    "site-registry:narada-proper:relation-lifecycle",
+    "site-registry:narada-proper:dashboard-rows"
+  ],
+  "forbidden_context_classes": [
+    "private_task_lifecycle_db",
+    "raw_inbox_payloads",
+    "raw_secrets",
+    "raw_logs",
+    "unexported_filesystem_state",
+    "other_site_projection_without_selection"
+  ],
+  "tool_policy": {
+    "allowed_tools": [
+      "compose_site_inbox_message",
+      "submit_site_inbox_message"
+    ],
+    "forbidden_tools": [
+      "task_lifecycle_mutation",
+      "site_config_mutation",
+      "registry_relation_mutation",
+      "secret_read"
+    ]
+  }
+}

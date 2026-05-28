@@ -1,0 +1,23 @@
+{
+  "schema": "narada.site_registry.relation_capability_verifier_refusal.v0",
+  "status": "refused",
+  "refusal_code": "relation_cross_site_verifier_refused",
+  "relation_id": "rel_site-a_registry",
+  "requested_actor": {
+    "kind": "site",
+    "site_id": "site-b"
+  },
+  "expected_actor": {
+    "kind": "site",
+    "site_id": "site-a"
+  },
+  "transition": "withdraw",
+  "raw_secret_values_recorded": false,
+  "private_verifier_material_disclosed": false,
+  "next_step": "Use the relation owner Site authority or registry-owner enrollment surface; do not enroll or use a verifier for another Site relation.",
+  "authority_limits": [
+    "site_relation_scope_must_match_verifier_scope",
+    "route_knowledge_is_not_transition_authority",
+    "refusal_must_not_echo_presented_secret"
+  ]
+}

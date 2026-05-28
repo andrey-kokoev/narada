@@ -63,6 +63,20 @@ The smoke fixture verifies health, auth refusal, accepted event projection,
 protected projection read, remote message submit, pending poll, finalize, and
 receipt read without live network or Cloudflare credentials.
 
+## Relation Verifier Enrollment
+
+Relation withdrawal verifier enrollment is not a public route in this slice.
+Use the package preflight helper to produce a dry-run plan first. A live D1
+verifier seed or rotation requires registry-owner/operator standing, bounded
+evidence refs, an accepted relation capability ref, a credential ref, and
+explicit execute/admin approval. The preflight plan never creates or rotates
+remote Worker secret material.
+
+Creating or rotating the Cloudflare secret value referenced by `credential_ref`
+is a separate capability-governed secret operation. Record only the credential
+ref, verifier id, bounded evidence refs, and smoke result; do not record raw
+secret values in runbook output, task reports, fixtures, or response bodies.
+
 ## Live Deploy
 
 Live deploy remains gated. Record the operator capability grant, Cloudflare

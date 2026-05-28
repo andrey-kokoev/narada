@@ -1,0 +1,53 @@
+{
+  "schema": "narada.operator_site_communication_relation.ui_projection.v0",
+  "relation_id": "oscr_narada-proper_operator_surface_20260518_001",
+  "surface_id": "site-registry:narada-proper:operator-console",
+  "projection_only": true,
+  "selected_site_id": "narada-proper",
+  "derived_controls": [
+    {
+      "control": "message_button",
+      "derived_from": [
+        "inbound_edge_ref",
+        "allowed_message_kinds"
+      ],
+      "action_posture": "compose_candidate_only",
+      "authority_limits": [
+        "control_does_not_admit_local_inbox",
+        "control_does_not_mutate_task_lifecycle"
+      ]
+    },
+    {
+      "control": "site_scope_chat",
+      "derived_from": [
+        "operator_surface_ref",
+        "site_ref"
+      ],
+      "action_posture": "projection_context_only",
+      "authority_limits": [
+        "chat_reads_selected_site_projection_only",
+        "chat_cannot_mutate_site_config",
+        "chat_cannot_grant_capability"
+      ]
+    },
+    {
+      "control": "receipt_badge",
+      "derived_from": [
+        "receipt_policy",
+        "evidence_refs"
+      ],
+      "action_posture": "display_only",
+      "authority_limits": [
+        "receipt_badge_does_not_confirm_admission",
+        "receipt_badge_does_not_record_operator_approval"
+      ]
+    }
+  ],
+  "forbidden_claims": [
+    "local_inbox_admission",
+    "task_lifecycle_mutation",
+    "operator_approval",
+    "site_config_mutation",
+    "effect_execution"
+  ]
+}

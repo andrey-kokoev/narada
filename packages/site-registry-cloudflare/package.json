@@ -17,6 +17,10 @@
     "./deploy-readiness": {
       "types": "./dist/deploy-readiness.d.ts",
       "import": "./dist/deploy-readiness.js"
+    },
+    "./site-scope-chat": {
+      "types": "./dist/site-scope-chat.d.ts",
+      "import": "./dist/site-scope-chat.js"
     }
   },
   "scripts": {

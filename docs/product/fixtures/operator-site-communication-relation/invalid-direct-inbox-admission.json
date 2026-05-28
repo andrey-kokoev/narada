@@ -1,0 +1,31 @@
+{
+  "schema": "narada.operator_site_communication_relation.v0",
+  "relation_id": "oscr_invalid_direct_inbox_admission",
+  "operator_principal_ref": "principal:operator",
+  "operator_surface_ref": {
+    "surface_id": "site-registry:narada-proper:operator-console"
+  },
+  "site_ref": {
+    "site_id": "narada-proper"
+  },
+  "inbound_edge_ref": {
+    "edge_id": "edge_site_registry_operator_to_narada_proper_inbox",
+    "target_authority": "canonical_inbox"
+  },
+  "outbound_edge_ref": {
+    "edge_id": "edge_narada_proper_to_operator_notification"
+  },
+  "allowed_message_kinds": [
+    "operator_message"
+  ],
+  "lifecycle_state": "active",
+  "receipt_policy": {
+    "remote_preservation_is_local_admission": true
+  },
+  "authority_claims": [
+    "local_inbox_admission"
+  ],
+  "authority_limits": [
+    "relation_cannot_create_or_close_tasks"
+  ]
+}

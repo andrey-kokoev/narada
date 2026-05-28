@@ -1,0 +1,39 @@
+{
+  "schema": "narada.site_registry.relation_capability_verifier.v0",
+  "verifier_id": "relv_rel_site-a_registry_withdraw_20260516",
+  "relation_id": "rel_site-a_registry",
+  "registry_id": "registry_user_site_telemetry",
+  "site_id": "site-a",
+  "subject_site_id": "registry",
+  "relation_kind": "publishes_to",
+  "capability_kind": "site_registry.relation.withdraw",
+  "allowed_transitions": ["withdraw"],
+  "allowed_actor": {
+    "kind": "site",
+    "site_id": "site-a"
+  },
+  "credential_ref": "cloudflare-worker-secret:NARADA_SITE_REGISTRY_RELATION_WITHDRAW_SITE_A",
+  "verifier_material_kind": "shared_secret_digest",
+  "verifier_digest": "sha256:fixture-digest-not-a-secret",
+  "digest_algorithm": "sha256",
+  "status": "active",
+  "created_at": "2026-05-16T23:55:00.000Z",
+  "created_by": "registry_owner:operator",
+  "expires_at": "2026-08-16T00:00:00.000Z",
+  "rotation": {
+    "last_rotated_at": null,
+    "next_review_due_at": "2026-06-16T00:00:00.000Z",
+    "replaced_verifier_id": null
+  },
+  "revocation": null,
+  "enrollment_evidence_refs": [
+    "task:1441",
+    "relation:rel_site-a_registry",
+    "capability-grant:site-a:site_registry.relation.withdraw"
+  ],
+  "authority_limits": [
+    "verifier_record_is_private_registry_storage",
+    "credential_ref_is_not_raw_secret",
+    "verifier_match_is_not_transition_admission"
+  ]
+}

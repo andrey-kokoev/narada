@@ -1,0 +1,14 @@
+{
+  "schema": "narada.site_communication.chat_response.v0",
+  "site_id": "narada-proper",
+  "response_kind": "refusal",
+  "reason_codes": [
+    "private_site_context_not_in_projection"
+  ],
+  "message": "I can answer only from the published projection for narada-proper.",
+  "authority_limits": [
+    "chat_context_is_site_projection_only",
+    "chat_cannot_read_private_site_substrate",
+    "chat_cannot_mutate_site_state"
+  ]
+}

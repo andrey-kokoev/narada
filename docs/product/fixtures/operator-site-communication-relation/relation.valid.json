@@ -1,0 +1,149 @@
+{
+  "schema": "narada.operator_site_communication_relation.v0",
+  "relation_id": "oscr_narada-proper_operator_surface_20260518_001",
+  "operator_principal_ref": "principal:operator",
+  "operator_surface_ref": {
+    "surface_id": "site-registry:narada-proper:operator-console",
+    "surface_kind": "site_communication_surface",
+    "projection_scope": "site_projection",
+    "selected_site_id": "narada-proper"
+  },
+  "site_ref": {
+    "site_id": "narada-proper",
+    "authority_locus": "narada-proper"
+  },
+  "owning_site_ref": {
+    "site_id": "narada-proper",
+    "relation_lifecycle_authority": "site_governance"
+  },
+  "inbound_edge_ref": {
+    "edge_id": "edge_site_registry_operator_to_narada_proper_inbox",
+    "edge_schema": "narada.incoming_message_intake_edge.v0",
+    "target_authority": "canonical_inbox",
+    "arrival_artifact": "remote_candidate_exchange"
+  },
+  "outbound_edge_ref": {
+    "edge_id": "edge_narada_proper_to_operator_notification",
+    "outbound_authority": "canonical_outbox",
+    "transport": "site_communication_notification",
+    "target_ref": "operator_surface:site-registry:narada-proper:operator-console"
+  },
+  "allowed_message_kinds": [
+    "operator_message",
+    "question",
+    "proposal",
+    "incident",
+    "approval_request",
+    "handoff"
+  ],
+  "capability_posture": {
+    "compose_preview": {
+      "capability_required": false
+    },
+    "submit_message": {
+      "capability_kind": "site_communication.submit",
+      "grant_ref": "capability-grant:site-registry:narada-proper:submit"
+    },
+    "receipt_read": {
+      "capability_kind": "site_communication.receipt.read",
+      "grant_ref": "capability-grant:site-registry:narada-proper:receipt-read"
+    },
+    "finalize_receipt": {
+      "capability_kind": "site_communication.finalize",
+      "grant_ref": "capability-grant:narada-proper:local-admission-finalize"
+    },
+    "credential_values_included": false,
+    "denied_actions": [
+      "task_lifecycle_mutation",
+      "site_config_mutation",
+      "capability_grant",
+      "effect_execution"
+    ]
+  },
+  "trust_posture": {
+    "verification_status": "unknown",
+    "policy_ref": "trust-policy:narada-proper:operator-site-communication:v0",
+    "source_identity": {
+      "claimed_operator_principal": "principal:operator",
+      "verified": false
+    },
+    "evidence_refs": [
+      "docs/product/incoming-intake-trust-provenance-projection.md"
+    ],
+    "raw_cryptographic_material_included": false
+  },
+  "lifecycle_state": "configured",
+  "receipt_policy": {
+    "projected_receipts": [
+      "relation_configured",
+      "remote_preserved",
+      "transport_delivered",
+      "local_admitted",
+      "local_rejected",
+      "local_deferred",
+      "outbox_composed",
+      "outbox_approved",
+      "outbox_confirmed",
+      "operator_acknowledged",
+      "operator_approved",
+      "expired"
+    ],
+    "operator_acknowledgement_is_approval": false,
+    "remote_preservation_is_local_admission": false,
+    "transport_delivery_is_operator_acknowledgement": false
+  },
+  "suspension_posture": {
+    "state": "not_suspended",
+    "blocked_directions": [],
+    "reason_codes": []
+  },
+  "projection_policy": {
+    "ui_derivations": [
+      {
+        "projection": "message_button",
+        "derived_from": [
+          "inbound_edge_ref",
+          "allowed_message_kinds"
+        ],
+        "authority_limit": "opens compose only; does not admit local inbox"
+      },
+      {
+        "projection": "site_scope_chat",
+        "derived_from": [
+          "operator_surface_ref",
+          "site_ref"
+        ],
+        "authority_limit": "reads selected Site projection only; cannot mutate Site"
+      },
+      {
+        "projection": "receipt_badge",
+        "derived_from": [
+          "receipt_policy",
+          "evidence_refs"
+        ],
+        "authority_limit": "displays receipt posture only"
+      }
+    ],
+    "projection_only_ui": true,
+    "relation_is_projection_only": false
+  },
+  "evidence_refs": [
+    "docs/product/operator-site-communication-relation.v0.md",
+    "docs/product/site-communication-surface.v0.md",
+    "docs/product/incoming-message-intake-edge.md",
+    "docs/concepts/canonical-outbox.md"
+  ],
+  "authority_limits": [
+    "relation_is_governed_configuration_not_projection_only_ui",
+    "relation_cannot_admit_local_inbox",
+    "relation_cannot_create_or_close_tasks",
+    "relation_cannot_record_operator_approval",
+    "relation_cannot_admit_knowledge",
+    "relation_cannot_activate_site_registry_relation",
+    "relation_cannot_mutate_site_config",
+    "relation_cannot_grant_capability_or_possess_credentials",
+    "relation_cannot_execute_transport_or_effects",
+    "operator_acknowledgement_is_not_approval",
+    "remote_preservation_is_not_local_admission"
+  ]
+}

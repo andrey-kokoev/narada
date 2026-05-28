@@ -64,6 +64,10 @@ and secret posture task. Raw token values are never repo-visible.
 | `POST` | `/api/messages/:message_id/finalize` | `NARADA_SITE_REGISTRY_LOCAL_ADMISSION_TOKEN` | `narada.remote_candidate.finalize_response.v0` | Refuses invalid auth, missing D1, unknown message, or invalid finalization payload. |
 | `POST` | `/api/relations/transition` | `NARADA_SITE_REGISTRY_RELATION_WITHDRAW_TOKEN` or `NARADA_SITE_REGISTRY_RELATION_ADMIN_TOKEN` | `narada.site_registry.relation_transition_response.v0` | Refuses invalid auth, invalid actor standing, unsupported transition, purge/delete, missing D1, or raw secret markers. |
 
+The `/api/messages` route names are compatibility names for the generic hosted
+message boundary. Their pull/admit/finalize semantics are specified in
+[`hosted-message-local-admission-boundary.md`](hosted-message-local-admission-boundary.md).
+
 Purge/delete is intentionally outside this route family. See
 [Site Registry Purge Posture v0](site-registry-purge-posture.v0.md) for the
 future high-authority operation requirements.

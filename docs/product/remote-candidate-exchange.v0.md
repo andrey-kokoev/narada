@@ -10,6 +10,12 @@ fits cross-Site publication/subscription signals, review handoffs, capability
 notices, knowledge candidates, task candidates, and future bounded intake
 families.
 
+The configured path that delivers material to, or pulls material from, a remote
+candidate surface is an
+[`IncomingMessageIntakeEdge`](incoming-message-intake-edge.md). The edge owns
+reachability and capability/trust posture; Remote Candidate Exchange owns
+remote preservation, receipt, and finalization artifacts.
+
 ## Rule
 
 ```text
@@ -58,6 +64,7 @@ capability registry, lineage records, or Site configuration.
 | `freshness` | no | Optional current freshness posture for the candidate. |
 | `evidence_refs` | yes | Bounded source evidence references. |
 | `capability` | no | Capability requirements, requests, claims, references, grants, refusals, or revocations as inert metadata only. |
+| `trust` | no | Trust/provenance projection such as verification status, source identity summary, digest, forwarding chain, and redacted verification evidence refs. |
 | `crossing` | yes | Scale-relative crossing coordinates describing source/target authority posture. |
 | `admission_posture` | yes | Explicit statement that local admission is required and remote surface authority is candidate-only. |
 | `authority_limits` | yes | Non-empty list of things the candidate and remote surface cannot do. |
@@ -91,6 +98,10 @@ candidate. It is not evidence that the target Site admitted the candidate.
 `narada.remote_candidate.finalize.v0` is sent by a target Site or its governed
 puller after local handling. It updates the remote receipt as a report of local
 truth; it does not create local truth retroactively.
+
+For the target-Site pull/admit/finalize sequence and descriptor-only local
+admission plan posture, see
+[`hosted-message-local-admission-boundary.md`](hosted-message-local-admission-boundary.md).
 
 Allowed statuses:
 
@@ -147,6 +158,18 @@ Required specialization:
   local inbox, task, knowledge, capability, or Site governance consequences.
 
 Telemetry candidates are one use of the generic contract, not the owner of it.
+
+## Trust And Provenance Projection
+
+Remote candidates may carry trust/provenance evidence, but the remote surface
+remains candidate-only. Pending, detail, receipt, and finalization views should
+show verification status, claimed or verified source, forwarding summary,
+digest/evidence refs, and local-admission-required posture without exposing raw
+cryptographic material. A `verified` or `decrypted_verified` candidate is still
+inert until the target Site admits it locally.
+
+For the shared fields, vocabulary, and display limits, see
+[`Incoming Intake Trust And Provenance Projection`](incoming-intake-trust-provenance-projection.md).
 
 ## Rejection, Deferral, And Ledger Expectations
 

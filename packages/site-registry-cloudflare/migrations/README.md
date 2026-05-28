@@ -24,3 +24,8 @@ do not admit canonical inbox or task lifecycle state.
 
 Relation lifecycle current state belongs in D1. JSON transition payloads are
 stored as replayable evidence in D1 rows. KV is not relation lifecycle authority.
+
+`0004_site_registry_outbound_communications.sql` adds outbound Site
+communication records, delivery attempts, and distinct delivery/admission
+receipt JSON. These rows are communication evidence only; they do not mutate a
+target Site inbox and do not make delivery equivalent to local Site admission.

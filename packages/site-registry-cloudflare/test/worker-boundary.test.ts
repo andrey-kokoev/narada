@@ -2,10 +2,16 @@ import { describe, expect, it } from "vitest";
 import worker, {
   HOSTED_SITE_REGISTRY_AUTHORITY_LIMITS,
   SITE_REGISTRY_CLOUDFLARE_BINDINGS,
+  createSiteRegistryRelationCapabilityVerifier,
+  getActiveSiteRegistryRelationCapabilityVerifier,
   getSiteRegistryRelation,
+  getSiteRegistryRelationCapabilityVerifierById,
   healthPayload,
   listSiteRegistryRelationEvents,
+  planRelationCapabilityVerifierEnrollment,
   recordSiteRegistryRelationTransition,
+  revokeSiteRegistryRelationCapabilityVerifier,
+  rotateSiteRegistryRelationCapabilityVerifier,
   routePosture,
   type SiteRegistryCloudflareEnv,
 } from "../src/index.js";
@@ -25,9 +31,12 @@ class FakeKv {
 class FakeD1 {
   readonly rows: unknown[][] = [];
   readonly messages = new Map<string, Record<string, unknown>>();
+  readonly outboundCommunications = new Map<string, Record<string, unknown>>();
+  readonly outboundAttempts: Record<string, unknown>[] = [];
   readonly events: Record<string, unknown>[] = [];
   readonly relations = new Map<string, Record<string, unknown>>();
   readonly relationEvents: Record<string, unknown>[] = [];
+  readonly relationVerifiers = new Map<string, Record<string, unknown>>();
 
   prepare(sql: string) {
     return {
@@ -76,6 +85,29 @@ class FakeD1 {
               event_json,
             });
           }
+          if (sql.includes("insert into site_registry_relation_capability_verifiers")) {
+            const [verifier_id, relation_id, registry_id, site_id, subject_site_id, relation_kind, owner_site_id, capability_ref, capability_family, algorithm, salt, verifier_hash, status, created_at, rotated_at, revoked_at, evidence_refs_json, verifier_json] = values;
+            this.relationVerifiers.set(String(verifier_id), {
+              verifier_id,
+              relation_id,
+              registry_id,
+              site_id,
+              subject_site_id,
+              relation_kind,
+              owner_site_id,
+              capability_ref,
+              capability_family,
+              algorithm,
+              salt,
+              verifier_hash,
+              status,
+              created_at,
+              rotated_at,
+              revoked_at,
+              evidence_refs_json,
+              verifier_json,
+            });
+          }
           if (sql.includes("insert into site_registry_remote_messages")) {
             const [message_id, source_ref, idempotency_key, target_site_id, status, retry_count, received_at, message_json, receipt_json] = values;
             this.messages.set(String(message_id), {
@@ -89,6 +121,26 @@ class FakeD1 {
               message_json,
               receipt_json,
             });
+          }
+          if (sql.includes("insert into site_registry_outbound_communications")) {
+            const [communication_id, source_ref, idempotency_key, target_site_id, delivery_status, admission_status, created_at, updated_at, envelope_json, delivery_receipt_json, admission_receipt_json] = values;
+            this.outboundCommunications.set(String(communication_id), {
+              communication_id,
+              source_ref,
+              idempotency_key,
+              target_site_id,
+              delivery_status,
+              admission_status,
+              created_at,
+              updated_at,
+              envelope_json,
+              delivery_receipt_json,
+              admission_receipt_json,
+            });
+          }
+          if (sql.includes("insert into site_registry_outbound_delivery_attempts")) {
+            const [attempt_id, communication_id, status, attempted_at, delivery_endpoint_json, receipt_json] = values;
+            this.outboundAttempts.push({ attempt_id, communication_id, status, attempted_at, delivery_endpoint_json, receipt_json });
           }
           if (sql.includes("update site_registry_remote_messages set retry_count")) {
             const [messageId] = values;
@@ -115,10 +167,31 @@ class FakeD1 {
             const row = this.relations.get(String(values[0]));
             return row ? { relation_json: row.relation_json } : null;
           }
+          if (sql.includes("select verifier_json from site_registry_relation_capability_verifiers where verifier_id = ?")) {
+            const row = this.relationVerifiers.get(String(values[0]));
+            return row ? { verifier_json: row.verifier_json } : null;
+          }
+          if (sql.includes("select verifier_json from site_registry_relation_capability_verifiers where relation_id = ?")) {
+            const row = [...this.relationVerifiers.values()].find((candidate) =>
+              candidate.relation_id === values[0]
+              && candidate.site_id === values[1]
+              && candidate.capability_family === values[2]
+              && candidate.status === values[3]);
+            return row ? { verifier_json: row.verifier_json } : null;
+          }
           if (sql.includes("select event_json from site_registry_relation_events where relation_id = ? and idempotency_key = ?")) {
             const row = this.relationEvents.find((candidate) =>
               candidate.relation_id === values[0] && candidate.idempotency_key === values[1]);
             return row ? { event_json: row.event_json } : null;
+          }
+          if (sql.includes("select envelope_json from site_registry_outbound_communications where communication_id = ?")) {
+            const row = this.outboundCommunications.get(String(values[0]));
+            return row ? { envelope_json: row.envelope_json } : null;
+          }
+          if (sql.includes("select envelope_json from site_registry_outbound_communications where source_ref = ? and idempotency_key = ?")) {
+            const row = [...this.outboundCommunications.values()].find((candidate) =>
+              candidate.source_ref === values[0] && candidate.idempotency_key === values[1]);
+            return row ? { envelope_json: row.envelope_json } : null;
           }
           if (sql.includes("where message_id = ?")) {
             const row = this.messages.get(String(values[0]));
@@ -207,6 +280,31 @@ function webhookRequest(body: unknown, token = "publish-token") {
   });
 }
 
+function siteCommunicationPayload(overrides: Record<string, unknown> = {}) {
+  return {
+    schema: "narada.site_registry.outbound_communication.send.v0",
+    target_site_id: "site-a",
+    source: { kind: "operator_ui", ref: "ui:send-message", principal: "operator" },
+    idempotency_key: "site-a:message:1",
+    envelope: {
+      schema: "narada.site_inbox.typed_envelope.v0",
+      kind: "observation",
+      subject: "Bounded observation",
+      body: "Please inspect this bounded observation.",
+      payload: { summary: "bounded" },
+      evidence_refs: ["test:site-communication"],
+      authority_limits: ["target_site_admission_required"],
+    },
+    delivery_endpoint: {
+      kind: "site_inbox_http",
+      url: "https://site-a.example/inbox",
+      capability_ref: "capability:site-a.inbox.submit",
+    },
+    evidence_refs: ["test:site-communication"],
+    ...overrides,
+  };
+}
+
 describe("@narada2/site-registry-cloudflare scaffold", () => {
   it("declares Cloudflare bindings without raw ids or secrets", () => {
     expect(SITE_REGISTRY_CLOUDFLARE_BINDINGS).toEqual({
@@ -262,6 +360,37 @@ describe("@narada2/site-registry-cloudflare scaffold", () => {
     expect(healthJson.routes.length).toBeGreaterThan(0);
     expect(sites.status).toBe(200);
     expect(root.headers.get("content-type")).toContain("text/html");
+  });
+
+  it("renders bounded per-Site message composer controls without bearer values", async () => {
+    const root = await worker.fetch(new Request("https://registry.example/"), env());
+    const html = await root.text();
+
+    expect(root.status).toBe(200);
+    expect(html).toContain("Target Site:");
+    expect(html).toContain("Message");
+    expect(html).toContain("/api/site-communications/send");
+    expect(html).toContain("Delivery receipt");
+    expect(html).toContain("Admission receipt");
+    expect(html).toContain("Delivery receipt is separate from target Site admission");
+    expect(html).toContain("refusal_reasons");
+    expect(html).toContain("site_communication_request_failed");
+    expect(html).toContain("delivery_is_admission");
+    expect(html).toContain("Chat");
+    expect(html).toContain("Chatting about");
+    expect(html).toContain("Source basis:");
+    expect(html).toContain("Draft message");
+    expect(html).toContain("Draft requires explicit send confirmation");
+    expect(html).toContain("site_scope_projected_chat");
+    expect(html).toContain("chat_can_only_compose_or_send_this_candidate");
+    expect(html).toContain("/api/site-communications/send");
+    expect(html).not.toContain("registry-wide chat");
+    expect(html).not.toContain("task_lifecycle_mutation");
+    expect(html).not.toContain("site_config_mutation");
+    expect(html).not.toContain("publish-token");
+    expect(html).not.toContain("read-token");
+    expect(html).not.toContain("message-token");
+    expect(html).not.toContain("wrong-token");
   });
 
   it("accepts authenticated known bounded typed events and updates projection storage", async () => {
@@ -390,6 +519,125 @@ describe("@narada2/site-registry-cloudflare scaffold", () => {
     expect(freshnessText).not.toContain("publish-token");
     expect(freshnessText).not.toContain("read-token");
     expect(freshnessText).not.toContain("payload_summary");
+  });
+
+  it("accepts guarded Site communication sends and separates delivery from target admission", async () => {
+    const runtime = env();
+    const response = await worker.fetch(new Request("https://registry.example/api/site-communications/send", {
+      method: "POST",
+      headers: { authorization: "Bearer message-token" },
+      body: JSON.stringify(siteCommunicationPayload()),
+    }), runtime);
+    const body = await response.json() as {
+      status: string;
+      communication: { communication_id: string; target_site_id: string };
+      delivery_receipt: { status: string; live_network_attempted: boolean; target_site_mutated: boolean };
+      admission_receipt: { status: string; cloud_delivery_is_not_admission: boolean };
+      delivery_is_admission: boolean;
+      target_site_mutated: boolean;
+      registry_relation_mutated: boolean;
+    };
+    const d1 = runtime.NARADA_SITE_REGISTRY_D1 as unknown as FakeD1;
+
+    expect(response.status).toBe(202);
+    expect(body.status).toBe("accepted");
+    expect(body.communication.target_site_id).toBe("site-a");
+    expect(body.delivery_receipt.status).toBe("recorded_not_delivered");
+    expect(body.delivery_receipt.live_network_attempted).toBe(false);
+    expect(body.delivery_receipt.target_site_mutated).toBe(false);
+    expect(body.admission_receipt.status).toBe("pending_target_site_admission");
+    expect(body.admission_receipt.cloud_delivery_is_not_admission).toBe(true);
+    expect(body.delivery_is_admission).toBe(false);
+    expect(body.target_site_mutated).toBe(false);
+    expect(body.registry_relation_mutated).toBe(false);
+    expect(d1.outboundCommunications.size).toBe(1);
+    expect(d1.outboundAttempts).toHaveLength(1);
+    expect(JSON.stringify(body)).not.toContain("message-token");
+  });
+
+  it("deduplicates Site communication sends by source ref and idempotency key", async () => {
+    const runtime = env();
+    const request = () => new Request("https://registry.example/api/site-communications/send", {
+      method: "POST",
+      headers: { authorization: "Bearer message-token" },
+      body: JSON.stringify(siteCommunicationPayload()),
+    });
+    const first = await worker.fetch(request(), runtime);
+    const second = await worker.fetch(request(), runtime);
+    const firstBody = await first.json() as { communication: { communication_id: string } };
+    const secondBody = await second.json() as { status: string; communication: { communication_id: string } };
+    const d1 = runtime.NARADA_SITE_REGISTRY_D1 as unknown as FakeD1;
+
+    expect(first.status).toBe(202);
+    expect(second.status).toBe(200);
+    expect(secondBody.status).toBe("duplicate");
+    expect(secondBody.communication.communication_id).toBe(firstBody.communication.communication_id);
+    expect(d1.outboundCommunications.size).toBe(1);
+  });
+
+  it("refuses unauthorized or invalid Site communication sends without echoing tokens", async () => {
+    const runtime = env();
+    const missing = await worker.fetch(new Request("https://registry.example/api/site-communications/send", {
+      method: "POST",
+      body: JSON.stringify(siteCommunicationPayload()),
+    }), runtime);
+    const wrong = await worker.fetch(new Request("https://registry.example/api/site-communications/send", {
+      method: "POST",
+      headers: { authorization: "Bearer wrong-token" },
+      body: JSON.stringify(siteCommunicationPayload()),
+    }), runtime);
+    const invalidTarget = await worker.fetch(new Request("https://registry.example/api/site-communications/send", {
+      method: "POST",
+      headers: { authorization: "Bearer message-token" },
+      body: JSON.stringify(siteCommunicationPayload({ target_site_id: "unknown-site" })),
+    }), runtime);
+    const badEndpoint = await worker.fetch(new Request("https://registry.example/api/site-communications/send", {
+      method: "POST",
+      headers: { authorization: "Bearer message-token" },
+      body: JSON.stringify(siteCommunicationPayload({
+        delivery_endpoint: { kind: "site_inbox_http", url: "http://site-a.example/inbox", capability_ref: "capability:site-a.inbox.submit" },
+      })),
+    }), runtime);
+    const invalidBody = await invalidTarget.json() as { refusal_reasons: string[] };
+    const endpointBody = await badEndpoint.json() as { refusal_reasons: string[] };
+    const allText = `${await missing.text()} ${await wrong.text()} ${JSON.stringify(invalidBody)} ${JSON.stringify(endpointBody)}`;
+
+    expect(missing.status).toBe(401);
+    expect(wrong.status).toBe(401);
+    expect(invalidTarget.status).toBe(400);
+    expect(invalidBody.refusal_reasons).toContain("site_communication_target_not_active_public_relation");
+    expect(endpointBody.refusal_reasons).toContain("site_communication_delivery_endpoint_https_required");
+    expect(allText).not.toContain("wrong-token");
+    expect(allText).not.toContain("message-token");
+  });
+
+  it("serves read-only Site communication status and receipt routes", async () => {
+    const runtime = env();
+    const send = await worker.fetch(new Request("https://registry.example/api/site-communications/send", {
+      method: "POST",
+      headers: { authorization: "Bearer message-token" },
+      body: JSON.stringify(siteCommunicationPayload({ idempotency_key: "site-a:message:status" })),
+    }), runtime);
+    const sendBody = await send.json() as { communication: { communication_id: string } };
+    const detail = await worker.fetch(new Request(`https://registry.example/api/site-communications/${sendBody.communication.communication_id}`, {
+      headers: { authorization: "Bearer read-token" },
+    }), runtime);
+    const receipt = await worker.fetch(new Request(`https://registry.example/api/site-communications/${sendBody.communication.communication_id}/receipt`, {
+      headers: { authorization: "Bearer read-token" },
+    }), runtime);
+    const receiptBody = await receipt.json() as {
+      delivery_receipt: { status: string };
+      admission_receipt: { status: string };
+      admits_inbox: boolean;
+      delivery_is_admission: boolean;
+    };
+
+    expect(detail.status).toBe(200);
+    expect(receipt.status).toBe(200);
+    expect(receiptBody.delivery_receipt.status).toBe("recorded_not_delivered");
+    expect(receiptBody.admission_receipt.status).toBe("pending_target_site_admission");
+    expect(receiptBody.delivery_is_admission).toBe(false);
+    expect(receiptBody.admits_inbox).toBe(false);
   });
 
   it("filters public Site APIs by active visible relation lifecycle while retaining projection evidence", async () => {
@@ -594,6 +842,217 @@ describe("@narada2/site-registry-cloudflare scaffold", () => {
     expect(second.status).toBe("duplicate");
     expect(second.event.event_id).toBe("rel-event-1");
     expect(events).toHaveLength(1);
+  });
+
+  it("stores relation capability verifiers separately from public relation rows without raw secrets", async () => {
+    const runtime = env();
+    const d1 = runtime.NARADA_SITE_REGISTRY_D1 as unknown as FakeD1;
+    await recordSiteRegistryRelationTransition(d1 as unknown as D1Database, {
+      event_id: "rel-event-active-for-verifier",
+      idempotency_key: "site-a:activate:verifier",
+      registry_id: "site-registry:test",
+      relation_id: "rel_site-a_registry",
+      site_id: "site-a",
+      relation_kind: "publishes_to",
+      transition: "activate",
+      to_state: "active",
+      to_visibility: "public",
+      actor: { kind: "registry_owner", site_id: "registry-site", principal: "test" },
+      capability_ref: "capability:site_registry.relation.activate",
+      occurred_at: "2026-05-16T23:45:00.000Z",
+      reason_codes: ["fixture_active_relation"],
+      evidence_refs: ["test:relation:activate"],
+    });
+    const verifier = await createSiteRegistryRelationCapabilityVerifier(d1 as unknown as D1Database, {
+      verifier_id: "relv_site_a_withdraw",
+      relation_id: "rel_site-a_registry",
+      registry_id: "site-registry:test",
+      site_id: "site-a",
+      subject_site_id: "registry",
+      relation_kind: "publishes_to",
+      owner_site_id: "registry-site",
+      capability_ref: "capability:site_registry.relation.withdraw.site-a",
+      capability_family: "site_registry.relation.withdraw",
+      raw_verifier_secret: "site-a-withdraw-secret",
+      salt: "fixture-salt",
+      iterations: 1000,
+      created_at: "2026-05-16T23:46:00.000Z",
+      evidence_refs: ["test:verifier:enroll"],
+    });
+    const active = await getActiveSiteRegistryRelationCapabilityVerifier(
+      d1 as unknown as D1Database,
+      "rel_site-a_registry",
+      "site-a",
+      "site_registry.relation.withdraw",
+    );
+    const relation = await getSiteRegistryRelation(d1 as unknown as D1Database, "rel_site-a_registry");
+
+    expect(active?.verifier_id).toBe("relv_site_a_withdraw");
+    expect(verifier.verifier_hash).toMatch(/^pbkdf2-sha256\.v0:/);
+    expect(verifier.raw_secret_values_recorded).toBe(false);
+    expect(verifier.public_relation_row_mutated).toBe(false);
+    expect(JSON.stringify([...d1.relationVerifiers.values()])).not.toContain("site-a-withdraw-secret");
+    expect(JSON.stringify(relation)).not.toContain("relv_site_a_withdraw");
+    expect(JSON.stringify(relation)).not.toContain("site-a-withdraw-secret");
+  });
+
+  it("revokes relation capability verifiers and excludes revoked records from active lookup", async () => {
+    const runtime = env();
+    const d1 = runtime.NARADA_SITE_REGISTRY_D1 as unknown as FakeD1;
+    await createSiteRegistryRelationCapabilityVerifier(d1 as unknown as D1Database, {
+      verifier_id: "relv_site_a_withdraw",
+      relation_id: "rel_site-a_registry",
+      registry_id: "site-registry:test",
+      site_id: "site-a",
+      relation_kind: "publishes_to",
+      owner_site_id: "registry-site",
+      capability_ref: "capability:site_registry.relation.withdraw.site-a",
+      capability_family: "site_registry.relation.withdraw",
+      raw_verifier_secret: "site-a-withdraw-secret",
+      salt: "fixture-salt",
+      iterations: 1000,
+      created_at: "2026-05-16T23:46:00.000Z",
+      evidence_refs: ["test:verifier:enroll"],
+    });
+
+    const revoked = await revokeSiteRegistryRelationCapabilityVerifier(
+      d1 as unknown as D1Database,
+      "relv_site_a_withdraw",
+      "2026-05-16T23:50:00.000Z",
+      ["test:verifier:revoke"],
+    );
+    const active = await getActiveSiteRegistryRelationCapabilityVerifier(
+      d1 as unknown as D1Database,
+      "rel_site-a_registry",
+      "site-a",
+      "site_registry.relation.withdraw",
+    );
+    const byId = await getSiteRegistryRelationCapabilityVerifierById(d1 as unknown as D1Database, "relv_site_a_withdraw");
+
+    expect(revoked?.status).toBe("revoked");
+    expect(active).toBeNull();
+    expect(byId?.status).toBe("revoked");
+    expect(JSON.stringify(byId)).not.toContain("site-a-withdraw-secret");
+  });
+
+  it("plans verifier enrollment as dry-run by default and gates live mutation", () => {
+    const dryRun = planRelationCapabilityVerifierEnrollment({
+      relation_id: "rel_site-a_registry",
+      registry_id: "site-registry:test",
+      site_id: "site-a",
+      relation_kind: "publishes_to",
+      owner_site_id: "registry-site",
+      actor: { kind: "registry_owner", principal: "operator" },
+      capability_ref: "capability:site_registry.relation.withdraw.site-a",
+      credential_ref: "cloudflare-worker-secret:NARADA_SITE_REGISTRY_RELATION_WITHDRAW_SITE_A",
+      capability_family: "site_registry.relation.withdraw",
+      evidence_refs: ["test:verifier:seed"],
+    });
+    const blockedLive = planRelationCapabilityVerifierEnrollment({
+      ...dryRun.relation_ref,
+      owner_site_id: "registry-site",
+      actor: { kind: "registry_owner", principal: "operator" },
+      capability_ref: "capability:site_registry.relation.withdraw.site-a",
+      credential_ref: "cloudflare-worker-secret:NARADA_SITE_REGISTRY_RELATION_WITHDRAW_SITE_A",
+      capability_family: "site_registry.relation.withdraw",
+      evidence_refs: ["test:verifier:seed"],
+      execute: true,
+    });
+    const readyLive = planRelationCapabilityVerifierEnrollment({
+      ...dryRun.relation_ref,
+      owner_site_id: "registry-site",
+      actor: { kind: "operator", principal: "operator" },
+      capability_ref: "capability:site_registry.relation.withdraw.site-a",
+      credential_ref: "cloudflare-worker-secret:NARADA_SITE_REGISTRY_RELATION_WITHDRAW_SITE_A",
+      capability_family: "site_registry.relation.withdraw",
+      evidence_refs: ["test:verifier:seed"],
+      execute: true,
+      admin_approved: true,
+    });
+
+    expect(dryRun.status).toBe("dry_run");
+    expect(dryRun.live_d1_mutation_planned).toBe(false);
+    expect(blockedLive.status).toBe("blocked");
+    expect(blockedLive.refusal_reasons).toContain("relation_enrollment_live_mutation_requires_admin_approval");
+    expect(readyLive.status).toBe("ready");
+    expect(readyLive.live_d1_mutation_planned).toBe(true);
+    expect(readyLive.remote_secret_mutation_planned).toBe(false);
+    expect(JSON.stringify(readyLive)).not.toContain("withdraw-token");
+  });
+
+  it("refuses verifier enrollment by non-owner Sites in v0", () => {
+    const plan = planRelationCapabilityVerifierEnrollment({
+      relation_id: "rel_site-a_registry",
+      registry_id: "site-registry:test",
+      site_id: "site-a",
+      relation_kind: "publishes_to",
+      owner_site_id: "registry-site",
+      actor: { kind: "site", site_id: "site-a" },
+      capability_ref: "capability:site_registry.relation.withdraw.site-a",
+      credential_ref: "cloudflare-worker-secret:NARADA_SITE_REGISTRY_RELATION_WITHDRAW_SITE_A",
+      capability_family: "site_registry.relation.withdraw",
+      evidence_refs: ["test:verifier:seed"],
+    });
+
+    expect(plan.status).toBe("blocked");
+    expect(plan.refusal_reasons).toContain("relation_enrollment_requires_registry_owner");
+    expect(plan.live_d1_mutation_planned).toBe(false);
+  });
+
+  it("rotates relation capability verifiers by superseding the old active record", async () => {
+    const runtime = env();
+    const d1 = runtime.NARADA_SITE_REGISTRY_D1 as unknown as FakeD1;
+    await createSiteRegistryRelationCapabilityVerifier(d1 as unknown as D1Database, {
+      verifier_id: "relv_site_a_withdraw_old",
+      relation_id: "rel_site-a_registry",
+      registry_id: "site-registry:test",
+      site_id: "site-a",
+      relation_kind: "publishes_to",
+      owner_site_id: "registry-site",
+      capability_ref: "capability:site_registry.relation.withdraw.site-a",
+      capability_family: "site_registry.relation.withdraw",
+      raw_verifier_secret: "old-secret",
+      salt: "old-salt",
+      iterations: 1000,
+      created_at: "2026-05-16T23:46:00.000Z",
+      evidence_refs: ["test:verifier:enroll"],
+    });
+
+    const rotation = await rotateSiteRegistryRelationCapabilityVerifier(
+      d1 as unknown as D1Database,
+      "relv_site_a_withdraw_old",
+      {
+        verifier_id: "relv_site_a_withdraw_new",
+        relation_id: "rel_site-a_registry",
+        registry_id: "site-registry:test",
+        site_id: "site-a",
+        relation_kind: "publishes_to",
+        owner_site_id: "registry-site",
+        capability_ref: "capability:site_registry.relation.withdraw.site-a",
+        capability_family: "site_registry.relation.withdraw",
+        raw_verifier_secret: "new-secret",
+        salt: "new-salt",
+        iterations: 1000,
+        created_at: "2026-05-17T00:01:00.000Z",
+        evidence_refs: ["test:verifier:rotate"],
+      },
+      "2026-05-17T00:01:00.000Z",
+      ["test:rotation:approved"],
+    );
+    const active = await getActiveSiteRegistryRelationCapabilityVerifier(
+      d1 as unknown as D1Database,
+      "rel_site-a_registry",
+      "site-a",
+      "site_registry.relation.withdraw",
+    );
+    const oldById = await getSiteRegistryRelationCapabilityVerifierById(d1 as unknown as D1Database, "relv_site_a_withdraw_old");
+
+    expect(rotation?.old_verifier.status).toBe("superseded");
+    expect(rotation?.new_verifier.status).toBe("active");
+    expect(oldById?.status).toBe("superseded");
+    expect(active?.verifier_id).toBe("relv_site_a_withdraw_new");
+    expect(JSON.stringify([...d1.relationVerifiers.values()])).not.toContain("old-secret");
+    expect(JSON.stringify([...d1.relationVerifiers.values()])).not.toContain("new-secret");
   });
 
   it("accepts protected relation withdrawal and returns bounded cloud receipt only", async () => {

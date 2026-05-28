@@ -1,0 +1,42 @@
+{
+  "schema": "narada.site_communication.message_candidate.v0",
+  "candidate_id": "scm_narada-proper_20260517_001",
+  "surface_id": "site-registry:narada-proper:cloudflare",
+  "target_site_id": "narada-proper",
+  "target_authority": "canonical_inbox",
+  "idempotency_key": "site-message:narada-proper:2026-05-17:001",
+  "source": {
+    "kind": "operator_surface",
+    "site_id": "narada-proper",
+    "principal": "operator"
+  },
+  "kind": "operator_message",
+  "subject": "Question about stale projection",
+  "body": "Please inspect why the registry projection is stale.",
+  "payload": {
+    "schema": "narada.site_communication.operator_message_payload.v0",
+    "urgency": "normal",
+    "related_projection_ref": "site-registry:narada-proper:projection:latest"
+  },
+  "crossing": {
+    "scale": "site",
+    "authority_scope": "narada-proper",
+    "from_locus": "site-registry:narada-proper:cloudflare",
+    "to_locus": "site:narada-proper:canonical_inbox",
+    "owning_site": "narada-proper",
+    "target_authority": "canonical_inbox",
+    "requested_crossing": "admission_request",
+    "admission_state": "received"
+  },
+  "payload_bounds": {
+    "max_body_bytes": 12000,
+    "raw_values_excluded": true
+  },
+  "authority_limits": [
+    "remote_preservation_is_not_local_inbox_admission",
+    "message_candidate_cannot_mutate_task_lifecycle",
+    "message_candidate_cannot_mutate_site_config",
+    "message_candidate_cannot_grant_capability",
+    "chat_can_only_compose_or_send_this_candidate"
+  ]
+}

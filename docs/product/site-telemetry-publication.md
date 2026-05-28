@@ -4,9 +4,11 @@ Site Telemetry Publication is the Narada shape for bounded signals, state
 summaries, and candidate messages moving between Sites through a hosted or local
 projection surface.
 
-It is the generic structure behind the Staccato published surface pattern and
-the first Cloudflare hosted Site Registry slice. SiteRegistry is one read model
-inside this shape, not the whole structure.
+It is the generic structure behind the Staccato published surface pattern. The
+current Cloudflare hosted package co-locates several concern realizations:
+telemetry event receive/projection, Site Registry read and relation lifecycle,
+registry operational telemetry, and Site Communication Candidate Exchange.
+Those co-located realizations share deployment coordinates, not authority.
 
 ## Rule
 
@@ -49,9 +51,11 @@ otherwise.
 | Finalize message | Finalized receipt with local admission/rejection/error reference | Report what local authority did. | Create that local admission retroactively. |
 | Deploy surface | Worker version, D1/KV bindings, route evidence | Materialize an interface. | Make the interface the Site authority. |
 
-## Relationship To SiteRegistry
+## Relationship To Site Registry
 
-SiteRegistry should be treated as one chapter within Site Telemetry Publication.
+Site Registry should be treated as an adjacent registry concern that may consume
+telemetry projections. It is not a subpart of Site Operational Telemetry, and
+Site telemetry publication is not the relation publication tool.
 
 SiteRegistry answers questions like:
 
@@ -60,9 +64,14 @@ SiteRegistry answers questions like:
 - What telemetry endpoints and inbox endpoints are known?
 - What freshness/health/capability posture is currently projected?
 
-Those answers are read models unless a separate SiteRegistry authority substrate
-is explicitly admitted. A URL named `site-registry.*` should therefore name the
-surface/read-model purpose, not imply that Cloudflare owns Site authority.
+Those answers are read models unless a separate Site Registry authority
+substrate is explicitly admitted. A URL named `site-registry.*` should therefore
+name the surface/read-model purpose, not imply that Cloudflare owns Site
+authority.
+
+Use a Site Registry relation command family, not `site-telemetry publish`, for
+relation activation, withdrawal, suppression, retirement, or future publication
+of local relation-admission evidence to a hosted registry.
 
 ## Relationship To User Site Awareness
 
@@ -74,7 +83,7 @@ Correct shape:
 
 ```text
 publisher Sites -> telemetry publication edge -> User Site owned telemetry surface
-surface -> SiteRegistry/read projections
+surface -> Site Registry/read projections
 surface -> remote candidate exchange
 receiving Sites -> local pull/admit/finalize
 ```
@@ -110,11 +119,13 @@ subchapters:
    accepted event families, capability refs, and secret posture.
 3. **Telemetry Surface Realizations**: Cloudflare Worker first, later local or
    other hosted realizations.
-4. **SiteRegistry Read Model**: known Sites, relation posture, endpoints,
-   freshness, health, capabilities, and provenance.
-5. **Remote Candidate Exchange**: generic remote candidate contract, submit,
-   pending, detail, receipt, finalize, ledger, and local-admission-reference
-   semantics. See [`remote-candidate-exchange.v0.md`](remote-candidate-exchange.v0.md).
+4. **Adjacent Site Registry Read Model**: known Sites, relation posture,
+   endpoints, freshness, health, capabilities, and provenance. This is consumed
+   beside telemetry and does not make registry writes part of telemetry publish.
+5. **Adjacent Remote Candidate Exchange**: generic remote candidate contract,
+   submit, pending, detail, receipt, finalize, ledger, and
+   local-admission-reference semantics. See
+   [`remote-candidate-exchange.v0.md`](remote-candidate-exchange.v0.md).
 6. **Local Publisher And Puller Tools**: Site-side emit and admit/finalize loops.
 7. **Readiness And Operations**: deploy gates, migration evidence, smoke proof,
    rollback, monitoring, rotation, and operational ownership.
@@ -123,16 +134,16 @@ subchapters:
 
 ## First Slice Assessment
 
-The completed Cloudflare hosted Site Registry work is an implementation slice of
-this uber-chapter:
+The completed Cloudflare hosted package is a co-located implementation slice:
 
 - implemented: Cloudflare realization, event receiver, projection reads,
   SiteRegistry read model seed, remote candidate exchange, local client helpers,
   non-live smoke, deployment runbook;
 - not yet resolved: owning Site, formal publication-edge registry, first-class
-  SiteRegistry authority substrate, User Site awareness integration, live
-  Cloudflare deployment evidence, monitoring ownership, and Inquiry Space
-  import of the branch pressure.
+  Site Registry relation publication command family, Site Registry authority
+  substrate, User Site awareness integration, live Cloudflare deployment
+  evidence, monitoring ownership, and Inquiry Space import of the branch
+  pressure.
 
 Verdict for that slice remains: smoke-ready, not live-deployed.
 
@@ -141,10 +152,11 @@ Verdict for that slice remains: smoke-ready, not live-deployed.
 - Decide the owning Site for the first hosted Site Telemetry Publication surface.
 - Decide whether the first public domain should be user-owned, project-owned, or
   neutral surface-owned.
-- Specify `SiteRegistry` as read model first, then decide if/when it needs a
+- Specify `Site Registry` as read model first, then decide if/when it needs a
   separate authority substrate.
 - Define the publication-edge config shape and capability resolver posture.
-- Lift the current Cloudflare package names/docs from "Site Registry" toward
-  "Site Telemetry Publication" where appropriate.
+- Keep compatibility package and route names stable while docs and UI use the
+  four-concern vocabulary from
+  [`site-telemetry-registry-boundary.v0.md`](site-telemetry-registry-boundary.v0.md).
 - Route the Site Telemetry Publication branch into Inquiry Space once machinery
   exists.

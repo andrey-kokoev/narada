@@ -70,3 +70,25 @@ For Site pub/sub doctrine, see [`site-pubsub-signal-exchange.md`](site-pubsub-si
 This document defines registry semantics. It does not yet implement storage, discovery, subscription management, or mutation routing.
 
 Until a first-class command exists, manual `linked_sites` maps in User Site config are provisional authoring surfaces. They should be treated as awareness hints, not authority grants.
+
+## SiteRegistry Read Model Consumption
+
+A User Site may consume `narada.site_registry.read_model.v0` output as an
+advisory awareness projection. The adapter boundary is:
+
+```text
+remote SiteRegistry read model -> User Site awareness posture
+```
+
+The crossing imports route candidates, freshness, conflicts, visible capability
+summaries, and provenance. It does not import ownership, membership mutation
+truth, task lifecycle truth, inbox admission, or executable capability.
+
+Stale remote records remain stale awareness entries. Conflicting remote records
+remain conflicted awareness entries until a target-Site authority surface or a
+separately admitted User Site registry mutation resolves them.
+
+Fixture examples:
+
+- `docs/product/fixtures/user-site-awareness-from-registry/site-awareness-input-registry.json`
+- `docs/product/fixtures/user-site-awareness-from-registry/site-awareness.expected.json`

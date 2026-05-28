@@ -1,0 +1,32 @@
+{
+  "schema": "narada.site_registry.relation_transition_request.v0",
+  "event_id": "rel-event-withdraw-site-a-20260516",
+  "idempotency_key": "site-a:rel_site-a_registry:withdraw:20260516",
+  "registry_id": "registry_user_site_telemetry",
+  "relation_id": "rel_site-a_registry",
+  "site_id": "site-a",
+  "subject_site_id": "registry",
+  "relation_kind": "publishes_to",
+  "transition": "withdraw",
+  "to_state": "withdrawn",
+  "to_visibility": "private",
+  "actor": {
+    "kind": "site",
+    "site_id": "site-a"
+  },
+  "capability_ref": "capability:site_registry.relation.withdraw.site-a",
+  "verifier_ref": {
+    "verifier_id": "relv_rel_site-a_registry_withdraw_20260516",
+    "proof_kind": "authorization_digest_match",
+    "presented_secret_recorded": false
+  },
+  "occurred_at": "2026-05-16T23:56:00.000Z",
+  "reason_codes": ["site_requested_relation_withdrawal"],
+  "evidence_refs": ["site-a:operator-request:withdraw-registry-publication"],
+  "raw_secret_values_recorded": false,
+  "authority_limits": [
+    "withdrawal_is_governed_disposition_request_not_deletion",
+    "verifier_match_is_not_local_site_admission",
+    "cloud_receipt_is_not_relation_truth_outside_hosted_registry"
+  ]
+}

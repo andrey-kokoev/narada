@@ -104,13 +104,15 @@ as one telemetry surface realization, implement package-level validation, add a
 local fixture realization, and add deploy hash/smoke verifier parity with
 Staccato.
 
-## SiteRegistry Read Model
+## Adjacent Site Registry Read Model
 
 Outcome artifact: `site_registry_read_model.v0`; concrete specification:
 [`site-registry-read-model.v0.md`](site-registry-read-model.v0.md).
 
 Purpose: provide a queryable projection over known Sites and their relation to
-the owning Site or awareness locus.
+the owning Site or awareness locus. This concern is adjacent to Site Operational
+Telemetry: it may consume telemetry projections, but relation lifecycle writes
+belong to the Site Registry command family, not telemetry publish.
 
 Required fields:
 
@@ -129,17 +131,19 @@ Invariants:
 - a future SiteRegistry authority substrate must be separately admitted.
 
 Residual tasks: implement deterministic derivation helpers, integrate with User
-Site awareness, and decide through separate evidence whether any registry
-authority object is earned.
+Site awareness, specify Site Registry relation publication commands, and decide
+through separate evidence whether any registry authority object is earned.
 
-## Remote Candidate Exchange
+## Adjacent Remote Candidate Exchange
 
 Outcome artifact family: `remote_candidate_message.v0`,
 `remote_candidate_receipt.v0`, `remote_candidate_finalize.v0`; concrete
 generic specification: [`remote-candidate-exchange.v0.md`](remote-candidate-exchange.v0.md).
 
 Purpose: allow hosted surfaces to hold candidate messages until the receiving
-Site admits, rejects, or errors locally.
+Site admits, rejects, or errors locally. This concern is adjacent to Site
+Operational Telemetry and Site Registry; it is the communication crossing, not a
+telemetry publish path or registry relation mutation path.
 
 Required fields:
 
@@ -159,8 +163,8 @@ Invariants:
 - local admission reference is evidence only, not retroactive mutation;
 - duplicate submits increment retry/idempotency posture;
 - finalize capability is separate from submit and poll.
-- Remote Candidate is generic; telemetry publication messages instantiate it but
-  do not own or narrow the contract.
+- Remote Candidate is generic; telemetry and registry surfaces may instantiate
+  it but do not own or narrow the contract.
 
 Residual tasks: align hosted Worker route names with generic contract names,
 define D1 schema versioning, integrate local receiving Site proof, add package
