@@ -92,3 +92,10 @@ Capability Consent grants authority to use a capability.
 Outbox records the outbound effect intent and lifecycle. It requires route and capability references for execution, but those references do not execute anything by themselves.
 
 Transport executors consume approved outbox items in future tasks. They must produce execution evidence and delivery confirmation before an item is confirmed.
+
+When outbound messages target an operator-facing communication surface, the
+route may be referenced by an
+[`OperatorSiteCommunicationRelation`](../product/operator-site-communication-relation.v0.md).
+The relation can name the outbound edge and receipt policy, but outbox item
+composition, approval, execution, and confirmation remain outbox or
+transport-executor authority.

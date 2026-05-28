@@ -2,6 +2,12 @@
 
 The Canonical Admission Rejection Ledger is the Site-local authority record for candidate admission decisions. It records what was considered, admitted, rejected, deferred, or superseded.
 
+For configured incoming paths, the
+[`IncomingMessageIntakeEdge`](../product/incoming-message-intake-edge.md)
+explains how material reached the boundary. This ledger records the local
+decision when that material is rejected, deferred, superseded, or otherwise
+considered without becoming an active admitted artifact.
+
 Rejection is evidence, not silence. A candidate that is rejected should leave a durable trace with reason codes and evidence references so it does not disappear, re-enter unnoticed, or get reinterpreted later without context.
 
 ## Command Surface
@@ -43,6 +49,8 @@ Each ledger entry records:
 | `decided_by` | Principal or system actor recording the decision |
 | `system_rule` | Optional rule that made or assisted the decision |
 | `authority_level` | Authority level of the decision |
+| `candidate_trust` | Optional snapshot of candidate verification status, source identity, trust policy, trust reason codes, and redacted evidence refs considered at decision time |
+| `candidate_provenance` | Optional source surface, source candidate ref, intake edge ref, and forwarding-chain summary |
 | `resulting_envelope_id` | Envelope id when admitted |
 | `supersedes`, `retry_of` | Links to prior candidates or decisions |
 | `observed_at`, `decided_at` | Candidate and decision timestamps |
@@ -50,6 +58,11 @@ Each ledger entry records:
 ## Relationship To Canonical Inbox
 
 Canonical Inbox stores typed envelopes after admission. The ledger stores candidate decisions before or around admission. This keeps rejected file-drop items, rejected mailbox candidates, deferred Site absorption material, and superseded proposals visible without forcing all of them into the inbox as active work.
+
+Trust and provenance evidence may explain why a candidate was admitted,
+rejected, deferred, superseded, or errored, but it is not the lifecycle
+authority. For shared intake trust fields and default redaction rules, see
+[`Incoming Intake Trust And Provenance Projection`](../product/incoming-intake-trust-provenance-projection.md).
 
 ## Relationship To Appeal And Grievance
 

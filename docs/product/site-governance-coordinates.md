@@ -34,6 +34,10 @@ When durable governance coordinates, runtime truth, and operator/session knowled
 | `local_overlays` | Site-local law, guidance, or policy overlays. | Local additions must not silently fork global doctrine. |
 | `federation_policy` | Receive/publish posture with peer Sites. | Federation is influence and handoff, not authority replication. |
 
+For `message_routing_authority` compatibility, cross-locus enforcement,
+capability checks, and refusal posture, see
+[`message-routing-authority-posture.md`](message-routing-authority-posture.md).
+
 ## Minimal Shape
 
 ```json

@@ -97,6 +97,10 @@ Useful statuses:
 - `encrypted_unreadable`;
 - `decrypted_verified`.
 
+For incoming intake attachment points across intake edges, remote candidates,
+Canonical Inbox envelopes, and Admission Rejection Ledger entries, see
+[`Incoming Intake Trust And Provenance Projection`](../product/incoming-intake-trust-provenance-projection.md).
+
 ## Boundary
 
 This document defines doctrine and requirements only. It does not add signing, encryption, key storage, trust policy evaluation, or verification commands.

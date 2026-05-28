@@ -108,6 +108,8 @@ The catalog says what is technically available. The operation policy says what i
 - Email-originated requests for mutating tools are only proposals. They must become pending `operator_action_requests`, pass identity-provider confirmation, and execute through the canonical operator-action path.
 - Ops repos must not copy `.env`, DB wrappers, Sentry wrappers, or source-tree assumptions from system repos.
 
+Individual carrier-produced tool calls cross the [`Carrier Action Admission Boundary`](../concepts/carrier-action-admission-boundary.md). The catalog and operation policy make classification possible; they do not themselves admit a particular requested effect.
+
 ## Sonar Example
 
 For `narada.sonar`, Sonar-specific capabilities should live in `~/src/sonar.cloud/.narada/`. The `narada.sonar` operation should reference that catalog and grant selected tools to support charters. Read-only tools can be used for diagnostics; mutating tools such as `sonar.git.write` must remain approval-gated.

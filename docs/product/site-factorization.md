@@ -111,6 +111,10 @@ The User Site may know about the PC Site. It does not become the PC Site's mutat
 - Site provenance lineage records crossings that affect Site relationships or authority posture.
 - Site pub/sub delivers inert signals; receiving Sites govern admission.
 - Site relation ledger records durable relation evidence without moving authority.
+- Operator Site Communication Relation declares a governed communication
+  relation between one operator-facing surface and one Site; its UI/chat
+  projections are not Site authority. See
+  [`operator-site-communication-relation.v0.md`](operator-site-communication-relation.v0.md).
 
 ## Migration Note
 

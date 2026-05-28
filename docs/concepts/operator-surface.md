@@ -178,6 +178,13 @@ Architect and Builder thread bootstrap contracts describe the role grammar for a
 
 The role contract remains the authority-bearing instruction source. The surface is only an interface for inhabiting that contract.
 
+When an operator-facing surface is used for Site communication, the Site-owned
+configuration object is
+[`OperatorSiteCommunicationRelation`](../product/operator-site-communication-relation.v0.md).
+The surface may project message, chat, receipt, acknowledgement, or approval
+controls from that relation, but those controls must still route through the
+inbound intake, outbox, approval, or task authority that owns the consequence.
+
 ## Relationship To MCP And API Agents
 
 MCP and API agents may not have a visible window. They still have:

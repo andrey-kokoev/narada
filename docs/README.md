@@ -7,6 +7,8 @@ Root documentation organized by semantic layer.
 Semantic and architecture-boundary concepts. These documents define how the system thinks about itself and how layers own boundaries.
 
 - [`runtime-usc-boundary.md`](concepts/runtime-usc-boundary.md) — Runtime / USC / operator ownership boundary
+- [`narada-agent-runtime-server.md`](concepts/narada-agent-runtime-server.md) — Vendor-neutral, stateful, machine-addressable Agent runtime server concept
+- [`carrier-action-admission-boundary.md`](concepts/carrier-action-admission-boundary.md) — Governed conversion boundary from carrier action requests to authority-bearing Site decisions
 - [`system.md`](concepts/system.md) — System architecture and data flow overview
 - [`mailbox-knowledge-model.md`](concepts/mailbox-knowledge-model.md) — Knowledge placement, proof vs knowledge, and playbook examples
 

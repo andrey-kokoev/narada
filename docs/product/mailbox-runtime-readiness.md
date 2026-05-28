@@ -2,6 +2,11 @@
 
 Mailbox runtime readiness is not proven by sync or evaluation alone.
 
+Mailbox source reachability can be modeled as an
+[`IncomingMessageIntakeEdge`](incoming-message-intake-edge.md), but mailbox
+source read does not by itself prove approval, outbound handoff, draft/effect
+execution, or full runtime readiness.
+
 A mailbox Site is operational only when a governed proposal can travel through approval, outbound handoff, draft/effect execution, and read-back evidence appropriate to its posture.
 
 ## Readiness States

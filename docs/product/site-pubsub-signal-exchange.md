@@ -6,6 +6,12 @@ It is not automatic replication, shared ownership, or remote mutation.
 
 In the Site factorization, pub/sub is an interface and crossing family between Site authority objects. Delivery creates an inert signal, not admission. See [`site-factorization.md`](site-factorization.md).
 
+A subscription or receiver path is an
+[`IncomingMessageIntakeEdge`](incoming-message-intake-edge.md) when it is
+configured as an incoming source. The edge tracks reachability and health;
+receiving admission still maps to Canonical Inbox, Remote Candidate Exchange,
+ledger, or SourceRecord/Fact artifacts.
+
 This is a direct instance of Governed Crossing: transported signal arrival is not receiving-Site admission. See [`../concepts/governed-crossing.md`](../concepts/governed-crossing.md).
 
 ## Rule

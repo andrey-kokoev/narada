@@ -4,6 +4,12 @@ Site-local daemon sources admit observations from the Site's own runtime locus. 
 
 This document defines the authority posture for Project and Site-local daemons that observe heartbeat, inbox-drop, or filesystem surfaces.
 
+Each configured daemon observation path can be read as an
+[`IncomingMessageIntakeEdge`](incoming-message-intake-edge.md) when it feeds a
+Site intake boundary. The edge governs source reachability and health; daemon
+records remain SourceRecord/Fact or inert inbox artifacts until governed
+admission.
+
 ## Current Source Inventory
 
 | Source family | Current role | Authority posture |

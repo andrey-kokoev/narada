@@ -6,6 +6,18 @@ Inbox envelopes are inert. Submitting an envelope does not create a task, execut
 
 Canonical Inbox is a stabilized Governed Crossing form for arrivals that may or may not become consequential. See [`governed-crossing.md`](governed-crossing.md).
 
+When an arrival reaches Canonical Inbox through a configured source path, the
+path itself is an [`IncomingMessageIntakeEdge`](../product/incoming-message-intake-edge.md).
+The edge governs reachability, capability/trust posture, and health; the Inbox
+envelope remains the inert local admission artifact.
+
+For operator-facing Site communication, Canonical Inbox is the possible local
+inbound artifact after the
+[`OperatorSiteCommunicationRelation`](../product/operator-site-communication-relation.v0.md)
+and its intake edge have delivered or preserved material. The Inbox does not
+own the communication relation, UI projection, outbound reply path, or operator
+approval.
+
 ## CLI Surface
 
 ```bash
@@ -32,6 +44,9 @@ Prefer `submit-observation` for routine observations from chat, diagnostics, and
 Use `--principal <id>` to set `authority.principal`. `--authority-principal <id>` is accepted as a compatibility alias on `inbox submit` and `inbox submit-observation` for callers that name the field by its envelope location.
 
 Use `--target-locus <locus>` when a Site declares `governance.message_routing_authority` or root `message_routing_authority`. The routing decision evaluates `principal + target_locus + envelope_kind + authority_level` before admitting the inert envelope. If the route is refused, the command returns a bounded refusal reason and writes no envelope.
+
+For the compatibility and cross-locus enforcement posture, see
+[`Message Routing Authority Posture`](../product/message-routing-authority-posture.md).
 
 `inbox submit` and `inbox submit-observation` preflight their working directory before mutation. When invoked from a package subdirectory inside a Git worktree, they resolve the authority cwd to the worktree root and write `.ai/inbox.db`, `.ai/inbox-envelopes`, and mutation evidence there. The result includes `cwd_preflight` with the input cwd, authority cwd, and repair command so callers can make the locus explicit. Package-local `.ai` inbox artifacts are not created by default.
 
@@ -147,6 +162,7 @@ Admission writes exactly one `file_drop` envelope per item path and content dige
 | `promotion` | Optional target after governed promotion |
 | `handling` | Optional claim/lease metadata while a principal handles the envelope |
 | `capability` | Optional inert capability metadata for requirements, requests, claims, references, grant evidence, refusals, or revocations |
+| `trust` | Optional trust/provenance projection for verification status, source identity, forwarding chain, envelope digest, encryption posture, and redacted verification evidence |
 | `crossing` | Optional scale-relative crossing coordinates for external intake or intra-Site role handoff |
 
 ## Scale-Relative Crossing Coordinates
@@ -347,6 +363,10 @@ Revocation or refusal notice:
 ```
 
 Related doctrine: [`canonical-capability-consent-registry.md`](canonical-capability-consent-registry.md), [`capability-governed-secret-management.md`](capability-governed-secret-management.md), and [`verifiable-envelope-trust.md`](verifiable-envelope-trust.md).
+
+For incoming intake display limits and attachment points across edges,
+remote candidates, envelopes, and admission decisions, see
+[`Incoming Intake Trust And Provenance Projection`](../product/incoming-intake-trust-provenance-projection.md).
 
 ## Example
 
